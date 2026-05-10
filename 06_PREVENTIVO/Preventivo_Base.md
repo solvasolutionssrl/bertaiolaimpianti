@@ -13,14 +13,14 @@
 
 | Voce | Importo |
 |---|---|
-| **Setup + Sviluppo MVP** (Sprint 0 + MVP, una tantum) | **€ 9.900** |
-| **Sprint 2** — Integrazione Freshdesk + Notifiche + Ricerca | € 5.600 |
+| **Setup + Sviluppo MVP** (Sprint 0 + MVP, una tantum) — **PWA + ticketing nativo base inclusi** | **€ 10.500** |
+| **Sprint 2** — Migrazione Freshdesk + Ticketing email/portale + Notifiche + Ricerca | € 5.600 |
 | **Sprint 3** — Portale cliente finale (opzionale) | € 4.900 |
 | **Sprint 4** — Preventivi & rapportini (opzionale) | € 7.700 |
-| **Infrastruttura annua gestita SOLVA** (anno 1) | **€ 1.030** |
+| **Infrastruttura annua gestita SOLVA** (anno 1) — **PWA = -€204/anno Expo EAS** | **€ 828** |
 | **Canone manutenzione SOLVA** — tier Standard | da € 250/mese |
 
-**Pacchetto consigliato per il go-live**: Sprint 0 + MVP + Sprint 2 = **€ 15.500 una tantum** + infrastruttura €1.030/anno + canone manutenzione.
+**Pacchetto consigliato per il go-live**: Sprint 0 + MVP + Sprint 2 = **€ 16.100 una tantum** + infrastruttura €828/anno + canone manutenzione.
 
 ---
 
@@ -42,28 +42,30 @@ Per semplicità tutte le righe seguenti usano **€ 65/h come riferimento**.
 | Documentazione tecnica baseline | 3 |
 | **Subtotale Sprint 0** | **25 h → € 1.625** |
 
-### Sprint MVP — Core (3 settimane, 140 h)
+### Sprint MVP — Core (3 settimane, 155 h)
 
 | Modulo | Effort | Costo |
 |---|---|---|
-| Backend (schema, RLS multitenant, Edge functions create commessa, link file, alberatura NC) | 40 h | € 2.600 |
-| Frontend Web Ufficio (auth, dashboard, lista, dettaglio, fasi, file browser) | 50 h | € 3.250 |
-| Mobile Expo (auth, lista, dettaglio, scatta+upload foto, geo, push token) | 40 h | € 2.600 |
+| Backend (schema multitenant **+ tabelle clients/tickets/messages**, RLS, Edge functions create commessa, link file, ticket→commessa, alberatura NC) | 45 h | € 2.925 |
+| Frontend Web Ufficio (auth, dashboard, **sezione ticket**, lista, dettaglio commessa, fasi, file browser, anagrafica clienti) | 55 h | € 3.575 |
+| **PWA Tecnici** (manifest, service worker, auth, lista, dettaglio, scatta+upload foto, geo, onboarding "Aggiungi a Home") | 40 h | € 2.600 |
 | Setup sync Nextcloud sui 5 PC ufficio + documentazione | 10 h | € 650 |
-| **Subtotale Sprint MVP** | **140 h** | **€ 9.100** |
+| Onboarding & QA su iPhone reali (3 modelli) + Android + Windows desktop | 5 h | € 325 |
+| **Subtotale Sprint MVP** | **155 h** | **€ 10.075** |
 
-**🎯 Totale Sprint 0 + MVP = € 10.725** → Arrotondato a **€ 9.900** (sconto fast-pilot SOLVA del ~8%).
+**🎯 Totale Sprint 0 + MVP = € 11.700** → Arrotondato a **€ 10.500** (sconto fast-pilot SOLVA del ~10%).
 
-### Sprint 2 — Freshdesk + Notifiche + Ricerca (2 settimane, 80 h)
+### Sprint 2 — Migrazione Freshdesk + Ticketing avanzato + Notifiche + Ricerca (2 settimane, 80 h)
 
 | Modulo | Effort | Costo |
 |---|---|---|
-| Webhook Freshdesk → creazione commessa auto + linking | 35 h | € 2.275 |
-| Sistema notifiche (push Expo + email Resend, regole, preferenze) | 25 h | € 1.625 |
+| **Migrazione Freshdesk one-time** (API export → JSON, dedup clienti, import ticket + messaggi + allegati su Nextcloud, UI review) | 25 h | € 1.625 |
+| **Ticketing avanzato** (email inbound Resend → ticket nativo, routing automatico, auto-reply cliente, thread email↔ticket) | 20 h | € 1.300 |
+| Sistema notifiche (Web Push PWA + email Resend, regole, preferenze) | 15 h | € 975 |
 | Ricerca full-text Postgres + OCR Mistral opt-in | 20 h | € 1.300 |
 | **Subtotale Sprint 2** | **80 h** | **€ 5.200** |
 
-Arrotondato a **€ 5.600** (margine per debug + 1ª iterazione regole notifica).
+Arrotondato a **€ 5.600** (margine per debug migrazione + 1ª iterazione regole).
 
 ### Sprint 3 — Portale Cliente Finale (2 settimane, 70 h, OPZIONALE)
 
@@ -101,17 +103,18 @@ Arrotondato a **€ 7.700**.
 |---|---|
 | Hetzner Storage Share NX11 (1 TB Nextcloud managed, Falkenstein DE) | € 60 |
 | Supabase Pro (DB + Auth + Storage + Realtime, Frankfurt EU) | € 276 |
-| Vercel Pro (web hosting Next.js) | € 216 |
-| Expo EAS Production (build + push iOS/Android) | € 204 |
-| Resend (email transactional) | € 216 |
+| Vercel Pro (web hosting Next.js + PWA tecnici) | € 216 |
+| Resend (email transactional + inbound parsing per ticket) | € 216 |
 | Cloudflare DNS/CDN | € 0 |
 | Sentry monitoring (free tier) | € 0 |
 | Dominio `.app` o `.it` (registrazione) | € 30 |
 | Mistral OCR (uso atteso) | € 6 |
 | Backup off-site Cloudflare R2 | € 24 |
-| **TOTALE INFRA ANNO 1** | **€ 1.032** |
+| **TOTALE INFRA ANNO 1** | **€ 828** |
 
-SOLVA fattura al cliente questa voce con un **mark-up 10%** = **€ 1.150 / anno** per coprire gestione contratti e variazioni listino.
+SOLVA fattura al cliente questa voce con un **mark-up 10%** = **€ 920 / anno** per coprire gestione contratti e variazioni listino.
+
+> 📉 **Differenza vs versione precedente del preventivo**: rimossa voce Expo EAS Production (€204/anno) grazie alla scelta PWA. Il TCO infra scende del 20%.
 
 ---
 
@@ -149,22 +152,22 @@ Tre tier proposti:
 ## E. Pacchetti commerciali consigliati
 
 ### Pacchetto A — "MVP & Live"
-- Sprint 0 + MVP : € 9.900
-- Infra anno 1 : € 1.150
+- Sprint 0 + MVP : € 10.500
+- Infra anno 1 : € 920
 - Canone Standard 12 mesi : € 3.000
-- **Totale anno 1: € 14.050**
+- **Totale anno 1: € 14.420**
 
 ### Pacchetto B — "Full v1" ⭐ consigliato per Bertaiola
-- Sprint 0 + MVP + Sprint 2 : € 15.500
-- Infra anno 1 : € 1.150
+- Sprint 0 + MVP + Sprint 2 : € 16.100
+- Infra anno 1 : € 920
 - Canone Standard 12 mesi : € 3.000
-- **Totale anno 1: € 19.650**
+- **Totale anno 1: € 20.020**
 
 ### Pacchetto C — "Full + Portale Cliente"
-- Sprint 0 + MVP + Sprint 2 + Sprint 3 : € 20.400
-- Infra anno 1 : € 1.150
+- Sprint 0 + MVP + Sprint 2 + Sprint 3 : € 21.000
+- Infra anno 1 : € 920
 - Canone Premium 12 mesi : € 5.400
-- **Totale anno 1: € 26.950**
+- **Totale anno 1: € 27.320**
 
 ---
 
@@ -172,14 +175,15 @@ Tre tier proposti:
 
 | Voce | v1 (SharePoint/M365) | v2 SOLVA Cantiera (Pacchetto B) |
 |---|---|---|
-| Setup una tantum | ~€ 11.000 | **€ 15.500** (più funzionalità: app mobile + multitenant + integrazione Freshdesk inclusi) |
-| Licenze utente | € 200/mese = € 2.400/anno | **€ 0** (incluso in canone) |
-| Infrastruttura aggiuntiva | da definire | **€ 1.150/anno** trasparente |
+| Setup una tantum | ~€ 11.000 | **€ 16.100** (più funzionalità: PWA tecnici + multitenant + ticketing nativo + migrazione Freshdesk inclusi) |
+| Licenze utente | € 200/mese = € 2.400/anno | **€ 0** (incluso in canone, nessuna licenza M365) |
+| Licenza Freshdesk | ~€ 15-49 / agente / mese | **€ 0** (Freshdesk disdetto post-migrazione) |
+| Infrastruttura aggiuntiva | da definire | **€ 920/anno** trasparente |
 | Manutenzione | da definire | **€ 3.000/anno** chiaro |
-| **Totale costo anno 1** | ~€ 13.400 + manutenzione | **€ 19.650 chiavi in mano** |
-| **Totale anno 2 (a regime)** | ~€ 2.400/anno + manutenzione | **€ 4.150/anno** |
+| **Totale costo anno 1** | ~€ 13.400 + Freshdesk + manutenzione | **€ 20.020 chiavi in mano** |
+| **Totale anno 2 (a regime)** | ~€ 2.400/anno + Freshdesk + manutenzione | **€ 3.920/anno** |
 
-> 💡 Sul **lungo periodo** (3+ anni) il modello v2 è **più conveniente** del v1, perché elimina €2.400/anno di licenze ricorrenti. Inoltre v2 include funzionalità custom (app mobile, multitenant, branding) **non incluse nelle licenze M365**.
+> 💡 Sul **lungo periodo** (3+ anni) il modello v2 è **nettamente più conveniente** del v1, perché elimina sia €2.400/anno di licenze M365 sia il canone Freshdesk. Inoltre v2 include funzionalità custom (PWA tecnici, multitenant, ticketing nativo, branding) **non incluse in M365**.
 
 ---
 
@@ -200,8 +204,9 @@ Tre tier proposti:
 
 Quando produrrai la slide preventivo, **suggerisco di evidenziare**:
 
-1. Il **risparmio di €2.400/anno** sulle licenze M365 evitate
+1. Il **risparmio cumulativo**: ~€2.400/anno di licenze M365 evitate **+ licenza Freshdesk disdetta** (~€15-49/agente/mese)
 2. Il fatto che Bertaiola riceve **una app proprietaria** non un canone software altrui
 3. **Hosting 100% UE / GDPR** (anti-vendor-lock-in americano)
 4. Il valore aggiunto del **doppio brand** SOLVA × Bertaiola
-5. Roadmap evolutiva **a vista** (preventivi, rapportini, portale cliente) come opzioni non obblighi
+5. **PWA installabile**: zero attriti per i tecnici (no App Store, no review), update istantanei
+6. Roadmap evolutiva **a vista** (preventivi, rapportini, portale cliente) come opzioni non obblighi

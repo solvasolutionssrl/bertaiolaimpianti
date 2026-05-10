@@ -69,9 +69,10 @@
 
 | ID | Decisione | Data | Owner |
 |---|---|---|---|
-| D1 | Mantenere Freshdesk come sistema di ticketing | 14/11 | Cliente |
+| D1 | ~~Mantenere Freshdesk~~ → **Abbandonare Freshdesk**: migrazione one-time via API, ticketing nativo nella nuova app | Dic 2025 (rev.) | Cliente |
 | D2 | Adottare un archivio cloud unico + struttura standardizzata per commessa | 14/11 | Cliente + SOLVA |
 | D3 | App mobile per tecnici come funzione cardine (foto + checklist + consultazione) | 28/11 | Cliente + SOLVA |
+| D3.1 | **App mobile = PWA installabile** (no App Store, no Play Store, no review): URL → "Aggiungi alla schermata Home" su iPhone | Dic 2025 | Cliente + SOLVA |
 | D4 | Mobilità totale senza VPN | 28/11 | SOLVA |
 | D5 | Riconsiderare SharePoint, valutare alternative leggere con sync locale | Dic 2025 | SOLVA |
 | D6 | Architettura MULTITENANT, doppio brand SOLVA + Bertaiola | Dic 2025 (questionario) | Cliente + SOLVA |
@@ -81,6 +82,7 @@
 | D10 | MVP go-live in 1 mese (Gennaio 2026) | Dic 2025 | Cliente |
 | D11 | NO offline mobile per fase 1 (online sufficiente) | Dic 2025 | Cliente |
 | D12 | Scope opzionali in roadmap successiva: preventivi, rapportini, portale cliente, integrazione impiantix.app per manutenzioni | Dic 2025 | SOLVA + cliente |
+| D13 | Nuova app gestisce **end-to-end** il ciclo: ticket entrante → commessa → fasi → foto → DICO → chiusura. Nessun sistema esterno di ticketing post go-live | Dic 2025 | Cliente |
 
 ## Punti aperti
 
@@ -88,10 +90,11 @@
 |---|---|---|---|
 | OPEN-1 | Selezione brand prodotto multitenant (3 opzioni proposte) | Decisione SOLVA + cliente | 🟡 In corso |
 | OPEN-2 | Scelta finale storage: Hetzner Storage Share (Nextcloud) vs alternative | SOLVA — analisi in `02_ARCHITETTURA` | 🟡 In corso |
-| OPEN-3 | Trigger automatico creazione cartella su nuovo ticket Freshdesk: webhook in MVP o post-MVP? | SOLVA | 🟡 In corso |
-| OPEN-4 | Modalità migrazione album Google Foto → nuovo archivio (script una tantum) | SOLVA | ⚪ Pianificato |
+| OPEN-3 | Data esatta di disdetta licenza Freshdesk (consigliato: fine periodo fatturazione corrente, dopo migrazione e go-live) | Cliente | 🟡 In corso |
+| OPEN-4 | Modalità migrazione album Google Foto + ticket Freshdesk → nuovo archivio (script una tantum) | SOLVA | ⚪ Pianificato |
 | OPEN-5 | Sessione formativa ufficio (1-2h × 5 utenti) | SOLVA | ⚪ Pianificato |
 | OPEN-6 | Roadmap manutenzioni programmate: integrare impiantix.app o sviluppare modulo nativo? | SOLVA + cliente | ⚪ Da pianificare in fase 3 |
+| OPEN-7 | Push notifications su iOS via PWA: richiede installazione PWA come standalone app (supportata da iOS 16.4+). Backup canale email per browser senza PWA installata | SOLVA | 🟡 In corso |
 
 ## Rischi identificati
 

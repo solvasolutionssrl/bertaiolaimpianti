@@ -11,21 +11,24 @@ Tutti i prezzi listino dei fornitori (rilevati Q1-Q2 2026). IVA esclusa salvo di
 
 | Voce | Fornitore | Piano | Costo €/mese | Costo €/anno | Note |
 |---|---|---|---|---|---|
-| **Storage file (1 TB)** | Hetzner | <span class="cite">Storage Share NX11</span> | ~5 | ~60 | UE/GDPR, sync desktop, 50 utenti illimitati |
+| **Storage file (1 TB)** | Hetzner | <span class="cite">Storage Share NX11</span> | ~5 | ~60 | UE/GDPR, sync desktop, utenti illimitati |
 | **Backend (DB + Auth + Storage cache + Realtime)** | Supabase | <span class="cite">Pro</span> | ~23 ($25) | ~276 | <span class="cite">8 GB DB, 100 GB file, 100K MAU, 250 GB egress incl.</span> |
-| **Hosting web (Vercel)** | Vercel | <span class="cite">Pro $20/mese per seat</span> | ~18 | ~216 | 1 seat per SOLVA; <span class="cite">$20 credit + 1 TB bandwidth</span> |
-| **Mobile build & push (Expo EAS)** | Expo | Production | ~17 ($19) | ~204 | Build cloud iOS/Android + OTA updates |
-| **Email transactional** | Resend | Pro | ~18 ($20) | ~216 | 50k email/mese, multi-dominio |
-| **DNS / CDN** | Cloudflare | Free | 0 | 0 | Routing multi-tenant, DDoS |
+| **Hosting web + PWA (Vercel)** | Vercel | <span class="cite">Pro $20/mese per seat</span> | ~18 | ~216 | 1 seat per SOLVA; serve sia web sia PWA tecnici dallo stesso deploy |
+| **Email transactional + inbound** | Resend | Pro | ~18 ($20) | ~216 | 50k email/mese + parsing inbound → ticket nativi |
+| **DNS / CDN** | Cloudflare | Free | 0 | 0 | Routing multi-tenant + subdomain `m.<tenant>` per PWA |
 | **Monitoring errori** | Sentry | Free → Team | 0 → 23 | 0 → 276 | Free tier fino a 5k errori/mese sufficiente per start |
 | **Dominio (.app/.it)** | Registrar (Cloudflare/OVH) | 1 anno | ~3 | ~30 | brand prodotto + sotto-dominio tenant |
 | **OCR (Mistral)** | Mistral AI | pay-per-use | ~0,5 | ~6 | ~500 pagine/anno × <span class="cite">$1/1000 pagine Batch API</span> |
 | **AI features (futuro, opz.)** | Anthropic Claude | pay-per-use | 0 (off) → ~25 | 0 → ~300 | Attivabile su richiesta |
 | **Backup off-site (script S3 → Cloudflare R2)** | Cloudflare R2 | Storage | ~2 | ~24 | Snapshot settimanale archivio Nextcloud |
-| **TOTALE BASE** | | | **~87 €/mese** | **~1.030 €/anno** | Senza Sentry Team e AI features |
-| **TOTALE CON ESTENSIONI** | | | **~135 €/mese** | **~1.610 €/anno** | Con Sentry Team + AI Claude attivo |
+| **TOTALE BASE** | | | **~70 €/mese** | **~828 €/anno** | Senza Sentry Team e AI features |
+| **TOTALE CON ESTENSIONI** | | | **~118 €/mese** | **~1.404 €/anno** | Con Sentry Team + AI Claude attivo |
 
-> 💡 **Confronto con proposta v1 SharePoint**: M365 BS+BB 5+15 utenti = **~€200/mese = €2.400/anno solo licenze**, ovvero **2× il nostro stack completo** (e senza ancora aver scritto una riga di app custom).
+> 💡 **Confronto con proposta v1 SharePoint**: M365 BS+BB 5+15 utenti = **~€200/mese = €2.400/anno solo licenze**, ovvero quasi **3× il nostro stack completo** (e senza ancora aver scritto una riga di app custom).
+
+> ✂️ **Risparmio rispetto a v2 con app nativa Expo**: la scelta PWA elimina €204/anno di Expo EAS Production + ~€90/anno di Apple Developer Program = **~€300/anno risparmiati** nel TCO.
+
+> 🪦 **Costo Freshdesk evitato**: la disdetta della licenza Freshdesk dopo il go-live libera ulteriori ~€15-49 € per agente al mese a seconda del piano attivato dal cliente (verifica fattura corrente per stima esatta del risparmio).
 
 ## B. Costi ricorrenti — Scalabilità multitenant (a regime)
 
@@ -35,12 +38,11 @@ Quando SOLVA aggiunge il **secondo, terzo, N-esimo** tenant al prodotto SaaS, i 
 |---|---|---|
 | Storage Share Hetzner | ✅ +€5-14/mese per tenant | 1 istanza per cliente |
 | Supabase | 🟡 leggermente | Stessa istanza Postgres serve tutti i tenant (RLS) finché < 10 GB DB e < 100K MAU |
-| Vercel | ❌ stessa app | Multitenant via subdomain o path |
-| Expo EAS | ❌ stessa app | Una sola binary iOS/Android serve tutti i clienti |
+| Vercel | ❌ stessa app | Multitenant via subdomain o path; PWA tecnici inclusa |
 | Email Resend | 🟡 scala con volume | 50k email/mese coprono ~5 tenant medi |
 | Cloudflare DNS | ❌ free fino a domini centinaia | |
 
-**Marginal cost per nuovo tenant**: ~**€10/mese** (storage + email + un po' di Supabase) → vendibile a margine alto da SOLVA.
+**Marginal cost per nuovo tenant**: ~**€8/mese** (storage + email + un po' di Supabase) → vendibile a margine alto da SOLVA.
 
 ## C. Costi una tantum — Sviluppo MVP
 
@@ -49,8 +51,8 @@ Vedi `06_PREVENTIVO/Preventivo_Base.md` per il dettaglio. Sintesi:
 | Sprint | Settimane | Effort SOLVA |
 |---|---|---|
 | Sprint 0 — Setup infra & multitenant base | 0,5 | ~25 h |
-| Sprint MVP — Web ufficio + Mobile foto + Sync Nextcloud + Auth | 3 | ~140 h |
-| Sprint 2 — Integrazione Freshdesk + Notifiche + Ricerca base | 2 | ~80 h |
+| Sprint MVP — Web ufficio + PWA tecnici + Sync Nextcloud + Auth + Ticketing base | 3 | ~155 h |
+| Sprint 2 — Migrazione Freshdesk + Ticketing email/portale + Notifiche + Ricerca | 2 | ~80 h |
 | Sprint 3 — Portale cliente (opz.) | 2 | ~70 h |
 | Sprint 4 — Preventivi & rapportini (opz., facoltativi) | 3 | ~110 h |
 | Sprint manutenzioni / impiantix integration | 2-3 | ~80 h |
@@ -100,9 +102,10 @@ Da definire nel preventivo (`06_PREVENTIVO/Preventivo_Base.md`). Range:
 
 | Voce | Importo | Note |
 |---|---|---|
-| Infra annua Bertaiola (gestita SOLVA) | **~€1.030/anno** | UE/GDPR, scalabile |
-| Risparmio vs proposta v1 SharePoint | **~€1.370/anno** | M365 +SharePoint = ~€2.400/anno |
+| Infra annua Bertaiola (gestita SOLVA) | **~€828/anno** | UE/GDPR, scalabile, no Expo EAS grazie a PWA |
+| Risparmio vs proposta v1 SharePoint | **~€1.570/anno** | M365 +SharePoint = ~€2.400/anno |
+| Risparmio licenza Freshdesk disdetta | **da quantificare** | dipende dal piano corrente del cliente (verifica fattura) |
 | Costo MVP (una tantum, sviluppo) | vedi preventivo | range €10-14k per MVP focused |
 | Costo manutenzione gestita | vedi preventivo | canone mensile o annuale |
 
-> **Allocazione budget cliente €1.500-3.000/anno**: ampiamente coperto dall'infrastruttura **+ canone manutenzione SOLVA base**.
+> **Allocazione budget cliente €1.500-3.000/anno**: ampiamente coperto dall'infrastruttura **+ canone manutenzione SOLVA base**, con margine maggiore rispetto alla v2 iniziale grazie alla scelta PWA.

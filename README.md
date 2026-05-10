@@ -46,17 +46,18 @@ Repository del progetto di digitalizzazione gestione documenti e lavori per Bert
 
 | Tema | Decisione |
 |---|---|
-| **Scope MVP** | Web ufficio · App mobile foto · Sync cartelle ufficio · Multitenancy |
+| **Scope MVP** | Web ufficio · **PWA tecnici (installabile)** · Sync cartelle ufficio · Multitenancy · **Ticketing nativo base** |
+| **Freshdesk** | **Abbandonato dopo go-live** · migrazione one-time via API (Sprint 2) |
 | **Storage file** | Hetzner Storage Share (Nextcloud managed) — alternativa scelta a SharePoint v1 |
 | **Backend** | Supabase Pro (Frankfurt EU) — Postgres + Auth + Realtime + Edge Functions |
 | **Web** | Next.js 14 su Vercel |
-| **Mobile** | Expo (React Native), iOS + Android |
+| **Mobile tecnici** | **PWA** (Next.js + Service Worker + Web App Manifest) — no App Store, no Play Store, installabile via "Aggiungi alla schermata Home" |
 | **Brand** | Doppio brand SOLVA + Bertaiola, prodotto SaaS proposto: **Cantiera** |
 | **Hosting** | 100% UE (Germania + Frankfurt) — GDPR compliant |
 | **Go-live MVP** | 1 mese dal kickoff sviluppo |
-| **Costo anno 1 (Pacchetto B)** | ~€ 19.650 + IVA (chiavi in mano) |
-| **Anno 2 a regime** | ~€ 4.150/anno (infra + manutenzione Standard) |
-| **Risparmio strutturale vs v1 SharePoint** | ~€ 2.400/anno di licenze M365 evitate |
+| **Costo anno 1 (Pacchetto B)** | ~€ 20.020 + IVA (chiavi in mano) |
+| **Anno 2 a regime** | ~€ 3.920/anno (infra + manutenzione Standard) |
+| **Risparmi vs v1 SharePoint** | ~€ 2.400/anno licenze M365 evitate + canone Freshdesk disdetto |
 
 ---
 
@@ -92,10 +93,13 @@ Repository del progetto di digitalizzazione gestione documenti e lavori per Bert
 
 ## 🚨 Cosa manca / da fare prossimamente
 
-- [ ] **PPT commerciale** (`07_PRESENTAZIONI/Bertaiola_Commerciale.pptx`) — esclusa esplicitamente dal pacchetto attuale, da produrre lato SOLVA dopo validazione preventivo
+- [ ] **Rigenerare le 2 PPT** (`07_PRESENTAZIONI/Bertaiola_Executive.pptx` + `Bertaiola_Tecnica.pptx`) per riflettere le scelte aggiornate: **PWA** invece di Expo, **abbandono Freshdesk** invece di integrazione
+- [ ] **Aggiornare `05_MOCKUP/Mockup_UI.md`** per riflettere modulo ticket nativo e PWA tecnici
+- [ ] **PPT commerciale** — esclusa esplicitamente, da produrre dopo validazione preventivo
 - [ ] Verifica WHOIS domini candidati (cantiera.app, cantiera.it, cantiera.com)
-- [ ] Brief grafico per logo Cantiera
-- [ ] Decisione finale tra istanza Nextcloud per tenant vs group folders condivise (dopo demo MVP)
+- [ ] Audit account Freshdesk del cliente per stima dimensione migrazione
+- [ ] Brief grafico per logo Cantiera + icone PWA 192/512
+- [ ] Decisione finale tra istanza Nextcloud per tenant vs group folders (dopo demo MVP)
 - [ ] Roadmap manutenzioni: modulo nativo o integrazione impiantix.app (post-MVP)
 
 ---
