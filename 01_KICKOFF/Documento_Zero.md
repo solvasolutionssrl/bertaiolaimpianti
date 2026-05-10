@@ -14,7 +14,9 @@
 
 ## 2. Problema da risolvere
 
-L'azienda ha già adottato **Freshdesk** come sistema di ticketing, ma la documentazione delle commesse (disegni, foto, schede tecniche, DICO, preventivi) è gestita **separatamente**: cartelle locali NAS in ufficio e album Google Foto condivisi linkati dentro Freshdesk per le foto cantiere caricate dal titolare via iPhone.
+L'azienda usa oggi **Freshdesk** come sistema di ticketing **legacy**, ma:
+- La documentazione delle commesse (disegni, foto, schede tecniche, DICO, preventivi) è gestita **separatamente**: cartelle locali NAS in ufficio e album Google Foto condivisi linkati dentro Freshdesk per le foto cantiere caricate dal titolare via iPhone.
+- Freshdesk è uno strumento generico di customer support, non un sistema di gestione commesse → introduce attriti nei workflow reali di Bertaiola.
 
 Conseguenze:
 - File sparsi tra NAS, Drive, email, allegati Freshdesk
@@ -23,17 +25,20 @@ Conseguenze:
 - Difficoltà a recuperare velocemente documenti storici
 - Nessuna automazione su upload mancanti / chiusura lavoro
 - Mancanza di app mobile dedicata per i tecnici
+- Doppio salto mentale "ticket Freshdesk ↔ commessa fisica"
 
 ## 3. Visione del progetto (post-discussione)
 
-Costruire **un'unica piattaforma** che:
+Costruire **un'unica piattaforma** che **sostituisce** Freshdesk e centralizza tutto:
 
-1. **Unifica** Freshdesk (ticket) con un archivio documentale strutturato (file).
+1. **Sostituisce** Freshdesk con un modulo ticketing nativo integrato alla gestione commesse (un ticket può diventare commessa con un click; gli storici Freshdesk sono migrati una tantum via API).
 2. **Standardizza** l'alberatura cartelle automaticamente per ogni commessa, in base alle fasi selezionate (fra le 38 lavorazioni tipiche mappate).
-3. **Da accesso mobile** ai tecnici per consultare disegni, scattare/caricare foto, vedere lo stato delle fasi della propria commessa.
+3. **Da accesso mobile** ai tecnici tramite **PWA installabile** (no App Store, no installazione complicata): consultano disegni, scattano/caricano foto, vedono lo stato delle fasi della propria commessa.
 4. **Notifica automaticamente** ufficio e capi-cantiere su upload mancanti, fasi in attesa, requisiti per chiudere il lavoro.
 5. **Permette accesso "alla vecchia"** dall'ufficio: i 5 PC Windows in sede vedono le cartelle delle commesse come unità di rete sincronizzata (drag-and-drop, doppio click, niente app obbligatoria per le operazioni quotidiane di routine).
 6. **Apre un portale cliente finale** dove far consultare documenti e (in futuro) eseguire pagamenti.
+
+> ⚠️ **Cambio rispetto a v1 e ipotesi intermedie**: Freshdesk non viene "integrato" ma **abbandonato**. La migrazione è uno script one-time che estrae i ticket via API Freshdesk in JSON e li importa nella nuova app. Dal go-live, Bertaiola non rinnova più la licenza Freshdesk.
 
 ## 4. Vincoli e scelte chiave emerse
 
@@ -52,6 +57,8 @@ Costruire **un'unica piattaforma** che:
 | Manutenzione | **Tutto gestito SOLVA** |
 | Brand | **Doppio brand** SOLVA + Bertaiola |
 | Architettura | **MULTITENANT** dal giorno 1 (Bertaiola è il primo cliente di una nuova linea SaaS) |
+| Mobile tecnici | **PWA installabile** (no App Store, distribuita via URL, "Aggiungi alla schermata Home") |
+| Freshdesk | **Da abbandonare**: migrazione one-time via API, poi ticketing nativo nella nuova app |
 | Pubblico PPT | Tecnico |
 
 ## 5. Pivot architetturale rispetto alla v1 (28/11/2025)
@@ -80,11 +87,11 @@ Bertaiola è il **caso d'uso pilota** per un prodotto SaaS verticale destinato a
 
 ## 8. Punti chiusi vs aperti
 
-**Chiusi**: settore, organico, volumi, vincoli budget, vincolo go-live, scelta multitenant, scope MVP (ponte Freshdesk + app foto + commesse + portale cliente), scelta hosting UE.
+**Chiusi**: settore, organico, volumi, vincoli budget, vincolo go-live, scelta multitenant, scope MVP (ticketing nativo + app foto PWA + commesse + portale cliente), scelta hosting UE, decisione di abbandonare Freshdesk, decisione PWA al posto di app nativa.
 
 **Aperti** (vedi roadmap):
 - Selezione finale brand prodotto (3 opzioni in `03_BRAND`)
 - Decisione tra Nextcloud managed (Hetzner Storage Share) vs Supabase Storage puro (vedi comparativa)
-- Modalità integrazione Freshdesk: manuale (CSV/import) all'avvio, poi webhook automatico
+- Data esatta di disdetta licenza Freshdesk (consigliato: fine periodo fatturazione corrente, dopo go-live e migrazione storico)
 - Strategia di onboarding nuovi tenant (post Bertaiola)
 - Piano formativo per ufficio (1-2 sessioni)
