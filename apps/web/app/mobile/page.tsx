@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Archive, ChevronRight, MapPin } from 'lucide-react';
+import { ChevronRight, ClipboardCheck, MapPin, Mic } from 'lucide-react';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
-import { Button, StatoBadge } from '@impiantixplus/ui';
+import { StatoBadge } from '@impiantixplus/ui';
 import type { StatoCommessa } from '@impiantixplus/api/types';
 
 import { guardMobile } from './_lib/guard';
@@ -94,15 +94,38 @@ export default async function MobileCommessePage() {
   });
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-4 p-4">
+    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-2">
-        <p className="text-xs uppercase tracking-widest text-muted-foreground">
-          {greeting()} · {formatToday()}
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          · {greeting()} · {formatToday()} ·
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">
-          Le mie commesse oggi
+        <h1 className="mt-1 text-[26px] font-semibold leading-none tracking-tight">
+          Oggi
         </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {rows.length === 0
+            ? 'Nessuna commessa attiva.'
+            : `${rows.length} ${rows.length === 1 ? 'commessa attiva' : 'commesse attive'}`}
+        </p>
       </header>
+
+      {/* Azioni rapide — sostituiscono Sopralluogo dalla bottom-nav */}
+      <div className="grid grid-cols-2 gap-2">
+        <QuickAction
+          href="/mobile/sopralluogo"
+          icon={ClipboardCheck}
+          label="Nuovo sopralluogo"
+          hint="7 passi · cliente nuovo"
+        />
+        <QuickAction
+          href="/mobile/voice-intake"
+          icon={Mic}
+          label="Voce"
+          hint="detta nota o ordine"
+          tone="primary"
+          dataTour="vocale"
+        />
+      </div>
 
       {rows.length === 0 ? (
         <EmptyState />
@@ -115,16 +138,64 @@ export default async function MobileCommessePage() {
           ))}
         </ul>
       )}
-
-      <div className="mt-2">
-        <Link href="/mobile/archivio" passHref>
-          <Button variant="outline" size="lg" className="min-h-[48px] w-full">
-            <Archive className="h-4 w-4" aria-hidden="true" />
-            Vedi archivio
-          </Button>
-        </Link>
-      </div>
     </div>
+  );
+}
+
+function QuickAction({
+  href,
+  icon: Icon,
+  label,
+  hint,
+  tone = 'default',
+  dataTour,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  hint: string;
+  tone?: 'default' | 'primary';
+  dataTour?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      data-tour={dataTour}
+      className={[
+        'group relative flex flex-col gap-1 overflow-hidden rounded-xl border p-3 transition-colors active:scale-[0.99]',
+        tone === 'primary'
+          ? 'border-primary/30 bg-primary/5 hover:bg-primary/10'
+          : 'border-border bg-card hover:bg-muted/40',
+      ].join(' ')}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className={[
+            'flex h-9 w-9 items-center justify-center rounded-lg border',
+            tone === 'primary'
+              ? 'border-primary/30 bg-primary text-primary-foreground'
+              : 'border-border bg-background text-foreground',
+          ].join(' ')}
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <span
+          aria-hidden="true"
+          className={[
+            'font-mono text-[9px] uppercase tracking-[0.18em]',
+            tone === 'primary' ? 'text-primary' : 'text-muted-foreground/70',
+          ].join(' ')}
+        >
+          {tone === 'primary' ? 'rec' : 'new'}
+        </span>
+      </div>
+      <span className="mt-1 text-sm font-semibold tracking-tight text-foreground">
+        {label}
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        {hint}
+      </span>
+    </Link>
   );
 }
 
@@ -137,6 +208,7 @@ function CommessaCard({ commessa }: { commessa: CommessaRow }) {
   return (
     <Link
       href={`/mobile/commessa/${commessa.id}`}
+      data-tour="commessa-card"
       className="block rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-muted"
     >
       <div className="flex items-start justify-between gap-3">
