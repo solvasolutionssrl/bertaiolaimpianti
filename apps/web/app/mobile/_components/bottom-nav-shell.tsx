@@ -3,19 +3,26 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Briefcase, Timer, Mic, Bell, User } from 'lucide-react';
 
-import {
-  MobileBottomNav,
-  type MobileTab,
-  type MobileTabId,
-} from '@impiantixplus/ui';
+import { MobileBottomNav, type MobileTab, type MobileTabId } from '@impiantixplus/ui';
 
 /**
- * Wrapper client del bottom-nav: serve solo a calcolare l'`activeTab` dalla
- * pathname corrente (il layout server-async non può usare `usePathname`).
+ * Wrapper client del bottom-nav.
+ * Le icone (React components) devono vivere nel client — non sono serializzabili
+ * da Server Component. Il server passa solo `unreadCount` (number, serializzabile).
  */
-export function BottomNavShell({ tabs }: { tabs: MobileTab[] }) {
+export function BottomNavShell({ unreadCount }: { unreadCount: number }) {
   const pathname = usePathname() ?? '';
+
+  const tabs: MobileTab[] = [
+    { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
+    { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
+    { id: 'voce', label: 'Voce', icon: Mic, href: '/mobile/voice-intake', primary: true },
+    { id: 'notifiche', label: 'Inbox', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+    { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+  ];
+
   const activeTab = matchActive(pathname, tabs);
 
   return (
@@ -31,12 +38,7 @@ export function BottomNavShell({ tabs }: { tabs: MobileTab[] }) {
   );
 }
 
-function matchActive(
-  pathname: string,
-  tabs: MobileTab[],
-): MobileTabId | undefined {
-  // Best-match: tab con href più lungo che fa da prefisso, escludendo "/mobile"
-  // se ci sono match più specifici.
+function matchActive(pathname: string, tabs: MobileTab[]): MobileTabId | undefined {
   let best: { tab: MobileTab; len: number } | null = null;
   for (const t of tabs) {
     const href = t.href;
