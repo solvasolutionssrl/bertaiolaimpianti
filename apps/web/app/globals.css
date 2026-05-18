@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ===== impiantiXplus — Brand: Bertaiola (Blu + Arancio) =====
+     * Dominante: blu profondo industriale (link, primary, sidebar attiva, focus)
+     * Accento: arancio caldo (notifiche, highlight, hover lift, status "in corso")
+     */
+
+    --background: 32 28% 98%;          /* #FBFAF6 carta calda */
+    --foreground: 220 30% 9%;          /* #0F1320 ink blu scuro */
+    --card: 0 0% 100%;
+    --card-foreground: 220 30% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 30% 9%;
+    --muted: 34 18% 95%;
+    --muted-foreground: 220 10% 40%;
+    --border: 30 12% 89%;
+    --input: 30 12% 89%;
+
+    /* PRIMARY — Bertaiola Blu (cobalto profondo) */
+    --primary: 220 80% 32%;            /* #1340A6 */
+    --primary-foreground: 0 0% 100%;
+    --primary-soft: 220 90% 96%;       /* #EAF0FB */
+    --primary-soft-foreground: 220 80% 28%;
+    --ring: 220 80% 32%;
+
+    /* ACCENT — Bertaiola Arancio (caldo, vivo) */
+    --accent: 22 92% 54%;              /* #F26B23 */
+    --accent-foreground: 0 0% 100%;
+    --accent-soft: 28 100% 95%;        /* #FFEEDC */
+    --accent-soft-foreground: 22 92% 38%;
+
+    --secondary: 220 30% 14%;          /* ink scuro per testi importanti */
+    --secondary-foreground: 0 0% 100%;
+
+    --destructive: 0 78% 50%;          /* #DC2626 */
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 56% 36%;            /* forest */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 220 30% 9%;
+
+    --radius: 0.625rem;
+
+    /* Brand variables esposte come token semantici */
+    --brand-blu: 220 80% 32%;
+    --brand-arancio: 22 92% 54%;
+  }
+
+  .dark {
+    --background: 220 30% 7%;
+    --foreground: 32 28% 96%;
+    --card: 220 25% 10%;
+    --card-foreground: 32 28% 96%;
+    --popover: 220 25% 10%;
+    --popover-foreground: 32 28% 96%;
+    --muted: 220 18% 14%;
+    --muted-foreground: 220 12% 65%;
+    --border: 220 18% 18%;
+    --input: 220 18% 18%;
+
+    --primary: 220 90% 65%;            /* blu lifted */
+    --primary-foreground: 220 30% 7%;
+    --primary-soft: 220 50% 16%;
+    --primary-soft-foreground: 220 90% 78%;
+    --ring: 220 90% 65%;
+
+    --accent: 22 95% 60%;
+    --accent-foreground: 220 30% 7%;
+    --accent-soft: 22 50% 18%;
+    --accent-soft-foreground: 22 95% 75%;
+
+    --secondary: 32 28% 96%;
+    --secondary-foreground: 220 30% 7%;
+
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 220 30% 7%;
+    --success: 152 55% 50%;
+    --warning: 38 92% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv11', 'ss01', 'ss03', 'cv01';
+    letter-spacing: -0.005em;
+  }
+  table, .tabular, .num {
+    font-variant-numeric: tabular-nums;
+  }
+  code, kbd, .codice {
+    font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-ligatures: none;
+  }
+}
+
+@layer utilities {
+  /* ===== Backgrounds atmosferici ===== */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.7) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.7) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+  .bg-grid-radial {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.6) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.6) 1px, transparent 1px);
+    background-size: 28px 28px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 70%);
+            mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 70%);
+  }
+  .bg-aurora-brand {
+    background:
+      radial-gradient(900px 500px at 15% -10%, hsl(220 80% 92%) 0%, transparent 55%),
+      radial-gradient(700px 400px at 85% -5%, hsl(28 100% 90%) 0%, transparent 60%),
+      hsl(var(--background));
+  }
+  .dark .bg-aurora-brand {
+    background:
+      radial-gradient(900px 500px at 15% -10%, hsl(220 70% 18% / 0.65) 0%, transparent 55%),
+      radial-gradient(700px 400px at 85% -5%, hsl(22 60% 22% / 0.55) 0%, transparent 60%),
+      hsl(var(--background));
+  }
+
+  /* Canvas applicativo: sfumatura morbidissima blu↘arancio che spezza
+   * il "tutto bianco" senza disturbare il contenuto. Pensato per il
+   * main wrapper dell'OfficeShell. */
+  .bg-canvas {
+    background:
+      radial-gradient(1100px 700px at 0% 0%, hsl(220 95% 96%) 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 0%, hsl(28 100% 96%) 0%, transparent 55%),
+      radial-gradient(800px 500px at 50% 100%, hsl(220 80% 97%) 0%, transparent 60%),
+      hsl(var(--background));
+  }
+  .dark .bg-canvas {
+    background:
+      radial-gradient(1100px 700px at 0% 0%, hsl(220 70% 14% / 0.6) 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 0%, hsl(22 70% 16% / 0.55) 0%, transparent 55%),
+      hsl(var(--background));
+  }
+
+  /* ===== Bordo "vivo" — gradient blu→arancio ===== */
+  .border-brand-line {
+    background:
+      linear-gradient(90deg,
+        hsl(var(--primary)) 0%,
+        hsl(var(--primary)) 35%,
+        hsl(var(--accent)) 65%,
+        hsl(var(--accent)) 100%);
+  }
+  .text-brand-grad {
+    background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)));
+    -webkit-background-clip: text;
+            background-clip: text;
+    -webkit-text-fill-color: transparent;
+            color: transparent;
+  }
+
+  /* ===== Shadows ===== */
+  .shadow-soft {
+    box-shadow:
+      0 1px 0 0 hsl(var(--border)),
+      0 1px 2px 0 hsl(0 0% 0% / 0.04);
+  }
+  .shadow-soft-md {
+    box-shadow:
+      0 1px 0 0 hsl(var(--border)),
+      0 4px 12px -4px hsl(0 0% 0% / 0.08);
+  }
+  .shadow-soft-lg {
+    box-shadow:
+      0 0 0 1px hsl(var(--border)),
+      0 12px 40px -16px hsl(0 0% 0% / 0.12);
+  }
+  .shadow-glow-brand {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.25),
+      0 8px 24px -8px hsl(var(--primary) / 0.35);
+  }
+
+  /* ===== Animations ===== */
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-up { animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .stagger > * {
+    animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0.00s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.03s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.06s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.09s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.12s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.15s; }
+  .stagger > *:nth-child(7) { animation-delay: 0.18s; }
+  .stagger > *:nth-child(8) { animation-delay: 0.21s; }
+
+  @keyframes ping-soft {
+    0%   { transform: scale(1);   opacity: 1; }
+    80%  { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  .animate-ping-soft::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.6;
+    animation: ping-soft 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+}

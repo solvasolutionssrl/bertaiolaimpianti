@@ -1,0 +1,80 @@
+# Supabase local dev config — impiantiXplus
+# Region target prod: Frankfurt (eu-central-1) — vedi documentazione_generale/02_ARCHITETTURA/Stack_Tecnico.md
+project_id = "impiantixplus"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "http://127.0.0.1:3000",
+  "http://localhost:3000",
+  "http://m.localhost:3000",
+  "http://cliente.localhost:3000",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = false # invite-only multitenant
+
+[auth.email]
+enable_signup = false
+double_confirm_changes = true
+enable_confirmations = false
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[edge_runtime]
+enabled = true
+inspector_port = 8083
+
+# Default per le Edge Functions: verify_jwt = true (impostato dal CLI).
+# Override per singola funzione qui sotto quando l'auth non è via JWT utente.
+
+# Webhook esterni (Resend) → autenticati con HMAC, non JWT
+[functions.inbound-email]
+verify_jwt = false
+
+# Database webhook + pg_cron → autenticato con shared secret `x-webhook-secret`
+[functions.notify-event]
+verify_jwt = false
+
+# Onboarding admin → autenticato con `x-admin-secret` shared secret
+[functions.onboard-tenant]
+verify_jwt = false
