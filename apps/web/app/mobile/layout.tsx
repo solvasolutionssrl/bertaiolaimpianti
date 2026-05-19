@@ -60,7 +60,14 @@ export default async function MobileLayout({
         {children}
       </main>
 
-      {ctx ? <BottomNavShell unreadCount={unreadCount} shell={shell} /> : null}
+      {ctx ? (
+        <BottomNavShell
+          unreadCount={unreadCount}
+          shell={shell}
+          userId={ctx.userId}
+          tenantId={ctx.tenantId}
+        />
+      ) : null}
 
       {/* PWA install prompt — solo per utenti loggati, con re-prompt 30gg */}
       {ctx ? <PwaInstallPrompt /> : null}
