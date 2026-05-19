@@ -107,9 +107,14 @@ export function Hero({
   return (
     <div
       className={cn(
-        'relative -mx-4 -mt-4 mb-2 overflow-hidden bg-primary px-4 pt-6 pb-12 text-primary-foreground',
+        'relative mb-2 overflow-hidden bg-primary px-5 pb-12 text-primary-foreground',
         className,
       )}
+      style={{
+        // Padding-top combina il padding visivo (1.5rem) col safe-area-inset-top
+        // del notch/status-bar quando la PWA è installata in standalone.
+        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)',
+      }}
     >
       {/* Grid pattern texture */}
       <div
