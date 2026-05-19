@@ -28,8 +28,12 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // maximumScale: 5 + userScalable: true → permette zoom accessibility
+  // (utenti con vista debole). Lighthouse a11y richiede questo per WCAG 2.1.
+  maximumScale: 5,
+  userScalable: true,
+  // Estende il layout sotto il notch su iPhone PWA in standalone
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
