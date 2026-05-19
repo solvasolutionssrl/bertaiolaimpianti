@@ -42,3 +42,6 @@ supabase/.temp
 # Output script one-time (audit Freshdesk, ecc.)
 scripts/.migrate-freshdesk-errors.json
 scripts/.migrate-freshdesk-report.csv
+
+# Claude local state
+.claude/
