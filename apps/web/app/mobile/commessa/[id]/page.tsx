@@ -461,11 +461,15 @@ export default async function CommessaDetailPage({
       </section>
       </div>
 
-      {/* FAB camera fisso */}
+      {/* FAB camera fisso — bottom calcolato per non sovrapporsi
+          al bottom-nav nemmeno con safe-area home indicator iPhone */}
       <Link
         href={`/mobile/commessa/${params.id}/scatto`}
         aria-label="Scatta foto"
-        className="fixed bottom-24 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground shadow-glow-brand transition-transform active:scale-[0.92]"
+        className="fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground shadow-glow-brand transition-transform active:scale-[0.92]"
+        style={{
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)',
+        }}
       >
         <Camera className="h-6 w-6" aria-hidden="true" />
       </Link>
