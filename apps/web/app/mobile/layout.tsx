@@ -7,6 +7,7 @@ import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache
 import { getMobileShell } from '@impiantixplus/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
+import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
 import { MOBILE_TOUR_STEPS } from '../_components/onboarding-tour-steps';
@@ -60,6 +61,9 @@ export default async function MobileLayout({
       </main>
 
       {ctx ? <BottomNavShell unreadCount={unreadCount} shell={shell} /> : null}
+
+      {/* PWA install prompt — solo per utenti loggati, con re-prompt 30gg */}
+      {ctx ? <PwaInstallPrompt /> : null}
 
       {showOnboardingTour ? (
         <Suspense fallback={null}>

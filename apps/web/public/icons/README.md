@@ -1,42 +1,26 @@
 # PWA Icons
 
-Mancano gli asset PNG `icon-192.png` e `icon-512.png` (referenziati da
-`apps/web/app/manifest.ts`). Non versioniamo asset binari finali in attesa
-del file logo definitivo del tenant Bertaiola.
+Le icone della PWA (`icon-192.png`, `icon-512.png`, `apple-icon`) **NON** sono
+file statici versionati nel repo: vengono **generate dinamicamente** dai
+Route Handlers Next 14 in:
 
-## Come generarli
+- `apps/web/app/icons/icon-192.png/route.tsx` → 192×192
+- `apps/web/app/icons/icon-512.png/route.tsx` → 512×512
+- `apps/web/app/apple-icon.tsx` → 180×180 (convenzione Next 14 Metadata API)
 
-A partire dal logo master in SVG presente in `/branding/` (TBD) oppure dal
-PNG quadrato del cliente:
+Sotto il cofano usano `next/og` (Satori + resvg, runtime edge) per renderizzare
+da JSX. Niente dipendenze native (sharp, libvips). Le risposte vengono cachate
+da Vercel come immutable.
 
-```bash
-# Esempio con ImageMagick (richiede sfondo già "safe area" per maskable):
-magick branding/impiantixplus-logo.png -resize 192x192 \
-  apps/web/public/icons/icon-192.png
-magick branding/impiantixplus-logo.png -resize 512x512 \
-  apps/web/public/icons/icon-512.png
-```
+## Vantaggi
 
-In alternativa, generatore web: <https://realfavicongenerator.net/> →
-configurare:
+- Niente PNG binari da committare → repo pulito
+- Cambi al design = un commit TSX, non Photoshop
+- Allineato al theme (`#1340A6` primary, `#F26B23` accent) che vive in CSS
+  variables: niente drift visivo
 
-- Theme color: `#D97706` (Ocra)
-- Background: `#FFFFFF`
-- Safe area maskable: 80% (padding 10% per lato)
-- iOS: include apple-touch-icon-180.png (suggerito ma non obbligatorio:
-  Next 14 Metadata API lo genera automaticamente se presente
-  `apps/web/app/apple-icon.png`)
+## Per cambiare il design
 
-## Verifica
-
-```bash
-pnpm --filter @impiantixplus/web dev
-# poi: chrome://inspect → DevTools → Application → Manifest
-# deve mostrare entrambe le icone "any" + "maskable" valide
-```
-
-## File attesi
-
-- `icon-192.png` — 192×192, sfondo Ocra o trasparente con safe area
-- `icon-512.png` — 512×512, idem
-- (opz.) `apple-touch-icon.png` — 180×180, generato da Next se in `app/`
+Modifica i `route.tsx`. Concept attuale: "X+" mono bold arancio su sfondo
+blu profondo con grid pattern bianco a bassa opacità + glow accent in basso-
+destra. Coerente col linguaggio "Engineering Blueprint" della app.
