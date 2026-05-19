@@ -84,7 +84,7 @@ export class NextcloudStorageProvider implements StorageProvider {
         : body instanceof ArrayBuffer
           ? new Uint8Array(body)
           : body;
-    await this.req('PUT', this.webdav(path), new Blob([buffer]), {
+    await this.req('PUT', this.webdav(path), new Blob([buffer as unknown as BlobPart]), {
       'Content-Type': opts.contentType ?? 'application/octet-stream',
     });
     return { path, size: buffer.byteLength };

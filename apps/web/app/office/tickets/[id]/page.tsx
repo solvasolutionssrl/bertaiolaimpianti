@@ -50,7 +50,9 @@ export default async function TicketDetailPage({
       .maybeSingle(),
   ]);
 
-  const t = ticketRes.data;
+  // tickets_with_sla è una VIEW — i join non hanno FK nei tipi generati → cast
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const t = ticketRes.data as any;
   if (ticketRes.error || !t) notFound();
 
   const cliente = Array.isArray(t.cliente) ? t.cliente[0] : t.cliente;

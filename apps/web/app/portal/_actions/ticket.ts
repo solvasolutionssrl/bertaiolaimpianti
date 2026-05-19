@@ -144,10 +144,11 @@ export async function creaTicketDaPortale(
         staff.map((u) => ({
           tenant_id: ctx.tenantId,
           user_id: u.id,
-          tipo: 'ticket_nuovo_portale',
-          titolo: `Nuova richiesta da ${ctx.cliente.ragioneSociale}`,
-          corpo: `${ticket.codice} — ${input.oggetto}`,
-          link: `/office/tickets/${ticket.id}`,
+          type: 'ticket_nuovo_portale',
+          payload: {
+            descrizione: `${ticket.codice} — ${input.oggetto} (da ${ctx.cliente.ragioneSociale})`,
+            ticket_id: ticket.id,
+          },
         })),
       );
     }
