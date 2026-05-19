@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 
 // Cattura errori nel root layout (raro ma possibile — es. font fail).
 // Non può usare componenti del layout (niente <html> wrapper esterno).
@@ -12,6 +13,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
+    Sentry.captureException(error);
     console.error('[global error]', error.digest ?? error.message);
   }, [error]);
 

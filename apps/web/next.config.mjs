@@ -71,4 +71,23 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry wrapper: attivo solo se SENTRY_AUTH_TOKEN è settato (per upload
+// source maps in prod). In dev e in build senza token, comportamento
+// invariato. Il runtime client/server resta funzionante anche senza Sentry.
+import { withSentryConfig } from '@sentry/nextjs';
+
+const sentryEnabled = !!process.env.SENTRY_AUTH_TOKEN;
+
+export default sentryEnabled
+  ? withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      silent: !process.env.CI,
+      widenClientFileUpload: true,
+      reactComponentAnnotation: { enabled: true },
+      tunnelRoute: '/monitoring',
+      hideSourceMaps: true,
+      disableLogger: true,
+      automaticVercelMonitors: true,
+    })
+  : nextConfig;
