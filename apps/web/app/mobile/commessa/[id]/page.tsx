@@ -9,6 +9,7 @@ import {
   FileText,
   ImageIcon,
   FileIcon,
+  Folder,
   PencilLine,
   ChevronRight,
 } from 'lucide-react';
@@ -25,6 +26,8 @@ import {
   Divider,
   Stagger,
   CornerTicks,
+  Hero,
+  HeroMeta,
 } from '../../_components/blueprint';
 
 export async function generateMetadata({
@@ -141,42 +144,57 @@ export default async function CommessaDetailPage({
   const telefono = (cliente?.telefoni as string[] | undefined)?.[0];
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-7 p-4 pb-28">
-      {/* Topbar minima */}
-      <div className="flex items-center justify-between pt-1">
-        <Link
-          href="/mobile"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Indietro</span>
-        </Link>
-        <StatoLed stato={stato} showLabel />
-      </div>
+    <div className="flex min-h-[100dvh] flex-col pb-28">
+      {/* Hero dark con codice + cliente + LED */}
+      <Hero>
+        <div className="flex items-center justify-between">
+          <Link
+            href="/mobile"
+            className="inline-flex items-center gap-1.5 text-primary-foreground/80 transition-colors hover:text-primary-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Indietro</span>
+          </Link>
+          <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1">
+            <StatoLed stato={stato} />
+            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
+              {{
+                aperta: 'Aperta',
+                in_corso: 'In corso',
+                collaudo: 'Collaudo',
+                bozza: 'Bozza',
+                completata: 'Completata',
+                archiviata: 'Archiviata',
+                critica: 'Critica',
+              }[stato] ?? stato}
+            </span>
+          </span>
+        </div>
 
-      {/* ── 01 / IDENTITÀ ───────────────────────────────────────────────────── */}
-      <section className="space-y-3 animate-fade-up">
-        <SectionNumber n={1} title="Commessa" />
-        <div>
-          <p className="font-mono text-2xl font-bold leading-none tabular-nums text-foreground">
+        <div className="mt-5">
+          <HeroMeta>Commessa · {fmtData(commessa.data_apertura)}</HeroMeta>
+          <p className="mt-1 font-mono text-2xl font-bold leading-none tabular-nums text-primary-foreground">
             {commessa.codice_interno}
           </p>
-          <h1 className="mt-3 text-2xl font-semibold leading-tight tracking-tight text-foreground">
+          <h1 className="mt-3 text-2xl font-semibold leading-tight tracking-tight text-primary-foreground">
             {cliente?.ragione_sociale ?? '—'}
           </h1>
           {commessa.cliente_indirizzo_cantiere && (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-primary-foreground/70">
               {commessa.cliente_indirizzo_cantiere}
             </p>
           )}
-          <MetaLine className="mt-2">
-            {fmtData(commessa.data_apertura)}
-            {responsabile?.display_name && ` · resp. ${responsabile.display_name}`}
-          </MetaLine>
+          {responsabile?.display_name && (
+            <HeroMeta className="mt-2">Resp · {responsabile.display_name}</HeroMeta>
+          )}
         </div>
+      </Hero>
 
-        {/* Azioni rapide */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
+      <div className="flex flex-col gap-7 px-4 pt-4">
+
+      {/* Azioni rapide — overlap sull'hero */}
+      <section className="-mt-12 animate-fade-up">
+        <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 shadow-soft-lg">
           {telefono ? (
             <a
               href={`tel:${telefono}`}
@@ -351,15 +369,29 @@ export default async function CommessaDetailPage({
               </Stagger>
             )}
 
-            <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3">
-              <MetaLine className="mb-1">Cartella cloud</MetaLine>
-              <p className="font-mono text-xs leading-snug text-foreground break-all">
-                {commessa.nome_cartella ?? '—'}
-              </p>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Tutti i file vivono nella cartella condivisa del tenant.
-              </p>
-            </div>
+            <Link
+              href={`/mobile/commessa/${params.id}/cartella`}
+              className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-accent/5 p-4 shadow-soft transition-all active:scale-[0.99]"
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary text-primary-foreground">
+                <Folder className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-primary">
+                  Esplora cloud
+                </p>
+                <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+                  {commessa.nome_cartella ?? 'Cartella commessa'}
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Naviga sottocartelle e file da Nextcloud
+                </p>
+              </div>
+              <ChevronRight
+                className="h-4 w-4 shrink-0 text-primary transition-transform group-active:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
           </TabsContent>
 
           {/* ───────────── AGGIORNAMENTI ───────────── */}
@@ -396,6 +428,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
         </Tabs>
       </section>
+      </div>
 
       {/* FAB camera fisso */}
       <Link

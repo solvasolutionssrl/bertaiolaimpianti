@@ -91,6 +91,71 @@ export function Stagger({ children, className }: { children: React.ReactNode; cl
   return <div className={cn('stagger', className)}>{children}</div>;
 }
 
+// ─── Hero ────────────────────────────────────────────────────────────────────
+// Blocco dark blu profondo brand in cima alla pagina con grid texture
+// di sfondo. Dà depth immediata e separa il "contesto" dal "contenuto".
+// Le sezioni che seguono possono fare overlap negativo per fluttuare
+// sopra il bordo inferiore curvo.
+
+export function Hero({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'relative -mx-4 -mt-4 mb-2 overflow-hidden bg-primary px-4 pt-6 pb-12 text-primary-foreground',
+        className,
+      )}
+    >
+      {/* Grid pattern texture */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.12]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, rgba(255,255,255,0.7) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.7) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          maskImage: 'radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%)',
+        }}
+      />
+      {/* Accent glow arancio in basso a destra per "vita" */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-20 -right-16 h-48 w-48 rounded-full opacity-25 blur-3xl"
+        style={{ background: 'hsl(var(--accent))' }}
+      />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+// ─── HeroMeta ────────────────────────────────────────────────────────────────
+// MetaLine ma in tono "dark hero" (semi-transparent sul blu).
+
+export function HeroMeta({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <p
+      className={cn(
+        'font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60',
+        className,
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
 // ─── Corner Tick ─────────────────────────────────────────────────────────────
 // Decoro angolare stile "registration mark" tecnico per card distintive.
 

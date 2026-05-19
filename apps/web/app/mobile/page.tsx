@@ -18,7 +18,7 @@ import type { StatoCommessa } from '@impiantixplus/api/types';
 import { getMobileShell } from '@impiantixplus/api/types';
 
 import { guardMobile } from './_lib/guard';
-import { SectionNumber, MetaLine, Stagger, CornerTicks } from './_components/blueprint';
+import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 
 export const metadata: Metadata = {
   title: 'impiantiXplus mobile',
@@ -102,54 +102,66 @@ async function GestioneDashboard({
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-7 p-4 pb-24">
-      {/* Hero */}
-      <header className="pt-2 animate-fade-up">
-        <MetaLine>
+    <div className="flex min-h-[100dvh] flex-col pb-24">
+      {/* Hero dark */}
+      <Hero>
+        <HeroMeta>
           {greeting()} · {formatToday()}
-        </MetaLine>
+        </HeroMeta>
         <div className="mt-2 flex items-baseline justify-between gap-3">
-          <h1 className="font-mono text-3xl font-bold leading-none tracking-tightest">
+          <h1 className="font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
             DASHBOARD
           </h1>
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">
+          <span className="rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
             {roleLabel[ctx.role] ?? ctx.role}
           </span>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-primary-foreground/70">
           Riepilogo operativo del tenant.
         </p>
-      </header>
+      </Hero>
 
-      {/* ── 01 / METRICHE ──────────────────────────────────────────────────── */}
-      <section className="space-y-3 animate-fade-up [animation-delay:40ms]">
-        <SectionNumber n={1} title="Metriche oggi" />
-        <div className="relative overflow-hidden rounded-lg border border-border bg-card p-5 shadow-soft">
-          <CornerTicks />
-          {/* Grid pattern decorativo sullo sfondo */}
-          <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.4]" aria-hidden="true" />
-          <div className="relative grid grid-cols-3 gap-3">
-            <MetricCell
-              value={aperte.count ?? 0}
-              label="Attive"
-              icon={<TrendingUp className="h-3 w-3" />}
-              tone="primary"
-            />
-            <MetricCell
-              value={fasiAttesa.count ?? 0}
-              label="Ferme"
-              icon={<Clock className="h-3 w-3" />}
-              tone={fasiAttesa.count && fasiAttesa.count > 0 ? 'warn' : 'neutral'}
-            />
-            <MetricCell
-              value={fotoOggi.count ?? 0}
-              label="Foto oggi"
-              icon={<Camera className="h-3 w-3" />}
-              tone="neutral"
-            />
+      <div className="flex flex-col gap-7 px-4 pt-4">
+        {/* ── 01 / METRICHE ──────── (overlap parziale sull'hero) ────────────── */}
+        <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft-lg">
+            <CornerTicks />
+            {/* Grid pattern decorativo sullo sfondo */}
+            <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.35]" aria-hidden="true" />
+            <div className="relative">
+              <SectionNumber
+                n={1}
+                title="Metriche oggi"
+                trailing={
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50">
+                    live
+                  </span>
+                }
+                className="mb-4"
+              />
+              <div className="grid grid-cols-3 gap-3">
+                <MetricCell
+                  value={aperte.count ?? 0}
+                  label="Attive"
+                  icon={<TrendingUp className="h-3 w-3" />}
+                  tone="primary"
+                />
+                <MetricCell
+                  value={fasiAttesa.count ?? 0}
+                  label="Ferme"
+                  icon={<Clock className="h-3 w-3" />}
+                  tone={fasiAttesa.count && fasiAttesa.count > 0 ? 'warn' : 'neutral'}
+                />
+                <MetricCell
+                  value={fotoOggi.count ?? 0}
+                  label="Foto oggi"
+                  icon={<Camera className="h-3 w-3" />}
+                  tone="neutral"
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       {/* ── 02 / AZIONI RAPIDE ─────────────────────────────────────────────── */}
       <section className="space-y-3 animate-fade-up [animation-delay:80ms]">
@@ -197,6 +209,7 @@ async function GestioneDashboard({
           </Stagger>
         )}
       </section>
+      </div>
     </div>
   );
 }
@@ -239,25 +252,27 @@ async function CampoOggi({
   }));
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-7 p-4 pb-24">
-      {/* Hero */}
-      <header className="pt-2 animate-fade-up">
-        <MetaLine>
+    <div className="flex min-h-[100dvh] flex-col pb-24">
+      {/* Hero dark */}
+      <Hero>
+        <HeroMeta>
           {greeting()} · {formatToday()}
-        </MetaLine>
-        <h1 className="mt-2 font-mono text-3xl font-bold leading-none tracking-tightest">
+        </HeroMeta>
+        <h1 className="mt-2 font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
           OGGI
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-primary-foreground/70">
           {rows.length === 0
             ? 'Nessuna commessa attiva.'
             : `${rows.length} ${rows.length === 1 ? 'commessa' : 'commesse'} in carico`}
         </p>
-      </header>
+      </Hero>
 
+      <div className="flex flex-col gap-7 px-4 pt-4">
       {/* Azioni rapide */}
-      <section className="space-y-3 animate-fade-up [animation-delay:40ms]">
-        <SectionNumber n={1} title="Azioni rapide" />
+      <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
+        <div className="rounded-xl border border-border bg-card p-4 shadow-soft-lg">
+          <SectionNumber n={1} title="Azioni rapide" className="mb-3" />
         <div className="grid grid-cols-2 gap-2">
           <QuickAction
             href="/mobile/sopralluogo"
@@ -276,6 +291,7 @@ async function CampoOggi({
             tag="REC"
             dataTour="vocale"
           />
+        </div>
         </div>
       </section>
 
@@ -300,6 +316,7 @@ async function CampoOggi({
           </Stagger>
         )}
       </section>
+      </div>
     </div>
   );
 }
