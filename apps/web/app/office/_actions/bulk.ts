@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServiceSupabase } from '@impiantixplus/api/service';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
 
 import { aggiornaPriorita } from './tickets';
@@ -235,6 +236,12 @@ export async function bulkCambiaStatoCommessa(
     const parsed = bulkCambiaStatoCommessaSchema.parse({ ids, stato });
     const supabase = createServerSupabase();
 
+    // Snapshot commesse prima del cambio (per notifica al responsabile)
+    const { data: commesseInfo } = await supabase
+      .from('commesse')
+      .select('id, codice_interno, responsabile_id, cliente:clienti(ragione_sociale)')
+      .in('id', parsed.ids);
+
     const { error, count } = await supabase
       .from('commesse')
       .update({ stato: parsed.stato })
@@ -252,6 +259,36 @@ export async function bulkCambiaStatoCommessa(
       field: 'stato',
       value: parsed.stato,
     });
+
+    // Notifica responsabile commessa su transizioni significative
+    // (completata, collaudo, archiviata, critica). Best-effort.
+    if (['completata', 'collaudo', 'archiviata'].includes(parsed.stato)) {
+      try {
+        const service = createServiceSupabase();
+        const rows = ((commesseInfo ?? []) as any[])
+          .filter((c) => c.responsabile_id)
+          .map((c) => {
+            const cli = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
+            return {
+              tenant_id: ctx.tenantId,
+              user_id: c.responsabile_id as string,
+              type: `commessa_${parsed.stato}`,
+              payload: {
+                commessa_id: c.id,
+                codice: c.codice_interno,
+                cliente: cli?.ragione_sociale ?? null,
+                descrizione: `Commessa ${c.codice_interno} → ${parsed.stato}${cli?.ragione_sociale ? ` (${cli.ragione_sociale})` : ''}`,
+                actor_user_id: ctx.userId,
+              },
+            };
+          });
+        if (rows.length > 0) {
+          await service.from('notifiche').insert(rows);
+        }
+      } catch (e) {
+        console.warn('[bulkCambiaStatoCommessa] notifica fallita', e);
+      }
+    }
 
     revalidatePath('/office/commesse');
     return { ok: true, updated: count ?? parsed.ids.length };
@@ -275,6 +312,13 @@ export async function bulkAssegnaResponsabile(
     const parsed = bulkAssegnaResponsabileSchema.parse({ ids, userId });
     const supabase = createServerSupabase();
 
+    // Leggi codici delle commesse PRIMA dell'update così abbiamo info
+    // ricche per la notifica al nuovo responsabile
+    const { data: commesseInfo } = await supabase
+      .from('commesse')
+      .select('id, codice_interno, cliente:clienti(ragione_sociale)')
+      .in('id', parsed.ids);
+
     const { error, count } = await supabase
       .from('commesse')
       .update({ responsabile_id: parsed.userId })
@@ -292,6 +336,33 @@ export async function bulkAssegnaResponsabile(
       field: 'responsabile_id',
       value: parsed.userId,
     });
+
+    // Notifica il nuovo responsabile — best-effort, non blocca l'assegnazione.
+    // Service role per bypass RLS (l'attore office magari non vede notifiche
+    // dell'utente target).
+    try {
+      const service = createServiceSupabase();
+      const rows = ((commesseInfo ?? []) as any[]).map((c) => {
+        const cli = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
+        return {
+          tenant_id: ctx.tenantId,
+          user_id: parsed.userId,
+          type: 'commessa_assigned',
+          payload: {
+            commessa_id: c.id,
+            codice: c.codice_interno,
+            cliente: cli?.ragione_sociale ?? null,
+            descrizione: `Ti è stata assegnata la commessa ${c.codice_interno}${cli?.ragione_sociale ? ` — ${cli.ragione_sociale}` : ''}`,
+            actor_user_id: ctx.userId,
+          },
+        };
+      });
+      if (rows.length > 0) {
+        await service.from('notifiche').insert(rows);
+      }
+    } catch (e) {
+      console.warn('[bulkAssegnaResponsabile] notifica fallita', e);
+    }
 
     revalidatePath('/office/commesse');
     return { ok: true, updated: count ?? parsed.ids.length };
