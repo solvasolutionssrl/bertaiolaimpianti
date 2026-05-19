@@ -1,26 +1,41 @@
 import { Skeleton } from '@impiantixplus/ui';
 
-export default function MobileLoading() {
+export default function MobileHomeLoading() {
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
-      {/* Header skeleton */}
-      <div className="pt-2">
-        <Skeleton className="h-2.5 w-40 rounded-full" />
-        <Skeleton className="mt-2 h-7 w-16 rounded-md" />
-        <Skeleton className="mt-1.5 h-3 w-32 rounded-full" />
+    <div className="flex min-h-[100dvh] flex-col gap-7 p-4 pb-24">
+      {/* Hero */}
+      <div className="pt-2 space-y-2">
+        <Skeleton className="h-2.5 w-56 rounded-full" />
+        <Skeleton className="h-8 w-44 rounded-md" />
+        <Skeleton className="h-3 w-60 rounded-full" />
       </div>
 
-      {/* QuickActions skeleton */}
-      <div className="grid grid-cols-2 gap-2">
-        <Skeleton className="h-[90px] rounded-xl" />
-        <Skeleton className="h-[90px] rounded-xl" />
+      {/* Metriche card */}
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-32 rounded-full" />
+        <Skeleton className="h-[112px] w-full rounded-lg" />
       </div>
 
-      {/* Commessa cards skeleton */}
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-[88px] rounded-xl" />
-        ))}
+      {/* Quick actions */}
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-28 rounded-full" />
+        <div className="grid grid-cols-2 gap-2">
+          <Skeleton className="h-[88px] rounded-lg" />
+          <Skeleton className="h-[88px] rounded-lg" />
+        </div>
+      </div>
+
+      {/* Ultime commesse */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <Skeleton className="h-3 w-36 rounded-full" />
+          <Skeleton className="h-3 w-12 rounded-full" />
+        </div>
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[88px] rounded-lg" />
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -6,6 +6,8 @@ export { Input } from './components/input';
 export { Label } from './components/label';
 export { Badge, badgeVariants } from './components/badge';
 export { StatoBadge } from './components/stato-badge';
+export { StatoLed } from './components/stato-led';
+export type { StatoLedKind, StatoLedProps } from './components/stato-led';
 export { KpiCard } from './components/kpi-card';
 export { Avatar, AvatarFallback, AvatarImage } from './components/avatar';
 export {
