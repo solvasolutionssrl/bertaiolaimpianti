@@ -354,7 +354,38 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE ───────────── */}
-          <TabsContent value="file" className="mt-5 space-y-3">
+          <TabsContent value="file" className="mt-5 space-y-4">
+            {/* Documenti generati — Report PDF, blocco accent in alto */}
+            <div className="space-y-2">
+              <MetaLine>Documenti generati</MetaLine>
+              <a
+                href={`/office/commesse/${params.id}/report`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-accent/30 bg-gradient-to-br from-accent/8 via-card to-primary/5 p-3.5 shadow-soft transition-all active:scale-[0.995]"
+              >
+                <CornerTicks />
+                <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-accent/40 bg-accent text-accent-foreground font-mono text-[9px] font-black leading-none">
+                  <FileText className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
+                  <span>PDF</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-accent-soft-foreground">
+                    Report chiusura
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+                    Riepilogo completo commessa
+                  </p>
+                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    Cliente · foto · fasi · DICO
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-accent-soft-foreground" aria-hidden="true" />
+              </a>
+            </div>
+
+            <Divider label="File caricati" />
+
             {documenti.length === 0 ? (
               <EmptyBlock
                 icon={<FileText className="h-5 w-5" />}
