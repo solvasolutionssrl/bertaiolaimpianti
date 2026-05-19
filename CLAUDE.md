@@ -48,7 +48,7 @@ These decisions evolved across versions — the current state is **v3** (commit 
 | **Product working name** | **impiantiXplus** (provisional, replaces earlier "Cantiera"). The legacy alternatives in `03_BRAND/` are historical context, not active proposals. |
 | **Freshdesk** | **Abandoned** post go-live. One-time API migration script, then native ticketing in the new app. Do not describe it as "integrated". |
 | **Mobile tecnici** | **PWA** (Next.js + Service Worker + Web App Manifest). **Not** Expo, **not** React Native, **not** native iOS/Android. No App Store / Play Store. |
-| **Storage cloud** | 🟡 **DECISION DEFERRED**. Hetzner Storage Share (Nextcloud managed) was the v2 proposal — see `documentazione_generale/02_ARCHITETTURA/Comparativa_Storage.md` — but the user has flagged this as TBD and wants to reconsider. Do not write as if Hetzner is final. |
+| **Storage cloud** | ✅ **Nextcloud confirmed** (Hetzner Storage Share managed). Decisione chiusa: il cliente Bertaiola ha già acquistato e configurato Nextcloud, il file browser mobile vede i file reali. Mantenere comunque l'astrazione `StorageProvider` nel codice per supportare in futuro altri tenant con provider diversi. |
 | **Backend** | Supabase Pro, region **Frankfurt EU** (GDPR). Postgres + Auth + Realtime + Edge Functions. |
 | **Web** | Next.js 14 on Vercel. Monorepo with shared codebase across web office / PWA tecnici / portale cliente. |
 | **Multitenant** | From day 1. Bertaiola is the **pilot tenant** of a SaaS product (working name **impiantiXplus**). |

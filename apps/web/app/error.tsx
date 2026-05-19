@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 
 export default function Error({
   error,
@@ -10,7 +11,9 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // In produzione il messaggio è offuscato; il digest è utile per i log.
+    // Sentry cattura l'errore se DSN configurato; in dev senza DSN no-op
+    Sentry.captureException(error);
+    // In produzione il messaggio è offuscato; il digest è utile per i log
     console.error('[app error]', error.digest ?? error.message);
   }, [error]);
 
