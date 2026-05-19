@@ -4,6 +4,8 @@ import type { Metadata } from 'next';
 import { createServerSupabase } from '@impiantixplus/api/server';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 
+import { getMobileShell } from '@impiantixplus/api/types';
+
 import SwRegistrar from './_components/sw-registrar';
 import { BottomNavShell } from './_components/bottom-nav-shell';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
@@ -30,6 +32,8 @@ export default async function MobileLayout({
 }) {
   const ctx = await getTenantContext();
 
+  const shell = ctx ? getMobileShell(ctx.role) : 'campo';
+
   let showOnboardingTour = false;
   let unreadCount = 0;
   if (ctx) {
@@ -55,7 +59,7 @@ export default async function MobileLayout({
         {children}
       </main>
 
-      {ctx ? <BottomNavShell unreadCount={unreadCount} /> : null}
+      {ctx ? <BottomNavShell unreadCount={unreadCount} shell={shell} /> : null}
 
       {showOnboardingTour ? (
         <Suspense fallback={null}>

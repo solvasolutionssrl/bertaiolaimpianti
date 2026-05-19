@@ -7,6 +7,7 @@ import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';
 import { UtentiTable, type UtenteRow } from './_components/utenti-table';
 import type { AppRole } from '@impiantixplus/api';
+import type { UserPermissionOverrides } from '@impiantixplus/api/types';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Utenti · Impostazioni' };
@@ -17,6 +18,7 @@ interface UserAppRow {
   role: AppRole;
   attivo: boolean;
   avatar_url: string | null;
+  permissions: UserPermissionOverrides | null;
 }
 
 export default async function UtentiPage() {
@@ -26,7 +28,7 @@ export default async function UtentiPage() {
 
   const { data: appUsers, error } = await supabase
     .from('users')
-    .select('id, display_name, role, attivo, avatar_url')
+    .select('id, display_name, role, attivo, avatar_url, permissions')
     .eq('tenant_id', ctx.tenantId)
     .order('attivo', { ascending: false })
     .order('display_name', { ascending: true });
@@ -68,6 +70,7 @@ export default async function UtentiPage() {
           avatar_url: u.avatar_url,
           email: meta?.email ?? '',
           last_sign_in_at: meta?.last_sign_in_at ?? null,
+          permission_overrides: (u.permissions as UserPermissionOverrides | null) ?? null,
         });
       }
     } else {
@@ -80,6 +83,7 @@ export default async function UtentiPage() {
           avatar_url: u.avatar_url,
           email: '—',
           last_sign_in_at: null,
+          permission_overrides: (u.permissions as UserPermissionOverrides | null) ?? null,
         });
       }
     }

@@ -1,15 +1,17 @@
+import * as React from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ChevronRight, ClipboardCheck, MapPin, Mic } from 'lucide-react';
+import { ChevronRight, ClipboardCheck, MapPin, Mic, TrendingUp, Clock, Camera } from 'lucide-react';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
 import { StatoBadge } from '@impiantixplus/ui';
 import type { StatoCommessa } from '@impiantixplus/api/types';
+import { getMobileShell } from '@impiantixplus/api/types';
 
 import { guardMobile } from './_lib/guard';
 
 export const metadata: Metadata = {
-  title: 'Le mie commesse',
+  title: 'impiantiXplus mobile',
 };
 
 interface CommessaRow {
@@ -25,22 +27,170 @@ interface CommessaRow {
   foto_richieste: number;
 }
 
-/**
- * /mobile — "Le mie commesse oggi" (Mockup_UI §4-bis).
- *
- * Filtro: commesse dove
- *   - responsabile_id = utente corrente, OR
- *   - utente corrente è assegnato_a su almeno una commessa_voci
- * Per MVP: lato app usiamo la prima clausola; la seconda richiede la
- * colonna `commessa_voci.assegnato_a` (TBD: non ancora in migrazioni —
- * vedi `20260101000700_commessa_voci.sql`). Quando esiste, basta
- * estendere la query qui sotto.
- *
- * Le foto target sono `SUM(min_foto_richieste)` su tutte le voci attive,
- * le foto caricate sono `SUM(foto_caricate_count)`.
- */
-export default async function MobileCommessePage() {
+interface VoceRow {
+  min_foto_richieste?: number | null;
+  foto_caricate_count?: number | null;
+  stato?: string;
+}
+
+export default async function MobileHomePage() {
   const ctx = await guardMobile();
+  const shell = getMobileShell(ctx.role);
+
+  return shell === 'gestione'
+    ? <GestioneDashboard ctx={ctx} />
+    : <CampoOggi ctx={ctx} />;
+}
+
+// ─── GESTIONE DASHBOARD ────────────────────────────────────────────────────
+
+async function GestioneDashboard({ ctx }: { ctx: Awaited<ReturnType<typeof guardMobile>> }) {
+  const supabase = createServerSupabase();
+
+  const today = new Date();
+  const todayIso = today.toISOString().slice(0, 10);
+  const treGiorniFa = new Date(today);
+  treGiorniFa.setDate(treGiorniFa.getDate() - 3);
+
+  const [aperte, fasiAttesa, fotoOggi, recenti] = await Promise.all([
+    supabase
+      .from('commesse')
+      .select('id', { count: 'exact', head: true })
+      .in('stato', ['aperta', 'in_corso', 'collaudo']),
+    supabase
+      .from('commessa_voci')
+      .select('commessa_id', { count: 'exact', head: true })
+      .eq('stato', 'da_iniziare')
+      .lt('updated_at', treGiorniFa.toISOString()),
+    supabase
+      .from('file_refs')
+      .select('id', { count: 'exact', head: true })
+      .gte('uploaded_at', `${todayIso}T00:00:00Z`)
+      .like('mime', 'image/%'),
+    supabase
+      .from('commesse')
+      .select(`
+        id,
+        codice_interno,
+        nome_cartella,
+        stato,
+        cliente_indirizzo_cantiere,
+        data_apertura,
+        cliente:clienti ( id, ragione_sociale ),
+        voci:commessa_voci ( min_foto_richieste, foto_caricate_count, stato )
+      `)
+      .in('stato', ['aperta', 'in_corso', 'collaudo'])
+      .order('data_apertura', { ascending: false })
+      .limit(5),
+  ]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recentRows: CommessaRow[] = ((recenti.data ?? []) as any[]).map((r) => {
+    const voci: VoceRow[] = Array.isArray(r.voci) ? (r.voci as VoceRow[]) : [];
+    return {
+      id: r.id,
+      codice_interno: r.codice_interno,
+      nome_cartella: r.nome_cartella,
+      stato: r.stato as StatoCommessa,
+      cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
+      data_apertura: r.data_apertura,
+      cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
+      voci_attive: voci.filter((v) => v.stato !== 'completata').length,
+      foto_caricate: voci.reduce((acc, v) => acc + (v.foto_caricate_count ?? 0), 0),
+      foto_richieste: voci.reduce((acc, v) => acc + (v.min_foto_richieste ?? 0), 0),
+    };
+  });
+
+  const roleLabel: Record<string, string> = {
+    owner: 'Owner', admin: 'Amministratore', office: 'Ufficio', capo: 'Capo cantiere',
+  };
+
+  return (
+    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+      <header className="pt-2">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          · {greeting()} · {formatToday()} ·
+        </p>
+        <div className="mt-1 flex items-baseline gap-2">
+          <h1 className="text-[26px] font-semibold leading-none tracking-tight">Dashboard</h1>
+          <span className="rounded-md border border-primary/30 bg-primary/8 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-primary">
+            {roleLabel[ctx.role] ?? ctx.role}
+          </span>
+        </div>
+        <p className="mt-1.5 text-sm text-muted-foreground">Riepilogo operativo del tenant</p>
+      </header>
+
+      {/* KPI mini-cards */}
+      <div className="grid grid-cols-3 gap-2">
+        <MiniKpi
+          value={aperte.count ?? 0}
+          label="Attive"
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
+          tone="primary"
+        />
+        <MiniKpi
+          value={fasiAttesa.count ?? 0}
+          label="In attesa"
+          icon={<Clock className="h-3.5 w-3.5" />}
+          tone={fasiAttesa.count && fasiAttesa.count > 0 ? 'warn' : 'neutral'}
+        />
+        <MiniKpi
+          value={fotoOggi.count ?? 0}
+          label="Foto oggi"
+          icon={<Camera className="h-3.5 w-3.5" />}
+          tone="neutral"
+        />
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-2">
+        <QuickAction
+          href="/mobile/sopralluogo"
+          icon={ClipboardCheck}
+          label="Sopralluogo"
+          hint="nuovo cliente"
+        />
+        <QuickAction
+          href="/mobile/voice-intake"
+          icon={Mic}
+          label="Voce"
+          hint="detta nota o ordine"
+          tone="primary"
+        />
+      </div>
+
+      {/* Ultime commesse */}
+      <section>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Ultime commesse
+          </h2>
+          <Link
+            href="/mobile/commesse"
+            className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary hover:underline"
+          >
+            Vedi tutte →
+          </Link>
+        </div>
+        {recentRows.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {recentRows.map((c) => (
+              <li key={c.id}>
+                <CommessaCard commessa={c} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ─── CAMPO TODAY VIEW ───────────────────────────────────────────────────────
+
+async function CampoOggi({ ctx }: { ctx: Awaited<ReturnType<typeof guardMobile>> }) {
   const supabase = createServerSupabase();
 
   const { data, error } = await supabase
@@ -64,15 +214,13 @@ export default async function MobileCommessePage() {
 
   if (error) {
     return (
-      <ErrorState
-        title="Impossibile caricare le commesse"
-        detail={error.message}
-      />
+      <ErrorState title="Impossibile caricare le commesse" detail={error.message} />
     );
   }
 
-  const rows: CommessaRow[] = (data ?? []).map((r) => {
-    const voci = Array.isArray(r.voci) ? r.voci : [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: CommessaRow[] = ((data ?? []) as any[]).map((r) => {
+    const voci: VoceRow[] = Array.isArray(r.voci) ? (r.voci as VoceRow[]) : [];
     return {
       id: r.id,
       codice_interno: r.codice_interno,
@@ -82,14 +230,8 @@ export default async function MobileCommessePage() {
       data_apertura: r.data_apertura,
       cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
       voci_attive: voci.filter((v) => v.stato !== 'completata').length,
-      foto_caricate: voci.reduce(
-        (acc, v) => acc + (v.foto_caricate_count ?? 0),
-        0,
-      ),
-      foto_richieste: voci.reduce(
-        (acc, v) => acc + (v.min_foto_richieste ?? 0),
-        0,
-      ),
+      foto_caricate: voci.reduce((acc, v) => acc + (v.foto_caricate_count ?? 0), 0),
+      foto_richieste: voci.reduce((acc, v) => acc + (v.min_foto_richieste ?? 0), 0),
     };
   });
 
@@ -99,9 +241,7 @@ export default async function MobileCommessePage() {
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
           · {greeting()} · {formatToday()} ·
         </p>
-        <h1 className="mt-1 text-[26px] font-semibold leading-none tracking-tight">
-          Oggi
-        </h1>
+        <h1 className="mt-1 text-[26px] font-semibold leading-none tracking-tight">Oggi</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           {rows.length === 0
             ? 'Nessuna commessa attiva.'
@@ -109,13 +249,13 @@ export default async function MobileCommessePage() {
         </p>
       </header>
 
-      {/* Azioni rapide — sostituiscono Sopralluogo dalla bottom-nav */}
       <div className="grid grid-cols-2 gap-2">
         <QuickAction
           href="/mobile/sopralluogo"
           icon={ClipboardCheck}
           label="Nuovo sopralluogo"
           hint="7 passi · cliente nuovo"
+          dataTour="sopralluogo"
         />
         <QuickAction
           href="/mobile/voice-intake"
@@ -138,6 +278,32 @@ export default async function MobileCommessePage() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ─── SHARED COMPONENTS ──────────────────────────────────────────────────────
+
+function MiniKpi({
+  value,
+  label,
+  icon,
+  tone,
+}: {
+  value: number;
+  label: string;
+  icon: React.ReactNode;
+  tone: 'primary' | 'warn' | 'neutral';
+}) {
+  const colors = {
+    primary: 'border-primary/20 bg-primary/5 text-primary',
+    warn: 'border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400',
+    neutral: 'border-border bg-card text-muted-foreground',
+  };
+  return (
+    <div className={`flex flex-col gap-1 rounded-xl border p-3 ${colors[tone]}`}>
+      <span className="flex items-center gap-1 opacity-70">{icon}<span className="font-mono text-[9px] uppercase tracking-wider">{label}</span></span>
+      <span className="font-mono text-2xl font-bold tabular-nums">{value}</span>
     </div>
   );
 }
@@ -189,17 +355,11 @@ function QuickAction({
           {tone === 'primary' ? 'rec' : 'new'}
         </span>
       </div>
-      <span className="mt-1 text-sm font-semibold tracking-tight text-foreground">
-        {label}
-      </span>
-      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-        {hint}
-      </span>
+      <span className="mt-1 text-sm font-semibold tracking-tight text-foreground">{label}</span>
+      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{hint}</span>
     </Link>
   );
 }
-
-// ---------------------------------------------------------------------
 
 function CommessaCard({ commessa }: { commessa: CommessaRow }) {
   const fotoUnder =
@@ -229,38 +389,23 @@ function CommessaCard({ commessa }: { commessa: CommessaRow }) {
             </p>
           ) : null}
         </div>
-        <ChevronRight
-          className="mt-1 h-5 w-5 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
+        <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </div>
 
       <dl className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
         <div>
           <dt className="sr-only">Voci attive</dt>
           <dd>
-            <span className="font-semibold text-foreground">
-              {commessa.voci_attive}
-            </span>{' '}
+            <span className="font-semibold text-foreground">{commessa.voci_attive}</span>{' '}
             {commessa.voci_attive === 1 ? 'fase attiva' : 'fasi attive'}
           </dd>
         </div>
         <div className="flex items-center gap-1">
           <span aria-hidden="true">📸</span>
-          <span
-            className={
-              fotoUnder
-                ? 'font-semibold text-stato-collaudo'
-                : 'font-semibold text-foreground'
-            }
-          >
+          <span className={fotoUnder ? 'font-semibold text-stato-collaudo' : 'font-semibold text-foreground'}>
             {commessa.foto_caricate}/{commessa.foto_richieste || '—'}
           </span>
-          {fotoUnder ? (
-            <span aria-label="Sotto target foto" title="Sotto target foto">
-              ⚠
-            </span>
-          ) : null}
+          {fotoUnder ? <span aria-label="Sotto target foto">⚠</span> : null}
         </div>
       </dl>
     </Link>
@@ -270,11 +415,9 @@ function CommessaCard({ commessa }: { commessa: CommessaRow }) {
 function EmptyState() {
   return (
     <div className="rounded-xl border border-dashed border-border bg-muted/30 p-8 text-center">
-      <p className="text-sm text-muted-foreground">
-        Nessuna commessa attiva assegnata a te per oggi.
-      </p>
+      <p className="text-sm text-muted-foreground">Nessuna commessa attiva.</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Le commesse compaiono qui appena un capo ti assegna come responsabile.
+        Le commesse compaiono qui appena vengono aperte.
       </p>
     </div>
   );

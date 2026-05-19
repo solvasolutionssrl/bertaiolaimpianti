@@ -13,6 +13,7 @@ import {
 import { cn } from '../lib/cn';
 
 export type MobileTabId =
+  | 'overview'
   | 'commesse'
   | 'turno'
   | 'voce'
