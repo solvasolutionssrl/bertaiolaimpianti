@@ -358,10 +358,8 @@ export default async function CommessaDetailPage({
             {/* Documenti generati — Report PDF, blocco accent in alto */}
             <div className="space-y-2">
               <MetaLine>Documenti generati</MetaLine>
-              <a
-                href={`/office/commesse/${params.id}/report`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                href={`/mobile/commessa/${params.id}/report`}
                 className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-accent/30 bg-gradient-to-br from-accent/8 via-card to-primary/5 p-3.5 shadow-soft transition-all active:scale-[0.995]"
               >
                 <CornerTicks />
@@ -381,7 +379,7 @@ export default async function CommessaDetailPage({
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-accent-soft-foreground" aria-hidden="true" />
-              </a>
+              </Link>
             </div>
 
             <Divider label="File caricati" />
