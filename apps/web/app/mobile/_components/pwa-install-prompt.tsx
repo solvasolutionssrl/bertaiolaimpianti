@@ -169,7 +169,13 @@ export function PwaInstallPrompt() {
             <X className="h-4 w-4" />
           </button>
 
-          <div className="relative px-5 pt-7 pb-6">
+          <div
+            className="relative px-5 pt-7"
+            style={{
+              // Safe-area-aware bottom per iPhone con home indicator
+              paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)',
+            }}
+          >
             {/* Header label mono */}
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">
               · Installa l'app ·

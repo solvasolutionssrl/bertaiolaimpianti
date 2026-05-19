@@ -22,7 +22,12 @@ export const metadata: Metadata = {
   other: {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-status-bar-style': 'default',
+    // black-translucent: la status bar diventa overlay trasparente,
+    // il viewport include l'area sotto Dynamic Island / notch e l'Hero
+    // blu si estende fino al bordo superiore (con safe-area-inset-top
+    // gestito nel componente Hero). Testo status bar bianco leggibile
+    // sopra il blu primary.
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
   },
 };
 
@@ -56,7 +61,15 @@ export default async function MobileLayout({
     <div className="min-h-[100dvh] bg-background">
       <SwRegistrar />
 
-      <main className="mx-auto w-full max-w-screen-sm pb-24">
+      <main
+        className="mx-auto w-full max-w-screen-sm"
+        style={{
+          // Safe-area-aware bottom padding per iPhone con home indicator
+          // (e Dynamic Island). Garantisce che il contenuto non finisca
+          // mai sotto il bottom-nav fisso.
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)',
+        }}
+      >
         {children}
       </main>
 
