@@ -1,11 +1,11 @@
-import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ShieldCheck, Smartphone } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
-import { Avatar, AvatarFallback, Button } from '@impiantixplus/ui';
+import { Avatar, AvatarFallback } from '@impiantixplus/ui';
 
 import { guardMobile } from '../_lib/guard';
+import { InstallPromptHint } from '../_components/install-prompt-hint';
 import { LogoutButton } from './logout-button';
 import { PushToggle } from './push-toggle';
 import { PreferenzeNotifiche, type PrefRow } from './preferenze-notifiche';
@@ -107,18 +107,9 @@ export default async function ProfiloPage() {
         />
       </section>
 
-      <nav aria-label="Azioni profilo" className="flex flex-col gap-2">
-        <Link href="/mobile/installazione" passHref>
-          <Button
-            variant="outline"
-            size="lg"
-            className="min-h-[48px] w-full justify-start"
-          >
-            <Smartphone className="h-4 w-4" aria-hidden="true" />
-            Aggiungi alla schermata Home
-          </Button>
-        </Link>
-      </nav>
+      <section aria-label="Installazione app" className="flex flex-col gap-2">
+        <InstallPromptHint />
+      </section>
 
       <LogoutButton />
 

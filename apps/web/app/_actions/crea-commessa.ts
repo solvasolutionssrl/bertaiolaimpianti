@@ -220,7 +220,7 @@ export async function creaCommessa(
       cliente_indirizzo_cantiere: data.indirizzoCantiere ?? null,
       responsabile_id: ctx.userId,
       stato: 'aperta',
-      data_apertura: seg2,
+      data_apertura: dataIsoOggi(),
       descrizione_ai_proposta: null,
       descrizione_ai_finale: data.descrizioneFinale,
       preset_id: data.presetId ?? null,

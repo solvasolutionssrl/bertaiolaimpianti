@@ -1369,6 +1369,7 @@ export type Database = {
           id: string
           is_platform_admin: boolean
           onboarded_at: string | null
+          permissions: Json | null
           role: Database["public"]["Enums"]["app_role"]
           tenant_id: string | null
           updated_at: string
@@ -1381,6 +1382,7 @@ export type Database = {
           id: string
           is_platform_admin?: boolean
           onboarded_at?: string | null
+          permissions?: Json | null
           role?: Database["public"]["Enums"]["app_role"]
           tenant_id?: string | null
           updated_at?: string
@@ -1393,6 +1395,7 @@ export type Database = {
           id?: string
           is_platform_admin?: boolean
           onboarded_at?: string | null
+          permissions?: Json | null
           role?: Database["public"]["Enums"]["app_role"]
           tenant_id?: string | null
           updated_at?: string
@@ -1688,6 +1691,51 @@ export type Database = {
           },
         ]
       }
+      users_with_permissions: {
+        Row: {
+          attivo: boolean | null
+          avatar_url: string | null
+          created_at: string | null
+          display_name: string | null
+          effective_permissions: Json | null
+          id: string | null
+          is_platform_admin: boolean | null
+          onboarded_at: string | null
+          permissions: Json | null
+          role: Database["public"]["Enums"]["app_role"] | null
+          tenant_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attivo?: boolean | null
+          avatar_url?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          effective_permissions?: never
+          id?: string | null
+          is_platform_admin?: boolean | null
+          onboarded_at?: string | null
+          permissions?: Json | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attivo?: boolean | null
+          avatar_url?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          effective_permissions?: never
+          id?: string | null
+          is_platform_admin?: boolean | null
+          onboarded_at?: string | null
+          permissions?: Json | null
+          role?: Database["public"]["Enums"]["app_role"] | null
+          tenant_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       aggiorna_usage_snapshot: {
@@ -1708,8 +1756,16 @@ export type Database = {
         Args: { p_anno: number; p_slug: string }
         Returns: string
       }
+      get_effective_permissions: {
+        Args: { p_role: Database["public"]["Enums"]["app_role"]; p_overrides?: Json }
+        Returns: Json
+      }
       is_platform_admin: { Args: never; Returns: boolean }
       refresh_search_documents: { Args: never; Returns: undefined }
+      role_default_permissions: {
+        Args: { p_role: Database["public"]["Enums"]["app_role"] }
+        Returns: Json
+      }
       ticket_sla_status: {
         Args: {
           p_closed_at: string

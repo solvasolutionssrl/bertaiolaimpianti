@@ -16,7 +16,7 @@
  * Versioning: bump `CACHE_VERSION` ad ogni release per forzare clean-up.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const SHELL_CACHE = `impiantixplus-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `impiantixplus-runtime-${CACHE_VERSION}`;
 const VALID_CACHES = new Set([SHELL_CACHE, RUNTIME_CACHE]);

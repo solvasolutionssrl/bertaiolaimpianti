@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import type { CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from './types/database.generated';
@@ -19,7 +20,7 @@ export function createServerSupabase() {
         getAll() {
           return store.getAll();
         },
-        setAll(toSet) {
+        setAll(toSet: { name: string; value: string; options: CookieOptions }[]) {
           try {
             for (const { name, value, options } of toSet) {
               store.set(name, value, options);
@@ -49,7 +50,7 @@ export async function updateSession(req: NextRequest) {
         getAll() {
           return req.cookies.getAll();
         },
-        setAll(toSet) {
+        setAll(toSet: { name: string; value: string; options: CookieOptions }[]) {
           for (const { name, value } of toSet) {
             req.cookies.set(name, value);
           }
