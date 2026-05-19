@@ -15,20 +15,34 @@ import {
 import { MobileBottomNav, type MobileTab, type MobileTabId } from '@impiantixplus/ui';
 import type { MobileShell } from '@impiantixplus/api/types';
 
+import { useRealtimeUnread } from './use-realtime-unread';
+
 /**
  * Wrapper client del bottom-nav.
  * Le icone (React components) devono vivere nel client — non sono serializzabili
- * da Server Component. Il server passa solo `unreadCount` (number) e `shell`
- * (string letterale), entrambi serializzabili.
+ * da Server Component. Il server passa initial unread count + userId + tenantId
+ * (tutti serializzabili) e qui usiamo Supabase Realtime per aggiornare il badge
+ * senza refresh quando arrivano nuove notifiche.
  */
 export function BottomNavShell({
-  unreadCount,
+  unreadCount: initialUnreadCount,
   shell,
+  userId,
+  tenantId,
 }: {
   unreadCount: number;
   shell: MobileShell;
+  userId: string;
+  tenantId: string;
 }) {
   const pathname = usePathname() ?? '';
+
+  // Real-time: sostituisce il count statico con uno live aggiornato dal canale
+  const unreadCount = useRealtimeUnread({
+    userId,
+    tenantId,
+    initialCount: initialUnreadCount,
+  });
 
   const tabs: MobileTab[] =
     shell === 'gestione'
