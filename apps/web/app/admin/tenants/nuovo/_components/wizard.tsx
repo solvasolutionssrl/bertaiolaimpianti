@@ -12,8 +12,12 @@ import {
   Badge,
   cn,
 } from '@impiantixplus/ui';
-import { ArrowLeft, ArrowRight, Check, Loader2, Send } from 'lucide-react';
-import { creaTenant, type CreaTenantInput } from '../../../_actions/tenants';
+import { ArrowLeft, ArrowRight, Check, Loader2, Send, Plug, XCircle } from 'lucide-react';
+import {
+  creaTenant,
+  testaConnessioneStorage,
+  type CreaTenantInput,
+} from '../../../_actions/tenants';
 
 interface Plan {
   id: string;
@@ -67,6 +71,36 @@ export function NuovoTenantWizard({ plans }: Props) {
   const [storageBaseUrl, setStorageBaseUrl] = React.useState('');
   const [storageUser, setStorageUser] = React.useState('');
   const [storagePass, setStoragePass] = React.useState('');
+
+  // Test connessione storage (Nextcloud)
+  const [testing, startTest] = React.useTransition();
+  const [testResult, setTestResult] = React.useState<
+    | { kind: 'idle' }
+    | { kind: 'ok'; latencyMs: number; detail: string }
+    | { kind: 'fail'; error: string }
+  >({ kind: 'idle' });
+
+  // Reset test result quando cambia la config
+  React.useEffect(() => {
+    setTestResult({ kind: 'idle' });
+  }, [storageProvider, storageBaseUrl, storageUser, storagePass]);
+
+  function runStorageTest() {
+    setTestResult({ kind: 'idle' });
+    startTest(async () => {
+      const res = await testaConnessioneStorage({
+        provider: storageProvider,
+        baseUrl: storageBaseUrl,
+        user: storageUser,
+        appPassword: storagePass,
+      });
+      if (res.ok) {
+        setTestResult({ kind: 'ok', latencyMs: res.latencyMs, detail: res.detail });
+      } else {
+        setTestResult({ kind: 'fail', error: res.error });
+      }
+    });
+  }
 
   // -------- Step 3 (owner) --------
   const [ownerName, setOwnerName] = React.useState('');
@@ -326,6 +360,38 @@ export function NuovoTenantWizard({ plans }: Props) {
                         type="password"
                       />
                     </div>
+                  </div>
+
+                  {/* Test connessione live */}
+                  <div className="flex items-center gap-3 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={runStorageTest}
+                      disabled={
+                        testing || !storageBaseUrl || !storageUser || !storagePass
+                      }
+                    >
+                      {testing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plug className="h-3.5 w-3.5" />
+                      )}
+                      Testa connessione
+                    </Button>
+                    {testResult.kind === 'ok' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-success">
+                        <Check className="h-3.5 w-3.5" />
+                        {testResult.detail} · {testResult.latencyMs} ms
+                      </span>
+                    ) : null}
+                    {testResult.kind === 'fail' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-destructive">
+                        <XCircle className="h-3.5 w-3.5" />
+                        {testResult.error}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
