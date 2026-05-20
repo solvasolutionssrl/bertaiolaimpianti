@@ -326,6 +326,101 @@ export async function eliminaTenant(tenantId: string) {
 }
 
 // ---------------------------------------------------------------------
+// TEST CONNESSIONE STORAGE — probe pre-creazione
+// ---------------------------------------------------------------------
+
+const testStorageSchema = z.object({
+  provider: z.enum(['supabase', 'nextcloud']),
+  baseUrl: z.string().optional(),
+  user: z.string().optional(),
+  appPassword: z.string().optional(),
+});
+
+export type TestStorageInput = z.infer<typeof testStorageSchema>;
+export type TestStorageResult =
+  | { ok: true; latencyMs: number; detail: string }
+  | { ok: false; error: string };
+
+/**
+ * Verifica live una config storage PRIMA di salvarla sul tenant.
+ *
+ * - supabase: nessun probe esterno (gestito), ritorna ok immediato
+ * - nextcloud: PROPFIND su baseUrl con Basic Auth, timeout 5s
+ *
+ * Usato dal wizard "Nuovo tenant" step 2 e dal dettaglio tenant per
+ * evitare di scoprire config sbagliate solo nella pagina Salute.
+ */
+export async function testaConnessioneStorage(
+  input: TestStorageInput,
+): Promise<TestStorageResult> {
+  await requirePlatformAdmin();
+  const parsed = testStorageSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: 'Input non valido' };
+  }
+  const data = parsed.data;
+
+  if (data.provider === 'supabase') {
+    return {
+      ok: true,
+      latencyMs: 0,
+      detail: 'Bucket Supabase gestito — niente probe esterno richiesto',
+    };
+  }
+
+  // Nextcloud probe
+  if (!data.baseUrl || !data.user || !data.appPassword) {
+    return {
+      ok: false,
+      error: 'Compila baseUrl + user + appPassword prima di testare',
+    };
+  }
+
+  const start = Date.now();
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 5000);
+  try {
+    const auth =
+      'Basic ' +
+      Buffer.from(`${data.user}:${data.appPassword}`).toString('base64');
+    const res = await fetch(data.baseUrl, {
+      method: 'PROPFIND',
+      headers: {
+        Authorization: auth,
+        Depth: '0',
+        'Content-Type': 'application/xml',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(tid);
+    const ms = Date.now() - start;
+    if (res.status === 207 || res.status === 200) {
+      return { ok: true, latencyMs: ms, detail: `WebDAV reachable (HTTP ${res.status})` };
+    }
+    if (res.status === 401) {
+      return {
+        ok: false,
+        error: 'Credenziali rifiutate (HTTP 401). Verifica user + app-password.',
+      };
+    }
+    if (res.status === 404) {
+      return {
+        ok: false,
+        error: 'URL WebDAV non trovato (HTTP 404). Controlla baseUrl.',
+      };
+    }
+    return { ok: false, error: `Risposta inattesa: HTTP ${res.status}` };
+  } catch (e) {
+    clearTimeout(tid);
+    const msg = (e as Error).message ?? 'errore sconosciuto';
+    if (msg.toLowerCase().includes('abort')) {
+      return { ok: false, error: 'Timeout 5s — server non raggiungibile' };
+    }
+    return { ok: false, error: `Errore di rete: ${msg}` };
+  }
+}
+
+// ---------------------------------------------------------------------
 // IMPERSONATE — JWT shadow vero
 // ---------------------------------------------------------------------
 

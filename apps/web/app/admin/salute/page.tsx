@@ -69,6 +69,60 @@ export default async function SalutePage() {
       : 'ANTHROPIC_API_KEY assente — Co-pilot disabilitato',
   });
 
+  // ----- 4b. Sentry env -----
+  const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN ?? process.env.SENTRY_DSN;
+  checks.push({
+    id: 'sentry',
+    label: 'Sentry',
+    descrizione: 'Error tracking client + server',
+    stato: sentryDsn ? 'OK' : 'WARN',
+    dettaglio: sentryDsn
+      ? `DSN configurato${process.env.SENTRY_AUTH_TOKEN ? ' + source maps' : ' (no source maps)'}`
+      : 'NEXT_PUBLIC_SENTRY_DSN assente — errori non tracciati',
+  });
+
+  // ----- 4c. App runtime self-check via /api/health -----
+  // Probe interno: se il server non risponde al proprio endpoint, qualcosa
+  // di grave succede (loopback fail). 3s timeout.
+  {
+    let stato: Stato = 'OK';
+    let dettaglio = '';
+    try {
+      const origin =
+        process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : 'http://localhost:3000';
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 3000);
+      const t0 = Date.now();
+      const res = await fetch(`${origin}/api/health`, {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      clearTimeout(tid);
+      const ms = Date.now() - t0;
+      if (res.ok) {
+        const j = (await res.json().catch(() => null)) as
+          | { status?: string; dbLatencyMs?: number; version?: string }
+          | null;
+        dettaglio = `HTTP ${res.status} · ${ms} ms · build ${j?.version ?? '—'}`;
+      } else {
+        stato = res.status === 503 ? 'WARN' : 'FAIL';
+        dettaglio = `HTTP ${res.status}`;
+      }
+    } catch (e) {
+      stato = 'FAIL';
+      dettaglio = `Errore loopback: ${(e as Error).message}`;
+    }
+    checks.push({
+      id: 'runtime',
+      label: 'App runtime',
+      descrizione: 'Self-probe /api/health',
+      stato,
+      dettaglio,
+    });
+  }
+
   // ----- 5. Storage provider per ogni tenant -----
   const { data: tenants } = await supabase
     .from('tenants')
