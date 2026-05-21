@@ -44,9 +44,12 @@ export default async function VoiceIntakePage() {
 
   return (
     <div className="bg-aurora-brand relative min-h-[100dvh]">
-      {/* Griglia decorativa: absolute + mask così non clippa il contenuto figlio */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-radial" />
-      <VoiceIntakeFlow voci={voci} vociDefault={vociDefault} />
+      {/* Griglia: z-0, absoluta e pointer-events-none — il mask CSS agisce solo su di lei */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 bg-grid-radial" />
+      {/* Contenuto: z-[1] per stare sopra alla griglia */}
+      <div className="relative z-[1]">
+        <VoiceIntakeFlow voci={voci} vociDefault={vociDefault} />
+      </div>
     </div>
   );
 }

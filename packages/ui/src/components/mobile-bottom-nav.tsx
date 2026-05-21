@@ -31,6 +31,8 @@ export interface MobileTab {
   badge?: number;
   /** Se true il tab è disegnato come FAB centrale rialzato. */
   primary?: boolean;
+  /** Badge angolo in alto a destra del FAB (es. "+"). */
+  cornerBadge?: string;
 }
 
 export const DEFAULT_MOBILE_TABS: MobileTab[] = [
@@ -126,6 +128,14 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
                     className="absolute inset-0 -z-10 animate-pulse rounded-2xl bg-primary/30 blur-md"
                   />
                   <Icon className="h-6 w-6" strokeWidth={2.25} aria-hidden="true" />
+                  {tab.cornerBadge ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -right-1 -top-1 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white text-[10px] font-bold leading-none text-primary shadow-sm"
+                    >
+                      {tab.cornerBadge}
+                    </span>
+                  ) : null}
                   {tab.badge && tab.badge > 0 ? (
                     <span
                       aria-label={`${tab.badge} non letti`}

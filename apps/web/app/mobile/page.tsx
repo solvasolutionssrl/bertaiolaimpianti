@@ -154,7 +154,7 @@ async function GestioneDashboard({
                 />
                 <MetricCell
                   value={fotoOggi.count ?? 0}
-                  label="Foto oggi"
+                  label="Foto/video"
                   icon={<Camera className="h-3 w-3" />}
                   tone="neutral"
                 />
@@ -171,8 +171,8 @@ async function GestioneDashboard({
             href="/mobile/sopralluogo"
             icon={ClipboardCheck}
             label="Sopralluogo"
-            hint="7 passi · cliente nuovo"
-            tag="NEW"
+            hint="step guidati · foto/video"
+            tag="+"
           />
           <QuickAction
             href="/mobile/voice-intake"
@@ -278,8 +278,8 @@ async function CampoOggi({
             href="/mobile/sopralluogo"
             icon={ClipboardCheck}
             label="Sopralluogo"
-            hint="cliente nuovo"
-            tag="NEW"
+            hint="guidato · foto/video"
+            tag="+"
             dataTour="sopralluogo"
           />
           <QuickAction

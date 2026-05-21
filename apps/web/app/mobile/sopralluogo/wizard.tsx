@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Mic,
   Wand2,
+  Camera,
 } from 'lucide-react';
 
 import {
@@ -18,16 +19,19 @@ import {
   Input,
   Label,
   StatoBadge,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from '@impiantixplus/ui';
 
 import { creaCommessa } from '../../_actions/crea-commessa';
 import { VoiceRecorder } from '../../_components/voice-recorder';
+import {
+  MediaAttachSection,
+  type MediaFile,
+} from '../../office/commesse/nuova/_components/media-attach-section';
+import {
+  uploadMediaBatch,
+  type UploadProgressMap,
+  type UploadMediaResult,
+} from '../../office/commesse/nuova/_lib/upload-media';
 
 interface VoiceSuggested {
   ragione_sociale?: string;
@@ -66,7 +70,7 @@ interface WizardProps {
   preset: PresetOption[];
 }
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 interface State {
   cliente: {
@@ -79,7 +83,7 @@ interface State {
     email: string;
   };
   capture: { nota: string };
-  vociSelezionate: Set<number>; // include sempre quelle di default
+  vociSelezionate: Set<number>;
   descrizioneFinale: string;
   descrizioneAlternative: string[];
 }
@@ -107,8 +111,12 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
   );
   const [step, setStep] = React.useState<Step>(1);
   const [state, setState] = React.useState<State>(() => initialState(vociDefault));
+  const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
   const [aiPending, setAiPending] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
+  const [uploadResults, setUploadResults] = React.useState<UploadMediaResult[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<{
     commessaId: string;
@@ -117,28 +125,22 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
     cloudFolderPath: string;
   } | null>(null);
 
-  // ------ navigation ------
-  const next = () => setStep((s) => Math.min(s + 1, 7) as Step);
+  const next = () => setStep((s) => Math.min(s + 1, 8) as Step);
   const back = () => setStep((s) => Math.max(s - 1, 1) as Step);
 
   const canGoNext = (): boolean => {
     switch (step) {
-      case 1:
-        return state.cliente.nome.trim().length >= 2;
-      case 2:
-        return true;
-      case 3:
-        return state.vociSelezionate.size > 0;
-      case 4:
-        return true;
-      case 5:
-        return state.descrizioneFinale.trim().length > 0;
-      default:
-        return true;
+      case 1: return state.cliente.nome.trim().length >= 2;
+      case 2: return true;
+      case 3: return state.vociSelezionate.size > 0;
+      case 4: return true;
+      case 5: return state.descrizioneFinale.trim().length > 0;
+      case 6: return true; // foto/video opzionali
+      default: return true;
     }
   };
 
-  // ------ step 5: AI naming via /api/suggerisci-nome ------
+  // AI naming al primo ingresso su step 5
   const handleGenAi = async () => {
     setAiPending(true);
     setError(null);
@@ -169,7 +171,6 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
     }
   };
 
-  // Auto-gen al primo ingresso su step 5
   React.useEffect(() => {
     if (step === 5 && state.descrizioneFinale === '' && !aiPending) {
       void handleGenAi();
@@ -177,7 +178,6 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
-  // ------ step 6: submit ------
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(null);
@@ -195,9 +195,7 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
               email: state.cliente.email ? [state.cliente.email] : [],
               note: state.capture.nota || null,
             },
-        voci: [...state.vociSelezionate].filter(
-          (id) => !vociDefault.includes(id),
-        ),
+        voci: [...state.vociSelezionate].filter((id) => !vociDefault.includes(id)),
         descrizioneFinale: state.descrizioneFinale.trim(),
         note: state.capture.nota || null,
         indirizzoCantiere: state.cliente.indirizzo || null,
@@ -206,21 +204,35 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
         setError(res.error);
         return;
       }
-      setResult({
+      const r = {
         commessaId: res.data.commessaId,
         codiceInterno: res.data.codiceInterno,
         nomeCartella: res.data.nomeCartella,
         cloudFolderPath: res.data.cloudFolderPath,
-      });
-      setStep(7);
+      };
+      setResult(r);
+      setSubmitting(false);
+
+      // Upload foto/video se presenti
+      if (mediaFiles.length > 0) {
+        setUploading(true);
+        const results = await uploadMediaBatch(
+          mediaFiles,
+          r.commessaId,
+          (map) => setUploadProgress(new Map(map)),
+        );
+        setUploadResults(results);
+        setUploading(false);
+      }
+
+      setStep(8);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Creazione commessa fallita');
-    } finally {
       setSubmitting(false);
+      setUploading(false);
     }
   };
 
-  // ------ render ------
   return (
     <div className="flex flex-col gap-4">
       <ProgressBar step={step} />
@@ -238,11 +250,7 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
         <Step1Cliente state={state} setState={setState} clienti={clienti} />
       )}
       {step === 2 && (
-        <Step2Capture
-          state={state}
-          setState={setState}
-          vociDefault={vociDefault}
-        />
+        <Step2Capture state={state} setState={setState} vociDefault={vociDefault} />
       )}
       {step === 3 && (
         <Step3Voci
@@ -263,20 +271,26 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
         />
       )}
       {step === 6 && (
-        <Step6Conferma
+        <Step6Media mediaFiles={mediaFiles} onChange={setMediaFiles} />
+      )}
+      {step === 7 && (
+        <Step7Conferma
           state={state}
+          mediaCount={mediaFiles.length}
           submitting={submitting}
+          uploading={uploading}
           onSubmit={handleSubmit}
         />
       )}
-      {step === 7 && result && (
-        <Step7Success
+      {step === 8 && result && (
+        <Step8Success
           result={result}
+          uploadResults={uploadResults}
           onOpen={() => router.push(`/mobile/commessa/${result.commessaId}`)}
         />
       )}
 
-      {step < 6 && (
+      {step < 7 && (
         <div className="mt-2 flex gap-2 pt-2">
           <Button
             variant="outline"
@@ -303,22 +317,14 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
   );
 }
 
-// ---------------------------------------------------------------------
-// Sub-components (step screens)
-// ---------------------------------------------------------------------
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────────────────────────────────
 
 function ProgressBar({ step }: { step: Step }) {
-  const labels = [
-    'Cliente',
-    'Cattura',
-    'Voci',
-    'Riepilogo',
-    'Nome',
-    'Conferma',
-    'Fatto',
-  ];
+  const labels = ['Cliente', 'Cattura', 'Voci', 'Riepilogo', 'Nome', 'Foto/video', 'Conferma', 'Fatto'];
   return (
-    <div className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider">
+    <div className="flex items-center gap-0.5 text-[9px] font-medium uppercase tracking-wider">
       {labels.map((l, i) => {
         const n = (i + 1) as Step;
         const done = n < step;
@@ -336,7 +342,7 @@ function ProgressBar({ step }: { step: Step }) {
             >
               <span
                 className={
-                  'inline-flex h-5 w-5 items-center justify-center rounded-full border ' +
+                  'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ' +
                   (done
                     ? 'border-stato-aperta bg-stato-aperta/10'
                     : current
@@ -357,6 +363,8 @@ function ProgressBar({ step }: { step: Step }) {
     </div>
   );
 }
+
+// ─── Step 1: Cliente ─────────────────────────────────────────────────────────
 
 function Step1Cliente({
   state,
@@ -416,9 +424,7 @@ function Step1Cliente({
                 >
                   <span className="font-medium">{m.nome}</span>
                   {m.citta ? (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {m.citta}
-                    </span>
+                    <span className="ml-2 text-xs text-muted-foreground">{m.citta}</span>
                   ) : null}
                 </button>
               </li>
@@ -437,10 +443,7 @@ function Step1Cliente({
             onChange={(e) =>
               setState((s) => ({
                 ...s,
-                cliente: {
-                  ...s.cliente,
-                  tipo: e.target.value as 'persona_fisica' | 'azienda',
-                },
+                cliente: { ...s.cliente, tipo: e.target.value as 'persona_fisica' | 'azienda' },
               }))
             }
           >
@@ -457,10 +460,7 @@ function Step1Cliente({
           className="h-12 text-base"
           value={state.cliente.indirizzo}
           onChange={(e) =>
-            setState((s) => ({
-              ...s,
-              cliente: { ...s.cliente, indirizzo: e.target.value },
-            }))
+            setState((s) => ({ ...s, cliente: { ...s.cliente, indirizzo: e.target.value } }))
           }
         />
       </div>
@@ -472,10 +472,7 @@ function Step1Cliente({
           className="h-12 text-base"
           value={state.cliente.citta}
           onChange={(e) =>
-            setState((s) => ({
-              ...s,
-              cliente: { ...s.cliente, citta: e.target.value },
-            }))
+            setState((s) => ({ ...s, cliente: { ...s.cliente, citta: e.target.value } }))
           }
         />
       </div>
@@ -489,10 +486,7 @@ function Step1Cliente({
             className="h-12 text-base"
             value={state.cliente.telefono}
             onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                cliente: { ...s.cliente, telefono: e.target.value },
-              }))
+              setState((s) => ({ ...s, cliente: { ...s.cliente, telefono: e.target.value } }))
             }
           />
         </div>
@@ -505,27 +499,22 @@ function Step1Cliente({
             className="h-12 text-base"
             value={state.cliente.email}
             onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                cliente: { ...s.cliente, email: e.target.value },
-              }))
+              setState((s) => ({ ...s, cliente: { ...s.cliente, email: e.target.value } }))
             }
           />
         </div>
       </div>
 
       {state.cliente.id ? (
-        <p className="text-xs text-muted-foreground">
-          Cliente esistente selezionato dall'archivio.
-        </p>
+        <p className="text-xs text-muted-foreground">Cliente esistente selezionato dall&apos;archivio.</p>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          Nuovo cliente: verrà creato in archivio alla conferma.
-        </p>
+        <p className="text-xs text-muted-foreground">Nuovo cliente: verrà creato in archivio alla conferma.</p>
       )}
     </section>
   );
 }
+
+// ─── Step 2: Cattura ─────────────────────────────────────────────────────────
 
 function Step2Capture({
   state,
@@ -536,10 +525,7 @@ function Step2Capture({
   setState: React.Dispatch<React.SetStateAction<State>>;
   vociDefault: number[];
 }) {
-  const [voiceOpen, setVoiceOpen] = React.useState(false);
-  const [voicePending, setVoicePending] = React.useState<
-    'idle' | 'transcribing' | 'extracting'
-  >('idle');
+  const [voicePending, setVoicePending] = React.useState<'idle' | 'transcribing' | 'extracting'>('idle');
   const [voiceError, setVoiceError] = React.useState<string | null>(null);
   const [voiceResult, setVoiceResult] = React.useState<{
     transcript: string;
@@ -550,22 +536,17 @@ function Step2Capture({
 
   const handleRecorded = async (blob: Blob) => {
     setVoiceError(null);
+    setVoiceResult(null);
     setVoicePending('transcribing');
     try {
       const fd = new FormData();
       fd.append('audio', blob, 'voicenote.webm');
       fd.append('mode', 'full');
-      const res = await fetch('/api/voice/extract', {
-        method: 'POST',
-        body: fd,
-      });
+      const res = await fetch('/api/voice/extract', { method: 'POST', body: fd });
       setVoicePending('extracting');
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(
-          (j as { error?: string }).error ??
-            `Trascrizione fallita (HTTP ${res.status})`,
-        );
+        throw new Error((j as { error?: string }).error ?? `HTTP ${res.status}`);
       }
       const data = (await res.json()) as {
         transcript: string;
@@ -580,9 +561,7 @@ function Step2Capture({
         previewReason: data._previewReason,
       });
     } catch (e) {
-      setVoiceError(
-        e instanceof Error ? e.message : 'Errore durante la trascrizione',
-      );
+      setVoiceError(e instanceof Error ? e.message : 'Errore durante la trascrizione');
     } finally {
       setVoicePending('idle');
     }
@@ -591,7 +570,6 @@ function Step2Capture({
   const applica = (s: VoiceSuggested) => {
     setState((prev) => {
       const next: State = { ...prev };
-      // Cliente: solo se non già selezionato dall'archivio
       if (!prev.cliente.id) {
         next.cliente = {
           ...prev.cliente,
@@ -601,17 +579,14 @@ function Step2Capture({
           indirizzo: s.indirizzo ?? prev.cliente.indirizzo,
         };
       }
-      // Voci: merge (mai rimuove)
       if (s.voci_ids && s.voci_ids.length > 0) {
         const merged = new Set([...prev.vociSelezionate, ...vociDefault]);
         for (const id of s.voci_ids) merged.add(id);
         next.vociSelezionate = merged;
       }
-      // Descrizione: solo se vuota
       if (s.descrizione && !prev.descrizioneFinale.trim()) {
         next.descrizioneFinale = s.descrizione;
       }
-      // Nota: append o set
       if (s.note) {
         next.capture = {
           ...prev.capture,
@@ -622,257 +597,129 @@ function Step2Capture({
       }
       return next;
     });
-    setVoiceOpen(false);
     setVoiceResult(null);
   };
 
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-semibold">2 · Cattura sul posto</h2>
-
-      {/* CTA hero "Dettato completo" → /mobile/voice-intake */}
-      <a
-        href="/mobile/voice-intake"
-        className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border-2 border-primary p-4 text-left shadow-glow-brand transition active:scale-[0.98]"
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_50%,hsl(22_92%_54%/0.18),transparent_60%),radial-gradient(circle_at_85%_50%,hsl(220_80%_45%/0.18),transparent_60%)]"
-        />
-        <span className="relative inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[radial-gradient(circle_at_30%_30%,hsl(22_95%_60%),hsl(22_92%_45%))] text-white shadow-lg">
-          <Mic className="h-6 w-6" aria-hidden="true" />
-        </span>
-        <span className="relative flex-1">
-          <span className="block text-base font-bold text-foreground">
-            Dettato vocale — più veloce
-          </span>
-          <span className="block text-xs text-muted-foreground">
-            Parla 30-90 sec: cliente, indirizzo, lavoro. L&apos;AI compila tutto e tu rivedi.
-          </span>
-        </span>
-        <ChevronRight
-          className="relative h-5 w-5 text-primary transition-transform group-hover:translate-x-0.5"
-          aria-hidden="true"
-        />
-      </a>
-
-      {/* Voice CTA legacy (registrazione inline + applica al wizard) */}
-      <button
-        type="button"
-        onClick={() => setVoiceOpen(true)}
-        className="flex w-full items-center gap-3 rounded-lg border-2 border-accent bg-accent-soft/40 p-4 text-left transition active:scale-[0.98]"
-      >
-        <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-lg">
-          <Mic className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <span className="flex-1">
-          <span className="block text-sm font-semibold text-foreground">
-            Registra descrizione vocale
-          </span>
-          <span className="block text-xs text-muted-foreground">
-            Resta nel wizard: applica i campi estratti agli step successivi.
-          </span>
-        </span>
-      </button>
-
+      <h2 className="text-base font-semibold">2 · Descrizione vocale</h2>
       <p className="text-sm text-muted-foreground">
-        Le foto/video le carichi dopo dalla schermata foto della commessa.
-        Puoi anche prendere una nota libera scritta qui sotto, oppure saltare.
+        Parla per 30–60 secondi: tipo di lavoro, stato dell&apos;impianto, note urgenti.
+        L&apos;AI pre-compila i prossimi step.
       </p>
 
+      {/* Registratore inline — primario */}
+      {!voiceResult ? (
+        <div className="rounded-xl border-2 border-primary/20 bg-primary-soft/20 p-4">
+          <VoiceRecorder
+            onRecorded={handleRecorded}
+            disabled={voicePending !== 'idle'}
+            maxDurationSec={180}
+          />
+          {voicePending !== 'idle' ? (
+            <div className="mt-3 flex items-center justify-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              {voicePending === 'transcribing' ? 'Trascrivo l’audio…' : 'Estraggo i campi…'}
+            </div>
+          ) : null}
+          {voiceError ? (
+            <p role="alert" className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {voiceError}
+            </p>
+          ) : null}
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Puoi anche saltare questo step e compilare i campi manualmente.
+          </p>
+        </div>
+      ) : (
+        <InlineVoicePreview
+          result={voiceResult}
+          onApply={() => applica(voiceResult.suggested)}
+          onRedo={() => setVoiceResult(null)}
+        />
+      )}
+
+      {/* Note scritte */}
       <div className="space-y-2">
-        <Label htmlFor="nota">Note sopralluogo</Label>
+        <Label htmlFor="nota">Note aggiuntive (opzionale)</Label>
         <textarea
           id="nota"
-          rows={6}
+          rows={4}
           className="block w-full rounded-md border border-input bg-background px-3 py-2 text-base"
           placeholder="Es. caldaia obsoleta, sostituzione bagno completa, tubi ramati visibili…"
           value={state.capture.nota}
           onChange={(e) =>
-            setState((s) => ({
-              ...s,
-              capture: { ...s.capture, nota: e.target.value },
-            }))
+            setState((s) => ({ ...s, capture: { ...s.capture, nota: e.target.value } }))
           }
         />
       </div>
 
-      <Dialog
-        open={voiceOpen}
-        onOpenChange={(o) => {
-          if (!o) {
-            setVoiceOpen(false);
-            setVoiceResult(null);
-            setVoiceError(null);
-          } else {
-            setVoiceOpen(true);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Mic className="h-5 w-5 text-accent" aria-hidden="true" />
-              Descrizione vocale
-            </DialogTitle>
-            <DialogDescription>
-              Parla per 30–90 secondi: cliente, indirizzo, intervento. L&apos;AI compila i prossimi step.
-            </DialogDescription>
-          </DialogHeader>
-
-          {!voiceResult ? (
-            <div className="space-y-3">
-              <VoiceRecorder
-                onRecorded={handleRecorded}
-                disabled={voicePending !== 'idle'}
-                maxDurationSec={180}
-              />
-              {voicePending !== 'idle' ? (
-                <div className="flex items-center justify-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  {voicePending === 'transcribing'
-                    ? 'Trascrivo l’audio…'
-                    : 'Estraggo i campi…'}
-                </div>
-              ) : null}
-              {voiceError ? (
-                <p
-                  role="alert"
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {voiceError}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <MobileVoicePreview
-              result={voiceResult}
-              onApply={() => applica(voiceResult.suggested)}
-              onRedo={() => setVoiceResult(null)}
-            />
-          )}
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => {
-                setVoiceOpen(false);
-                setVoiceResult(null);
-              }}
-            >
-              Chiudi
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Hint a cambio modalità — in basso, non in evidenza */}
+      <div className="mt-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+        <p className="text-xs text-muted-foreground">
+          Preferisci creare la commessa con un unico dettato completo?{' '}
+          <a
+            href="/mobile/voice-intake"
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            Usa il flusso vocale →
+          </a>
+        </p>
+      </div>
     </section>
   );
 }
 
-function MobileVoicePreview({
+function InlineVoicePreview({
   result,
   onApply,
   onRedo,
 }: {
-  result: {
-    transcript: string;
-    suggested: VoiceSuggested;
-    preview: boolean;
-    previewReason?: string;
-  };
+  result: { transcript: string; suggested: VoiceSuggested; preview: boolean; previewReason?: string };
   onApply: () => void;
   onRedo: () => void;
 }) {
   const s = result.suggested;
   const hasAny =
-    s.ragione_sociale ||
-    s.telefono ||
-    s.email ||
-    s.indirizzo ||
-    s.descrizione ||
-    s.note ||
+    s.ragione_sociale || s.telefono || s.email || s.indirizzo || s.descrizione || s.note ||
     (s.voci_ids && s.voci_ids.length > 0);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-xl border-2 border-primary/20 bg-primary-soft/10 p-4">
       {result.preview ? (
         <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-          <strong>Preview.</strong>{' '}
-          {result.previewReason ?? 'API key non configurata.'}
+          <strong>Preview.</strong> {result.previewReason ?? 'API key non configurata.'}
         </div>
       ) : null}
 
-      <details className="rounded-md border border-border bg-muted/30">
+      <details className="rounded-md border border-border bg-background">
         <summary className="cursor-pointer px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Trascrizione audio
         </summary>
-        <p className="border-t border-border px-3 py-2 text-sm">
-          {result.transcript}
-        </p>
+        <p className="border-t border-border px-3 py-2 text-sm">{result.transcript}</p>
       </details>
 
       {hasAny ? (
-        <div className="space-y-1.5 rounded-md border border-primary/30 bg-primary-soft/30 p-3 text-sm">
-          {s.ragione_sociale ? (
-            <p>
-              <strong>Cliente:</strong> {s.ragione_sociale}
-            </p>
-          ) : null}
-          {s.telefono ? (
-            <p>
-              <strong>Telefono:</strong> {s.telefono}
-            </p>
-          ) : null}
-          {s.email ? (
-            <p>
-              <strong>Email:</strong> {s.email}
-            </p>
-          ) : null}
-          {s.indirizzo ? (
-            <p>
-              <strong>Indirizzo:</strong> {s.indirizzo}
-            </p>
-          ) : null}
-          {s.voci_ids && s.voci_ids.length > 0 ? (
-            <p>
-              <strong>Voci suggerite:</strong> {s.voci_ids.length}
-            </p>
-          ) : null}
-          {s.descrizione ? (
-            <p>
-              <strong>Descrizione:</strong> <code>{s.descrizione}</code>
-            </p>
-          ) : null}
-          {s.note ? (
-            <p className="text-xs text-muted-foreground">
-              <strong>Note:</strong> {s.note}
-            </p>
-          ) : null}
+        <div className="space-y-1.5 rounded-md border border-primary/30 bg-background p-3 text-sm">
+          {s.ragione_sociale && <p><strong>Cliente:</strong> {s.ragione_sociale}</p>}
+          {s.telefono && <p><strong>Telefono:</strong> {s.telefono}</p>}
+          {s.email && <p><strong>Email:</strong> {s.email}</p>}
+          {s.indirizzo && <p><strong>Indirizzo:</strong> {s.indirizzo}</p>}
+          {s.voci_ids && s.voci_ids.length > 0 && <p><strong>Voci suggerite:</strong> {s.voci_ids.length}</p>}
+          {s.descrizione && <p><strong>Descrizione:</strong> <code className="text-xs">{s.descrizione}</code></p>}
+          {s.note && <p className="text-xs text-muted-foreground"><strong>Note:</strong> {s.note}</p>}
         </div>
       ) : (
         <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-3 text-xs text-muted-foreground">
-          Nessun campo riconosciuto. Ripeti indicando cliente, indirizzo e tipo di lavoro.
+          Nessun campo riconosciuto. Registra di nuovo indicando cliente, indirizzo e tipo di lavoro.
         </p>
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          className="min-h-[48px]"
-          onClick={onRedo}
-        >
+        <Button type="button" variant="outline" size="lg" className="min-h-[48px]" onClick={onRedo}>
           Registra di nuovo
         </Button>
-        <Button
-          type="button"
-          size="lg"
-          className="min-h-[48px]"
-          onClick={onApply}
-          disabled={!hasAny}
-        >
+        <Button type="button" size="lg" className="min-h-[48px]" onClick={onApply} disabled={!hasAny}>
           <Wand2 className="h-4 w-4" aria-hidden="true" />
           Applica
         </Button>
@@ -880,6 +727,8 @@ function MobileVoicePreview({
     </div>
   );
 }
+
+// ─── Step 3: Voci ─────────────────────────────────────────────────────────────
 
 function Step3Voci({
   state,
@@ -917,10 +766,7 @@ function Step3Voci({
     if (!id) return;
     const p = preset.find((x) => x.id === id);
     if (!p) return;
-    setState((s) => ({
-      ...s,
-      vociSelezionate: new Set([...vociDefault, ...p.vociIds]),
-    }));
+    setState((s) => ({ ...s, vociSelezionate: new Set([...vociDefault, ...p.vociIds]) }));
   };
 
   return (
@@ -937,17 +783,13 @@ function Step3Voci({
           >
             <option value="">— nessuno —</option>
             {preset.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
+              <option key={p.id} value={p.id}>{p.nome}</option>
             ))}
           </select>
         </div>
       ) : null}
 
-      <p className="text-xs text-muted-foreground">
-        Sezione A (1-10, 26): sempre attive · Sezione B: selezione del capo.
-      </p>
+      <p className="text-xs text-muted-foreground">Sezione A (1-10, 26): sempre attive · Sezione B: selezione del capo.</p>
 
       <div className="space-y-4">
         {groups.map(([cat, items]) => (
@@ -961,10 +803,7 @@ function Step3Voci({
                 return (
                   <label
                     key={v.id}
-                    className={
-                      'flex min-h-[48px] items-center gap-3 rounded-md px-2 py-1.5 text-sm ' +
-                      (v.default ? 'bg-muted/50' : 'hover:bg-muted/40')
-                    }
+                    className={'flex min-h-[48px] items-center gap-3 rounded-md px-2 py-1.5 text-sm ' + (v.default ? 'bg-muted/50' : 'hover:bg-muted/40')}
                   >
                     <input
                       type="checkbox"
@@ -975,9 +814,7 @@ function Step3Voci({
                     />
                     <span className="flex-1">{v.nome}</span>
                     {v.default ? (
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        sempre
-                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">sempre</span>
                     ) : null}
                   </label>
                 );
@@ -990,13 +827,9 @@ function Step3Voci({
   );
 }
 
-function Step4Riepilogo({
-  state,
-  voci,
-}: {
-  state: State;
-  voci: VoceCatalogoOption[];
-}) {
+// ─── Step 4: Riepilogo ───────────────────────────────────────────────────────
+
+function Step4Riepilogo({ state, voci }: { state: State; voci: VoceCatalogoOption[] }) {
   const sel = voci.filter((v) => state.vociSelezionate.has(v.id));
   return (
     <section className="space-y-4">
@@ -1006,20 +839,11 @@ function Step4Riepilogo({
         <p className="font-semibold">{state.cliente.nome || '(senza nome)'}</p>
         {state.cliente.indirizzo ? (
           <p className="text-muted-foreground">
-            {state.cliente.indirizzo}
-            {state.cliente.citta ? `, ${state.cliente.citta}` : ''}
+            {state.cliente.indirizzo}{state.cliente.citta ? `, ${state.cliente.citta}` : ''}
           </p>
         ) : null}
-        {state.cliente.telefono ? (
-          <p className="text-xs text-muted-foreground">
-            Telefono: {state.cliente.telefono}
-          </p>
-        ) : null}
-        {state.cliente.email ? (
-          <p className="text-xs text-muted-foreground">
-            Email: {state.cliente.email}
-          </p>
-        ) : null}
+        {state.cliente.telefono ? <p className="text-xs text-muted-foreground">Tel: {state.cliente.telefono}</p> : null}
+        {state.cliente.email ? <p className="text-xs text-muted-foreground">Email: {state.cliente.email}</p> : null}
       </div>
 
       <div>
@@ -1028,29 +852,22 @@ function Step4Riepilogo({
         </p>
         <ul className="flex flex-wrap gap-1.5 text-xs">
           {sel.map((v) => (
-            <li
-              key={v.id}
-              className="rounded-full border border-border bg-muted/50 px-2 py-0.5"
-            >
-              {v.nome}
-            </li>
+            <li key={v.id} className="rounded-full border border-border bg-muted/50 px-2 py-0.5">{v.nome}</li>
           ))}
         </ul>
       </div>
 
       {state.capture.nota ? (
         <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Note
-          </p>
-          <p className="whitespace-pre-wrap rounded-md border bg-card p-3 text-sm">
-            {state.capture.nota}
-          </p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Note</p>
+          <p className="whitespace-pre-wrap rounded-md border bg-card p-3 text-sm">{state.capture.nota}</p>
         </div>
       ) : null}
     </section>
   );
 }
+
+// ─── Step 5: Nome cartella ───────────────────────────────────────────────────
 
 function Step5Nome({
   state,
@@ -1078,9 +895,7 @@ function Step5Nome({
           maxLength={30}
           className="h-12 text-base"
           value={state.descrizioneFinale}
-          onChange={(e) =>
-            setState((s) => ({ ...s, descrizioneFinale: e.target.value }))
-          }
+          onChange={(e) => setState((s) => ({ ...s, descrizioneFinale: e.target.value }))}
           disabled={aiPending}
         />
         {state.descrizioneAlternative.length > 0 ? (
@@ -1092,9 +907,7 @@ function Step5Nome({
                 <button
                   type="button"
                   className="underline"
-                  onClick={() =>
-                    setState((s) => ({ ...s, descrizioneFinale: alt }))
-                  }
+                  onClick={() => setState((s) => ({ ...s, descrizioneFinale: alt }))}
                 >
                   {alt}
                 </button>
@@ -1122,7 +935,7 @@ function Step5Nome({
 
       <div className="rounded-md border bg-muted/30 p-3 text-xs">
         <p className="text-muted-foreground">
-          Cartella prevista:{' '}
+          Cartella Nextcloud:{' '}
           <code className="break-all">
             /{anteprimaCartella(state.cliente.nome, state.cliente.tipo, state.descrizioneFinale)}/
           </code>
@@ -1132,52 +945,75 @@ function Step5Nome({
   );
 }
 
-function Step6Conferma({
-  state,
-  submitting,
-  onSubmit,
+// ─── Step 6: Foto / Video ────────────────────────────────────────────────────
+
+function Step6Media({
+  mediaFiles,
+  onChange,
 }: {
-  state: State;
-  submitting: boolean;
-  onSubmit: () => void;
+  mediaFiles: MediaFile[];
+  onChange: (files: MediaFile[]) => void;
 }) {
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-semibold">6 · Conferma e crea</h2>
-
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+          <Camera className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <h2 className="text-base font-semibold">6 · Foto/video sopralluogo</h2>
+      </div>
       <p className="text-sm text-muted-foreground">
-        Creo la commessa in archivio. La cartella su cloud non viene creata
-        ora (storage in fase di scelta) ma il nome viene salvato e mostrato.
+        Documenta lo stato iniziale del cantiere — opzionale, puoi aggiungere altro in seguito.
       </p>
+      <MediaAttachSection files={mediaFiles} onChange={onChange} />
+    </section>
+  );
+}
 
-      <ul className="space-y-1 text-sm">
-        <li>
-          <strong>Cliente:</strong> {state.cliente.nome}
-        </li>
-        <li>
-          <strong>Voci:</strong> {state.vociSelezionate.size}
-        </li>
-        <li>
-          <strong>Descrizione:</strong>{' '}
-          <code>{state.descrizioneFinale}</code>
-        </li>
+// ─── Step 7: Conferma ────────────────────────────────────────────────────────
+
+function Step7Conferma({
+  state,
+  mediaCount,
+  submitting,
+  uploading,
+  onSubmit,
+}: {
+  state: State;
+  mediaCount: number;
+  submitting: boolean;
+  uploading: boolean;
+  onSubmit: () => void;
+}) {
+  const busy = submitting || uploading;
+  return (
+    <section className="space-y-4">
+      <h2 className="text-base font-semibold">7 · Conferma e crea</h2>
+
+      <ul className="space-y-1 rounded-md border bg-card p-3 text-sm">
+        <li><strong>Cliente:</strong> {state.cliente.nome}</li>
+        <li><strong>Voci:</strong> {state.vociSelezionate.size}</li>
+        <li><strong>Descrizione:</strong> <code className="text-xs">{state.descrizioneFinale}</code></li>
+        {mediaCount > 0 ? (
+          <li><strong>Foto/video:</strong> {mediaCount} file da caricare</li>
+        ) : null}
       </ul>
 
       <Button
         size="lg"
         className="min-h-[52px] w-full text-base"
         onClick={onSubmit}
-        disabled={submitting}
+        disabled={busy}
       >
-        {submitting ? (
+        {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Creazione in corso…
+            {uploading ? `Carico foto/video (${mediaCount} file)…` : 'Creo la commessa…'}
           </>
         ) : (
           <>
             <Check className="h-4 w-4" aria-hidden="true" />
-            Crea commessa
+            Crea commessa{mediaCount > 0 ? ` + ${mediaCount} foto/video` : ''}
           </>
         )}
       </Button>
@@ -1185,18 +1021,20 @@ function Step6Conferma({
   );
 }
 
-function Step7Success({
+// ─── Step 8: Successo ────────────────────────────────────────────────────────
+
+function Step8Success({
   result,
+  uploadResults,
   onOpen,
 }: {
-  result: {
-    commessaId: string;
-    codiceInterno: string;
-    nomeCartella: string;
-    cloudFolderPath: string;
-  };
+  result: { commessaId: string; codiceInterno: string; nomeCartella: string; cloudFolderPath: string };
+  uploadResults: UploadMediaResult[];
   onOpen: () => void;
 }) {
+  const uploadOk = uploadResults.filter((r) => r.ok).length;
+  const uploadErr = uploadResults.filter((r) => !r.ok).length;
+
   return (
     <section className="space-y-4">
       <div className="flex items-center gap-2 rounded-md border border-stato-aperta/40 bg-stato-aperta/10 px-3 py-3 text-sm text-stato-aperta">
@@ -1214,8 +1052,18 @@ function Step7Success({
           <code className="break-all">{result.nomeCartella}</code>
         </p>
         <p className="text-xs text-muted-foreground">
-          Percorso teorico: <code className="break-all">{result.cloudFolderPath}</code>
+          Percorso Nextcloud: <code className="break-all">{result.cloudFolderPath}</code>
         </p>
+        {uploadResults.length > 0 ? (
+          <p className="border-t border-border pt-2 text-xs">
+            {uploadOk > 0 && (
+              <span className="text-success">{uploadOk} foto/video caricati ✓</span>
+            )}
+            {uploadErr > 0 && (
+              <span className="ml-2 text-destructive">{uploadErr} falliti — riprova dalla commessa</span>
+            )}
+          </p>
+        ) : null}
         <p className="pt-1">
           <StatoBadge stato="aperta" />
         </p>
@@ -1229,19 +1077,11 @@ function Step7Success({
   );
 }
 
-// ---------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function anteprimaCartella(
-  rag: string,
-  tipo: 'persona_fisica' | 'azienda',
-  desc: string,
-): string {
+function anteprimaCartella(rag: string, tipo: 'persona_fisica' | 'azienda', desc: string): string {
   const seg1 = sanitize(
-    tipo === 'persona_fisica'
-      ? rag.trim().split(/\s+/).slice(-1)[0] ?? rag
-      : rag,
+    tipo === 'persona_fisica' ? rag.trim().split(/\s+/).slice(-1)[0] ?? rag : rag,
   );
   const seg2 = new Date().toISOString().slice(0, 10);
   const seg3 = sanitize(desc);

@@ -68,7 +68,7 @@ export default async function SopralluogoPage() {
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Nuovo sopralluogo</h1>
         <p className="text-xs text-muted-foreground">
-          7 passi · termina con la creazione automatica della commessa e della cartella.
+          Passi guidati · cliente, voci, foto/video e creazione commessa su Nextcloud.
         </p>
       </header>
 

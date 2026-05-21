@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   Briefcase,
   Timer,
-  Plus,
+  Mic,
   Bell,
   User,
   LayoutDashboard,
@@ -49,14 +49,14 @@ export function BottomNavShell({
       ? [
           { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, href: '/mobile' },
           { id: 'commesse', label: 'Commesse', icon: Briefcase, href: '/mobile/commesse' },
-          { id: 'voce', label: 'Nuova', icon: Plus, href: '/mobile/voice-intake', primary: true },
+          { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
           { id: 'notifiche', label: 'Inbox', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
           { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
         ]
       : [
           { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
           { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
-          { id: 'voce', label: 'Nuova', icon: Plus, href: '/mobile/voice-intake', primary: true },
+          { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
           { id: 'notifiche', label: 'Inbox', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
           { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
         ];

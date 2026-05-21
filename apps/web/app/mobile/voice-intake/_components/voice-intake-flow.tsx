@@ -27,6 +27,15 @@ import {
   type VoiceReviewData,
 } from '../../../_components/voice-review';
 import { creaCommessa } from '../../../_actions/crea-commessa';
+import {
+  MediaAttachSection,
+  type MediaFile,
+} from '../../../office/commesse/nuova/_components/media-attach-section';
+import {
+  uploadMediaBatch,
+  type UploadProgressMap,
+  type UploadMediaResult,
+} from '../../../office/commesse/nuova/_lib/upload-media';
 
 export interface VoceOption {
   id: number;
@@ -77,6 +86,10 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
     data: {},
   });
   const [tipsOpen, setTipsOpen] = React.useState(false);
+  const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
+  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
+  const [uploadResults, setUploadResults] = React.useState<UploadMediaResult[]>([]);
+  const [uploading, setUploading] = React.useState(false);
 
   const stepNum =
     state.phase === 'record'
@@ -195,6 +208,20 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         setState((s) => ({ ...s, phase: 'confirm', error: res.error }));
         return;
       }
+      const commessaId = res.data.commessaId;
+
+      // Upload foto/video se presenti
+      if (mediaFiles.length > 0) {
+        setUploading(true);
+        const results = await uploadMediaBatch(
+          mediaFiles,
+          commessaId,
+          (map) => setUploadProgress(new Map(map)),
+        );
+        setUploadResults(results);
+        setUploading(false);
+      }
+
       setState((s) => ({
         ...s,
         phase: 'done',
@@ -207,6 +234,7 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         error: null,
       }));
     } catch (e) {
+      setUploading(false);
       setState((s) => ({
         ...s,
         phase: 'confirm',
@@ -404,32 +432,38 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
                   : undefined
               }
             />
-            <SummaryRow
-              label="Descrizione"
-              value={state.data.descrizione}
-              mono
-            />
+            <SummaryRow label="Descrizione" value={state.data.descrizione} mono />
           </div>
 
           <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
             <p className="text-muted-foreground">Anteprima cartella:</p>
             <code className="mt-1 block break-all font-mono text-foreground">
-              /
-              {anteprimaCartella(
-                state.data.ragione_sociale ?? 'Cliente',
-                state.data.descrizione ?? 'Commessa',
-              )}
-              /
+              /{anteprimaCartella(state.data.ragione_sociale ?? 'Cliente', state.data.descrizione ?? 'Commessa')}/
             </code>
           </div>
+
+          {/* Foto/video — visibile solo in fase confirm, non durante creazione */}
+          {state.phase === 'confirm' && (
+            <MediaAttachSection
+              files={mediaFiles}
+              onChange={setMediaFiles}
+              uploading={uploading}
+              uploadProgress={uploadProgress}
+            />
+          )}
 
           <Button
             size="lg"
             className="min-h-[56px] w-full text-base"
             onClick={handleCreate}
-            disabled={state.phase === 'creating'}
+            disabled={state.phase === 'creating' || uploading}
           >
-            {state.phase === 'creating' ? (
+            {uploading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Carico foto/video ({mediaFiles.length} file)…
+              </>
+            ) : state.phase === 'creating' ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Creo la commessa…
@@ -437,7 +471,7 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
             ) : (
               <>
                 <Sparkles className="h-4 w-4" aria-hidden="true" />
-                Crea commessa
+                Crea commessa{mediaFiles.length > 0 ? ` + ${mediaFiles.length} foto/video` : ''}
               </>
             )}
           </Button>
@@ -448,7 +482,7 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
             size="sm"
             className="w-full text-muted-foreground"
             onClick={() => setState((s) => ({ ...s, phase: 'review' }))}
-            disabled={state.phase === 'creating'}
+            disabled={state.phase === 'creating' || uploading}
           >
             Torna a modificare
           </Button>
@@ -474,20 +508,30 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
           <div className="space-y-2 rounded-lg border bg-card p-4 text-sm">
             <p>
               <span className="text-muted-foreground">Codice:</span>{' '}
-              <strong className="font-mono">
-                {state.result.codiceInterno}
-              </strong>
+              <strong className="font-mono">{state.result.codiceInterno}</strong>
             </p>
             <p>
               <span className="text-muted-foreground">Cartella:</span>{' '}
-              <code className="break-all font-mono">
-                {state.result.nomeCartella}
-              </code>
+              <code className="break-all font-mono">{state.result.nomeCartella}</code>
             </p>
             <p className="text-xs text-muted-foreground">
-              Percorso:{' '}
+              Percorso Nextcloud:{' '}
               <code className="break-all">{state.result.cloudFolderPath}</code>
             </p>
+            {uploadResults.length > 0 ? (
+              <p className="border-t border-border pt-2 text-xs">
+                {uploadResults.filter((r) => r.ok).length > 0 && (
+                  <span className="text-success">
+                    {uploadResults.filter((r) => r.ok).length} foto/video caricati ✓
+                  </span>
+                )}
+                {uploadResults.filter((r) => !r.ok).length > 0 && (
+                  <span className="ml-2 text-destructive">
+                    {uploadResults.filter((r) => !r.ok).length} falliti — riprova dalla commessa
+                  </span>
+                )}
+              </p>
+            ) : null}
           </div>
 
           <Button

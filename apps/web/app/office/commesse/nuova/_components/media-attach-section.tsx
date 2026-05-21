@@ -107,7 +107,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
             <Camera className="h-4 w-4" aria-hidden="true" />
           </span>
           <div>
-            <CardTitle className="text-base">Foto &amp; Video · sopralluogo</CardTitle>
+            <CardTitle className="text-base">Foto/video · sopralluogo</CardTitle>
             <CardDescription>
               Documenta lo stato iniziale del cantiere. Opzionale — puoi aggiungere altro in seguito.
             </CardDescription>
