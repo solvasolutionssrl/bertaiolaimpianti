@@ -76,7 +76,7 @@ export default async function CommessaDetailPage({
   // 2) Foto e video: separati per momento
   const fotoQuery = supabase
     .from('file_refs')
-    .select('id, filename, thumbnail_url, momento, uploaded_at, mime')
+    .select('id, filename, thumbnail_url, momento, uploaded_at, mime, r2_key')
     .eq('commessa_id', params.id)
     .or('mime.like.image/%,mime.like.video/%')
     .order('uploaded_at', { ascending: false })

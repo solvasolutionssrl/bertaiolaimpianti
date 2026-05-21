@@ -4,9 +4,6 @@ import type { Metadata } from 'next';
 import {
   ArrowLeft,
   Folder,
-  FileText,
-  ImageIcon,
-  ChevronRight,
   AlertTriangle,
 } from 'lucide-react';
 
@@ -19,7 +16,8 @@ import {
 } from '@impiantixplus/integrations/storage';
 
 import { guardMobile } from '../../../_lib/guard';
-import { Hero, HeroMeta, MetaLine, Stagger } from '../../../_components/blueprint';
+import { Hero, HeroMeta, MetaLine } from '../../../_components/blueprint';
+import { CartellaEntries } from './_components/cartella-entries';
 
 export const metadata: Metadata = {
   title: 'Cartella cloud',
@@ -119,7 +117,7 @@ export default async function CartellaPage({
 
   const breadcrumbs = buildBreadcrumbs(c.nome_cartella, subPath, params.id);
   const backHref = breadcrumbs.length > 1
-    ? breadcrumbs[breadcrumbs.length - 2].href
+    ? breadcrumbs[breadcrumbs.length - 2]!.href
     : `/mobile/commessa/${params.id}`;
 
   return (
@@ -190,17 +188,12 @@ export default async function CartellaPage({
                 {sortedEntries.length === 1 ? 'elemento' : 'elementi'}
               </MetaLine>
             </div>
-            <Stagger className="flex flex-col gap-1.5">
-              {sortedEntries.map((entry) => (
-                <EntryRow
-                  key={entry.path}
-                  entry={entry}
-                  commessaId={params.id}
-                  subPath={subPath}
-                  rootName={c.nome_cartella}
-                />
-              ))}
-            </Stagger>
+            <CartellaEntries
+              entries={sortedEntries}
+              commessaId={params.id}
+              subPath={subPath}
+              rootName={c.nome_cartella}
+            />
           </section>
         )}
       </div>
@@ -227,87 +220,6 @@ function buildBreadcrumbs(
     out.push({ label: p, href: `${base}?path=${encodeURIComponent(acc)}` });
   }
   return out;
-}
-
-function EntryRow({
-  entry,
-  commessaId,
-  subPath,
-  rootName,
-}: {
-  entry: StorageObject;
-  commessaId: string;
-  subPath: string;
-  rootName: string;
-}) {
-  if (entry.isDirectory) {
-    const nextPath = subPath ? `${subPath}/${entry.name}` : entry.name;
-    return (
-      <Link
-        href={`/mobile/commessa/${commessaId}/cartella?path=${encodeURIComponent(nextPath)}`}
-        className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft transition-all active:scale-[0.995] active:bg-muted"
-      >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/8 text-primary">
-          <Folder className="h-4 w-4" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{entry.name}</p>
-          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            Cartella
-          </p>
-        </div>
-        <ChevronRight
-          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-active:translate-x-0.5"
-          aria-hidden="true"
-        />
-      </Link>
-    );
-  }
-
-  const ext = entry.name.split('.').pop()?.toUpperCase() ?? '?';
-  const isImage = entry.mimeType.startsWith('image/');
-  const isPdf = ext === 'PDF';
-  const sizeLabel = formatBytes(entry.size);
-  // Path completo lato cloud = root commessa + subPath + filename
-  const cloudPath = [rootName, subPath, entry.name].filter(Boolean).join('/');
-  const proxyUrl = `/api/cloud/file?path=${encodeURIComponent(cloudPath)}`;
-
-  return (
-    <a
-      href={proxyUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft transition-all active:scale-[0.995] active:bg-muted"
-    >
-      <span
-        className={
-          'flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-md font-mono text-[9px] font-bold leading-none ' +
-          (isPdf
-            ? 'border border-accent/40 bg-accent/10 text-accent-soft-foreground'
-            : isImage
-              ? 'border border-success/30 bg-success/10 text-success'
-              : 'border border-border bg-muted text-muted-foreground')
-        }
-      >
-        {isImage ? (
-          <ImageIcon className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-        ) : (
-          <FileText className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-        )}
-        <span className="tracking-tight">{ext.slice(0, 4)}</span>
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{entry.name}</p>
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {sizeLabel}
-        </p>
-      </div>
-      <ChevronRight
-        className="h-4 w-4 shrink-0 text-muted-foreground"
-        aria-hidden="true"
-      />
-    </a>
-  );
 }
 
 function EmptyCard() {
@@ -343,14 +255,3 @@ function ErrorCard({ message, provider }: { message: string; provider: string })
   );
 }
 
-function formatBytes(n: number): string {
-  if (!n || n <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let v = n;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
-}
