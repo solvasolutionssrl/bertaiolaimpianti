@@ -40,17 +40,20 @@ export const dynamic = 'force-dynamic';
 // Whisper può prendere ~10-20s su audio lungo; alziamo il limite.
 export const maxDuration = 60;
 
+// .catch(undefined) su ogni campo: se il LLM restituisce un valore non
+// conforme per un campo, quel campo viene scartato invece di far fallire
+// l'intero parse (comportamento robusto per output LLM).
 const OUTPUT_SCHEMA = z.object({
-  ragione_sociale: z.string().trim().min(1).max(200).optional(),
-  tipo: z.enum(['persona_fisica', 'azienda']).optional(),
-  telefono: z.string().trim().min(4).max(40).optional(),
-  email: z.string().trim().email().max(200).optional(),
-  indirizzo: z.string().trim().min(3).max(300).optional(),
-  citta: z.string().trim().min(1).max(120).optional(),
-  voci_ids: z.array(z.number().int().min(1).max(100)).max(20).optional(),
-  descrizione: z.string().trim().min(1).max(30).optional(),
-  note: z.string().trim().min(1).max(500).optional(),
-  tag_suggeriti: z.array(z.string().trim().min(1).max(40)).max(5).optional(),
+  ragione_sociale: z.string().trim().min(1).max(200).optional().catch(undefined),
+  tipo: z.enum(['persona_fisica', 'azienda']).optional().catch(undefined),
+  telefono: z.string().trim().min(4).max(40).optional().catch(undefined),
+  email: z.string().trim().email().max(200).optional().catch(undefined),
+  indirizzo: z.string().trim().min(3).max(300).optional().catch(undefined),
+  citta: z.string().trim().min(1).max(120).optional().catch(undefined),
+  voci_ids: z.array(z.number().int().positive()).max(20).optional().catch(undefined),
+  descrizione: z.string().trim().min(1).max(200).optional().catch(undefined),
+  note: z.string().trim().min(1).max(500).optional().catch(undefined),
+  tag_suggeriti: z.array(z.string().trim().min(1).max(40)).max(5).optional().catch(undefined),
 });
 
 type SuggestedFields = z.infer<typeof OUTPUT_SCHEMA>;
