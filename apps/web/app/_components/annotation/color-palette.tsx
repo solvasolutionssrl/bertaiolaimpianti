@@ -70,9 +70,9 @@ export interface StrokeWidthPickerProps {
   orientation?: 'row' | 'column';
 }
 
-/** Mostriamo solo i 3 valori più utili: 2px, 4px, 8px. Il 4° (16) era
- *  rumoroso e quasi mai scelto. */
-const PRESETS = STROKE_WIDTHS.slice(0, 3);
+/** 4 livelli S/M/L/XL — XL utile su iPad con Apple Pencil per
+ *  evidenziature corpose. */
+const PRESETS = STROKE_WIDTHS;
 
 export function StrokeWidthPicker({
   value,
@@ -81,7 +81,7 @@ export function StrokeWidthPicker({
   return (
     <div className="flex shrink-0 items-center gap-1">
       {PRESETS.map((w, i) => {
-        const labels = ['S', 'M', 'L'] as const;
+        const labels = ['S', 'M', 'L', 'XL'] as const;
         const active = value === w;
         return (
           <button

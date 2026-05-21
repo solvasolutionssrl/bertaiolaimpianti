@@ -130,13 +130,14 @@ export type Shape =
 export const PALETTE_BASE: readonly string[] = Object.freeze([
   '#EF4444', // red-500
   '#F59E0B', // amber-500
+  '#FACC15', // yellow-400 (highlighter giallo classico)
   '#10B981', // emerald-500
   '#3B82F6', // blue-500
   '#0F172A', // slate-900
   '#FFFFFF', // white
 ]);
 
-/** Larghezze tratto preset (px @ canvas di riferimento). */
+/** Larghezze tratto preset (px @ canvas di riferimento). 4 livelli S/M/L/XL. */
 export const STROKE_WIDTHS: readonly number[] = Object.freeze([2, 4, 8, 16]);
 
 /** Default sensati per nuovo editor. */

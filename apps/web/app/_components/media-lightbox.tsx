@@ -9,9 +9,11 @@ import {
   X as XIcon,
   Download,
   Loader2,
+  PenLine,
 } from 'lucide-react';
 
 import { VideoPlayer } from './video-player';
+import { AnnotationOverlay, type AnnotationTarget } from './annotation-overlay';
 
 const PdfViewer = dynamic(() => import('./pdf-viewer').then((m) => m.PdfViewer), {
   ssr: false,
@@ -29,6 +31,13 @@ export interface MediaItem {
   filename: string;
   /** URL alternativo per download/apertura esterna (default: src). */
   downloadUrl?: string;
+  /**
+   * Se presente, abilita il bottone "Annota" per immagini/PDF.
+   * Foto-tab: passa direttamente `{ fileRefId }`.
+   * Cartella-entries: passa `{ resolve: { commessaId, path, ... } }` per
+   * risolvere/creare la riga file_refs on demand.
+   */
+  annotation?: AnnotationTarget;
 }
 
 interface Props {
@@ -62,6 +71,7 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
     initialIndex == null ? 0 : Math.max(0, Math.min(initialIndex, items.length - 1)),
   );
   const touchStartXRef = React.useRef<number | null>(null);
+  const [annotating, setAnnotating] = React.useState(false);
 
   // Re-sync index quando arriva un nuovo initialIndex (apri di una foto diversa)
   React.useEffect(() => {
@@ -103,6 +113,8 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
   const isVideo = current.mime.startsWith('video/');
   const isPdf =
     current.mime === 'application/pdf' || /\.pdf$/i.test(current.filename);
+  const canAnnotate =
+    !!current.annotation && (isImage || isPdf);
 
   const lightTheme = isPdf;
   const swipeEnabled = isImage && items.length > 1;
@@ -179,6 +191,23 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
               </p>
             </div>
             <div className="flex items-center gap-1">
+              {canAnnotate && (
+                <button
+                  type="button"
+                  onClick={() => setAnnotating(true)}
+                  className={
+                    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ' +
+                    (lightTheme
+                      ? 'border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-100'
+                      : 'border border-white/20 bg-white/10 text-white hover:bg-white/20')
+                  }
+                  aria-label="Annota"
+                  title="Annota"
+                >
+                  <PenLine className="h-3.5 w-3.5" />
+                  Annota
+                </button>
+              )}
               <a
                 href={current.downloadUrl ?? current.src}
                 download={current.filename}
@@ -305,6 +334,17 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
           >
             <p className="truncate font-mono text-[11px]">{current.filename}</p>
           </div>
+
+          {/* Annotation overlay (sopra al lightbox) */}
+          {annotating && canAnnotate && current.annotation && (
+            <AnnotationOverlay
+              src={current.src}
+              mime={current.mime}
+              filename={current.filename}
+              target={current.annotation}
+              onClose={() => setAnnotating(false)}
+            />
+          )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

@@ -46,15 +46,30 @@ export function CartellaEntries({ entries, commessaId, subPath, rootName }: Prop
     () => lightboxables.map((e) => {
       const cloudPath = [rootName, subPath, e.name].filter(Boolean).join('/');
       const src = `/api/cloud/file?path=${encodeURIComponent(cloudPath)}`;
+      const mime = e.mimeType || guessMimeFromName(e.name);
       return {
         id: cloudPath,
         src,
-        mime: e.mimeType || guessMimeFromName(e.name),
+        mime,
         filename: e.name,
         downloadUrl: src,
+        // File da Nextcloud: risolvi/crea la riga file_refs on-demand
+        // quando l'utente clicca "Annota". Solo per img/PDF.
+        annotation:
+          mime.startsWith('image/') || mime === 'application/pdf' || /\.pdf$/i.test(e.name)
+            ? {
+                resolve: {
+                  commessaId,
+                  path: cloudPath,
+                  filename: e.name,
+                  mime,
+                  sizeBytes: e.size,
+                },
+              }
+            : undefined,
       };
     }),
-    [lightboxables, rootName, subPath],
+    [lightboxables, rootName, subPath, commessaId],
   );
 
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);

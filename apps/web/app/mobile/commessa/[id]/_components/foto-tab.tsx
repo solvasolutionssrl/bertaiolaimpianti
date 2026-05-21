@@ -52,6 +52,8 @@ export function FotoTab({ commessaId, sopralluogo, inCorso, finali }: Props) {
         : f.mime.startsWith('image/')
           ? `/api/photo/${f.id}`
           : '',
+      // Foto/video di file_refs: passiamo direttamente l'id (è già un fileRefId).
+      annotation: { fileRefId: f.id },
     })),
     [allItems],
   );
