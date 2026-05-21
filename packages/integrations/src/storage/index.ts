@@ -3,6 +3,7 @@ import { SupabaseStorageProvider } from './supabase';
 import { NextcloudStorageProvider } from './nextcloud';
 
 export * from './types';
+export * from './r2';
 export { SupabaseStorageProvider, NextcloudStorageProvider };
 
 export interface StorageProviderConfig {

@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { useFormStatus } from 'react-dom';
 import {
   Clock,
   MapPin,
@@ -11,14 +10,16 @@ import {
   Loader2,
   CheckCircle2,
   PencilLine,
+  X as XIcon,
 } from 'lucide-react';
 
 import { Button, Label } from '@impiantixplus/ui';
 
-import { uploadFotoFromForm } from '../../../_actions/foto';
 import { PhotoCaptureInput } from '../../../_components/photo-capture-input';
 import { PhotoAnnotationEditor } from '../../../../_components/photo-annotation-loader';
 import type { Shape } from '../../../../_lib/annotation-shapes';
+import { useChunkedUpload } from '../../../../_lib/use-chunked-upload';
+import { salvaAnnotazione } from '../../../../_actions/annotations';
 
 export interface VoceOption {
   id: number;
@@ -69,9 +70,12 @@ export function ScattoForm({
   } | null>(null);
   const [photoBlobUrl, setPhotoBlobUrl] = React.useState<string | null>(null);
 
-  // Costruisce/revoca blob URL ogni volta che cambia il file. Tenuto in
-  // state separato perché `PhotoCaptureInput` ne crea uno proprio per la
-  // preview, ma a noi serve passarlo all'editor.
+  const { state: uploadState, upload, cancel } = useChunkedUpload();
+  const busy =
+    uploadState.phase === 'init' ||
+    uploadState.phase === 'uploading' ||
+    uploadState.phase === 'finalizing';
+
   React.useEffect(() => {
     if (!file) {
       if (photoBlobUrl) URL.revokeObjectURL(photoBlobUrl);
@@ -85,13 +89,11 @@ export function ScattoForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file]);
 
-  // Aggiorna timestamp ogni 30s
   React.useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
 
-  // Geolocation API: prova al mount, non bloccante
   React.useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setGeoError('Geolocalizzazione non disponibile sul dispositivo.');
@@ -113,28 +115,52 @@ export function ScattoForm({
     );
   }, []);
 
-  const action = async (formData: FormData) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setServerError(null);
+    if (!file) {
+      setServerError('Foto mancante');
+      return;
+    }
+
+    const form = formRef.current;
+    if (!form) return;
+    const data = new FormData(form);
+    const faseVoceIdRaw = data.get('faseVoceId');
+    const voceId =
+      faseVoceIdRaw && faseVoceIdRaw !== '' ? Number(faseVoceIdRaw) : null;
+    const momento = (String(data.get('momento') ?? 'in_corso') as Momento);
+
     try {
-      // Forziamo geo da state (più affidabile dei valori in hidden input
-      // quando l'utente nega + poi concede mid-form)
-      if (geo) {
-        formData.set('geo_lat', String(geo.lat));
-        formData.set('geo_lng', String(geo.lng));
-      }
-      // Annotazione pre-upload (opzionale)
+      const result = await upload({
+        file,
+        commessaId,
+        momento,
+        voceId,
+        geoLat: geo?.lat ?? null,
+        geoLng: geo?.lng ?? null,
+      });
+
+      // Annotazione pre-upload (best-effort, non blocca il successo)
       if (annotation && annotation.layer.length > 0) {
-        formData.set('annotation_layer', JSON.stringify(annotation.layer));
-        formData.set('annotation_width', String(annotation.width));
-        formData.set('annotation_height', String(annotation.height));
+        const annRes = await salvaAnnotazione({
+          fileRefId: result.fileRefId,
+          layer: annotation.layer,
+          width: annotation.width,
+          height: annotation.height,
+        });
+        if (!annRes.ok) {
+          // Log silenzioso: la foto è caricata, l'annotazione si potrà
+          // ri-creare dall'ufficio.
+          console.warn('[scatto] annotazione fallita:', annRes.error);
+        }
       }
-      await uploadFotoFromForm(formData);
+
       setSuccess(true);
-      // Reset graceful + ricarica dati server
-      formRef.current?.reset();
+      form.reset();
       setFile(null);
+      setAnnotation(null);
       router.refresh();
-      // Nascondi banner dopo 2.5s
       setTimeout(() => setSuccess(false), 2500);
     } catch (e) {
       setServerError(e instanceof Error ? e.message : 'Upload fallito');
@@ -142,9 +168,7 @@ export function ScattoForm({
   };
 
   return (
-    <form ref={formRef} action={action} className="space-y-5">
-      <input type="hidden" name="commessaId" value={commessaId} />
-
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
       {/* Capture */}
       <div>
         <Label htmlFor="photo-input" className="mb-2 block">
@@ -165,6 +189,7 @@ export function ScattoForm({
               size="lg"
               onClick={() => setAnnotating(true)}
               className="min-h-[48px] w-full"
+              disabled={busy}
             >
               <PencilLine className="h-4 w-4" aria-hidden="true" />
               {annotation && annotation.layer.length > 0
@@ -183,6 +208,7 @@ export function ScattoForm({
           name="faseVoceId"
           defaultValue={preselectedVoceId ?? ''}
           className="block h-12 w-full rounded-md border border-input bg-background px-3 text-base"
+          disabled={busy}
         >
           <option value="">— Seleziona fase —</option>
           {voci.map((v) => (
@@ -200,7 +226,7 @@ export function ScattoForm({
       </div>
 
       {/* Momento */}
-      <fieldset className="space-y-2">
+      <fieldset className="space-y-2" disabled={busy}>
         <legend className="text-sm font-medium">Momento</legend>
         <div className="grid grid-cols-3 gap-2" role="radiogroup">
           {MOMENTI.map((m, idx) => (
@@ -212,7 +238,7 @@ export function ScattoForm({
                 type="radio"
                 name="momento"
                 value={m.value}
-                defaultChecked={idx === 1} // "In corso" default
+                defaultChecked={idx === 1}
                 className="sr-only"
               />
               {m.label}
@@ -251,12 +277,6 @@ export function ScattoForm({
             </span>
           </span>
         </div>
-        {geo ? (
-          <>
-            <input type="hidden" name="geo_lat" value={geo.lat} />
-            <input type="hidden" name="geo_lng" value={geo.lng} />
-          </>
-        ) : null}
       </div>
 
       {/* Nota */}
@@ -268,6 +288,7 @@ export function ScattoForm({
           rows={3}
           placeholder="Es. tubazioni passaggio…"
           className="block w-full rounded-md border border-input bg-background px-3 py-2 text-base"
+          disabled={busy}
         />
       </div>
 
@@ -290,7 +311,13 @@ export function ScattoForm({
         </p>
       ) : null}
 
-      <SubmitButton disabled={!file} />
+      <UploadButton
+        disabled={!file}
+        busy={busy}
+        phase={uploadState.phase}
+        progressPct={uploadState.progressPct}
+        onCancel={cancel}
+      />
 
       {/* Editor annotazione pre-upload */}
       {annotating && photoBlobUrl ? (
@@ -336,20 +363,35 @@ export function ScattoForm({
   );
 }
 
-function SubmitButton({ disabled }: { disabled: boolean }) {
-  const { pending } = useFormStatus();
+function UploadButton({
+  disabled,
+  busy,
+  phase,
+  progressPct,
+  onCancel,
+}: {
+  disabled: boolean;
+  busy: boolean;
+  phase: string;
+  progressPct: number;
+  onCancel: () => void;
+}) {
   return (
     <div className="space-y-2">
       <Button
         type="submit"
         size="lg"
-        disabled={disabled || pending}
+        disabled={disabled || busy}
         className="min-h-[52px] w-full text-base"
       >
-        {pending ? (
+        {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Caricamento foto…
+            {phase === 'init'
+              ? 'Inizializzo…'
+              : phase === 'finalizing'
+                ? 'Finalizzo…'
+                : `Carico ${progressPct}%`}
           </>
         ) : (
           <>
@@ -358,10 +400,29 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
           </>
         )}
       </Button>
-      {pending ? (
-        <p className="text-center text-xs text-muted-foreground">
-          Anche se chiudi l'app, l'upload continua.
-        </p>
+      {busy ? (
+        <div className="space-y-2">
+          <div
+            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuenow={progressPct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div
+              className="h-full bg-primary transition-[width] duration-200"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex w-full items-center justify-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+          >
+            <XIcon className="h-3 w-3" aria-hidden="true" />
+            Annulla upload
+          </button>
+        </div>
       ) : null}
     </div>
   );
