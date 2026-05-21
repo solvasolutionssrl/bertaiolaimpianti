@@ -6,15 +6,21 @@ import {
   Camera,
   Phone,
   FileText,
-  FileIcon,
   Folder,
   PencilLine,
   ChevronRight,
+  CloudUpload,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServiceSupabase } from '@impiantixplus/api/service';
 import { Button, StatoLed, Tabs, TabsContent, TabsList, TabsTrigger } from '@impiantixplus/ui';
 import type { StatoCommessa } from '@impiantixplus/api/types';
+import {
+  getStorageProvider,
+  type StorageObject,
+  type StorageProviderName,
+} from '@impiantixplus/integrations/storage';
 
 import { guardMobile } from '../../_lib/guard';
 import { fmtData, fmtDataOra } from '../../../office/_lib/format';
@@ -28,6 +34,7 @@ import {
   HeroMeta,
 } from '../../_components/blueprint';
 import { FotoTab, type FotoItem } from './_components/foto-tab';
+import { CartellaEntries } from './cartella/_components/cartella-entries';
 
 export async function generateMetadata({
   params,
@@ -61,7 +68,7 @@ export default async function CommessaDetailPage({
     .from('commesse')
     .select(
       `
-        id, codice_interno, nome_cartella, stato,
+        id, codice_interno, nome_cartella, stato, tenant_id,
         cliente_indirizzo_cantiere, cloud_folder_path,
         descrizione_ai_finale, data_apertura,
         cliente:clienti ( ragione_sociale, email, telefoni ),
@@ -82,15 +89,6 @@ export default async function CommessaDetailPage({
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
-  // 3) File documenti (PDF, DOC, ecc — non immagini)
-  const fileQuery = supabase
-    .from('file_refs')
-    .select('id, filename, mime, size_bytes, uploaded_at, path')
-    .eq('commessa_id', params.id)
-    .not('mime', 'like', 'image/%')
-    .order('uploaded_at', { ascending: false })
-    .limit(30);
-
   // 4) Aggiornamenti — interventi con note
   const updatesQuery = supabase
     .from('interventi')
@@ -103,9 +101,55 @@ export default async function CommessaDetailPage({
     .order('start_at', { ascending: false })
     .limit(10);
 
-  const [fotoRes, fileRes, updatesRes] = await Promise.all([fotoQuery, fileQuery, updatesQuery]);
+  const [fotoRes, updatesRes] = await Promise.all([fotoQuery, updatesQuery]);
 
   const commessa = rawCommessa as any;
+
+  // 5) Cloud entries (root della cartella commessa) per la tab File
+  let cloudEntries: StorageObject[] | null = null;
+  let cloudError: string | null = null;
+  if (commessa.nome_cartella && commessa.tenant_id) {
+    try {
+      const service = createServiceSupabase();
+      const { data: tenantRow } = await service
+        .from('tenants')
+        .select('storage_provider, storage_config')
+        .eq('id', commessa.tenant_id)
+        .maybeSingle();
+
+      const providerName = (tenantRow?.storage_provider as StorageProviderName) ?? 'supabase';
+      const cfg = (tenantRow?.storage_config as Record<string, string> | null) ?? {};
+
+      if (providerName === 'nextcloud' && cfg.baseUrl && cfg.user && cfg.appPassword) {
+        const provider = getStorageProvider({
+          provider: 'nextcloud',
+          baseUrl: cfg.baseUrl,
+          user: cfg.user,
+          appPassword: cfg.appPassword,
+        });
+        cloudEntries = await provider.listFolder(commessa.nome_cartella);
+      } else if (providerName === 'supabase') {
+        const provider = getStorageProvider({
+          provider: 'supabase',
+          bucket: (cfg.bucket as string | undefined) ?? 'commesse',
+        });
+        cloudEntries = await provider.listFolder(commessa.nome_cartella);
+      } else {
+        cloudError = `Provider ${providerName} non configurato`;
+      }
+    } catch (e) {
+      cloudError = e instanceof Error ? e.message : 'Errore caricamento cartella';
+    }
+  }
+
+  const sortedCloudEntries = (cloudEntries ?? [])
+    .filter((e) => e.name && !e.name.startsWith('.'))
+    .sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  const cloudFileCount = sortedCloudEntries.filter((e) => !e.isDirectory).length;
   const cliente = Array.isArray(commessa.cliente) ? commessa.cliente[0] : commessa.cliente;
   const responsabile = Array.isArray(commessa.responsabile)
     ? commessa.responsabile[0]
@@ -117,15 +161,6 @@ export default async function CommessaDetailPage({
   const fotoInCorso = tutteFoto.filter((f) => f.momento === 'in_corso');
   const fotoFinali = tutteFoto.filter((f) => f.momento === 'finale');
   const fotoTot = tutteFoto.length;
-
-  const documenti = (fileRes.data ?? []) as Array<{
-    id: string;
-    filename: string;
-    mime: string;
-    size_bytes: number;
-    uploaded_at: string;
-    path: string;
-  }>;
 
   const updates = ((updatesRes.data ?? []) as any[]).map((i) => ({
     id: i.id as string,
@@ -272,7 +307,7 @@ export default async function CommessaDetailPage({
           title="Documentazione"
           trailing={
             <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-              {fotoTot + documenti.length + updates.length}
+              {fotoTot + cloudFileCount + updates.length}
             </span>
           }
         />
@@ -290,7 +325,7 @@ export default async function CommessaDetailPage({
               className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
             >
               File
-              <span className="ml-1.5 font-sans tabular-nums opacity-60">{documenti.length}</span>
+              <span className="ml-1.5 font-sans tabular-nums opacity-60">{cloudFileCount}</span>
             </TabsTrigger>
             <TabsTrigger
               value="updates"
@@ -311,47 +346,27 @@ export default async function CommessaDetailPage({
             />
           </TabsContent>
 
-          {/* ───────────── FILE ───────────── */}
-          <TabsContent value="file" className="mt-5 space-y-4">
-            {/* Nextcloud in cima — è quello che l'utente usa sempre */}
-            <Link
-              href={`/mobile/commessa/${params.id}/cartella`}
-              className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-accent/5 p-4 shadow-soft transition-all active:scale-[0.99]"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary text-primary-foreground">
-                <Folder className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-primary">
-                  Esplora cloud
-                </p>
-                <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
-                  {commessa.nome_cartella ?? 'Cartella commessa'}
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Naviga sottocartelle e file da Nextcloud
-                </p>
-              </div>
-              <ChevronRight
-                className="h-4 w-4 shrink-0 text-primary transition-transform group-active:translate-x-0.5"
-                aria-hidden="true"
-              />
-            </Link>
-
-            <Divider label="File caricati" />
-
-            {documenti.length === 0 ? (
+          {/* ───────────── FILE (cloud diretto) ───────────── */}
+          <TabsContent value="file" className="mt-5 space-y-3">
+            {cloudError ? (
               <EmptyBlock
                 icon={<FileText className="h-5 w-5" />}
-                title="Nessun file"
-                hint="POS, DICO, schemi e altri documenti compaiono qui"
+                title="Cloud non disponibile"
+                hint={cloudError}
+              />
+            ) : sortedCloudEntries.length === 0 ? (
+              <EmptyBlock
+                icon={<Folder className="h-5 w-5" />}
+                title="Cartella vuota"
+                hint="Carica foto/video dal mobile o documenti dall'ufficio"
               />
             ) : (
-              <Stagger className="flex flex-col gap-2">
-                {documenti.map((f) => (
-                  <FileTile key={f.id} file={f} commessaId={params.id} />
-                ))}
-              </Stagger>
+              <CartellaEntries
+                entries={sortedCloudEntries}
+                commessaId={params.id}
+                subPath=""
+                rootName={commessa.nome_cartella}
+              />
             )}
 
             {/* Report: visibile solo quando la commessa è in fase avanzata */}
@@ -382,6 +397,15 @@ export default async function CommessaDetailPage({
                 </Link>
               </>
             )}
+
+            {/* Banner sync: i file caricati ora possono richiedere fino a 10 min */}
+            <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/30 p-2.5 text-[11px] text-muted-foreground">
+              <CloudUpload className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/70" aria-hidden="true" />
+              <p>
+                I file appena caricati possono richiedere fino a <strong>10 minuti</strong> per
+                comparire qui (sync automatico verso Nextcloud).
+              </p>
+            </div>
           </TabsContent>
 
           {/* ───────────── AGGIORNAMENTI ───────────── */}
@@ -437,45 +461,6 @@ export default async function CommessaDetailPage({
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-
-function FileTile({
-  file,
-  commessaId,
-}: {
-  file: { id: string; filename: string; mime: string; size_bytes: number; uploaded_at: string };
-  commessaId: string;
-}) {
-  const ext = file.filename.split('.').pop()?.toUpperCase() ?? '?';
-  const isPdf = ext === 'PDF';
-  const sizeKb = Math.round(file.size_bytes / 1024);
-  const sizeLabel = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
-
-  return (
-    <Link
-      href={`/office/commesse/${commessaId}/documenti/${file.id}/annota`}
-      className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 shadow-soft transition-all active:scale-[0.99] active:bg-muted"
-    >
-      <span
-        className={
-          'flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md font-mono text-[9px] font-bold leading-none ' +
-          (isPdf
-            ? 'border border-accent/40 bg-accent/10 text-accent-soft-foreground'
-            : 'border border-border bg-muted text-muted-foreground')
-        }
-      >
-        <FileIcon className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-        <span className="tracking-tight">{ext.slice(0, 4)}</span>
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{file.filename}</p>
-        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {sizeLabel} · {fmtData(file.uploaded_at)}
-        </p>
-      </div>
-      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-    </Link>
-  );
-}
 
 function EmptyBlock({
   icon,

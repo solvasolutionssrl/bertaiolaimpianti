@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Folder,
   FileText,
-  ImageIcon,
+  Image as ImageIcon,
   Video,
   ChevronRight,
 } from 'lucide-react';
@@ -24,20 +24,26 @@ interface Props {
 /**
  * Render della lista entries del file browser cartella.
  *
- * Comportamento click:
- *  - cartella  → naviga al sotto-path
- *  - immagine/video → apre MediaLightbox in-app (con swipe tra media)
- *  - altri file (PDF, doc, ecc.) → apre proxy in nuova tab (come prima)
+ * Click:
+ *  - cartella     → naviga nel sotto-path
+ *  - immagine/video/PDF → apre MediaLightbox (con swipe tra i media nella cartella)
+ *  - altri file   → apre proxy in nuova tab
+ *
+ * Thumbnail:
+ *  - image  → <img> dal proxy
+ *  - video  → <video preload="metadata"> mostra primo frame
+ *  - PDF    → mini card stilizzata
+ *  - altri  → icona tipologica
  */
 export function CartellaEntries({ entries, commessaId, subPath, rootName }: Props) {
-  // Media navigabili (img+video) → indice per il lightbox
-  const mediaEntries = React.useMemo(
-    () => entries.filter((e) => !e.isDirectory && isMediaMime(e.mimeType)),
+  // Media + PDF navigabili dal lightbox
+  const lightboxables = React.useMemo(
+    () => entries.filter((e) => !e.isDirectory && isLightboxable(e.mimeType, e.name)),
     [entries],
   );
 
-  const mediaItems = React.useMemo<MediaItem[]>(
-    () => mediaEntries.map((e) => {
+  const lightboxItems = React.useMemo<MediaItem[]>(
+    () => lightboxables.map((e) => {
       const cloudPath = [rootName, subPath, e.name].filter(Boolean).join('/');
       const src = `/api/cloud/file?path=${encodeURIComponent(cloudPath)}`;
       return {
@@ -48,13 +54,13 @@ export function CartellaEntries({ entries, commessaId, subPath, rootName }: Prop
         downloadUrl: src,
       };
     }),
-    [mediaEntries, rootName, subPath],
+    [lightboxables, rootName, subPath],
   );
 
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
 
   const openMedia = (entryName: string) => {
-    const idx = mediaEntries.findIndex((e) => e.name === entryName);
+    const idx = lightboxables.findIndex((e) => e.name === entryName);
     if (idx >= 0) setLightboxIdx(idx);
   };
 
@@ -75,7 +81,7 @@ export function CartellaEntries({ entries, commessaId, subPath, rootName }: Prop
 
       {lightboxIdx !== null && (
         <MediaLightbox
-          items={mediaItems}
+          items={lightboxItems}
           initialIndex={lightboxIdx}
           onClose={() => setLightboxIdx(null)}
         />
@@ -104,8 +110,8 @@ function EntryRow({
         href={`/mobile/commessa/${commessaId}/cartella?path=${encodeURIComponent(nextPath)}`}
         className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft transition-all active:scale-[0.995] active:bg-muted"
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/8 text-primary">
-          <Folder className="h-4 w-4" aria-hidden="true" />
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-primary/8 text-primary">
+          <Folder className="h-5 w-5" aria-hidden="true" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{entry.name}</p>
@@ -125,34 +131,66 @@ function EntryRow({
   const mime = entry.mimeType || guessMimeFromName(entry.name);
   const isImage = mime.startsWith('image/');
   const isVideo = mime.startsWith('video/');
-  const isPdf = ext === 'PDF';
+  const isPdf = mime === 'application/pdf' || ext === 'PDF';
+  const isMedia = isImage || isVideo;
   const sizeLabel = formatBytes(entry.size);
 
   const cloudPath = [rootName, subPath, entry.name].filter(Boolean).join('/');
   const proxyUrl = `/api/cloud/file?path=${encodeURIComponent(cloudPath)}`;
 
-  const iconClass =
-    'flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-md font-mono text-[9px] font-bold leading-none ' +
-    (isPdf
-      ? 'border border-accent/40 bg-accent/10 text-accent-soft-foreground'
-      : isImage
-        ? 'border border-success/30 bg-success/10 text-success'
-        : isVideo
-          ? 'border border-primary/30 bg-primary/10 text-primary'
-          : 'border border-border bg-muted text-muted-foreground');
+  const thumb = (
+    <span
+      className={
+        'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md ' +
+        (isImage
+          ? 'bg-muted'
+          : isVideo
+            ? 'bg-black'
+            : isPdf
+              ? 'border border-accent/40 bg-gradient-to-br from-accent/15 to-accent/5'
+              : 'border border-border bg-muted')
+      }
+    >
+      {isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={proxyUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
+      ) : isVideo ? (
+        <>
+          <video
+            src={proxyUrl}
+            preload="metadata"
+            muted
+            playsInline
+            className="h-full w-full object-cover"
+          />
+          <span className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+              <Video className="h-3 w-3 text-white" aria-hidden="true" />
+            </span>
+          </span>
+        </>
+      ) : isPdf ? (
+        <span className="flex flex-col items-center justify-center font-mono text-[8px] font-black uppercase leading-none text-accent-soft-foreground">
+          <FileText className="mb-0.5 h-3.5 w-3.5" aria-hidden="true" />
+          <span>PDF</span>
+        </span>
+      ) : (
+        <span className="flex flex-col items-center justify-center font-mono text-[8px] font-bold uppercase leading-none text-muted-foreground">
+          <FileText className="mb-0.5 h-3.5 w-3.5" aria-hidden="true" />
+          <span>{ext.slice(0, 4)}</span>
+        </span>
+      )}
+    </span>
+  );
 
   const content = (
     <>
-      <span className={iconClass}>
-        {isImage ? (
-          <ImageIcon className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-        ) : isVideo ? (
-          <Video className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-        ) : (
-          <FileText className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-        )}
-        <span className="tracking-tight">{ext.slice(0, 4)}</span>
-      </span>
+      {thumb}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{entry.name}</p>
         <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -166,8 +204,8 @@ function EntryRow({
     </>
   );
 
-  // Media → lightbox in-app
-  if (isImage || isVideo) {
+  // Media + PDF → lightbox in-app
+  if (isMedia || isPdf) {
     return (
       <button
         type="button"
@@ -179,7 +217,7 @@ function EntryRow({
     );
   }
 
-  // Altri tipi (PDF, doc) → apri esternamente come prima
+  // Altri tipi → apri esternamente
   return (
     <a
       href={proxyUrl}
@@ -192,9 +230,11 @@ function EntryRow({
   );
 }
 
-function isMediaMime(mime: string): boolean {
-  if (!mime) return false;
-  return mime.startsWith('image/') || mime.startsWith('video/');
+function isLightboxable(mime: string, name: string): boolean {
+  if (mime?.startsWith('image/') || mime?.startsWith('video/')) return true;
+  if (mime === 'application/pdf') return true;
+  if (/\.pdf$/i.test(name)) return true;
+  return false;
 }
 
 function guessMimeFromName(name: string): string {
@@ -207,6 +247,7 @@ function guessMimeFromName(name: string): string {
   if (ext === 'mp4') return 'video/mp4';
   if (ext === 'mov') return 'video/quicktime';
   if (ext === 'webm') return 'video/webm';
+  if (ext === 'pdf') return 'application/pdf';
   return 'application/octet-stream';
 }
 
