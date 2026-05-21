@@ -15,7 +15,7 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '20mb', // foto cantiere fino a ~12 MP iPhone
+      bodySizeLimit: '150mb', // foto + video cantiere iPhone (1080p ~90s ≈ 120MB)
     },
     // Tree-shaking aggressivo per pacchetti grossi con tanti named export:
     // accorcia compile time in dev (meno moduli da bundlare per pagina) e
