@@ -76,8 +76,10 @@ export function RenderShape(props: RenderShapeProps) {
           stroke={shape.color}
           fill={shape.color}
           strokeWidth={shape.strokeWidth}
-          pointerLength={Math.max(10, shape.strokeWidth * 3)}
-          pointerWidth={Math.max(10, shape.strokeWidth * 3)}
+          // Punta più generosa: min 18px, scala 4.5x il tratto (era 3x con
+          // base 10 → testa quasi invisibile a tratti sottili).
+          pointerLength={Math.max(18, shape.strokeWidth * 4.5)}
+          pointerWidth={Math.max(16, shape.strokeWidth * 4)}
           opacity={shape.opacity ?? 1}
           lineCap="round"
           lineJoin="round"

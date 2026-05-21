@@ -276,15 +276,7 @@ export default async function CommessaDetailPage({
 
       {/* ── 02 / BRIEFING ──────────────────────────────────────────────────── */}
       <section className="space-y-3 animate-fade-up [animation-delay:60ms]">
-        <SectionNumber
-          n={2}
-          title="Briefing"
-          trailing={
-            <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-              dal capo
-            </span>
-          }
-        />
+        <SectionNumber n={2} title="Briefing" />
         <article className="relative overflow-hidden rounded-lg border border-border bg-card p-4 shadow-soft">
           <CornerTicks />
           {/* Linea brand verticale a sinistra */}

@@ -38,7 +38,13 @@ export type PdfTextTool =
   | 'text-strike'
   | 'comment';
 
-export type PdfMode = 'text' | 'draw';
+/**
+ * Modalità del PdfAnnotator:
+ *  - 'hand' : scroll/pan libero, nessuna interazione overlay (default).
+ *  - 'text' : selezione testo PDF per highlight/underline/strike/comment.
+ *  - 'draw' : disegno overlay Konva (matita/freccia/rect/ecc).
+ */
+export type PdfMode = 'hand' | 'text' | 'draw';
 
 export type SaveStatus =
   | { kind: 'idle' }

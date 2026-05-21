@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
   ChevronRight,
-  ClipboardCheck,
+  Plus,
   MapPin,
   Mic,
   TrendingUp,
@@ -169,10 +169,9 @@ async function GestioneDashboard({
         <div className="grid grid-cols-2 gap-2">
           <QuickAction
             href="/mobile/sopralluogo"
-            icon={ClipboardCheck}
+            icon={Plus}
             label="Sopralluogo"
             hint="step guidati · foto/video"
-            tag="+"
           />
           <QuickAction
             href="/mobile/voice-intake"
@@ -276,10 +275,9 @@ async function CampoOggi({
         <div className="grid grid-cols-2 gap-2">
           <QuickAction
             href="/mobile/sopralluogo"
-            icon={ClipboardCheck}
+            icon={Plus}
             label="Sopralluogo"
             hint="guidato · foto/video"
-            tag="+"
             dataTour="sopralluogo"
           />
           <QuickAction

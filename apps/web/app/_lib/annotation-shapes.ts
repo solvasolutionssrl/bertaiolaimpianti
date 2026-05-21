@@ -137,12 +137,13 @@ export const PALETTE_BASE: readonly string[] = Object.freeze([
   '#FFFFFF', // white
 ]);
 
-/** Larghezze tratto preset (px @ canvas di riferimento). 4 livelli S/M/L/XL. */
-export const STROKE_WIDTHS: readonly number[] = Object.freeze([2, 4, 8, 16]);
+/** Larghezze tratto preset (px @ canvas di riferimento). 4 livelli S/M/L/XL.
+ *  S=3 (era 2 → quasi invisibile a schermo), M=6, L=12, XL=20. */
+export const STROKE_WIDTHS: readonly number[] = Object.freeze([3, 6, 12, 20]);
 
 /** Default sensati per nuovo editor. */
 export const DEFAULT_COLOR: string = '#EF4444';
-export const DEFAULT_STROKE: number = 4;
+export const DEFAULT_STROKE: number = 6;
 export const HIGHLIGHT_OPACITY: number = 0.4;
 export const HIGHLIGHT_STROKE_MULTIPLIER: number = 4;
 

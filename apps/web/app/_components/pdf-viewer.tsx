@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Document, Page } from 'react-pdf';
-import { ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import './annotation/pdf-worker';
 
@@ -11,88 +11,118 @@ interface Props {
 }
 
 /**
- * Viewer PDF inline (riusa react-pdf + worker pdfjs già configurato).
+ * Viewer PDF inline con scroll continuo.
  *
- * Paginazione semplice con frecce ↑↓ e contatore. Per i PDF molto pesanti
- * (>10 MB) il rendering pagina-a-pagina mantiene la memoria contenuta.
+ * Tutte le pagine vengono renderizzate consecutivamente in una colonna
+ * scrollabile. Niente paginazione manuale: l'utente scorre come in un
+ * documento web normale (più intuitivo dei tasti pagina).
+ *
+ * Performance: per PDF molto grandi (> 50 pagine) può essere lento.
+ * Per ora pragmatico — la quasi totalità dei PDF di cantiere sta sotto
+ * le 20 pagine. Se diventerà necessario virtualizzeremo (react-window).
+ *
+ * Width responsive: ogni pagina occupa min(container - 32, 900px).
  */
 export function PdfViewer({ src }: Props) {
   const [numPages, setNumPages] = React.useState<number | null>(null);
-  const [page, setPage] = React.useState(1);
   const [containerWidth, setContainerWidth] = React.useState<number>(0);
+  const [currentPage, setCurrentPage] = React.useState(1);
   const wrapRef = React.useRef<HTMLDivElement>(null);
+  const pageRefs = React.useRef<Array<HTMLDivElement | null>>([]);
 
   React.useEffect(() => {
     const update = () => {
-      if (wrapRef.current) {
-        setContainerWidth(wrapRef.current.clientWidth);
-      }
+      if (wrapRef.current) setContainerWidth(wrapRef.current.clientWidth);
     };
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
   }, []);
 
+  // Aggiorna il contatore della pagina visibile in base allo scroll
+  React.useEffect(() => {
+    if (!numPages || !wrapRef.current) return;
+    const root = wrapRef.current;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .map((e) => Number((e.target as HTMLElement).dataset.page))
+          .filter((n) => Number.isFinite(n));
+        if (visible.length) {
+          // pagina con la sezione "più centrale": prendi la prima visibile
+          setCurrentPage(Math.min(...visible));
+        }
+      },
+      { root, threshold: 0.3 },
+    );
+
+    pageRefs.current.forEach((el) => {
+      if (el) obs.observe(el);
+    });
+
+    return () => obs.disconnect();
+  }, [numPages]);
+
+  const pageWidth = Math.min(containerWidth - 32, 900);
+
   return (
-    <div className="relative flex h-full w-full flex-col bg-neutral-900">
-      <div
-        ref={wrapRef}
-        className="flex flex-1 items-start justify-center overflow-auto p-4"
-      >
+    <div className="relative flex h-full w-full flex-col bg-neutral-100">
+      <div ref={wrapRef} className="flex-1 overflow-auto px-4 py-4">
         <Document
           file={src}
-          onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+          onLoadSuccess={({ numPages: n }) => {
+            setNumPages(n);
+            pageRefs.current = new Array(n).fill(null);
+          }}
           loading={
-            <div className="flex h-full items-center justify-center text-white/70">
+            <div className="flex h-full items-center justify-center text-neutral-500">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
           }
           error={
-            <div className="flex h-full items-center justify-center text-white/70">
+            <div className="flex h-full items-center justify-center text-neutral-500">
               Impossibile aprire il PDF
             </div>
           }
-          className="rounded-md shadow-2xl"
+          className="flex flex-col items-center gap-4"
         >
-          {containerWidth > 0 && (
-            <Page
-              pageNumber={page}
-              width={Math.min(containerWidth - 32, 900)}
-              renderAnnotationLayer={false}
-              renderTextLayer={false}
-              loading={
-                <div className="flex h-96 items-center justify-center text-white/70">
-                  <Loader2 className="h-5 w-5 animate-spin" />
+          {containerWidth > 0 && numPages
+            ? Array.from({ length: numPages }, (_, i) => (
+                <div
+                  key={`page-${i + 1}`}
+                  data-page={i + 1}
+                  ref={(el) => {
+                    pageRefs.current[i] = el;
+                  }}
+                  className="shadow-xl ring-1 ring-black/5"
+                >
+                  <Page
+                    pageNumber={i + 1}
+                    width={pageWidth}
+                    renderAnnotationLayer={false}
+                    renderTextLayer={false}
+                    loading={
+                      <div
+                        className="flex items-center justify-center bg-white text-neutral-400"
+                        style={{ width: pageWidth, height: pageWidth * 1.41 }}
+                      >
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      </div>
+                    }
+                  />
                 </div>
-              }
-            />
-          )}
+              ))
+            : null}
         </Document>
       </div>
 
       {numPages && numPages > 1 && (
-        <div className="flex items-center justify-center gap-3 border-t border-white/10 bg-black/60 py-2 backdrop-blur">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            className="rounded-full p-1.5 text-white hover:bg-white/10 disabled:opacity-30"
-            aria-label="Pagina precedente"
-          >
-            <ChevronUp className="h-4 w-4" />
-          </button>
-          <span className="font-mono text-xs tabular-nums text-white/80">
-            {page} / {numPages}
+        <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2">
+          <span className="pointer-events-auto rounded-full bg-white/90 px-3 py-1 font-mono text-[11px] tabular-nums text-neutral-700 shadow-lg ring-1 ring-black/10 backdrop-blur">
+            {currentPage} / {numPages}
           </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(numPages, p + 1))}
-            disabled={page >= numPages}
-            className="rounded-full p-1.5 text-white hover:bg-white/10 disabled:opacity-30"
-            aria-label="Pagina successiva"
-          >
-            <ChevronDown className="h-4 w-4" />
-          </button>
         </div>
       )}
     </div>

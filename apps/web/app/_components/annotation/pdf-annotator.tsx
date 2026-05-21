@@ -85,7 +85,9 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
   } = props;
 
   // ---- modalità & tools ----
-  const [mode, setMode] = React.useState<PdfMode>('text');
+  // Default 'hand': all'apertura il PDF è scrollabile, nessuna interazione
+  // overlay → l'utente deve esplicitamente entrare in Testo o Disegno.
+  const [mode, setMode] = React.useState<PdfMode>('hand');
   const [drawingTool, setDrawingTool] = React.useState<DrawingTool>('pencil');
   const [textTool, setTextTool] = React.useState<PdfTextTool>('text-highlight');
   const [color, setColor] = React.useState(DEFAULT_COLOR);
@@ -246,23 +248,25 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
       }
       modeSwitchSlot={<ModeSwitch value={mode} onChange={setMode} />}
       toolbar={
-        <AnnotationToolbar
-          mode={mode === 'draw' ? 'drawing' : 'pdf-text'}
-          tool={mode === 'draw' ? drawingTool : textTool}
-          onTool={(t) =>
-            mode === 'draw'
-              ? setDrawingTool(t as DrawingTool)
-              : setTextTool(t as PdfTextTool)
-          }
-          color={color}
-          onColor={setColor}
-          strokeWidth={strokeWidth}
-          onStrokeWidth={setStrokeWidth}
-          onUndo={state.undo}
-          onRedo={state.redo}
-          canUndo={state.canUndo}
-          canRedo={state.canRedo}
-        />
+        mode === 'hand' ? null : (
+          <AnnotationToolbar
+            mode={mode === 'draw' ? 'drawing' : 'pdf-text'}
+            tool={mode === 'draw' ? drawingTool : textTool}
+            onTool={(t) =>
+              mode === 'draw'
+                ? setDrawingTool(t as DrawingTool)
+                : setTextTool(t as PdfTextTool)
+            }
+            color={color}
+            onColor={setColor}
+            strokeWidth={strokeWidth}
+            onStrokeWidth={setStrokeWidth}
+            onUndo={state.undo}
+            onRedo={state.redo}
+            canUndo={state.canUndo}
+            canRedo={state.canRedo}
+          />
+        )
       }
       status={status}
       pageInfo={pageInfo}

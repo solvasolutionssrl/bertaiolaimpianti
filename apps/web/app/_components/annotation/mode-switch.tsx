@@ -11,7 +11,7 @@
  */
 
 import * as React from 'react';
-import { Pencil, Type as TypeIcon } from 'lucide-react';
+import { Pencil, Type as TypeIcon, Hand } from 'lucide-react';
 
 import type { PdfMode } from './types';
 
@@ -27,6 +27,13 @@ export function ModeSwitch({ value, onChange }: ModeSwitchProps) {
       aria-label="Modalità annotazione PDF"
       className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/80 p-1 shadow-sm backdrop-blur"
     >
+      <ModeButton
+        active={value === 'hand'}
+        onClick={() => onChange('hand')}
+        accent="neutral"
+        Icon={Hand}
+        label="Mano"
+      />
       <ModeButton
         active={value === 'text'}
         onClick={() => onChange('text')}
@@ -50,13 +57,15 @@ function ModeButton(props: {
   onClick: () => void;
   Icon: typeof Pencil;
   label: string;
-  accent: 'blue' | 'orange';
+  accent: 'blue' | 'orange' | 'neutral';
 }) {
   const { active, onClick, Icon, label, accent } = props;
   const cls = active
     ? accent === 'blue'
       ? 'bg-primary text-primary-foreground shadow'
-      : 'bg-accent text-accent-foreground shadow'
+      : accent === 'orange'
+        ? 'bg-accent text-accent-foreground shadow'
+        : 'bg-slate-200 text-slate-900 shadow'
     : 'text-slate-300 hover:bg-slate-800';
   return (
     <button
