@@ -13,8 +13,8 @@
  */
 
 import * as React from 'react';
-import { Stage, Layer, Image as KImage } from 'react-konva';
-import { Loader2 } from 'lucide-react';
+import { Stage, Layer, Image as KImage, Text as KText } from 'react-konva';
+import { Loader2, Check, X as XIcon, Type as TypeIcon } from 'lucide-react';
 
 import {
   HIGHLIGHT_OPACITY,
@@ -41,6 +41,18 @@ export interface PhotoCanvasProps {
   readOnly?: boolean;
   /** Notifica il parent della dimensione effettiva di riferimento. */
   onRefSize?: (w: number, h: number) => void;
+}
+
+export interface PhotoCanvasHandle {
+  /**
+   * Esporta lo stage Konva come immagine "flattenata" alla risoluzione
+   * piena del canvas di riferimento. Ritorna un Blob (JPEG) o null se
+   * lo stage non è ancora montato/l'immagine non è caricata.
+   */
+  exportFlattenedBlob(options?: {
+    mimeType?: string;
+    quality?: number;
+  }): Promise<Blob | null>;
 }
 
 function useImage(src: string) {
@@ -87,7 +99,8 @@ function useContainerSize(ref: React.RefObject<HTMLElement>) {
   return size;
 }
 
-export function PhotoCanvas(props: PhotoCanvasProps) {
+export const PhotoCanvas = React.forwardRef<PhotoCanvasHandle, PhotoCanvasProps>(
+  function PhotoCanvas(props, forwardedRef) {
   const {
     imageUrl,
     state,
@@ -99,6 +112,10 @@ export function PhotoCanvas(props: PhotoCanvasProps) {
     readOnly,
     onRefSize,
   } = props;
+
+  // Ref allo Stage Konva per export
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stageRef = React.useRef<any>(null);
 
   const { img, natural, error: imgError } = useImage(imageUrl);
 
@@ -122,11 +139,28 @@ export function PhotoCanvas(props: PhotoCanvasProps) {
   const stageW = Math.round(refSize.w * scale);
   const stageH = Math.round(refSize.h * scale);
 
+  /**
+   * Editor testo: gestisce sia nuovo testo (editingId undef) che modifica
+   * di un testo esistente (editingId = shape.id). Mantiene anche fontSize
+   * e color locali — slegati dalla toolbar, così l'utente può variare la
+   * dimensione del singolo testo senza cambiare gli altri tool.
+   */
   const [textInput, setTextInput] = React.useState<{
     x: number;
     y: number;
     value: string;
+    fontSize: number;
+    color: string;
+    editingId?: string;
   } | null>(null);
+
+  const FONT_PRESETS = [
+    { label: 'S', value: 20 },
+    { label: 'M', value: 32 },
+    { label: 'L', value: 48 },
+    { label: 'XL', value: 72 },
+  ] as const;
+  const TEXT_COLORS = ['#EF4444', '#F59E0B', '#FACC15', '#10B981', '#3B82F6', '#0F172A', '#FFFFFF'];
 
   const isPointerDownRef = React.useRef(false);
 
@@ -210,7 +244,14 @@ export function PhotoCanvas(props: PhotoCanvasProps) {
         });
         break;
       case 'text':
-        setTextInput({ x, y, value: '' });
+        // Apre editor "nuovo testo" alla posizione del tap. Default font M.
+        setTextInput({
+          x,
+          y,
+          value: '',
+          fontSize: 32,
+          color,
+        });
         isPointerDownRef.current = false;
         break;
       case 'eraser':
@@ -269,20 +310,74 @@ export function PhotoCanvas(props: PhotoCanvasProps) {
   const commitText = () => {
     if (!textInput) return;
     const value = textInput.value.trim();
-    if (value) {
-      state.commit({
-        id: newShapeId(),
-        type: 'text',
-        color,
-        strokeWidth: 1,
-        x: textInput.x,
-        y: textInput.y,
-        text: value,
-        fontSize: Math.max(16, strokeWidth * 4),
-      });
+    if (!value) {
+      setTextInput(null);
+      return;
+    }
+    const next = {
+      id: textInput.editingId ?? newShapeId(),
+      type: 'text' as const,
+      color: textInput.color,
+      strokeWidth: 1,
+      x: textInput.x,
+      y: textInput.y,
+      text: value,
+      fontSize: textInput.fontSize,
+    };
+    if (textInput.editingId) {
+      state.replace(textInput.editingId, next);
+    } else {
+      state.commit(next);
     }
     setTextInput(null);
   };
+
+  const openTextEditorForShape = (shapeId: string) => {
+    const s = state.shapes.find((s) => s.id === shapeId);
+    if (!s || s.type !== 'text') return;
+    setTextInput({
+      x: s.x,
+      y: s.y,
+      value: s.text,
+      fontSize: s.fontSize,
+      color: s.color,
+      editingId: s.id,
+    });
+  };
+
+  const deleteTextShape = () => {
+    if (!textInput?.editingId) return;
+    state.remove([textInput.editingId]);
+    setTextInput(null);
+  };
+
+  /** Drag end di un text shape: salva la nuova posizione. */
+  const onTextDragEnd = (shapeId: string, newX: number, newY: number) => {
+    const s = state.shapes.find((s) => s.id === shapeId);
+    if (!s || s.type !== 'text') return;
+    state.replace(shapeId, { ...s, x: newX, y: newY });
+  };
+
+  // Imperative handle: il parent (PhotoAnnotator) lo usa per ottenere il
+  // render "flatten" (immagine + annotazioni) da uploadare come nuova versione.
+  React.useImperativeHandle(forwardedRef, () => ({
+    exportFlattenedBlob: async ({ mimeType = 'image/jpeg', quality = 0.92 } = {}) => {
+      const stage = stageRef.current;
+      if (!stage || !img) return null;
+      // pixelRatio=1 perché lo Stage è già rasterizzato alla risoluzione di
+      // riferimento (scale gestisce il fit). Per export piena risoluzione
+      // useremmo refSize.w / stage.width, ma stage interno alla scala 1:1
+      // del refSize → pixelRatio = 1/scale per export full res.
+      const fullResRatio = scale > 0 ? 1 / scale : 1;
+      const dataUrl: string = stage.toDataURL({
+        mimeType,
+        quality,
+        pixelRatio: fullResRatio,
+      });
+      const res = await fetch(dataUrl);
+      return res.blob();
+    },
+  }));
 
   return (
     <div
@@ -311,6 +406,7 @@ export function PhotoCanvas(props: PhotoCanvasProps) {
           style={{ width: stageW, height: stageH, background: '#FFF' }}
         >
           <Stage
+            ref={stageRef}
             width={stageW}
             height={stageH}
             scaleX={scale}
@@ -332,40 +428,63 @@ export function PhotoCanvas(props: PhotoCanvasProps) {
               ))}
               {state.drawing ? <RenderShape shape={state.drawing} /> : null}
             </Layer>
+            {/* Layer interattivo per i testi: drag + tap per editare.
+                Attivo solo quando il tool corrente è 'text'. */}
+            {tool === 'text' && !readOnly && (
+              <Layer>
+                {state.shapes
+                  .filter((s) => s.type === 'text')
+                  .map((s) =>
+                    s.type === 'text' ? (
+                      <KText
+                        key={`int-${s.id}`}
+                        x={s.x}
+                        y={s.y}
+                        text={s.text}
+                        fontSize={s.fontSize}
+                        fontStyle="bold"
+                        fill="transparent"
+                        draggable
+                        onClick={() => openTextEditorForShape(s.id)}
+                        onTap={() => openTextEditorForShape(s.id)}
+                        onDragEnd={(e) =>
+                          onTextDragEnd(s.id, e.target.x(), e.target.y())
+                        }
+                        // Hit area generosa: il testo è "trasparente" ma
+                        // l'area cliccabile copre la bounding box reale.
+                      />
+                    ) : null,
+                  )}
+              </Layer>
+            )}
           </Stage>
 
           {textInput ? (
-            <input
-              type="text"
-              autoFocus
+            <TextEditorPopover
               value={textInput.value}
-              onChange={(e) => setTextInput({ ...textInput, value: e.target.value })}
-              onBlur={commitText}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  commitText();
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setTextInput(null);
-                }
-              }}
-              placeholder="Testo annotazione…"
-              className="absolute rounded border-2 bg-white px-1 py-0.5 text-sm font-medium text-slate-900 shadow"
-              style={{
-                left: textInput.x * scale,
-                top: textInput.y * scale,
-                borderColor: color,
-                color,
-                minWidth: 120,
-              }}
+              fontSize={textInput.fontSize}
+              color={textInput.color}
+              fontPresets={FONT_PRESETS}
+              colors={TEXT_COLORS}
+              isEditing={Boolean(textInput.editingId)}
+              previewLeft={Math.min(
+                textInput.x * scale,
+                Math.max(0, stageW - 280),
+              )}
+              previewTop={Math.max(0, textInput.y * scale - 12)}
+              onChange={(patch) =>
+                setTextInput((prev) => (prev ? { ...prev, ...patch } : prev))
+              }
+              onConfirm={commitText}
+              onCancel={() => setTextInput(null)}
+              onDelete={textInput.editingId ? deleteTextShape : undefined}
             />
           ) : null}
         </div>
       )}
     </div>
   );
-}
+});
 
 function isShapeEmpty(s: Shape): boolean {
   switch (s.type) {
@@ -395,4 +514,176 @@ function cursorFor(tool: DrawingTool, readOnly: boolean): string {
     default:
       return 'crosshair';
   }
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  Text editor popover                                                     */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+interface TextEditorPopoverProps {
+  value: string;
+  fontSize: number;
+  color: string;
+  fontPresets: ReadonlyArray<{ label: string; value: number }>;
+  colors: readonly string[];
+  isEditing: boolean;
+  previewLeft: number;
+  previewTop: number;
+  onChange: (patch: { value?: string; fontSize?: number; color?: string }) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}
+
+function TextEditorPopover({
+  value,
+  fontSize,
+  color,
+  fontPresets,
+  colors,
+  isEditing,
+  previewLeft,
+  previewTop,
+  onChange,
+  onConfirm,
+  onCancel,
+  onDelete,
+}: TextEditorPopoverProps) {
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  React.useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <div
+      role="dialog"
+      aria-label={isEditing ? 'Modifica testo' : 'Nuovo testo'}
+      className="absolute z-20 w-[260px] overflow-hidden rounded-lg border border-slate-300 bg-white text-slate-900 shadow-2xl"
+      style={{ left: previewLeft, top: previewTop }}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-2.5 py-1.5">
+        <TypeIcon className="h-3.5 w-3.5 text-slate-500" aria-hidden="true" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          {isEditing ? 'Modifica testo' : 'Nuovo testo'}
+        </span>
+      </div>
+
+      {/* Input testo */}
+      <div className="p-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => onChange({ value: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              onConfirm();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+          placeholder="Scrivi qui…"
+          className="block w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/30"
+          style={{ color }}
+        />
+      </div>
+
+      {/* Font size picker */}
+      <div className="border-t border-slate-100 px-2.5 py-2">
+        <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+          Dimensione
+        </p>
+        <div className="flex items-center gap-1">
+          {fontPresets.map((p) => {
+            const active = fontSize === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => onChange({ fontSize: p.value })}
+                className={
+                  'flex h-8 flex-1 items-center justify-center rounded-md text-xs font-semibold transition-colors ' +
+                  (active
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200')
+                }
+                aria-pressed={active}
+                aria-label={`Dimensione ${p.label} (${p.value}px)`}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Color picker */}
+      <div className="border-t border-slate-100 px-2.5 py-2">
+        <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+          Colore
+        </p>
+        <div className="flex items-center gap-1.5">
+          {colors.map((c) => {
+            const active = c === color;
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => onChange({ color: c })}
+                className={
+                  'relative h-7 w-7 rounded-full border-2 transition ' +
+                  (active
+                    ? 'border-slate-900 shadow ring-2 ring-primary/40'
+                    : 'border-slate-200 hover:border-slate-400')
+                }
+                style={{ backgroundColor: c }}
+                aria-pressed={active}
+                aria-label={`Colore ${c}`}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div className="flex items-center justify-between gap-1 border-t border-slate-200 bg-slate-50 px-2 py-2">
+        {onDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="rounded-md px-2 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10"
+          >
+            Elimina
+          </button>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2.5 text-xs font-medium text-slate-700 hover:bg-white"
+          >
+            <XIcon className="h-3.5 w-3.5" aria-hidden="true" />
+            Annulla
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!value.trim()}
+            className="flex h-8 items-center gap-1 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition hover:opacity-95 disabled:opacity-40"
+          >
+            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            Conferma
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

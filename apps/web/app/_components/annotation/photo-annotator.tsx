@@ -23,6 +23,7 @@ import {
 
 import { EditorShell } from './editor-shell';
 import { ConfirmDialog } from '../confirm-dialog';
+import type { PhotoCanvasHandle } from './photo-canvas';
 import { AnnotationToolbar } from './toolbar';
 import { PhotoCanvas } from './photo-canvas';
 import { useAnnotationState } from './hooks/use-annotation-state';
@@ -45,7 +46,7 @@ const IDLE_AUTOSAVE_MS = 5000;
 
 export function PhotoAnnotator(props: PhotoAnnotatorProps) {
   const {
-    fileRefId: _fileRefId,
+    fileRefId,
     imageUrl,
     title,
     initialLayer,
@@ -73,12 +74,44 @@ export function PhotoAnnotator(props: PhotoAnnotatorProps) {
     if (state.dirty) setStatus({ kind: 'dirty' });
   }, [state.dirty]);
 
+  // Ref al canvas: serve per esportare il flatten dopo il save.
+  const canvasRef = React.useRef<PhotoCanvasHandle>(null);
+
   const doSave = React.useCallback(async () => {
     if (readOnly) return;
     if (!refSize.w || !refSize.h) return;
     setStatus({ kind: 'saving' });
     try {
+      // 1. Salva overlay vettoriale (back-up storico delle shape)
       await onSave(state.shapes, refSize.w, refSize.h);
+
+      // 2. Flatten: esporta canvas come immagine + uploada server-side
+      //    sovrascrivendo l'originale (con backup automatico).
+      //    Solo se ci sono shape (niente flatten su foto pulita).
+      if (state.shapes.length > 0 && canvasRef.current) {
+        try {
+          const blob = await canvasRef.current.exportFlattenedBlob({
+            mimeType: 'image/jpeg',
+            quality: 0.92,
+          });
+          if (blob) {
+            const fd = new FormData();
+            fd.append('image', blob, 'annotated.jpg');
+            const res = await fetch(`/api/upload/media/${fileRefId}/flatten`, {
+              method: 'POST',
+              body: fd,
+            });
+            if (!res.ok) {
+              const t = await res.text();
+              console.warn(`[annotator] flatten failed (${res.status}): ${t.slice(0, 200)}`);
+            }
+          }
+        } catch (e) {
+          // Il flatten è "best-effort": l'overlay è già salvato in DB.
+          console.warn('[annotator] flatten failed (non-fatal):', e);
+        }
+      }
+
       setStatus({ kind: 'saved', at: Date.now() });
     } catch (e) {
       setStatus({
@@ -86,7 +119,7 @@ export function PhotoAnnotator(props: PhotoAnnotatorProps) {
         message: e instanceof Error ? e.message : 'Salvataggio fallito',
       });
     }
-  }, [readOnly, refSize, state.shapes, onSave]);
+  }, [readOnly, refSize, state.shapes, onSave, fileRefId]);
 
   // Auto-save: dopo IDLE_AUTOSAVE_MS senza modifiche, salviamo silenziosamente.
   React.useEffect(() => {
@@ -155,6 +188,7 @@ export function PhotoAnnotator(props: PhotoAnnotatorProps) {
       onClose={handleClose}
     >
       <PhotoCanvas
+        ref={canvasRef}
         imageUrl={imageUrl}
         state={state}
         tool={tool}

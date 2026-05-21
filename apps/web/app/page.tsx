@@ -93,7 +93,7 @@ function SiteNav() {
           href="#architettura"
           className="text-foreground/70 transition hover:text-foreground"
         >
-          Architettura
+          Garanzie
         </a>
       </div>
 
@@ -139,7 +139,7 @@ function Hero() {
             <span className="absolute inset-0 animate-ping rounded-full bg-success/60" />
             <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-success" />
           </span>
-          pilot in produzione · Bertaiola Impianti
+          già in uso su cantieri reali · suite SOLVA
         </span>
       </div>
 
@@ -190,10 +190,10 @@ function Hero() {
 
 function TrustBar() {
   const items = [
-    { icon: ShieldCheck, label: 'GDPR · hosting EU' },
-    { icon: Folder, label: 'Multi-tenant nativo' },
-    { icon: Sparkles, label: 'AI naming + voice intake' },
-    { icon: CloudUpload, label: 'Sync R2 ↔ Nextcloud' },
+    { icon: ShieldCheck, label: 'Conforme GDPR' },
+    { icon: CloudUpload, label: 'Sync automatico col cloud aziendale' },
+    { icon: Folder, label: 'Cartelle create da sole' },
+    { icon: Sparkles, label: 'Voce → commessa pronta' },
   ];
   return (
     <section className="mx-auto max-w-6xl px-6 pb-10">
@@ -219,25 +219,25 @@ function ComeFunziona() {
       n: '01',
       icon: Mic,
       title: 'Detti la commessa a voce',
-      body: 'Whisper la trascrive, Claude estrae cliente · descrizione · fasi · indirizzo. Tu confermi in due tap.',
+      body: 'Parli al telefono, l\'app estrae cliente, descrizione, fasi e indirizzo. Tu confermi in due tap.',
     },
     {
       n: '02',
       icon: Folder,
-      title: 'Cartella e fasi pronte',
-      body: 'Codice interno univoco, cartella cloud creata con scaffold completo, voci di lavoro pre-popolate.',
+      title: 'Cartella pronta in automatico',
+      body: 'Codice interno univoco, struttura cartelle creata con un click, voci di lavoro pre-popolate.',
     },
     {
       n: '03',
       icon: Camera,
       title: 'Foto e video dal cantiere',
-      body: 'Upload diretto verso R2 con multipart resiliente. Niente più video bloccati a 80% sul mobile.',
+      body: 'Upload anche su rete debole, niente video bloccati a metà. Caricano da soli mentre lavori.',
     },
     {
       n: '04',
       icon: FileText,
-      title: 'Report e firma',
-      body: 'PDF di chiusura generato in automatico con foto, fasi e DICO. Annota e firma in app, niente stampa.',
+      title: 'Report e consegna',
+      body: 'PDF di chiusura generato in automatico con foto, fasi e documenti. Annota e firma direttamente in app.',
     },
   ];
   return (
@@ -283,33 +283,33 @@ function Funzionalita() {
   const items = [
     {
       icon: Mic,
-      title: 'Voice intake con AI',
-      body: 'Detti, l\'AI estrae cliente, fasi e descrizione. Tu rivedi due card, confermi e parti.',
+      title: 'Voce → commessa pronta',
+      body: 'Detti due frasi, l\'app capisce cliente, lavori, indirizzo. Tu confermi e parti.',
     },
     {
       icon: CloudUpload,
-      title: 'Upload resiliente',
-      body: 'Multipart diretto verso R2: bypass del limite Vercel, retry automatici, cancel pulito.',
-    },
-    {
-      icon: ImageIcon,
-      title: 'Lightbox in-app',
-      body: 'Foto, video con player custom e PDF inline con scroll continuo. Niente popup browser.',
-    },
-    {
-      icon: PenLine,
-      title: 'Annotazioni con Pencil',
-      body: 'Matita, freccia, evidenziatore, testo. Sensibilità Apple Pencil, lock pessimistico per editing condiviso.',
+      title: 'Sync col cloud aziendale',
+      body: 'Foto e video appaiono nel vostro cloud d\'ufficio entro un minuto, dove i ragazzi li cercano già.',
     },
     {
       icon: Folder,
-      title: 'Nextcloud come verità',
-      body: 'Sync R2 → Nextcloud in background. I file appaiono dove i ragazzi in ufficio li cercano già.',
+      title: 'Cartelle senza pensieri',
+      body: 'Struttura creata in automatico per ogni commessa: foto per fase, documenti, materiali, chiusura.',
     },
     {
-      icon: Sparkles,
-      title: 'AI naming',
-      body: 'La cartella si nomina da sola in modo coerente: codice + cliente + descrizione, niente ambiguità.',
+      icon: PenLine,
+      title: 'Annota le foto in app',
+      body: 'Frecce, cerchi, evidenziatore e note direttamente sopra alle foto. Funziona con la penna iPad.',
+    },
+    {
+      icon: ImageIcon,
+      title: 'Galleria e PDF integrati',
+      body: 'Foto e video si aprono dentro l\'app con swipe. I PDF si scorrono pagina dopo pagina come un libro.',
+    },
+    {
+      icon: FileText,
+      title: 'Report con un click',
+      body: 'PDF di chiusura cantiere con foto, fasi e documenti. Pronto da inviare al cliente o all\'archivio.',
     },
   ];
   return (
@@ -411,18 +411,13 @@ function PerChi() {
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function Architettura() {
-  const stack = [
-    { label: 'Next.js 14 · Vercel', sub: 'Fluid Compute · EU dub1' },
-    { label: 'Supabase EU', sub: 'Postgres · Auth · RLS' },
-    { label: 'Cloudflare R2', sub: 'Staging multipart · EU' },
-    { label: 'Nextcloud', sub: 'Source of truth aziendale' },
-    { label: 'Claude + Whisper', sub: 'AI naming + voice intake' },
-  ];
   const garanzie = [
-    'GDPR · hosting esclusivamente EU (Frankfurt, Dublino, EEUR)',
-    'Multi-tenant con RLS Postgres + scoping JWT da day 1',
-    'Audit trail completo: ogni upload, annotation, edit',
-    'Backup giornaliero gestito, retention 30 giorni',
+    'Conforme GDPR: tutti i dati restano in Europa',
+    'Dati separati per azienda, accessi tracciati',
+    'Sincronizzazione automatica entro un minuto col cloud che già usate',
+    'Storico completo: chi ha caricato cosa, quando, da dove',
+    'Backup giornaliero, ripristino disponibile per 30 giorni',
+    'Accesso da web e telefono con lo stesso account',
   ];
   return (
     <section
@@ -430,26 +425,12 @@ function Architettura() {
       className="relative mx-auto max-w-6xl px-6 py-20"
     >
       <SectionHeading
-        eyebrow="Architettura"
-        title="Tecnologia europea, sotto controllo"
-        subtitle="Niente dipendenze americane critiche, niente backdoor. Il vostro dato resta in Europa, tracciato e ripristinabile."
+        eyebrow="Garanzie"
+        title="Sicurezza, conformità e continuità del dato"
+        subtitle="Costruita in Italia, ospitata in Europa. Tutti i dati restano dove devono restare, anche dopo la chiusura della commessa."
       />
 
-      <div className="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {stack.map(({ label, sub }) => (
-          <div
-            key={label}
-            className="rounded-lg border border-border bg-card/60 p-4 backdrop-blur"
-          >
-            <p className="text-sm font-semibold tracking-tight">{label}</p>
-            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              {sub}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-8 grid gap-2 sm:grid-cols-2">
+      <div className="mt-12 grid gap-2 sm:grid-cols-2">
         {garanzie.map((g) => (
           <div
             key={g}
@@ -472,11 +453,11 @@ function FinalCta() {
   return (
     <section className="mx-auto max-w-3xl px-6 py-20 text-center">
       <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-        Pronto a smettere di cercare le foto su WhatsApp?
+        Pronto a portare le commesse fuori dal caos?
       </h2>
       <p className="mx-auto mt-3 max-w-xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
-        Apri l&apos;applicativo se sei già del team Bertaiola, oppure scrivici
-        per una demo personalizzata sulla tua realtà.
+        Se hai già un account, apri l&apos;applicativo. Altrimenti scrivici per
+        una demo personalizzata sulla tua realtà cantieristica.
       </p>
       <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <Link
@@ -548,7 +529,7 @@ function SiteFooter() {
             </li>
             <li>
               <a href="#architettura" className="text-foreground/80 hover:text-foreground">
-                Architettura
+                Garanzie
               </a>
             </li>
           </ul>

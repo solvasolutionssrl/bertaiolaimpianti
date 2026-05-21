@@ -16,6 +16,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   DeleteObjectCommand,
+  CopyObjectCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
@@ -217,6 +218,40 @@ export class R2StorageProvider {
   async delete(key: string): Promise<void> {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+  }
+
+  /**
+   * Upload diretto server-side (no presigned). Usato dal flatten endpoint
+   * dopo l'annotazione foto: il blob arriva via multipart al server e va
+   * scritto su R2 senza esporre presigned al client.
+   */
+  async putObject(
+    key: string,
+    body: Uint8Array | Buffer,
+    contentType: string,
+  ): Promise<void> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+      }),
+    );
+  }
+
+  /**
+   * Copia server-side R2 → R2 (no banda lato Vercel). Usato per fare
+   * backup dell'originale prima di sovrascrivere col flatten annotato.
+   */
+  async copyObject(srcKey: string, dstKey: string): Promise<void> {
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: `${this.bucket}/${encodeURI(srcKey)}`,
+        Key: dstKey,
+      }),
     );
   }
 }
