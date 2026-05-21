@@ -34,6 +34,7 @@ export default async function MobileCommessePage() {
     )
     .in('stato', ['aperta', 'in_corso', 'collaudo', 'bozza'])
     .order('data_apertura', { ascending: false })
+    .order('codice_interno', { ascending: false })
     .limit(120);
 
   if (error) {

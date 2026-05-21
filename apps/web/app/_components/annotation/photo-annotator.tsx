@@ -22,6 +22,7 @@ import {
 } from '../../_lib/annotation-shapes';
 
 import { EditorShell } from './editor-shell';
+import { ConfirmDialog } from '../confirm-dialog';
 import { AnnotationToolbar } from './toolbar';
 import { PhotoCanvas } from './photo-canvas';
 import { useAnnotationState } from './hooks/use-annotation-state';
@@ -97,15 +98,12 @@ export function PhotoAnnotator(props: PhotoAnnotatorProps) {
     return () => clearTimeout(t);
   }, [autoSave, readOnly, status, doSave]);
 
+  // Conferma dirty-close via ConfirmDialog in-app (no popup browser nativo)
+  const [confirmCloseOpen, setConfirmCloseOpen] = React.useState(false);
   const handleClose = () => {
     if (state.dirty && status.kind !== 'saved') {
-      if (
-        !window.confirm(
-          'Hai modifiche non salvate. Vuoi davvero chiudere senza salvare?',
-        )
-      ) {
-        return;
-      }
+      setConfirmCloseOpen(true);
+      return;
     }
     onClose();
   };
@@ -166,6 +164,19 @@ export function PhotoAnnotator(props: PhotoAnnotatorProps) {
         height={height}
         readOnly={readOnly}
         onRefSize={(w, h) => setRefSize({ w, h })}
+      />
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title="Esci senza salvare?"
+        description="Le modifiche all'annotazione non salvate andranno perse."
+        confirmLabel="Esci"
+        cancelLabel="Continua a modificare"
+        destructive
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          onClose();
+        }}
+        onCancel={() => setConfirmCloseOpen(false)}
       />
     </EditorShell>
   );

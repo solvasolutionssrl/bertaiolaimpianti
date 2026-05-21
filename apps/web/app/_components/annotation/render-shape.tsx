@@ -76,10 +76,12 @@ export function RenderShape(props: RenderShapeProps) {
           stroke={shape.color}
           fill={shape.color}
           strokeWidth={shape.strokeWidth}
-          // Punta più generosa: min 18px, scala 4.5x il tratto (era 3x con
-          // base 10 → testa quasi invisibile a tratti sottili).
-          pointerLength={Math.max(18, shape.strokeWidth * 4.5)}
-          pointerWidth={Math.max(16, shape.strokeWidth * 4)}
+          // Testa generosa: min 24px, scala 6x sul tratto. A tratti
+          // sottili è la lunghezza minima che rende la freccia leggibile;
+          // a tratti spessi (XL=20) la testa diventa proporzionalmente più
+          // grande senza sovrastare la linea.
+          pointerLength={Math.max(24, shape.strokeWidth * 6)}
+          pointerWidth={Math.max(22, shape.strokeWidth * 5)}
           opacity={shape.opacity ?? 1}
           lineCap="round"
           lineJoin="round"

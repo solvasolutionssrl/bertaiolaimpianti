@@ -57,6 +57,7 @@ export default async function CommessePage({
       { count: 'exact' },
     )
     .order('data_apertura', { ascending: false })
+    .order('codice_interno', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
 
   if (searchParams.stato) query = query.eq('stato', searchParams.stato as any);

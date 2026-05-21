@@ -223,6 +223,7 @@ export async function creaCommessa(
       data_apertura: dataIsoOggi(),
       descrizione_ai_proposta: null,
       descrizione_ai_finale: data.descrizioneFinale,
+      note_iniziali: data.noteIniziali?.trim() || null,
       preset_id: data.presetId ?? null,
     })
     .select('id')

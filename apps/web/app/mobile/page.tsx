@@ -81,6 +81,7 @@ async function GestioneDashboard({
       )
       .in('stato', ['aperta', 'in_corso', 'collaudo'])
       .order('data_apertura', { ascending: false })
+    .order('codice_interno', { ascending: false })
       .limit(5),
   ]);
 
@@ -172,6 +173,7 @@ async function GestioneDashboard({
             icon={Plus}
             label="Sopralluogo"
             hint="step guidati · foto/video"
+            tone="primary"
           />
           <QuickAction
             href="/mobile/voice-intake"
@@ -234,6 +236,7 @@ async function CampoOggi({
     .eq('responsabile_id', ctx.userId)
     .in('stato', ['aperta', 'in_corso', 'collaudo'])
     .order('data_apertura', { ascending: false })
+    .order('codice_interno', { ascending: false })
     .limit(30);
 
   if (error) {
@@ -278,6 +281,7 @@ async function CampoOggi({
             icon={Plus}
             label="Sopralluogo"
             hint="guidato · foto/video"
+            tone="primary"
             dataTour="sopralluogo"
           />
           <QuickAction

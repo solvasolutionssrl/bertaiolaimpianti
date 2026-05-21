@@ -30,6 +30,7 @@ import {
 } from '../../_lib/annotation-shapes';
 
 import { EditorShell } from './editor-shell';
+import { ConfirmDialog } from '../confirm-dialog';
 import { AnnotationToolbar } from './toolbar';
 import { ModeSwitch } from './mode-switch';
 import { PdfCanvas } from './pdf-canvas';
@@ -197,15 +198,12 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
     return () => clearTimeout(t);
   }, [autoSave, readOnly, status, doSaveAll]);
 
+  // Conferma dirty-close via ConfirmDialog in-app (no popup browser nativo)
+  const [confirmCloseOpen, setConfirmCloseOpen] = React.useState(false);
   const handleClose = () => {
     if (status.kind === 'dirty' || anyDirty()) {
-      if (
-        !window.confirm(
-          'Hai modifiche non salvate. Vuoi davvero chiudere senza salvare?',
-        )
-      ) {
-        return;
-      }
+      setConfirmCloseOpen(true);
+      return;
     }
     onClose();
   };
@@ -349,6 +347,19 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
         readOnly={readOnly}
         onDocumentLoaded={(n) => setNumPages(n)}
         onPageSize={setPageRefSize}
+      />
+      <ConfirmDialog
+        open={confirmCloseOpen}
+        title="Esci senza salvare?"
+        description="Le annotazioni non salvate andranno perse."
+        confirmLabel="Esci"
+        cancelLabel="Continua a modificare"
+        destructive
+        onConfirm={() => {
+          setConfirmCloseOpen(false);
+          onClose();
+        }}
+        onCancel={() => setConfirmCloseOpen(false)}
       />
     </EditorShell>
   );

@@ -342,6 +342,7 @@ export type Database = {
           descrizione_ai_proposta: string | null
           id: string
           nome_cartella: string
+          note_iniziali: string | null
           preset_id: string | null
           responsabile_id: string | null
           stato: Database["public"]["Enums"]["stato_commessa"]
@@ -360,6 +361,7 @@ export type Database = {
           descrizione_ai_proposta?: string | null
           id?: string
           nome_cartella: string
+          note_iniziali?: string | null
           preset_id?: string | null
           responsabile_id?: string | null
           stato?: Database["public"]["Enums"]["stato_commessa"]
@@ -378,6 +380,7 @@ export type Database = {
           descrizione_ai_proposta?: string | null
           id?: string
           nome_cartella?: string
+          note_iniziali?: string | null
           preset_id?: string | null
           responsabile_id?: string | null
           stato?: Database["public"]["Enums"]["stato_commessa"]

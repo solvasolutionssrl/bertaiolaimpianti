@@ -35,6 +35,7 @@ import {
 } from '../../_components/blueprint';
 import { FotoTab, type FotoItem } from './_components/foto-tab';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
+import { DettagliEdit } from '../../../_components/dettagli-edit';
 
 export async function generateMetadata({
   params,
@@ -60,8 +61,9 @@ export default async function CommessaDetailPage({
 }: {
   params: { id: string };
 }) {
-  await guardMobile();
+  const ctx = await guardMobile();
   const supabase = createServerSupabase();
+  const canEditDettagli = ctx.role === 'admin' || ctx.role === 'owner';
 
   // 1) Commessa + cliente + responsabile
   const { data: rawCommessa, error } = await supabase
@@ -70,7 +72,7 @@ export default async function CommessaDetailPage({
       `
         id, codice_interno, nome_cartella, stato, tenant_id,
         cliente_indirizzo_cantiere, cloud_folder_path,
-        descrizione_ai_finale, descrizione_ai_proposta, data_apertura,
+        descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, data_apertura,
         cliente:clienti ( ragione_sociale, email, telefoni ),
         responsabile:users!commesse_responsabile_id_fkey ( display_name )
       `,
@@ -169,9 +171,14 @@ export default async function CommessaDetailPage({
     autore: (Array.isArray(i.autore) ? i.autore[0] : i.autore)?.display_name as string | null,
   }));
 
-  // Briefing = descrizione AI dal voice intake del capo (finale > proposta)
-  const briefingTesto: string | null =
-    commessa.descrizione_ai_finale ?? commessa.descrizione_ai_proposta ?? null;
+  // "Dettagli" = trascrizione integrale del capo (verità sacrosanta).
+  // Fallback su descrizione AI per le commesse create prima dell'introduzione
+  // del campo note_iniziali.
+  const dettagliTesto: string | null =
+    commessa.note_iniziali ??
+    commessa.descrizione_ai_finale ??
+    commessa.descrizione_ai_proposta ??
+    null;
 
   const telefono = (cliente?.telefoni as string[] | undefined)?.[0];
 
@@ -274,9 +281,9 @@ export default async function CommessaDetailPage({
         </div>
       </section>
 
-      {/* ── 02 / BRIEFING ──────────────────────────────────────────────────── */}
+      {/* ── 02 / DETTAGLI ──────────────────────────────────────────────────── */}
       <section className="space-y-3 animate-fade-up [animation-delay:60ms]">
-        <SectionNumber n={2} title="Briefing" />
+        <SectionNumber n={2} title="Dettagli" />
         <article className="relative overflow-hidden rounded-lg border border-border bg-card p-4 shadow-soft">
           <CornerTicks />
           {/* Linea brand verticale a sinistra */}
@@ -284,16 +291,21 @@ export default async function CommessaDetailPage({
             aria-hidden="true"
             className="absolute left-0 top-4 bottom-4 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
           />
-          {briefingTesto ? (
+          {dettagliTesto ? (
             <p className="whitespace-pre-wrap pl-3 text-[15px] leading-relaxed text-foreground">
-              {briefingTesto}
+              {dettagliTesto}
             </p>
           ) : (
             <p className="pl-3 text-sm italic text-muted-foreground">
-              Nessun briefing salvato. Verrà popolato dalla descrizione AI generata
-              durante la creazione della commessa.
+              Nessun dettaglio salvato. Le commesse create via voice intake
+              memorizzano qui la nota completa del capo.
             </p>
           )}
+          <DettagliEdit
+            commessaId={params.id}
+            initial={commessa.note_iniziali ?? dettagliTesto ?? null}
+            canEdit={canEditDettagli}
+          />
         </article>
       </section>
 

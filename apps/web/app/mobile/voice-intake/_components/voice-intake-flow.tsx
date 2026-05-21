@@ -202,6 +202,8 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         },
         voci: vociFromAi,
         descrizioneFinale: d.descrizione.trim(),
+        // Trascrizione completa Whisper → salvata come "Dettagli" (note_iniziali)
+        noteIniziali: state.transcript?.trim() || null,
         note: d.note || null,
         indirizzoCantiere: d.indirizzo || null,
       });

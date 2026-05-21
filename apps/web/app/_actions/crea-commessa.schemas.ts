@@ -27,6 +27,12 @@ export const creaCommessaServerInputSchema = z
     voci: z.array(z.number().int().min(1).max(38)).default([]),
     descrizioneFinale: z.string().min(1).max(60),
     note: z.string().optional().nullable(),
+    /**
+     * Trascrizione completa della prima nota dettata dal capo (voice intake).
+     * Salvata in `commesse.note_iniziali` come "verità sacrosanta" e mostrata
+     * come "Dettagli" sulla card commessa.
+     */
+    noteIniziali: z.string().optional().nullable(),
     presetId: z.string().uuid().optional().nullable(),
     indirizzoCantiere: z.string().optional().nullable(),
   })
