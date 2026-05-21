@@ -1,11 +1,16 @@
 import type { MediaFile } from '../_components/media-attach-section';
 import { compressImage } from './compress-image';
+import type {
+  CompletePartInfo,
+  InitResponse,
+} from '../../../../_lib/media-upload-types';
 
 export interface UploadMediaResult {
   id: string;
   name: string;
   ok: boolean;
   error?: string;
+  fileRefId?: string;
 }
 
 export type UploadProgressStep = 'compressing' | 'uploading' | 'processing' | 'done' | 'error';
@@ -16,18 +21,23 @@ export type UploadProgressMap = Map<
 >;
 
 /**
- * Carica un batch di file media verso /api/upload/media.
+ * Carica un batch di file media via R2 staging (Fase 1).
  *
- * Strategia:
+ * Flusso per ciascun file:
+ *   1. POST /api/upload/media/init  → presigned URL R2 (single PUT o multipart)
+ *   2. PUT diretto su R2            → bypassa il limite 4.5 MB di Vercel
+ *   3. POST /api/upload/media/[id]/complete → server marca uploaded
+ *
+ * Strategia batch:
  *  - Immagini: compressione client-side (Canvas) poi upload parallelo max 3
- *  - Video: upload sequenziale (file grandi, evitiamo pressione di memoria)
+ *  - Video: upload sequenziale (file grandi, evita pressione di memoria/banda)
  *  - Ogni file: 2 retry automatici su errore rete, backoff 2s / 5s
- *  - signal: AbortSignal per cancel — ferma il file corrente e marca gli altri come 'error'
+ *  - signal: AbortSignal per cancel — ferma il file corrente, marca gli altri 'Annullato'
  *
- * Progress bifasico per video:
- *  0–80% = browser → Vercel (upload.onprogress)
- *  80–99% = Vercel → Nextcloud streaming (server processing)
- *  100%   = risposta server ricevuta (onload 2xx)
+ * Progress mapping:
+ *   0–90%  = upload effettivo verso R2 (xhr.upload.onprogress)
+ *  90–99%  = chiamata complete (server HEAD + completeMultipart)
+ *    100%  = file_refs.status = 'uploaded'
  */
 export async function uploadMediaBatch(
   files: MediaFile[],
@@ -133,7 +143,6 @@ async function uploadOneWithRetry(
     }
     if (attempt > 0) {
       onProgress(0, 'uploading');
-      // backoff interrompibile se arriva abort
       await new Promise<void>((res, rej) => {
         const t = setTimeout(res, attempt === 1 ? 2000 : 5000);
         signal?.addEventListener('abort', () => { clearTimeout(t); rej(new Error('Annullato')); }, { once: true });
@@ -143,8 +152,8 @@ async function uploadOneWithRetry(
       }
     }
     try {
-      await xhrUpload(file, commessaId, onProgress, signal);
-      return { id: mf.id, name: mf.file.name, ok: true };
+      const fileRefId = await r2Upload(file, commessaId, onProgress, signal);
+      return { id: mf.id, name: mf.file.name, ok: true, fileRefId };
     } catch (e) {
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
       if (isAbort) {
@@ -163,77 +172,171 @@ async function uploadOneWithRetry(
   return { id: mf.id, name: mf.file.name, ok: false, error: 'Unexpected' };
 }
 
-function xhrUpload(
+/**
+ * Esegue il flusso init → PUT/multipart su R2 → complete per un singolo file.
+ * Ritorna il fileRefId al successo.
+ */
+async function r2Upload(
   file: File,
   commessaId: string,
   onProgress: (pct: number, step?: UploadProgressStep) => void,
   signal?: AbortSignal,
+): Promise<string> {
+  // 1. init
+  const initRes = await fetch('/api/upload/media/init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commessaId,
+      momento: 'sopralluogo',
+      filename: file.name,
+      mime: file.type || 'application/octet-stream',
+      sizeBytes: file.size,
+    }),
+    signal,
+  });
+  if (!initRes.ok) {
+    const t = await initRes.text();
+    throw new Error(`init ${initRes.status}: ${t.slice(0, 200)}`);
+  }
+  const init = (await initRes.json()) as InitResponse;
+
+  // 2. upload su R2
+  const completedParts: CompletePartInfo[] = [];
+  try {
+    if (init.mode === 'single') {
+      await putToR2(file, init.uploadUrl, signal, (loaded) => {
+        onProgress((loaded / file.size) * 0.9, 'uploading');
+      });
+    } else {
+      const partSize = init.partSize;
+      const parts = init.parts;
+      const loaded = new Array<number>(parts.length).fill(0);
+      const reportProgress = () => {
+        const sum = loaded.reduce((a, b) => a + b, 0);
+        onProgress((sum / file.size) * 0.9, 'uploading');
+      };
+      let nextIdx = 0;
+      const concurrency = 3;
+      const runWorker = async () => {
+        while (true) {
+          if (signal?.aborted) throw new DOMException('aborted', 'AbortError');
+          const idx = nextIdx++;
+          if (idx >= parts.length) return;
+          const part = parts[idx]!;
+          const start = idx * partSize;
+          const end = Math.min(start + partSize, file.size);
+          const blob = file.slice(start, end);
+          const etag = await putPartToR2(blob, part.url, signal, (l) => {
+            loaded[idx] = l;
+            reportProgress();
+          });
+          completedParts.push({ partNumber: part.partNumber, etag });
+        }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(concurrency, parts.length) }, runWorker),
+      );
+    }
+  } catch (e) {
+    // Best-effort abort lato server (idempotente)
+    fetch(`/api/upload/media/${init.fileRefId}/abort`, {
+      method: 'POST',
+      keepalive: true,
+    }).catch(() => {});
+    throw e;
+  }
+
+  // 3. complete
+  onProgress(0.92, 'processing');
+  const completeRes = await fetch(`/api/upload/media/${init.fileRefId}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      parts: init.mode === 'multipart' ? completedParts : undefined,
+    }),
+    signal,
+  });
+  if (!completeRes.ok) {
+    const t = await completeRes.text();
+    throw new Error(`complete ${completeRes.status}: ${t.slice(0, 200)}`);
+  }
+  onProgress(1, 'done');
+  return init.fileRefId;
+}
+
+function putToR2(
+  file: Blob,
+  url: string,
+  signal: AbortSignal | undefined,
+  onProgress: (loaded: number) => void,
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    const isVideo = file.type.startsWith('video/');
-    const params = new URLSearchParams({ commessaId, momento: 'sopralluogo' });
+    const onAbort = () => xhr.abort();
+    signal?.addEventListener('abort', onAbort);
 
-    xhr.open('POST', `/api/upload/media?${params.toString()}`);
-    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
-    xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
-    // Fallback content-length: alcuni proxy Vercel strippano il header,
-    // il server lo usa come fallback per Content-Length su Nextcloud PUT.
-    xhr.setRequestHeader('X-File-Size', String(file.size));
-
-    // Timeout separato per video: su LTE 5 Mbps un video da 300 MB
-    // impiega ~480s solo per l'invio → il vecchio 280s causava timeout sistematici.
-    // Per video: 900s (15 min) coprono file fino a ~500 MB anche su rete lenta.
-    // Per immagini già compresse: 120s è abbondante.
-    xhr.timeout = isVideo ? 900_000 : 120_000;
-
-    // Progress BIFASICO:
-    //   0→80%  = browser invia a Vercel (upload.onprogress)
-    //  80→99%  = Vercel streamma su Nextcloud (processing, nessun progresso misurabile)
-    //    100%  = server risponde 2xx
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        onProgress((e.loaded / e.total) * 0.8, 'uploading');
-      }
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) onProgress(ev.loaded);
     };
-    // Il browser ha finito di inviare → server sta elaborando
-    xhr.upload.onload = () => {
-      onProgress(0.85, 'processing');
-    };
-
     xhr.onload = () => {
-      signal?.removeEventListener('abort', abortHandler);
+      signal?.removeEventListener('abort', onAbort);
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`R2 PUT ${xhr.status}: ${xhr.responseText.slice(0, 200)}`));
+    };
+    xhr.onerror = () => {
+      signal?.removeEventListener('abort', onAbort);
+      reject(new Error('R2 PUT network error'));
+    };
+    xhr.onabort = () => {
+      signal?.removeEventListener('abort', onAbort);
+      reject(new DOMException('aborted', 'AbortError'));
+    };
+
+    xhr.open('PUT', url, true);
+    if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+    xhr.send(file);
+  });
+}
+
+function putPartToR2(
+  blob: Blob,
+  url: string,
+  signal: AbortSignal | undefined,
+  onProgress: (loaded: number) => void,
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const onAbort = () => xhr.abort();
+    signal?.addEventListener('abort', onAbort);
+
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) onProgress(ev.loaded);
+    };
+    xhr.onload = () => {
+      signal?.removeEventListener('abort', onAbort);
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
+        const etag = (xhr.getResponseHeader('etag') ?? '').replace(/^"|"$/g, '');
+        if (!etag) {
+          reject(new Error('R2 part: ETag mancante (CORS ExposeHeaders["ETag"]?)'));
+          return;
+        }
+        resolve(etag);
       } else {
-        let msg = `HTTP ${xhr.status}`;
-        try {
-          msg = (JSON.parse(xhr.responseText) as { error?: string }).error ?? msg;
-        } catch { /* empty */ }
-        reject(new Error(msg));
+        reject(new Error(`R2 part ${xhr.status}: ${xhr.responseText.slice(0, 200)}`));
       }
     };
-    xhr.onerror = () => reject(new Error('Errore di rete durante upload'));
-    xhr.ontimeout = () =>
-      reject(
-        new Error(
-          isVideo
-            ? 'Video troppo grande o connessione troppo lenta — prova in WiFi o riduci la qualità (Impostazioni → Fotocamera → Alta efficienza)'
-            : 'Upload scaduto — riprova con connessione migliore',
-        ),
-      );
-
-    const abortHandler = () => {
-      xhr.abort();
-      reject(new DOMException('Upload annullato', 'AbortError'));
+    xhr.onerror = () => {
+      signal?.removeEventListener('abort', onAbort);
+      reject(new Error('R2 part network error'));
     };
-    signal?.addEventListener('abort', abortHandler, { once: true });
     xhr.onabort = () => {
-      signal?.removeEventListener('abort', abortHandler);
-      reject(new DOMException('Upload annullato', 'AbortError'));
+      signal?.removeEventListener('abort', onAbort);
+      reject(new DOMException('aborted', 'AbortError'));
     };
 
-    xhr.send(file);
+    xhr.open('PUT', url, true);
+    xhr.send(blob);
   });
 }
 
