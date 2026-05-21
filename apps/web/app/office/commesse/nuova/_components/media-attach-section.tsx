@@ -26,9 +26,10 @@ export interface MediaFile {
   sizeMB: number;
 }
 
-const MAX_VIDEO_MB = 150;
+const MAX_VIDEO_MB = 500;
 const MAX_PHOTO_MB = 25;
 const MAX_FILES = 6;
+const WARN_VIDEO_MB = 200;
 
 interface ValidationError {
   name: string;
@@ -64,7 +65,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
         errors.push({
           name: f.name,
           reason: isVideo
-            ? `Video troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_VIDEO_MB} MB). Registra in 1080p: Impostazioni iPhone → Fotocamera.`
+            ? `Video troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_VIDEO_MB} MB). Vai su Impostazioni iPhone → Fotocamera → Formato e scegli "Alta efficienza" (H.265).`
             : `Foto troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_PHOTO_MB} MB).`,
         });
         return;
@@ -97,6 +98,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
 
   const totalMB = files.reduce((s, f) => s + f.sizeMB, 0);
   const hasVideo = files.some((f) => f.kind === 'video');
+  const hasLargeVideo = files.some((f) => f.kind === 'video' && f.sizeMB > WARN_VIDEO_MB);
   const atLimit = files.length >= MAX_FILES;
 
   return (
@@ -242,7 +244,17 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
           </div>
         )}
 
-        {hasVideo && (
+        {hasLargeVideo && (
+          <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+            <Smartphone className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>
+              Video grande (&gt;{WARN_VIDEO_MB} MB) — il caricamento richiede qualche minuto su rete mobile.
+              Per file più leggeri: <strong>Impostazioni iPhone → Fotocamera → Formato → Alta efficienza</strong> (H.265 dimezza la dimensione senza perdita visibile).
+              Tieni lo schermo acceso durante l'upload.
+            </span>
+          </div>
+        )}
+        {hasVideo && !hasLargeVideo && (
           <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
             <Smartphone className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
