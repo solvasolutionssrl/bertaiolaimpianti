@@ -514,10 +514,6 @@ export function NuovaCommessaForm({
               </Row>
             )}
           </dl>
-          <p className="mt-3 text-xs text-muted-foreground">
-            La cartella su cloud non è stata creata: lo storage definitivo è in
-            fase di scelta. Per ora teniamo solo i metadata in database.
-          </p>
           <div className="mt-6 flex gap-2">
             <Button asChild>
               <Link href={`/office/commesse/${success.commessaId}`}>
@@ -1075,8 +1071,7 @@ export function NuovaCommessaForm({
                   /{anteprima}/
                 </code>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  La cartella fisica verrà creata quando lo storage cloud sarà
-                  attivato.
+                  La cartella verrà creata su Nextcloud al momento della conferma.
                 </p>
               </CardContent>
             </Card>

@@ -43,10 +43,10 @@ export default async function VoiceIntakePage() {
   const vociDefault = voci.filter((v) => v.default).map((v) => v.id);
 
   return (
-    <div className="bg-aurora-brand min-h-[100dvh]">
-      <div className="bg-grid-radial">
-        <VoiceIntakeFlow voci={voci} vociDefault={vociDefault} />
-      </div>
+    <div className="bg-aurora-brand relative min-h-[100dvh]">
+      {/* Griglia decorativa: absolute + mask così non clippa il contenuto figlio */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid-radial" />
+      <VoiceIntakeFlow voci={voci} vociDefault={vociDefault} />
     </div>
   );
 }
