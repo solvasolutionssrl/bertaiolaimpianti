@@ -101,16 +101,16 @@ export function AnnotationToolbar(props: AnnotationToolbarProps) {
       role="toolbar"
       aria-label="Strumenti annotazione"
       className={[
-        // mobile bottom bar
-        'order-2 flex shrink-0 items-stretch gap-1 border-t border-slate-800 bg-slate-900/95 px-2 py-2 backdrop-blur',
-        // desktop sidebar
-        'md:order-1 md:w-64 md:flex-col md:items-stretch md:gap-3 md:border-r md:border-t-0 md:p-3',
-        // safe area iOS
+        // Mobile: bottom panel a 2 righe (tool icons | controlli)
+        'order-2 flex shrink-0 flex-col gap-1.5 border-t border-slate-800 bg-slate-900/95 px-2 py-2 backdrop-blur',
+        // Desktop: sidebar verticale 64
+        'md:order-1 md:w-64 md:gap-3 md:border-r md:border-t-0 md:p-3',
+        // Safe area iOS
         'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
       ].join(' ')}
     >
-      {/* TOOLS */}
-      <div className="flex flex-1 items-center gap-1 overflow-x-auto md:flex-col md:items-stretch md:overflow-visible">
+      {/* RIGA 1 / TOOLS (icone) */}
+      <div className="flex items-center gap-1 overflow-x-auto md:flex-col md:items-stretch md:overflow-visible">
         {tools.map(({ id, label, Icon }) => {
           const active = tool === id;
           return (
@@ -122,7 +122,7 @@ export function AnnotationToolbar(props: AnnotationToolbarProps) {
               title={label}
               onClick={() => onTool(id)}
               className={[
-                'group relative flex h-11 min-w-[44px] items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-all md:justify-start md:px-3',
+                'group relative flex h-11 min-w-[44px] shrink-0 items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-all md:justify-start md:px-3',
                 active
                   ? 'bg-primary text-primary-foreground shadow-sm ring-2 ring-accent ring-offset-2 ring-offset-slate-900'
                   : 'text-slate-200 hover:bg-slate-800/80',
@@ -135,18 +135,14 @@ export function AnnotationToolbar(props: AnnotationToolbarProps) {
         })}
       </div>
 
-      {/* DIVIDER mobile vertical bar */}
+      {/* DESKTOP: label + palette + stroke (verticali) */}
       <div className="hidden md:block md:h-px md:bg-slate-800" />
-
-      {/* COLOR PALETTE */}
       <div className="hidden items-center md:flex md:flex-col md:items-start md:gap-2">
         <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
           Colore
         </span>
         <ColorPalette value={color} onChange={onColor} orientation="column" />
       </div>
-
-      {/* STROKE WIDTH (solo modalità drawing) */}
       {mode === 'drawing' ? (
         <div className="hidden items-center md:flex md:flex-col md:items-start md:gap-2">
           <span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
@@ -156,8 +152,40 @@ export function AnnotationToolbar(props: AnnotationToolbarProps) {
         </div>
       ) : null}
 
-      {/* Undo / Redo — su mobile in fondo alla riga, su desktop in fondo alla colonna */}
-      <div className="flex shrink-0 items-center gap-1 md:mt-auto md:justify-between">
+      {/* RIGA 2 MOBILE / controlli rapidi: colori + tratto + undo/redo */}
+      <div className="flex items-center gap-2 overflow-x-auto md:hidden">
+        <ColorPalette value={color} onChange={onColor} />
+        {mode === 'drawing' && (
+          <>
+            <span aria-hidden="true" className="h-6 w-px shrink-0 bg-slate-700/60" />
+            <StrokeWidthPicker value={strokeWidth} onChange={onStrokeWidth} />
+          </>
+        )}
+        <span aria-hidden="true" className="ml-auto h-6 w-px shrink-0 bg-slate-700/60" />
+        <button
+          type="button"
+          aria-label="Annulla"
+          title="Annulla (⌘Z)"
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-800/60 text-slate-100 transition-colors hover:bg-slate-700 disabled:opacity-30"
+        >
+          <Undo2 className="h-5 w-5" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Ripeti"
+          title="Ripeti (⌘⇧Z)"
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-800/60 text-slate-100 transition-colors hover:bg-slate-700 disabled:opacity-30"
+        >
+          <Redo2 className="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* DESKTOP / Undo / Redo in fondo alla colonna */}
+      <div className="hidden md:mt-auto md:flex md:items-center md:gap-2">
         <button
           type="button"
           aria-label="Annulla"
@@ -178,11 +206,6 @@ export function AnnotationToolbar(props: AnnotationToolbarProps) {
         >
           <Redo2 className="h-5 w-5" aria-hidden="true" />
         </button>
-      </div>
-
-      {/* Mobile-only: palette inline compact */}
-      <div className="ml-1 flex shrink-0 items-center gap-1 md:hidden">
-        <ColorPalette value={color} onChange={onColor} />
       </div>
     </aside>
   );

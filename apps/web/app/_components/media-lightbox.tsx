@@ -116,7 +116,11 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
   const canAnnotate =
     !!current.annotation && (isImage || isPdf);
 
-  const lightTheme = isPdf;
+  // Tema chiaro come default per tutti i media (foto/video/PDF).
+  // I video usano un container nero interno (VideoPlayer) per il letterboxing.
+  const lightTheme = true;
+  // Swipe abilitato solo per immagini (video/PDF catturano i touch interni).
+  // Per gli altri si naviga con frecce / thumbnail strip.
   const swipeEnabled = isImage && items.length > 1;
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -250,7 +254,7 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
                 type="button"
                 onClick={prev}
                 className={
-                  'absolute left-3 z-10 hidden h-11 w-11 items-center justify-center rounded-full backdrop-blur transition hover:scale-105 md:flex ' +
+                  'absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition hover:scale-105 ' +
                   (lightTheme
                     ? 'bg-white/80 text-neutral-700 ring-1 ring-black/10 hover:bg-white'
                     : 'bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20')
@@ -311,7 +315,7 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
                 type="button"
                 onClick={next}
                 className={
-                  'absolute right-3 z-10 hidden h-11 w-11 items-center justify-center rounded-full backdrop-blur transition hover:scale-105 md:flex ' +
+                  'absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full backdrop-blur transition hover:scale-105 ' +
                   (lightTheme
                     ? 'bg-white/80 text-neutral-700 ring-1 ring-black/10 hover:bg-white'
                     : 'bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20')
@@ -323,17 +327,110 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
             )}
           </div>
 
-          {/* Footer mobile: filename */}
-          <div
-            className={
-              'border-t px-4 py-2 text-center sm:hidden ' +
-              (lightTheme
-                ? 'border-neutral-200 bg-white/80 text-neutral-600'
-                : 'border-white/5 bg-black/30 text-white/70 backdrop-blur-md')
-            }
-          >
-            <p className="truncate font-mono text-[11px]">{current.filename}</p>
-          </div>
+          {/* Thumbnail strip (visibile quando ci sono ≥ 2 item) */}
+          {total > 1 && (
+            <div
+              className={
+                'border-t px-2 py-2 ' +
+                (lightTheme
+                  ? 'border-neutral-200 bg-white/90'
+                  : 'border-white/5 bg-black/40 backdrop-blur-md')
+              }
+            >
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
+                {items.map((it, i) => {
+                  const isActive = i === index;
+                  const itIsVideo = it.mime.startsWith('video/');
+                  const itIsImage = it.mime.startsWith('image/');
+                  const itIsPdf =
+                    it.mime === 'application/pdf' || /\.pdf$/i.test(it.filename);
+                  return (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => setIndex(i)}
+                      ref={(el) => {
+                        if (isActive && el) {
+                          el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+                        }
+                      }}
+                      className={
+                        'group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-md transition ' +
+                        (isActive
+                          ? lightTheme
+                            ? 'ring-2 ring-primary'
+                            : 'ring-2 ring-white'
+                          : lightTheme
+                            ? 'opacity-60 hover:opacity-100 ring-1 ring-neutral-200'
+                            : 'opacity-50 hover:opacity-100 ring-1 ring-white/20')
+                      }
+                      aria-label={`Apri ${it.filename}`}
+                      title={it.filename}
+                    >
+                      {itIsImage ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={it.src}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : itIsVideo ? (
+                        <>
+                          <video
+                            src={it.src}
+                            preload="metadata"
+                            muted
+                            playsInline
+                            className="h-full w-full object-cover"
+                          />
+                          <span className="absolute inset-0 flex items-center justify-center">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
+                              <ChevronRight className="h-3 w-3 text-white" />
+                            </span>
+                          </span>
+                        </>
+                      ) : itIsPdf ? (
+                        <span
+                          className={
+                            'flex h-full w-full flex-col items-center justify-center font-mono text-[8px] font-black uppercase ' +
+                            (lightTheme
+                              ? 'bg-gradient-to-br from-accent/15 to-accent/5 text-accent-soft-foreground'
+                              : 'bg-white/10 text-white')
+                          }
+                        >
+                          <span>PDF</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={
+                            'flex h-full w-full items-center justify-center font-mono text-[8px] font-bold uppercase ' +
+                            (lightTheme ? 'bg-neutral-100 text-neutral-500' : 'bg-white/10 text-white/70')
+                          }
+                        >
+                          ?
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Footer mobile: filename (solo se nessuna strip) */}
+          {total <= 1 && (
+            <div
+              className={
+                'border-t px-4 py-2 text-center sm:hidden ' +
+                (lightTheme
+                  ? 'border-neutral-200 bg-white/80 text-neutral-600'
+                  : 'border-white/5 bg-black/30 text-white/70 backdrop-blur-md')
+              }
+            >
+              <p className="truncate font-mono text-[11px]">{current.filename}</p>
+            </div>
+          )}
 
           {/* Annotation overlay (sopra al lightbox) */}
           {annotating && canAnnotate && current.annotation && (
