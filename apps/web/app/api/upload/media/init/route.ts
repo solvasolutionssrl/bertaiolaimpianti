@@ -175,9 +175,7 @@ export async function POST(request: NextRequest) {
         expiresAt,
       } satisfies InitResponseMultipart;
     } else {
-      const presigned = await r2.createPresignedPutUrl(r2Key, body.mime, {
-        contentLength: body.sizeBytes,
-      });
+      const presigned = await r2.createPresignedPutUrl(r2Key, body.mime);
       response = {
         mode: 'single',
         fileRefId,
@@ -186,6 +184,11 @@ export async function POST(request: NextRequest) {
       } satisfies InitResponseSingle;
     }
   } catch (e) {
+    // Pulizia: se siamo riusciti a creare la sessione multipart ma
+    // signMultipartParts ha fallito, aborta lato R2 per non lasciare orfani.
+    if (isMultipart && r2UploadId) {
+      r2.abortMultipart(r2Key, r2UploadId).catch(() => {});
+    }
     return Response.json(
       {
         error: `R2 init fallito: ${e instanceof Error ? e.message : 'unknown'}`,

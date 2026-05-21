@@ -86,14 +86,17 @@ export class R2StorageProvider {
   async createPresignedPutUrl(
     key: string,
     contentType: string,
-    opts?: { ttlSec?: number; contentLength?: number },
+    opts?: { ttlSec?: number },
   ): Promise<PresignedUploadUrl> {
     const ttl = opts?.ttlSec ?? DEFAULT_PUT_TTL_SEC;
+    // ContentLength NON firmato di proposito: alcuni browser mobile
+    // (notabilmente iOS Safari) possono divergere di pochi byte fra dichiarato
+    // e payload reale, causando SignatureDoesNotMatch. La size vera viene
+    // verificata server-side via HEAD R2 in /complete.
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
       ContentType: contentType,
-      ContentLength: opts?.contentLength,
     });
     const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl });
     return {
