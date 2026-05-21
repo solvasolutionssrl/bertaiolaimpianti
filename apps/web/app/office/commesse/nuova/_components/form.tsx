@@ -15,6 +15,7 @@ import {
   Mic,
   ChevronDown,
   Wand2,
+  ImageUp,
 } from 'lucide-react';
 
 import {
@@ -38,6 +39,8 @@ import { createBrowserSupabase } from '@impiantixplus/api/client';
 import { creaCommessa } from '../../../../_actions/crea-commessa';
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
+import { uploadMediaBatch, type UploadProgressMap } from '../_lib/upload-media';
+import { MediaAttachSection, type MediaFile } from './media-attach-section';
 
 // ---------------------------------------------------------------------
 // Types
@@ -144,6 +147,9 @@ export function NuovaCommessaForm({
   const [genPending, setGenPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<CreaCommessaServerData | null>(null);
+  const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
+  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
+  const [uploadResults, setUploadResults] = React.useState<Array<{ name: string; ok: boolean }>>([]);
 
   // Errori per-field (mostrati inline accanto al campo, niente solo banner)
   type FieldErrors = {
@@ -388,7 +394,6 @@ export function NuovaCommessaForm({
     ev.preventDefault();
     setError(null);
 
-    // Valida tutti i campi insieme, raccogli errori per-field
     const newFieldErrors: FieldErrors = {};
     if (!state.cliente.id && state.cliente.ragione_sociale.trim().length < 2) {
       newFieldErrors.ragione_sociale = 'Indica un cliente esistente o un nuovo nominativo';
@@ -400,7 +405,6 @@ export function NuovaCommessaForm({
     if (Object.keys(newFieldErrors).length > 0) {
       setFieldErrors(newFieldErrors);
       setError('Mancano dei campi obbligatori — controlla i campi evidenziati');
-      // Focus + scroll al primo errore
       const firstError = newFieldErrors.ragione_sociale ? ragioneRef : descrizioneRef;
       requestAnimationFrame(() => {
         firstError.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -412,6 +416,7 @@ export function NuovaCommessaForm({
 
     setSubmitting(true);
     try {
+      // Fase 1: crea commessa
       const result = await creaCommessa({
         clienteId: state.cliente.id,
         clienteNew: state.cliente.id
@@ -436,6 +441,17 @@ export function NuovaCommessaForm({
         setError(result.error);
         return;
       }
+
+      // Fase 2: comprimi + carica allegati in parallelo con progresso reale
+      if (mediaFiles.length > 0) {
+        const batchResults = await uploadMediaBatch(
+          mediaFiles,
+          result.data.commessaId,
+          (progress) => setUploadProgress(new Map(progress)),
+        );
+        setUploadResults(batchResults.map((r) => ({ name: r.name, ok: r.ok })));
+      }
+
       setSuccess(result.data);
       router.refresh();
     } catch (e) {
@@ -475,11 +491,29 @@ export function NuovaCommessaForm({
                 {success.cloudFolderPath}
               </code>
             </Row>
+            {uploadResults.length > 0 && (
+              <Row label="Allegati">
+                <div className="space-y-1">
+                  {uploadResults.map((r) => (
+                    <span
+                      key={r.name}
+                      className={`flex items-center gap-1.5 text-xs ${r.ok ? 'text-success' : 'text-destructive'}`}
+                    >
+                      {r.ok ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                          <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                      )}
+                      <span className="truncate max-w-[180px]">{r.name}</span>
+                      {!r.ok && <span className="text-destructive/70">— fallito, riprova dalla commessa</span>}
+                    </span>
+                  ))}
+                </div>
+              </Row>
+            )}
           </dl>
-          <p className="mt-3 text-xs text-muted-foreground">
-            La cartella su cloud non è stata creata: lo storage definitivo è in
-            fase di scelta. Per ora teniamo solo i metadata in database.
-          </p>
           <div className="mt-6 flex gap-2">
             <Button asChild>
               <Link href={`/office/commesse/${success.commessaId}`}>
@@ -1037,13 +1071,22 @@ export function NuovaCommessaForm({
                   /{anteprima}/
                 </code>
                 <p className="mt-3 text-xs text-muted-foreground">
-                  La cartella fisica verrà creata quando lo storage cloud sarà
-                  attivato.
+                  La cartella verrà creata su Nextcloud al momento della conferma.
                 </p>
               </CardContent>
             </Card>
           </div>
         </aside>
+      </div>
+
+      {/* Allegati */}
+      <div className="mt-6 lg:col-span-8">
+        <MediaAttachSection
+          files={mediaFiles}
+          onChange={setMediaFiles}
+          uploading={submitting && uploadProgress.size > 0}
+          uploadProgress={uploadProgress.size > 0 ? uploadProgress : undefined}
+        />
       </div>
 
       {error ? (
@@ -1077,12 +1120,33 @@ export function NuovaCommessaForm({
       {/* Action bar sticky in basso */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur md:left-64">
         <div className="mx-auto flex max-w-screen-2xl items-center gap-3 px-6 py-4 md:px-10">
-          <span className="text-xs text-muted-foreground">
-            <span className="font-mono font-semibold tabular-nums text-foreground">
-              {totalVoci}
-            </span>{' '}
-            voci totali · cartella registrata solo in DB
-          </span>
+          {submitting && uploadProgress.size > 0 ? (
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
+              <ImageUp className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>
+                Caricamento{' '}
+                {[...uploadProgress.values()].filter((p) => p.step === 'done' || p.step === 'error').length}
+                /{uploadProgress.size} file…
+              </span>
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              <span className="font-mono font-semibold tabular-nums text-foreground">
+                {totalVoci}
+              </span>{' '}
+              voci
+              {mediaFiles.length > 0 && (
+                <>
+                  {' '}·{' '}
+                  <span className="font-mono font-semibold tabular-nums text-foreground">
+                    {mediaFiles.length}
+                  </span>{' '}
+                  allegato{mediaFiles.length !== 1 ? 'i' : ''}
+                </>
+              )}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <Button asChild type="button" variant="ghost" disabled={submitting}>
               <Link href="/office/commesse">Annulla</Link>
@@ -1091,7 +1155,7 @@ export function NuovaCommessaForm({
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Creazione…
+                  {uploadProgress.size > 0 ? 'Caricamento…' : 'Creazione…'}
                 </>
               ) : (
                 <>Crea commessa</>

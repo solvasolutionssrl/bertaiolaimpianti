@@ -83,6 +83,26 @@ export class SupabaseStorageProvider implements StorageProvider {
     return { path: data.path, size: blob.size };
   }
 
+  async uploadStream(
+    path: string,
+    stream: ReadableStream<Uint8Array>,
+    size: number,
+    opts: UploadOptions = {},
+  ): Promise<UploadResult> {
+    // Supabase Storage non supporta streaming nativo: bufferizza e delega a uploadFile.
+    const chunks: Uint8Array[] = [];
+    const reader = stream.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) chunks.push(value);
+    }
+    const buffer = new Uint8Array(chunks.reduce((acc, c) => acc + c.byteLength, 0));
+    let offset = 0;
+    for (const c of chunks) { buffer.set(c, offset); offset += c.byteLength; }
+    return this.uploadFile(path, buffer, opts);
+  }
+
   async listFolder(path: string): Promise<StorageObject[]> {
     const { data, error } = await this.client.storage.from(this.bucket).list(path, {
       limit: 1000,

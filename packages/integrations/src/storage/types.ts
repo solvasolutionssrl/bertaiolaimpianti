@@ -46,6 +46,14 @@ export interface StorageProvider {
   /** Carica un file binario al `path` indicato. */
   uploadFile(path: string, body: Blob | ArrayBuffer | Uint8Array, opts?: UploadOptions): Promise<UploadResult>;
 
+  /** Carica in streaming senza bufferizzare in RAM. Preferire a uploadFile per file grandi. */
+  uploadStream?(
+    path: string,
+    stream: ReadableStream<Uint8Array>,
+    size: number,
+    opts?: UploadOptions,
+  ): Promise<UploadResult>;
+
   /** Lista i contenuti di una directory (non ricorsivo). */
   listFolder(path: string): Promise<StorageObject[]>;
 

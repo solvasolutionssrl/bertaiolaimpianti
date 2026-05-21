@@ -90,6 +90,30 @@ export class NextcloudStorageProvider implements StorageProvider {
     return { path, size: buffer.byteLength };
   }
 
+  async uploadStream(
+    path: string,
+    stream: ReadableStream<Uint8Array>,
+    size: number,
+    opts: UploadOptions = {},
+  ): Promise<UploadResult> {
+    const res = await fetch(this.webdav(path), {
+      method: 'PUT',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Type': opts.contentType ?? 'application/octet-stream',
+        'Content-Length': String(size),
+      },
+      body: stream,
+      // duplex:'half' required in Node.js 18+ for streaming request bodies
+      ...(({ duplex: 'half' }) as Record<string, unknown>),
+    } as RequestInit);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Nextcloud PUT ${path} → ${res.status}: ${text.slice(0, 200)}`);
+    }
+    return { path, size };
+  }
+
   async listFolder(path: string): Promise<StorageObject[]> {
     const res = await this.req(
       'PROPFIND',
