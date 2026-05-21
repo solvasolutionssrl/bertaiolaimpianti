@@ -101,7 +101,24 @@ export default async function CommessaDetailPage({
     .order('start_at', { ascending: false })
     .limit(10);
 
-  const [fotoRes, updatesRes] = await Promise.all([fotoQuery, updatesQuery]);
+  // 4b) Prima nota cronologica → usata come briefing nella PWA
+  const primaNotaQuery = supabase
+    .from('interventi')
+    .select(`
+      note, start_at,
+      autore:users!interventi_user_id_fkey ( display_name )
+    `)
+    .eq('commessa_id', params.id)
+    .not('note', 'is', null)
+    .order('start_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const [fotoRes, updatesRes, primaNotaRes] = await Promise.all([
+    fotoQuery,
+    updatesQuery,
+    primaNotaQuery,
+  ]);
 
   const commessa = rawCommessa as any;
 
@@ -168,6 +185,20 @@ export default async function CommessaDetailPage({
     note: i.note as string,
     autore: (Array.isArray(i.autore) ? i.autore[0] : i.autore)?.display_name as string | null,
   }));
+
+  // Prima nota cronologica → briefing
+  const primaNotaRaw = primaNotaRes?.data as
+    | { note: string | null; start_at: string; autore: { display_name: string | null } | { display_name: string | null }[] | null }
+    | null;
+  const primaNota = primaNotaRaw?.note
+    ? {
+        note: primaNotaRaw.note,
+        start_at: primaNotaRaw.start_at,
+        autore_nome: (Array.isArray(primaNotaRaw.autore)
+          ? primaNotaRaw.autore[0]?.display_name
+          : primaNotaRaw.autore?.display_name) ?? null,
+      }
+    : null;
 
   const telefono = (cliente?.telefoni as string[] | undefined)?.[0];
 
@@ -277,7 +308,7 @@ export default async function CommessaDetailPage({
           title="Briefing"
           trailing={
             <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground/60">
-              dal capo
+              {primaNota?.autore_nome ? `da ${primaNota.autore_nome}` : 'dal capo'}
             </span>
           }
         />
@@ -288,13 +319,18 @@ export default async function CommessaDetailPage({
             aria-hidden="true"
             className="absolute left-0 top-4 bottom-4 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
           />
-          {commessa.descrizione_ai_finale ? (
-            <p className="whitespace-pre-wrap pl-3 text-[15px] leading-relaxed text-foreground">
-              {commessa.descrizione_ai_finale}
-            </p>
+          {primaNota?.note ? (
+            <>
+              <p className="whitespace-pre-wrap pl-3 text-[15px] leading-relaxed text-foreground">
+                {primaNota.note}
+              </p>
+              <p className="mt-2 pl-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground/70">
+                Prima nota · {fmtDataOra(primaNota.start_at)}
+              </p>
+            </>
           ) : (
             <p className="pl-3 text-sm italic text-muted-foreground">
-              Nessun briefing ancora. Il capo registrerà la nota vocale durante il sopralluogo.
+              Nessun briefing ancora. Apparirà qui la prima nota scritta da un tecnico.
             </p>
           )}
         </article>

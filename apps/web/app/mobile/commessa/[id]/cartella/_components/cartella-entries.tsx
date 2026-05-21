@@ -79,13 +79,14 @@ export function CartellaEntries({ entries, commessaId, subPath, rootName }: Prop
         ))}
       </div>
 
-      {lightboxIdx !== null && (
-        <MediaLightbox
-          items={lightboxItems}
-          initialIndex={lightboxIdx}
-          onClose={() => setLightboxIdx(null)}
-        />
-      )}
+      <MediaLightbox
+        items={lightboxItems}
+        initialIndex={lightboxIdx}
+        open={lightboxIdx !== null}
+        onOpenChange={(o) => {
+          if (!o) setLightboxIdx(null);
+        }}
+      />
     </>
   );
 }

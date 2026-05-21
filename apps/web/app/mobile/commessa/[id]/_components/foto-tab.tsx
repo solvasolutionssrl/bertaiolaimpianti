@@ -135,13 +135,14 @@ export function FotoTab({ commessaId, sopralluogo, inCorso, finali }: Props) {
         </Stagger>
       )}
 
-      {lightboxIdx !== null && (
-        <MediaLightbox
-          items={lightboxItems}
-          initialIndex={lightboxIdx}
-          onClose={() => setLightboxIdx(null)}
-        />
-      )}
+      <MediaLightbox
+        items={lightboxItems}
+        initialIndex={lightboxIdx}
+        open={lightboxIdx !== null}
+        onOpenChange={(o) => {
+          if (!o) setLightboxIdx(null);
+        }}
+      />
     </div>
   );
 }

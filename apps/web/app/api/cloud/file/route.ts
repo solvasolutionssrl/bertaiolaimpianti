@@ -74,24 +74,39 @@ export async function GET(req: Request) {
       }
       const ncUrl = `${cfg.baseUrl.replace(/\/+$/, '')}/remote.php/dav/files/${cfg.user}/${encodeURI(safePath)}`;
       const auth = Buffer.from(`${cfg.user}:${cfg.appPassword}`).toString('base64');
-      const res = await fetch(ncUrl, {
-        headers: { Authorization: `Basic ${auth}` },
-      });
+
+      // Forward del Range del client → Nextcloud. Indispensabile per il
+      // tag <video>: senza partial content il browser non può fare seek
+      // né iniziare la riproduzione prima del download completo.
+      const range = req.headers.get('range');
+      const upstreamHeaders: Record<string, string> = { Authorization: `Basic ${auth}` };
+      if (range) upstreamHeaders['Range'] = range;
+
+      const res = await fetch(ncUrl, { headers: upstreamHeaders });
       if (!res.ok || !res.body) {
         return NextResponse.json(
           { error: 'cloud_fetch_failed', status: res.status },
           { status: 502 },
         );
       }
+
       const headers = new Headers();
       const ct = res.headers.get('content-type');
       const cl = res.headers.get('content-length');
+      const cr = res.headers.get('content-range');
+      const ar = res.headers.get('accept-ranges');
       if (ct) headers.set('Content-Type', ct);
       if (cl) headers.set('Content-Length', cl);
-      // Disposition inline → apre nel browser dove possibile
+      if (cr) headers.set('Content-Range', cr);
+      // Annuncia che accettiamo Range anche quando rispondiamo 200:
+      // così i video player capiscono che possono fare seek.
+      headers.set('Accept-Ranges', ar ?? 'bytes');
       headers.set('Content-Disposition', `inline; filename="${safePath.split('/').pop() ?? 'file'}"`);
       headers.set('Cache-Control', 'private, max-age=300');
-      return new NextResponse(res.body, { status: 200, headers });
+
+      // Mantieni 206 Partial Content se l'upstream l'ha emesso, altrimenti 200.
+      const status = res.status === 206 ? 206 : 200;
+      return new NextResponse(res.body, { status, headers });
     }
 
     return NextResponse.json({ error: 'unsupported_provider' }, { status: 503 });
