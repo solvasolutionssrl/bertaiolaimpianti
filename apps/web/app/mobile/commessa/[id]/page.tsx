@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
@@ -7,7 +6,6 @@ import {
   Camera,
   Phone,
   FileText,
-  ImageIcon,
   FileIcon,
   Folder,
   PencilLine,
@@ -29,7 +27,7 @@ import {
   Hero,
   HeroMeta,
 } from '../../_components/blueprint';
-import { AddMediaSection } from './_components/add-media-section';
+import { FotoTab, type FotoItem } from './_components/foto-tab';
 
 export async function generateMetadata({
   params,
@@ -114,14 +112,7 @@ export default async function CommessaDetailPage({
     : commessa.responsabile;
   const stato = commessa.stato as StatoCommessa;
 
-  const tutteFoto = (fotoRes.data ?? []) as Array<{
-    id: string;
-    filename: string;
-    thumbnail_url: string | null;
-    momento: 'sopralluogo' | 'in_corso' | 'finale' | null;
-    uploaded_at: string;
-    mime: string;
-  }>;
+  const tutteFoto = (fotoRes.data ?? []) as FotoItem[];
   const fotoSopralluogo = tutteFoto.filter((f) => f.momento === 'sopralluogo').reverse();
   const fotoInCorso = tutteFoto.filter((f) => f.momento === 'in_corso');
   const fotoFinali = tutteFoto.filter((f) => f.momento === 'finale');
@@ -311,98 +302,18 @@ export default async function CommessaDetailPage({
           </TabsList>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
-          <TabsContent value="foto" className="mt-5 space-y-6">
-            {fotoTot === 0 ? (
-              <EmptyBlock
-                icon={<ImageIcon className="h-5 w-5" />}
-                title="Nessuna foto o video"
-                hint="Scatta dal vivo o carica dalla galleria"
-              />
-            ) : (
-              <>
-                {fotoSopralluogo.length > 0 && (
-                  <FotoBlock
-                    momentoLabel="Sopralluogo"
-                    count={fotoSopralluogo.length}
-                    commessaId={params.id}
-                    foto={fotoSopralluogo}
-                  />
-                )}
-                {fotoInCorso.length > 0 && (
-                  <FotoBlock
-                    momentoLabel="In corso"
-                    count={fotoInCorso.length}
-                    commessaId={params.id}
-                    foto={fotoInCorso}
-                  />
-                )}
-                {fotoFinali.length > 0 && (
-                  <FotoBlock
-                    momentoLabel="Finali"
-                    count={fotoFinali.length}
-                    commessaId={params.id}
-                    foto={fotoFinali}
-                  />
-                )}
-              </>
-            )}
-
-            <Link href={`/mobile/commessa/${params.id}/scatto`} className="block">
-              <Button size="lg" variant="outline" className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]">
-                <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Scatta foto dal vivo
-              </Button>
-            </Link>
-
-            <Divider label="Carica dalla galleria" />
-            <AddMediaSection commessaId={params.id} />
+          <TabsContent value="foto">
+            <FotoTab
+              commessaId={params.id}
+              sopralluogo={fotoSopralluogo}
+              inCorso={fotoInCorso}
+              finali={fotoFinali}
+            />
           </TabsContent>
 
           {/* ───────────── FILE ───────────── */}
           <TabsContent value="file" className="mt-5 space-y-4">
-            {/* Documenti generati — Report PDF, blocco accent in alto */}
-            <div className="space-y-2">
-              <MetaLine>Documenti generati</MetaLine>
-              <Link
-                href={`/mobile/commessa/${params.id}/report`}
-                className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-accent/30 bg-gradient-to-br from-accent/8 via-card to-primary/5 p-3.5 shadow-soft transition-all active:scale-[0.995]"
-              >
-                <CornerTicks />
-                <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-accent/40 bg-accent text-accent-foreground font-mono text-[9px] font-black leading-none">
-                  <FileText className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
-                  <span>PDF</span>
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-accent-soft-foreground">
-                    Report chiusura
-                  </p>
-                  <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
-                    Riepilogo completo commessa
-                  </p>
-                  <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                    Cliente · foto · fasi · DICO
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 shrink-0 text-accent-soft-foreground" aria-hidden="true" />
-              </Link>
-            </div>
-
-            <Divider label="File caricati" />
-
-            {documenti.length === 0 ? (
-              <EmptyBlock
-                icon={<FileText className="h-5 w-5" />}
-                title="Nessun file"
-                hint="POS, DICO, schemi e altri documenti compaiono qui"
-              />
-            ) : (
-              <Stagger className="flex flex-col gap-2">
-                {documenti.map((f) => (
-                  <FileTile key={f.id} file={f} commessaId={params.id} />
-                ))}
-              </Stagger>
-            )}
-
+            {/* Nextcloud in cima — è quello che l'utente usa sempre */}
             <Link
               href={`/mobile/commessa/${params.id}/cartella`}
               className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-primary/30 bg-gradient-to-br from-primary/10 via-card to-accent/5 p-4 shadow-soft transition-all active:scale-[0.99]"
@@ -426,6 +337,51 @@ export default async function CommessaDetailPage({
                 aria-hidden="true"
               />
             </Link>
+
+            <Divider label="File caricati" />
+
+            {documenti.length === 0 ? (
+              <EmptyBlock
+                icon={<FileText className="h-5 w-5" />}
+                title="Nessun file"
+                hint="POS, DICO, schemi e altri documenti compaiono qui"
+              />
+            ) : (
+              <Stagger className="flex flex-col gap-2">
+                {documenti.map((f) => (
+                  <FileTile key={f.id} file={f} commessaId={params.id} />
+                ))}
+              </Stagger>
+            )}
+
+            {/* Report: visibile solo quando la commessa è in fase avanzata */}
+            {(['collaudo', 'completata', 'archiviata'] as const).includes(stato as any) && (
+              <>
+                <Divider label="Documenti generati" />
+                <Link
+                  href={`/mobile/commessa/${params.id}/report`}
+                  className="group relative flex items-center gap-3 overflow-hidden rounded-lg border border-accent/30 bg-gradient-to-br from-accent/8 via-card to-primary/5 p-3.5 shadow-soft transition-all active:scale-[0.995]"
+                >
+                  <CornerTicks />
+                  <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-accent/40 bg-accent text-accent-foreground font-mono text-[9px] font-black leading-none">
+                    <FileText className="h-3.5 w-3.5 mb-0.5" aria-hidden="true" />
+                    <span>PDF</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-accent-soft-foreground">
+                      Report chiusura
+                    </p>
+                    <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
+                      Riepilogo completo commessa
+                    </p>
+                    <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                      Cliente · foto · fasi · DICO
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-accent-soft-foreground" aria-hidden="true" />
+                </Link>
+              </>
+            )}
           </TabsContent>
 
           {/* ───────────── AGGIORNAMENTI ───────────── */}
@@ -481,56 +437,6 @@ export default async function CommessaDetailPage({
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-
-function FotoBlock({
-  momentoLabel,
-  count,
-  commessaId,
-  foto,
-}: {
-  momentoLabel: string;
-  count: number;
-  commessaId: string;
-  foto: Array<{ id: string; filename: string; thumbnail_url: string | null; mime: string }>;
-}) {
-  return (
-    <div className="space-y-2">
-      <Divider label={`${momentoLabel} · ${String(count).padStart(2, '0')}`} />
-      <div className="grid grid-cols-3 gap-1.5">
-        {foto.map((f) => {
-          const isVideo = f.mime.startsWith('video/');
-          return (
-            <Link
-              key={f.id}
-              href={`/mobile/commessa/${commessaId}/scatto`}
-              className="group relative aspect-square overflow-hidden rounded-md border border-border bg-muted transition-transform active:scale-[0.96]"
-              title={f.filename}
-            >
-              {f.thumbnail_url ? (
-                <Image
-                  src={f.thumbnail_url}
-                  alt={f.filename}
-                  width={160}
-                  height={160}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                  <ImageIcon className="h-5 w-5" aria-hidden="true" />
-                </div>
-              )}
-              {isVideo && (
-                <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-1.5 py-px font-mono text-[10px] font-bold text-white">
-                  ▶
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function FileTile({
   file,

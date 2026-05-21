@@ -22,6 +22,7 @@ import {
 } from '@impiantixplus/ui';
 
 import { creaCommessa } from '../../_actions/crea-commessa';
+import { ContactPickerButton } from '../../_components/contact-picker-button';
 import { VoiceRecorder } from '../../_components/voice-recorder';
 import {
   MediaAttachSection,
@@ -384,7 +385,23 @@ function Step1Cliente({
 
   return (
     <section className="space-y-4">
-      <h2 className="text-base font-semibold">1 · Anagrafica cliente</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">1 · Anagrafica cliente</h2>
+        <ContactPickerButton
+          onSelect={(c) =>
+            setState((s) => ({
+              ...s,
+              cliente: {
+                ...s.cliente,
+                id: undefined,
+                nome: c.name ?? s.cliente.nome,
+                telefono: c.tel ?? s.cliente.telefono,
+                email: c.email ?? s.cliente.email,
+              },
+            }))
+          }
+        />
+      </div>
 
       <div className="space-y-2">
         <Label htmlFor="cli-nome">Nome / Ragione sociale</Label>

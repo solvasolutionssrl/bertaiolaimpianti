@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 import { Button, Input, Label } from '@impiantixplus/ui';
+import { ContactPickerButton } from './contact-picker-button';
 
 /**
  * Voice Review (Schermo 2 del voice-intake flow).
@@ -240,6 +241,22 @@ export function VoiceReview({
         >
           {cliente.status === 'editing' ? (
             <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between pb-1">
+                <span className="text-xs text-muted-foreground">Modifica i campi o importa dalla rubrica</span>
+                <ContactPickerButton
+                  onSelect={(c) =>
+                    setCliente((s) => ({
+                      ...s,
+                      value: {
+                        ...s.value,
+                        ragione_sociale: c.name ?? s.value.ragione_sociale,
+                        telefono: c.tel ?? s.value.telefono,
+                        email: c.email ?? s.value.email,
+                      },
+                    }))
+                  }
+                />
+              </div>
               <FieldRow
                 label="Ragione sociale"
                 value={cliente.value.ragione_sociale}
