@@ -19,6 +19,12 @@ const MOMENTO_FOLDER: Record<MomentoFoto, string> = {
 };
 
 export async function POST(request: NextRequest) {
+  // Probe: verifica che la funzione venga chiamata (console.warn sopravvive a removeConsole)
+  const clHeader = request.headers.get('content-length');
+  const xfsHeader = request.headers.get('x-file-size');
+  const ctHeader = request.headers.get('content-type') ?? '?';
+  console.warn(`[upload/media] ENTRY content-length=${clHeader} x-file-size=${xfsHeader} content-type=${ctHeader}`);
+
   // 1. Auth — reads session from cookies, does NOT consume request body
   let ctx;
   try {
@@ -121,7 +127,7 @@ export async function POST(request: NextRequest) {
   try {
     const buffer = new Uint8Array(await request.arrayBuffer());
     actualSize = buffer.byteLength;
-    console.log(`[upload/media] buffered ${actualSize}B (${providerName}, ${contentType})`);
+    console.warn(`[upload/media] buffered ${actualSize}B → ${storagePath}`);
     const result = await storage.uploadFile(storagePath, buffer, { contentType });
     uploadedPath = result.path;
   } catch (e) {
