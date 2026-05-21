@@ -418,6 +418,16 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Conferma e crea</h2>
 
+          {/* Foto/video prima — l'utente le vede subito e le aggiunge prima di confermare */}
+          {state.phase === 'confirm' && (
+            <MediaAttachSection
+              files={mediaFiles}
+              onChange={setMediaFiles}
+              uploading={uploading}
+              uploadProgress={uploadProgress}
+            />
+          )}
+
           <div className="space-y-3 rounded-lg border-2 border-primary/20 bg-card p-4 shadow-soft-md">
             <SummaryRow label="Cliente" value={state.data.ragione_sociale} />
             <SummaryRow label="Indirizzo" value={state.data.indirizzo} />
@@ -441,16 +451,6 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
               /{anteprimaCartella(state.data.ragione_sociale ?? 'Cliente', state.data.descrizione ?? 'Commessa')}/
             </code>
           </div>
-
-          {/* Foto/video — visibile solo in fase confirm, non durante creazione */}
-          {state.phase === 'confirm' && (
-            <MediaAttachSection
-              files={mediaFiles}
-              onChange={setMediaFiles}
-              uploading={uploading}
-              uploadProgress={uploadProgress}
-            />
-          )}
 
           <Button
             size="lg"

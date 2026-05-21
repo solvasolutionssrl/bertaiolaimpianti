@@ -29,6 +29,7 @@ import {
   Hero,
   HeroMeta,
 } from '../../_components/blueprint';
+import { AddMediaSection } from './_components/add-media-section';
 
 export async function generateMetadata({
   params,
@@ -74,12 +75,12 @@ export default async function CommessaDetailPage({
 
   if (error || !rawCommessa) notFound();
 
-  // 2) Foto: separate per momento
+  // 2) Foto e video: separati per momento
   const fotoQuery = supabase
     .from('file_refs')
-    .select('id, filename, thumbnail_url, momento, uploaded_at')
+    .select('id, filename, thumbnail_url, momento, uploaded_at, mime')
     .eq('commessa_id', params.id)
-    .like('mime', 'image/%')
+    .or('mime.like.image/%,mime.like.video/%')
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
@@ -119,6 +120,7 @@ export default async function CommessaDetailPage({
     thumbnail_url: string | null;
     momento: 'sopralluogo' | 'in_corso' | 'finale' | null;
     uploaded_at: string;
+    mime: string;
   }>;
   const fotoSopralluogo = tutteFoto.filter((f) => f.momento === 'sopralluogo').reverse();
   const fotoInCorso = tutteFoto.filter((f) => f.momento === 'in_corso');
@@ -289,7 +291,7 @@ export default async function CommessaDetailPage({
               value="foto"
               className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
             >
-              Foto
+              Foto/video
               <span className="ml-1.5 font-sans tabular-nums opacity-60">{fotoTot}</span>
             </TabsTrigger>
             <TabsTrigger
@@ -308,13 +310,13 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
           </TabsList>
 
-          {/* ───────────── FOTO ───────────── */}
+          {/* ───────────── FOTO/VIDEO ───────────── */}
           <TabsContent value="foto" className="mt-5 space-y-6">
             {fotoTot === 0 ? (
               <EmptyBlock
                 icon={<ImageIcon className="h-5 w-5" />}
-                title="Nessuna foto"
-                hint="Scatta la prima foto del cantiere"
+                title="Nessuna foto o video"
+                hint="Scatta dal vivo o carica dalla galleria"
               />
             ) : (
               <>
@@ -346,11 +348,14 @@ export default async function CommessaDetailPage({
             )}
 
             <Link href={`/mobile/commessa/${params.id}/scatto`} className="block">
-              <Button size="lg" className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]">
+              <Button size="lg" variant="outline" className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]">
                 <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                Aggiungi foto
+                Scatta foto dal vivo
               </Button>
             </Link>
+
+            <Divider label="Carica dalla galleria" />
+            <AddMediaSection commessaId={params.id} />
           </TabsContent>
 
           {/* ───────────── FILE ───────────── */}
@@ -486,34 +491,42 @@ function FotoBlock({
   momentoLabel: string;
   count: number;
   commessaId: string;
-  foto: Array<{ id: string; filename: string; thumbnail_url: string | null }>;
+  foto: Array<{ id: string; filename: string; thumbnail_url: string | null; mime: string }>;
 }) {
   return (
     <div className="space-y-2">
       <Divider label={`${momentoLabel} · ${String(count).padStart(2, '0')}`} />
       <div className="grid grid-cols-3 gap-1.5">
-        {foto.map((f) => (
-          <Link
-            key={f.id}
-            href={`/mobile/commessa/${commessaId}/scatto`}
-            className="group relative aspect-square overflow-hidden rounded-md border border-border bg-muted transition-transform active:scale-[0.96]"
-            title={f.filename}
-          >
-            {f.thumbnail_url ? (
-              <Image
-                src={f.thumbnail_url}
-                alt={f.filename}
-                width={160}
-                height={160}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                <ImageIcon className="h-5 w-5" aria-hidden="true" />
-              </div>
-            )}
-          </Link>
-        ))}
+        {foto.map((f) => {
+          const isVideo = f.mime.startsWith('video/');
+          return (
+            <Link
+              key={f.id}
+              href={`/mobile/commessa/${commessaId}/scatto`}
+              className="group relative aspect-square overflow-hidden rounded-md border border-border bg-muted transition-transform active:scale-[0.96]"
+              title={f.filename}
+            >
+              {f.thumbnail_url ? (
+                <Image
+                  src={f.thumbnail_url}
+                  alt={f.filename}
+                  width={160}
+                  height={160}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                  <ImageIcon className="h-5 w-5" aria-hidden="true" />
+                </div>
+              )}
+              {isVideo && (
+                <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-1.5 py-px font-mono text-[10px] font-bold text-white">
+                  ▶
+                </span>
+              )}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

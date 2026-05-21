@@ -37,8 +37,8 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-// Whisper può prendere ~10-20s su audio lungo; alziamo il limite.
-export const maxDuration = 60;
+// Audio fino a ~2 min: Whisper ~15-25s + extraction ~5-10s → 120s margin.
+export const maxDuration = 120;
 
 // .catch(undefined) su ogni campo: se il LLM restituisce un valore non
 // conforme per un campo, quel campo viene scartato invece di far fallire
@@ -52,7 +52,7 @@ const OUTPUT_SCHEMA = z.object({
   citta: z.string().trim().min(1).max(120).optional().catch(undefined),
   voci_ids: z.array(z.number().int().positive()).max(20).optional().catch(undefined),
   descrizione: z.string().trim().min(1).max(200).optional().catch(undefined),
-  note: z.string().trim().min(1).max(500).optional().catch(undefined),
+  note: z.string().trim().min(1).max(2000).optional().catch(undefined),
   tag_suggeriti: z.array(z.string().trim().min(1).max(40)).max(5).optional().catch(undefined),
 });
 
@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
         process.env.OPENAI_MODEL_EXTRACT?.trim() || 'gpt-4o-mini';
       const completion = await chatCompletion({
         model: extractModel,
-        maxTokens: 800,
+        maxTokens: 2000,
         responseFormat: 'json_object',
         messages: [
           { role: 'system', content: system },
