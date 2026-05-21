@@ -247,19 +247,28 @@ export async function POST(req: NextRequest) {
         suggested = parsed.data;
         usedExtractModel = completion.model;
       } else {
-        const local = localExtract(transcript);
-        const localParsed = OUTPUT_SCHEMA.safeParse(local);
-        suggested = localParsed.success ? localParsed.data : {};
-        usedExtractModel = 'local-heuristics-fallback';
-        extractionPreview = true;
+        // Il modello ha risposto con JSON valido ma non conforme allo schema.
+        // Non usiamo euristiche locali in produzione: restituiamo i campi
+        // vuoti (l'utente li compila a mano dal transcript).
+        console.error('[voice/extract] Zod schema miss:', JSON.stringify(parsed.error.flatten()));
+        suggested = {};
+        usedExtractModel = completion.model + '-schema-miss';
       }
     } catch (err) {
-      const local = localExtract(transcript);
-      const localParsed = OUTPUT_SCHEMA.safeParse(local);
-      suggested = localParsed.success ? localParsed.data : {};
-      usedExtractModel = 'local-heuristics-fallback';
-      extractionPreview = true;
-      console.error('[voice/extract] OpenAI error, fallback:', err);
+      // Errore reale OpenAI (HTTP 4xx/5xx, timeout, rete).
+      // In modalità preview usiamo le euristiche locali; in produzione
+      // restituiamo un errore chiaro invece di degradare silenziosamente.
+      console.error('[voice/extract] OpenAI extraction error:', err);
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error && err.message.includes('429')
+              ? 'Limite API raggiunto — riprova tra qualche secondo.'
+              : 'Estrazione AI non riuscita. Riprova tra qualche secondo.',
+          detail: err instanceof Error ? err.message.slice(0, 300) : 'unknown',
+        },
+        { status: 502 },
+      );
     }
   }
 
