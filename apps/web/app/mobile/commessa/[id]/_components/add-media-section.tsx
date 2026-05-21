@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Upload, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@impiantixplus/ui';
 
 import {
@@ -25,19 +25,34 @@ export function AddMediaSection({ commessaId }: Props) {
   const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
   const [results, setResults] = React.useState<UploadMediaResult[]>([]);
   const [uploadState, setUploadState] = React.useState<State>('idle');
+  const abortRef = React.useRef<AbortController | null>(null);
 
   const handleUpload = async () => {
     if (files.length === 0) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setUploadState('uploading');
     try {
-      const res = await uploadMediaBatch(files, commessaId, (map) =>
-        setUploadProgress(new Map(map)),
+      const res = await uploadMediaBatch(
+        files,
+        commessaId,
+        (map) => setUploadProgress(new Map(map)),
+        controller.signal,
       );
       setResults(res);
-      setUploadState(res.some((r) => !r.ok) ? 'error' : 'done');
+      const cancelled = res.every((r) => r.error === 'Annullato');
+      setUploadState(cancelled ? 'idle' : res.some((r) => !r.ok) ? 'error' : 'done');
     } catch {
       setUploadState('error');
+    } finally {
+      abortRef.current = null;
     }
+  };
+
+  const handleCancel = () => {
+    abortRef.current?.abort();
+    setUploadProgress(new Map());
+    setUploadState('idle');
   };
 
   const reset = () => {
@@ -48,10 +63,10 @@ export function AddMediaSection({ commessaId }: Props) {
   };
 
   const ok = results.filter((r) => r.ok).length;
-  const fail = results.filter((r) => !r.ok).length;
+  const fail = results.filter((r) => !r.ok && r.error !== 'Annullato').length;
   const uploading = uploadState === 'uploading';
 
-  if (uploadState === 'done' || uploadState === 'error') {
+  if (uploadState === 'done' || (uploadState === 'error' && results.length > 0)) {
     return (
       <div className="rounded-lg border border-border bg-card p-4 space-y-3">
         {ok > 0 && (
@@ -63,7 +78,10 @@ export function AddMediaSection({ commessaId }: Props) {
         {fail > 0 && (
           <div className="flex items-center gap-2 text-sm text-destructive">
             <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{fail} file non caricati — riprova</span>
+            <span>
+              {fail} file non caricati —{' '}
+              {results.find((r) => !r.ok && r.error !== 'Annullato')?.error ?? 'errore sconosciuto'}
+            </span>
           </div>
         )}
         <Button type="button" variant="outline" size="sm" onClick={reset} className="w-full">
@@ -80,6 +98,7 @@ export function AddMediaSection({ commessaId }: Props) {
         onChange={setFiles}
         uploading={uploading}
         uploadProgress={uploadProgress}
+        onCancel={handleCancel}
       />
 
       {files.length > 0 && !uploading && (
@@ -92,13 +111,6 @@ export function AddMediaSection({ commessaId }: Props) {
           <Upload className="h-4 w-4" aria-hidden="true" />
           Carica {files.length} foto/video
         </Button>
-      )}
-
-      {uploading && (
-        <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          <span>Caricamento in corso…</span>
-        </div>
       )}
     </div>
   );

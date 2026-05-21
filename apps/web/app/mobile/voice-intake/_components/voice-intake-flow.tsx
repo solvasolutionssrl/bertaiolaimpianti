@@ -90,6 +90,7 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
   const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
   const [uploadResults, setUploadResults] = React.useState<UploadMediaResult[]>([]);
   const [uploading, setUploading] = React.useState(false);
+  const uploadAbortRef = React.useRef<AbortController | null>(null);
 
   const stepNum =
     state.phase === 'record'
@@ -212,12 +213,16 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
 
       // Upload foto/video se presenti
       if (mediaFiles.length > 0) {
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
         setUploading(true);
         const results = await uploadMediaBatch(
           mediaFiles,
           commessaId,
           (map) => setUploadProgress(new Map(map)),
+          controller.signal,
         );
+        uploadAbortRef.current = null;
         setUploadResults(results);
         setUploading(false);
       }
@@ -425,6 +430,7 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
               onChange={setMediaFiles}
               uploading={uploading}
               uploadProgress={uploadProgress}
+              onCancel={() => { uploadAbortRef.current?.abort(); setUploading(false); }}
             />
           )}
 

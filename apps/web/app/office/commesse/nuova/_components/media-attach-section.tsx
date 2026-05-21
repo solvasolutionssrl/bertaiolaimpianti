@@ -41,12 +41,14 @@ interface Props {
   onChange: (files: MediaFile[]) => void;
   uploading?: boolean;
   uploadProgress?: UploadProgressMap;
+  onCancel?: () => void;
 }
 
-export function MediaAttachSection({ files, onChange, uploading = false, uploadProgress }: Props) {
+export function MediaAttachSection({ files, onChange, uploading = false, uploadProgress, onCancel }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [skipOpen, setSkipOpen] = React.useState(false);
   const [validationErrors, setValidationErrors] = React.useState<ValidationError[]>([]);
+  const [confirmCancel, setConfirmCancel] = React.useState(false);
 
   const addFiles = (list: FileList | null) => {
     if (!list || list.length === 0) return;
@@ -150,6 +152,11 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
                         <>
                           <Loader2 className="h-5 w-5 animate-spin text-white" aria-hidden="true" />
                           <span className="text-[10px] font-semibold text-white">Comprimo…</span>
+                        </>
+                      ) : prog.step === 'processing' ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin text-white" aria-hidden="true" />
+                          <span className="text-[10px] font-semibold text-white">Cloud…</span>
                         </>
                       ) : (
                         <>
@@ -278,7 +285,35 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
           ) : (
             <span>Nessun allegato — la commessa verrà creata senza file.</span>
           )}
-          {files.length > 0 && !uploading && (
+          {uploading && onCancel ? (
+            confirmCancel ? (
+              <span className="flex items-center gap-2">
+                <span className="text-foreground">Annullare?</span>
+                <button
+                  type="button"
+                  className="font-semibold text-destructive"
+                  onClick={() => { onCancel(); setConfirmCancel(false); }}
+                >
+                  Sì
+                </button>
+                <button
+                  type="button"
+                  className="text-muted-foreground"
+                  onClick={() => setConfirmCancel(false)}
+                >
+                  No
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmCancel(true)}
+                className="underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Annulla
+              </button>
+            )
+          ) : files.length > 0 && !uploading ? (
             <button
               type="button"
               onClick={() => setSkipOpen(true)}
@@ -286,7 +321,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
             >
               Salta per ora
             </button>
-          )}
+          ) : null}
         </div>
       </CardContent>
 

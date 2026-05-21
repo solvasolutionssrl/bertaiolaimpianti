@@ -40,8 +40,13 @@ export async function POST(request: NextRequest) {
 
   const contentType = request.headers.get('content-type') ?? 'application/octet-stream';
   const filename = decodeURIComponent(request.headers.get('x-filename') ?? 'file');
-  // content-length is set automatically by XHR when sending a File object
-  const size = Number(request.headers.get('content-length') ?? '0');
+  // content-length è settato automaticamente da XHR; alcuni proxy Vercel lo strippano.
+  // x-file-size è un nostro header di fallback inviato dal client.
+  const size = Number(
+    request.headers.get('content-length') ??
+    request.headers.get('x-file-size') ??
+    '0'
+  );
 
   if (!request.body) {
     return Response.json({ error: 'Body mancante' }, { status: 400 });
@@ -125,8 +130,10 @@ export async function POST(request: NextRequest) {
       uploadedPath = result.path;
     }
   } catch (e) {
+    const detail = e instanceof Error ? e.message : 'unknown';
+    console.error(`[upload/media] storage upload failed (${providerName}, ${contentType}, ${size}B):`, detail);
     return Response.json(
-      { error: `Upload su ${providerName} fallito: ${e instanceof Error ? e.message : 'unknown'}` },
+      { error: `Upload su ${providerName} fallito: ${detail}` },
       { status: 502 },
     );
   }

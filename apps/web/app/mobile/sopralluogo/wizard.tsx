@@ -118,6 +118,7 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
   const [uploading, setUploading] = React.useState(false);
   const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
   const [uploadResults, setUploadResults] = React.useState<UploadMediaResult[]>([]);
+  const uploadAbortRef = React.useRef<AbortController | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<{
     commessaId: string;
@@ -216,12 +217,16 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
 
       // Upload foto/video se presenti
       if (mediaFiles.length > 0) {
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
         setUploading(true);
         const results = await uploadMediaBatch(
           mediaFiles,
           r.commessaId,
           (map) => setUploadProgress(new Map(map)),
+          controller.signal,
         );
+        uploadAbortRef.current = null;
         setUploadResults(results);
         setUploading(false);
       }
