@@ -180,10 +180,36 @@ export async function POST(
   revalidatePath(`/office/commesse/${ref.commessa_id}`);
   revalidatePath(`/mobile/commessa/${ref.commessa_id}`);
 
+  // 10. Fire-and-forget: avvia sync R2 → Nextcloud per questo file.
+  // Il cron */10min cattura comunque ciò che fallisce qui.
+  triggerSyncForFile(request, ref.id).catch(() => {});
+
   return Response.json({
     ok: true,
     fileRefId: ref.id,
     sizeBytes: head.size,
     status: 'uploaded',
   } satisfies CompleteResponse);
+}
+
+/**
+ * Avvia il sync di un singolo file in background (fire-and-forget).
+ * Usa CRON_SECRET come bearer interno: in produzione Vercel risolve l'URL
+ * via origine della request; in dev locale punta a localhost.
+ */
+async function triggerSyncForFile(request: NextRequest, fileRefId: string): Promise<void> {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return; // in dev senza CRON_SECRET, cron periodico catturerà comunque
+
+  const origin = new URL(request.url).origin;
+  await fetch(`${origin}/api/sync/r2-to-nextcloud`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Internal-Sync-Secret': secret,
+    },
+    body: JSON.stringify({ fileRefId }),
+    // Non aspettiamo la risposta: lasciamo che giri in background
+    keepalive: true,
+  });
 }

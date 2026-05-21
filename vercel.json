@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/sync/r2-to-nextcloud?max=10",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
