@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     default: 'Portale Cliente',
     template: '%s · Portale Cliente',
   },
-  description: 'Documenti, stato lavori e richieste — Portale cliente impiantiXplus',
+  description: 'Documenti, stato lavori e richieste — Portale cliente Kommessa',
 };
 
 export const viewport: Viewport = {
@@ -49,7 +49,7 @@ export default async function PortalLayout({
 
   const brandColor = ctx?.tenant.brandColor ?? null;
   const logoUrl = ctx?.tenant.logoUrl ?? null;
-  const tenantName = ctx?.tenant.nome ?? 'impiantiXplus';
+  const tenantName = ctx?.tenant.nome ?? 'Kommessa';
 
   return (
     <div

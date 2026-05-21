@@ -11,10 +11,10 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'impiantiXplus',
-    short_name: 'impiantiX+',
+    name: 'Kommessa',
+    short_name: 'Kommessa',
     description:
-      'Gestione commesse impiantistiche — sopralluogo, foto cantiere, checklist per tecnici e capi.',
+      'Gestione commesse impiantistiche — sopralluogo, foto cantiere, checklist per tecnici e capi. Suite SOLVA.',
     start_url: '/mobile',
     scope: '/',
     display: 'standalone',

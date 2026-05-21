@@ -3,12 +3,10 @@ import { ImageResponse } from 'next/og';
 export const runtime = 'edge';
 
 /**
- * Apple Touch Icon — Next 14 Metadata API genera automaticamente
- * <link rel="apple-touch-icon" href="/apple-icon"> e lo serve a iOS
- * quando l'utente fa "Aggiungi a Home".
+ * Apple Touch Icon — Kommessa.
  *
- * 180×180 secondo HIG Apple. Niente trasparenza (iOS applica già la
- * smussatura agli angoli).
+ * 180×180 secondo HIG Apple. Niente trasparenza (iOS smussa gli angoli).
+ * "K" in evidenza su gradient blu→arancio della suite SOLVA.
  */
 export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
@@ -20,10 +18,12 @@ export default function AppleIcon() {
         style={{
           width: '100%',
           height: '100%',
-          background: '#1340A6',
+          background:
+            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%)',
           backgroundImage:
-            'linear-gradient(to right, rgba(255,255,255,0.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.10) 1px, transparent 1px)',
-          backgroundSize: '22px 22px',
+            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%), linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)',
+          backgroundSize: '100%, 22px 22px, 22px 22px',
+          backgroundBlendMode: 'normal, overlay, overlay',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -32,27 +32,16 @@ export default function AppleIcon() {
       >
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(circle at 70% 80%, rgba(242,107,35,0.35) 0%, transparent 55%)',
-            display: 'flex',
-          }}
-        />
-        <div
-          style={{
-            fontSize: 105,
+            fontSize: 130,
             fontWeight: 900,
-            color: '#F26B23',
+            color: '#FFFFFF',
             letterSpacing: '-0.06em',
             display: 'flex',
-            alignItems: 'baseline',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
             position: 'relative',
-            fontFamily: 'monospace',
           }}
         >
-          <span>X</span>
-          <span style={{ color: '#FFFFFF', fontSize: 84, marginLeft: 4 }}>+</span>
+          K
         </div>
       </div>
     ),

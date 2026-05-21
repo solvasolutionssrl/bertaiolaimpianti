@@ -21,7 +21,7 @@ import { guardMobile } from './_lib/guard';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 
 export const metadata: Metadata = {
-  title: 'impiantiXplus mobile',
+  title: 'Kommessa mobile',
 };
 
 interface CommessaRow {

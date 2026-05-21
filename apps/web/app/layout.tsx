@@ -5,16 +5,17 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: 'impiantiXplus',
-    template: '%s · impiantiXplus',
+    default: 'Kommessa — gestione commesse impiantistiche',
+    template: '%s · Kommessa',
   },
-  description: 'Gestione commesse impiantistiche — SOLVA × Bertaiola Impianti',
-  applicationName: 'impiantiXplus',
+  description:
+    'Kommessa è la piattaforma di gestione commesse cantiere per impiantisti: voice intake, foto/video dal mobile, sync cloud, annotazioni e report. Suite SOLVA.',
+  applicationName: 'Kommessa',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'impiantiXplus',
+    title: 'Kommessa',
   },
   formatDetection: {
     telephone: false,

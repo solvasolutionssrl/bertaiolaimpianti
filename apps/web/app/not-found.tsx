@@ -75,7 +75,7 @@ export default function NotFound() {
         </div>
 
         <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[hsl(220,10%,65%)]">
-          impiantiXplus · powered by SOLVA
+          Kommessa · powered by SOLVA
         </p>
       </div>
     </main>
