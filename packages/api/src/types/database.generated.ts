@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -59,7 +85,21 @@ export type Database = {
             foreignKeyName: "audit_events_actor_user_id_fkey"
             columns: ["actor_user_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "audit_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -200,7 +240,21 @@ export type Database = {
             foreignKeyName: "commessa_tags_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "commessa_tags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -358,7 +412,21 @@ export type Database = {
             foreignKeyName: "commesse_responsabile_id_fkey"
             columns: ["responsabile_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "commesse_responsabile_id_fkey"
+            columns: ["responsabile_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commesse_responsabile_id_fkey"
+            columns: ["responsabile_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -502,6 +570,34 @@ export type Database = {
             foreignKeyName: "file_annotations_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "file_annotations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_annotations_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_annotations_editing_by_fkey"
+            columns: ["editing_by"]
+            isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "file_annotations_editing_by_fkey"
+            columns: ["editing_by"]
+            isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -509,7 +605,7 @@ export type Database = {
             foreignKeyName: "file_annotations_editing_by_fkey"
             columns: ["editing_by"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -537,7 +633,21 @@ export type Database = {
             foreignKeyName: "file_annotations_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "file_annotations_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_annotations_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
         ]
@@ -545,18 +655,24 @@ export type Database = {
       file_refs: {
         Row: {
           commessa_id: string | null
+          deleted_at: string | null
           filename: string
           geo_lat: number | null
           geo_lng: number | null
           id: string
+          last_sync_error: string | null
           mime: string
           momento: Database["public"]["Enums"]["momento_foto"] | null
           ocr_status: Database["public"]["Enums"]["ocr_status"]
           ocr_text: string | null
           path: string
           pubblico: boolean
+          r2_key: string | null
+          r2_upload_id: string | null
           sha256: string | null
           size_bytes: number
+          status: Database["public"]["Enums"]["media_status"]
+          sync_attempts: number
           taken_at: string | null
           tenant_id: string
           thumbnail_url: string | null
@@ -567,18 +683,24 @@ export type Database = {
         }
         Insert: {
           commessa_id?: string | null
+          deleted_at?: string | null
           filename: string
           geo_lat?: number | null
           geo_lng?: number | null
           id?: string
+          last_sync_error?: string | null
           mime: string
           momento?: Database["public"]["Enums"]["momento_foto"] | null
           ocr_status?: Database["public"]["Enums"]["ocr_status"]
           ocr_text?: string | null
           path: string
           pubblico?: boolean
+          r2_key?: string | null
+          r2_upload_id?: string | null
           sha256?: string | null
           size_bytes: number
+          status?: Database["public"]["Enums"]["media_status"]
+          sync_attempts?: number
           taken_at?: string | null
           tenant_id: string
           thumbnail_url?: string | null
@@ -589,18 +711,24 @@ export type Database = {
         }
         Update: {
           commessa_id?: string | null
+          deleted_at?: string | null
           filename?: string
           geo_lat?: number | null
           geo_lng?: number | null
           id?: string
+          last_sync_error?: string | null
           mime?: string
           momento?: Database["public"]["Enums"]["momento_foto"] | null
           ocr_status?: Database["public"]["Enums"]["ocr_status"]
           ocr_text?: string | null
           path?: string
           pubblico?: boolean
+          r2_key?: string | null
+          r2_upload_id?: string | null
           sha256?: string | null
           size_bytes?: number
+          status?: Database["public"]["Enums"]["media_status"]
+          sync_attempts?: number
           taken_at?: string | null
           tenant_id?: string
           thumbnail_url?: string | null
@@ -649,7 +777,21 @@ export type Database = {
             foreignKeyName: "file_refs_uploaded_by_fkey"
             columns: ["uploaded_by"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "file_refs_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "file_refs_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -733,7 +875,21 @@ export type Database = {
             foreignKeyName: "interventi_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "interventi_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interventi_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -741,6 +897,102 @@ export type Database = {
             columns: ["voce_id"]
             isOneToOne: false
             referencedRelation: "voci_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_event_types: {
+        Row: {
+          code: string
+          critical: boolean
+          default_email: boolean
+          default_in_app: boolean
+          default_push: boolean
+          description: string | null
+          label: string
+          ordine: number
+        }
+        Insert: {
+          code: string
+          critical?: boolean
+          default_email?: boolean
+          default_in_app?: boolean
+          default_push?: boolean
+          description?: string | null
+          label: string
+          ordine?: number
+        }
+        Update: {
+          code?: string
+          critical?: boolean
+          default_email?: boolean
+          default_in_app?: boolean
+          default_push?: boolean
+          description?: string | null
+          label?: string
+          ordine?: number
+        }
+        Relationships: []
+      }
+      notification_preferences: {
+        Row: {
+          email: boolean
+          event_code: string
+          in_app: boolean
+          push: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          email?: boolean
+          event_code: string
+          in_app?: boolean
+          push?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          email?: boolean
+          event_code?: string
+          in_app?: boolean
+          push?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_event_code_fkey"
+            columns: ["event_code"]
+            isOneToOne: false
+            referencedRelation: "notification_event_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "notification_preferences_event_code_fkey"
+            columns: ["event_code"]
+            isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["event_code"]
+          },
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
         ]
@@ -785,7 +1037,21 @@ export type Database = {
             foreignKeyName: "notifiche_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "notifiche_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifiche_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
         ]
@@ -877,7 +1143,21 @@ export type Database = {
             foreignKeyName: "preset_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "preset_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preset_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -935,7 +1215,21 @@ export type Database = {
             foreignKeyName: "push_subscriptions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
         ]
@@ -1018,7 +1312,21 @@ export type Database = {
             foreignKeyName: "tenant_quotas_updated_by_fkey"
             columns: ["updated_by"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "tenant_quotas_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_quotas_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
         ]
@@ -1126,6 +1434,7 @@ export type Database = {
           note_interne: string | null
           plan: string
           plan_id: string | null
+          r2_config: Json
           slug: string
           sospeso: boolean
           sospeso_at: string | null
@@ -1144,6 +1453,7 @@ export type Database = {
           note_interne?: string | null
           plan?: string
           plan_id?: string | null
+          r2_config?: Json
           slug: string
           sospeso?: boolean
           sospeso_at?: string | null
@@ -1162,6 +1472,7 @@ export type Database = {
           note_interne?: string | null
           plan?: string
           plan_id?: string | null
+          r2_config?: Json
           slug?: string
           sospeso?: boolean
           sospeso_at?: string | null
@@ -1245,7 +1556,21 @@ export type Database = {
             foreignKeyName: "ticket_messages_sender_user_id_fkey"
             columns: ["sender_user_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "ticket_messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -1334,7 +1659,21 @@ export type Database = {
             foreignKeyName: "tickets_assegnato_a_fkey"
             columns: ["assegnato_a"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "tickets_assegnato_a_fkey"
+            columns: ["assegnato_a"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_assegnato_a_fkey"
+            columns: ["assegnato_a"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -1370,6 +1709,8 @@ export type Database = {
           is_platform_admin: boolean
           onboarded_at: string | null
           permissions: Json | null
+          quiet_hours_end: number | null
+          quiet_hours_start: number | null
           role: Database["public"]["Enums"]["app_role"]
           tenant_id: string | null
           updated_at: string
@@ -1383,6 +1724,8 @@ export type Database = {
           is_platform_admin?: boolean
           onboarded_at?: string | null
           permissions?: Json | null
+          quiet_hours_end?: number | null
+          quiet_hours_start?: number | null
           role?: Database["public"]["Enums"]["app_role"]
           tenant_id?: string | null
           updated_at?: string
@@ -1396,6 +1739,8 @@ export type Database = {
           is_platform_admin?: boolean
           onboarded_at?: string | null
           permissions?: Json | null
+          quiet_hours_end?: number | null
+          quiet_hours_start?: number | null
           role?: Database["public"]["Enums"]["app_role"]
           tenant_id?: string | null
           updated_at?: string
@@ -1463,7 +1808,21 @@ export type Database = {
             foreignKeyName: "commesse_responsabile_id_fkey"
             columns: ["responsabile_id"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "commesse_responsabile_id_fkey"
+            columns: ["responsabile_id"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commesse_responsabile_id_fkey"
+            columns: ["responsabile_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -1512,6 +1871,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_preferences_effective: {
+        Row: {
+          critical: boolean | null
+          description: string | null
+          email: boolean | null
+          event_code: string | null
+          in_app: boolean | null
+          label: string | null
+          ordine: number | null
+          push: boolean | null
+          user_id: string | null
+        }
+        Relationships: []
       }
       portal_files_view: {
         Row: {
@@ -1665,7 +2038,21 @@ export type Database = {
             foreignKeyName: "tickets_assegnato_a_fkey"
             columns: ["assegnato_a"]
             isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "tickets_assegnato_a_fkey"
+            columns: ["assegnato_a"]
+            isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tickets_assegnato_a_fkey"
+            columns: ["assegnato_a"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
             referencedColumns: ["id"]
           },
           {
@@ -1694,47 +2081,40 @@ export type Database = {
       users_with_permissions: {
         Row: {
           attivo: boolean | null
-          avatar_url: string | null
-          created_at: string | null
           display_name: string | null
           effective_permissions: Json | null
           id: string | null
-          is_platform_admin: boolean | null
-          onboarded_at: string | null
-          permissions: Json | null
+          permission_overrides: Json | null
           role: Database["public"]["Enums"]["app_role"] | null
           tenant_id: string | null
-          updated_at: string | null
         }
         Insert: {
           attivo?: boolean | null
-          avatar_url?: string | null
-          created_at?: string | null
           display_name?: string | null
           effective_permissions?: never
           id?: string | null
-          is_platform_admin?: boolean | null
-          onboarded_at?: string | null
-          permissions?: Json | null
+          permission_overrides?: Json | null
           role?: Database["public"]["Enums"]["app_role"] | null
           tenant_id?: string | null
-          updated_at?: string | null
         }
         Update: {
           attivo?: boolean | null
-          avatar_url?: string | null
-          created_at?: string | null
           display_name?: string | null
           effective_permissions?: never
           id?: string | null
-          is_platform_admin?: boolean | null
-          onboarded_at?: string | null
-          permissions?: Json | null
+          permission_overrides?: Json | null
           role?: Database["public"]["Enums"]["app_role"] | null
           tenant_id?: string | null
-          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "users_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -1757,7 +2137,10 @@ export type Database = {
         Returns: string
       }
       get_effective_permissions: {
-        Args: { p_role: Database["public"]["Enums"]["app_role"]; p_overrides?: Json }
+        Args: {
+          p_overrides: Json
+          p_role: Database["public"]["Enums"]["app_role"]
+        }
         Returns: Json
       }
       is_platform_admin: { Args: never; Returns: boolean }
@@ -1788,6 +2171,14 @@ export type Database = {
         | "allacci"
         | "supporto"
         | "alimentazione"
+      media_status:
+        | "uploading"
+        | "uploaded"
+        | "syncing"
+        | "synced"
+        | "sync_failed"
+        | "failed"
+        | "deleted"
       momento_foto: "sopralluogo" | "in_corso" | "finale"
       ocr_status: "none" | "pending" | "done" | "error"
       priorita_ticket: "bassa" | "media" | "alta" | "urgente"
@@ -1932,6 +2323,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["owner", "admin", "office", "capo", "tecnico", "cliente"],
@@ -1945,6 +2339,15 @@ export const Constants = {
         "allacci",
         "supporto",
         "alimentazione",
+      ],
+      media_status: [
+        "uploading",
+        "uploaded",
+        "syncing",
+        "synced",
+        "sync_failed",
+        "failed",
+        "deleted",
       ],
       momento_foto: ["sopralluogo", "in_corso", "finale"],
       ocr_status: ["none", "pending", "done", "error"],
@@ -1970,3 +2373,6 @@ export const Constants = {
     },
   },
 } as const
+<claude-code-hint v="1" type="plugin" value="supabase@claude-plugins-official" />
+A new version of Supabase CLI is available: v2.101.0 (currently installed v2.98.2)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

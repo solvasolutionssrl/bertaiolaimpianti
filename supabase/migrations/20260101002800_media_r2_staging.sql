@@ -59,7 +59,7 @@ CREATE INDEX IF NOT EXISTS file_refs_status_active_idx
 
 -- Cleanup multipart orfani: sessioni uploading vecchie di 24h+.
 CREATE INDEX IF NOT EXISTS file_refs_upload_in_progress_idx
-  ON public.file_refs(created_at)
+  ON public.file_refs(uploaded_at)
   WHERE status = 'uploading' AND r2_upload_id IS NOT NULL;
 
 -- Soft-deleted rows (audit + future cleanup).
