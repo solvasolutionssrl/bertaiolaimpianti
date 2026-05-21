@@ -40,13 +40,6 @@ export async function POST(request: NextRequest) {
 
   const contentType = request.headers.get('content-type') ?? 'application/octet-stream';
   const filename = decodeURIComponent(request.headers.get('x-filename') ?? 'file');
-  // content-length è settato automaticamente da XHR; alcuni proxy Vercel lo strippano.
-  // x-file-size è un nostro header di fallback inviato dal client.
-  const size = Number(
-    request.headers.get('content-length') ??
-    request.headers.get('x-file-size') ??
-    '0'
-  );
 
   if (!request.body) {
     return Response.json({ error: 'Body mancante' }, { status: 400 });
@@ -118,37 +111,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 6. Ensure parent folder exists (WebDAV PUT requires parent to exist)
-  if (storage.createFolder) {
-    const parentPath = storagePath.split('/').slice(0, -1).join('/');
-    try {
-      await storage.createFolder(parentPath);
-    } catch (folderErr) {
-      console.warn('[upload/media] createFolder failed:', folderErr instanceof Error ? folderErr.message : folderErr);
-    }
-  }
-
-  // 7. Stream upload — zero-copy on Nextcloud, buffered fallback on Supabase
+  // 6. Buffer body + upload
+  // Usiamo uploadFile (body bufferizzato) invece dello streaming duplex:'half'
+  // che su Node.js 24 / Vercel Fluid Compute causava Content-Length:0 verso
+  // Nextcloud e fallimento immediato del PUT.
+  // Per file fino a 500 MB siamo ampiamente sotto il limite memoria Vercel (1 GB).
   let uploadedPath: string;
+  let actualSize: number;
   try {
-    if (storage.uploadStream) {
-      const result = await storage.uploadStream(storagePath, request.body, size, { contentType });
-      uploadedPath = result.path;
-    } else {
-      const buffer = new Uint8Array(await request.arrayBuffer());
-      const result = await storage.uploadFile(storagePath, buffer, { contentType });
-      uploadedPath = result.path;
-    }
+    const buffer = new Uint8Array(await request.arrayBuffer());
+    actualSize = buffer.byteLength;
+    console.log(`[upload/media] buffered ${actualSize}B (${providerName}, ${contentType})`);
+    const result = await storage.uploadFile(storagePath, buffer, { contentType });
+    uploadedPath = result.path;
   } catch (e) {
     const detail = e instanceof Error ? e.message : 'unknown';
-    console.error(`[upload/media] storage upload failed (${providerName}, ${contentType}, ${size}B):`, detail);
+    console.error(`[upload/media] storage upload failed (${providerName}, ${contentType}):`, detail);
     return Response.json(
       { error: `Upload su ${providerName} fallito: ${detail}` },
       { status: 502 },
     );
   }
 
-  // 8. Insert file_refs (metadata in Supabase)
+  // 7. Insert file_refs (metadata in Supabase)
   const { data: ref, error: rErr } = await supabase
     .from('file_refs')
     .insert({
@@ -159,7 +144,7 @@ export async function POST(request: NextRequest) {
       path: uploadedPath,
       filename: baseFilename,
       mime: contentType,
-      size_bytes: size,
+      size_bytes: actualSize,
       uploaded_by: ctx.userId,
       taken_at: ts.toISOString(),
       geo_lat: null,
@@ -176,7 +161,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 9. Audit log
+  // 8. Audit log
   await supabase.from('audit_events').insert({
     tenant_id: ctx.tenantId,
     actor_user_id: ctx.userId,
@@ -189,9 +174,9 @@ export async function POST(request: NextRequest) {
       momento,
       voce_id: faseVoceId,
       path: uploadedPath,
-      size_bytes: size,
+      size_bytes: actualSize,
       mime: contentType,
-      storage: { provider: providerName, via: 'api_stream' },
+      storage: { provider: providerName, via: 'api_buffered' },
     },
   });
 
