@@ -118,7 +118,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 6. Stream upload — zero-copy on Nextcloud, buffered fallback on Supabase
+  // 6. Ensure parent folder exists (WebDAV PUT requires parent to exist)
+  if (storage.createFolder) {
+    const parentPath = storagePath.split('/').slice(0, -1).join('/');
+    try {
+      await storage.createFolder(parentPath);
+    } catch (folderErr) {
+      console.warn('[upload/media] createFolder failed:', folderErr instanceof Error ? folderErr.message : folderErr);
+    }
+  }
+
+  // 7. Stream upload — zero-copy on Nextcloud, buffered fallback on Supabase
   let uploadedPath: string;
   try {
     if (storage.uploadStream) {
@@ -138,7 +148,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 7. Insert file_refs (metadata in Supabase)
+  // 8. Insert file_refs (metadata in Supabase)
   const { data: ref, error: rErr } = await supabase
     .from('file_refs')
     .insert({
@@ -166,7 +176,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 8. Audit log
+  // 9. Audit log
   await supabase.from('audit_events').insert({
     tenant_id: ctx.tenantId,
     actor_user_id: ctx.userId,
