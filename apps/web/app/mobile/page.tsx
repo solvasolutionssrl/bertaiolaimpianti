@@ -149,7 +149,7 @@ async function GestioneDashboard({
                 />
                 <MetricCell
                   value={fasiAttesa.count ?? 0}
-                  label="Ferme"
+                  label="Voci ferme"
                   icon={<Clock className="h-3 w-3" />}
                   tone={fasiAttesa.count && fasiAttesa.count > 0 ? 'warn' : 'neutral'}
                 />
