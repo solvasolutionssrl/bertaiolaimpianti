@@ -11,4 +11,8 @@ export async function register() {
   }
 }
 
-export { onRequestError } from '@sentry/nextjs';
+// `onRequestError` esiste solo nelle versioni recenti di @sentry/nextjs (≥ 8.5)
+// e Next ≥ 15. La versione attuale del progetto (Next 14.2 + Sentry 10.x)
+// non lo esporta come hook nominato → lo escludiamo per non causare errori.
+// Quando si farà l'upgrade Next 15 + Sentry recente, riabilitare.
+// export { onRequestError } from '@sentry/nextjs';

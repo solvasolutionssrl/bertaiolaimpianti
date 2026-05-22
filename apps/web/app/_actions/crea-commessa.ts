@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@impiantixplus/api/server';
 import { createServiceSupabase } from '@impiantixplus/api/service';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
-import type { AppRole } from '@impiantixplus/api';
+import type { AppRole, Json } from '@impiantixplus/api';
 import {
   getStorageProvider,
   SCAFFOLD_TREE,
@@ -280,7 +280,7 @@ export async function creaCommessa(
       cliente_id: clienteId,
       voci: vociUnion,
       storage: storageResult,
-    } as Record<string, unknown>,
+    } as unknown as Json,
   });
 
   // 10) Revalidate

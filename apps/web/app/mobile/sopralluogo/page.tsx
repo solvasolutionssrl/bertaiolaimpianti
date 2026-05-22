@@ -38,7 +38,7 @@ export default async function SopralluogoPage() {
       .order('ordine_visualizzazione'),
     supabase
       .from('preset')
-      .select('id, nome, voci_ids')
+      .select('id, nome, voci_default')
       .eq('tenant_id', ctx.tenantId)
       .order('nome'),
   ]);
@@ -60,7 +60,7 @@ export default async function SopralluogoPage() {
   const preset: PresetOption[] = (presetRaw ?? []).map((p) => ({
     id: p.id,
     nome: p.nome,
-    vociIds: Array.isArray(p.voci_ids) ? (p.voci_ids as number[]) : [],
+    vociIds: Array.isArray(p.voci_default) ? (p.voci_default as number[]) : [],
   }));
 
   return (

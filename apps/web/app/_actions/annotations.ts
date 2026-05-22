@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@impiantixplus/api/server';
 import { createServiceSupabase } from '@impiantixplus/api/service';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
+import type { Json } from '@impiantixplus/api';
 import {
   getStorageProvider,
   type StorageProvider,
@@ -163,7 +164,8 @@ export async function salvaAnnotazione(
     const { data: updated, error: updErr } = await supabase
       .from('file_annotations')
       .update({
-        layer_json: input.layer,
+        // Shape[] è JSON-serializable; Supabase type Json non lo cattura nativamente.
+        layer_json: input.layer as unknown as Json,
         width_px: Math.round(input.width),
         height_px: Math.round(input.height),
         updated_by: ctx.userId,
@@ -186,7 +188,7 @@ export async function salvaAnnotazione(
         tenant_id: ctx.tenantId,
         file_ref_id: input.fileRefId,
         version: 1,
-        layer_json: input.layer,
+        layer_json: input.layer as unknown as Json,
         width_px: Math.round(input.width),
         height_px: Math.round(input.height),
         kind,
@@ -461,7 +463,7 @@ export async function caricaAnnotazioniFile(
     if (!prev || row.version > prev.version) {
       // deserializeLayer non importato qui per evitare bundle client-only.
       // Best-effort: passiamo layer_json grezzo (Shape[] o array vuoto).
-      const layer = Array.isArray(row.layer_json) ? (row.layer_json as Shape[]) : [];
+      const layer = Array.isArray(row.layer_json) ? (row.layer_json as unknown as Shape[]) : [];
       byPage.set(k, {
         page: row.page,
         layer,

@@ -57,7 +57,7 @@ export default async function ProfiloPage() {
     quiet_hours_end: number | null;
   } | null;
 
-  const displayName = profilo?.display_name ?? ctx.email.split('@')[0];
+  const displayName = profilo?.display_name ?? ctx.email.split('@')[0] ?? 'Utente';
   const initials = displayName
     .split(/\s+/)
     .map((s) => s.charAt(0).toUpperCase())

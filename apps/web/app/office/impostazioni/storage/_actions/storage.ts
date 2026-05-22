@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@impiantixplus/api/server';
+import type { Json } from '@impiantixplus/api';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
 
@@ -109,7 +110,7 @@ export async function aggiornaStorage(
     .from('tenants')
     .update({
       storage_provider: parsed.data.provider,
-      storage_config: nextConfig,
+      storage_config: nextConfig as unknown as Json,
     })
     .eq('id', ctx.tenantId);
 

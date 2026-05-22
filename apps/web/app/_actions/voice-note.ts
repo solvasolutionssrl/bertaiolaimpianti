@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
+import type { Json } from '@impiantixplus/api';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
 
 /**
@@ -83,11 +84,11 @@ export async function salvaNotaVocale(
         vocale: true,
         audio_duration_sec: input.durationSec ?? null,
         _preview: input.preview ?? false,
-      } as Record<string, unknown>,
+      } as unknown as Json,
       metadata: {
         commessa_codice: commessa.codice_interno,
         source: 'voice_recorder',
-      } as Record<string, unknown>,
+      } as unknown as Json,
     })
     .select('id')
     .single();

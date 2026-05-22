@@ -105,6 +105,7 @@ export default async function DocumentiTab({
         .select('file_ref_id, total, pagine_annotate')
         .in('file_ref_id', refIds);
       for (const s of sums ?? []) {
+        if (!s.file_ref_id) continue;
         summaryByRef.set(s.file_ref_id, {
           total: s.total ?? 0,
           pagine_annotate: s.pagine_annotate ?? 0,

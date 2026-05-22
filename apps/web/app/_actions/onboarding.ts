@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createServerSupabase } from '@impiantixplus/api/server';
+import type { Json } from '@impiantixplus/api';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
 
 /**
@@ -49,7 +50,7 @@ export async function completaOnboarding(): Promise<{ ok: true } | { ok: false; 
     entity_type: 'user',
     entity_id: ctx.userId,
     action: 'onboarding.completed',
-    after_data: { source: 'office_or_mobile_tour' } as Record<string, unknown>,
+    after_data: { source: 'office_or_mobile_tour' } as unknown as Json,
   });
 
   revalidatePath('/office');
@@ -89,7 +90,7 @@ export async function skipOnboarding(): Promise<{ ok: true } | { ok: false; erro
     entity_type: 'user',
     entity_id: ctx.userId,
     action: 'onboarding.skipped',
-    after_data: { source: 'office_or_mobile_tour' } as Record<string, unknown>,
+    after_data: { source: 'office_or_mobile_tour' } as unknown as Json,
   });
 
   revalidatePath('/office');
@@ -129,7 +130,7 @@ export async function resetOnboarding(): Promise<{ ok: true } | { ok: false; err
     entity_type: 'user',
     entity_id: ctx.userId,
     action: 'onboarding.reset',
-    metadata: { dev_only: true } as Record<string, unknown>,
+    metadata: { dev_only: true } as unknown as Json,
   });
 
   revalidatePath('/office');

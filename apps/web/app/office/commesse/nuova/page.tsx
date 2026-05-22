@@ -17,7 +17,7 @@ export default async function NuovaCommessaPage() {
       .order('ordine_visualizzazione'),
     supabase
       .from('preset')
-      .select('id, nome, voci_ids')
+      .select('id, nome, voci_default')
       .eq('tenant_id', ctx.tenantId)
       .order('nome'),
   ]);
@@ -32,7 +32,7 @@ export default async function NuovaCommessaPage() {
   const presetItems: PresetItem[] = (preset.data ?? []).map((p) => ({
     id: p.id as string,
     nome: p.nome as string,
-    vociIds: Array.isArray(p.voci_ids) ? (p.voci_ids as number[]) : [],
+    vociIds: Array.isArray(p.voci_default) ? (p.voci_default as number[]) : [],
   }));
 
   return (
