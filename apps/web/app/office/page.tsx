@@ -12,15 +12,20 @@ import {
 } from '@kommessa/ui';
 import {
   Activity,
+  AlertCircle,
   ArrowUpRight,
   Briefcase,
+  Calendar,
   Camera,
   CheckCircle2,
+  CircleDot,
   Clock,
   FileWarning,
+  Flame,
   ShieldAlert,
   Sparkles,
 } from 'lucide-react';
+import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
 import { SectionHeader } from '../_components/section-header';
 import { EmptyState } from '../_components/empty-state';
@@ -106,6 +111,19 @@ export default async function DashboardPage() {
         </div>
         <Suspense fallback={<RiskSkeleton />}>
           <RiskSection />
+        </Suspense>
+      </section>
+
+      {/* ===== TODO urgenti cross-commesse ===== */}
+      <section className="space-y-4">
+        <SectionHeader
+          eyebrow="Lavori"
+          title="TODO urgenti aperti"
+          description="Cose da fare con priorità alta/urgente o scadute, su tutte le commesse attive."
+          icon={<CircleDot />}
+        />
+        <Suspense fallback={<TodoUrgentiSkeleton />}>
+          <TodoUrgentiSection />
         </Suspense>
       </section>
 
@@ -319,6 +337,167 @@ async function TimelineSection() {
             </li>
           ))}
         </ol>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* TODO urgenti cross-commesse                                         */
+/* ------------------------------------------------------------------ */
+
+async function TodoUrgentiSection() {
+  const supabase = createServerSupabase();
+  // Carica tutti i TODO aperti/in_corso del tenant, sort lato JS per
+  // priorità + scadenza. RLS limita al tenant corrente.
+  const { data } = await supabase
+    .from('commessa_todo' as never)
+    .select(
+      `id, titolo, priorita, scadenza_at, stato, commessa_id, assegnato_a,
+       commessa:commesse!commessa_todo_commessa_id_fkey ( codice_interno, cliente:clienti ( ragione_sociale ) ),
+       assegnato:users!commessa_todo_assegnato_a_fkey ( display_name )`,
+    )
+    .in('stato', ['aperto', 'in_corso'])
+    .limit(200);
+
+  const now = Date.now();
+  type Row = {
+    id: string;
+    titolo: string;
+    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    scadenza_at: string | null;
+    commessa_id: string;
+    codice_interno: string | null;
+    cliente_nome: string | null;
+    assegnato_nome: string | null;
+    isScaduto: boolean;
+  };
+  const priOrder: Record<Row['priorita'], number> = {
+    urgente: 0,
+    alta: 1,
+    media: 2,
+    bassa: 3,
+  };
+  const rows: Row[] = ((data ?? []) as Array<any>)
+    .map((t) => {
+      const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
+      const cli = comm
+        ? Array.isArray(comm.cliente)
+          ? comm.cliente[0]
+          : comm.cliente
+        : null;
+      const ass = Array.isArray(t.assegnato) ? t.assegnato[0] : t.assegnato;
+      return {
+        id: t.id as string,
+        titolo: t.titolo as string,
+        priorita: t.priorita as Row['priorita'],
+        scadenza_at: (t.scadenza_at as string | null) ?? null,
+        commessa_id: t.commessa_id as string,
+        codice_interno: (comm?.codice_interno as string | undefined) ?? null,
+        cliente_nome: (cli?.ragione_sociale as string | undefined) ?? null,
+        assegnato_nome: (ass?.display_name as string | undefined) ?? null,
+        isScaduto: t.scadenza_at
+          ? new Date(t.scadenza_at as string).getTime() < now
+          : false,
+      };
+    })
+    // Mostriamo solo quelli "urgenti": priorità alta/urgente o scaduti.
+    .filter((r) => r.isScaduto || r.priorita === 'alta' || r.priorita === 'urgente')
+    .sort((a, b) => {
+      if (a.isScaduto !== b.isScaduto) return a.isScaduto ? -1 : 1;
+      const pa = priOrder[a.priorita];
+      const pb = priOrder[b.priorita];
+      if (pa !== pb) return pa - pb;
+      return a.titolo.localeCompare(b.titolo, 'it');
+    })
+    .slice(0, 12);
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={CheckCircle2}
+        tone="primary"
+        title="Tutto in ordine"
+        description="Nessun TODO urgente o scaduto al momento. Buon lavoro!"
+      />
+    );
+  }
+
+  const META: Record<Row['priorita'], { chip: string; Icon: typeof Flame }> = {
+    urgente: {
+      chip: 'bg-red-500/15 text-red-700 border-red-500/40 dark:text-red-400',
+      Icon: Flame,
+    },
+    alta: {
+      chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400',
+      Icon: AlertCircle,
+    },
+    media: {
+      chip: 'bg-blue-500/15 text-blue-700 border-blue-500/40',
+      Icon: Clock,
+    },
+    bassa: {
+      chip: 'bg-muted text-muted-foreground border-border',
+      Icon: Clock,
+    },
+  };
+
+  return (
+    <Card>
+      <CardContent className="divide-y divide-border p-0">
+        {rows.map((r) => {
+          const m = META[r.priorita];
+          const Icon = m.Icon;
+          return (
+            <Link
+              key={r.id}
+              href={`/office/commesse/${r.commessa_id}/lavori`}
+              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+            >
+              <span
+                className={[
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border',
+                  m.chip,
+                ].join(' ')}
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{r.titolo}</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                  {r.codice_interno ? (
+                    <span className="font-mono tabular-nums">{r.codice_interno}</span>
+                  ) : null}
+                  {r.cliente_nome ? <span>· {r.cliente_nome}</span> : null}
+                  {r.assegnato_nome ? <span>· {r.assegnato_nome}</span> : null}
+                  {r.scadenza_at ? (
+                    <span className={r.isScaduto ? 'font-semibold text-destructive' : ''}>
+                      <Calendar className="mr-0.5 inline h-3 w-3" />
+                      {fmtData(r.scadenza_at)}
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </Link>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function TodoUrgentiSkeleton() {
+  return (
+    <Card>
+      <CardContent className="space-y-3 py-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-3 flex-1 rounded-full" />
+            <Skeleton className="h-3 w-24 rounded-full" />
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

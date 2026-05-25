@@ -2,14 +2,19 @@ import * as React from 'react';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import {
+  AlertCircle,
+  Briefcase,
+  Calendar,
+  Camera,
+  CheckCircle2,
   ChevronRight,
-  Plus,
+  Clock,
+  Flame,
   MapPin,
   Mic,
+  Plus,
+  Sparkles,
   TrendingUp,
-  Clock,
-  Camera,
-  Briefcase,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -244,24 +249,79 @@ async function CampoOggi({
     );
   }
 
-  const { data, error } = await supabase
-    .from('commesse')
-    .select(
-      `
-        id, codice_interno, nome_cartella, stato, is_critica,
-        cliente_indirizzo_cantiere, data_apertura,
-        cliente:clienti ( id, ragione_sociale )
-      `,
-    )
-    .in('id', assignedIds)
-    .in('stato', ['aperta', 'in_corso', 'collaudo'])
-    .order('data_apertura', { ascending: false })
-    .order('codice_interno', { ascending: false })
-    .limit(30);
+  const [commesseRes, todosRes] = await Promise.all([
+    supabase
+      .from('commesse')
+      .select(
+        `
+          id, codice_interno, nome_cartella, stato, is_critica,
+          cliente_indirizzo_cantiere, data_apertura,
+          cliente:clienti ( id, ragione_sociale )
+        `,
+      )
+      .in('id', assignedIds)
+      .in('stato', ['aperta', 'in_corso', 'collaudo'])
+      .order('data_apertura', { ascending: false })
+      .order('codice_interno', { ascending: false })
+      .limit(30),
+    // TODO assegnati al tecnico (cross-commessa) — solo aperti / in_corso.
+    // Ordino lato JS per priorità + scadenza.
+    supabase
+      .from('commessa_todo' as never)
+      .select(
+        `id, titolo, priorita, scadenza_at, commessa_id,
+         commessa:commesse!commessa_todo_commessa_id_fkey ( codice_interno )`,
+      )
+      .eq('assegnato_a', ctx.userId)
+      .in('stato', ['aperto', 'in_corso'])
+      .in('commessa_id', assignedIds)
+      .limit(50),
+  ]);
+  const { data, error } = commesseRes;
 
   if (error) {
     return <ErrorState title="Impossibile caricare le commesse" detail={error.message} />;
   }
+
+  // Ordina TODO: scaduti prima, poi per priorità (urgente→bassa), poi
+  // titolo. Limita a 8 in dashboard — i rimanenti sono dentro le commesse.
+  type TodoMini = {
+    id: string;
+    titolo: string;
+    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    scadenza_at: string | null;
+    commessa_id: string;
+    codice_interno: string | null;
+  };
+  const priOrder: Record<TodoMini['priorita'], number> = {
+    urgente: 0,
+    alta: 1,
+    media: 2,
+    bassa: 3,
+  };
+  const now = Date.now();
+  const myTodos: TodoMini[] = ((todosRes.data ?? []) as Array<any>)
+    .map((t) => {
+      const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
+      return {
+        id: t.id as string,
+        titolo: t.titolo as string,
+        priorita: t.priorita as TodoMini['priorita'],
+        scadenza_at: (t.scadenza_at as string | null) ?? null,
+        commessa_id: t.commessa_id as string,
+        codice_interno: (comm?.codice_interno as string | undefined) ?? null,
+      };
+    })
+    .sort((a, b) => {
+      const aScaduto = a.scadenza_at && new Date(a.scadenza_at).getTime() < now ? 0 : 1;
+      const bScaduto = b.scadenza_at && new Date(b.scadenza_at).getTime() < now ? 0 : 1;
+      if (aScaduto !== bScaduto) return aScaduto - bScaduto;
+      const pa = priOrder[a.priorita];
+      const pb = priOrder[b.priorita];
+      if (pa !== pb) return pa - pb;
+      return a.titolo.localeCompare(b.titolo, 'it');
+    })
+    .slice(0, 8);
 
   const rows: CommessaRow[] = ((data ?? []) as any[]).map((r) => ({
     id: r.id,
@@ -318,10 +378,30 @@ async function CampoOggi({
         </div>
       </section>
 
+      {/* Cosa fare oggi: TODO assegnati a me */}
+      {myTodos.length > 0 ? (
+        <section className="space-y-2 animate-fade-up [animation-delay:60ms]">
+          <SectionNumber
+            n={2}
+            title="Cosa fare"
+            trailing={
+              <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
+                {String(myTodos.length).padStart(2, '0')}
+              </span>
+            }
+          />
+          <ul className="space-y-1.5">
+            {myTodos.map((t) => (
+              <TodoMiniCard key={t.id} todo={t} now={now} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* Commesse */}
       <section className="space-y-3 animate-fade-up [animation-delay:80ms]">
         <SectionNumber
-          n={2}
+          n={myTodos.length > 0 ? 3 : 2}
           title="In carico"
           trailing={
             <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
@@ -481,6 +561,74 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
       />
     </Link>
   );
+}
+
+function TodoMiniCard({
+  todo,
+  now,
+}: {
+  todo: {
+    id: string;
+    titolo: string;
+    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    scadenza_at: string | null;
+    commessa_id: string;
+    codice_interno: string | null;
+  };
+  now: number;
+}) {
+  const meta = {
+    urgente: { chip: 'bg-red-500/15 text-red-700 border-red-500/40', icon: Flame },
+    alta: { chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40', icon: AlertCircle },
+    media: { chip: 'bg-blue-500/15 text-blue-700 border-blue-500/40', icon: Clock },
+    bassa: { chip: 'bg-muted text-muted-foreground border-border', icon: Clock },
+  }[todo.priorita];
+  const Icon = meta.icon;
+  const isScaduto =
+    todo.scadenza_at && new Date(todo.scadenza_at).getTime() < now;
+  return (
+    <li>
+      <Link
+        href={`/mobile/commessa/${todo.commessa_id}#lavori`}
+        className="flex items-center gap-2 rounded-md border border-border bg-card p-2.5 transition-colors active:bg-muted"
+      >
+        <span
+          className={[
+            'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
+            meta.chip,
+          ].join(' ')}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium leading-tight">{todo.titolo}</p>
+          <p className="mt-0.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            {todo.codice_interno ? (
+              <span className="tabular-nums">{todo.codice_interno}</span>
+            ) : null}
+            {todo.scadenza_at ? (
+              <span className={isScaduto ? 'font-semibold text-destructive' : ''}>
+                <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
+                {fmtScadenza(todo.scadenza_at)}
+              </span>
+            ) : null}
+          </p>
+        </div>
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+    </li>
+  );
+}
+
+function fmtScadenza(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('it-IT', {
+      day: '2-digit',
+      month: 'short',
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function CampoVuoto({ title, body }: { title: string; body: string }) {

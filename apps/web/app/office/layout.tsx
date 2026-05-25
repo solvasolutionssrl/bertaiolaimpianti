@@ -26,7 +26,15 @@ export default async function OfficeLayout({
   let ctx;
   try {
     ctx = await requireTenantContext();
-  } catch {
+  } catch (e) {
+    // Distinguiamo i due casi così l'utente non si trova con un /login
+    // ingannevole quando in realtà è loggato:
+    //   - NO_TENANT_CLAIM: di solito un platform_admin SOLVA loggato ma
+    //     senza tenant_id nel JWT. Indirizziamolo a /admin/tenants per
+    //     scegliere un tenant da impersonare.
+    //   - UNAUTHENTICATED: nessuna sessione → /login.
+    const msg = e instanceof Error ? e.message : '';
+    if (msg === 'NO_TENANT_CLAIM') redirect('/admin/tenants?reason=pick_tenant');
     redirect('/login');
   }
 

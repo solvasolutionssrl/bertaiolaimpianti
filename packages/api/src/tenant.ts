@@ -26,6 +26,13 @@ export interface TenantContext {
  * Throws if unauthenticated. Use in Server Components / Server Actions
  * where authentication is required.
  *
+ * IMPERSONATION: il sistema di impersonation è in `apps/web/app/admin/
+ * _actions/tenants.ts` (`impersonateUser`/`endImpersonation`). Funziona
+ * via JWT swap (magic-link + verifyOtp) → riscrive i cookie sb-*-auth-token
+ * con la sessione del target user. Risultato: `requireTenantContext` legge
+ * naturalmente i claim del target dal nuovo JWT, senza override custom.
+ * Per il banner UI vedi `apps/web/app/office/_components/impersonation-banner.tsx`.
+ *
  * NOTA performance: chiamata ripetuta in layout + page nella stessa
  * request porta a multiple chiamate a `auth.getUser()`. Gli app consumer
  * dovrebbero wrappare in `React.cache` (es. `apps/web` lo fa via

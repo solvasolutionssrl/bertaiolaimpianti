@@ -38,6 +38,10 @@ import {
   CommessaTodoMobile,
   type TodoMobileRow,
 } from './_components/commessa-todo-mobile';
+import {
+  CommessaRiunioniMobile,
+  type RiunioneMobileRow,
+} from './_components/commessa-riunioni-mobile';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
 import { TecniciMobile } from './_components/tecnici-mobile';
@@ -146,10 +150,21 @@ export default async function CommessaDetailPage({
     .order('sort_order', { ascending: true })
     .limit(200);
 
-  const [fotoRes, updatesRes, todoRes] = await Promise.all([
+  // 4-ter) Riunioni della commessa (più recenti prima)
+  const riunioniQuery = supabase
+    .from('commessa_riunione' as never)
+    .select(
+      'id, data_riunione, titolo, reportino, corpo_libero, trascrizione, created_by, created_at',
+    )
+    .eq('commessa_id', params.id)
+    .order('data_riunione', { ascending: false })
+    .limit(20);
+
+  const [fotoRes, updatesRes, todoRes, riunioniRes] = await Promise.all([
     fotoQuery,
     updatesQuery,
     todoQuery,
+    riunioniQuery,
   ]);
 
   // Note dei todo (in batch) + risoluzione nomi
@@ -167,11 +182,24 @@ export default async function CommessaDetailPage({
     completato_da: string | null;
   }>;
   const todoIds = todosRaw.map((t) => t.id);
+  const riunioniRaw = (riunioniRes.data ?? []) as Array<{
+    id: string;
+    data_riunione: string;
+    titolo: string | null;
+    reportino: string | null;
+    corpo_libero: string | null;
+    trascrizione: string | null;
+    created_by: string | null;
+    created_at: string;
+  }>;
   const todoUserIds = new Set<string>();
   for (const t of todosRaw) {
     if (t.assegnato_a) todoUserIds.add(t.assegnato_a);
     if (t.created_by) todoUserIds.add(t.created_by);
     if (t.completato_da) todoUserIds.add(t.completato_da);
+  }
+  for (const r of riunioniRaw) {
+    if (r.created_by) todoUserIds.add(r.created_by);
   }
   const [noteRes, todoUsersRes] = await Promise.all([
     todoIds.length > 0
@@ -241,6 +269,16 @@ export default async function CommessaDetailPage({
   const todoApertiCount = todosMobile.filter(
     (t) => t.stato === 'aperto' || t.stato === 'in_corso',
   ).length;
+
+  const riunioniMobile: RiunioneMobileRow[] = riunioniRaw.map((r) => ({
+    id: r.id,
+    data_riunione: r.data_riunione,
+    titolo: r.titolo,
+    reportino: r.reportino,
+    corpo_libero: r.corpo_libero,
+    trascrizione: r.trascrizione,
+    created_by_nome: r.created_by ? (todoUsersMap.get(r.created_by) ?? null) : null,
+  }));
 
   const commessa = rawCommessa as any;
 
@@ -486,8 +524,10 @@ export default async function CommessaDetailPage({
               value="todo"
               className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
             >
-              TODO
-              <span className="ml-1.5 font-sans tabular-nums opacity-60">{todoApertiCount}</span>
+              Lavori
+              <span className="ml-1.5 font-sans tabular-nums opacity-60">
+                {todoApertiCount + riunioniMobile.length}
+              </span>
             </TabsTrigger>
             <TabsTrigger
               value="foto"
@@ -512,12 +552,20 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
           </TabsList>
 
-          {/* ───────────── TODO ───────────── */}
-          <TabsContent value="todo" className="mt-5">
+          {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
+          <TabsContent value="todo" className="mt-5 space-y-5">
             <CommessaTodoMobile
               todos={todosMobile}
               currentUserId={ctx.userId}
             />
+            {riunioniMobile.length > 0 ? (
+              <section>
+                <h3 className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Riunioni ({riunioniMobile.length})
+                </h3>
+                <CommessaRiunioniMobile riunioni={riunioniMobile} />
+              </section>
+            ) : null}
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}

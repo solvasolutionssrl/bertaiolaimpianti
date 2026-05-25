@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { MoreVertical, ExternalLink, Ban, RotateCcw, Link2 } from 'lucide-react';
+import { MoreVertical, ExternalLink, Ban, RotateCcw, Link2, UserCheck } from 'lucide-react';
 import {
   Button,
   DropdownMenu,
@@ -11,18 +11,20 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@kommessa/ui';
-import { sospendiTenant, riattivaTenant } from '../../_actions/tenants';
-import { useAlert } from '@/app/_components/confirm-provider';
+import { sospendiTenant, riattivaTenant, impersonate } from '../../_actions/tenants';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenantId: string;
+  tenantNome: string;
   slug: string;
   sospeso: boolean;
 }
 
-export function TenantRowActions({ tenantId, slug, sospeso }: Props) {
+export function TenantRowActions({ tenantId, tenantNome, slug, sospeso }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
+  const askConfirm = useConfirm();
   const [pending, start] = React.useTransition();
 
   return (
@@ -45,6 +47,38 @@ export function TenantRowActions({ tenantId, slug, sospeso }: Props) {
           <ExternalLink className="h-3.5 w-3.5" />
           Apri dettaglio
         </DropdownMenuItem>
+        {!sospeso ? (
+          <DropdownMenuItem
+            onSelect={async () => {
+              const ok = await askConfirm({
+                title: `Impersonare "${tenantNome}"?`,
+                description:
+                  'Entrerai in /office come admin di questo tenant. Tutte le tue azioni vengono tracciate in audit con flag platform=true. Esci con il banner in alto a destra.',
+                confirmLabel: 'Impersona',
+              });
+              if (!ok) return;
+              start(async () => {
+                try {
+                  // impersonate() fa JWT-swap (magic-link → verifyOtp) +
+                  // redirect /office. Se fallisce prima del redirect,
+                  // ritorna { ok: false, error }.
+                  const res = await impersonate(tenantId);
+                  if (res && 'ok' in res && !res.ok)
+                    await showAlert({ title: 'Errore', body: res.error });
+                } catch (e) {
+                  const msg =
+                    e instanceof Error && !e.message.includes('NEXT_REDIRECT')
+                      ? e.message
+                      : null;
+                  if (msg) await showAlert({ title: 'Errore', body: msg });
+                }
+              });
+            }}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Impersona tenant
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuSeparator />
         {sospeso ? (
           <DropdownMenuItem

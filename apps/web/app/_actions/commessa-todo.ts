@@ -7,6 +7,11 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 
+import {
+  cleanupAllegatoFiles,
+  getTodoFileRefIds,
+} from './_lib/storage-cleanup';
+
 /**
  * Server actions per gestire i TODO di una commessa.
  *
@@ -243,20 +248,16 @@ export async function riordinaTodo(input: unknown): Promise<Result> {
     return { ok: false, error: 'Solo admin/office possono riordinare' };
   }
 
+  // Una sola query atomica via RPC: aggiorna sort_order di tutta la lista
+  // in una transazione implicita (Postgres `UPDATE ... FROM unnest WITH
+  // ORDINALITY`). Vedi migration 20260101003600_todo_riordina_rpc.sql.
   const supabase = createServerSupabase();
-  // Update batch — un round per ogni id (Postgres non ha UPDATE ... FROM
-  // VALUES facile da Supabase JS). 5-10 todo aperti tipici → 10 query max.
-  let i = 0;
-  for (const id of parsed.data.idsOrdinati) {
-    i += 1;
-    const { error } = await supabase
-      .from('commessa_todo' as never)
-      .update({ sort_order: i } as never)
-      .eq('id', id)
-      .eq('commessa_id', parsed.data.commessaId);
-    if (error)
-      return { ok: false, error: `Riordino fallito su ${id}: ${error.message}` };
-  }
+  const { error } = await supabase.rpc('commessa_todo_riordina' as never, {
+    p_commessa_id: parsed.data.commessaId,
+    p_ids: parsed.data.idsOrdinati,
+  } as never);
+  if (error) return { ok: false, error: `Riordino fallito: ${error.message}` };
+
   revalidatePath(`/office/commesse/${parsed.data.commessaId}`);
   return { ok: true };
 }
@@ -283,6 +284,20 @@ export async function eliminaTodo(input: unknown): Promise<Result> {
     .maybeSingle();
   if (!todo) return { ok: false, error: 'TODO non trovato' };
   const t = todo as { commessa_id: string; titolo: string };
+
+  // Cleanup allegati su storage cloud PRIMA del delete cascade del TODO
+  // (la FK cascade rimuove i junction allegato, ma non i file_refs né i
+  // file fisici su Nextcloud).
+  const fileRefIds = await getTodoFileRefIds(parsed.data.id);
+  if (fileRefIds.length > 0) {
+    const cleanup = await cleanupAllegatoFiles({
+      tenantId: ctx.tenantId,
+      fileRefIds,
+    });
+    if (cleanup.errors.length > 0) {
+      console.warn('[eliminaTodo] cleanup errors', cleanup.errors);
+    }
+  }
 
   const { error } = await supabase
     .from('commessa_todo' as never)

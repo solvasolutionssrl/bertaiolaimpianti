@@ -159,6 +159,7 @@ export default async function TenantsListPage({ searchParams }: Props) {
                         <td className="px-4 py-3 text-right">
                           <TenantRowActions
                             tenantId={t.id}
+                            tenantNome={t.nome}
                             slug={t.slug}
                             sospeso={t.sospeso}
                           />

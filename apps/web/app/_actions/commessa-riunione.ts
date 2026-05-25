@@ -12,6 +12,10 @@ import {
   getChatModel,
   isOpenAIConfigured,
 } from '../_lib/openai';
+import {
+  cleanupAllegatoFiles,
+  getRiunioneFileRefIds,
+} from './_lib/storage-cleanup';
 
 /**
  * Server actions per le RIUNIONI di una commessa.
@@ -152,6 +156,19 @@ export async function eliminaRiunione(input: unknown): Promise<Result> {
     .eq('id', parsed.data.id)
     .maybeSingle();
   if (!r) return { ok: false, error: 'Riunione non trovata' };
+
+  // Cleanup allegati su storage cloud PRIMA del delete cascade
+  const fileRefIds = await getRiunioneFileRefIds(parsed.data.id);
+  if (fileRefIds.length > 0) {
+    const cleanup = await cleanupAllegatoFiles({
+      tenantId: ctx.tenantId,
+      fileRefIds,
+    });
+    if (cleanup.errors.length > 0) {
+      console.warn('[eliminaRiunione] cleanup errors', cleanup.errors);
+    }
+  }
+
   const { error } = await supabase
     .from('commessa_riunione' as never)
     .delete()
