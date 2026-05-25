@@ -17,7 +17,10 @@ import {
   type CreaCommessaServerInput,
   type CreaCommessaServerResult,
 } from './crea-commessa.schemas';
-import { STATUS_FOLDER_RICHIESTE } from '../_lib/commessa-stato-folder';
+import {
+  STATUS_FOLDER_RICHIESTE,
+  ensureStatusFolders,
+} from '../_lib/commessa-stato-folder';
 
 /**
  * Server Action canonica per la creazione di una commessa.
@@ -209,9 +212,34 @@ export async function creaCommessa(
   const nomeCartella = await trovaNomeCartellaLibero(supabase, ctx.tenantId, baseName);
   // Nuovo schema: la commessa nasce sempre dentro 01_Richieste; le 4 cartelle
   // di stato (Richieste / In_Lavorazione / Completate / Archivio) sono create
-  // se mancanti via initStatusFolders.
+  // se mancanti via ensureStatusFolders (lazy init, idempotente).
   const statusFolder = STATUS_FOLDER_RICHIESTE;
   const cloudFolderPath = `/${statusFolder}/${nomeCartella}/`;
+
+  // Lazy init: assicura che le 4 cartelle di stato esistano sotto la macro
+  // del tenant. Non blocchiamo se fallisce: non è critico per la creazione DB.
+  try {
+    const svcForInit = createServiceSupabase();
+    const { data: t } = await svcForInit
+      .from('tenants')
+      .select('storage_provider, storage_config')
+      .eq('id', ctx.tenantId)
+      .maybeSingle();
+    if (t?.storage_provider === 'nextcloud') {
+      const cfg = (t.storage_config as Record<string, string> | null) ?? {};
+      if (cfg.baseUrl && cfg.user && cfg.appPassword) {
+        const storage = getStorageProvider({
+          provider: 'nextcloud',
+          baseUrl: cfg.baseUrl,
+          user: cfg.user,
+          appPassword: cfg.appPassword,
+        });
+        await ensureStatusFolders(storage);
+      }
+    }
+  } catch (e) {
+    console.warn('[crea-commessa] ensureStatusFolders failed (non-fatal):', e);
+  }
 
   // 6) INSERT commessa
   const { data: commessa, error: comErr } = await supabase

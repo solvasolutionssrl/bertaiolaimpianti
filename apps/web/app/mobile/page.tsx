@@ -29,6 +29,7 @@ interface CommessaRow {
   codice_interno: string;
   nome_cartella: string;
   stato: StatoCommessa;
+  is_critica: boolean;
   cliente_indirizzo_cantiere: string | null;
   data_apertura: string;
   cliente: { id: string; ragione_sociale: string } | null;
@@ -74,7 +75,7 @@ async function GestioneDashboard({
       .from('commesse')
       .select(
         `
-          id, codice_interno, nome_cartella, stato,
+          id, codice_interno, nome_cartella, stato, is_critica,
           cliente_indirizzo_cantiere, data_apertura,
           cliente:clienti ( id, ragione_sociale )
         `,
@@ -90,6 +91,7 @@ async function GestioneDashboard({
     codice_interno: r.codice_interno,
     nome_cartella: r.nome_cartella,
     stato: r.stato as StatoCommessa,
+    is_critica: Boolean(r.is_critica),
     cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
     data_apertura: r.data_apertura,
     cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
@@ -248,6 +250,7 @@ async function CampoOggi({
     codice_interno: r.codice_interno,
     nome_cartella: r.nome_cartella,
     stato: r.stato as StatoCommessa,
+    is_critica: Boolean(r.is_critica),
     cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
     data_apertura: r.data_apertura,
     cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
@@ -437,6 +440,11 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
           <span className="font-mono text-xs font-semibold tabular-nums text-muted-foreground">
             {commessa.codice_interno}
           </span>
+          {commessa.is_critica && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-destructive/15 px-1.5 py-px font-mono text-[9px] font-bold uppercase leading-none tracking-wider text-destructive">
+              <span aria-hidden="true">●</span> Critica
+            </span>
+          )}
         </div>
         <p className="mt-1.5 truncate text-base font-semibold tracking-tight text-foreground">
           {commessa.cliente?.ragione_sociale ?? '—'}

@@ -76,3 +76,24 @@ export function buildCloudFolderPath(
 ): string {
   return `/${cloudFolderForStato(stato)}/${nomeCartella}/`;
 }
+
+/**
+ * Inizializza le 4 cartelle di stato sotto la macro-cartella del tenant.
+ * Idempotente: createFolder Nextcloud restituisce 405/409 se esistono già
+ * e l'errore viene swallow-ato dallo storage provider.
+ *
+ * Usato prima della creazione di una commessa (lazy init): nessun
+ * "setup tenant" esplicito, le cartelle compaiono al primo uso reale.
+ */
+export async function ensureStatusFolders(
+  storage: { createFolder: (path: string) => Promise<void> },
+): Promise<void> {
+  await Promise.all(
+    ALL_STATUS_FOLDERS.map((folder) =>
+      storage.createFolder(folder).catch(() => {
+        // Idempotente: ignora errori (folder già esistente, race condition, etc.)
+        // Il sync worker creerà comunque i parent path mancanti al primo upload.
+      }),
+    ),
+  );
+}

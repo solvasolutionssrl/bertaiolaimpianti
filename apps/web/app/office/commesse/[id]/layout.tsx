@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { ArrowLeft, FileText } from 'lucide-react';
-import { Button, StatoBadge } from '@impiantixplus/ui';
+import { Button } from '@impiantixplus/ui';
+import type { StatoCommessa } from '@impiantixplus/api/types';
+
 import { loadCommessa } from './_lib/get-commessa';
 import { fmtData } from '../../_lib/format';
 import { CommessaTabs } from './_components/commessa-tabs';
+import { StatoChip, StatoControls } from './_components/stato-controls';
 
 export default async function CommessaLayout({
   params,
@@ -26,14 +29,17 @@ export default async function CommessaLayout({
         Torna alla lista
       </Link>
 
-      <header className="space-y-2">
+      <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-xl font-semibold">{c.codice_interno}</h1>
           <span className="text-xl">·</span>
           <span className="text-xl font-medium">
             {cliente?.ragione_sociale ?? '—'}
           </span>
-          <StatoBadge stato={c.stato as any} />
+          <StatoChip
+            stato={c.stato as StatoCommessa}
+            isCritica={Boolean(c.is_critica)}
+          />
           <div className="ml-auto">
             <Button asChild variant="outline" size="sm" className="gap-2">
               <Link
@@ -55,6 +61,13 @@ export default async function CommessaLayout({
           <span className="text-muted-foreground">Cartella: </span>
           <span className="font-mono">{c.nome_cartella}</span>
         </p>
+
+        {/* Controlli stato + critica */}
+        <StatoControls
+          commessaId={params.id}
+          currentStato={c.stato as StatoCommessa}
+          isCritica={Boolean(c.is_critica)}
+        />
       </header>
 
       <CommessaTabs id={params.id} />

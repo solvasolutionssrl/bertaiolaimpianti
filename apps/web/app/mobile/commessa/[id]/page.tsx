@@ -72,7 +72,7 @@ export default async function CommessaDetailPage({
       `
         id, codice_interno, nome_cartella, stato, tenant_id,
         cliente_indirizzo_cantiere, cloud_folder_path,
-        descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, data_apertura,
+        descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, is_critica, data_apertura,
         cliente:clienti ( ragione_sociale, email, telefoni ),
         responsabile:users!commesse_responsabile_id_fkey ( display_name )
       `,
@@ -194,20 +194,26 @@ export default async function CommessaDetailPage({
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Indietro</span>
           </Link>
-          <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1">
-            <StatoLed stato={stato} />
-            <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
-              {{
-                aperta: 'Aperta',
-                in_corso: 'In corso',
-                collaudo: 'Collaudo',
-                bozza: 'Bozza',
-                completata: 'Completata',
-                archiviata: 'Archiviata',
-                critica: 'Critica',
-              }[stato] ?? stato}
+          <div className="inline-flex items-center gap-2">
+            {commessa.is_critica && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/25 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-destructive ring-1 ring-destructive/40">
+                <span aria-hidden="true">●</span> Critica
+              </span>
+            )}
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1">
+              <StatoLed stato={stato} />
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
+                {{
+                  aperta: 'Aperta',
+                  in_corso: 'In corso',
+                  collaudo: 'Collaudo',
+                  bozza: 'Bozza',
+                  completata: 'Completata',
+                  archiviata: 'Archiviata',
+                }[stato] ?? stato}
+              </span>
             </span>
-          </span>
+          </div>
         </div>
 
         <div className="mt-5">
