@@ -10,6 +10,7 @@ import {
   RefreshCw,
   RotateCcw,
   ShieldCheck,
+  Trash2,
   UserCheck,
   UserPlus,
 } from 'lucide-react';
@@ -37,6 +38,7 @@ import {
   cambiaRuoloTenantUser,
   creaUtenteManuale,
   disattivaUserGlobal,
+  eliminaUserGlobal,
   impostaPasswordManuale,
   invitaUtenteTenant,
   resetPasswordUser,
@@ -262,21 +264,47 @@ export function TabUtenti({
                             <Ban className="h-3.5 w-3.5" />
                           </Button>
                         ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            title="Riattiva"
-                            onClick={() =>
-                              start(async () => {
-                                const res = await attivaUserGlobal(u.id);
-                                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
-                                router.refresh();
-                              })
-                            }
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </Button>
+                          <>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              title="Riattiva"
+                              onClick={() =>
+                                start(async () => {
+                                  const res = await attivaUserGlobal(u.id);
+                                  if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
+                                  router.refresh();
+                                })
+                              }
+                            >
+                              <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              title="Elimina definitivamente"
+                              onClick={async () => {
+                                const ok = await askConfirm({
+                                  title: `Eliminare ${u.display_name ?? u.email}?`,
+                                  description:
+                                    'Operazione irreversibile. L\'utente verrà rimosso dal sistema di autenticazione e dalla tabella utenti. Lo storico (commesse, foto, TODO) resta ma con autore = "—". Da fare solo per utenti creati per errore o dipendenti usciti.',
+                                  destructive: true,
+                                  confirmLabel: 'Elimina definitivamente',
+                                });
+                                if (!ok) return;
+                                start(async () => {
+                                  const res = await eliminaUserGlobal(u.id);
+                                  if (!res.ok)
+                                    await showAlert({ title: 'Errore', body: res.error });
+                                  router.refresh();
+                                });
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </td>

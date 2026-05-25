@@ -82,6 +82,78 @@ export async function resetPasswordUser(authId: string) {
   return { ok: true as const, link: link.data.properties?.action_link ?? null };
 }
 
+// ─── Elimina utente (hard delete) ────────────────────────────────────
+//
+// Rimuove l'utente sia da `auth.users` (Supabase Auth) che da
+// `public.users` (riga applicativa). Pattern di sicurezza:
+//   1. L'utente deve essere PRIMA disattivato (`attivo=false`). Questo
+//      è un freno cognitivo per evitare delete accidentali — la UI fa
+//      "disattiva, poi conferma eliminazione".
+//   2. Non si può eliminare se stessi.
+//   3. FK con ON DELETE SET NULL su created_by/uploaded_by/ecc. fanno
+//      sì che lo storico (commesse, todo, foto) sopravviva con autore=null.
+//   4. La riga in public.users viene cancellata via cascade dalla
+//      delete su auth.users (constraint `users_id_fkey` ON DELETE CASCADE).
+//      Se per qualche motivo la cascade non parte, facciamo cleanup
+//      esplicito best-effort.
+//
+// Audit con action='delete' su entity_type='user'.
+
+export async function eliminaUserGlobal(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ctx = await requirePlatformAdmin();
+  if (userId === ctx.userId) {
+    return { ok: false, error: 'Non puoi eliminare te stesso' };
+  }
+  const supabase = createServiceSupabase();
+
+  // 1. Verifica che esista e sia disattivato
+  const { data: u } = await supabase
+    .from('users')
+    .select('id, tenant_id, attivo, display_name, is_platform_admin')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!u) return { ok: false, error: 'Utente non trovato' };
+  if (u.attivo) {
+    return {
+      ok: false,
+      error: 'Disattiva prima l\'utente, poi elimina (sicurezza)',
+    };
+  }
+
+  // 2. Elimina da auth.users — il cascade su public.users dovrebbe scattare
+  const del = await supabase.auth.admin.deleteUser(userId);
+  if (del.error) {
+    return { ok: false, error: `Delete auth fallita: ${del.error.message}` };
+  }
+
+  // 3. Cleanup difensivo public.users (se cascade non scattata)
+  await supabase.from('users').delete().eq('id', userId);
+
+  // 4. Audit (l'entity_id è ormai orfano, ma serve per il log)
+  await supabase.from('audit_events').insert({
+    tenant_id: u.tenant_id ?? null,
+    actor_user_id: ctx.userId,
+    actor_role: 'admin',
+    entity_type: 'user',
+    entity_id: userId,
+    action: 'delete',
+    before_data: {
+      display_name: u.display_name,
+      is_platform_admin: u.is_platform_admin,
+    } as Record<string, unknown>,
+    metadata: {
+      platform: true,
+      actor_email: ctx.email,
+    } as Record<string, unknown>,
+  } as never);
+
+  revalidatePath(`/admin/tenants/${u.tenant_id}`);
+  revalidatePath('/admin/utenti');
+  return { ok: true };
+}
+
 export async function disattivaUserGlobal(userId: string) {
   const ctx = await requirePlatformAdmin();
   const supabase = createServiceSupabase();
