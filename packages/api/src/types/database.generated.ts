@@ -265,6 +265,94 @@ export type Database = {
           },
         ]
       }
+      commessa_tecnici: {
+        Row: {
+          assegnato_at: string
+          assegnato_da: string | null
+          commessa_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          assegnato_at?: string
+          assegnato_da?: string | null
+          commessa_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          assegnato_at?: string
+          assegnato_da?: string | null
+          commessa_id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commessa_tecnici_assegnato_da_fkey"
+            columns: ["assegnato_da"]
+            isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_assegnato_da_fkey"
+            columns: ["assegnato_da"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_assegnato_da_fkey"
+            columns: ["assegnato_da"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_commessa_id_fkey"
+            columns: ["commessa_id"]
+            isOneToOne: false
+            referencedRelation: "commesse"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_commessa_id_fkey"
+            columns: ["commessa_id"]
+            isOneToOne: false
+            referencedRelation: "commesse_con_cliente"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "notification_preferences_effective"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_tecnici_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_with_permissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commessa_voci: {
         Row: {
           commessa_id: string
@@ -2126,6 +2214,12 @@ export type Database = {
       aggiorna_usage_snapshot: {
         Args: { p_tenant_id?: string }
         Returns: number
+      }
+      commesse_assegnate_a_me: {
+        Args: never
+        Returns: {
+          commessa_id: string
+        }[]
       }
       current_cliente_id: { Args: never; Returns: string }
       current_role: {

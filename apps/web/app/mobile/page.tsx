@@ -225,16 +225,35 @@ async function CampoOggi({
 }) {
   const supabase = createServerSupabase();
 
+  // Tecnico: vede solo le commesse a cui è assegnato (commessa_tecnici).
+  // L'assegnazione è gestita da admin/office via la pagina commessa.
+  const { data: assegnazioni } = await supabase
+    .from('commessa_tecnici')
+    .select('commessa_id')
+    .eq('user_id', ctx.userId);
+  const assignedIds = (assegnazioni ?? [])
+    .map((r) => r.commessa_id as string)
+    .filter(Boolean);
+
+  if (assignedIds.length === 0) {
+    return (
+      <CampoVuoto
+        title="Nessuna commessa assegnata"
+        body="Quando l'ufficio o l'amministratore ti assegna una commessa, la vedrai qui."
+      />
+    );
+  }
+
   const { data, error } = await supabase
     .from('commesse')
     .select(
       `
-        id, codice_interno, nome_cartella, stato,
+        id, codice_interno, nome_cartella, stato, is_critica,
         cliente_indirizzo_cantiere, data_apertura,
         cliente:clienti ( id, ragione_sociale )
       `,
     )
-    .eq('responsabile_id', ctx.userId)
+    .in('id', assignedIds)
     .in('stato', ['aperta', 'in_corso', 'collaudo'])
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
@@ -461,6 +480,28 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
         aria-hidden="true"
       />
     </Link>
+  );
+}
+
+function CampoVuoto({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex min-h-[100dvh] flex-col">
+      <Hero>
+        <HeroMeta>il tuo lavoro di oggi</HeroMeta>
+        <h1 className="mt-1 font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
+          OGGI
+        </h1>
+      </Hero>
+      <div className="px-4 pt-6">
+        <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center">
+          <span className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Briefcase className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{body}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -7,6 +7,12 @@ import { loadCommessa } from './_lib/get-commessa';
 import { fmtData } from '../../_lib/format';
 import { CommessaTabs } from './_components/commessa-tabs';
 import { StatoChip, StatoControls } from './_components/stato-controls';
+import { TecniciPanel } from './_components/tecnici-panel';
+import {
+  elencaTecniciAssegnati,
+  elencaTecniciTenant,
+} from '../../../_actions/commessa-tecnici';
+import { requireTenantContext } from '@impiantixplus/api/tenant';
 
 export default async function CommessaLayout({
   params,
@@ -16,8 +22,16 @@ export default async function CommessaLayout({
   children: React.ReactNode;
 }) {
   const c = await loadCommessa(params.id);
+  const ctx = await requireTenantContext();
   const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
+  const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
+
+  // Carica in parallelo tecnici assegnati + rosa disponibile (per il picker)
+  const [tecniciAssegnati, tecniciTenant] = await Promise.all([
+    elencaTecniciAssegnati(params.id),
+    canManageTecnici ? elencaTecniciTenant() : Promise.resolve([]),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
@@ -69,6 +83,13 @@ export default async function CommessaLayout({
           isCritica={Boolean(c.is_critica)}
         />
       </header>
+
+      <TecniciPanel
+        commessaId={params.id}
+        assigned={tecniciAssegnati}
+        available={tecniciTenant}
+        canManage={canManageTecnici}
+      />
 
       <CommessaTabs id={params.id} />
 

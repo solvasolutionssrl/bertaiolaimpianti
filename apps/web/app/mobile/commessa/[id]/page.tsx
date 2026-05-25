@@ -36,6 +36,11 @@ import {
 import { FotoTab, type FotoItem } from './_components/foto-tab';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
+import { TecniciMobile } from './_components/tecnici-mobile';
+import {
+  elencaTecniciAssegnati,
+  elencaTecniciTenant,
+} from '../../../_actions/commessa-tecnici';
 
 export async function generateMetadata({
   params,
@@ -64,6 +69,29 @@ export default async function CommessaDetailPage({
   const ctx = await guardMobile();
   const supabase = createServerSupabase();
   const canEditDettagli = ctx.role === 'admin';
+  const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
+
+  // Carica tecnici assegnati + rosa disponibile (rosa solo se admin/office)
+  const [tecniciAssegnati, tecniciTenant] = await Promise.all([
+    elencaTecniciAssegnati(params.id),
+    canManageTecnici ? elencaTecniciTenant() : Promise.resolve([]),
+  ]);
+
+  // Gate accesso per i tecnici: possono aprire solo le commesse a cui sono assegnati.
+  // Admin/office vedono tutto. Super_admin SOLVA bypassa via service role (TODO se serve).
+  if (ctx.role === 'tecnico') {
+    const { data: assign } = await supabase
+      .from('commessa_tecnici')
+      .select('commessa_id')
+      .eq('commessa_id', params.id)
+      .eq('user_id', ctx.userId)
+      .maybeSingle();
+    if (!assign) {
+      // Non assegnato: redirect alla home invece di mostrare 404 — UX più gentile.
+      const { redirect } = await import('next/navigation');
+      redirect('/mobile');
+    }
+  }
 
   // 1) Commessa + cliente + responsabile
   const { data: rawCommessa, error } = await supabase
@@ -313,6 +341,14 @@ export default async function CommessaDetailPage({
             canEdit={canEditDettagli}
           />
         </article>
+
+        {/* Pannello tecnici (sotto la card dettagli) */}
+        <TecniciMobile
+          commessaId={params.id}
+          assigned={tecniciAssegnati}
+          available={tecniciTenant}
+          canManage={canManageTecnici}
+        />
       </section>
 
       {/* ── 03 / DOCUMENTAZIONE ────────────────────────────────────────────── */}
