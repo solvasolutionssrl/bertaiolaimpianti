@@ -341,6 +341,7 @@ export type Database = {
           descrizione_ai_finale: string | null
           descrizione_ai_proposta: string | null
           id: string
+          is_critica: boolean
           nome_cartella: string
           note_iniziali: string | null
           preset_id: string | null
@@ -360,6 +361,7 @@ export type Database = {
           descrizione_ai_finale?: string | null
           descrizione_ai_proposta?: string | null
           id?: string
+          is_critica?: boolean
           nome_cartella: string
           note_iniziali?: string | null
           preset_id?: string | null
@@ -379,6 +381,7 @@ export type Database = {
           descrizione_ai_finale?: string | null
           descrizione_ai_proposta?: string | null
           id?: string
+          is_critica?: boolean
           nome_cartella?: string
           note_iniziali?: string | null
           preset_id?: string | null

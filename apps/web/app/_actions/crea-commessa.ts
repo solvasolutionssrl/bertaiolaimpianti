@@ -17,6 +17,7 @@ import {
   type CreaCommessaServerInput,
   type CreaCommessaServerResult,
 } from './crea-commessa.schemas';
+import { STATUS_FOLDER_RICHIESTE } from '../_lib/commessa-stato-folder';
 
 /**
  * Server Action canonica per la creazione di una commessa.
@@ -206,7 +207,11 @@ export async function creaCommessa(
   const baseName = `${codiceInterno}_${segCliente}_${segDesc}`;
 
   const nomeCartella = await trovaNomeCartellaLibero(supabase, ctx.tenantId, baseName);
-  const cloudFolderPath = `/${nomeCartella}/`;
+  // Nuovo schema: la commessa nasce sempre dentro 01_Richieste; le 4 cartelle
+  // di stato (Richieste / In_Lavorazione / Completate / Archivio) sono create
+  // se mancanti via initStatusFolders.
+  const statusFolder = STATUS_FOLDER_RICHIESTE;
+  const cloudFolderPath = `/${statusFolder}/${nomeCartella}/`;
 
   // 6) INSERT commessa
   const { data: commessa, error: comErr } = await supabase
