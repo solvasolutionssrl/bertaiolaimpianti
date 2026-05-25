@@ -41,6 +41,7 @@ import {
   elencaTecniciAssegnati,
   elencaTecniciTenant,
 } from '../../../_actions/commessa-tecnici';
+import { canView, loadFolderAclMap } from '../../../_lib/folder-acl';
 
 export async function generateMetadata({
   params,
@@ -172,13 +173,21 @@ export default async function CommessaDetailPage({
     }
   }
 
-  const sortedCloudEntries = (cloudEntries ?? [])
-    .filter((e) => e.name && !e.name.startsWith('.'))
-    .sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
+  // ACL filtering: nascondi le cartelle/file non visibili per il ruolo corrente.
+  const aclMapHome = await loadFolderAclMap(commessa.tenant_id, commessa.id);
+  const filteredCloudEntries = (cloudEntries ?? []).filter((e) => {
+    if (!e.name || e.name.startsWith('.')) return false;
+    // Alla root: checkPath = directory name; file alla root → permessi root (deny default)
+    const checkPath = e.isDirectory ? e.name : '';
+    if (!checkPath) return ctx.role === 'admin' || ctx.role === 'office';
+    return canView(ctx.role, checkPath, aclMapHome);
+  });
+
+  const sortedCloudEntries = filteredCloudEntries.sort((a, b) => {
+    if (a.isDirectory && !b.isDirectory) return -1;
+    if (!a.isDirectory && b.isDirectory) return 1;
+    return a.name.localeCompare(b.name);
+  });
   const cloudFileCount = sortedCloudEntries.filter((e) => !e.isDirectory).length;
   const cliente = Array.isArray(commessa.cliente) ? commessa.cliente[0] : commessa.cliente;
   const responsabile = Array.isArray(commessa.responsabile)

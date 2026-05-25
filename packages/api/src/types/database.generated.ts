@@ -198,6 +198,64 @@ export type Database = {
           },
         ]
       }
+      commessa_folder_overrides: {
+        Row: {
+          commessa_id: string
+          created_at: string
+          custom_label: string | null
+          id: string
+          path: string
+          tenant_id: string
+          updated_at: string
+          upload_roles: Database["public"]["Enums"]["app_role"][] | null
+          visible_roles: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Insert: {
+          commessa_id: string
+          created_at?: string
+          custom_label?: string | null
+          id?: string
+          path: string
+          tenant_id: string
+          updated_at?: string
+          upload_roles?: Database["public"]["Enums"]["app_role"][] | null
+          visible_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Update: {
+          commessa_id?: string
+          created_at?: string
+          custom_label?: string | null
+          id?: string
+          path?: string
+          tenant_id?: string
+          updated_at?: string
+          upload_roles?: Database["public"]["Enums"]["app_role"][] | null
+          visible_roles?: Database["public"]["Enums"]["app_role"][] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commessa_folder_overrides_commessa_id_fkey"
+            columns: ["commessa_id"]
+            isOneToOne: false
+            referencedRelation: "commesse"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_folder_overrides_commessa_id_fkey"
+            columns: ["commessa_id"]
+            isOneToOne: false
+            referencedRelation: "commesse_con_cliente"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commessa_folder_overrides_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commessa_tags: {
         Row: {
           commessa_id: string
@@ -892,6 +950,53 @@ export type Database = {
             columns: ["voce_id"]
             isOneToOne: false
             referencedRelation: "voci_catalogo"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      folder_presets: {
+        Row: {
+          created_at: string
+          id: string
+          is_system: boolean
+          label: string
+          ordine: number
+          path: string
+          tenant_id: string
+          updated_at: string
+          upload_roles: Database["public"]["Enums"]["app_role"][]
+          visible_roles: Database["public"]["Enums"]["app_role"][]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          label: string
+          ordine?: number
+          path: string
+          tenant_id: string
+          updated_at?: string
+          upload_roles?: Database["public"]["Enums"]["app_role"][]
+          visible_roles?: Database["public"]["Enums"]["app_role"][]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_system?: boolean
+          label?: string
+          ordine?: number
+          path?: string
+          tenant_id?: string
+          updated_at?: string
+          upload_roles?: Database["public"]["Enums"]["app_role"][]
+          visible_roles?: Database["public"]["Enums"]["app_role"][]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folder_presets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]

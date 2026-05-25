@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 
+import { createServerSupabase } from '@impiantixplus/api/server';
 import { createServiceSupabase } from '@impiantixplus/api/service';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
 import {
   getStorageProvider,
   type StorageProviderName,
 } from '@impiantixplus/integrations/storage';
+
+import {
+  canView,
+  loadFolderAclMap,
+  stripCommessaRoot,
+} from '../../../_lib/folder-acl';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -42,6 +49,47 @@ export async function GET(req: Request) {
     .replace(/^\/+/, '');
   if (!safePath) {
     return NextResponse.json({ error: 'path required' }, { status: 400 });
+  }
+
+  // ─── ACL CHECK ─────────────────────────────────────────────────────
+  // Schema path atteso: <01_X>/<nome_cartella>/<rest...>
+  // Trova la commessa via nome_cartella, poi verifica il ruolo sul path relativo.
+  const pathSegments = safePath.split('/');
+  if (pathSegments.length >= 2 && /^[0-9]{2}_/.test(pathSegments[0]!)) {
+    const nomeCartella = pathSegments[1]!;
+    const sb = createServerSupabase();
+    const { data: commessa } = await sb
+      .from('commesse')
+      .select('id, tenant_id')
+      .eq('nome_cartella', nomeCartella)
+      .eq('tenant_id', ctx.tenantId)
+      .maybeSingle();
+
+    if (commessa?.id) {
+      // Tecnico: deve essere assegnato alla commessa
+      if (ctx.role === 'tecnico') {
+        const { data: assign } = await sb
+          .from('commessa_tecnici')
+          .select('commessa_id')
+          .eq('commessa_id', commessa.id)
+          .eq('user_id', ctx.userId)
+          .maybeSingle();
+        if (!assign) {
+          return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+        }
+      }
+
+      // Folder ACL
+      const aclMap = await loadFolderAclMap(ctx.tenantId, commessa.id);
+      const relPath = stripCommessaRoot(safePath);
+      // Estrai SOLO la cartella, non il filename, per il check
+      const folderPath = relPath.includes('/')
+        ? relPath.split('/').slice(0, -1).join('/')
+        : '';
+      if (folderPath && !canView(ctx.role, folderPath, aclMap)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+      }
+    }
   }
 
   // Risolvi config storage del tenant via service role

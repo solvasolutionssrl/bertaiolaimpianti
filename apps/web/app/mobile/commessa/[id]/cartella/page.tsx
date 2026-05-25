@@ -18,6 +18,7 @@ import {
 import { guardMobile } from '../../../_lib/guard';
 import { Hero, HeroMeta, MetaLine } from '../../../_components/blueprint';
 import { CartellaEntries } from './_components/cartella-entries';
+import { canView, loadFolderAclMap } from '../../../../_lib/folder-acl';
 
 export const metadata: Metadata = {
   title: 'Cartella cloud',
@@ -43,7 +44,7 @@ export default async function CartellaPage({
   params: { id: string };
   searchParams?: { path?: string };
 }) {
-  await guardMobile();
+  const ctx = await guardMobile();
   const supabase = createServerSupabase();
 
   const { data: commessa } = await supabase
@@ -107,13 +108,27 @@ export default async function CartellaPage({
     storageError = e instanceof Error ? e.message : 'Errore nel caricamento cartella';
   }
 
-  const sortedEntries = (entries ?? [])
-    .filter((e) => e.name && !e.name.startsWith('.'))
-    .sort((a, b) => {
-      if (a.isDirectory && !b.isDirectory) return -1;
-      if (!a.isDirectory && b.isDirectory) return 1;
-      return a.name.localeCompare(b.name);
-    });
+  // Filtro ACL: rimuovi entries che il ruolo corrente non può vedere
+  // (admin/office vedono tutto; tecnico solo le cartelle classificate per il ruolo).
+  // Il filtro è basato sul path relativo alla root commessa.
+  const aclMap = await loadFolderAclMap(c.tenant_id, c.id);
+  const filteredEntries = (entries ?? []).filter((e) => {
+    if (!e.name || e.name.startsWith('.')) return false;
+    // Path relativo dell'entry rispetto alla root commessa
+    const relPath = subPath ? `${subPath}/${e.name}` : e.name;
+    // Per le directory controlliamo direttamente; per i file controlliamo
+    // la directory che li contiene (più permissivo: se vedi la cartella,
+    // vedi i file dentro).
+    const checkPath = e.isDirectory ? relPath : subPath || relPath;
+    if (!checkPath) return true;
+    return canView(ctx.role, checkPath, aclMap);
+  });
+
+  const sortedEntries = filteredEntries.sort((a, b) => {
+    if (a.isDirectory && !b.isDirectory) return -1;
+    if (!a.isDirectory && b.isDirectory) return 1;
+    return a.name.localeCompare(b.name);
+  });
 
   const breadcrumbs = buildBreadcrumbs(c.nome_cartella, subPath, params.id);
   const backHref = breadcrumbs.length > 1

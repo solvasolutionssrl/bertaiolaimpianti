@@ -8,6 +8,12 @@ import {
   getR2ProviderFromTenantConfig,
 } from '@impiantixplus/integrations/storage';
 
+import {
+  canView,
+  loadFolderAclMap,
+  stripCommessaRoot,
+} from '../../../_lib/folder-acl';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +49,7 @@ export async function GET(
   const supabase = createServerSupabase();
   const { data: ref, error } = await supabase
     .from('file_refs')
-    .select('id, tenant_id, r2_key, status, mime, filename, deleted_at')
+    .select('id, tenant_id, commessa_id, path, r2_key, status, mime, filename, deleted_at')
     .eq('id', fileRefId)
     .single();
 
@@ -62,6 +68,33 @@ export async function GET(
   }
   if (!['uploaded', 'syncing', 'synced', 'sync_failed'].includes(ref.status)) {
     return new Response('Media non disponibile', { status: 409 });
+  }
+
+  // ─── ACL CHECK ───────────────────────────────────────────────────────
+  if (ref.commessa_id) {
+    if (ctx.role === 'tecnico') {
+      // Tecnico vede solo media di commesse a cui è assegnato
+      const { data: assign } = await supabase
+        .from('commessa_tecnici')
+        .select('commessa_id')
+        .eq('commessa_id', ref.commessa_id)
+        .eq('user_id', ctx.userId)
+        .maybeSingle();
+      if (!assign) {
+        return new Response('Forbidden', { status: 403 });
+      }
+    }
+    // Folder ACL: deriva folder dal path file_refs.path
+    if (ref.path) {
+      const aclMap = await loadFolderAclMap(ctx.tenantId, ref.commessa_id);
+      const relPath = stripCommessaRoot(ref.path);
+      const folderPath = relPath.includes('/')
+        ? relPath.split('/').slice(0, -1).join('/')
+        : '';
+      if (folderPath && !canView(ctx.role, folderPath, aclMap)) {
+        return new Response('Forbidden', { status: 403 });
+      }
+    }
   }
 
   // R2 provider (tenant config con fallback env)
