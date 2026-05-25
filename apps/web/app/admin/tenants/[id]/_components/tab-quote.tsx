@@ -11,6 +11,7 @@ import {
   Label,
 } from '@impiantixplus/ui';
 import { aggiornaQuote, cambiaPiano } from '../../../_actions/quote';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Plan {
   id: string;
@@ -42,6 +43,7 @@ export function TabQuote({
   plans: Plan[];
 }) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [planId, setPlanId] = React.useState<string>(plan?.id ?? '');
   const [u, setU] = React.useState(quota?.max_utenti ?? '');
@@ -88,7 +90,7 @@ export function TabQuote({
                 start(async () => {
                   if (!planId) return;
                   const res = await cambiaPiano(tenantId, planId);
-                  if (!res.ok) alert(res.error);
+                  if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                   router.refresh();
                 })
               }
@@ -159,7 +161,7 @@ export function TabQuote({
                     max_tickets_mese: parseN(k),
                     note: note || null,
                   });
-                  if (!res.ok) alert(res.error);
+                  if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                   router.refresh();
                 })
               }

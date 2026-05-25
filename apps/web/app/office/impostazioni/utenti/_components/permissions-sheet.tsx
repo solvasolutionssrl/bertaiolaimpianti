@@ -18,6 +18,7 @@ import type {
 } from '@impiantixplus/api/types';
 import type { AppRole } from '@impiantixplus/api';
 import { salvaPermessi } from '../_actions/permissions';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   open: boolean;
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export function PermissionsSheet({ open, onClose, userId, userName, role, overrides }: Props) {
+  const showAlert = useAlert();
   const defaults = getRoleDefaultPermissions(role);
 
   // Local state: current selection per area (starts from effective = defaults merged with overrides)
@@ -85,7 +87,7 @@ export function PermissionsSheet({ open, onClose, userId, userName, role, overri
         setSaved(true);
         setTimeout(onClose, 800);
       } catch (e) {
-        alert(e instanceof Error ? e.message : 'Errore nel salvataggio.');
+        await showAlert({ title: 'Errore', body: e instanceof Error ? e.message : 'Errore nel salvataggio.' });
       }
     });
   }

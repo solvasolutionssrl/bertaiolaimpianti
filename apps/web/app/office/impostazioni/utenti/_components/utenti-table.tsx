@@ -28,6 +28,7 @@ import { InviteDialog } from './invite-dialog';
 import { PermissionsSheet } from './permissions-sheet';
 import type { AppRole } from '@impiantixplus/api';
 import type { UserPermissionOverrides } from '@impiantixplus/api/types';
+import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 
 export interface UtenteRow {
   id: string;
@@ -91,6 +92,8 @@ export function UtentiTable({
   currentUserId: string;
 }) {
   const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
   const [pending, start] = useTransition();
   const [inviteOpen, setInviteOpen] = useState(false);
 
@@ -254,7 +257,7 @@ export function UtentiTable({
                                         await cambiaRuolo({ userId: u.id, role: r.value });
                                         router.refresh();
                                       } catch (e) {
-                                        alert(e instanceof Error ? e.message : 'Errore');
+                                        await showAlert({ title: 'Errore', body: e instanceof Error ? e.message : 'Errore' });
                                       }
                                     })
                                   }
@@ -277,14 +280,14 @@ export function UtentiTable({
                                 <DropdownMenuItem
                                   disabled={isSelf}
                                   className="text-destructive focus:text-destructive"
-                                  onSelect={() => {
-                                    if (!confirm(`Disattivare ${u.display_name ?? u.email}?`)) return;
+                                  onSelect={async () => {
+                                    if (!(await askConfirm({ title: `Disattivare ${u.display_name ?? u.email}?`, destructive: true }))) return;
                                     start(async () => {
                                       try {
                                         await disattivaUtente({ userId: u.id });
                                         router.refresh();
                                       } catch (e) {
-                                        alert(e instanceof Error ? e.message : 'Errore');
+                                        await showAlert({ title: 'Errore', body: e instanceof Error ? e.message : 'Errore' });
                                       }
                                     });
                                   }}
@@ -300,7 +303,7 @@ export function UtentiTable({
                                         await riattivaUtente({ userId: u.id });
                                         router.refresh();
                                       } catch (e) {
-                                        alert(e instanceof Error ? e.message : 'Errore');
+                                        await showAlert({ title: 'Errore', body: e instanceof Error ? e.message : 'Errore' });
                                       }
                                     })
                                   }

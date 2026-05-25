@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
 } from '@impiantixplus/ui';
 import { sospendiTenant, riattivaTenant } from '../../_actions/tenants';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenantId: string;
@@ -21,6 +22,7 @@ interface Props {
 
 export function TenantRowActions({ tenantId, slug, sospeso }: Props) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
 
   return (
@@ -49,7 +51,7 @@ export function TenantRowActions({ tenantId, slug, sospeso }: Props) {
             onSelect={() =>
               start(async () => {
                 const res = await riattivaTenant(tenantId);
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               })
             }
@@ -63,7 +65,7 @@ export function TenantRowActions({ tenantId, slug, sospeso }: Props) {
               const motivo = prompt('Motivo sospensione (opzionale)') ?? undefined;
               start(async () => {
                 const res = await sospendiTenant(tenantId, motivo);
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               });
             }}
@@ -73,10 +75,10 @@ export function TenantRowActions({ tenantId, slug, sospeso }: Props) {
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
-          onSelect={() => {
+          onSelect={async () => {
             const url = `${window.location.origin}/login?tenant=${slug}`;
             navigator.clipboard?.writeText(url);
-            alert(`Link onboarding copiato:\n${url}`);
+            await showAlert({ title: 'Link onboarding copiato', body: url });
           }}
         >
           <Link2 className="h-3.5 w-3.5" />

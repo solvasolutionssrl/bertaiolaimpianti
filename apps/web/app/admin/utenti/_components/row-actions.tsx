@@ -15,6 +15,7 @@ import {
   disattivaUserGlobal,
   resetPasswordUser,
 } from '../../_actions/utenti';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 export function UtentiRowActions({
   userId,
@@ -24,6 +25,7 @@ export function UtentiRowActions({
   attivo: boolean;
 }) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   return (
     <DropdownMenu>
@@ -37,8 +39,8 @@ export function UtentiRowActions({
           onSelect={() =>
             start(async () => {
               const res = await resetPasswordUser(userId);
-              if (!res.ok) alert(res.error);
-              else alert('Reset password inviato.');
+              if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
+              else await showAlert({ title: 'Email inviata', body: 'Reset password inviato.' });
             })
           }
         >
@@ -50,7 +52,7 @@ export function UtentiRowActions({
             onSelect={() =>
               start(async () => {
                 const res = await disattivaUserGlobal(userId);
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               })
             }
@@ -63,7 +65,7 @@ export function UtentiRowActions({
             onSelect={() =>
               start(async () => {
                 const res = await attivaUserGlobal(userId);
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               })
             }

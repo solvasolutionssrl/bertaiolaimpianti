@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardContent, Input, Label } from '@impiantixplus/ui';
 import { creaCliente, aggiornaCliente, eliminaCliente } from '../../_actions/clienti';
+import { useConfirm } from '@/app/_components/confirm-provider';
 
 interface Initial {
   id?: string;
@@ -22,6 +23,7 @@ interface Initial {
 
 export function ClienteForm({ initial }: { initial?: Initial }) {
   const router = useRouter();
+  const askConfirm = useConfirm();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const isEdit = Boolean(initial?.id);
@@ -180,8 +182,8 @@ export function ClienteForm({ initial }: { initial?: Initial }) {
             variant="destructive"
             size="sm"
             disabled={pending}
-            onClick={() => {
-              if (!confirm('Eliminare definitivamente questo cliente?')) return;
+            onClick={async () => {
+              if (!(await askConfirm({ title: 'Eliminare definitivamente questo cliente?', destructive: true }))) return;
               start(async () => {
                 await eliminaCliente({ id: initial.id! });
                 router.push('/office/clienti');

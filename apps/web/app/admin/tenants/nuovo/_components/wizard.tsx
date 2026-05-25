@@ -18,6 +18,7 @@ import {
   testaConnessioneStorage,
   type CreaTenantInput,
 } from '../../../_actions/tenants';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Plan {
   id: string;
@@ -43,6 +44,7 @@ function autoSlug(nome: string): string {
 
 export function NuovoTenantWizard({ plans }: Props) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [step, setStep] = React.useState<Step>(1);
   const [pending, start] = React.useTransition();
   const [errore, setErrore] = React.useState<string | null>(null);
@@ -181,10 +183,10 @@ export function NuovoTenantWizard({ plans }: Props) {
             </Button>
             <Button
               variant="outline"
-              onClick={() => {
+              onClick={async () => {
                 const url = `${window.location.origin}/login?tenant=${risultato.slug}`;
                 navigator.clipboard?.writeText(url);
-                alert(`Link onboarding copiato:\n${url}`);
+                await showAlert({ title: 'Link onboarding copiato', body: url });
               }}
             >
               <Send className="h-3.5 w-3.5" />

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Download } from 'lucide-react';
 import { Button, Input, Label } from '@impiantixplus/ui';
 import { esportaAuditCSV } from '../../_actions/audit';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenants: Array<{ id: string; slug: string; nome: string }>;
@@ -19,6 +20,7 @@ interface Props {
 
 export function AuditToolbar({ tenants, initial }: Props) {
   const router = useRouter();
+  const showAlert = useAlert();
   const params = useSearchParams();
   const [pending, start] = React.useTransition();
 
@@ -40,7 +42,7 @@ export function AuditToolbar({ tenants, initial }: Props) {
         limit: 5000,
       });
       if (!res.ok) {
-        alert(res.error);
+        await showAlert({ title: 'Errore', body: res.error });
         return;
       }
       const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });

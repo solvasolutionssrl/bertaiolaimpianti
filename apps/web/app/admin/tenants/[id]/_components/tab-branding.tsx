@@ -11,6 +11,7 @@ import {
   Label,
 } from '@impiantixplus/ui';
 import { aggiornaTenant } from '../../../_actions/tenants';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenantId: string;
@@ -28,6 +29,7 @@ export function TabBranding({
   inboundEmail: inboundInit,
 }: Props) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [nome, setNome] = React.useState(nomeInit);
   const [colore, setColore] = React.useState(brandColor ?? '#0c2d57');
@@ -99,7 +101,7 @@ export function TabBranding({
                   brand_color: colore || null,
                   logo_url: logo || null,
                 });
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               })
             }

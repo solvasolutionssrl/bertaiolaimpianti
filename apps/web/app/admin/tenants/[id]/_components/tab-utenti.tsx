@@ -25,6 +25,7 @@ import {
   cambiaRuoloTenantUser,
 } from '../../../_actions/utenti';
 import { impersonateUser } from '../../../_actions/tenants';
+import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 
 interface UtenteRow {
   id: string;
@@ -45,6 +46,8 @@ export function TabUtenti({
   utenti: UtenteRow[];
 }) {
   const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
   const [open, setOpen] = React.useState(false);
   const [pending, start] = React.useTransition();
   const [nome, setNome] = React.useState('');
@@ -94,7 +97,7 @@ export function TabUtenti({
                         onChange={(e) =>
                           start(async () => {
                             const res = await cambiaRuoloTenantUser(u.id, e.target.value);
-                            if (!res.ok) alert(res.error);
+                            if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                             router.refresh();
                           })
                         }
@@ -124,11 +127,12 @@ export function TabUtenti({
                             variant="ghost"
                             className="h-7 w-7"
                             title={`Impersona ${u.display_name ?? u.email} (JWT shadow)`}
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                !confirm(
-                                  `Entrare come ${u.display_name ?? u.email}?\n\nTutte le azioni saranno tracciate in audit a tuo nome.`,
-                                )
+                                !(await askConfirm({
+                                  title: `Entrare come ${u.display_name ?? u.email}?`,
+                                  description: 'Tutte le azioni saranno tracciate in audit a tuo nome.',
+                                }))
                               )
                                 return;
                               start(async () => {
@@ -136,7 +140,7 @@ export function TabUtenti({
                                   tenantId,
                                   targetUserId: u.id,
                                 });
-                                if (res && 'ok' in res && !res.ok) alert(res.error);
+                                if (res && 'ok' in res && !res.ok) await showAlert({ title: 'Errore', body: res.error });
                               });
                             }}
                           >
@@ -151,8 +155,8 @@ export function TabUtenti({
                           onClick={() =>
                             start(async () => {
                               const res = await resetPasswordUser(u.id);
-                              if (!res.ok) alert(res.error);
-                              else alert('Email reset inviata.');
+                              if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
+                              else await showAlert({ title: 'Email inviata', body: 'Email reset inviata.' });
                             })
                           }
                         >
@@ -167,7 +171,7 @@ export function TabUtenti({
                             onClick={() =>
                               start(async () => {
                                 const res = await disattivaUserGlobal(u.id);
-                                if (!res.ok) alert(res.error);
+                                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                                 router.refresh();
                               })
                             }
@@ -183,7 +187,7 @@ export function TabUtenti({
                             onClick={() =>
                               start(async () => {
                                 const res = await attivaUserGlobal(u.id);
-                                if (!res.ok) alert(res.error);
+                                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                                 router.refresh();
                               })
                             }

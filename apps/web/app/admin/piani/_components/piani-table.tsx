@@ -19,6 +19,7 @@ import {
   creaPiano,
   eliminaPiano,
 } from '../../_actions/plans';
+import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 
 interface Plan {
   id: string;
@@ -38,6 +39,8 @@ type EditState = Partial<Plan> & { _new?: boolean };
 
 export function PianiTable({ plans }: { plans: Plan[] }) {
   const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [edit, setEdit] = React.useState<EditState | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -128,11 +131,11 @@ export function PianiTable({ plans }: { plans: Plan[] }) {
                       variant="ghost"
                       className="h-8 w-8"
                       title="Archivia"
-                      onClick={() => {
-                        if (!confirm(`Archiviare il piano "${p.nome}"?`)) return;
+                      onClick={async () => {
+                        if (!(await askConfirm({ title: `Archiviare il piano "${p.nome}"?`, destructive: true }))) return;
                         start(async () => {
                           const res = await eliminaPiano(p.id);
-                          if (!res.ok) alert(res.error);
+                          if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                           router.refresh();
                         });
                       }}

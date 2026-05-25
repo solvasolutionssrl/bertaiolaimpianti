@@ -20,6 +20,7 @@ import {
   type PresetEdit,
   type VoceCatalogoOpt,
 } from './preset-form';
+import { useConfirm } from '@/app/_components/confirm-provider';
 
 export interface PresetRow {
   id: string;
@@ -39,6 +40,7 @@ export function PresetManager({
   canEdit: boolean;
 }) {
   const router = useRouter();
+  const askConfirm = useConfirm();
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState<PresetEdit | null>(null);
   const [open, setOpen] = useState(false);
@@ -153,8 +155,8 @@ export function PresetManager({
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onSelect={() => {
-                          if (!confirm(`Eliminare il preset "${p.nome}"?`)) return;
+                        onSelect={async () => {
+                          if (!(await askConfirm({ title: `Eliminare il preset "${p.nome}"?`, destructive: true }))) return;
                           start(async () => {
                             try {
                               await eliminaPreset({ id: p.id });

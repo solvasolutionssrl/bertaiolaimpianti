@@ -17,6 +17,7 @@ import {
   eliminaTenant,
   impersonate,
 } from '../../../_actions/tenants';
+import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenantId: string;
@@ -27,6 +28,8 @@ interface Props {
 
 export function TenantDetailHeaderActions({ tenantId, slug, nome, sospeso }: Props) {
   const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
 
   return (
@@ -58,7 +61,7 @@ export function TenantDetailHeaderActions({ tenantId, slug, nome, sospeso }: Pro
               onSelect={() =>
                 start(async () => {
                   const res = await riattivaTenant(tenantId);
-                  if (!res.ok) alert(res.error);
+                  if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                   router.refresh();
                 })
               }
@@ -72,7 +75,7 @@ export function TenantDetailHeaderActions({ tenantId, slug, nome, sospeso }: Pro
                 const motivo = prompt(`Sospendi ${nome} (${slug}) — motivo (opzionale)`) ?? undefined;
                 start(async () => {
                   const res = await sospendiTenant(tenantId, motivo);
-                  if (!res.ok) alert(res.error);
+                  if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                   router.refresh();
                 });
               }}
@@ -83,15 +86,17 @@ export function TenantDetailHeaderActions({ tenantId, slug, nome, sospeso }: Pro
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={() => {
-              const conferma = confirm(
-                `Eliminare definitivamente "${nome}" (${slug})?\n\nQuesta è una soft-delete (sospeso=true, motivo=ELIMINATO). I dati restano in DB.`,
-              );
+            onSelect={async () => {
+              const conferma = await askConfirm({
+                title: `Eliminare definitivamente "${nome}" (${slug})?`,
+                description: 'Questa è una soft-delete (sospeso=true, motivo=ELIMINATO). I dati restano in DB.',
+                destructive: true,
+              });
               if (!conferma) return;
               start(async () => {
                 const res = await eliminaTenant(tenantId);
                 if (!res.ok) {
-                  alert(res.error);
+                  await showAlert({ title: 'Errore', body: res.error });
                   return;
                 }
                 router.push('/admin/tenants');

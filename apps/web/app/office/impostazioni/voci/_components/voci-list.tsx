@@ -24,6 +24,7 @@ import {
   salvaVoceOverride,
   type VoceFormState,
 } from '../_actions/voci';
+import { useConfirm } from '@/app/_components/confirm-provider';
 
 export interface VoceCatalogo {
   id: number;
@@ -297,6 +298,7 @@ function VoceEditDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const askConfirm = useConfirm();
   const [state, formAction] = useFormState(salvaVoceOverride, initialState);
   const [pending, start] = useTransition();
 
@@ -396,8 +398,8 @@ function VoceEditDialog({
                 type="button"
                 variant="ghost"
                 disabled={pending}
-                onClick={() => {
-                  if (!confirm('Rimuovere l override e tornare al default globale?'))
+                onClick={async () => {
+                  if (!(await askConfirm({ title: 'Rimuovere l’override e tornare al default globale?', destructive: true })))
                     return;
                   start(async () => {
                     try {

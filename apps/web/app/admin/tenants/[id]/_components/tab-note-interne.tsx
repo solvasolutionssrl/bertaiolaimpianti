@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Save, Lock } from 'lucide-react';
 import { Button, Card, CardContent } from '@impiantixplus/ui';
 import { aggiornaTenant } from '../../../_actions/tenants';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 export function TabNoteInterne({
   tenantId,
@@ -14,6 +15,7 @@ export function TabNoteInterne({
   noteInterne: string;
 }) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [note, setNote] = React.useState(noteInterne);
 
@@ -45,7 +47,7 @@ export function TabNoteInterne({
                   tenantId,
                   note_interne: note || null,
                 });
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               })
             }

@@ -11,6 +11,7 @@ import {
   Label,
 } from '@impiantixplus/ui';
 import { aggiornaTenant } from '../../../_actions/tenants';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenantId: string;
@@ -20,6 +21,7 @@ interface Props {
 
 export function TabStorage({ tenantId, storageProvider, storageConfig }: Props) {
   const router = useRouter();
+  const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [provider, setProvider] = React.useState<'supabase' | 'nextcloud'>(
     storageProvider ?? 'supabase',
@@ -146,7 +148,7 @@ export function TabStorage({ tenantId, storageProvider, storageConfig }: Props) 
                   storage_provider: provider,
                   storage_config: cfg,
                 });
-                if (!res.ok) alert(res.error);
+                if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();
               })
             }

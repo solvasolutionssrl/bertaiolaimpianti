@@ -6,6 +6,7 @@ import {
   toggleNotificationPref,
   setQuietHours,
 } from './_actions/preferenze';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 export interface PrefRow {
   event_code: string;
@@ -34,6 +35,7 @@ export function PreferenzeNotifiche({
   quietStart: number | null;
   quietEnd: number | null;
 }) {
+  const showAlert = useAlert();
   const [rows, setRows] = React.useState<PrefRow[]>(initial);
   const [qStart, setQStart] = React.useState<number | null>(quietStart);
   const [qEnd, setQEnd] = React.useState<number | null>(quietEnd);
@@ -58,7 +60,7 @@ export function PreferenzeNotifiche({
           r.event_code === code ? { ...r, [channel]: !value } : r,
         ),
       );
-      alert(res.error);
+      await showAlert({ title: 'Errore', body: res.error });
     }
     setPendingKey(null);
   }
@@ -68,7 +70,7 @@ export function PreferenzeNotifiche({
     setQStart(start);
     setQEnd(end);
     const res = await setQuietHours({ start, end });
-    if (!res.ok) alert(res.error);
+    if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
     setPendingKey(null);
   }
 
