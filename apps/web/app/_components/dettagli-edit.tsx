@@ -95,29 +95,21 @@ export function DettagliEdit({ commessaId, initial, canEdit }: Props) {
 
   return (
     <>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      {/* Solo "Modifica" — l'aggiunta di note/aggiornamenti vive nella tab
+          Lavori (TODO + Riunioni). Qui resta solo il fix del testo iniziale
+          AI quando contiene errori di trascrizione. */}
+      <div className="mt-3 flex justify-end">
         <Button
           type="button"
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={startEdit}
-          className="gap-1.5"
+          className="h-7 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+          title="Correggi il testo della nota iniziale del capo"
         >
-          <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
-          Modifica
+          <PencilLine className="h-3 w-3" aria-hidden="true" />
+          Modifica testo
         </Button>
-        {initial && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={startAppend}
-            className="gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            Aggiungi nota
-          </Button>
-        )}
       </div>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>

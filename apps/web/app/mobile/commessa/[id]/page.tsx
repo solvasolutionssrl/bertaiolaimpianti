@@ -42,6 +42,7 @@ import {
   CommessaRiunioniMobile,
   type RiunioneMobileRow,
 } from './_components/commessa-riunioni-mobile';
+import { CommessaLavoriMobile } from './_components/commessa-lavori-mobile';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
 import { TecniciMobile } from './_components/tecnici-mobile';
@@ -400,26 +401,26 @@ export default async function CommessaDetailPage({
           </div>
         </div>
 
-        <div className="mt-5">
-          <HeroMeta>Commessa · {fmtData(commessa.data_apertura)}</HeroMeta>
-          <p className="mt-1 font-mono text-2xl font-bold leading-none tabular-nums text-primary-foreground">
-            {commessa.codice_interno}
+        {/* Hero compattato — meno spazio sprecato, lascia più verticale al
+            contenuto. Cliente in alto perché è quello che si cerca a colpo
+            d'occhio; codice come "etichetta" sopra. */}
+        <div className="mt-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
+            {commessa.codice_interno} · {fmtData(commessa.data_apertura)}
+            {responsabile?.display_name ? ` · Resp ${responsabile.display_name}` : ''}
           </p>
-          <h1 className="mt-3 text-2xl font-semibold leading-tight tracking-tight text-primary-foreground">
+          <h1 className="mt-1 text-lg font-semibold leading-snug tracking-tight text-primary-foreground">
             {cliente?.ragione_sociale ?? '—'}
           </h1>
           {commessa.cliente_indirizzo_cantiere && (
-            <p className="mt-1 text-sm text-primary-foreground/70">
+            <p className="mt-0.5 text-xs text-primary-foreground/70">
               {commessa.cliente_indirizzo_cantiere}
             </p>
-          )}
-          {responsabile?.display_name && (
-            <HeroMeta className="mt-2">Resp · {responsabile.display_name}</HeroMeta>
           )}
         </div>
       </Hero>
 
-      <div className="flex flex-col gap-7 px-4 pt-4">
+      <div className="flex flex-col gap-5 px-4 pt-4">
 
       {/* Azioni rapide — overlap sull'hero */}
       <section className="-mt-12 animate-fade-up">
@@ -471,18 +472,19 @@ export default async function CommessaDetailPage({
         </div>
       </section>
 
-      {/* ── 02 / DETTAGLI ──────────────────────────────────────────────────── */}
-      <section className="space-y-3 animate-fade-up [animation-delay:60ms]">
-        <SectionNumber n={2} title="Dettagli" />
-        <article className="relative overflow-hidden rounded-lg border border-border bg-card p-4 shadow-soft">
-          <CornerTicks />
+      {/* ── 02 / DETTAGLI (compatto) ─────────────────────────────────── */}
+      <section className="space-y-2 animate-fade-up [animation-delay:60ms]">
+        <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+          Nota del capo
+        </h2>
+        <article className="relative overflow-hidden rounded-lg border border-border bg-card p-3 shadow-soft">
           {/* Linea brand verticale a sinistra */}
           <span
             aria-hidden="true"
-            className="absolute left-0 top-4 bottom-4 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
+            className="absolute left-0 top-3 bottom-3 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
           />
           {dettagliTesto ? (
-            <p className="whitespace-pre-wrap pl-3 text-[15px] leading-relaxed text-foreground">
+            <p className="whitespace-pre-wrap pl-3 text-[14px] leading-relaxed text-foreground">
               {dettagliTesto}
             </p>
           ) : (
@@ -507,71 +509,73 @@ export default async function CommessaDetailPage({
         />
       </section>
 
-      {/* ── 03 / DOCUMENTAZIONE ────────────────────────────────────────────── */}
-      <section className="space-y-3 animate-fade-up [animation-delay:120ms]">
-        <SectionNumber
-          n={3}
-          title="Documentazione"
-          trailing={
-            <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-              {fotoTot + cloudFileCount + updates.length}
-            </span>
-          }
-        />
+      {/* ── 03 / Tab principali — l'utente si muove qui dentro ─────────── */}
+      <section className="animate-fade-up [animation-delay:120ms]">
         <Tabs
           defaultValue={
             todoApertiCount > 0 || riunioniMobile.length > 0 ? 'todo' : 'foto'
           }
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-4 rounded-lg border border-border bg-muted/40 p-1">
+          {/* TabsList contrastata — attiva = blu pieno con testo bianco,
+              inattive = grigio chiaro con testo soft. Tap target h-11
+              touch-friendly. */}
+          <TabsList className="grid w-full grid-cols-4 rounded-xl border border-border bg-muted p-1 shadow-soft">
             <TabsTrigger
               value="todo"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
+              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
             >
               Lavori
-              <span className="ml-1.5 font-sans tabular-nums opacity-60">
+              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
                 {todoApertiCount + riunioniMobile.length}
               </span>
             </TabsTrigger>
             <TabsTrigger
               value="foto"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
+              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
             >
               Foto
-              <span className="ml-1.5 font-sans tabular-nums opacity-60">{fotoTot}</span>
+              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+                {fotoTot}
+              </span>
             </TabsTrigger>
             <TabsTrigger
               value="file"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
+              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
             >
               File
-              <span className="ml-1.5 font-sans tabular-nums opacity-60">{cloudFileCount}</span>
+              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+                {cloudFileCount}
+              </span>
             </TabsTrigger>
             <TabsTrigger
               value="updates"
-              className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
+              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
             >
               Note
-              <span className="ml-1.5 font-sans tabular-nums opacity-60">{updates.length}</span>
+              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+                {updates.length}
+              </span>
             </TabsTrigger>
           </TabsList>
 
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="mt-5 space-y-6">
-            <CommessaTodoMobile
-              todos={todosMobile}
+          <TabsContent value="todo" className="mt-5">
+            <CommessaLavoriMobile
+              commessaId={params.id}
+              contestoCommessa={[
+                commessa.codice_interno,
+                cliente?.ragione_sociale,
+                commessa.cliente_indirizzo_cantiere,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
               currentUserId={ctx.userId}
+              canWrite={canManageTecnici}
+              todos={todosMobile}
+              riunioni={riunioniMobile}
+              tecniciTenant={tecniciTenant}
             />
-            {riunioniMobile.length > 0 ? (
-              <section>
-                <h3 className="mb-2 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
-                  <span className="inline-block h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
-                  Riunioni ({riunioniMobile.length})
-                </h3>
-                <CommessaRiunioniMobile riunioni={riunioniMobile} />
-              </section>
-            ) : null}
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
