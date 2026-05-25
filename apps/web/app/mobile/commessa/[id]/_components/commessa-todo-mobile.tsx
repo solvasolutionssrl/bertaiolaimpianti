@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   Calendar,
-  CheckCircle2,
   ChevronDown,
   Circle,
   Flame,
@@ -188,8 +187,10 @@ function TodoCard({ todo, isMine }: { todo: TodoMobileRow; isMine: boolean }) {
           type="button"
           onClick={complete}
           disabled={pending}
-          aria-label="Completa"
-          className="mt-0.5 shrink-0 rounded-full text-muted-foreground active:scale-90 disabled:opacity-50"
+          aria-label="Completa TODO"
+          // Tap target 44x44 (Apple HIG) — l'icona resta 24px ma con padding
+          // l'area attiva è grande abbastanza da non sbagliare.
+          className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-emerald-500/10 active:text-emerald-600 disabled:opacity-50"
         >
           {pending ? (
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -342,5 +343,3 @@ function fmtDataBreve(iso: string): string {
   }
 }
 
-// CheckCircle2 export to suppress lint warning of unused import in some configs
-void CheckCircle2;

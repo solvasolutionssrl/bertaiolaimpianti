@@ -406,16 +406,19 @@ async function audit(
   entityId: string,
   metadata: Record<string, unknown>,
 ) {
+  // entity_type='commessa' + entity_id=commessaId così la tab Cronologia
+  // (filtrata per entity_type='commessa') include questi eventi.
+  // L'id specifico del TODO va in metadata.todo_id.
   const supabase = createServerSupabase();
   await supabase.from('audit_events').insert({
     tenant_id: ctx.tenantId,
     actor_user_id: ctx.userId,
     actor_role: ctx.role,
-    entity_type: 'commessa_todo',
-    entity_id: entityId,
+    entity_type: 'commessa',
+    entity_id: commessaId,
     action,
     metadata: {
-      commessa_id: commessaId,
+      todo_id: entityId,
       ...metadata,
     } as unknown as never,
   });

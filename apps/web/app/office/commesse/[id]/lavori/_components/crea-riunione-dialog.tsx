@@ -39,7 +39,7 @@ import {
   materializzaTodoDaRiunione,
   type TodoProposto,
 } from '../../../../../_actions/commessa-riunione';
-import { useAlert } from '@/app/_components/confirm-provider';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { PdfCameraCapture } from '@/app/_components/pdf-camera-capture';
 
 interface Props {
@@ -82,6 +82,7 @@ export function CreaRiunioneDialog({
 }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
+  const askConfirm = useConfirm();
   const [step, setStep] = React.useState<Step>('dati');
 
   // ─── Step 1: Dati ─────────────────────────────────────────────────
@@ -196,12 +197,18 @@ export function CreaRiunioneDialog({
     });
   };
 
-  // cleanup previewUrl al unmount
+  // cleanup previewUrl al unmount.
+  // Usiamo un ref per evitare lo stale-closure bug: useEffect con deps
+  // vuoto cattura attachments=[] al mount → revoke non sarebbe mai chiamato
+  // per gli allegati aggiunti dopo. Con il ref leggiamo lo stato attuale.
+  const attachmentsRef = React.useRef(attachments);
+  React.useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
   React.useEffect(() => {
     return () => {
-      for (const a of attachments) URL.revokeObjectURL(a.previewUrl);
+      for (const a of attachmentsRef.current) URL.revokeObjectURL(a.previewUrl);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Step 3: Report AI ─────────────────────────────────────────────
@@ -322,9 +329,27 @@ export function CreaRiunioneDialog({
     trascrizione.trim().length > 0 ||
     attachments.length > 0;
 
+  // Chiusura "intelligente": se l'utente ha già contenuto o un reportino
+  // AI generato, chiediamo conferma prima di buttare via il lavoro.
+  const handleClose = async () => {
+    const hasUnsavedAI = reportino.trim().length > 0;
+    if (hasUnsavedAI || (hasContent && step !== 'dati')) {
+      const ok = await askConfirm({
+        title: 'Chiudere senza salvare?',
+        description: hasUnsavedAI
+          ? 'Il reportino AI generato e gli eventuali TODO proposti verranno persi.'
+          : 'Perderai il contenuto inserito.',
+        destructive: true,
+        confirmLabel: 'Chiudi e perdi',
+      });
+      if (!ok) return;
+    }
+    onClose();
+  };
+
   // ─── render ───────────────────────────────────────────────────────
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && void handleClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -487,19 +512,10 @@ export function CreaRiunioneDialog({
                     Camera (mobile) o galleria.
                   </p>
                 </div>
-                <AttachmentsGrid
-                  attachments={attachments.filter((a) => a.kind === 'foto')}
-                  onRemove={(idx) => {
-                    const real = attachments.findIndex(
-                      (a, i) =>
-                        a.kind === 'foto' &&
-                        attachments.filter((b, j) => b.kind === 'foto' && j <= i)
-                          .length -
-                          1 ===
-                          idx,
-                    );
-                    if (real >= 0) removeAttachment(real);
-                  }}
+                <AttachmentsGridFiltered
+                  attachments={attachments}
+                  kind="foto"
+                  onRemoveGlobalIdx={removeAttachment}
                 />
               </div>
             ) : null}
@@ -520,22 +536,10 @@ export function CreaRiunioneDialog({
                     single-page.
                   </p>
                 </div>
-                <AttachmentsGrid
-                  attachments={attachments.filter(
-                    (a) => a.kind === 'pdf_acquisito',
-                  )}
-                  onRemove={(idx) => {
-                    const real = attachments.findIndex(
-                      (a, i) =>
-                        a.kind === 'pdf_acquisito' &&
-                        attachments.filter(
-                          (b, j) => b.kind === 'pdf_acquisito' && j <= i,
-                        ).length -
-                          1 ===
-                          idx,
-                    );
-                    if (real >= 0) removeAttachment(real);
-                  }}
+                <AttachmentsGridFiltered
+                  attachments={attachments}
+                  kind="pdf_acquisito"
+                  onRemoveGlobalIdx={removeAttachment}
                 />
               </div>
             ) : null}
@@ -761,23 +765,33 @@ function StepIndicator({ step }: { step: Step }) {
   );
 }
 
-function AttachmentsGrid({
+/**
+ * Filtra gli allegati per kind, ma mantiene gli indici globali in modo
+ * che onRemove possa rimuovere la voce corretta dall'array originale.
+ */
+function AttachmentsGridFiltered({
   attachments,
-  onRemove,
+  kind,
+  onRemoveGlobalIdx,
 }: {
   attachments: AttachmentDraft[];
-  onRemove: (idx: number) => void;
+  kind: AttachmentDraft['kind'];
+  onRemoveGlobalIdx: (idx: number) => void;
 }) {
-  if (attachments.length === 0)
+  const items = attachments
+    .map((a, idx) => ({ a, idx }))
+    .filter(({ a }) => a.kind === kind);
+  if (items.length === 0) {
     return (
       <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
         Nessun allegato.
       </p>
     );
+  }
   return (
     <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {attachments.map((a, i) => (
-        <li key={i} className="relative overflow-hidden rounded-md border border-border bg-muted/20">
+      {items.map(({ a, idx }) => (
+        <li key={idx} className="relative overflow-hidden rounded-md border border-border bg-muted/20">
           {a.kind === 'foto' ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={a.previewUrl} alt={a.filename} className="aspect-square w-full object-cover" />
@@ -789,7 +803,7 @@ function AttachmentsGrid({
           )}
           <button
             type="button"
-            onClick={() => onRemove(i)}
+            onClick={() => onRemoveGlobalIdx(idx)}
             className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
             aria-label="Rimuovi"
           >

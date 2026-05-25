@@ -1,5 +1,6 @@
+import Link from 'next/link';
 import { Card, CardContent } from '@impiantixplus/ui';
-import { StickyNote, Mic } from 'lucide-react';
+import { StickyNote, Mic, Sparkles, ChevronRight } from 'lucide-react';
 import { createServerSupabase } from '@impiantixplus/api/server';
 
 import { VoiceNoteCapture } from './_components/voice-note-capture';
@@ -82,6 +83,20 @@ export default async function NoteTab({
 
   return (
     <div className="space-y-4">
+      {/* Banner: rimanda alla nuova tab Lavori per cose strutturate */}
+      <Link
+        href={`/office/commesse/${params.id}/lavori`}
+        className="flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm transition-colors hover:bg-primary/10"
+      >
+        <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
+        <span className="flex-1">
+          Per <strong>TODO assegnabili</strong> e{' '}
+          <strong>verbali di riunione</strong> con report AI, usa la tab
+          <strong> Lavori</strong>.
+        </span>
+        <ChevronRight className="h-4 w-4 text-primary" aria-hidden="true" />
+      </Link>
+
       {/* Voice capture */}
       <VoiceNoteCapture commessaId={params.id} />
 

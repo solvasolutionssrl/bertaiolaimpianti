@@ -60,7 +60,9 @@ export async function creaRiunione(
     .insert({
       tenant_id: ctx.tenantId,
       commessa_id: parsed.data.commessaId,
-      data_riunione: parsed.data.dataRiunione ?? new Date().toISOString().slice(0, 10),
+      // Default: data locale (Italia) — evita off-by-one quando si crea
+      // dopo le 22 UTC (= 23/00 ora italiana, "oggi" sarebbe già "domani UTC").
+      data_riunione: parsed.data.dataRiunione ?? localDateISO(),
       titolo: parsed.data.titolo ?? null,
       corpo_libero: parsed.data.corpoLibero ?? null,
       trascrizione: parsed.data.trascrizione ?? null,
@@ -269,7 +271,7 @@ export async function generaReportRiunione(
     };
   }
 
-  const system = `Sei un assistente che riepiloga riunioni di cantiere/sopralluogo per un'impresa di impianti idro-termo-sanitari italiani (Bertaiola Impianti).
+  const system = `Sei un assistente che riepiloga riunioni di cantiere/sopralluogo per un'impresa di impianti idro-termo-sanitari italiana.
 
 Ricevi il verbale grezzo di una riunione (può essere scritto a mano o dettato a voce, italiano). Devi produrre:
 1. un "reportino": riassunto sintetico in italiano, max 6 punti chiave, in markdown leggero (- elenco puntato, **grassetto** per evidenze). Linguaggio asciutto, tecnico, professionale.
@@ -422,6 +424,13 @@ export async function materializzaTodoDaRiunione(
 
 // ─── helpers ────────────────────────────────────────────────────────
 
+/** Data odierna in fuso Europe/Rome, formato YYYY-MM-DD. */
+function localDateISO(): string {
+  // toLocaleDateString con sv-SE produce direttamente YYYY-MM-DD; il TZ
+  // del server (Vercel di solito UTC) viene compensato.
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+}
+
 async function safeCtx() {
   try {
     return await requireTenantContext();
@@ -437,16 +446,18 @@ async function audit(
   entityId: string,
   metadata: Record<string, unknown>,
 ) {
+  // entity_type='commessa' + entity_id=commessaId così la tab Cronologia
+  // include questi eventi sotto la commessa. L'id riunione → metadata.
   const supabase = createServerSupabase();
   await supabase.from('audit_events').insert({
     tenant_id: ctx.tenantId,
     actor_user_id: ctx.userId,
     actor_role: ctx.role,
-    entity_type: 'commessa_riunione',
-    entity_id: entityId,
+    entity_type: 'commessa',
+    entity_id: commessaId,
     action,
     metadata: {
-      commessa_id: commessaId,
+      riunione_id: entityId,
       ...metadata,
     } as unknown as never,
   });

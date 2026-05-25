@@ -28,7 +28,7 @@ export default async function LavoriTab({
 
   const canWrite = ctx.role === 'admin' || ctx.role === 'office';
 
-  const [todoRes, riuRes, notaRes, auditRes, fileRes, tecniciTenant] =
+  const [todoRes, riuRes, auditRes, fileRes, tecniciTenant] =
     await Promise.all([
       supabase
         .from('commessa_todo' as never)
@@ -47,21 +47,16 @@ export default async function LavoriTab({
         .order('data_riunione', { ascending: false })
         .limit(100),
       supabase
-        .from('commessa_todo_nota' as never)
-        .select('id, todo_id, author_id, body, created_at')
-        .in(
-          'todo_id',
-          // subquery via filter? Supabase JS non supporta subquery; usiamo IN
-          // sui todo che abbiamo già caricato.
-          [],
-        )
-        .limit(0), // placeholder, riempito sotto
-      supabase
         .from('audit_events')
         .select('id, action, metadata, actor_user_id, actor_role, created_at')
         .eq('entity_type', 'commessa')
         .eq('entity_id', params.id)
-        .in('action', ['commessa.stato.cambiato', 'commessa.critica.toggle'])
+        .in('action', [
+          'commessa.stato.cambiato',
+          'commessa.critica.toggle',
+          'commessa.tecnico.assign',
+          'commessa.tecnico.unassign',
+        ])
         .order('created_at', { ascending: false })
         .limit(80),
       supabase
@@ -108,8 +103,6 @@ export default async function LavoriTab({
       .limit(500);
     note = (noteData ?? []) as typeof note;
   }
-  // Suppress unused res from initial fetch placeholder
-  void notaRes;
 
   // Risolvi nomi utente per assegnato_a, created_by, completato_da, author_id
   const userIds = new Set<string>();
@@ -169,9 +162,7 @@ export default async function LavoriTab({
   return (
     <LavoriBoard
       commessaId={params.id}
-      codiceInterno={c.codice_interno}
       currentUserId={ctx.userId}
-      currentRole={ctx.role}
       canWrite={canWrite}
       contestoCommessa={[
         c.codice_interno,

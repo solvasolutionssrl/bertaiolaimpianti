@@ -29,10 +29,7 @@ import {
   CardContent,
   cn,
 } from '@impiantixplus/ui';
-import type { AppRole } from '@impiantixplus/api';
-
 import {
-  aggiornaTodo,
   aggiungiNotaTodo,
   cambiaTodoStato,
   eliminaTodo,
@@ -114,9 +111,7 @@ interface FileView {
 
 interface Props {
   commessaId: string;
-  codiceInterno: string;
   currentUserId: string;
-  currentRole: AppRole;
   canWrite: boolean;
   contestoCommessa: string;
   todos: TodoView[];
@@ -169,9 +164,7 @@ const PRIORITA_META: Record<
 
 export function LavoriBoard({
   commessaId,
-  codiceInterno,
   currentUserId,
-  currentRole,
   canWrite,
   contestoCommessa,
   todos,
@@ -387,7 +380,6 @@ export function LavoriBoard({
                   onEdit={() => setTodoInEdit(t)}
                   onDelete={() => onDelete(t)}
                   onNoteAdded={() => router.refresh()}
-                  currentUserNome={null}
                 />
               ))}
             </ul>
@@ -438,8 +430,17 @@ export function LavoriBoard({
       {/* Timeline cronologica */}
       {timelineFiltrata.length === 0 ? (
         <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Nessun evento per questo filtro.
+          <CardContent className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+            <span>Nessun evento per questo filtro.</span>
+            {filtro !== 'tutto' && timeline.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setFiltro('tutto')}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Rimuovi filtro
+              </button>
+            ) : null}
           </CardContent>
         </Card>
       ) : (
@@ -510,8 +511,15 @@ function TodoRow({
   onEdit: () => void;
   onDelete: () => void;
   onNoteAdded: () => void;
-  currentUserNome: string | null;
 }) {
+  const fonteRiunione =
+    todo.metadata && typeof todo.metadata === 'object'
+      ? typeof (todo.metadata as { fonte?: unknown }).fonte === 'string'
+        ? ((todo.metadata as { fonte: string }).fonte.startsWith('riunione:')
+          ? 'riunione'
+          : null)
+        : null
+      : null;
   const showAlert = useAlert();
   const [expanded, setExpanded] = React.useState(false);
   const [noteOpen, setNoteOpen] = React.useState(false);
@@ -548,8 +556,9 @@ function TodoRow({
           type="button"
           onClick={onComplete}
           disabled={pending}
-          aria-label="Completa"
-          className="mt-0.5 shrink-0 rounded-full text-muted-foreground transition-colors hover:text-emerald-600 disabled:opacity-50"
+          aria-label="Completa TODO"
+          // Tap target ~44px (h-10 + padding) per touch-friendliness
+          className="-m-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-50"
         >
           <Circle className="h-5 w-5" />
         </button>
@@ -566,6 +575,16 @@ function TodoRow({
             {todo.stato === 'in_corso' ? (
               <Badge variant="outline" className="text-[10px] uppercase">
                 In corso
+              </Badge>
+            ) : null}
+            {fonteRiunione ? (
+              <Badge
+                variant="outline"
+                className="border-primary/30 bg-primary/5 text-[10px] uppercase text-primary"
+                title="TODO generato automaticamente dal report di una riunione"
+              >
+                <Sparkles className="mr-0.5 h-2.5 w-2.5" />
+                Da riunione
               </Badge>
             ) : null}
           </div>

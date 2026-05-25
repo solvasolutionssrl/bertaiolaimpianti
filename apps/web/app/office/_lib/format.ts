@@ -62,6 +62,21 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   upload: 'Caricamento',
   assign: 'Assegnazione',
   convert: 'Conversione',
+  // TODO / Riunione
+  'commessa.todo.crea': 'Creato TODO',
+  'commessa.todo.aggiorna': 'Modificato TODO',
+  'commessa.todo.completa': 'Completato TODO',
+  'commessa.todo.stato': 'Cambio stato TODO',
+  'commessa.todo.elimina': 'Eliminato TODO',
+  'commessa.riunione.crea': 'Creata riunione',
+  'commessa.riunione.elimina': 'Eliminata riunione',
+  'commessa.riunione.materializza_todo': 'Generati TODO da riunione',
+  // Stato commessa
+  'commessa.stato.cambiato': 'Cambio stato commessa',
+  'commessa.critica.toggle': 'Toggle critica',
+  // Tecnici
+  'commessa.tecnico.assign': 'Assegnato tecnico',
+  'commessa.tecnico.unassign': 'Rimosso tecnico',
 };
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
   commessa: 'commessa',
@@ -78,6 +93,21 @@ export function descriviAuditEvent(e: {
   metadata?: Record<string, unknown> | null;
 }): string {
   const azione = AUDIT_ACTION_LABELS[e.action] ?? e.action;
+  const md = e.metadata ?? {};
+
+  // Action namespacate (es. "commessa.todo.crea"): la label è già
+  // self-explanatory, aggiungiamo dettagli da metadata se sensati.
+  if (e.action.includes('.')) {
+    const titolo = (md as { titolo?: string }).titolo;
+    const fromTo =
+      (md as { from_stato?: string; to_stato?: string }).to_stato &&
+      `${(md as any).from_stato ?? '?'} → ${(md as any).to_stato}`;
+    const count = (md as { count?: number }).count;
+    const dettaglio = titolo ?? fromTo ?? (count ? `${count} TODO` : null);
+    return dettaglio ? `${azione}: ${dettaglio}` : azione;
+  }
+
+  // Action legacy (create/update/...): manteniamo la forma vecchia.
   const entita = AUDIT_ENTITY_LABELS[e.entity_type] ?? e.entity_type;
   return `${azione} ${entita} ${e.entity_id}`;
 }
