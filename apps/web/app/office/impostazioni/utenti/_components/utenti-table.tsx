@@ -41,19 +41,15 @@ export interface UtenteRow {
 }
 
 const ROLE_OPTS: { value: AppRole; label: string; hint?: string }[] = [
-  { value: 'owner', label: 'Owner', hint: 'Super-admin del tenant' },
-  { value: 'admin', label: 'Admin', hint: 'Gestione operativa' },
-  { value: 'office', label: 'Office', hint: 'Ufficio / segreteria' },
-  { value: 'capo', label: 'Capo cantiere' },
-  { value: 'tecnico', label: 'Tecnico' },
-  { value: 'cliente', label: 'Cliente' },
+  { value: 'admin', label: 'Admin', hint: 'Boss / gestione completa del tenant' },
+  { value: 'office', label: 'Office', hint: 'Ufficio / backoffice' },
+  { value: 'tecnico', label: 'Tecnico', hint: 'Operativo in cantiere' },
+  { value: 'cliente', label: 'Cliente', hint: 'Portale white-label (non attivo)' },
 ];
 
 const ROLE_VARIANT: Record<AppRole, 'default' | 'secondary' | 'outline'> = {
-  owner: 'default',
   admin: 'default',
   office: 'secondary',
-  capo: 'secondary',
   tecnico: 'outline',
   cliente: 'outline',
 };

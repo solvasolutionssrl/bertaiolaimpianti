@@ -35,7 +35,7 @@ interface UtenteRow {
   created_at: string;
 }
 
-const ROLES = ['owner', 'admin', 'office', 'capo', 'tecnico'] as const;
+const ROLES = ['admin', 'office', 'tecnico'] as const;
 
 export function TabUtenti({
   tenantId,

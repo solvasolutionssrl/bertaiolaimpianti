@@ -71,21 +71,20 @@ export type EffectivePermissions = PermissionLevelMap;
 export type MobileShell = 'gestione' | 'campo';
 
 export function getMobileShell(role: string): MobileShell {
-  return ['owner', 'admin', 'office', 'capo'].includes(role) ? 'gestione' : 'campo';
+  // 'gestione' = chi gestisce il tenant (admin/office); il resto va in 'campo'.
+  return ['admin', 'office'].includes(role) ? 'gestione' : 'campo';
 }
 
 export function getRoleDefaultPermissions(role: AppRole): EffectivePermissions {
   switch (role) {
-    case 'owner':
-      return { commesse: 'full', clienti: 'full', ticket: 'full', turni: 'approve', documenti: 'full', utenti: 'full', statistiche: 'export' };
     case 'admin':
-      return { commesse: 'full', clienti: 'full', ticket: 'full', turni: 'approve', documenti: 'full', utenti: 'invite', statistiche: 'export' };
+      return { commesse: 'full', clienti: 'full', ticket: 'full', turni: 'approve', documenti: 'full', utenti: 'full', statistiche: 'export' };
     case 'office':
       return { commesse: 'edit', clienti: 'edit', ticket: 'create', turni: 'own', documenti: 'upload', utenti: 'none', statistiche: 'aggregati' };
-    case 'capo':
-      return { commesse: 'edit', clienti: 'view', ticket: 'create', turni: 'team', documenti: 'upload', utenti: 'none', statistiche: 'aggregati' };
     case 'tecnico':
       return { commesse: 'view', clienti: 'none', ticket: 'none', turni: 'own', documenti: 'view', utenti: 'none', statistiche: 'none' };
+    case 'cliente':
+      return { commesse: 'none', clienti: 'none', ticket: 'none', turni: 'none', documenti: 'none', utenti: 'none', statistiche: 'none' };
     default:
       return { commesse: 'none', clienti: 'none', ticket: 'none', turni: 'none', documenti: 'none', utenti: 'none', statistiche: 'none' };
   }

@@ -136,7 +136,7 @@ export async function creaTicketDaPortale(
       .from('users')
       .select('id')
       .eq('tenant_id', ctx.tenantId)
-      .in('role', ['office', 'admin', 'owner'])
+      .in('role', ['office', 'admin'])
       .eq('attivo', true)
       .returns<{ id: string }[]>();
     if (staff && staff.length > 0) {

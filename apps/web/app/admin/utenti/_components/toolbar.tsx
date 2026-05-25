@@ -63,7 +63,7 @@ export function UtentiToolbar({ tenants }: Props) {
         className="h-10 rounded-md border border-border bg-card px-3 text-sm"
       >
         <option value="">Tutti i ruoli</option>
-        {['owner', 'admin', 'office', 'capo', 'tecnico', 'cliente'].map((r) => (
+        {['admin', 'office', 'tecnico', 'cliente'].map((r) => (
           <option key={r} value={r}>
             {r}
           </option>

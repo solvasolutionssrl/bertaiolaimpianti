@@ -47,7 +47,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function AttivitaPage() {
   const ctx = await guardMobile();
-  const isAdminLike = ctx.role === 'admin' || ctx.role === 'owner';
+  const isAdminLike = ctx.role === 'admin' || ctx.role === 'office';
 
   // audit_events ha RLS che potrebbe non includere admin/owner per default
   // → usiamo service-role e filtriamo manualmente per tenant + ruolo.

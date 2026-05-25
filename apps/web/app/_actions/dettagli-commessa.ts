@@ -41,8 +41,8 @@ export async function aggiornaDettagliCommessa(
     return { ok: false, error: 'Sessione non valida' };
   }
 
-  if (ctx.role !== 'admin' && ctx.role !== 'owner') {
-    return { ok: false, error: 'Solo admin/owner possono modificare i dettagli' };
+  if (ctx.role !== 'admin') {
+    return { ok: false, error: 'Solo gli admin possono modificare i dettagli' };
   }
 
   const supabase = createServerSupabase();

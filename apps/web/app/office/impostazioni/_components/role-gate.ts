@@ -1,6 +1,6 @@
 import type { AppRole, TenantContext } from '@impiantixplus/api';
 
-export const ROLES_ADMIN: ReadonlyArray<AppRole> = ['owner', 'admin'];
+export const ROLES_ADMIN: ReadonlyArray<AppRole> = ['admin'];
 
 export function canManageTenant(ctx: { role: AppRole }): boolean {
   return ROLES_ADMIN.includes(ctx.role);

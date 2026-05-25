@@ -98,10 +98,9 @@ async function GestioneDashboard({
   }));
 
   const roleLabel: Record<string, string> = {
-    owner: 'Owner',
     admin: 'Amministratore',
     office: 'Ufficio',
-    capo: 'Capo cantiere',
+    tecnico: 'Tecnico',
   };
 
   return (

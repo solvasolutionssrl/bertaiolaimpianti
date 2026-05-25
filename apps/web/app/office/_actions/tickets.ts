@@ -83,10 +83,8 @@ export async function inviaMessaggio(input: z.infer<typeof inviaMessaggioInput>)
   // marchiamo first_response_at. I ruoli "cliente" non contano come risposta.
   // Stessa update tocca updated_at; saltiamo se non staff o nota interna.
   const isStaff =
-    ctx.role === 'owner' ||
     ctx.role === 'admin' ||
     ctx.role === 'office' ||
-    ctx.role === 'capo' ||
     ctx.role === 'tecnico';
 
   const updates: Record<string, string> = {
@@ -115,10 +113,10 @@ export async function inviaMessaggio(input: z.infer<typeof inviaMessaggioInput>)
 // SLA + assegnazione round-robin
 // ---------------------------------------------------------------------------
 
-const STAFF_ROLES = ['owner', 'admin', 'office', 'capo'] as const;
+const STAFF_ROLES = ['admin', 'office', 'tecnico'] as const;
 
 function assertOfficeRole(role: string): void {
-  if (role !== 'owner' && role !== 'admin' && role !== 'office') {
+  if (role !== 'admin' && role !== 'admin' && role !== 'office') {
     throw new Error('FORBIDDEN: solo office/admin/owner possono eseguire questa operazione.');
   }
 }

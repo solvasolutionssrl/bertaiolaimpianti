@@ -1,6 +1,17 @@
 import { createServerSupabase } from './server';
 
-export type AppRole = 'owner' | 'admin' | 'office' | 'capo' | 'tecnico' | 'cliente';
+/**
+ * Ruoli applicativi (v2 semplificata).
+ *
+ * Postgres enum app_role conserva ancora 'owner' e 'capo' come valori
+ * deprecati (non rimuovibili senza riscrivere policies/funzioni). Lato
+ * TypeScript ci limitiamo ai 4 ruoli attivi: chi legge un valore legacy
+ * dal DB (caso teorico, già migrato a runtime) verrà gestito come
+ * 'admin' o 'tecnico' lato applicazione.
+ *
+ * Super_admin SOLVA è ortogonale (users.is_platform_admin flag).
+ */
+export type AppRole = 'admin' | 'office' | 'tecnico' | 'cliente';
 
 export interface TenantContext {
   tenantId: string;

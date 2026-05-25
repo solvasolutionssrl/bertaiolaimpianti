@@ -50,8 +50,10 @@ export function PermissionsSheet({ open, onClose, userId, userName, role, overri
   if (!open) return null;
 
   const roleLabel: Record<AppRole, string> = {
-    owner: 'Owner', admin: 'Admin', office: 'Ufficio',
-    capo: 'Capo cantiere', tecnico: 'Tecnico', cliente: 'Cliente',
+    admin: 'Admin',
+    office: 'Ufficio',
+    tecnico: 'Tecnico',
+    cliente: 'Cliente',
   };
 
   const hasChanges = PERMISSION_AREAS.some((area) => selected[area] !== defaults[area]);

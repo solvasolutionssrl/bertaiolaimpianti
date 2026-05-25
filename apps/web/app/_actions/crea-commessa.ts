@@ -41,10 +41,8 @@ import {
  */
 
 const RUOLI_AMMESSI: ReadonlySet<AppRole> = new Set<AppRole>([
-  'owner',
   'admin',
   'office',
-  'capo',
 ]);
 
 // ---------------------------------------------------------------------

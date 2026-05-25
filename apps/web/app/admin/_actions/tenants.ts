@@ -47,7 +47,7 @@ async function auditPlatform(opts: {
   await supabase.from('audit_events').insert({
     tenant_id: opts.tenantId,
     actor_user_id: opts.actorUserId,
-    actor_role: 'owner', // placeholder: actor_role enum non ha 'platform_admin'
+    actor_role: 'admin', // placeholder: actor_role enum non ha 'platform_admin'
     entity_type: opts.entityType,
     entity_id: opts.entityId,
     action: opts.action,
@@ -150,7 +150,7 @@ export async function creaTenant(
       app_metadata: {
         tenant_id: tenant.id,
         tenant_slug: tenant.slug,
-        role: 'owner',
+        role: 'admin',
       } as never,
     });
 
@@ -158,7 +158,7 @@ export async function creaTenant(
     await supabase.from('users').insert({
       id: newAuthUserId,
       tenant_id: tenant.id,
-      role: 'owner',
+      role: 'admin',
       display_name: data.owner_name,
       attivo: true,
     } as never);
@@ -465,7 +465,7 @@ export async function impersonateUser(opts: {
       .from('users')
       .select('id')
       .eq('tenant_id', tenant.id)
-      .eq('role', 'owner')
+      .eq('role', 'admin')
       .eq('attivo', true)
       .limit(1)
       .maybeSingle();
@@ -619,7 +619,7 @@ export async function endImpersonation() {
   await svc.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: shadow.admin_user_id,
-    actor_role: 'owner', // placeholder enum
+    actor_role: 'admin', // placeholder enum
     entity_type: 'user',
     entity_id: shadow.target_user_id ?? null,
     action: 'impersonate_end',

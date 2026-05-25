@@ -39,7 +39,7 @@ const STATI_COMMESSA = [
 const idsSchema = z.array(z.string().uuid()).min(1).max(500);
 
 function assertOfficeRole(role: string): void {
-  if (role !== 'owner' && role !== 'admin' && role !== 'office') {
+  if (role !== 'admin' && role !== 'admin' && role !== 'office') {
     throw new Error('FORBIDDEN: solo office/admin/owner possono eseguire bulk action.');
   }
 }

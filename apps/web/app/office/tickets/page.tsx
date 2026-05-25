@@ -92,7 +92,7 @@ export default async function TicketsPage({
       .from('users')
       .select('id, display_name, role, attivo')
       .eq('attivo', true)
-      .in('role', ['owner', 'admin', 'office', 'capo']),
+      .in('role', ['admin', 'office', 'tecnico']),
   ]);
   let rows = error ? [] : data ?? [];
   const staff = ((staffRes.data ?? []) as any[]).map((u) => ({

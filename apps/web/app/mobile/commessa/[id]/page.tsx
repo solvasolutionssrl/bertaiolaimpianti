@@ -63,7 +63,7 @@ export default async function CommessaDetailPage({
 }) {
   const ctx = await guardMobile();
   const supabase = createServerSupabase();
-  const canEditDettagli = ctx.role === 'admin' || ctx.role === 'owner';
+  const canEditDettagli = ctx.role === 'admin';
 
   // 1) Commessa + cliente + responsabile
   const { data: rawCommessa, error } = await supabase

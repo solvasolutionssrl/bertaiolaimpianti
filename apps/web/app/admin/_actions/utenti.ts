@@ -26,13 +26,13 @@ export async function invitaPlatformAdmin(email: string, displayName: string) {
   if (!uid) return { ok: false as const, error: 'auth id mancante' };
 
   await supabase.auth.admin.updateUserById(uid, {
-    app_metadata: { platform_admin: true, role: 'owner' } as never,
+    app_metadata: { platform_admin: true, role: 'admin' } as never,
   });
 
   await supabase.from('users').insert({
     id: uid,
     tenant_id: null,
-    role: 'owner',
+    role: 'admin',
     display_name: parsed.data.displayName,
     is_platform_admin: true,
     attivo: true,
@@ -41,7 +41,7 @@ export async function invitaPlatformAdmin(email: string, displayName: string) {
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'platform_admin',
     entity_id: uid,
     action: 'invite',
@@ -72,7 +72,7 @@ export async function resetPasswordUser(authId: string) {
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'user',
     entity_id: authId,
     action: 'password_reset',
@@ -94,7 +94,7 @@ export async function disattivaUserGlobal(userId: string) {
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'user',
     entity_id: userId,
     action: 'deactivate',
@@ -117,7 +117,7 @@ export async function attivaUserGlobal(userId: string) {
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'user',
     entity_id: userId,
     action: 'activate',
@@ -132,7 +132,7 @@ const invitaTenantUserSchema = z.object({
   tenantId: z.string().uuid(),
   email: z.string().email(),
   displayName: z.string().min(2).max(120),
-  role: z.enum(['owner', 'admin', 'office', 'capo', 'tecnico']),
+  role: z.enum(['admin', 'office', 'tecnico']),
 });
 
 export async function invitaUtenteTenant(input: z.infer<typeof invitaTenantUserSchema>) {
@@ -174,7 +174,7 @@ export async function invitaUtenteTenant(input: z.infer<typeof invitaTenantUserS
   await supabase.from('audit_events').insert({
     tenant_id: parsed.data.tenantId,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'user',
     entity_id: uid,
     action: 'invite',
@@ -213,7 +213,7 @@ export async function cambiaRuoloTenantUser(userId: string, role: string) {
   await supabase.from('audit_events').insert({
     tenant_id: u?.tenant_id ?? null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'user',
     entity_id: userId,
     action: 'role_change',

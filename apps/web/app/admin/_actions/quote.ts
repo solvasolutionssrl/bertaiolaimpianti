@@ -42,7 +42,7 @@ export async function aggiornaQuote(input: z.infer<typeof aggiornaQuoteSchema>) 
   await supabase.from('audit_events').insert({
     tenant_id: tenantId,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'tenant_quota',
     entity_id: tenantId,
     action: 'update',
@@ -66,7 +66,7 @@ export async function cambiaPiano(tenantId: string, planId: string) {
   await supabase.from('audit_events').insert({
     tenant_id: tenantId,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'tenant',
     entity_id: tenantId,
     action: 'plan_change',

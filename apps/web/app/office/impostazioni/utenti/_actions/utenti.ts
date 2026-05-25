@@ -8,7 +8,7 @@ import { createServiceSupabase } from '@impiantixplus/api/service';
 import { requireTenantContext } from '@impiantixplus/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
 
-const ROLE_VALUES = ['owner', 'admin', 'office', 'capo', 'tecnico', 'cliente'] as const;
+const ROLE_VALUES = ['admin', 'office', 'tecnico', 'cliente'] as const;
 
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email('Email non valida'),
@@ -126,7 +126,7 @@ export async function cambiaRuolo(input: { userId: string; role: AppRole }) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
   const parsed = roleChangeSchema.parse(input);
-  if (parsed.userId === ctx.userId && parsed.role !== 'owner' && ctx.role === 'owner') {
+  if (parsed.userId === ctx.userId && parsed.role !== 'admin' && ctx.role === 'admin') {
     throw new Error('Non puoi rimuovere il tuo ruolo di owner.');
   }
   const supabase = createServerSupabase();

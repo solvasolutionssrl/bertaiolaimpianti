@@ -33,7 +33,7 @@ export async function creaPiano(input: z.infer<typeof planSchema>) {
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'plan',
     entity_id: data.id,
     action: 'create',
@@ -60,7 +60,7 @@ export async function aggiornaPiano(
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'plan',
     entity_id: id,
     action: 'update',
@@ -85,7 +85,7 @@ export async function eliminaPiano(id: string) {
   await supabase.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: ctx.userId,
-    actor_role: 'owner',
+    actor_role: 'admin',
     entity_type: 'plan',
     entity_id: id,
     action: 'archive',

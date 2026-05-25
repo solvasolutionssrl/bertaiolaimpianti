@@ -57,10 +57,8 @@ const Input = z.object({
 });
 
 const RUOLI_AMMESSI: ReadonlySet<AppRole> = new Set<AppRole>([
-  'owner',
   'admin',
   'office',
-  'capo',
 ]);
 
 export type SpostaCommessaResult =
