@@ -109,18 +109,20 @@
 @layer utilities {
   /* ===== Backgrounds atmosferici ===== */
   .bg-grid {
+    /* Lighter grid: linee meno marcate + maglia più larga = meno "stampato",
+     * più "carta". Riduce il rumore visivo sul mobile senza eliminarlo. */
     background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.7) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.7) 1px, transparent 1px);
-    background-size: 32px 32px;
+      linear-gradient(to right, hsl(var(--border) / 0.45) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.45) 1px, transparent 1px);
+    background-size: 40px 40px;
   }
   .bg-grid-radial {
     background-image:
-      linear-gradient(to right, hsl(var(--border) / 0.6) 1px, transparent 1px),
-      linear-gradient(to bottom, hsl(var(--border) / 0.6) 1px, transparent 1px);
-    background-size: 28px 28px;
-    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 70%);
-            mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 70%);
+      linear-gradient(to right, hsl(var(--border) / 0.4) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.4) 1px, transparent 1px);
+    background-size: 36px 36px;
+    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 25%, transparent 65%);
+            mask-image: radial-gradient(ellipse at 50% 0%, black 25%, transparent 65%);
   }
   .bg-aurora-brand {
     background:

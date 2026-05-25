@@ -116,16 +116,16 @@ export function Hero({
         paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)',
       }}
     >
-      {/* Grid pattern texture */}
+      {/* Grid pattern texture — alleggerito (opacity + maglia più larga) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.12]"
+        className="pointer-events-none absolute inset-0 opacity-[0.07]"
         style={{
           backgroundImage:
-            'linear-gradient(to right, rgba(255,255,255,0.7) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.7) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
-          maskImage: 'radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%)',
-          WebkitMaskImage: 'radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%)',
+            'linear-gradient(to right, rgba(255,255,255,0.6) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.6) 1px, transparent 1px)',
+          backgroundSize: '36px 36px',
+          maskImage: 'radial-gradient(ellipse at 50% 0%, black 25%, transparent 70%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at 50% 0%, black 25%, transparent 70%)',
         }}
       />
       {/* Accent glow arancio in basso a destra per "vita" */}

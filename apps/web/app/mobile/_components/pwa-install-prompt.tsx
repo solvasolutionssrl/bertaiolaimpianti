@@ -12,18 +12,21 @@ import { Download, X, Share, MoreVertical } from 'lucide-react';
  *  - iOS Safari: non emette `beforeinstallprompt`, quindi rileva iOS +
  *    !standalone e mostra istruzioni "Condividi → Aggiungi alla Home".
  *  - Già installata (standalone display-mode): non mostra mai il prompt.
- *  - Dismiss "Più tardi": salva timestamp in localStorage; ripropone
- *    automaticamente dopo 30 giorni.
+ *  - Dismiss "Più tardi": una volta a sessione (sessionStorage); se chiusa,
+ *    non riappare finché non chiudi e riapri il browser/tab. In cross-session
+ *    ricompare dopo 30 giorni.
  *  - Install riuscito: salva flag permanente, mai più mostrato.
  *
  * Storage keys:
- *  - `pwa.installed`             → "1" se mai installato (mai più prompt)
- *  - `pwa.install-prompted-at`   → ISO timestamp ultimo dismiss
+ *  - `pwa.installed`              → "1" se mai installato (mai più prompt)
+ *  - `pwa.install-prompted-at`    → ISO timestamp ultimo dismiss (localStorage)
+ *  - `pwa.session-dismissed`      → "1" se dismessa in questa sessione
  *
  * Mount: nel layout /mobile, dopo SwRegistrar.
  */
 const STORAGE_INSTALLED = 'pwa.installed';
 const STORAGE_PROMPTED_AT = 'pwa.install-prompted-at';
+const SESSION_DISMISSED = 'pwa.session-dismissed';
 const REPROMPT_DAYS = 30;
 const FIRST_DELAY_MS = 8_000; // attesa minima prima di mostrare alla prima visita
 
@@ -51,7 +54,16 @@ export function PwaInstallPrompt() {
     }
     if (localStorage.getItem(STORAGE_INSTALLED) === '1') return;
 
-    // Controlla se è troppo presto per riproporre
+    // Già chiusa in questa sessione (sessionStorage persiste solo finché la
+    // tab/finestra resta aperta) → niente popup fino al prossimo riavvio.
+    // Questo evita il "ricompare ogni 15s" se l'utente naviga tra pagine.
+    try {
+      if (sessionStorage.getItem(SESSION_DISMISSED) === '1') return;
+    } catch {
+      // sessionStorage disabilitato (privacy mode) → ignora, fallback su 30g
+    }
+
+    // Controlla se è troppo presto per riproporre cross-sessione
     const lastPrompt = localStorage.getItem(STORAGE_PROMPTED_AT);
     if (lastPrompt) {
       const last = Date.parse(lastPrompt);
@@ -103,7 +115,12 @@ export function PwaInstallPrompt() {
       if (outcome === 'accepted') {
         localStorage.setItem(STORAGE_INSTALLED, '1');
       } else {
-        // Dismiss esplicito → re-prompt tra 30gg
+        // Dismiss dal prompt nativo → silenzio sessione + 30gg cross-sessione
+        try {
+          sessionStorage.setItem(SESSION_DISMISSED, '1');
+        } catch {
+          /* privacy mode */
+        }
         localStorage.setItem(STORAGE_PROMPTED_AT, new Date().toISOString());
       }
     } catch {
@@ -116,6 +133,14 @@ export function PwaInstallPrompt() {
   };
 
   const handleLater = () => {
+    // Doppio marcatore:
+    //  - sessionStorage: niente più popup in questa tab/finestra
+    //  - localStorage: silenzio di 30 giorni cross-sessione
+    try {
+      sessionStorage.setItem(SESSION_DISMISSED, '1');
+    } catch {
+      /* privacy mode */
+    }
     localStorage.setItem(STORAGE_PROMPTED_AT, new Date().toISOString());
     setShow(false);
   };
@@ -181,20 +206,24 @@ export function PwaInstallPrompt() {
               · Installa l'app ·
             </p>
 
-            {/* Icon + title */}
+            {/* Icon + title — stessa "K" della favicon (app/icon.tsx) */}
             <div className="mt-3 flex items-start gap-4">
               <div
-                className="flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-xl border border-primary/30 bg-primary text-primary-foreground shadow-glow-brand"
+                aria-hidden="true"
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl shadow-glow-brand"
                 style={{
-                  backgroundImage:
-                    'linear-gradient(to right, rgba(255,255,255,0.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.10) 1px, transparent 1px)',
-                  backgroundSize: '12px 12px',
+                  background:
+                    'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%)',
+                  color: 'white',
+                  fontSize: 44,
+                  fontWeight: 800,
+                  letterSpacing: '-0.04em',
+                  lineHeight: 1,
+                  fontFamily:
+                    'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
                 }}
               >
-                <div className="flex items-baseline font-mono font-black leading-none tracking-tightest">
-                  <span className="text-2xl text-accent">X</span>
-                  <span className="text-xl text-primary-foreground">+</span>
-                </div>
+                K
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
                 <h2

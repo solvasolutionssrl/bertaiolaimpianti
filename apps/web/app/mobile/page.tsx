@@ -129,7 +129,7 @@ async function GestioneDashboard({
           <div className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft-lg">
             <CornerTicks />
             {/* Grid pattern decorativo sullo sfondo */}
-            <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.35]" aria-hidden="true" />
+            <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.18]" aria-hidden="true" />
             <div className="relative">
               <SectionNumber
                 n={1}
