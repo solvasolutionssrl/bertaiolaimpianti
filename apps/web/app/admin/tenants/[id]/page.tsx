@@ -222,6 +222,7 @@ export default async function TenantDetailPage({
         <TabsContent value="storage">
           <TabStorage
             tenantId={tenant.id}
+            tenantNome={tenant.nome}
             storageProvider={tenant.storage_provider}
             storageConfig={tenant.storage_config ?? {}}
           />
