@@ -12,6 +12,7 @@ import {
   Clock,
   Filter,
   Flame,
+  GripVertical,
   Loader2,
   MoreHorizontal,
   PencilLine,
@@ -33,6 +34,7 @@ import {
   aggiungiNotaTodo,
   cambiaTodoStato,
   eliminaTodo,
+  riordinaTodo,
 } from '../../../../../_actions/commessa-todo';
 import { eliminaRiunione } from '../../../../../_actions/commessa-riunione';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
@@ -363,26 +365,29 @@ export function LavoriBoard({
       {todosAperti.length > 0 ? (
         <Card className="border-primary/30">
           <CardContent className="space-y-3 py-4">
-            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              <CircleDot className="h-3.5 w-3.5 text-primary" />
-              TODO aperti
+            <h2 className="flex items-center justify-between gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <CircleDot className="h-3.5 w-3.5 text-primary" />
+                TODO aperti
+              </span>
+              {canWrite && todosAperti.length > 1 ? (
+                <span className="font-mono text-[9px] normal-case text-muted-foreground/60">
+                  Trascina <GripVertical className="inline h-2.5 w-2.5" /> per riordinare
+                </span>
+              ) : null}
             </h2>
-            <ul className="space-y-2">
-              {todosAperti.map((t) => (
-                <TodoRow
-                  key={t.id}
-                  todo={t}
-                  isMine={t.assegnato_a === currentUserId}
-                  notes={noteByTodo.get(t.id) ?? []}
-                  canEdit={canWrite}
-                  pending={pending}
-                  onComplete={() => onComplete(t.id)}
-                  onEdit={() => setTodoInEdit(t)}
-                  onDelete={() => onDelete(t)}
-                  onNoteAdded={() => router.refresh()}
-                />
-              ))}
-            </ul>
+            <TodoDraggableList
+              commessaId={commessaId}
+              todos={todosAperti}
+              currentUserId={currentUserId}
+              noteByTodo={noteByTodo}
+              canWrite={canWrite}
+              pending={pending}
+              onComplete={onComplete}
+              onEdit={(t) => setTodoInEdit(t)}
+              onDelete={onDelete}
+              onNoteAdded={() => router.refresh()}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -488,6 +493,181 @@ export function LavoriBoard({
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// TodoDraggableList — wrapper con HTML5 drag-and-drop + keyboard a11y
+// ═══════════════════════════════════════════════════════════════════════
+
+function TodoDraggableList({
+  commessaId,
+  todos,
+  currentUserId,
+  noteByTodo,
+  canWrite,
+  pending,
+  onComplete,
+  onEdit,
+  onDelete,
+  onNoteAdded,
+}: {
+  commessaId: string;
+  todos: TodoView[];
+  currentUserId: string;
+  noteByTodo: Map<string, NotaView[]>;
+  canWrite: boolean;
+  pending: boolean;
+  onComplete: (id: string) => void;
+  onEdit: (t: TodoView) => void;
+  onDelete: (t: TodoView) => void;
+  onNoteAdded: () => void;
+}) {
+  // Stato locale = ordine corrente in UI. Sincronizzato con `todos` quando
+  // arriva un refresh dal server. Durante un drag, lavoriamo su questo.
+  const [orderedIds, setOrderedIds] = React.useState<string[]>(
+    todos.map((t) => t.id),
+  );
+  React.useEffect(() => {
+    setOrderedIds(todos.map((t) => t.id));
+  }, [todos]);
+
+  const byId = React.useMemo(() => {
+    const m = new Map<string, TodoView>();
+    for (const t of todos) m.set(t.id, t);
+    return m;
+  }, [todos]);
+
+  const [draggingId, setDraggingId] = React.useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = React.useState<string | null>(null);
+  const router = useRouter();
+  const showAlert = useAlert();
+
+  const persistOrder = React.useCallback(
+    async (nextIds: string[]) => {
+      // Optimistic update già fatto
+      const res = await riordinaTodo({
+        commessaId,
+        idsOrdinati: nextIds,
+      });
+      if (!res.ok) {
+        await showAlert({ title: 'Errore riordino', body: res.error });
+        // Rollback: rileggi
+        router.refresh();
+      } else {
+        router.refresh();
+      }
+    },
+    [commessaId, router, showAlert],
+  );
+
+  const moveBy = (id: string, delta: -1 | 1) => {
+    setOrderedIds((curr) => {
+      const idx = curr.indexOf(id);
+      if (idx < 0) return curr;
+      const targetIdx = idx + delta;
+      if (targetIdx < 0 || targetIdx >= curr.length) return curr;
+      const next = [...curr];
+      [next[idx], next[targetIdx]] = [next[targetIdx]!, next[idx]!];
+      void persistOrder(next);
+      return next;
+    });
+  };
+
+  const onDragStart =
+    (id: string): React.DragEventHandler<HTMLButtonElement> =>
+    (e) => {
+      setDraggingId(id);
+      e.dataTransfer.effectAllowed = 'move';
+      try {
+        e.dataTransfer.setData('text/plain', id);
+      } catch {
+        /* alcuni browser strict */
+      }
+    };
+
+  const onLiDragOver =
+    (targetId: string): React.DragEventHandler<HTMLLIElement> =>
+    (e) => {
+      if (!draggingId || draggingId === targetId) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDropTargetId(targetId);
+    };
+
+  const onLiDrop =
+    (targetId: string): React.DragEventHandler<HTMLLIElement> =>
+    (e) => {
+      e.preventDefault();
+      const fromId = draggingId;
+      setDraggingId(null);
+      setDropTargetId(null);
+      if (!fromId || fromId === targetId) return;
+      setOrderedIds((curr) => {
+        const fromIdx = curr.indexOf(fromId);
+        const toIdx = curr.indexOf(targetId);
+        if (fromIdx < 0 || toIdx < 0) return curr;
+        const next = [...curr];
+        next.splice(fromIdx, 1);
+        next.splice(toIdx, 0, fromId);
+        void persistOrder(next);
+        return next;
+      });
+    };
+
+  const onDragEnd: React.DragEventHandler = () => {
+    setDraggingId(null);
+    setDropTargetId(null);
+  };
+
+  return (
+    <ul className="space-y-2" role="list">
+      {orderedIds.map((id) => {
+        const t = byId.get(id);
+        if (!t) return null;
+        const dragProps =
+          canWrite && orderedIds.length > 1
+            ? {
+                draggable: true,
+                onDragStart: onDragStart(id),
+                onDragEnd,
+                onKeyDown: (e: React.KeyboardEvent<HTMLButtonElement>) => {
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    moveBy(id, 1);
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    moveBy(id, -1);
+                  }
+                },
+              }
+            : undefined;
+        return (
+          <li
+            key={id}
+            onDragOver={canWrite ? onLiDragOver(id) : undefined}
+            onDrop={canWrite ? onLiDrop(id) : undefined}
+            onDragLeave={() => setDropTargetId(null)}
+            className="list-none"
+          >
+            <TodoRow
+              todo={t}
+              isMine={t.assegnato_a === currentUserId}
+              notes={noteByTodo.get(t.id) ?? []}
+              canEdit={canWrite}
+              pending={pending}
+              onComplete={() => onComplete(t.id)}
+              onEdit={() => onEdit(t)}
+              onDelete={() => onDelete(t)}
+              onNoteAdded={onNoteAdded}
+              dragHandleProps={dragProps}
+              isDragging={draggingId === id}
+              isDropTarget={dropTargetId === id && draggingId !== id}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // TodoRow
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -501,6 +681,9 @@ function TodoRow({
   onEdit,
   onDelete,
   onNoteAdded,
+  dragHandleProps,
+  isDragging,
+  isDropTarget,
 }: {
   todo: TodoView;
   isMine: boolean;
@@ -511,6 +694,12 @@ function TodoRow({
   onEdit: () => void;
   onDelete: () => void;
   onNoteAdded: () => void;
+  /** Props da spreadare sull'handle del drag (solo se canEdit). */
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  /** True mentre questa riga è quella trascinata. */
+  isDragging?: boolean;
+  /** True quando questa è la riga su cui rilasceremo. */
+  isDropTarget?: boolean;
 }) {
   const fonteRiunione =
     todo.metadata && typeof todo.metadata === 'object'
@@ -544,14 +733,26 @@ function TodoRow({
   };
 
   return (
-    <li
+    <div
       className={cn(
-        'group rounded-md border bg-card p-3 transition-colors',
+        'group rounded-md border bg-card p-3 transition-all',
         isMine && 'ring-2',
         isMine && meta.ring,
+        isDragging && 'opacity-40',
+        isDropTarget && 'border-primary ring-2 ring-primary/30',
       )}
     >
       <div className="flex items-start gap-3">
+        {dragHandleProps ? (
+          <button
+            type="button"
+            {...dragHandleProps}
+            aria-label="Trascina per riordinare"
+            className="-m-1 flex h-8 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground/40 transition-colors hover:text-foreground active:cursor-grabbing"
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onComplete}
@@ -724,7 +925,7 @@ function TodoRow({
           ) : null}
         </div>
       </div>
-    </li>
+    </div>
   );
 }
 
@@ -834,14 +1035,23 @@ function TimelineEntry({
               {r.created_by_nome ? ` · ${r.created_by_nome}` : ''}
             </span>
             {r.titolo ? (
-              <p className="font-medium">{r.titolo}</p>
+              <p className="flex items-center gap-1.5 font-medium">
+                {r.titolo}
+                {r.reportino ? (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
+                    <Sparkles className="h-2 w-2" />
+                    AI
+                  </span>
+                ) : null}
+              </p>
             ) : null}
             {r.reportino ? (
-              <details className="mt-1">
-                <summary className="cursor-pointer text-xs text-primary hover:underline">
-                  Mostra reportino
+              <details className="mt-1 rounded-md border border-primary/20 bg-primary/5">
+                <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">
+                  <Sparkles className="mr-1 inline h-3 w-3" />
+                  Mostra reportino AI
                 </summary>
-                <div className="mt-1 whitespace-pre-wrap rounded-md bg-muted/40 p-2 text-xs leading-relaxed">
+                <div className="whitespace-pre-wrap border-t border-primary/15 bg-card px-2 py-2 text-xs leading-relaxed">
                   {r.reportino}
                 </div>
               </details>

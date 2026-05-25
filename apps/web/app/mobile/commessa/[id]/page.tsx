@@ -558,14 +558,15 @@ export default async function CommessaDetailPage({
           </TabsList>
 
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="mt-5 space-y-5">
+          <TabsContent value="todo" className="mt-5 space-y-6">
             <CommessaTodoMobile
               todos={todosMobile}
               currentUserId={ctx.userId}
             />
             {riunioniMobile.length > 0 ? (
               <section>
-                <h3 className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                <h3 className="mb-2 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+                  <span className="inline-block h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
                   Riunioni ({riunioniMobile.length})
                 </h3>
                 <CommessaRiunioniMobile riunioni={riunioniMobile} />
