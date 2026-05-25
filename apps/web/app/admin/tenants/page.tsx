@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Building2, Plus } from 'lucide-react';
+import { Building2, Plus, UserCheck } from 'lucide-react';
 import { Badge, Button, Card, CardContent } from '@kommessa/ui';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
@@ -12,13 +12,16 @@ export const metadata = { title: 'Platform · Tenants' };
 export const dynamic = 'force-dynamic';
 
 interface Props {
-  searchParams: { q?: string };
+  searchParams: { q?: string; reason?: string };
 }
 
 export default async function TenantsListPage({ searchParams }: Props) {
   await requirePlatformAdmin();
   const supabase = createServiceSupabase();
   const q = (searchParams.q ?? '').trim();
+  // Hint mostrato quando un platform_admin viene reindirizzato qui da
+  // /office perché non ha un tenant nel proprio JWT — vedi office/layout.tsx.
+  const pickTenantHint = searchParams.reason === 'pick_tenant';
 
   let query = supabase
     .from('tenants')
@@ -76,6 +79,17 @@ export default async function TenantsListPage({ searchParams }: Props) {
           </Button>
         }
       />
+
+      {pickTenantHint ? (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm">
+          <UserCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+          <p className="flex-1">
+            Non hai un tenant nel tuo JWT. Scegli un tenant qui sotto e clicca{' '}
+            <strong>Impersona tenant</strong> nel menù delle azioni per
+            entrare in <code className="rounded bg-muted px-1 py-0.5 text-[11px] font-mono">/office</code>.
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <TenantsSearch />

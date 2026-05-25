@@ -518,7 +518,12 @@ export default async function CommessaDetailPage({
             </span>
           }
         />
-        <Tabs defaultValue={todoApertiCount > 0 ? 'todo' : 'foto'} className="w-full">
+        <Tabs
+          defaultValue={
+            todoApertiCount > 0 || riunioniMobile.length > 0 ? 'todo' : 'foto'
+          }
+          className="w-full"
+        >
           <TabsList className="grid w-full grid-cols-4 rounded-lg border border-border bg-muted/40 p-1">
             <TabsTrigger
               value="todo"
