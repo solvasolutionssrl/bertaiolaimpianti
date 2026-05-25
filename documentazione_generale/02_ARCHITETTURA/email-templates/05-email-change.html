@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="it" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+  <title>Conferma il cambio di indirizzo email</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;-webkit-font-smoothing:antialiased;">
+
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    Conferma il nuovo indirizzo email per il tuo account Kommessa.
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f5f7fb;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.06);">
+
+          <!-- Header -->
+          <tr>
+            <td align="center" style="padding:28px 24px 22px;background-color:#ffffff;border-bottom:1px solid #eef0f4;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="width:64px;height:64px;background-color:#1340A6;border-radius:14px;text-align:center;vertical-align:middle;color:#ffffff;font-size:38px;font-weight:800;letter-spacing:-0.04em;line-height:64px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">K</td>
+                </tr>
+              </table>
+              <p style="margin:14px 0 0;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#1340A6;font-weight:700;">Kommessa</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 32px 28px;">
+              <h1 style="margin:0 0 14px;font-size:22px;line-height:1.3;font-weight:600;color:#1a1a1a;">
+                Conferma il nuovo indirizzo email
+              </h1>
+              <p style="margin:0 0 18px;font-size:15px;line-height:1.55;color:#3a3a3a;">
+                Hai chiesto di cambiare l'email del tuo account Kommessa.
+                Conferma il nuovo indirizzo cliccando il pulsante qui sotto.
+              </p>
+
+              <!-- From → To preview -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 22px;background-color:#f9fafc;border-radius:8px;">
+                <tr>
+                  <td style="padding:14px 16px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="padding:3px 0;font-size:11px;color:#888888;text-transform:uppercase;letter-spacing:0.12em;width:60px;">Da</td>
+                        <td style="padding:3px 0;font-size:13px;color:#3a3a3a;font-family:'SFMono-Regular',Menlo,monospace;">{{ .Email }}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:3px 0;font-size:11px;color:#1340A6;text-transform:uppercase;letter-spacing:0.12em;">A</td>
+                        <td style="padding:3px 0;font-size:13px;color:#1340A6;font-weight:600;font-family:'SFMono-Regular',Menlo,monospace;">{{ .NewEmail }}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 22px;font-size:13px;line-height:1.55;color:#666666;">
+                Una volta confermato, accederai a Kommessa con il nuovo
+                indirizzo. Il link è valido per <strong>24 ore</strong>.
+              </p>
+
+              <!-- CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;">
+                <tr>
+                  <td style="background-color:#1340A6;border-radius:8px;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:13px 30px;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;line-height:1;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+                      Conferma nuova email
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#888888;">
+                Se il pulsante non funziona, copia e incolla questo link nel browser:
+              </p>
+              <p style="margin:0 0 18px;font-size:12px;line-height:1.5;color:#1340A6;word-break:break-all;">
+                <a href="{{ .ConfirmationURL }}" target="_blank" style="color:#1340A6;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              </p>
+
+              <p style="margin:18px 0 0;padding-top:18px;border-top:1px solid #eef0f4;font-size:12px;line-height:1.5;color:#888888;">
+                Se non hai richiesto tu il cambio, ignora questa email —
+                l'indirizzo del tuo account resta invariato.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:18px 24px;background-color:#f9fafc;border-top:1px solid #eef0f4;">
+              <p style="margin:0 0 4px;font-size:12px;color:#888888;font-weight:600;">Kommessa</p>
+              <p style="margin:0;font-size:11px;color:#aaaaaa;">
+                Gestione commesse impiantistiche · Powered by SOLVA
+              </p>
+            </td>
+          </tr>
+
+        </table>
+
+        <p style="margin:18px 0 0;font-size:11px;color:#aaaaaa;">
+          Questa email è stata inviata a {{ .NewEmail }}
+        </p>
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
