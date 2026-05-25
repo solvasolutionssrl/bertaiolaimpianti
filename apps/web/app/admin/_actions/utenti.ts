@@ -128,6 +128,180 @@ export async function attivaUserGlobal(userId: string) {
   return { ok: true as const };
 }
 
+// ─── Crea utente "manuale" (no email, no invito) ────────────────────
+//
+// Pattern: il super-admin SOLVA crea l'utente assegnato a un tenant
+// fornendo manualmente username + password. Il sistema costruisce
+// un'email sintetica (`<username>@<tenant_slug>.kommessa.local`) che
+// serve solo come identificatore di login — il suffisso `.local`
+// è RFC-reserved e NON viene mai consegnato a nessun SMTP, quindi
+// niente rischio di bounce o accidentale invio email.
+//
+// `email_confirm: true` evita il flow di conferma email di Supabase.
+// L'utente può loggarsi immediatamente con la coppia (email, password)
+// stampata a video per il SA.
+
+const creaManualeSchema = z.object({
+  tenantId: z.string().uuid(),
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z0-9._-]+$/, 'Solo lettere minuscole, numeri, ".", "-", "_"'),
+  displayName: z.string().trim().min(2).max(120),
+  role: z.enum(['admin', 'office', 'tecnico']),
+  password: z.string().min(8).max(72),
+});
+
+export async function creaUtenteManuale(
+  input: z.infer<typeof creaManualeSchema>,
+): Promise<
+  | { ok: true; loginEmail: string; password: string; userId: string }
+  | { ok: false; error: string }
+> {
+  const ctx = await requirePlatformAdmin();
+  const parsed = creaManualeSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug, sospeso')
+    .eq('id', parsed.data.tenantId)
+    .maybeSingle();
+  if (!tenant) return { ok: false, error: 'Tenant non trovato' };
+  if (tenant.sospeso) return { ok: false, error: 'Tenant sospeso' };
+
+  // Email sintetica — login identifier, mai consegnata.
+  const loginEmail = `${parsed.data.username}@${tenant.slug}.kommessa.local`;
+
+  // Verifica collisione (Supabase non fa upsert su email)
+  const { data: existsCheck } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', '00000000-0000-0000-0000-000000000000') // dummy se serve, ma controllo via admin API
+    .maybeSingle();
+  void existsCheck;
+
+  const created = await supabase.auth.admin.createUser({
+    email: loginEmail,
+    password: parsed.data.password,
+    email_confirm: true, // skip flow di conferma — l'utente può loggare subito
+    user_metadata: { display_name: parsed.data.displayName },
+    app_metadata: {
+      tenant_id: parsed.data.tenantId,
+      tenant_slug: tenant.slug,
+      role: parsed.data.role,
+      manual_account: true, // flag per distinguere dagli invitati via email
+    } as never,
+  });
+  if (created.error) {
+    const msg = created.error.message;
+    if (msg.toLowerCase().includes('already')) {
+      return { ok: false, error: `Username "${parsed.data.username}" già usato in questo tenant` };
+    }
+    return { ok: false, error: msg };
+  }
+  const uid = created.data.user?.id;
+  if (!uid) return { ok: false, error: 'auth id mancante' };
+
+  // Riga applicativa
+  const { error: insErr } = await supabase.from('users').insert({
+    id: uid,
+    tenant_id: parsed.data.tenantId,
+    role: parsed.data.role,
+    display_name: parsed.data.displayName,
+    attivo: true,
+  } as never);
+  if (insErr) {
+    // Best-effort cleanup
+    try {
+      await supabase.auth.admin.deleteUser(uid);
+    } catch {
+      /* swallow */
+    }
+    return { ok: false, error: `Insert users fallita: ${insErr.message}` };
+  }
+
+  await supabase.from('audit_events').insert({
+    tenant_id: parsed.data.tenantId,
+    actor_user_id: ctx.userId,
+    actor_role: 'admin',
+    entity_type: 'user',
+    entity_id: uid,
+    action: 'create_manual',
+    after_data: {
+      login_email: loginEmail,
+      role: parsed.data.role,
+      display_name: parsed.data.displayName,
+    } as Record<string, unknown>,
+    metadata: {
+      platform: true,
+      actor_email: ctx.email,
+      mode: 'manual',
+    } as Record<string, unknown>,
+  } as never);
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  revalidatePath('/admin/utenti');
+  return { ok: true, loginEmail, password: parsed.data.password, userId: uid };
+}
+
+// ─── Imposta password manualmente (no email) ────────────────────────
+//
+// Pattern: il cliente perde la password, chiama il SA che gliela
+// rigenera al volo (manuale o auto-gen) e gliela comunica fuori canale.
+// Differente da `resetPasswordUser` che invia magic link via email.
+
+const setPasswordSchema = z.object({
+  userId: z.string().uuid(),
+  password: z.string().min(8).max(72),
+});
+
+export async function impostaPasswordManuale(
+  input: z.infer<typeof setPasswordSchema>,
+): Promise<{ ok: true; password: string } | { ok: false; error: string }> {
+  const ctx = await requirePlatformAdmin();
+  const parsed = setPasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  // Verifica esistenza utente (e ricava tenant per audit)
+  const { data: u } = await supabase
+    .from('users')
+    .select('tenant_id')
+    .eq('id', parsed.data.userId)
+    .maybeSingle();
+  if (!u) return { ok: false, error: 'Utente non trovato' };
+
+  const upd = await supabase.auth.admin.updateUserById(parsed.data.userId, {
+    password: parsed.data.password,
+  });
+  if (upd.error) return { ok: false, error: upd.error.message };
+
+  await supabase.from('audit_events').insert({
+    tenant_id: u.tenant_id ?? null,
+    actor_user_id: ctx.userId,
+    actor_role: 'admin',
+    entity_type: 'user',
+    entity_id: parsed.data.userId,
+    action: 'password_set_manual',
+    metadata: {
+      platform: true,
+      actor_email: ctx.email,
+      mode: 'manual',
+    } as Record<string, unknown>,
+  } as never);
+
+  return { ok: true, password: parsed.data.password };
+}
+
 const invitaTenantUserSchema = z.object({
   tenantId: z.string().uuid(),
   email: z.string().email(),
