@@ -8,11 +8,11 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleDot,
   LayoutDashboard,
   Menu,
   Search,
   Settings,
-  TicketCheck,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -44,10 +44,10 @@ export interface OfficeNavItem {
 export const DEFAULT_OFFICE_NAV: OfficeNavItem[] = [
   { id: 'home', label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { id: 'commesse', label: 'Commesse', href: '/commesse', icon: Briefcase },
-  { id: 'tickets', label: 'Tickets', href: '/tickets', icon: TicketCheck },
+  { id: 'todo', label: 'TODO', href: '/todo', icon: CircleDot },
   { id: 'clienti', label: 'Clienti', href: '/clienti', icon: Users },
   { id: 'ricerca', label: 'Ricerca', href: '/ricerca', icon: Search },
-  { id: 'notifiche', label: 'Notifiche', href: '/notifiche', icon: Bell },
+  { id: 'notifiche', label: 'Avvisi', href: '/notifiche', icon: Bell },
   { id: 'settings', label: 'Impostazioni', href: '/impostazioni', icon: Settings },
 ];
 
@@ -318,8 +318,8 @@ function OfficeShell({
                 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)) 55%, hsl(var(--accent)) 100%)',
             }}
           >
-            <span className="font-mono text-sm font-bold leading-none text-white">
-              i+
+            <span className="text-base font-extrabold leading-none tracking-tighter text-white">
+              K
             </span>
           </span>
           <div className="flex min-w-0 flex-col leading-none">
@@ -517,13 +517,13 @@ function OfficeShell({
               <div className="flex h-16 items-center gap-3 border-b border-border px-4">
                 <span
                   aria-hidden="true"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg font-mono text-sm font-bold leading-none text-white"
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-base font-extrabold leading-none tracking-tighter text-white"
                   style={{
                     background:
                       'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)) 55%, hsl(var(--accent)) 100%)',
                   }}
                 >
-                  i+
+                  K
                 </span>
                 <div className="flex flex-col leading-none">
                   <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">

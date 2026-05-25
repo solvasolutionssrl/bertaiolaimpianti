@@ -13,7 +13,9 @@ import {
 import {
   Activity,
   AlertCircle,
+  AlertTriangle,
   ArrowUpRight,
+  Bell,
   Briefcase,
   Calendar,
   Camera,
@@ -31,6 +33,7 @@ import { SectionHeader } from '../_components/section-header';
 import { EmptyState } from '../_components/empty-state';
 import { getCommesseARischio, getDashboardKpis, getUltimaAttivita } from './_lib/queries';
 import { descriviAuditEvent, fmtData, fmtDataOra, fmtOra } from './_lib/format';
+import { computeAlerts } from '../_lib/alerts';
 
 export const metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
@@ -111,6 +114,27 @@ export default async function DashboardPage() {
         </div>
         <Suspense fallback={<RiskSkeleton />}>
           <RiskSection />
+        </Suspense>
+      </section>
+
+      {/* ===== Avvisi top ===== */}
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <SectionHeader
+            eyebrow="Avvisi"
+            title="Cose da gestire"
+            description="Allerte computate dai dati — commesse ferme, foto sopralluogo mancanti, TODO scaduti."
+            icon={<Bell />}
+          />
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/office/notifiche">
+              Tutti gli avvisi
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+        <Suspense fallback={<TodoUrgentiSkeleton />}>
+          <AvvisiTopSection />
         </Suspense>
       </section>
 
@@ -498,6 +522,94 @@ function TodoUrgentiSkeleton() {
             <Skeleton className="h-3 w-24 rounded-full" />
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Avvisi top — preview alert computati dal compute helper             */
+/* ------------------------------------------------------------------ */
+
+async function AvvisiTopSection() {
+  const ctx = await requireTenantContext();
+  const alerts = await computeAlerts(ctx.tenantId);
+  if (alerts.length === 0) {
+    return (
+      <EmptyState
+        icon={CheckCircle2}
+        tone="primary"
+        title="Nessun avviso attivo"
+        description="Commesse seguite, foto sopralluogo presenti, TODO sotto controllo."
+      />
+    );
+  }
+  // Mostra i primi 5 (critical → warning → info)
+  const top = alerts.slice(0, 5);
+  return (
+    <Card>
+      <CardContent className="divide-y divide-border p-0">
+        {top.map((a, i) => {
+          const sev = {
+            critical: {
+              cls: 'text-destructive',
+              Icon: AlertCircle,
+              pill: 'bg-destructive/15 text-destructive',
+            },
+            warning: {
+              cls: 'text-amber-700 dark:text-amber-400',
+              Icon: AlertTriangle,
+              pill: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+            },
+            info: {
+              cls: 'text-blue-700 dark:text-blue-400',
+              Icon: Activity,
+              pill: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
+            },
+          }[a.severity];
+          const Icon = sev.Icon;
+          const body = (
+            <div className="flex items-start gap-3 px-4 py-3">
+              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${sev.cls}`} aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                  {a.title}
+                  {a.ref ? (
+                    <span className="font-mono text-xs text-muted-foreground">
+                      · {a.ref}
+                    </span>
+                  ) : null}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {a.description}
+                </p>
+              </div>
+              {a.href ? (
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              ) : null}
+            </div>
+          );
+          return a.href ? (
+            <Link
+              key={`${a.type}-${i}`}
+              href={a.href}
+              className="block transition-colors hover:bg-muted/40"
+            >
+              {body}
+            </Link>
+          ) : (
+            <div key={`${a.type}-${i}`}>{body}</div>
+          );
+        })}
+        {alerts.length > 5 ? (
+          <Link
+            href="/office/notifiche"
+            className="flex items-center justify-center gap-1 px-4 py-2 text-xs font-medium text-primary hover:bg-muted/40"
+          >
+            Vedi tutti gli avvisi ({alerts.length})
+            <ArrowUpRight className="h-3 w-3" />
+          </Link>
+        ) : null}
       </CardContent>
     </Card>
   );
