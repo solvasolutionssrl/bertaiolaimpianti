@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
+import { ConfirmAlertProvider } from './_components/confirm-provider';
 
 export const metadata: Metadata = {
   title: {
@@ -44,7 +45,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${GeistSans.variable} ${GeistMono.variable}`}
     >
-      <body className={GeistSans.className}>{children}</body>
+      <body className={GeistSans.className}>
+        <ConfirmAlertProvider>{children}</ConfirmAlertProvider>
+      </body>
     </html>
   );
 }

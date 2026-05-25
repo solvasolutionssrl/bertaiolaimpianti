@@ -363,6 +363,7 @@ function buildNextcloudProvider(
       baseUrl: cfg.baseUrl,
       user: cfg.user,
       appPassword: cfg.appPassword,
+      basePath: typeof cfg.basePath === 'string' ? cfg.basePath : undefined,
     });
   }
   if (name === 'supabase') {

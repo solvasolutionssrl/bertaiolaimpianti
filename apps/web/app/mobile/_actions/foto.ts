@@ -138,6 +138,7 @@ export async function uploadFoto(
         baseUrl: cfg.baseUrl,
         user: cfg.user,
         appPassword: cfg.appPassword,
+        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
       });
     } else if (providerName === 'supabase') {
       storage = getStorageProvider({

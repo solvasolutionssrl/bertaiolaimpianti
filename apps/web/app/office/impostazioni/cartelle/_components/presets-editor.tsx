@@ -22,54 +22,112 @@ interface Props {
   canEdit: boolean;
 }
 
-const ROLES: { value: AppRole; label: string; short: string }[] = [
-  { value: 'admin', label: 'Admin', short: 'A' },
-  { value: 'office', label: 'Office', short: 'O' },
-  { value: 'tecnico', label: 'Tecnico', short: 'T' },
-  { value: 'cliente', label: 'Cliente', short: 'C' },
+const ROLES: { value: AppRole; label: string; chipClass: string }[] = [
+  {
+    value: 'admin',
+    label: 'Admin',
+    chipClass:
+      'bg-primary/15 text-primary border-primary/30',
+  },
+  {
+    value: 'office',
+    label: 'Office',
+    chipClass:
+      'bg-blue-500/10 text-blue-700 border-blue-500/30 dark:text-blue-300',
+  },
+  {
+    value: 'tecnico',
+    label: 'Tecnico',
+    chipClass:
+      'bg-amber-500/10 text-amber-700 border-amber-500/30 dark:text-amber-300',
+  },
+  {
+    value: 'cliente',
+    label: 'Cliente',
+    chipClass:
+      'bg-emerald-500/10 text-emerald-700 border-emerald-500/30 dark:text-emerald-300',
+  },
 ];
 
 /**
- * Matrice editabile presets × ruoli. Due celle per cartella (Vedi/Carica).
- * Salva per riga via server action.
+ * Matrice editabile presets × ruoli. Due gruppi colonne (Visibilità +
+ * Caricamento) con chip colorati per ruolo. Salva per riga via server action.
  */
 export function PresetsEditor({ presets, canEdit }: Props) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
-          <thead className="border-b border-border bg-muted/30">
-            <tr>
-              <th className="px-4 py-2 text-left font-medium uppercase tracking-wide text-[10px] text-muted-foreground">
+        <table className="w-full min-w-[860px] text-sm">
+          <thead>
+            {/* Gruppo macro: Visibilità / Caricamento */}
+            <tr className="border-b border-border bg-muted/40">
+              <th
+                rowSpan={2}
+                className="border-r border-border px-4 py-2 text-left font-semibold tracking-tight text-xs text-foreground"
+              >
                 Cartella
               </th>
-              <th className="px-3 py-2 text-center font-medium uppercase tracking-wide text-[10px] text-muted-foreground" colSpan={4}>
-                <span className="inline-flex items-center gap-1">
-                  <Eye className="h-3 w-3" /> Visibilità
+              <th
+                colSpan={ROLES.length}
+                className="border-r border-border px-3 py-2 text-center"
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Eye className="h-3.5 w-3.5" /> Chi può vedere
                 </span>
               </th>
-              <th className="px-3 py-2 text-center font-medium uppercase tracking-wide text-[10px] text-muted-foreground" colSpan={4}>
-                <span className="inline-flex items-center gap-1">
-                  <Upload className="h-3 w-3" /> Caricamento
+              <th
+                colSpan={ROLES.length}
+                className="border-r border-border px-3 py-2 text-center"
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Upload className="h-3.5 w-3.5" /> Chi può caricare
                 </span>
               </th>
-              <th className="px-3 py-2 text-right font-medium uppercase tracking-wide text-[10px] text-muted-foreground">
+              <th
+                rowSpan={2}
+                className="px-3 py-2 text-right text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+              >
                 Azione
               </th>
             </tr>
-            <tr className="border-b border-border bg-muted/15 text-[10px] uppercase text-muted-foreground">
-              <th className="px-4 py-1.5 text-left"></th>
-              {ROLES.map((r) => (
-                <th key={`v-${r.value}`} className="px-1 py-1.5 text-center font-mono tabular-nums" title={r.label}>
-                  {r.short}
+            {/* Riga colonne ruolo: chip colorati per disambiguare a colpo d'occhio */}
+            <tr className="border-b border-border bg-muted/15">
+              {ROLES.map((r, idx) => (
+                <th
+                  key={`v-${r.value}`}
+                  className={
+                    'px-2 py-1.5 text-center align-middle ' +
+                    (idx === ROLES.length - 1 ? 'border-r border-border' : '')
+                  }
+                >
+                  <span
+                    className={
+                      'inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ' +
+                      r.chipClass
+                    }
+                  >
+                    {r.label}
+                  </span>
                 </th>
               ))}
-              {ROLES.map((r) => (
-                <th key={`u-${r.value}`} className="px-1 py-1.5 text-center font-mono tabular-nums" title={r.label}>
-                  {r.short}
+              {ROLES.map((r, idx) => (
+                <th
+                  key={`u-${r.value}`}
+                  className={
+                    'px-2 py-1.5 text-center align-middle ' +
+                    (idx === ROLES.length - 1 ? 'border-r border-border' : '')
+                  }
+                >
+                  <span
+                    className={
+                      'inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ' +
+                      r.chipClass
+                    }
+                  >
+                    {r.label}
+                  </span>
                 </th>
               ))}
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -78,6 +136,26 @@ export function PresetsEditor({ presets, canEdit }: Props) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Legenda compatta sotto la tabella */}
+      <div className="border-t border-border bg-muted/20 px-4 py-2.5">
+        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Legenda ruoli
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {ROLES.map((r) => (
+            <span
+              key={r.value}
+              className={
+                'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ' +
+                r.chipClass
+              }
+            >
+              {r.label}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -142,23 +220,37 @@ function PresetRowEditor({ preset, canEdit }: { preset: PresetRow; canEdit: bool
           <p className="font-mono text-[10px] text-muted-foreground">{preset.path}</p>
         </div>
       </td>
-      {ROLES.map((r) => (
-        <td key={`v-${r.value}`} className="px-1 py-2 text-center">
+      {ROLES.map((r, idx) => (
+        <td
+          key={`v-${r.value}`}
+          className={
+            'px-1 py-2 text-center align-middle ' +
+            (idx === ROLES.length - 1 ? 'border-r border-border' : '')
+          }
+        >
           <Checkbox
             checked={visible.has(r.value)}
             disabled={!canEdit}
             onToggle={() => toggle(visible, r.value, setVisible)}
-            aria-label={`Vedi ${r.label}`}
+            aria-label={`Visibile a ${r.label}`}
+            title={`Vedi: ${r.label}`}
           />
         </td>
       ))}
-      {ROLES.map((r) => (
-        <td key={`u-${r.value}`} className="px-1 py-2 text-center">
+      {ROLES.map((r, idx) => (
+        <td
+          key={`u-${r.value}`}
+          className={
+            'px-1 py-2 text-center align-middle ' +
+            (idx === ROLES.length - 1 ? 'border-r border-border' : '')
+          }
+        >
           <Checkbox
             checked={upload.has(r.value)}
             disabled={!canEdit}
             onToggle={() => toggle(upload, r.value, setUpload)}
-            aria-label={`Carica ${r.label}`}
+            aria-label={`Caricamento per ${r.label}`}
+            title={`Carica: ${r.label}`}
           />
         </td>
       ))}

@@ -91,6 +91,7 @@ export default async function CartellaPage({
           baseUrl: cfg.baseUrl,
           user: cfg.user,
           appPassword: cfg.appPassword,
+        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
         });
         entries = await provider.listFolder(fullPath);
       }

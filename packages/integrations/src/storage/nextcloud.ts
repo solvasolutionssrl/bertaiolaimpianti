@@ -11,6 +11,14 @@ interface Config {
   baseUrl: string;
   user: string;
   appPassword: string;
+  /**
+   * Cartella radice opzionale: se l'utente Nextcloud "tecnico app" vede
+   * come root la sua home WebDAV, qui specifichiamo la sotto-cartella
+   * condivisa entro cui l'app deve scrivere (es. "/Bertaiola Impianti").
+   * Tutti i path passati ai metodi vengono prefissati con questo valore.
+   * Default: '' (nessun prefisso → si scrive nella home dell'utente).
+   */
+  basePath?: string;
 }
 
 /**
@@ -25,15 +33,30 @@ export class NextcloudStorageProvider implements StorageProvider {
   private readonly baseUrl: string;
   private readonly user: string;
   private readonly authHeader: string;
+  private readonly basePath: string;
 
   constructor(config: Config) {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.user = config.user;
     this.authHeader = `Basic ${Buffer.from(`${config.user}:${config.appPassword}`).toString('base64')}`;
+    // Normalizza basePath: "/Bertaiola Impianti", senza trailing slash.
+    // Stringa vuota = nessun prefisso.
+    this.basePath = (config.basePath ?? '')
+      .replace(/^\/*/, '/')
+      .replace(/\/+$/, '');
+  }
+
+  /** Prefissa il path con basePath (se configurato). */
+  private withBase(path: string): string {
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    if (!this.basePath || this.basePath === '/') return clean;
+    if (clean === '/' || clean === '') return this.basePath;
+    return `${this.basePath}${clean}`;
   }
 
   private webdav(path: string): string {
-    return `${this.baseUrl}/remote.php/dav/files/${this.user}${path.startsWith('/') ? path : `/${path}`}`;
+    const prefixed = this.withBase(path);
+    return `${this.baseUrl}/remote.php/dav/files/${this.user}${prefixed.startsWith('/') ? prefixed : `/${prefixed}`}`;
   }
 
   private async req(method: string, url: string, body?: BodyInit, headers: Record<string, string> = {}) {
@@ -122,7 +145,20 @@ export class NextcloudStorageProvider implements StorageProvider {
       { Depth: '1', 'Content-Type': 'application/xml' },
     );
     const xml = await res.text();
-    return parsePropfindXml(xml, path);
+    const entries = parsePropfindXml(xml, path);
+    // Rimuovi il prefisso basePath dai path restituiti: il consumer lavora
+    // con path "logici" relativi alla root del tenant.
+    if (this.basePath && this.basePath !== '/') {
+      const prefix = this.basePath.replace(/^\/+|\/+$/g, '');
+      for (const e of entries) {
+        if (e.path.startsWith(`/${prefix}/`)) {
+          e.path = e.path.slice(prefix.length + 1) || '/';
+        } else if (e.path === `/${prefix}`) {
+          e.path = '/';
+        }
+      }
+    }
+    return entries;
   }
 
   async getDownloadUrl(path: string, expiresInSec = 3600): Promise<SignedUrl> {

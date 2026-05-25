@@ -157,6 +157,7 @@ export default async function CommessaDetailPage({
           baseUrl: cfg.baseUrl,
           user: cfg.user,
           appPassword: cfg.appPassword,
+        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
         });
         cloudEntries = await provider.listFolder(commessa.nome_cartella);
       } else if (providerName === 'supabase') {

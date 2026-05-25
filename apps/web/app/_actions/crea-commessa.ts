@@ -231,6 +231,7 @@ export async function creaCommessa(
           baseUrl: cfg.baseUrl,
           user: cfg.user,
           appPassword: cfg.appPassword,
+        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
         });
         await ensureStatusFolders(storage);
       }
@@ -369,6 +370,7 @@ async function provisionaCartelle(opts: {
         baseUrl: cfg.baseUrl,
         user: cfg.user,
         appPassword: cfg.appPassword,
+        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
       });
       // Path Nextcloud: relativo all'utente service, niente prefix "/"
       const rootPath = opts.nomeCartella;

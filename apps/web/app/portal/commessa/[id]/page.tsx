@@ -317,6 +317,10 @@ async function caricaStorageConfig(tenantId: string): Promise<StorageProviderCon
       baseUrl: data.storage_config.baseUrl,
       user: data.storage_config.user,
       appPassword: data.storage_config.appPassword,
+      basePath:
+        typeof data.storage_config.basePath === 'string'
+          ? data.storage_config.basePath
+          : undefined,
     };
   }
   return {

@@ -12,6 +12,12 @@ export interface StorageProviderConfig {
   baseUrl?: string; // nextcloud
   user?: string; // nextcloud
   appPassword?: string; // nextcloud
+  /**
+   * Nextcloud: sotto-cartella radice in cui isolare i file di questo
+   * tenant (es. "/Bertaiola Impianti"). Se omesso, i file vanno nella
+   * root WebDAV dell'utente Nextcloud.
+   */
+  basePath?: string;
 }
 
 /**
@@ -33,6 +39,7 @@ export function getStorageProvider(config: StorageProviderConfig): StorageProvid
         baseUrl: config.baseUrl,
         user: config.user,
         appPassword: config.appPassword,
+        basePath: config.basePath,
       });
     default: {
       const exhaustiveCheck: never = config.provider;

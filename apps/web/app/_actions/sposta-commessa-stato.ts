@@ -298,6 +298,7 @@ function buildStorageProvider(
       baseUrl: cfg.baseUrl,
       user: cfg.user,
       appPassword: cfg.appPassword,
+        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
     });
   }
   if (providerName === 'supabase') {
