@@ -34,6 +34,10 @@ import {
   HeroMeta,
 } from '../../_components/blueprint';
 import { FotoTab, type FotoItem } from './_components/foto-tab';
+import {
+  CommessaTodoMobile,
+  type TodoMobileRow,
+} from './_components/commessa-todo-mobile';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
 import { TecniciMobile } from './_components/tecnici-mobile';
@@ -132,7 +136,111 @@ export default async function CommessaDetailPage({
     .order('start_at', { ascending: false })
     .limit(10);
 
-  const [fotoRes, updatesRes] = await Promise.all([fotoQuery, updatesQuery]);
+  // 4-bis) TODO della commessa (aperti + completati recenti)
+  const todoQuery = supabase
+    .from('commessa_todo' as never)
+    .select(
+      'id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at, created_at, completato_at, created_by, completato_da',
+    )
+    .eq('commessa_id', params.id)
+    .order('sort_order', { ascending: true })
+    .limit(200);
+
+  const [fotoRes, updatesRes, todoRes] = await Promise.all([
+    fotoQuery,
+    updatesQuery,
+    todoQuery,
+  ]);
+
+  // Note dei todo (in batch) + risoluzione nomi
+  const todosRaw = (todoRes.data ?? []) as Array<{
+    id: string;
+    titolo: string;
+    descrizione: string | null;
+    stato: 'aperto' | 'in_corso' | 'completato' | 'annullato';
+    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    assegnato_a: string | null;
+    scadenza_at: string | null;
+    created_at: string;
+    completato_at: string | null;
+    created_by: string | null;
+    completato_da: string | null;
+  }>;
+  const todoIds = todosRaw.map((t) => t.id);
+  const todoUserIds = new Set<string>();
+  for (const t of todosRaw) {
+    if (t.assegnato_a) todoUserIds.add(t.assegnato_a);
+    if (t.created_by) todoUserIds.add(t.created_by);
+    if (t.completato_da) todoUserIds.add(t.completato_da);
+  }
+  const [noteRes, todoUsersRes] = await Promise.all([
+    todoIds.length > 0
+      ? supabase
+          .from('commessa_todo_nota' as never)
+          .select('id, todo_id, author_id, body, created_at')
+          .in('todo_id', todoIds)
+          .order('created_at', { ascending: false })
+          .limit(500)
+      : Promise.resolve({ data: [] }),
+    todoUserIds.size > 0
+      ? supabase
+          .from('users')
+          .select('id, display_name')
+          .in('id', Array.from(todoUserIds))
+      : Promise.resolve({ data: [] }),
+  ]);
+  const todoNote = ((noteRes.data ?? []) as Array<{
+    id: string;
+    todo_id: string;
+    author_id: string | null;
+    body: string;
+    created_at: string;
+  }>);
+  const todoUsersMap = new Map<string, string | null>(
+    ((todoUsersRes.data ?? []) as Array<{ id: string; display_name: string | null }>).map(
+      (u) => [u.id, u.display_name],
+    ),
+  );
+  // Carica anche author_id delle note nel users map
+  const noteAuthorIds = Array.from(
+    new Set(todoNote.map((n) => n.author_id).filter((v): v is string => !!v)),
+  ).filter((id) => !todoUsersMap.has(id));
+  if (noteAuthorIds.length > 0) {
+    const { data: extra } = await supabase
+      .from('users')
+      .select('id, display_name')
+      .in('id', noteAuthorIds);
+    for (const u of (extra ?? []) as Array<{ id: string; display_name: string | null }>) {
+      todoUsersMap.set(u.id, u.display_name);
+    }
+  }
+
+  const todosMobile: TodoMobileRow[] = todosRaw.map((t) => ({
+    id: t.id,
+    titolo: t.titolo,
+    descrizione: t.descrizione,
+    stato: t.stato,
+    priorita: t.priorita,
+    assegnato_a: t.assegnato_a,
+    assegnato_a_nome: t.assegnato_a ? (todoUsersMap.get(t.assegnato_a) ?? null) : null,
+    scadenza_at: t.scadenza_at,
+    created_at: t.created_at,
+    created_by_nome: t.created_by ? (todoUsersMap.get(t.created_by) ?? null) : null,
+    completato_at: t.completato_at,
+    completato_da_nome: t.completato_da ? (todoUsersMap.get(t.completato_da) ?? null) : null,
+    note: todoNote
+      .filter((n) => n.todo_id === t.id)
+      .map((n) => ({
+        id: n.id,
+        body: n.body,
+        created_at: n.created_at,
+        author_nome: n.author_id ? (todoUsersMap.get(n.author_id) ?? null) : null,
+      })),
+  }));
+
+  const todoApertiCount = todosMobile.filter(
+    (t) => t.stato === 'aperto' || t.stato === 'in_corso',
+  ).length;
 
   const commessa = rawCommessa as any;
 
@@ -372,13 +480,20 @@ export default async function CommessaDetailPage({
             </span>
           }
         />
-        <Tabs defaultValue="foto" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 rounded-lg border border-border bg-muted/40 p-1">
+        <Tabs defaultValue={todoApertiCount > 0 ? 'todo' : 'foto'} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 rounded-lg border border-border bg-muted/40 p-1">
+            <TabsTrigger
+              value="todo"
+              className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
+            >
+              TODO
+              <span className="ml-1.5 font-sans tabular-nums opacity-60">{todoApertiCount}</span>
+            </TabsTrigger>
             <TabsTrigger
               value="foto"
               className="font-mono text-[11px] uppercase tracking-[0.14em] data-[state=active]:bg-background data-[state=active]:shadow-soft"
             >
-              Foto/video
+              Foto
               <span className="ml-1.5 font-sans tabular-nums opacity-60">{fotoTot}</span>
             </TabsTrigger>
             <TabsTrigger
@@ -396,6 +511,14 @@ export default async function CommessaDetailPage({
               <span className="ml-1.5 font-sans tabular-nums opacity-60">{updates.length}</span>
             </TabsTrigger>
           </TabsList>
+
+          {/* ───────────── TODO ───────────── */}
+          <TabsContent value="todo" className="mt-5">
+            <CommessaTodoMobile
+              todos={todosMobile}
+              currentUserId={ctx.userId}
+            />
+          </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
           <TabsContent value="foto">

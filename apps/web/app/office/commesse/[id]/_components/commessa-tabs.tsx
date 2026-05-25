@@ -10,6 +10,7 @@ interface Props {
 
 const TABS = [
   { key: 'anagrafica', label: 'Anagrafica', sub: '' },
+  { key: 'lavori', label: 'Lavori', sub: 'lavori' },
   { key: 'fasi', label: 'Fasi', sub: 'fasi' },
   { key: 'timeline', label: 'Timeline', sub: 'timeline' },
   { key: 'documenti', label: 'Documenti', sub: 'documenti' },
