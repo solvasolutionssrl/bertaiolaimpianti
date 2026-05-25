@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Brush,
+  FolderLock,
   HardDrive,
   ListTree,
   Sparkles,
@@ -29,6 +30,7 @@ const TABS: Tab[] = [
   { id: 'utenti',   label: 'Utenti',           href: '/office/impostazioni/utenti',   icon: UsersRound },
   { id: 'branding', label: 'Branding',         href: '/office/impostazioni/branding', icon: Brush },
   { id: 'storage',  label: 'Storage',          href: '/office/impostazioni/storage',  icon: HardDrive },
+  { id: 'cartelle', label: 'Permessi cartelle',href: '/office/impostazioni/cartelle', icon: FolderLock },
 ];
 
 export function SettingsTabs() {
