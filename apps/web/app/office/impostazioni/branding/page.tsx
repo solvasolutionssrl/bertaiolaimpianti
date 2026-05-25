@@ -1,6 +1,6 @@
 import { Palette } from 'lucide-react';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
 import { SectionHeader } from '../_components/section-header';
 import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';

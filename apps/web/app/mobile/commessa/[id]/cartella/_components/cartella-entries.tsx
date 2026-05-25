@@ -10,7 +10,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
-import type { StorageObject } from '@impiantixplus/integrations/storage';
+import type { StorageObject } from '@kommessa/integrations/storage';
 
 import { MediaLightbox, type MediaItem } from '../../../../../_components/media-lightbox';
 

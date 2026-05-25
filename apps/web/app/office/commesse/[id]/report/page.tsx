@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { getStorageProvider } from '@impiantixplus/integrations/storage';
+import { createServerSupabase } from '@kommessa/api/server';
+import { getStorageProvider } from '@kommessa/integrations/storage';
 import { loadCommessa } from '../_lib/get-commessa';
 import { fmtData, fmtDataOra } from '../../../_lib/format';
 import { PrintButton } from './_components/print-button';
@@ -216,7 +216,7 @@ export default async function ReportPage({
                 Report di chiusura commessa
               </p>
               <h1 className="mt-1 text-[22pt] font-semibold leading-tight" style={{ color: '#0f172a' }}>
-                {tenant?.nome ?? 'impiantiXplus'}
+                {tenant?.nome ?? 'Kommessa'}
               </h1>
               <p className="text-[11pt]" style={{ color: '#475569' }}>
                 Codice <span className="font-mono">{c.codice_interno}</span> · {dataReport}
@@ -445,7 +445,7 @@ export default async function ReportPage({
             className="mt-8 border-t pt-3 text-center text-[9pt]"
             style={{ borderColor: '#e5e7eb', color: '#64748b' }}
           >
-            Generato da impiantiXplus · Powered by SOLVA · {dataReport}
+            Generato da Kommessa · Powered by SOLVA · {dataReport}
           </footer>
         </div>
       </div>

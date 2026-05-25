@@ -26,7 +26,7 @@ export function serviceClient(): SupabaseClient {
   const key = env('SUPABASE_SERVICE_ROLE_KEY');
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { 'x-impiantixplus-source': 'edge-service' } },
+    global: { headers: { 'x-kommessa-source': 'edge-service' } },
   });
 }
 

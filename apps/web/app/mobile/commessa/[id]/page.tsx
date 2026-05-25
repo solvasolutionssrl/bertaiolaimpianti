@@ -12,15 +12,15 @@ import {
   CloudUpload,
 } from 'lucide-react';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { Button, StatoLed, Tabs, TabsContent, TabsList, TabsTrigger } from '@impiantixplus/ui';
-import type { StatoCommessa } from '@impiantixplus/api/types';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { Button, StatoLed, Tabs, TabsContent, TabsList, TabsTrigger } from '@kommessa/ui';
+import type { StatoCommessa } from '@kommessa/api/types';
 import {
   getStorageProvider,
   type StorageObject,
   type StorageProviderName,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 import { guardMobile } from '../../_lib/guard';
 import { fmtData, fmtDataOra } from '../../../office/_lib/format';

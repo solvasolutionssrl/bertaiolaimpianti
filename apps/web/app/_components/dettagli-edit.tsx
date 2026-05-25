@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 import { aggiornaDettagliCommessa } from '../_actions/dettagli-commessa';
 import { ConfirmDialog } from './confirm-dialog';

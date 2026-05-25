@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, Send, Sparkles, User } from 'lucide-react';
 
-import { Button, Card } from '@impiantixplus/ui';
+import { Button, Card } from '@kommessa/ui';
 
 interface Message {
   id: string;

@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@impiantixplus/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { loadCommessa } from './_lib/get-commessa';
 
 export const dynamic = 'force-dynamic';

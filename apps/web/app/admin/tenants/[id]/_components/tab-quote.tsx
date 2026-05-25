@@ -9,7 +9,7 @@ import {
   CardContent,
   Input,
   Label,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { aggiornaQuote, cambiaPiano } from '../../../_actions/quote';
 import { useAlert } from '@/app/_components/confirm-provider';
 

@@ -14,7 +14,7 @@ import {
   Input,
   Label,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { aggiornaPreset, creaPreset } from '../_actions/preset';
 
 export interface VoceCatalogoOpt {

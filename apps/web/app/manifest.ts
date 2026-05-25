@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 
 /**
- * Web App Manifest — impiantiXplus PWA tecnici.
+ * Web App Manifest — Kommessa PWA tecnici.
  * Riferimenti: Architettura_Soluzione.md §7 (PWA capabilities),
  *              CLAUDE.md (stack PWA, niente Expo),
  *              Mockup_UI §componenti (palette Ocra #D97706).

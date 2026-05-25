@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FolderOpen } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 /**
  * Pulsante "Apri in cartella locale".
@@ -17,7 +17,7 @@ export function OpenLocalFolderButton({ fullPath }: { fullPath: string }) {
 
   const handle = () => {
     try {
-      const url = `file:///C:/Users/Public/impiantiXplus/${fullPath.replace(/^\/+/, '')}`;
+      const url = `file:///C:/Users/Public/Kommessa/${fullPath.replace(/^\/+/, '')}`;
       window.open(url, '_blank');
     } catch {
       // Ignored, fallthrough to hint.

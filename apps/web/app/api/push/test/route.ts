@@ -5,8 +5,8 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import { inviaPushAUtente } from '../../../../lib/push';
 
 export const runtime = 'nodejs';
@@ -17,7 +17,7 @@ export async function POST() {
     const ctx = await requireTenantContext();
     const supabase = createServerSupabase();
     const res = await inviaPushAUtente(supabase as any, ctx.userId, {
-      title: 'impiantiXplus · Test',
+      title: 'Kommessa · Test',
       body: 'Notifiche attive su questo dispositivo. ✔',
       url: '/mobile',
     });

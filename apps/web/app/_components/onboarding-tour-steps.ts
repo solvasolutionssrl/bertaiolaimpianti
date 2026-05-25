@@ -4,7 +4,7 @@ import type { TourStep } from './onboarding-tour';
  * Definizione passi del tour Web Office.
  *
  * I selettori CSS puntano a elementi reali della shell (`AppShellOffice`
- * in `@impiantixplus/ui`). Se uno dei selettori dovesse cambiare, il
+ * in `@kommessa/ui`). Se uno dei selettori dovesse cambiare, il
  * componente `OnboardingTour` salta automaticamente il passo e logga
  * un warning in console (non rompe il flusso).
  *
@@ -16,7 +16,7 @@ export const OFFICE_TOUR_STEPS: TourStep[] = [
   {
     id: 'office-menu-utente',
     target: 'header [aria-label="Menu utente"]',
-    title: 'Benvenuto in impiantiXplus',
+    title: 'Benvenuto in Kommessa',
     description:
       'Sei loggato come utente del tenant. Da qui esci, cambi profilo o accedi alle impostazioni del tuo account.',
     placement: 'bottom',

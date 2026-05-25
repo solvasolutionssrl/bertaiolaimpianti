@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { sospendiTenant, riattivaTenant } from '../../_actions/tenants';
 import { useAlert } from '@/app/_components/confirm-provider';
 

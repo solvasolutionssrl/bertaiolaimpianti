@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

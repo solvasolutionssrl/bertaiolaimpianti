@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../../_lib/tenant-cache';
-import { Card, CardContent, CardHeader, CardTitle } from '@impiantixplus/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { Bell, BellRing } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';

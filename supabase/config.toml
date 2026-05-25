@@ -1,6 +1,6 @@
-# Supabase local dev config — impiantiXplus
+# Supabase local dev config — Kommessa
 # Region target prod: Frankfurt (eu-central-1) — vedi documentazione_generale/02_ARCHITETTURA/Stack_Tecnico.md
-project_id = "impiantixplus"
+project_id = "kommessa"
 
 [api]
 enabled = true

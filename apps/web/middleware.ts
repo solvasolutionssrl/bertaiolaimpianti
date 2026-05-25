@@ -1,4 +1,4 @@
-import { updateSession } from '@impiantixplus/api/server';
+import { updateSession } from '@kommessa/api/server';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**

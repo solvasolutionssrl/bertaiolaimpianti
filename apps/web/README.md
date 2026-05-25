@@ -3,7 +3,7 @@
 **Versione**: 1.0
 **Stato**: scaffolding iniziale (Sprint 0)
 
-Una sola applicazione Next.js serve tutte e tre le superfici prodotto di impiantiXplus. La separazione avviene per **host** in `middleware.ts` e per **route group** nell'App Router — questo permette codice condiviso (auth, fetch Supabase, layout, componenti UI da `@impiantixplus/ui`) senza duplicare app o build.
+Una sola applicazione Next.js serve tutte e tre le superfici prodotto di Kommessa. La separazione avviene per **host** in `middleware.ts` e per **route group** nell'App Router — questo permette codice condiviso (auth, fetch Supabase, layout, componenti UI da `@kommessa/ui`) senza duplicare app o build.
 
 ---
 
@@ -11,9 +11,9 @@ Una sola applicazione Next.js serve tutte e tre le superfici prodotto di impiant
 
 | Superficie | Host atteso (prod) | Route group | Pubblico | Note |
 |---|---|---|---|---|
-| **Office** | `app.impiantixplus.app` | `app/(office)/...` | Personale ufficio Bertaiola | Dashboard commesse, ticketing nativo, anagrafica clienti, ricerca |
-| **Mobile (PWA tecnici)** | `m.impiantixplus.app` | `app/(mobile)/...` | Tecnici in cantiere | PWA installabile, scatto foto via camera, upload background |
-| **Portale cliente** | `cliente.impiantixplus.app` | `app/(portal)/...` | Clienti finali Bertaiola | Magic-link auth, stato lavori, download documenti, "Richiedi intervento" |
+| **Office** | `app.kommessa.app` | `app/(office)/...` | Personale ufficio Bertaiola | Dashboard commesse, ticketing nativo, anagrafica clienti, ricerca |
+| **Mobile (PWA tecnici)** | `m.kommessa.app` | `app/(mobile)/...` | Tecnici in cantiere | PWA installabile, scatto foto via camera, upload background |
+| **Portale cliente** | `cliente.kommessa.app` | `app/(portal)/...` | Clienti finali Bertaiola | Magic-link auth, stato lavori, download documenti, "Richiedi intervento" |
 
 Il routing per host è gestito in [`middleware.ts`](./middleware.ts):
 
@@ -72,7 +72,7 @@ Lo standard Web App Manifest richiede almeno una icona 192x192 e una 512x512, id
 
 ### Sorgente brand
 
-Il materiale brand del prodotto vive in [`documentazione_generale/03_BRAND/`](../../documentazione_generale/03_BRAND/) (il logo finale `impiantiXplus` è in lavorazione — al momento i candidati e le indicazioni cromatiche sono nei documenti markdown).
+Il materiale brand del prodotto vive in [`documentazione_generale/03_BRAND/`](../../documentazione_generale/03_BRAND/) (il logo finale `Kommessa` è in lavorazione — al momento i candidati e le indicazioni cromatiche sono nei documenti markdown).
 
 ### Procedura suggerita
 
@@ -106,10 +106,10 @@ Per il favicon classico (`/favicon.ico`) si può rigenerare dallo stesso master.
 ## Comandi locali
 
 ```bash
-pnpm --filter @impiantixplus/web dev        # solo questa app
-pnpm --filter @impiantixplus/web build
-pnpm --filter @impiantixplus/web lint
-pnpm --filter @impiantixplus/web typecheck
+pnpm --filter @kommessa/web dev        # solo questa app
+pnpm --filter @kommessa/web build
+pnpm --filter @kommessa/web lint
+pnpm --filter @kommessa/web typecheck
 ```
 
 Oppure dalla root: `pnpm dev` (lancia tutto il workspace in parallelo via turbo).

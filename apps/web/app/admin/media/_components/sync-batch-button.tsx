@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Play } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import { runSyncBatch } from '../_actions/sync';
 

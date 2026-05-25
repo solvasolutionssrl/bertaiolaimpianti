@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 import { ArrowRightLeft } from 'lucide-react';
 import { convertiInCommessa } from '../../../_actions/tickets';
 

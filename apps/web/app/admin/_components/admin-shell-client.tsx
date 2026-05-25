@@ -15,8 +15,8 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { Badge, cn } from '@impiantixplus/ui';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+import { Badge, cn } from '@kommessa/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 interface AdminNavItem {
   id: string;

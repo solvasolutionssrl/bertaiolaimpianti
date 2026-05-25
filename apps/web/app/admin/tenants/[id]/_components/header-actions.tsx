@@ -10,7 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import {
   sospendiTenant,
   riattivaTenant,

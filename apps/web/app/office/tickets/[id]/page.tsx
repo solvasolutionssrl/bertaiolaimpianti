@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { Card, CardContent } from '@impiantixplus/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { Card, CardContent } from '@kommessa/ui';
 import { fmtDataOra } from '../../_lib/format';
 import { RispostaForm } from './_components/risposta-form';
 import { ConvertiButton } from './_components/converti-button';

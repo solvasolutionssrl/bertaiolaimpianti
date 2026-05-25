@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn';
 
 /**
- * Button — pulsante "Operative Modern" per impiantiXplus.
+ * Button — pulsante "Operative Modern" per Kommessa.
  *
  * Direzione visiva: tipografia Geist, hairline borders, radius 10px,
  * focus ring sottile cobalt. Tap target generosi (≥40/44/48px) per

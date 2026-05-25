@@ -12,7 +12,7 @@ import {
   PencilLine,
   User,
 } from 'lucide-react';
-import { Badge, cn } from '@impiantixplus/ui';
+import { Badge, cn } from '@kommessa/ui';
 
 import {
   aggiungiNotaTodo,

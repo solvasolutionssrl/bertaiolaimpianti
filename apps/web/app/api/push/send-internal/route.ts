@@ -22,7 +22,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { inviaPushAUtente } from '../../../../lib/push';
 
 export const runtime = 'nodejs';
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
   // 3. Send
   try {
     const res = await inviaPushAUtente(svc, userId, {
-      title: title ?? 'impiantiXplus',
+      title: title ?? 'Kommessa',
       body: text ?? '',
       url,
       data: payload,

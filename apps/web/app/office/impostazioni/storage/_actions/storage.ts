@@ -2,9 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import type { Json } from '@impiantixplus/api';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import type { Json } from '@kommessa/api';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
 
 const PROVIDERS = ['supabase', 'nextcloud'] as const;

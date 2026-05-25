@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { X } from 'lucide-react';
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 export interface BulkAction {
   label: string;

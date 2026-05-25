@@ -3,7 +3,7 @@ import { Settings2 } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { SettingsTabs } from './_components/settings-tabs';
 
-export const metadata = { title: 'Impostazioni · impiantiXplus' };
+export const metadata = { title: 'Impostazioni · Kommessa' };
 
 export default function ImpostazioniLayout({
   children,

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 export interface TurnoRow {
   id: string;

@@ -1,5 +1,5 @@
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 import { NuovaCommessaForm, type VoceItem, type PresetItem } from './_components/form';
 

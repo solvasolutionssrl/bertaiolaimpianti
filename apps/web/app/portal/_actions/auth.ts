@@ -3,7 +3,7 @@
 import { headers } from 'next/headers';
 import { z } from 'zod';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 const emailSchema = z
   .string()

@@ -3,16 +3,16 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
-import type { AppRole } from '@impiantixplus/api';
-import type { StatoCommessa } from '@impiantixplus/api/types';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import type { AppRole } from '@kommessa/api';
+import type { StatoCommessa } from '@kommessa/api/types';
 import {
   getStorageProvider,
   type StorageProvider,
   type StorageProviderName,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 import {
   cloudFolderForStato,

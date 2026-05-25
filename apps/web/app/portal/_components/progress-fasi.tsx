@@ -1,4 +1,4 @@
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 export interface ProgressFasiProps {
   totali: number;

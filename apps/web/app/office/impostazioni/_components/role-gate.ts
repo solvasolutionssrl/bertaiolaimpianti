@@ -1,4 +1,4 @@
-import type { AppRole, TenantContext } from '@impiantixplus/api';
+import type { AppRole, TenantContext } from '@kommessa/api';
 
 export const ROLES_ADMIN: ReadonlyArray<AppRole> = ['admin'];
 

@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { Copy, MoreHorizontal, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { duplicaPreset, eliminaPreset } from '../_actions/preset';
 import {

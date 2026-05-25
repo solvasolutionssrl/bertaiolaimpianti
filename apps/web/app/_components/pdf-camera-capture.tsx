@@ -8,7 +8,7 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 /**
  * Acquisizione PDF "tipo scanner foglio" da fotocamera.

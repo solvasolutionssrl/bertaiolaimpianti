@@ -3,9 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 import { aggiornaPriorita } from './tickets';
 

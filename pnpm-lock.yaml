@@ -29,13 +29,13 @@ importers:
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.10.0(react-hook-form@7.75.0(react@18.3.1))
-      '@impiantixplus/api':
+      '@kommessa/api':
         specifier: workspace:*
         version: link:../../packages/api
-      '@impiantixplus/integrations':
+      '@kommessa/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
-      '@impiantixplus/ui':
+      '@kommessa/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@radix-ui/react-avatar':
@@ -193,7 +193,7 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.696.0
         version: 3.1051.0
-      '@impiantixplus/api':
+      '@kommessa/api':
         specifier: workspace:*
         version: link:../api
       '@supabase/supabase-js':

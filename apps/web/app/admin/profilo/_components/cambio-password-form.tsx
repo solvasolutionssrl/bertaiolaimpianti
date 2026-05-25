@@ -8,8 +8,8 @@ import {
   CardContent,
   Input,
   Label,
-} from '@impiantixplus/ui';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+} from '@kommessa/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 export function CambioPasswordForm() {
   const [pwd, setPwd] = React.useState('');

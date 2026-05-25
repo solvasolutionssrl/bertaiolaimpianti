@@ -4,8 +4,8 @@ import * as React from 'react';
 import Link from 'next/link';
 import { ChevronRight, MapPin, Search, X } from 'lucide-react';
 
-import { StatoLed } from '@impiantixplus/ui';
-import type { StatoCommessa } from '@impiantixplus/api/types';
+import { StatoLed } from '@kommessa/ui';
+import type { StatoCommessa } from '@kommessa/api/types';
 
 import { Stagger } from '../../_components/blueprint';
 

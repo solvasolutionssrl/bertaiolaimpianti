@@ -13,7 +13,7 @@ import {
   DialogFooter,
   Input,
   Label,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import {
   aggiornaPiano,
   creaPiano,

@@ -1,4 +1,4 @@
-import { Skeleton } from '@impiantixplus/ui';
+import { Skeleton } from '@kommessa/ui';
 
 export default function CommessaDetailLoading() {
   return (

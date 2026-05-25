@@ -3,7 +3,7 @@
 //
 // Richiede: header `x-admin-secret` = ONBOARDING_ADMIN_SECRET
 // (questa è una funzione "out-of-band" usata solo dai SOLVA admin per
-// creare un nuovo tenant del SaaS impiantiXplus).
+// creare un nuovo tenant del SaaS Kommessa).
 //
 // Body:
 //   {

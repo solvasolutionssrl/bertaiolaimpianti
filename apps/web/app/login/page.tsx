@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { LoginForm } from './_components/form';
 
-export const metadata: Metadata = { title: 'Accedi — impiantiXplus' };
+export const metadata: Metadata = { title: 'Accedi — Kommessa' };
 export const dynamic = 'force-dynamic';
 
 export default function LoginPage() {
@@ -50,7 +50,7 @@ export default function LoginPage() {
               </svg>
             </span>
             <span className="font-mono text-[15px] font-semibold tracking-tight text-[hsl(220,30%,9%)]">
-              impiantiXplus
+              Kommessa
             </span>
           </div>
           <p className="mt-2 text-xs uppercase tracking-[0.2em] text-[hsl(220,10%,50%)]">

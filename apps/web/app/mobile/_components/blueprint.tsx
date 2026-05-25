@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 /**
  * Primitive del linguaggio "blueprint" per la app mobile.

@@ -13,7 +13,7 @@ import {
   DialogTitle,
   Input,
   Label,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { invitaUtente, type UserFormState } from '../_actions/utenti';
 
 const initialState: UserFormState = { status: 'idle' };

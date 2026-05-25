@@ -1,13 +1,13 @@
 import { Users } from 'lucide-react';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { SectionHeader } from '../_components/section-header';
 import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';
 import { UtentiTable, type UtenteRow } from './_components/utenti-table';
-import type { AppRole } from '@impiantixplus/api';
-import type { UserPermissionOverrides } from '@impiantixplus/api/types';
+import type { AppRole } from '@kommessa/api';
+import type { UserPermissionOverrides } from '@kommessa/api/types';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Utenti · Impostazioni' };

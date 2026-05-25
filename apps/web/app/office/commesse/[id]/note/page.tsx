@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import { Card, CardContent } from '@impiantixplus/ui';
+import { Card, CardContent } from '@kommessa/ui';
 import { StickyNote, Mic, Sparkles, ChevronRight } from 'lucide-react';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 import { VoiceNoteCapture } from './_components/voice-note-capture';
 

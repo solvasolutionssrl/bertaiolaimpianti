@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react';
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 /**
  * EmptyState — placeholder visuale "vivo" per liste vuote / risultati zero.

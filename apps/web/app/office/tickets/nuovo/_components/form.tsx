@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, CardContent, Input, Label } from '@impiantixplus/ui';
+import { Button, Card, CardContent, Input, Label } from '@kommessa/ui';
 import { creaTicket } from '../../../_actions/tickets';
 
 export function NuovoTicketForm({

@@ -2,13 +2,13 @@ import { type NextRequest } from 'next/server';
 import { createHash } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import {
   getR2ProviderFromEnv,
   getR2ProviderFromTenantConfig,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

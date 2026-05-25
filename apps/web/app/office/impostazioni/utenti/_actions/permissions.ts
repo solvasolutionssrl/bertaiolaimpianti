@@ -1,10 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
 import { assertCanManageTenant } from '../../_components/role-gate';
-import type { UserPermissionOverrides } from '@impiantixplus/api/types';
+import type { UserPermissionOverrides } from '@kommessa/api/types';
 
 export async function salvaPermessi(input: {
   userId: string;

@@ -1,5 +1,5 @@
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { Card, CardContent } from '@impiantixplus/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { Card, CardContent } from '@kommessa/ui';
 import { AlertTriangle, CheckCircle2, Circle, ListChecks, Loader2 } from 'lucide-react';
 import { EmptyState } from '../../../../_components/empty-state';
 import { AggiungiFaseButton } from './_components/aggiungi-fase';

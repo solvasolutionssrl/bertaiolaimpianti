@@ -1,7 +1,7 @@
 import 'server-only';
 
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import type { AppRole } from '@impiantixplus/api';
+import { createServiceSupabase } from '@kommessa/api/service';
+import type { AppRole } from '@kommessa/api';
 
 /**
  * Layer ACL su cartelle/file commessa — server-side only.

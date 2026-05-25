@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 
 /**
@@ -446,7 +446,7 @@ export async function impersonateUser(opts: {
 }) {
   const ctx = await requirePlatformAdmin();
   const { cookies } = await import('next/headers');
-  const { createServerSupabase } = await import('@impiantixplus/api/server');
+  const { createServerSupabase } = await import('@kommessa/api/server');
   const cookieStore = cookies();
 
   const svc = createServiceSupabase();
@@ -579,7 +579,7 @@ export async function impersonate(tenantId: string) {
 
 export async function endImpersonation() {
   const { cookies } = await import('next/headers');
-  const { createServerSupabase } = await import('@impiantixplus/api/server');
+  const { createServerSupabase } = await import('@kommessa/api/server');
   const cookieStore = cookies();
 
   const shadowRaw = cookieStore.get('shadow_admin')?.value;

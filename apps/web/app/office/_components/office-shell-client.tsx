@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@impiantixplus/ui';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
 import { Sparkles, Timer } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';

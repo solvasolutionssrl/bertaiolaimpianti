@@ -14,7 +14,7 @@
  * la commessa critica resta dove sta (tipicamente 02_In_Lavorazione).
  */
 
-import type { StatoCommessa } from '@impiantixplus/api/types';
+import type { StatoCommessa } from '@kommessa/api/types';
 
 export const STATUS_FOLDER_RICHIESTE = '01_Richieste';
 export const STATUS_FOLDER_IN_LAVORAZIONE = '02_In_Lavorazione';

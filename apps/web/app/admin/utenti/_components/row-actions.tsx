@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import {
   attivaUserGlobal,
   disattivaUserGlobal,

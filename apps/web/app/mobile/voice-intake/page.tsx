@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../_lib/guard';
 import { VoiceIntakeFlow, type VoceOption } from './_components/voice-intake-flow';

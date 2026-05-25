@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@impiantixplus/ui';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@kommessa/ui';
+import { createServerSupabase } from '@kommessa/api/server';
 
 import { requirePortalContext } from '../_lib/portal-context';
 import { RichiediForm } from './richiedi-form';

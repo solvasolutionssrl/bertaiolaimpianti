@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 import { endImpersonation } from '../../admin/_actions/tenants';
 
 /**

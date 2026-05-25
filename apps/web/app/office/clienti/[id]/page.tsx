@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { ArrowLeft, Briefcase } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, StatoBadge } from '@impiantixplus/ui';
+import { Card, CardContent, CardHeader, CardTitle, StatoBadge } from '@kommessa/ui';
 import { EmptyState } from '../../../_components/empty-state';
 import { ClienteForm } from '../_components/form';
 import { fmtData } from '../../_lib/format';

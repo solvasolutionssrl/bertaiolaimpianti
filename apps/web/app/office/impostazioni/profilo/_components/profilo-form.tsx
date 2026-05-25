@@ -8,7 +8,7 @@ import {
   Button,
   Input,
   Label,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { aggiornaProfilo, type FormState } from '../_actions/profilo';
 
 const initialState: FormState = { status: 'idle' };

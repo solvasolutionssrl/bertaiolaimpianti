@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 function pickHomeForDevice(): string {
   if (typeof window === 'undefined') return '/office';

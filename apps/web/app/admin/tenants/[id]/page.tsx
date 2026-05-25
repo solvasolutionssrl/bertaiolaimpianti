@@ -10,8 +10,8 @@ import {
   TabsList,
   TabsTrigger,
   TabsContent,
-} from '@impiantixplus/ui';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+} from '@kommessa/ui';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../../_lib/guard';
 import { TenantStatusBadge } from '../../_components/tenant-status-badge';
 import { UsageBar } from '../../_components/usage-bar';

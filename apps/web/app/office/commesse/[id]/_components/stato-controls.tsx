@@ -11,8 +11,8 @@ import {
   Hammer,
   ClipboardCheck,
 } from 'lucide-react';
-import { Button, StatoLed } from '@impiantixplus/ui';
-import type { StatoCommessa } from '@impiantixplus/api/types';
+import { Button, StatoLed } from '@kommessa/ui';
+import type { StatoCommessa } from '@kommessa/api/types';
 
 import {
   spostaCommessaInStato,

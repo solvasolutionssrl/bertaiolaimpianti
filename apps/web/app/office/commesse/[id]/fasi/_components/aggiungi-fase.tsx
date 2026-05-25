@@ -12,7 +12,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { aggiungiVoce } from '../../../../_actions/commesse';
 
 interface VoceCatalogo {

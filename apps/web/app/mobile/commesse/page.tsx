@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import type { StatoCommessa } from '@impiantixplus/api/types';
-import { getMobileShell } from '@impiantixplus/api/types';
+import { createServerSupabase } from '@kommessa/api/server';
+import type { StatoCommessa } from '@kommessa/api/types';
+import { getMobileShell } from '@kommessa/api/types';
 
 import { guardMobile } from '../_lib/guard';
 import { Hero, HeroMeta } from '../_components/blueprint';

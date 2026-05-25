@@ -1,6 +1,6 @@
 'use server';
 
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 
 export interface AuditFilters {

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 /**
  * SectionHeader — header riusabile per le pagine office.

@@ -1,6 +1,6 @@
 /* eslint-disable no-undef, no-restricted-globals */
 /**
- * Service Worker custom per impiantiXplus (no next-pwa).
+ * Service Worker custom per Kommessa (no next-pwa).
  *
  * Strategie:
  *  1. App shell precache (install): /mobile e /mobile/login + offline fallback
@@ -17,8 +17,8 @@
  */
 
 const CACHE_VERSION = 'v2';
-const SHELL_CACHE = `impiantixplus-shell-${CACHE_VERSION}`;
-const RUNTIME_CACHE = `impiantixplus-runtime-${CACHE_VERSION}`;
+const SHELL_CACHE = `kommessa-shell-${CACHE_VERSION}`;
+const RUNTIME_CACHE = `kommessa-runtime-${CACHE_VERSION}`;
 const VALID_CACHES = new Set([SHELL_CACHE, RUNTIME_CACHE]);
 
 const SHELL_URLS = [
@@ -29,7 +29,7 @@ const SHELL_URLS = [
   '/icons/icon-512.png',
 ];
 
-const QUEUE_DB_NAME = 'impiantixplus-pwa';
+const QUEUE_DB_NAME = 'kommessa-pwa';
 const QUEUE_STORE = 'photo-upload-queue';
 
 // =====================================================================
@@ -64,7 +64,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k.startsWith('impiantixplus-') && !VALID_CACHES.has(k))
+            .filter((k) => k.startsWith('kommessa-') && !VALID_CACHES.has(k))
             .map((k) => caches.delete(k)),
         ),
       )
@@ -222,10 +222,10 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'impiantiXplus', body: event.data.text() };
+    payload = { title: 'Kommessa', body: event.data.text() };
   }
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'impiantiXplus', {
+    self.registration.showNotification(payload.title || 'Kommessa', {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',

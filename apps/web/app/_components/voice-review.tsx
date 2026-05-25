@@ -17,7 +17,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
-import { Button, Input, Label } from '@impiantixplus/ui';
+import { Button, Input, Label } from '@kommessa/ui';
 import { ContactPickerButton } from './contact-picker-button';
 
 /**

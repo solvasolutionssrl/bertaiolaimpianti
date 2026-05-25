@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 import {
   getR2ProviderFromEnv,
   getR2ProviderFromTenantConfig,
@@ -9,7 +9,7 @@ import {
   type R2StorageProvider,
   type StorageProvider,
   type StorageProviderName,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 /**
  * Worker di sync R2 → Nextcloud (Fase 2).

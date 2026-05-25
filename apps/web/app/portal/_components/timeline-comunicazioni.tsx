@@ -1,6 +1,6 @@
 import { MessageSquare, Building2, User } from 'lucide-react';
 
-import { Card, CardContent } from '@impiantixplus/ui';
+import { Card, CardContent } from '@kommessa/ui';
 
 export interface ComunicazioneItem {
   id: string;

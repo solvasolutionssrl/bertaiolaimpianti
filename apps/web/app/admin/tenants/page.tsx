@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Building2, Plus } from 'lucide-react';
-import { Badge, Button, Card, CardContent } from '@impiantixplus/ui';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { Badge, Button, Card, CardContent } from '@kommessa/ui';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { TenantStatusBadge } from '../_components/tenant-status-badge';
 import { SectionHeader } from '../../_components/section-header';

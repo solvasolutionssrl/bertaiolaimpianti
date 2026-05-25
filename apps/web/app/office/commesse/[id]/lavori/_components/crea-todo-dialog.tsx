@@ -13,7 +13,7 @@ import {
   Input,
   Label,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 import {
   aggiornaTodo,

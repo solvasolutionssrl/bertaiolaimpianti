@@ -3,7 +3,7 @@ import { cache } from 'react';
 import {
   getTenantContext as getTenantContextRaw,
   type TenantContext,
-} from '@impiantixplus/api/tenant';
+} from '@kommessa/api/tenant';
 
 /**
  * Wrapper request-scoped di `requireTenantContext` / `getTenantContext`.

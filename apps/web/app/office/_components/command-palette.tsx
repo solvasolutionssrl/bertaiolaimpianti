@@ -17,8 +17,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { cn } from '@impiantixplus/ui';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+import { cn } from '@kommessa/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 /**
  * Tipi risultato — discriminated union per tenere stretto il payload
@@ -572,7 +572,7 @@ export function CommandPalette({ open, onOpenChange, onLogout }: CommandPaletteP
               </span>
             </div>
             <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] md:inline">
-              impiantiXplus · ⌘K
+              Kommessa · ⌘K
             </span>
           </div>
         </DialogPrimitive.Content>

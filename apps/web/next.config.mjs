@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@impiantixplus/ui', '@impiantixplus/api', '@impiantixplus/integrations'],
+  transpilePackages: ['@kommessa/ui', '@kommessa/api', '@kommessa/integrations'],
   // ESLint solo in dev/CI dedicato; in build skip per evitare blocchi su
   // cosmetiche (apostrofi non-escaped, rule plugin mancanti).
   eslint: { ignoreDuringBuilds: true },
@@ -21,7 +21,7 @@ const nextConfig = {
     // accorcia compile time in dev (meno moduli da bundlare per pagina) e
     // riduce il bundle client in prod. Sicuro: nessun side-effect.
     optimizePackageImports: [
-      '@impiantixplus/ui',
+      '@kommessa/ui',
       'lucide-react',
       'date-fns',
     ],

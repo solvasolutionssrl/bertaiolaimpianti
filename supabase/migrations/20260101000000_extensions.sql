@@ -1,6 +1,6 @@
 -- =====================================================================
 -- 20260101000000_extensions.sql
--- Estensioni Postgres richieste dal prodotto impiantiXplus.
+-- Estensioni Postgres richieste dal prodotto Kommessa.
 -- Idempotente: tutte le CREATE EXTENSION sono IF NOT EXISTS.
 -- =====================================================================
 

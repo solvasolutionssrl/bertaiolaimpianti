@@ -10,7 +10,7 @@ import {
   Check,
   Search,
 } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import {
   assegnaTecnico,

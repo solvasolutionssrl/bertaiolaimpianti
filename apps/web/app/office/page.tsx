@@ -9,7 +9,7 @@ import {
   KpiCard,
   Skeleton,
   StatoBadge,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import {
   Activity,
   ArrowUpRight,

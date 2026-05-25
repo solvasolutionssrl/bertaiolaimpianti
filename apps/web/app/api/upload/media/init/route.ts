@@ -2,16 +2,16 @@ import { type NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import {
   buildR2Key,
   getR2ProviderFromEnv,
   getR2ProviderFromTenantConfig,
   MULTIPART_PART_SIZE_BYTES,
   MULTIPART_THRESHOLD_BYTES,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 import type {
   InitResponse,

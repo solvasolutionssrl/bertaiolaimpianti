@@ -4,8 +4,8 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Loader2 } from 'lucide-react';
 
-import { createBrowserSupabase } from '@impiantixplus/api/client';
-import { Button } from '@impiantixplus/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
+import { Button } from '@kommessa/ui';
 
 export function LogoutButton() {
   const router = useRouter();

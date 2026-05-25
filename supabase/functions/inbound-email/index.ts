@@ -245,7 +245,7 @@ function stripHtml(html: string): string {
 async function findTenantByInboundAddress(admin: any, toList: string[]) {
   // Strategia: cerchiamo `storage_config->>inbound_email` IN toList.
   // Fallback: matching su `tenants.slug` come prefisso locale dell'email
-  // (es. "ber@inbound.impiantixplus.it" → slug "BER").
+  // (es. "ber@inbound.kommessa.it" → slug "BER").
   const { data: byConfig } = await admin
     .from('tenants')
     .select('id,slug,nome,storage_provider,storage_config')
@@ -342,7 +342,7 @@ async function fetchAttachment(att: ResendInboundAttachment): Promise<Blob | nul
 
 function pickReplyFrom(toList: string[], tenantName: string): string {
   // Usa il primo TO come reply-from (è l'indirizzo del tenant).
-  const local = toList[0] ?? `noreply@impiantixplus.it`;
+  const local = toList[0] ?? `noreply@kommessa.it`;
   return `${tenantName} <${local}>`;
 }
 

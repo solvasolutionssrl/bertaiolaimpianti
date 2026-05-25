@@ -12,7 +12,7 @@ import {
   CardContent,
   Input,
   Label,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { Upload } from 'lucide-react';
 import {
   aggiornaBranding,
@@ -179,7 +179,7 @@ export function BrandingForm({
                   type="email"
                   value={inboundEmail}
                   onChange={(e) => setInboundEmail(e.target.value)}
-                  placeholder="supporto@bertaiola.impiantixplus.eu"
+                  placeholder="supporto@bertaiola.kommessa.eu"
                 />
                 <p className="text-xs text-muted-foreground">
                   Indirizzo da cui verranno generati i ticket via email
@@ -237,7 +237,7 @@ export function BrandingForm({
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{nome || 'Tenant'}</p>
               <p className="codice text-[10px] uppercase tracking-wider text-muted-foreground">
-                impiantiXplus
+                Kommessa
               </p>
             </div>
             <span

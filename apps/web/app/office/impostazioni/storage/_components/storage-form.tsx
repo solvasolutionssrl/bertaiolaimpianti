@@ -11,7 +11,7 @@ import {
   Input,
   Label,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { AlertTriangle, Cloud, Server } from 'lucide-react';
 import {
   aggiornaStorage,

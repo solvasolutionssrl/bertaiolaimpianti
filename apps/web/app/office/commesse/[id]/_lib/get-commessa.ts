@@ -1,6 +1,6 @@
 import 'server-only';
 import { cache } from 'react';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { notFound } from 'next/navigation';
 
 export type CommessaDettaglio = Awaited<ReturnType<typeof loadCommessa>>;

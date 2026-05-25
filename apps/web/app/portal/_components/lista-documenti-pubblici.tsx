@@ -1,6 +1,6 @@
 import { FileText, FileImage, FileSpreadsheet, File as FileIcon, Download } from 'lucide-react';
 
-import { Card, CardContent } from '@impiantixplus/ui';
+import { Card, CardContent } from '@kommessa/ui';
 
 export interface DocumentoPubblico {
   id: string;

@@ -1,6 +1,6 @@
-import { Card, CardContent } from '@impiantixplus/ui';
+import { Card, CardContent } from '@kommessa/ui';
 import { History } from 'lucide-react';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { EmptyState } from '../../../../_components/empty-state';
 import { descriviAuditEvent, fmtDataOra } from '../../../_lib/format';
 

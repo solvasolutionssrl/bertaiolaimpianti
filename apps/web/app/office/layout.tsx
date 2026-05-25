@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { ImpersonationBanner } from './_components/impersonation-banner';
@@ -69,7 +69,7 @@ export default async function OfficeLayout({
   };
 
   const tenant = {
-    name: tenantRes.data?.nome ?? 'impiantiXplus',
+    name: tenantRes.data?.nome ?? 'Kommessa',
     logoUrl: tenantRes.data?.logo_url ?? undefined,
     brandColor: tenantRes.data?.brand_color ?? undefined,
   };

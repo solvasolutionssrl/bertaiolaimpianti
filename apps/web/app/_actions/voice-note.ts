@@ -2,9 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import type { Json } from '@impiantixplus/api';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import type { Json } from '@kommessa/api';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 /**
  * Server Action: salva un transcript di nota vocale legato a una commessa.

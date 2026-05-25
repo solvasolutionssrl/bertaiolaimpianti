@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Timer } from 'lucide-react';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../_lib/guard';
 import {

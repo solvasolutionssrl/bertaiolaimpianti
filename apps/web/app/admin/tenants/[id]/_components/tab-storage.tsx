@@ -25,7 +25,7 @@ import {
   Input,
   Label,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 import { aggiornaTenant } from '../../../_actions/tenants';
 import {

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import type { TenantContext } from '@impiantixplus/api/tenant';
+import type { TenantContext } from '@kommessa/api/tenant';
 import { getTenantContextCached as getTenantContext } from '../../_lib/tenant-cache';
 
 /**

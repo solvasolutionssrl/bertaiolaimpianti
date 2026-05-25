@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Input } from '@impiantixplus/ui';
+import { Input } from '@kommessa/ui';
 import { Search } from 'lucide-react';
 
 export function TenantsSearch() {

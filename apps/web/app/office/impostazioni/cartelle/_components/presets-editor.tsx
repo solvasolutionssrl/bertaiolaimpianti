@@ -3,8 +3,8 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Loader2, Eye, Upload, AlertCircle } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
-import type { AppRole } from '@impiantixplus/api';
+import { Button } from '@kommessa/ui';
+import type { AppRole } from '@kommessa/api';
 
 import { aggiornaFolderPreset } from '../../../../_actions/folder-acl';
 

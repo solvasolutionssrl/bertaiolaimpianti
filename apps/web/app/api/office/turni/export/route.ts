@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 import {
   fetchInterventi,

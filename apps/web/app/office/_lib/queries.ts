@@ -1,6 +1,6 @@
 import 'server-only';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import type { TenantContext } from '@impiantixplus/api';
+import { createServerSupabase } from '@kommessa/api/server';
+import type { TenantContext } from '@kommessa/api';
 
 /**
  * Aggregati read-only per la dashboard ufficio.

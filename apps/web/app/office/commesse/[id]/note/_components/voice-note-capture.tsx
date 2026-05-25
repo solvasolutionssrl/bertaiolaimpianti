@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 import { VoiceRecorder } from '../../../../../_components/voice-recorder';
 import { salvaNotaVocale } from '../../../../../_actions/voice-note';

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 import {
   chatCompletionStream,
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     .join('\n');
 
   const systemPrompt = [
-    'Sei "Co-pilot operativo" di impiantiXplus, gestionale per impianti elettrici/idraulici.',
+    'Sei "Co-pilot operativo" di Kommessa, gestionale per impianti elettrici/idraulici.',
     `Tenant corrente: ${ctx.tenantSlug}. Ruolo utente: ${ctx.role}.`,
     'Rispondi sempre in italiano, in modo conciso e operativo.',
     'Non inventare dati: se mancano informazioni, dichiaralo.',

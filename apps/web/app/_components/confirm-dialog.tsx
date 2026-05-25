@@ -10,7 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 interface Props {
   open: boolean;

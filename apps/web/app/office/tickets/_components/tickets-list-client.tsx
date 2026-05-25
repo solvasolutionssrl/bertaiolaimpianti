@@ -13,7 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { Download, Flag, UserCheck, Workflow } from 'lucide-react';
 
 import { SlaBadge, isSlaAlerting, type SlaStatus } from './sla-badge';

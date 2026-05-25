@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import type { UploadProgressMap } from '../_lib/upload-media';
 
 export interface MediaFile {

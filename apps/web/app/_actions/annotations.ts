@@ -2,15 +2,15 @@
 
 import { revalidatePath } from 'next/cache';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
-import type { Json } from '@impiantixplus/api';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import type { Json } from '@kommessa/api';
 import {
   getStorageProvider,
   type StorageProvider,
   type StorageProviderName,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 import type { Shape } from '../_lib/annotation-shapes';
 

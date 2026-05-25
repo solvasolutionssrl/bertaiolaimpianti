@@ -1,5 +1,5 @@
 import { Building2 } from 'lucide-react';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../../_lib/guard';
 import { SectionHeader } from '../../../_components/section-header';
 import { NuovoTenantWizard } from './_components/wizard';

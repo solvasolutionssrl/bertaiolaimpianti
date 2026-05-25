@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Mic, Square, AlertTriangle, X } from 'lucide-react';
 
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 /**
  * Voice recorder condiviso (office desktop + mobile PWA voice-intake).

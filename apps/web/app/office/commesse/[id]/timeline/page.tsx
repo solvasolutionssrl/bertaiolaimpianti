@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { CalendarRange } from 'lucide-react';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { EmptyState } from '../../../../_components/empty-state';
 import { loadCommessa } from '../_lib/get-commessa';
 import { fmtData } from '../../../_lib/format';

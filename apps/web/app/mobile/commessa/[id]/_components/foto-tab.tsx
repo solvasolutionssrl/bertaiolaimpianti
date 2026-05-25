@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Camera, Upload, ImageIcon, Video } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import { Divider, Stagger } from '../../../_components/blueprint';
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';

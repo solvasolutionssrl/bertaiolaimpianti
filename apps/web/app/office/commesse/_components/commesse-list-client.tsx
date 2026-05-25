@@ -15,7 +15,7 @@ import {
   DialogTitle,
   Input,
   StatoBadge,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { Download, Tag, UserCheck, Workflow } from 'lucide-react';
 
 import { useBulkSelection } from '../../_components/use-bulk-selection';

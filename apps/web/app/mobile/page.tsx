@@ -12,10 +12,10 @@ import {
   Briefcase,
 } from 'lucide-react';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { StatoLed } from '@impiantixplus/ui';
-import type { StatoCommessa } from '@impiantixplus/api/types';
-import { getMobileShell } from '@impiantixplus/api/types';
+import { createServerSupabase } from '@kommessa/api/server';
+import { StatoLed } from '@kommessa/ui';
+import type { StatoCommessa } from '@kommessa/api/types';
+import { getMobileShell } from '@kommessa/api/types';
 
 import { guardMobile } from './_lib/guard';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';

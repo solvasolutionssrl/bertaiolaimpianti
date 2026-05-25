@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Upload, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import {
   MediaAttachSection,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { Button, Card, CardContent, Input, Label } from '@impiantixplus/ui';
+import { Button, Card, CardContent, Input, Label } from '@kommessa/ui';
 import { Save } from 'lucide-react';
 import { aggiornaSlaPolicy } from '../_actions/sla';
 

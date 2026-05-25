@@ -19,7 +19,7 @@
 import * as React from 'react';
 import { X, Save, Loader2, ArrowLeft } from 'lucide-react';
 
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import { AnnotationStatusBar } from './status-bar';
 import type { SaveStatus } from './types';

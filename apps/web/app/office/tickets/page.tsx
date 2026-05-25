@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { Button } from '@impiantixplus/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { Button } from '@kommessa/ui';
 import { Inbox, Plus, TicketCheck } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';

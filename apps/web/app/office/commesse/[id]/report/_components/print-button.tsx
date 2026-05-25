@@ -1,7 +1,7 @@
 'use client';
 
 import { Printer } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 /**
  * Bottone "Stampa / Salva PDF" — usa il dialog di stampa nativo del browser.

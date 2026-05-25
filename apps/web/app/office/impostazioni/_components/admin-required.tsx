@@ -1,5 +1,5 @@
 import { Lock } from 'lucide-react';
-import { Card, CardContent } from '@impiantixplus/ui';
+import { Card, CardContent } from '@kommessa/ui';
 
 export function AdminRequiredNotice({
   message = 'Solo gli amministratori del tenant possono modificare questa sezione.',

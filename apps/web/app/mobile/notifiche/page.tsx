@@ -14,8 +14,8 @@ import {
   Briefcase,
 } from 'lucide-react';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 
 import { guardMobile } from '../_lib/guard';
 import { Hero, HeroMeta, MetaLine, Stagger } from '../_components/blueprint';

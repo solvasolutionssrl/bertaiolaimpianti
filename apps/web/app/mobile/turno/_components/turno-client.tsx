@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin, Play, Square, Timer } from 'lucide-react';
 
-import { Button, Card, CardContent } from '@impiantixplus/ui';
+import { Button, Card, CardContent } from '@kommessa/ui';
 
 import { iniziaTurno, terminaTurno } from '../../_actions/turno';
 

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.tenants (
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE  public.tenants IS 'Tenant SaaS: un record per cliente impiantiXplus. RLS scope universale via JWT custom claim tenant_id.';
+COMMENT ON TABLE  public.tenants IS 'Tenant SaaS: un record per cliente Kommessa. RLS scope universale via JWT custom claim tenant_id.';
 COMMENT ON COLUMN public.tenants.slug IS 'Slug tecnico (uppercase preferito). Entra nel codice interno commessa: <SLUG>-<AA>-<NNN>.';
 COMMENT ON COLUMN public.tenants.storage_config IS 'Configurazione provider: bucket Supabase, oppure base_url WebDAV + credenziali Nextcloud (referenziate da Vault).';
 

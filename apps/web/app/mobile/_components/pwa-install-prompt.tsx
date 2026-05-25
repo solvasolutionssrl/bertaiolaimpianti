@@ -201,7 +201,7 @@ export function PwaInstallPrompt() {
                   id="pwa-install-title"
                   className="text-lg font-semibold leading-tight tracking-tight text-foreground"
                 >
-                  {isIos ? 'Aggiungi alla Home' : 'Installa impiantiXplus'}
+                  {isIos ? 'Aggiungi alla Home' : 'Installa Kommessa'}
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {isIos

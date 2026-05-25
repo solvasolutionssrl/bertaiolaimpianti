@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { AlertTriangle, ChevronRight, Folder, FileText, FolderOpen } from 'lucide-react';
-import { Card, CardContent } from '@impiantixplus/ui';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { getStorageProvider, type StorageObject } from '@impiantixplus/integrations/storage';
+import { Card, CardContent } from '@kommessa/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { getStorageProvider, type StorageObject } from '@kommessa/integrations/storage';
 import { EmptyState } from '../../../../_components/empty-state';
 import { loadCommessa } from '../_lib/get-commessa';
 import { fmtBytes, fmtData } from '../../../_lib/format';

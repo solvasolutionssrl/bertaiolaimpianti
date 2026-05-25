@@ -2,11 +2,11 @@
 
 import { z } from 'zod';
 
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServiceSupabase } from '@kommessa/api/service';
 import {
   NextcloudStorageProvider,
   type StorageObject,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 import { requirePlatformAdmin } from '../_lib/guard';
 

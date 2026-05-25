@@ -1,8 +1,8 @@
 'use server';
 
 import { z } from 'zod';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 const togglePrefSchema = z.object({
   eventCode: z.string().min(1).max(64),

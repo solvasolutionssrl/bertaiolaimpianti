@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { Card, CardContent, Input } from '@impiantixplus/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { Card, CardContent, Input } from '@kommessa/ui';
 import { FileText, Folder, Image as ImgIcon, Search, TicketCheck } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { fmtData } from '../_lib/format';

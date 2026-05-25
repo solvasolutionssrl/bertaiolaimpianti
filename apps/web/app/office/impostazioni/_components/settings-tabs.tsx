@@ -13,7 +13,7 @@ import {
   UsersRound,
   type LucideIcon,
 } from 'lucide-react';
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 interface Tab {
   id: string;

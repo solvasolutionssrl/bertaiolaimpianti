@@ -19,7 +19,7 @@ import {
   Input,
   Label,
   StatoBadge,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 import { creaCommessa } from '../../_actions/crea-commessa';
 import { ContactPickerButton } from '../../_components/contact-picker-button';

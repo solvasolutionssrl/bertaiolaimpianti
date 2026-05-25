@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 import { VoiceRecorder } from '../../../_components/voice-recorder';
 import {

@@ -9,7 +9,7 @@ import {
   CardContent,
   Input,
   Label,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { aggiornaTenant } from '../../../_actions/tenants';
 import { useAlert } from '@/app/_components/confirm-provider';
 

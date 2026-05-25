@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Card, CardContent } from '@impiantixplus/ui';
+import { Button, Card, CardContent } from '@kommessa/ui';
 import { inviaMessaggio } from '../../../_actions/tickets';
 
 export function RispostaForm({ ticketId }: { ticketId: string }) {

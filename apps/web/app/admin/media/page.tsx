@@ -10,8 +10,8 @@ import {
   XCircle,
   Trash2,
 } from 'lucide-react';
-import { Badge, Card, CardContent } from '@impiantixplus/ui';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { Badge, Card, CardContent } from '@kommessa/ui';
+import { createServiceSupabase } from '@kommessa/api/service';
 
 import { requirePlatformAdmin } from '../_lib/guard';
 import { SectionHeader } from '../../_components/section-header';

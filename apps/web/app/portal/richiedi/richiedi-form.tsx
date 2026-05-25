@@ -4,7 +4,7 @@ import { useFormState, useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import { CheckCircle2, Send } from 'lucide-react';
 
-import { Button, Input, Label } from '@impiantixplus/ui';
+import { Button, Input, Label } from '@kommessa/ui';
 
 import { creaTicketDaPortale, type CreaTicketResult } from '../_actions/ticket';
 

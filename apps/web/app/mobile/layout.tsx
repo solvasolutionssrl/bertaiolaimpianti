@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 
-import { getMobileShell } from '@impiantixplus/api/types';
+import { getMobileShell } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
@@ -18,7 +18,7 @@ import { MOBILE_TOUR_STEPS } from '../_components/onboarding-tour-steps';
  * Le icone dei tab vivono in BottomNavShell (Client Component).
  */
 export const metadata: Metadata = {
-  title: 'impiantiXplus mobile',
+  title: 'Kommessa mobile',
   other: {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',

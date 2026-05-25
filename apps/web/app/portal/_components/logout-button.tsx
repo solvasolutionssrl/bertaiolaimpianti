@@ -4,8 +4,8 @@ import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 
-import { Button } from '@impiantixplus/ui';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+import { Button } from '@kommessa/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 /**
  * Pulsante logout (client component) — invoca `supabase.auth.signOut()`

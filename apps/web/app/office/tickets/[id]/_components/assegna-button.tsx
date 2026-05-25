@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 import { Shuffle } from 'lucide-react';
 import { assegnaRoundRobin } from '../../../_actions/tickets';
 

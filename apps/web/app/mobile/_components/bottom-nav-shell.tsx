@@ -12,8 +12,8 @@ import {
   LayoutDashboard,
 } from 'lucide-react';
 
-import { MobileBottomNav, type MobileTab, type MobileTabId } from '@impiantixplus/ui';
-import type { MobileShell } from '@impiantixplus/api/types';
+import { MobileBottomNav, type MobileTab, type MobileTabId } from '@kommessa/ui';
+import type { MobileShell } from '@kommessa/api/types';
 
 import { useRealtimeUnread } from './use-realtime-unread';
 

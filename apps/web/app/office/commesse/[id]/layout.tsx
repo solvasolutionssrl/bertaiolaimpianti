@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowLeft, FileText } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
-import type { StatoCommessa } from '@impiantixplus/api/types';
+import { Button } from '@kommessa/ui';
+import type { StatoCommessa } from '@kommessa/api/types';
 
 import { loadCommessa } from './_lib/get-commessa';
 import { fmtData } from '../../_lib/format';
@@ -12,7 +12,7 @@ import {
   elencaTecniciAssegnati,
   elencaTecniciTenant,
 } from '../../../_actions/commessa-tecnici';
-import { requireTenantContext } from '@impiantixplus/api/tenant';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 export default async function CommessaLayout({
   params,

@@ -10,8 +10,8 @@ import {
   CardHeader,
   CardTitle,
   StatoBadge,
-} from '@impiantixplus/ui';
-import { createServerSupabase } from '@impiantixplus/api/server';
+} from '@kommessa/ui';
+import { createServerSupabase } from '@kommessa/api/server';
 
 import { requirePortalContext } from './_lib/portal-context';
 import { ProgressFasi } from './_components/progress-fasi';

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import { retrySyncFile } from '../_actions/sync';
 

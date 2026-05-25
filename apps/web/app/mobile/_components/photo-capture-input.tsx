@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Camera, ImagePlus, X } from 'lucide-react';
 
-import { cn } from '@impiantixplus/ui';
+import { cn } from '@kommessa/ui';
 
 /**
  * PhotoCaptureInput — wrapper su `<input type="file" capture>` che:

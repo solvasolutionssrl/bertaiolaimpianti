@@ -1,4 +1,4 @@
-import { Skeleton } from '@impiantixplus/ui';
+import { Skeleton } from '@kommessa/ui';
 
 /**
  * Loading skeleton per /office (dashboard).

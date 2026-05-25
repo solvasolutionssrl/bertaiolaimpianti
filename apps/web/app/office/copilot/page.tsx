@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Sparkles } from 'lucide-react';
 
-import { Card, CardContent } from '@impiantixplus/ui';
+import { Card, CardContent } from '@kommessa/ui';
 
 import { requireTenantContextCached as requireTenantContext } from '../../_lib/tenant-cache';
 import { SectionHeader } from '../../_components/section-header';

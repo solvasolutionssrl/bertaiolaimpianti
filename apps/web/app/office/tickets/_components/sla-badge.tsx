@@ -1,4 +1,4 @@
-import { Badge, cn } from '@impiantixplus/ui';
+import { Badge, cn } from '@kommessa/ui';
 import { AlertTriangle, CheckCircle2, Clock, TimerOff } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -27,7 +27,7 @@ interface BadgeConfig {
  *  - breach   -> rosso  (--destructive)
  *  - ok       -> muted neutro
  *
- * I colori vengono dai design token del preset Tailwind di @impiantixplus/ui,
+ * I colori vengono dai design token del preset Tailwind di @kommessa/ui,
  * NON da classi hardcoded di Tailwind (niente bg-orange-500 ecc.).
  */
 const SLA_BADGE_CONFIG: Record<SlaStatus, BadgeConfig> = {

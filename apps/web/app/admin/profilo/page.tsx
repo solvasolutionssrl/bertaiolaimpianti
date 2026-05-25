@@ -1,5 +1,5 @@
 import { UserCog } from 'lucide-react';
-import { Card, CardContent, Badge } from '@impiantixplus/ui';
+import { Card, CardContent, Badge } from '@kommessa/ui';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { SectionHeader } from '../../_components/section-header';
 import { CambioPasswordForm } from './_components/cambio-password-form';

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Bell, BellOff, BellRing, Loader2 } from 'lucide-react';
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 

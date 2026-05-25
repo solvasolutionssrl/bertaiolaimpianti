@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 /**
  * Hook real-time unread badge — si subscribe alla tabella `notifiche`

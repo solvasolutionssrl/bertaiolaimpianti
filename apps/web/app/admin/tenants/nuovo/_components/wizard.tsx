@@ -11,7 +11,7 @@ import {
   Label,
   Badge,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { ArrowLeft, ArrowRight, Check, Loader2, Send, Plug, XCircle } from 'lucide-react';
 import {
   creaTenant,

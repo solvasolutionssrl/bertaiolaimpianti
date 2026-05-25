@@ -28,7 +28,7 @@ import {
   Card,
   CardContent,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import {
   aggiungiNotaTodo,
   cambiaTodoStato,

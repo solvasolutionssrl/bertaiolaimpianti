@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
-import { Input } from '@impiantixplus/ui';
+import { Input } from '@kommessa/ui';
 
 interface Props {
   tenants: Array<{ id: string; slug: string; nome: string }>;

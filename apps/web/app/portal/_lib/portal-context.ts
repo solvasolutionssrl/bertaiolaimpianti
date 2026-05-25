@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 /**
  * Contesto runtime del portale cliente.

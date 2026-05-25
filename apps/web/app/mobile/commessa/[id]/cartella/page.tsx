@@ -7,13 +7,13 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import {
   getStorageProvider,
   type StorageObject,
   type StorageProviderName,
-} from '@impiantixplus/integrations/storage';
+} from '@kommessa/integrations/storage';
 
 import { guardMobile } from '../../../_lib/guard';
 import { Hero, HeroMeta, MetaLine } from '../../../_components/blueprint';

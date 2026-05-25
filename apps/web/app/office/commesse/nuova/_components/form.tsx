@@ -33,8 +33,8 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@impiantixplus/ui';
-import { createBrowserSupabase } from '@impiantixplus/api/client';
+} from '@kommessa/ui';
+import { createBrowserSupabase } from '@kommessa/api/client';
 
 import { creaCommessa } from '../../../../_actions/crea-commessa';
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';

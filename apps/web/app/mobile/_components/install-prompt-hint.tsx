@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Smartphone, Share, Plus, MoreVertical, Download } from 'lucide-react';
 
-import { Button, Card, CardContent, CardHeader, CardTitle } from '@impiantixplus/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 
 /**
  * Tipo del BeforeInstallPromptEvent (non-standard, Chromium-only).
@@ -84,7 +84,7 @@ export function InstallPromptHint() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Per usare impiantiXplus come una vera app — full-screen e con icona
+          Per usare Kommessa come una vera app — full-screen e con icona
           dedicata — installala sul telefono.
         </p>
 
@@ -128,7 +128,7 @@ export function InstallPromptHint() {
                 3
               </span>
               <span>
-                Conferma con <strong>Aggiungi</strong>: l'icona impiantiXplus
+                Conferma con <strong>Aggiungi</strong>: l'icona Kommessa
                 comparirà nella schermata Home.
               </span>
             </li>

@@ -13,7 +13,7 @@ import {
   X as XIcon,
 } from 'lucide-react';
 
-import { Button, Label } from '@impiantixplus/ui';
+import { Button, Label } from '@kommessa/ui';
 
 import { PhotoCaptureInput } from '../../../_components/photo-capture-input';
 import { PhotoAnnotationEditor } from '../../../../_components/photo-annotation-loader';

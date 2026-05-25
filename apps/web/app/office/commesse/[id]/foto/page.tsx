@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { Image as ImgIcon } from 'lucide-react';
 import { EmptyState } from '../../../../_components/empty-state';
 import { FotoGrid, type FotoItem } from './foto-grid';

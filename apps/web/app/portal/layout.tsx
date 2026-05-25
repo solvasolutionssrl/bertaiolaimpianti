@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import Link from 'next/link';
 import { headers } from 'next/headers';
 
-import { TenantBranding } from '@impiantixplus/ui';
+import { TenantBranding } from '@kommessa/ui';
 
 import { getPortalContextOrNull } from './_lib/portal-context';
 import { LogoutButton } from './_components/logout-button';

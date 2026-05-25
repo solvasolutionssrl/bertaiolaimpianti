@@ -324,7 +324,7 @@ function OfficeShell({
           </span>
           <div className="flex min-w-0 flex-col leading-none">
             <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              impiantiXplus
+              Kommessa
             </span>
             <span className="mt-1 hidden truncate text-[15px] font-semibold tracking-tight text-foreground sm:inline-flex sm:items-center sm:gap-1.5">
               <Building2 className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
@@ -527,7 +527,7 @@ function OfficeShell({
                 </span>
                 <div className="flex flex-col leading-none">
                   <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                    impiantiXplus
+                    Kommessa
                   </span>
                   <span className="mt-1 text-sm font-semibold tracking-tight">
                     {tenant.name}

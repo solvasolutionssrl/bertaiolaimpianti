@@ -1,6 +1,6 @@
 import { Layers } from 'lucide-react';
-import { Card, CardContent } from '@impiantixplus/ui';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { Card, CardContent } from '@kommessa/ui';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { SectionHeader } from '../../_components/section-header';
 import { PianiTable } from './_components/piani-table';

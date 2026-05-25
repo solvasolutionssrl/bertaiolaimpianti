@@ -9,14 +9,14 @@ import {
   AREA_LABELS,
   LEVEL_LABELS,
   getRoleDefaultPermissions,
-} from '@impiantixplus/api/types';
+} from '@kommessa/api/types';
 import type {
   PermissionArea,
   PermissionLevelMap,
   UserPermissionOverrides,
   EffectivePermissions,
-} from '@impiantixplus/api/types';
-import type { AppRole } from '@impiantixplus/api';
+} from '@kommessa/api/types';
+import type { AppRole } from '@kommessa/api';
 import { salvaPermessi } from '../_actions/permissions';
 import { useAlert } from '@/app/_components/confirm-provider';
 

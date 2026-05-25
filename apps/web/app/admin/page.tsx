@@ -9,8 +9,8 @@ import {
   RefreshCw,
   Users,
 } from 'lucide-react';
-import { Badge, Button, Card, CardContent, KpiCard } from '@impiantixplus/ui';
-import { createServiceSupabase } from '@impiantixplus/api/service';
+import { Badge, Button, Card, CardContent, KpiCard } from '@kommessa/ui';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from './_lib/guard';
 import { UsageBar } from './_components/usage-bar';
 import { TenantStatusBadge } from './_components/tenant-status-badge';
@@ -182,7 +182,7 @@ export default async function AdminDashboardPage() {
             Platform overview
           </h1>
           <p className="mt-1 text-xs text-muted-foreground">
-            Sintesi cross-tenant di SOLVA · impiantiXplus
+            Sintesi cross-tenant di SOLVA · Kommessa
           </p>
         </div>
         <form action={refreshSnapshot}>

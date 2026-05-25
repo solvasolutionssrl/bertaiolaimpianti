@@ -305,7 +305,7 @@ async function deliverNotification(admin: SupabaseClient, n: DeliverInput) {
       const { data: authUser } = await admin.auth.admin.getUserById(n.userId);
       const email = authUser?.user?.email;
       if (email) {
-        await sendEmail(email, `[impiantiXplus] ${n.title}`, `${n.body}\n\n${n.url ?? ''}\n`);
+        await sendEmail(email, `[Kommessa] ${n.title}`, `${n.body}\n\n${n.url ?? ''}\n`);
       }
     } catch (e) {
       console.error('[notify-event] email fallback failed', e);
@@ -355,7 +355,7 @@ async function deliverPushViaRelay(input: {
 async function sendEmail(to: string, subject: string, text: string): Promise<void> {
   const apiKey = Deno.env.get('RESEND_API_KEY');
   if (!apiKey) return;
-  const from = Deno.env.get('RESEND_FROM') ?? 'impiantiXplus <notify@impiantixplus.it>';
+  const from = Deno.env.get('RESEND_FROM') ?? 'Kommessa <notify@kommessa.it>';
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {

@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Download, ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { Button } from '@impiantixplus/ui';
+import { Button } from '@kommessa/ui';
 
 import type { CommessaOpt, UtenteOpt } from '../_lib/queries';
 

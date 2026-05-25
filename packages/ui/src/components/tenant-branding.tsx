@@ -14,7 +14,7 @@ export interface TenantBrandingProps
   brandColor?: string;
   /** Nome tenant esposto a fianco del logo. */
   tenantName: string;
-  /** Nome prodotto (default: impiantiXplus). */
+  /** Nome prodotto (default: Kommessa). */
   productName?: string;
   /** Nasconde il nome prodotto, lasciando solo il logo tenant. */
   hideProductName?: boolean;
@@ -27,7 +27,7 @@ export interface TenantBrandingProps
  * Più sobrio del brand_color tenant — quello viene comunque esposto come
  * CSS var `--brand-color` per accent secondari (es. bordi superiori, hover).
  *
- * Mockup_UI §"Layout generale Web": `[logo Bertaiola]  impiantiXplus`.
+ * Mockup_UI §"Layout generale Web": `[logo Bertaiola]  Kommessa`.
  */
 const TenantBranding = React.forwardRef<HTMLDivElement, TenantBrandingProps>(
   (
@@ -35,7 +35,7 @@ const TenantBranding = React.forwardRef<HTMLDivElement, TenantBrandingProps>(
       logoUrl,
       brandColor,
       tenantName,
-      productName = 'impiantiXplus',
+      productName = 'Kommessa',
       hideProductName,
       className,
       style,

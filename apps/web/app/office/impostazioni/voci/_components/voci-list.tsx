@@ -17,7 +17,7 @@ import {
   Input,
   Label,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { ChevronDown, RotateCcw } from 'lucide-react';
 import {
   resetVoceOverride,

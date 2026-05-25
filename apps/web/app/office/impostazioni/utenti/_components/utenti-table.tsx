@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   cn,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 import { MoreHorizontal, ShieldCheck, UserMinus, UserPlus2, Sliders } from 'lucide-react';
 import {
   cambiaRuolo,
@@ -26,8 +26,8 @@ import {
 } from '../_actions/utenti';
 import { InviteDialog } from './invite-dialog';
 import { PermissionsSheet } from './permissions-sheet';
-import type { AppRole } from '@impiantixplus/api';
-import type { UserPermissionOverrides } from '@impiantixplus/api/types';
+import type { AppRole } from '@kommessa/api';
+import type { UserPermissionOverrides } from '@kommessa/api/types';
 import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 
 export interface UtenteRow {

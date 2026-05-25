@@ -14,10 +14,10 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@impiantixplus/ui';
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { createServiceSupabase } from '@impiantixplus/api/service';
-import { getStorageProvider, type StorageProviderConfig } from '@impiantixplus/integrations/storage';
+} from '@kommessa/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { getStorageProvider, type StorageProviderConfig } from '@kommessa/integrations/storage';
 
 import { requirePortalContext } from '../../_lib/portal-context';
 import {

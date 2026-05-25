@@ -1,5 +1,5 @@
 import type { Config } from 'tailwindcss';
-import sharedPreset from '@impiantixplus/ui/tailwind-preset';
+import sharedPreset from '@kommessa/ui/tailwind-preset';
 
 const config: Config = {
   presets: [sharedPreset],

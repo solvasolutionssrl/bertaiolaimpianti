@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { ShieldCheck } from 'lucide-react';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
-import { Avatar, AvatarFallback } from '@impiantixplus/ui';
+import { createServerSupabase } from '@kommessa/api/server';
+import { Avatar, AvatarFallback } from '@kommessa/ui';
 
 import { guardMobile } from '../_lib/guard';
 import { InstallPromptHint } from '../_components/install-prompt-hint';
@@ -114,7 +114,7 @@ export default async function ProfiloPage() {
       <LogoutButton />
 
       <footer className="mt-auto pt-6 text-center text-[10px] uppercase tracking-wider text-muted-foreground">
-        impiantiXplus · powered by SOLVA
+        Kommessa · powered by SOLVA
       </footer>
     </div>
   );

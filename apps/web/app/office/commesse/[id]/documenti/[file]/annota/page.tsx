@@ -15,7 +15,7 @@
 
 import { notFound, redirect } from 'next/navigation';
 
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 
 import { PdfAnnotatorStandalone } from './client';
 

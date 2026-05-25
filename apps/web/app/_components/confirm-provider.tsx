@@ -10,7 +10,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@impiantixplus/ui';
+} from '@kommessa/ui';
 
 /**
  * Provider globale per sostituire window.confirm() / window.alert() nativi

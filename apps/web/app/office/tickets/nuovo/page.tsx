@@ -1,4 +1,4 @@
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { createServerSupabase } from '@kommessa/api/server';
 import { NuovoTicketForm } from './_components/form';
 
 export const metadata = { title: 'Nuovo ticket' };

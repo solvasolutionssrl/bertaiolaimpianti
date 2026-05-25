@@ -3,7 +3,7 @@
 **Versione**: 1.0
 **Stato**: attivo (Sprint 0)
 
-Tutto il backend di impiantiXplus vive su Supabase Pro, region **Frankfurt EU** (GDPR). Questo folder contiene:
+Tutto il backend di Kommessa vive su Supabase Pro, region **Frankfurt EU** (GDPR). Questo folder contiene:
 
 - `migrations/` — schema SQL versionato. Una migrazione = un cambio strutturale. **Mai modificare** migrazioni già pushate.
 - `functions/` — Edge Functions Deno (webhook inbound email, notifyOnEvent, ...). TBD.
@@ -127,7 +127,7 @@ Bypass RLS solo da:
 - Edge Functions con service-role key
 - Script one-time (vedi `scripts/migrate-freshdesk.ts` → usa `createServiceSupabase()`)
 
-Non importare mai `@impiantixplus/api/service` da componenti client.
+Non importare mai `@kommessa/api/service` da componenti client.
 
 ---
 

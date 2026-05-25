@@ -2,7 +2,7 @@ import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
 
 /**
- * impiantiXplus — design tokens.
+ * Kommessa — design tokens.
  * Brand cliente: Bertaiola → Blu profondo (primary) + Arancio caldo (accent).
  * Font: Geist Sans (body) + Geist Mono (codici/numeri).
  */

@@ -1,5 +1,5 @@
-import { requireTenantContext } from '@impiantixplus/api/tenant';
-import { createServerSupabase } from '@impiantixplus/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
 import { ListTree, PackageOpen } from 'lucide-react';
 import { EmptyState } from '../../../_components/empty-state';
 import { SectionHeader } from '../_components/section-header';
