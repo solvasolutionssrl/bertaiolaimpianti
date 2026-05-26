@@ -520,22 +520,22 @@ export default async function CommessaDetailPage({
       </section>
 
       {/* ── 02 / DETTAGLI (compatto) ─────────────────────────────────── */}
-      <section className="space-y-2 animate-fade-up [animation-delay:60ms]">
+      <section className="space-y-1.5 animate-fade-up [animation-delay:60ms]">
         <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
           Nota del capo
         </h2>
-        <article className="relative overflow-hidden rounded-lg border border-border bg-card p-3 shadow-soft">
+        <article className="relative overflow-hidden rounded-lg border border-border bg-card p-2.5 shadow-soft">
           {/* Linea brand verticale a sinistra */}
           <span
             aria-hidden="true"
-            className="absolute left-0 top-3 bottom-3 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
+            className="absolute left-0 top-2.5 bottom-2.5 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
           />
           {dettagliTesto ? (
-            <p className="whitespace-pre-wrap pl-3 text-[14px] leading-relaxed text-foreground">
+            <p className="whitespace-pre-wrap pl-3 text-[13px] leading-snug text-foreground">
               {dettagliTesto}
             </p>
           ) : (
-            <p className="pl-3 text-sm italic text-muted-foreground">
+            <p className="pl-3 text-[13px] italic text-muted-foreground">
               Nessun dettaglio salvato. Le commesse create via voice intake
               memorizzano qui la nota completa del capo.
             </p>
@@ -546,14 +546,6 @@ export default async function CommessaDetailPage({
             canEdit={canEditDettagli}
           />
         </article>
-
-        {/* Pannello tecnici (sotto la card dettagli) */}
-        <TecniciMobile
-          commessaId={params.id}
-          assigned={tecniciAssegnati}
-          available={tecniciTenant}
-          canManage={canManageTecnici}
-        />
       </section>
 
       {/* ── 03 / Tab principali — l'utente si muove qui dentro ─────────── */}
@@ -567,7 +559,7 @@ export default async function CommessaDetailPage({
           {/* TabsList contrastata — attiva = blu pieno con testo bianco,
               inattive = grigio chiaro con testo soft. Tap target h-11
               touch-friendly. */}
-          <TabsList className="grid w-full grid-cols-4 rounded-xl border border-border bg-muted p-1 shadow-soft">
+          <TabsList className="grid h-11 w-full grid-cols-4 items-center rounded-xl border border-border bg-muted p-1 shadow-soft">
             <TabsTrigger
               value="todo"
               className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
@@ -607,7 +599,13 @@ export default async function CommessaDetailPage({
           </TabsList>
 
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="mt-5">
+          <TabsContent value="todo" className="mt-3 space-y-3">
+            <TecniciMobile
+              commessaId={params.id}
+              assigned={tecniciAssegnati}
+              available={tecniciTenant}
+              canManage={canManageTecnici}
+            />
             <CommessaLavoriMobile
               commessaId={params.id}
               contestoCommessa={[
