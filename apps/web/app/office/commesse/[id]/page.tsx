@@ -118,7 +118,10 @@ function Field({
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
-      <dd className={`col-span-2 ${mono ? 'font-mono text-xs' : ''}`}>
+      <dd
+        className={`col-span-2 min-w-0 truncate ${mono ? 'font-mono text-xs' : ''}`}
+        title={value ?? undefined}
+      >
         {value || '—'}
       </dd>
     </div>
