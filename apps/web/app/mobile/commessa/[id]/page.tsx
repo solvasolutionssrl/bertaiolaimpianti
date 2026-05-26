@@ -535,7 +535,7 @@ export default async function CommessaDetailPage({
           </TabsList>
 
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="m-0 p-3 pt-4">
+          <TabsContent value="todo" className="m-0 bg-muted/30 p-3 pt-4">
             <CommessaLavoriMobile
               commessaId={params.id}
               contestoCommessa={[
@@ -554,7 +554,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
-          <TabsContent value="foto" className="m-0 p-3 pt-4">
+          <TabsContent value="foto" className="m-0 bg-muted/30 p-3 pt-4">
             <FotoTab
               commessaId={params.id}
               sopralluogo={fotoSopralluogo}
@@ -564,7 +564,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE (cloud diretto) ───────────── */}
-          <TabsContent value="file" className="m-0 space-y-3 p-3 pt-4">
+          <TabsContent value="file" className="m-0 space-y-3 bg-muted/30 p-3 pt-4">
             {cloudError ? (
               <CloudRetry />
             ) : sortedCloudEntries.length === 0 ? (
@@ -622,7 +622,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── TECNICI ───────────── */}
-          <TabsContent value="tecnici" className="m-0 p-3 pt-4">
+          <TabsContent value="tecnici" className="m-0 bg-muted/30 p-3 pt-4">
             <TecniciMobile
               commessaId={params.id}
               assigned={tecniciAssegnati}
