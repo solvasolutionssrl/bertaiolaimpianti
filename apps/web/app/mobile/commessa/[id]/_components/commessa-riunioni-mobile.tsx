@@ -1,12 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import {
-  Calendar,
   ChevronDown,
   FileText,
-  Image as ImageIcon,
   Paperclip,
   Sparkles,
   User,
@@ -40,14 +37,6 @@ interface Props {
   riunioni: RiunioneMobileRow[];
 }
 
-/**
- * Vista riunioni mobile per il tecnico: lettura del verbale + reportino AI.
- * Tap su una card → si espande il reportino (o il testo grezzo se non
- * c'è ancora un reportino AI).
- *
- * Il tecnico NON può creare/modificare/eliminare riunioni — quelle sono
- * azioni admin/office (lo enforcement è server-side via RLS).
- */
 export function CommessaRiunioniMobile({ riunioni }: Props) {
   if (riunioni.length === 0) {
     return (
@@ -58,11 +47,23 @@ export function CommessaRiunioniMobile({ riunioni }: Props) {
   }
 
   return (
-    <ul className="space-y-2">
+    <div className="relative pl-5">
+      {/* Rail verticale */}
+      <div className="absolute bottom-1 left-2 top-1 w-px bg-border" aria-hidden="true" />
       {riunioni.map((r) => (
-        <RiunioneCard key={r.id} r={r} />
+        <div key={r.id} className="relative mb-2 last:mb-0">
+          {/* Dot sul rail — primary se ha report AI, altrimenti muted */}
+          <span
+            className={cn(
+              'absolute -left-[11px] top-[18px] h-2 w-2 rounded-full',
+              r.reportino?.trim() ? 'bg-primary' : 'bg-border border border-muted-foreground/30',
+            )}
+            aria-hidden="true"
+          />
+          <RiunioneCard r={r} />
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 
@@ -74,67 +75,53 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
   return (
     <li
       className={cn(
-        'overflow-hidden rounded-lg border bg-card shadow-soft transition-colors',
+        'list-none overflow-hidden rounded-lg border bg-card shadow-soft transition-colors',
         hasReport ? 'border-primary/30' : 'border-border',
       )}
     >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-start gap-3 p-3 text-left active:bg-muted/40"
+        className="flex w-full items-start gap-2 p-3 text-left active:bg-muted/40"
       >
-        <span
-          className={cn(
-            'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-            hasReport
-              ? 'border border-primary/30 bg-primary/10 text-primary'
-              : 'border border-border bg-muted text-muted-foreground',
-          )}
-          aria-hidden="true"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-        </span>
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="text-[15px] font-semibold leading-snug">
-              {r.titolo?.trim() || 'Riunione'}
-            </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
-              {fmtData(r.data_riunione)}
-            </span>
-            {hasReport ? (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
-                <Sparkles className="h-2 w-2" />
-                AI
-              </span>
-            ) : null}
-            {r.allegati.length > 0 ? (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
-                <Paperclip className="h-2 w-2" />
-                {r.allegati.length}
-              </span>
-            ) : null}
+          {/* Data sopra il titolo */}
+          <p className="mb-0.5 font-mono text-[10px] text-muted-foreground">
+            {fmtData(r.data_riunione)}
+            {r.created_by_nome ? ` · ${r.created_by_nome}` : ''}
           </p>
-          {r.created_by_nome ? (
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              <User className="mr-0.5 inline h-2.5 w-2.5" />
-              {r.created_by_nome}
+          <div className="flex items-start gap-1.5">
+            <p className="flex-1 text-[13px] font-medium leading-snug">
+              {r.titolo?.trim() || 'Riunione'}
             </p>
-          ) : null}
+            <div className="flex shrink-0 items-center gap-1">
+              {hasReport ? (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  <Sparkles className="h-2 w-2" />
+                  AI
+                </span>
+              ) : null}
+              {r.allegati.length > 0 ? (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                  <Paperclip className="h-2 w-2" />
+                  {r.allegati.length}
+                </span>
+              ) : null}
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+                  open && 'rotate-180',
+                )}
+              />
+            </div>
+          </div>
           {!open && (hasReport || fallbackText) ? (
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+            <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
               {hasReport ? r.reportino : fallbackText}
             </p>
           ) : null}
         </div>
-        <ChevronDown
-          aria-hidden="true"
-          className={cn(
-            'mt-1 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-180',
-          )}
-        />
       </button>
 
       {open ? (
@@ -219,10 +206,13 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
 
 function fmtData(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('it-IT', {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleDateString('it-IT', {
       day: '2-digit',
       month: 'short',
-      year: 'numeric',
+      year: sameYear ? undefined : '2-digit',
     });
   } catch {
     return iso;

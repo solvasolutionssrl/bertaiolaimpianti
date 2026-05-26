@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Camera, Upload, ImageIcon, Video } from 'lucide-react';
+import { Camera, Loader2, Upload, ImageIcon, Video } from 'lucide-react';
 import { Button, cn } from '@kommessa/ui';
 
 import { Divider, Stagger } from '../../../_components/blueprint';
@@ -197,9 +197,11 @@ function FotoCell({
       title={item.filename}
       aria-label={`Apri ${item.filename}`}
     >
-      {/* Skeleton shimmer finché l'immagine non è caricata */}
-      {thumbSrc && !imgLoaded && (
-        <span className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />
+      {/* Spinner finché l'immagine non è caricata */}
+      {!imgLoaded && (
+        <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/60" />
+        </span>
       )}
 
       {thumbSrc ? (

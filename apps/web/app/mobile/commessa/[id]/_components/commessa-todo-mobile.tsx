@@ -72,15 +72,6 @@ const META: Record<Priorita, { label: string; chip: string; icon: React.Componen
   },
 };
 
-/**
- * Vista TODO per il tecnico mobile.
- *
- * Mostra TUTTI i TODO aperti/in_corso della commessa, con quelli assegnati
- * al tecnico corrente evidenziati. Il tecnico può:
- *  - completare un TODO (qualunque, anche non suo)
- *  - aggiungere una nota
- * NON può: creare, eliminare, riassegnare, cambiare priorità.
- */
 export function CommessaTodoMobile({ todos, currentUserId }: Props) {
   const aperti = React.useMemo(
     () =>
@@ -154,13 +145,14 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
           <h3 className="mb-2 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             <CheckCircle2 className="h-3 w-3" /> Completati ({completati.length})
           </h3>
-          {/* Vertical rail timeline */}
+          {/* Vertical rail — il dot è l'unico indicatore, niente icona nel card */}
           <div className="relative pl-5">
-            <div className="absolute left-2 top-1 bottom-1 w-px bg-border" aria-hidden="true" />
+            <div className="absolute bottom-1 left-2 top-1 w-px bg-border" aria-hidden="true" />
             {completati.map((t) => (
               <div key={t.id} className="relative mb-2 last:mb-0">
+                {/* UN solo dot verde, centrato verticalmente sulla prima riga */}
                 <span
-                  className="absolute -left-3 top-3 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"
+                  className="absolute -left-[11px] top-[18px] h-2 w-2 rounded-full bg-emerald-500"
                   aria-hidden="true"
                 />
                 <div className="opacity-70">
@@ -214,15 +206,12 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
     <li
       className={cn(
         'rounded-lg border bg-card p-3 shadow-soft transition-all',
-        isMine ? 'border-primary/40 ring-1 ring-primary/20' : 'border-border',
+        readonly ? 'border-border' : isMine ? 'border-primary/40 ring-1 ring-primary/20' : 'border-border',
       )}
     >
       <div className="flex items-start gap-2">
-        {readonly ? (
-          <span className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-emerald-600">
-            <CheckCircle2 className="h-6 w-6" />
-          </span>
-        ) : (
+        {/* Nessuna icona cerchio in readonly — il dot del rail è sufficiente */}
+        {!readonly && (
           <button
             type="button"
             onClick={complete}
@@ -242,8 +231,15 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
           onClick={() => setExpanded((e) => !e)}
           className="min-w-0 flex-1 text-left"
         >
+          {/* Data SOPRA il titolo per i completati */}
+          {readonly && todo.completato_at ? (
+            <p className="mb-0.5 font-mono text-[10px] text-emerald-600 dark:text-emerald-400">
+              {fmtDataBreve(todo.completato_at)}
+              {todo.completato_da_nome ? ` · ${todo.completato_da_nome}` : ''}
+            </p>
+          ) : null}
           <div className="flex items-start gap-2">
-            <p className="flex-1 text-[15px] font-medium leading-snug">
+            <p className="flex-1 text-[13px] font-medium leading-snug">
               {todo.titolo}
             </p>
             <Badge
@@ -257,53 +253,45 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
               {meta.label}
             </Badge>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground">
-            {readonly && todo.completato_at ? (
-              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                <CheckCircle2 className="mr-0.5 inline h-2.5 w-2.5" />
-                {fmtDataBreve(todo.completato_at)}
-                {todo.completato_da_nome ? ` · ${todo.completato_da_nome}` : ''}
-              </span>
-            ) : (
-              <>
-                {todo.assegnato_a_nome ? (
-                  <span>
-                    <User className="mr-0.5 inline h-2.5 w-2.5" />
-                    {isMine ? 'Tu' : todo.assegnato_a_nome}
-                  </span>
-                ) : (
-                  <span className="italic">Non assegnato</span>
-                )}
-                {todo.scadenza_at ? (
-                  <span
-                    className={cn(
-                      new Date(todo.scadenza_at) < new Date() &&
-                        'font-semibold text-destructive',
-                    )}
-                  >
-                    <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
-                    {fmtDataBreve(todo.scadenza_at)}
-                  </span>
-                ) : null}
-              </>
-            )}
-            {todo.note.length > 0 ? (
-              <span>
-                <PencilLine className="mr-0.5 inline h-2.5 w-2.5" />
-                {todo.note.length}
-              </span>
-            ) : null}
-            <ChevronDown
-              className={cn(
-                'ml-auto h-3 w-3 transition-transform',
-                expanded && 'rotate-180',
+          {!readonly ? (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground">
+              {todo.assegnato_a_nome ? (
+                <span>
+                  <User className="mr-0.5 inline h-2.5 w-2.5" />
+                  {isMine ? 'Tu' : todo.assegnato_a_nome}
+                </span>
+              ) : (
+                <span className="italic">Non assegnato</span>
               )}
-            />
-          </div>
+              {todo.scadenza_at ? (
+                <span
+                  className={cn(
+                    new Date(todo.scadenza_at) < new Date() &&
+                      'font-semibold text-destructive',
+                  )}
+                >
+                  <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
+                  {fmtDataBreve(todo.scadenza_at)}
+                </span>
+              ) : null}
+              {todo.note.length > 0 ? (
+                <span>
+                  <PencilLine className="mr-0.5 inline h-2.5 w-2.5" />
+                  {todo.note.length}
+                </span>
+              ) : null}
+              <ChevronDown
+                className={cn(
+                  'ml-auto h-3 w-3 transition-transform',
+                  expanded && 'rotate-180',
+                )}
+              />
+            </div>
+          ) : null}
         </button>
       </div>
 
-      {expanded ? (
+      {expanded && !readonly ? (
         <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-2">
           {todo.descrizione ? (
             <p className="whitespace-pre-wrap text-xs leading-relaxed">
@@ -391,4 +379,3 @@ function fmtDataBreve(iso: string): string {
     return iso;
   }
 }
-
