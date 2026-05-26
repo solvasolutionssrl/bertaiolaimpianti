@@ -150,15 +150,25 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
       ) : null}
 
       {completati.length > 0 ? (
-        <section className="opacity-70">
-          <h3 className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        <section>
+          <h3 className="mb-2 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             <CheckCircle2 className="h-3 w-3" /> Completati ({completati.length})
           </h3>
-          <ul className="space-y-1.5">
+          {/* Vertical rail timeline */}
+          <div className="relative pl-5">
+            <div className="absolute left-2 top-1 bottom-1 w-px bg-border" aria-hidden="true" />
             {completati.map((t) => (
-              <TodoCard key={t.id} todo={t} isMine={t.assegnato_a === currentUserId} readonly />
+              <div key={t.id} className="relative mb-2 last:mb-0">
+                <span
+                  className="absolute -left-3 top-3 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500"
+                  aria-hidden="true"
+                />
+                <div className="opacity-70">
+                  <TodoCard todo={t} isMine={t.assegnato_a === currentUserId} readonly />
+                </div>
+              </div>
             ))}
-          </ul>
+          </div>
         </section>
       ) : null}
     </div>
@@ -248,25 +258,35 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
             </Badge>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground">
-            {todo.assegnato_a_nome ? (
-              <span>
-                <User className="mr-0.5 inline h-2.5 w-2.5" />
-                {isMine ? 'Tu' : todo.assegnato_a_nome}
+            {readonly && todo.completato_at ? (
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="mr-0.5 inline h-2.5 w-2.5" />
+                {fmtDataBreve(todo.completato_at)}
+                {todo.completato_da_nome ? ` · ${todo.completato_da_nome}` : ''}
               </span>
             ) : (
-              <span className="italic">Non assegnato</span>
-            )}
-            {todo.scadenza_at ? (
-              <span
-                className={cn(
-                  new Date(todo.scadenza_at) < new Date() &&
-                    'font-semibold text-destructive',
+              <>
+                {todo.assegnato_a_nome ? (
+                  <span>
+                    <User className="mr-0.5 inline h-2.5 w-2.5" />
+                    {isMine ? 'Tu' : todo.assegnato_a_nome}
+                  </span>
+                ) : (
+                  <span className="italic">Non assegnato</span>
                 )}
-              >
-                <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
-                {fmtDataBreve(todo.scadenza_at)}
-              </span>
-            ) : null}
+                {todo.scadenza_at ? (
+                  <span
+                    className={cn(
+                      new Date(todo.scadenza_at) < new Date() &&
+                        'font-semibold text-destructive',
+                    )}
+                  >
+                    <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
+                    {fmtDataBreve(todo.scadenza_at)}
+                  </span>
+                ) : null}
+              </>
+            )}
             {todo.note.length > 0 ? (
               <span>
                 <PencilLine className="mr-0.5 inline h-2.5 w-2.5" />

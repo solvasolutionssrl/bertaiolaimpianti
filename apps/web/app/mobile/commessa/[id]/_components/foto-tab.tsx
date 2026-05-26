@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Camera, Upload, ImageIcon, Video } from 'lucide-react';
-import { Button } from '@kommessa/ui';
+import { Button, cn } from '@kommessa/ui';
 
 import { Divider, Stagger } from '../../../_components/blueprint';
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
@@ -180,10 +180,8 @@ function FotoCell({
   onOpen: (item: FotoItem) => void;
 }) {
   const isVideo = item.mime.startsWith('video/');
-  // Sorgente thumbnail:
-  //  - Se thumbnail_url disponibile, usalo (mai popolato in Fase 1).
-  //  - Se r2_key, /api/media/[id] funziona sia per img che per video.
-  //  - Altrimenti per img legacy /api/photo/[id]; per video legacy nessun thumb.
+  const [imgLoaded, setImgLoaded] = React.useState(false);
+
   const thumbSrc = item.thumbnail_url
     ?? (item.r2_key
       ? `/api/media/${item.id}`
@@ -199,16 +197,20 @@ function FotoCell({
       title={item.filename}
       aria-label={`Apri ${item.filename}`}
     >
+      {/* Skeleton shimmer finché l'immagine non è caricata */}
+      {thumbSrc && !imgLoaded && (
+        <span className="absolute inset-0 animate-pulse bg-muted" aria-hidden="true" />
+      )}
+
       {thumbSrc ? (
         isVideo ? (
-          // Video: usa <video preload="metadata"> come thumbnail (mostra primo frame).
-          // muted + playsInline evita autoplay e fullscreen su iOS.
           <video
             src={thumbSrc}
             preload="metadata"
             muted
             playsInline
             className="h-full w-full object-cover"
+            onLoadedData={() => setImgLoaded(true)}
           />
         ) : (
           <Image
@@ -216,8 +218,12 @@ function FotoCell({
             alt={item.filename}
             width={160}
             height={160}
-            className="h-full w-full object-cover"
+            className={cn(
+              'h-full w-full object-cover transition-opacity duration-200',
+              imgLoaded ? 'opacity-100' : 'opacity-0',
+            )}
             unoptimized={thumbSrc.startsWith('/api/')}
+            onLoad={() => setImgLoaded(true)}
           />
         )
       ) : (

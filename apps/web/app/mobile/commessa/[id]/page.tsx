@@ -511,11 +511,11 @@ export default async function CommessaDetailPage({
             className="absolute left-0 top-2.5 bottom-2.5 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
           />
           {dettagliTesto ? (
-            <p className="whitespace-pre-wrap pl-3 text-[13px] leading-snug text-foreground">
+            <p className="whitespace-pre-wrap pl-3 pr-7 text-[13px] leading-snug text-foreground">
               {dettagliTesto}
             </p>
           ) : (
-            <p className="pl-3 text-[13px] italic text-muted-foreground">
+            <p className="pl-3 pr-7 text-[13px] italic text-muted-foreground">
               Nessun dettaglio salvato. Le commesse create via voice intake
               memorizzano qui la nota completa del capo.
             </p>
