@@ -30,14 +30,7 @@ const BASE_NAV: OfficeNavItem[] = DEFAULT_OFFICE_NAV.map((item) => {
     case 'dashboard':
       return { ...item, href: '/office' };
     case 'commesse':
-      return {
-        ...item,
-        href: '/office/commesse',
-        children: [
-          { id: 'commesse-tutte', label: 'Tutte', href: '/office/commesse' },
-          { id: 'commesse-nuova', label: 'Nuova commessa', href: '/office/commesse/nuova' },
-        ],
-      };
+      return { ...item, href: '/office/commesse' };
     case 'tickets':
       return { ...item, href: '/office/tickets' };
     case 'todo':

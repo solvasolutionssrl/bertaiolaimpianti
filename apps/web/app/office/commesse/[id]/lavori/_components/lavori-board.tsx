@@ -243,9 +243,8 @@ export function LavoriBoard({
       | { kind: 'file'; ts: string; file: FileView };
 
     const all: Entry[] = [];
-    // TODO eventi: creato sempre; completato/annullato se applicabile
+    // TODO: solo completato/annullato — i "creato" sono rumore nella cronologia
     for (const t of todos) {
-      all.push({ kind: 'todo_creato', ts: t.created_at, todo: t });
       if (t.completato_at && t.stato === 'completato')
         all.push({ kind: 'todo_completato', ts: t.completato_at, todo: t });
       if (t.stato === 'annullato')
@@ -280,10 +279,10 @@ export function LavoriBoard({
     return timeline.filter((e) => {
       switch (filtro) {
         case 'tutto':
-          return true;
+          // note interne escluse dal default: troppo granulari per la cronologia
+          return e.kind !== 'todo_nota';
         case 'todo':
           return (
-            e.kind === 'todo_creato' ||
             e.kind === 'todo_completato' ||
             e.kind === 'todo_annullato' ||
             e.kind === 'todo_nota'
@@ -372,48 +371,66 @@ export function LavoriBoard({
         </div>
       ) : null}
 
-      {/* Sticky TODO aperti */}
-      {todosAperti.length > 0 ? (
-        <Card className="border-primary/30">
-          <CardContent className="space-y-3 py-4">
-            <h2 className="flex items-center justify-between gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <CircleDot className="h-3.5 w-3.5 text-primary" />
-                TODO aperti
-              </span>
-              {canWrite && todosAperti.length > 1 ? (
-                <span className="font-mono text-[9px] normal-case text-muted-foreground/60">
-                  Trascina <GripVertical className="inline h-2.5 w-2.5" /> per riordinare
-                </span>
-              ) : null}
-            </h2>
-            <TodoDraggableList
-              commessaId={commessaId}
-              todos={todosAperti}
-              currentUserId={currentUserId}
-              noteByTodo={noteByTodo}
-              canWrite={canWrite}
-              pending={pending}
-              onComplete={onComplete}
-              onEdit={(t) => setTodoInEdit(t)}
-              onDelete={onDelete}
-              onNoteAdded={() => router.refresh()}
-            />
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center gap-2 py-8 text-center">
-            <CircleDot className="h-7 w-7 text-muted-foreground" />
-            <p className="text-sm font-medium">Nessun TODO aperto</p>
+      {/* ── ZONA DA FARE ─────────────────────────────────────────────── */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <CircleDot className="h-3.5 w-3.5" />
+            </span>
+            <h2 className="text-sm font-semibold tracking-tight">Da fare</h2>
+            <span className={cn(
+              'rounded-full px-2 py-0.5 font-mono text-xs font-semibold',
+              todosAperti.length > 0 ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+            )}>
+              {todosAperti.length}
+            </span>
+          </div>
+          {canWrite && todosAperti.length > 1 ? (
+            <span className="flex items-center gap-1 font-mono text-[10px] text-muted-foreground/50">
+              <GripVertical className="h-3 w-3" /> Trascina per riordinare
+            </span>
+          ) : null}
+        </div>
+
+        {todosAperti.length > 0 ? (
+          <div className="overflow-hidden rounded-xl border border-primary/20 bg-primary/[0.025] ring-1 ring-primary/10">
+            <div className="p-3">
+              <TodoDraggableList
+                commessaId={commessaId}
+                todos={todosAperti}
+                currentUserId={currentUserId}
+                noteByTodo={noteByTodo}
+                canWrite={canWrite}
+                pending={pending}
+                onComplete={onComplete}
+                onEdit={(t) => setTodoInEdit(t)}
+                onDelete={onDelete}
+                onNoteAdded={() => router.refresh()}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/60 py-8 text-center">
+            <CircleDot className="h-6 w-6 text-muted-foreground/50" />
+            <p className="text-sm font-medium text-foreground/70">Nessun TODO aperto</p>
             <p className="text-xs text-muted-foreground">
               {canWrite
                 ? 'Crea il primo TODO o avvia una riunione: il sistema può proporli automaticamente.'
-                : 'Quando l\'ufficio aprirà delle attività compariranno qui.'}
+                : "Quando l'ufficio aprirà delle attività compariranno qui."}
             </p>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
+      </div>
+
+      {/* ── STORICO divider ──────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 pt-1">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
+          Storico
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
 
       {/* Filtri timeline */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -801,7 +818,7 @@ function TodoRow({
             ) : null}
           </div>
 
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {todo.assegnato_a_nome ? (
               <span className="flex items-center gap-0.5">
                 <User className="h-3 w-3" /> {todo.assegnato_a_nome}
@@ -838,21 +855,21 @@ function TodoRow({
           </div>
 
           {(todo.descrizione || notes.length > 0) && expanded ? (
-            <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-2">
+            <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-2.5">
               {todo.descrizione ? (
-                <p className="whitespace-pre-wrap text-xs leading-relaxed">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
                   {todo.descrizione}
                 </p>
               ) : null}
               {notes.length > 0 ? (
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {notes.map((n) => (
                     <li key={n.id} className="text-xs">
                       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                         {fmtDataBreve(n.created_at)}
                         {n.author_nome ? ` · ${n.author_nome}` : ''}
                       </span>
-                      <p className="whitespace-pre-wrap">{n.body}</p>
+                      <p className="whitespace-pre-wrap text-sm">{n.body}</p>
                     </li>
                   ))}
                 </ul>
@@ -1099,8 +1116,8 @@ function RiunioneTimelineEntry({
     : (r.corpo_libero || r.trascrizione || '');
 
   return (
-    <div className="flex items-start gap-3 p-3 text-sm">
-      <div className="mt-0.5 shrink-0">
+    <div className="flex items-start gap-3 px-4 py-4 text-sm">
+      <div className="mt-1 shrink-0">
         <Sparkles className="h-3.5 w-3.5 text-primary" />
       </div>
       <div className="min-w-0 flex-1">
@@ -1111,7 +1128,7 @@ function RiunioneTimelineEntry({
         >
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="font-medium">
+              <span className="text-[15px] font-semibold leading-snug">
                 {r.titolo || `Riunione ${fmtData(r.data_riunione)}`}
               </span>
               {r.titolo ? (
@@ -1120,25 +1137,20 @@ function RiunioneTimelineEntry({
                 </span>
               ) : null}
               {hasReport ? (
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
                   <Sparkles className="h-2 w-2" />
                   AI
                 </span>
               ) : null}
               {r.allegati.length > 0 ? (
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
                   {r.allegati.length} allegati
                 </span>
               ) : null}
             </div>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            <p className="mt-0.5 text-xs text-muted-foreground">
               {r.created_by_nome ?? '—'}
             </p>
-            {!expanded && previewText ? (
-              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                {previewText}
-              </p>
-            ) : null}
           </div>
           <ChevronDown
             className={cn(
@@ -1149,22 +1161,22 @@ function RiunioneTimelineEntry({
         </button>
 
         {expanded ? (
-          <div className="mt-3 space-y-3 rounded-md border border-border bg-muted/30 p-3">
+          <div className="mt-3 space-y-3 rounded-lg border border-border bg-muted/30 p-4">
             {hasReport ? (
               <div>
-                <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.16em] text-primary">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
                   Report AI
                 </p>
-                <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">
                   {r.reportino}
                 </div>
               </div>
             ) : (r.corpo_libero || r.trascrizione) ? (
               <div>
-                <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                   Verbale
                 </p>
-                <div className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
                   {r.corpo_libero || r.trascrizione}
                 </div>
               </div>
@@ -1233,7 +1245,7 @@ function RiunioneTimelineEntry({
       </div>
 
       <div className="shrink-0 text-right">
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-xs text-muted-foreground">
           {fmtDataOra(ts)}
         </p>
       </div>
@@ -1253,11 +1265,11 @@ function Row({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start gap-3 p-3 text-sm">
+    <div className="flex items-start gap-3 px-4 py-3.5 text-sm">
       <div className="mt-0.5 shrink-0">{icon}</div>
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1 leading-snug">{children}</div>
       <div className="shrink-0 text-right">
-        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="font-mono text-xs text-muted-foreground">
           {fmtDataOra(ts)}
         </p>
         {actions ? <div className="mt-0.5">{actions}</div> : null}
