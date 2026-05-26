@@ -380,39 +380,37 @@ export function CreaRiunioneDialog({
 
         {/* ─── STEP 1 — CONTENUTO ──────────────────────────────── */}
         {step === 'contenuto' ? (
-          <div className="space-y-5">
+          <div className="space-y-3">
             {/* Data + Titolo */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="r_data" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Data</Label>
+                <Label htmlFor="r_data" className="text-xs text-muted-foreground">Data</Label>
                 <Input
                   id="r_data"
                   type="date"
                   value={dataRiunione}
                   onChange={(e) => setDataRiunione(e.target.value)}
-                  className="mt-1.5 h-9"
+                  className="mt-1 h-8"
                 />
               </div>
               <div>
-                <Label htmlFor="r_tit" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Titolo <span className="normal-case font-normal">(opzionale)</span>
+                <Label htmlFor="r_tit" className="text-xs text-muted-foreground">
+                  Titolo <span className="font-normal opacity-60">(opzionale)</span>
                 </Label>
                 <Input
                   id="r_tit"
                   value={titolo}
                   onChange={(e) => setTitolo(e.target.value)}
                   placeholder="Es. Sopralluogo, Allineamento…"
-                  className="mt-1.5 h-9"
+                  className="mt-1 h-8"
                 />
               </div>
             </div>
 
             {/* Contenuto con dettatura */}
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Contenuto
-                </Label>
+              <div className="mb-1 flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Contenuto</Label>
                 <RecordingButton
                   recording={recording}
                   transcribing={transcribing}
@@ -422,33 +420,30 @@ export function CreaRiunioneDialog({
                 />
               </div>
 
-              {/* Recording banner */}
               {recording ? (
-                <div className="mb-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
-                  <span className="font-medium">Registrazione in corso — {fmtSecs(recSecs)}</span>
-                  <span className="ml-auto text-destructive/70">Premi «Ferma» quando hai finito</span>
+                <div className="mb-1.5 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" />
+                  <span className="font-medium">Registrazione — {fmtSecs(recSecs)}</span>
+                  <span className="ml-auto text-destructive/60">Premi «Ferma» quando hai finito</span>
                 </div>
               ) : null}
 
               {transcribing ? (
-                <div className="mb-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Trascrizione in corso — attendere…
+                <div className="mb-1.5 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Trascrizione in corso…
                 </div>
               ) : null}
 
               <textarea
                 value={corpoLibero}
                 onChange={(e) => setCorpoLibero(e.target.value)}
-                rows={7}
-                placeholder={
-                  'Punti discussi, decisioni, cose da fare…\n\nOppure premi «Ditta» per registrare la voce: la trascrizione verrà aggiunta qui automaticamente.'
-                }
-                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={6}
+                placeholder="Punti discussi, decisioni, cose da fare… oppure premi «Vocale» per dettare."
+                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
               />
               {corpoLibero.length > 0 ? (
-                <p className="mt-1 text-right text-[10px] text-muted-foreground">
+                <p className="mt-0.5 text-right text-[10px] text-muted-foreground">
                   {corpoLibero.length} car.
                 </p>
               ) : null}
@@ -456,9 +451,7 @@ export function CreaRiunioneDialog({
 
             {/* Allegati */}
             <div>
-              <Label className="mb-2 block text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Allegati
-              </Label>
+              <Label className="mb-1.5 block text-xs text-muted-foreground">Allegati</Label>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={fotoCameraRef}
@@ -480,7 +473,7 @@ export function CreaRiunioneDialog({
                 <button
                   type="button"
                   onClick={() => fotoCameraRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   <Camera className="h-4 w-4" />
                   + Scatta
@@ -488,7 +481,7 @@ export function CreaRiunioneDialog({
                 <button
                   type="button"
                   onClick={() => fotoGalleryRef.current?.click()}
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   <ImageIcon className="h-4 w-4" />
                   + Allega
@@ -496,14 +489,14 @@ export function CreaRiunioneDialog({
                 <button
                   type="button"
                   onClick={() => setPdfCaptureOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   <FileText className="h-4 w-4" />
                   + File
                 </button>
               </div>
               {attachments.length > 0 ? (
-                <ul className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5">
+                <ul className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-5">
                   {attachments.map((a, idx) => (
                     <li
                       key={idx}
@@ -540,51 +533,45 @@ export function CreaRiunioneDialog({
 
         {/* ─── STEP 2 — REPORT ─────────────────────────────────── */}
         {step === 'report' ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Reportino generato
-                </Label>
+              <div className="mb-1 flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground">Reportino generato</Label>
                 {reportModello ? (
-                  <span className="text-[10px] text-muted-foreground">
-                    {reportModello}
-                  </span>
+                  <span className="text-[10px] text-muted-foreground">{reportModello}</span>
                 ) : null}
               </div>
               <textarea
                 value={reportino}
                 onChange={(e) => setReportino(e.target.value)}
-                rows={8}
-                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={7}
+                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring"
               />
-              <p className="mt-1 text-[10px] text-muted-foreground">
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
                 Puoi modificare il testo prima di salvare.
               </p>
             </div>
 
             {todosConferma.length > 0 ? (
               <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    TODO proposti
-                  </Label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">TODO proposti</Label>
                   <span className="text-[10px] text-muted-foreground">
                     {todosConferma.filter((t) => t.selezionato).length}/{todosConferma.length} selezionati
                   </span>
                 </div>
-                <ul className="space-y-2">
+                <ul className="space-y-1.5">
                   {todosConferma.map((t, i) => (
                     <li
                       key={i}
                       className={cn(
-                        'rounded-md border p-3 transition-colors',
+                        'rounded-md border px-3 py-2 transition-colors',
                         t.selezionato
                           ? 'border-primary/40 bg-primary/5'
                           : 'border-border bg-card opacity-60',
                       )}
                     >
-                      <div className="flex items-start gap-2.5">
+                      <div className="flex items-start gap-2">
                         <input
                           type="checkbox"
                           checked={t.selezionato}
@@ -600,25 +587,18 @@ export function CreaRiunioneDialog({
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="flex-1 text-sm font-medium">
-                              {t.titolo}
-                            </p>
+                            <p className="flex-1 text-sm font-medium">{t.titolo}</p>
                             <Badge
                               variant="outline"
-                              className={cn(
-                                'text-[10px] uppercase',
-                                PRIORITA_CHIP[t.priorita],
-                              )}
+                              className={cn('text-[10px] uppercase', PRIORITA_CHIP[t.priorita])}
                             >
                               {t.priorita}
                             </Badge>
                           </div>
                           {t.note ? (
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {t.note}
-                            </p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">{t.note}</p>
                           ) : null}
-                          <div className="mt-2">
+                          <div className="mt-1.5">
                             <select
                               value={t.assegnatoA ?? ''}
                               onChange={(e) => {
@@ -647,7 +627,7 @@ export function CreaRiunioneDialog({
                 </ul>
               </div>
             ) : (
-              <p className="rounded-md border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+              <p className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                 Nessun TODO automatico estratto. Puoi crearne a mano dopo aver salvato la riunione.
               </p>
             )}
@@ -655,7 +635,7 @@ export function CreaRiunioneDialog({
         ) : null}
 
         {/* ─── FOOTER ──────────────────────────────────────────────── */}
-        <DialogFooter className="mt-2 flex-col gap-2 sm:flex-row sm:gap-2">
+        <DialogFooter className="mt-1 flex-col gap-2 sm:flex-row sm:gap-2">
           {step === 'contenuto' ? (
             <>
               <Button
@@ -740,7 +720,7 @@ function StepIndicator({ step }: { step: Step }) {
   ];
   const idx = steps.findIndex((s) => s.key === step);
   return (
-    <div className="-mt-1 mb-4 flex items-center gap-1">
+    <div className="-mt-1 mb-3 flex items-center gap-1">
       {steps.map((s, i) => (
         <React.Fragment key={s.key}>
           <div

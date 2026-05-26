@@ -69,7 +69,7 @@ export function CommessaLavoriMobile({
   let mostraRiunioni = true;
   switch (filtro) {
     case 'tutto':
-      todosShown = todosAperti;
+      todosShown = todos; // tutti: aperti + completati + annullati
       mostraRiunioni = true;
       break;
     case 'todo_aperti':

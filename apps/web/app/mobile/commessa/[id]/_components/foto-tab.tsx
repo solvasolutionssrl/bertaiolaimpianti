@@ -66,7 +66,7 @@ export function FotoTab({ commessaId, sopralluogo, inCorso, finali }: Props) {
   const totalCount = allItems.length;
 
   return (
-    <div className="mt-5 space-y-5">
+    <div className="space-y-4">
       {/* Azioni principali affiancate */}
       <div className="grid grid-cols-2 gap-2">
         <Link href={`/mobile/commessa/${commessaId}/scatto`} className="block">

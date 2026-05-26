@@ -296,11 +296,13 @@ export async function generaReportRiunione(
 
 Ricevi il verbale grezzo di una riunione (può essere scritto a mano o dettato a voce, italiano). Devi produrre:
 1. un "reportino": riassunto sintetico in italiano, max 6 punti, in TESTO SEMPLICE (no markdown). Usa eventualmente "- " per elenchi puntati e a-capo per separare i punti. Linguaggio asciutto, tecnico, professionale.
-2. "todo_proposti": una lista di azioni concrete e verificabili emerse dalla riunione che sembrano "cose da fare". Ogni TODO ha titolo breve (max 80 caratteri, imperativo: "Ordinare pompa…", "Chiamare Mario…"), priorita (bassa/media/alta/urgente — desumi dal tono: "subito"/"entro domani" → urgente; "appena puoi"/"settimana prossima" → media; "quando capita" → bassa) e una note opzionale di contesto (max 200 caratteri).
+2. "todo_proposti": lista di azioni SOLO se esplicitamente menzionate nel verbale. Ogni TODO ha titolo breve (max 80 caratteri, imperativo: "Ordinare pompa…", "Chiamare Mario…"), priorita (bassa/media/alta/urgente — desumi dal tono: "subito"/"entro domani" → urgente; "appena puoi"/"settimana prossima" → media; "quando capita" → bassa) e una note opzionale di contesto (max 200 caratteri).
 
-REGOLE:
-- Non inventare azioni: includi SOLO quelle esplicitamente menzionate o chiaramente implicate.
-- Se non emergono azioni, "todo_proposti" è un array vuoto.
+REGOLE STRICT PER I TODO:
+- Includi SOLO azioni che qualcuno ha dichiarato esplicitamente nel verbale ("dobbiamo fare X", "bisogna ordinare Y", "chiama Z"). NON aggiungere azioni logicamente sensate ma non menzionate.
+- NON inventare TODO come "pianificare consegne", "eseguire sopralluogo", "verificare disponibilità" se nessuno li ha detti.
+- Se il verbale menziona UN'azione specifica (es. "installare 5 pompe di calore"), crea SOLO quello. Non aggiungere azioni collaterali implicite.
+- Se non emergono azioni esplicite, "todo_proposti" è un array vuoto — è OK.
 - Non mettere come TODO cose già fatte/risolte durante la riunione.
 - NESSUN markdown nel reportino: niente **grassetto**, niente *corsivo*, niente # heading, niente \`code\`. Solo testo piano con eventuali "- " per i bullet.
 - Output STRICT JSON, nessun testo prima/dopo.`;

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
   Calendar,
+  CheckCircle2,
   ChevronDown,
   Circle,
   Flame,
@@ -89,7 +90,6 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
           const pa = META[a.priorita].order;
           const pb = META[b.priorita].order;
           if (pa !== pb) return pa - pb;
-          // Assegnati a me prima
           const am = a.assegnato_a === currentUserId ? 0 : 1;
           const bm = b.assegnato_a === currentUserId ? 0 : 1;
           if (am !== bm) return am - bm;
@@ -98,13 +98,25 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
     [todos, currentUserId],
   );
 
+  const completati = React.useMemo(
+    () =>
+      todos
+        .filter((t) => t.stato === 'completato')
+        .sort((a, b) =>
+          (b.completato_at ?? b.created_at).localeCompare(
+            a.completato_at ?? a.created_at,
+          ),
+        ),
+    [todos],
+  );
+
   const miei = aperti.filter((t) => t.assegnato_a === currentUserId);
   const altri = aperti.filter((t) => t.assegnato_a !== currentUserId);
 
-  if (aperti.length === 0) {
+  if (aperti.length === 0 && completati.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        Nessun TODO aperto su questa commessa.
+        Nessun TODO su questa commessa.
       </div>
     );
   }
@@ -136,11 +148,24 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
           </ul>
         </section>
       ) : null}
+
+      {completati.length > 0 ? (
+        <section className="opacity-70">
+          <h3 className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            <CheckCircle2 className="h-3 w-3" /> Completati ({completati.length})
+          </h3>
+          <ul className="space-y-1.5">
+            {completati.map((t) => (
+              <TodoCard key={t.id} todo={t} isMine={t.assegnato_a === currentUserId} readonly />
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function TodoCard({ todo, isMine }: { todo: TodoMobileRow; isMine: boolean }) {
+function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boolean; readonly?: boolean }) {
   const router = useRouter();
   const showAlert = useAlert();
   const [expanded, setExpanded] = React.useState(false);
@@ -183,21 +208,25 @@ function TodoCard({ todo, isMine }: { todo: TodoMobileRow; isMine: boolean }) {
       )}
     >
       <div className="flex items-start gap-2">
-        <button
-          type="button"
-          onClick={complete}
-          disabled={pending}
-          aria-label="Completa TODO"
-          // Tap target 44x44 (Apple HIG) — l'icona resta 24px ma con padding
-          // l'area attiva è grande abbastanza da non sbagliare.
-          className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-emerald-500/10 active:text-emerald-600 disabled:opacity-50"
-        >
-          {pending ? (
-            <Loader2 className="h-6 w-6 animate-spin" />
-          ) : (
-            <Circle className="h-6 w-6" />
-          )}
-        </button>
+        {readonly ? (
+          <span className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-emerald-600">
+            <CheckCircle2 className="h-6 w-6" />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={complete}
+            disabled={pending}
+            aria-label="Completa TODO"
+            className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-emerald-500/10 active:text-emerald-600 disabled:opacity-50"
+          >
+            {pending ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Circle className="h-6 w-6" />
+            )}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
