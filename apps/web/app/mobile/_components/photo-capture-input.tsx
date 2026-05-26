@@ -14,13 +14,21 @@ import { cn } from '@kommessa/ui';
  *    geo + timestamp vengono presi runtime via Geolocation API + Date.now()
  *    dal parent (vedi `scatto/page.tsx`).
  *
+ * Comportamento camera vs galleria:
+ *  - bottone principale ("Tap per scattare"): SEMPRE camera diretta
+ *    (`capture="environment"`). È l'azione 1-tap del cantiere.
+ *  - se `allowGallery=true` mostra anche un bottone secondario "Allega
+ *    da galleria" con un secondo input separato (no `capture`) →
+ *    permette di caricare una foto fatta in precedenza o un PDF/file
+ *    già sul telefono.
+ *
  * Mockup_UI §4 (scatto foto cantiere).
  */
 export interface PhotoCaptureInputProps {
   name: string;
   id?: string;
   required?: boolean;
-  /** Se true accetta selezione anche dalla galleria. Default false (solo camera). */
+  /** Se true mostra ANCHE un bottone "Da galleria". Default false (solo camera). */
   allowGallery?: boolean;
   onFileChange?: (file: File | null) => void;
   className?: string;
@@ -30,11 +38,12 @@ export function PhotoCaptureInput({
   name,
   id = 'photo-input',
   required,
-  allowGallery = true,
+  allowGallery = false,
   onFileChange,
   className,
 }: PhotoCaptureInputProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
   const [fileName, setFileName] = React.useState<string | null>(null);
 
@@ -60,7 +69,8 @@ export function PhotoCaptureInput({
   };
 
   const reset = () => {
-    if (inputRef.current) inputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
     if (preview) URL.revokeObjectURL(preview);
     setPreview(null);
     setFileName(null);
@@ -69,20 +79,30 @@ export function PhotoCaptureInput({
 
   return (
     <div className={cn('space-y-2', className)}>
+      {/* Input camera diretta — sempre presente, è il default */}
       <input
-        ref={inputRef}
+        ref={cameraInputRef}
         id={id}
         name={name}
         type="file"
         accept="image/*"
-        // `capture="environment"` apre direttamente la camera posteriore su iOS/Android.
-        // Se vogliamo permettere anche la galleria su iOS, l'attributo va omesso
-        // (Safari forza camera quando `capture` è presente).
-        {...(allowGallery ? {} : { capture: 'environment' })}
+        capture="environment"
         required={required}
         onChange={handleChange}
         className="sr-only"
       />
+      {/* Input galleria — solo se allowGallery. NON ha `name` per evitare
+          collisione di submit FormData con l'input camera. */}
+      {allowGallery ? (
+        <input
+          ref={galleryInputRef}
+          id={`${id}-gallery`}
+          type="file"
+          accept="image/*"
+          onChange={handleChange}
+          className="sr-only"
+        />
+      ) : null}
 
       {preview ? (
         <div className="relative overflow-hidden rounded-xl border border-border bg-muted">
@@ -102,28 +122,38 @@ export function PhotoCaptureInput({
         </div>
       ) : (
         <div className="flex flex-col gap-2">
+          {/* Bottone principale: camera diretta — full-width, tap target grande */}
           <label
             htmlFor={id}
             className={cn(
-              // Tap target: aspect-ratio 4/3 grande, min-h 240px
-              'flex min-h-[240px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-6 text-center transition-colors hover:bg-primary/10',
+              'flex min-h-[200px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-6 text-center transition-colors hover:bg-primary/10 active:bg-primary/15',
             )}
           >
             <Camera
-              className="h-12 w-12 text-primary"
+              className="h-11 w-11 text-primary"
               aria-hidden="true"
               strokeWidth={1.5}
             />
-            <span className="text-base font-medium text-foreground">
-              Tap per scattare
+            <span className="text-base font-semibold text-foreground">
+              Scatta foto
             </span>
-            {allowGallery ? (
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <ImagePlus className="h-3.5 w-3.5" aria-hidden="true" />
-                oppure scegli dalla galleria
-              </span>
-            ) : null}
+            <span className="text-[11px] font-mono uppercase tracking-[0.14em] text-muted-foreground">
+              Tap per aprire la fotocamera
+            </span>
           </label>
+
+          {/* Bottone secondario: galleria — solo se allowGallery */}
+          {allowGallery ? (
+            <label
+              htmlFor={`${id}-gallery`}
+              className={cn(
+                'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:bg-muted/70',
+              )}
+            >
+              <ImagePlus className="h-4 w-4" aria-hidden="true" />
+              Allega da galleria
+            </label>
+          ) : null}
         </div>
       )}
     </div>

@@ -156,8 +156,9 @@ export function CreaRiunioneDialog({
     setRecording(false);
   };
 
-  // ─── Foto: input file ──────────────────────────────────────────────
-  const fotoInputRef = React.useRef<HTMLInputElement | null>(null);
+  // ─── Foto: due input separati per scatta (camera) e allega (galleria) ──
+  const fotoCameraRef = React.useRef<HTMLInputElement | null>(null);
+  const fotoGalleryRef = React.useRef<HTMLInputElement | null>(null);
   const onFotoSelected = (files: FileList | null) => {
     if (!files) return;
     const drafts: AttachmentDraft[] = [];
@@ -490,27 +491,43 @@ export function CreaRiunioneDialog({
 
             {tab === 'foto' ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={fotoInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    multiple
-                    onChange={(e) => onFotoSelected(e.target.files)}
-                    className="hidden"
-                  />
+                {/* Due input separati: camera vs galleria. Su mobile il
+                    primo apre direttamente la fotocamera, il secondo
+                    apre il picker file/galleria. Su desktop entrambi
+                    aprono il file picker (capture viene ignorato). */}
+                <input
+                  ref={fotoCameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  onChange={(e) => onFotoSelected(e.target.files)}
+                  className="hidden"
+                />
+                <input
+                  ref={fotoGalleryRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => onFotoSelected(e.target.files)}
+                  className="hidden"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => fotoCameraRef.current?.click()}
+                  >
+                    <Camera className="h-4 w-4" />
+                    Scatta foto
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => fotoInputRef.current?.click()}
+                    onClick={() => fotoGalleryRef.current?.click()}
                   >
-                    <Camera className="h-4 w-4" />
-                    Aggiungi foto
+                    <ImageIcon className="h-4 w-4" />
+                    Allega da galleria
                   </Button>
-                  <p className="text-[11px] text-muted-foreground">
-                    Camera (mobile) o galleria.
-                  </p>
                 </div>
                 <AttachmentsGridFiltered
                   attachments={attachments}
