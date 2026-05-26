@@ -125,8 +125,18 @@ export function CreaRiunioneDialog({
             body: fd,
           });
           if (!res.ok) {
-            const j = await res.json().catch(() => null);
-            throw new Error(j?.error ?? `HTTP ${res.status}`);
+            const j = (await res.json().catch(() => null)) as {
+              error?: string;
+              detail?: string;
+            } | null;
+            // Mostra anche il detail (es. messaggio OpenAI "Invalid file
+            // format" o "Audio file is too short") per facilitare debug.
+            const msg = j
+              ? j.detail
+                ? `${j.error ?? 'Errore'} — ${j.detail}`
+                : (j.error ?? `HTTP ${res.status}`)
+              : `HTTP ${res.status}`;
+            throw new Error(msg);
           }
           const j = (await res.json()) as { transcript: string };
           setTrascrizione((prev) =>
@@ -852,7 +862,11 @@ function pickAudioMime(): string {
   return 'audio/webm';
 }
 function blobExt(b: Blob): string {
-  if (b.type.includes('mp4')) return 'mp4';
-  if (b.type.includes('ogg')) return 'ogg';
+  const m = (b.type || '').toLowerCase();
+  // iOS Safari emette audio/mp4 (con o senza codecs=...); Whisper preferisce
+  // "m4a" per file mp4-audio.
+  if (m.includes('mp4') || m.includes('m4a')) return 'm4a';
+  if (m.includes('ogg')) return 'ogg';
+  if (m.includes('wav')) return 'wav';
   return 'webm';
 }

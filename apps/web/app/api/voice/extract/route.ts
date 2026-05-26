@@ -123,11 +123,24 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const ext = audio.type.includes('mp4')
-        ? 'mp4'
-        : audio.type.includes('ogg')
-          ? 'ogg'
-          : 'webm';
+      // Whisper accetta: mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg, flac.
+      // Mapping MIME → estensione coerente con la lista. Il default 'webm'
+      // copre Chrome/Firefox/Android; iOS Safari produce audio/mp4 → 'mp4'.
+      const mime = (audio.type || '').toLowerCase();
+      const ext = mime.includes('mp4') || mime.includes('m4a')
+        ? 'm4a'
+        : mime.includes('mpeg') || mime.includes('mp3')
+          ? 'mp3'
+          : mime.includes('wav')
+            ? 'wav'
+            : mime.includes('ogg')
+              ? 'ogg'
+              : mime.includes('flac')
+                ? 'flac'
+                : 'webm';
+      console.warn(
+        `[voice/extract] transcribe start — size=${audio.size}B mime="${mime}" → ext=${ext}`,
+      );
       const r = await transcribeAudio({
         audio,
         filename: `voicenote.${ext}`,
@@ -143,10 +156,15 @@ export async function POST(req: NextRequest) {
         );
       }
     } catch (err) {
+      // Logghiamo SEMPRE il dettaglio in console (visibile in Vercel logs).
+      // L'errore tipico è: 400 "Invalid file format" (mime sbagliato), 401
+      // (API key), 429 (rate limit), 413 (file troppo grande lato OpenAI).
+      const msg = err instanceof Error ? err.message : 'unknown';
+      console.error(`[voice/extract] Whisper FAIL: ${msg}`);
       return NextResponse.json(
         {
           error: 'Trascrizione fallita (Whisper).',
-          detail: err instanceof Error ? err.message.slice(0, 300) : 'unknown',
+          detail: msg.slice(0, 300),
         },
         { status: 502 },
       );

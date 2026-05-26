@@ -105,7 +105,14 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
     setState((s) => ({ ...s, phase: 'uploading', error: null }));
     try {
       const fd = new FormData();
-      fd.append('audio', blob, 'voicenote.webm');
+      // Filename con estensione coerente al MIME — il backend rimappa
+      // ma è meglio essere già sincronizzati lato client.
+      const ext = blob.type.includes('mp4') || blob.type.includes('m4a')
+        ? 'm4a'
+        : blob.type.includes('ogg')
+          ? 'ogg'
+          : 'webm';
+      fd.append('audio', blob, `voicenote.${ext}`);
       fd.append('mode', 'full');
       setState((s) => ({ ...s, phase: 'transcribing' }));
       const t0 = performance.now();
@@ -113,9 +120,17 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
       const t1 = performance.now();
       setState((s) => ({ ...s, phase: 'extracting' }));
       if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        const j = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+        };
+        // Mostra anche detail: i bug di Whisper sono spesso "Invalid file
+        // format" o "API key invalid" — il dettaglio è chiave per il
+        // debug e per dirlo all'utente.
         throw new Error(
-          j.error ?? `Trascrizione fallita (HTTP ${res.status})`,
+          j.detail
+            ? `${j.error ?? 'Trascrizione fallita'} — ${j.detail}`
+            : (j.error ?? `Trascrizione fallita (HTTP ${res.status})`),
         );
       }
       const data = (await res.json()) as {

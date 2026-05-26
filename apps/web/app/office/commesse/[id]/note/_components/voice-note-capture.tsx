@@ -66,17 +66,26 @@ export function VoiceNoteCapture({ commessaId }: VoiceNoteCaptureProps) {
     setPending('transcribing');
     try {
       const fd = new FormData();
-      fd.append('audio', blob, 'voicenote.webm');
+      const ext = blob.type.includes('mp4') || blob.type.includes('m4a')
+        ? 'm4a'
+        : blob.type.includes('ogg')
+          ? 'ogg'
+          : 'webm';
+      fd.append('audio', blob, `voicenote.${ext}`);
       fd.append('mode', 'transcript-only');
       const res = await fetch('/api/voice/extract', {
         method: 'POST',
         body: fd,
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
+        const j = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+        };
         throw new Error(
-          (j as { error?: string }).error ??
-            `Trascrizione fallita (HTTP ${res.status})`,
+          j.detail
+            ? `${j.error ?? 'Trascrizione fallita'} — ${j.detail}`
+            : (j.error ?? `Trascrizione fallita (HTTP ${res.status})`),
         );
       }
       const data = (await res.json()) as {
