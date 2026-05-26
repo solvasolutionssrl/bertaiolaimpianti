@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { createBrowserSupabase } from '@kommessa/api/client';
+import { risolviUsernameLogin } from '../_actions/risolvi-username';
 
 function pickHomeForDevice(): string {
   if (typeof window === 'undefined') return '/office';
@@ -35,19 +36,37 @@ export function LoginForm() {
       <form
         action={(fd) => {
           setErr(null);
-          const email = String(fd.get('email') ?? '').trim();
+          const raw = String(fd.get('email') ?? '').trim();
           const password = String(fd.get('password') ?? '');
-          if (!email || !password) {
-            setErr('Inserisci email e password.');
+          if (!raw || !password) {
+            setErr('Inserisci email/username e password.');
             return;
           }
           start(async () => {
+            // Se l'utente ha digitato uno username "nudo" (senza @), risolvi
+            // server-side cercando l'email sintetica completa nei record
+            // creati manualmente dal SA (creaUtenteManuale).
+            let email = raw;
+            if (!raw.includes('@')) {
+              const res = await risolviUsernameLogin(raw);
+              if (!res.ok) {
+                setErr(
+                  res.error === 'not_found'
+                    ? `Username "${raw}" non trovato. Verifica con l'amministratore.`
+                    : res.error === 'ambiguous'
+                      ? 'Username ambiguo — inserisci l\'email completa.'
+                      : 'Username non valido.',
+                );
+                return;
+              }
+              email = res.email;
+            }
             const supabase = createBrowserSupabase();
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) {
               setErr(
                 error.message === 'Invalid login credentials'
-                  ? 'Credenziali non valide. Controlla email e password.'
+                  ? 'Credenziali non valide. Controlla email/username e password.'
                   : error.message,
               );
               return;
@@ -68,21 +87,25 @@ export function LoginForm() {
         }}
         className="flex flex-col gap-4"
       >
-        {/* Email */}
+        {/* Email o username */}
         <div className="flex flex-col gap-1.5">
           <label
             htmlFor="email"
             className="font-mono text-[10px] uppercase tracking-[0.18em] text-[hsl(220,10%,45%)]"
           >
-            Email
+            Email o username
           </label>
           <input
             id="email"
             name="email"
-            type="email"
-            autoComplete="email"
+            type="text"
+            inputMode="email"
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
-            placeholder="nome@azienda.it"
+            placeholder="nome@azienda.it  oppure  tecnico"
             disabled={pending}
             className="h-12 w-full rounded-xl border border-[hsl(30,12%,89%)] bg-[hsl(32,28%,99%)] px-4 text-[15px] text-[hsl(220,30%,9%)] placeholder:text-[hsl(220,10%,70%)] transition-colors focus:border-[hsl(220,80%,32%)] focus:outline-none focus:ring-2 focus:ring-[hsl(220,80%,32%)]/20 disabled:opacity-60"
           />
