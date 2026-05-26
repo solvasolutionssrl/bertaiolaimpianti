@@ -44,7 +44,7 @@ export interface OfficeNavItem {
 export const DEFAULT_OFFICE_NAV: OfficeNavItem[] = [
   { id: 'home', label: 'Dashboard', href: '/', icon: LayoutDashboard },
   { id: 'commesse', label: 'Commesse', href: '/commesse', icon: Briefcase },
-  { id: 'todo', label: 'TODO', href: '/todo', icon: CircleDot },
+  { id: 'todo', label: 'Task', href: '/todo', icon: CircleDot },
   { id: 'clienti', label: 'Clienti', href: '/clienti', icon: Users },
   { id: 'ricerca', label: 'Ricerca', href: '/ricerca', icon: Search },
   { id: 'notifiche', label: 'Avvisi', href: '/notifiche', icon: Bell },

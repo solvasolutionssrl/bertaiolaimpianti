@@ -19,7 +19,7 @@ import { EmptyState } from '../../_components/empty-state';
 import { elencaTecniciTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard } from './_components/todo-globale-board';
 
-export const metadata = { title: 'TODO' };
+export const metadata = { title: 'Task' };
 export const dynamic = 'force-dynamic';
 
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
@@ -187,8 +187,8 @@ export default async function TodoGlobalePage({
     <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
       <SectionHeader
         eyebrow="Lavori"
-        title="TODO"
-        description="Tutti i lavori da fare sul tenant — assegnabili, prioritizzabili, ordinabili. Click su un TODO per aprirlo nel contesto della commessa."
+        title="Task"
+        description="Tutti i task da fare sul tenant — assegnabili, prioritizzabili, ordinabili. Click su un task per aprirlo nel contesto della commessa."
         icon={<CircleDot />}
       />
 

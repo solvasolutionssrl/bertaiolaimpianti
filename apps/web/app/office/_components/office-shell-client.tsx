@@ -40,6 +40,9 @@ const BASE_NAV: OfficeNavItem[] = DEFAULT_OFFICE_NAV.map((item) => {
       };
     case 'tickets':
       return { ...item, href: '/office/tickets' };
+    case 'todo':
+      // Etichetta visibile: "Task" (più immediato di "TODO" in italiano)
+      return { ...item, label: 'Task', href: '/office/todo' };
     case 'clienti':
       return { ...item, href: '/office/clienti' };
     case 'ricerca':

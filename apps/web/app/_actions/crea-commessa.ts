@@ -361,6 +361,15 @@ async function provisionaCartelle(opts: {
     const providerName = (tenant.storage_provider as StorageProviderName) ?? 'supabase';
     const cfg = (tenant.storage_config as Record<string, string> | null) ?? {};
 
+    // Path canonico cloud: rimuoviamo leading/trailing slash da
+    // cloudFolderPath (es. "/01_Richieste/BER-26-001_Prova/" →
+    // "01_Richieste/BER-26-001_Prova"). Questo include la cartella di
+    // stato come prefisso — il bug precedente usava solo nomeCartella
+    // e creava la commessa nella root del basePath invece che dentro
+    // 01_Richieste, scollando il frontend (cloud_folder_path in DB
+    // diverso dal path reale su Nextcloud).
+    const rootPath = opts.cloudFolderPath.replace(/^\/+|\/+$/g, '');
+
     if (providerName === 'nextcloud') {
       if (!cfg.baseUrl || !cfg.user || !cfg.appPassword) {
         return { provisioned: false, provider: providerName, reason: 'nextcloud_config_incomplete' };
@@ -370,10 +379,8 @@ async function provisionaCartelle(opts: {
         baseUrl: cfg.baseUrl,
         user: cfg.user,
         appPassword: cfg.appPassword,
-        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
+        basePath: typeof cfg.basePath === 'string' ? cfg.basePath : undefined,
       });
-      // Path Nextcloud: relativo all'utente service, niente prefix "/"
-      const rootPath = opts.nomeCartella;
       await provider.createFolderTree(rootPath, SCAFFOLD_TREE as unknown as string[]);
       return {
         provisioned: true,
@@ -388,7 +395,6 @@ async function provisionaCartelle(opts: {
         provider: 'supabase',
         bucket: (cfg.bucket as string | undefined) ?? 'commesse',
       });
-      const rootPath = opts.nomeCartella;
       await provider.createFolderTree(rootPath, SCAFFOLD_TREE as unknown as string[]);
       return {
         provisioned: true,
