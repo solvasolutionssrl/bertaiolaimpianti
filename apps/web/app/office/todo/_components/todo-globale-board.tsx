@@ -148,139 +148,152 @@ export function TodoGlobaleBoard({
     (filtri.q ? 1 : 0);
 
   return (
-    <div className="space-y-4">
-      {/* Header action bar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <Filter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            value={qDraft}
-            onChange={(e) => setQDraft(e.target.value)}
-            placeholder="Cerca nel titolo o descrizione TODO…"
-            className="pl-9"
-          />
-        </div>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr] lg:gap-5">
+      {/* ─── SIDEBAR FILTRI (sticky desktop) ─────────────────────── */}
+      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
         {canWrite ? (
-          <Button onClick={() => setCreaOpen(true)}>
+          <Button onClick={() => setCreaOpen(true)} className="w-full">
             <Plus className="h-3.5 w-3.5" />
-            Nuovo TODO
+            Nuovo task
           </Button>
         ) : null}
-      </div>
 
-      {/* Chip filters */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          Stato:
-        </span>
-        <ChipFiltro
-          label="Aperti+in corso"
-          active={!filtri.stato}
-          onClick={() => updateFiltro('stato', null)}
-        />
-        <ChipFiltro
-          label="Solo aperti"
-          active={filtri.stato === 'aperto'}
-          onClick={() => updateFiltro('stato', 'aperto')}
-        />
-        <ChipFiltro
-          label="Solo in corso"
-          active={filtri.stato === 'in_corso'}
-          onClick={() => updateFiltro('stato', 'in_corso')}
-        />
-        <ChipFiltro
-          label="Completati"
-          active={filtri.stato === 'completato'}
-          onClick={() => updateFiltro('stato', 'completato')}
-        />
-
-        <span className="ml-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          Priorità:
-        </span>
-        <ChipFiltro
-          label="Tutte"
-          active={!filtri.priorita}
-          onClick={() => updateFiltro('priorita', null)}
-        />
-        {(['urgente', 'alta', 'media', 'bassa'] as const).map((p) => (
-          <ChipFiltro
-            key={p}
-            label={PRIORITA_META[p].label}
-            active={filtri.priorita === p}
-            onClick={() => updateFiltro('priorita', p)}
-            className={
-              filtri.priorita === p ? PRIORITA_META[p].chip : undefined
-            }
+        <FiltroGroup label="Stato">
+          <FiltroRadio
+            label="Aperti + in corso"
+            active={!filtri.stato}
+            onClick={() => updateFiltro('stato', null)}
           />
-        ))}
+          <FiltroRadio
+            label="Solo aperti"
+            active={filtri.stato === 'aperto'}
+            onClick={() => updateFiltro('stato', 'aperto')}
+          />
+          <FiltroRadio
+            label="In corso"
+            active={filtri.stato === 'in_corso'}
+            onClick={() => updateFiltro('stato', 'in_corso')}
+          />
+          <FiltroRadio
+            label="Completati"
+            active={filtri.stato === 'completato'}
+            onClick={() => updateFiltro('stato', 'completato')}
+          />
+        </FiltroGroup>
 
-        <span className="ml-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          Assegnato:
-        </span>
-        <select
-          value={filtri.assegnato ?? ''}
-          onChange={(e) => updateFiltro('assegnato', e.target.value || null)}
-          className="h-7 rounded-full border border-border bg-card px-2 text-xs"
-        >
-          <option value="">Chiunque</option>
-          <option value="nessuno">Non assegnato</option>
-          <option value={currentUserId}>A me</option>
-          {tecnici
-            .filter((t) => t.id !== currentUserId)
-            .map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.display_name ?? t.id.slice(0, 8)}
+        <FiltroGroup label="Priorità">
+          <FiltroRadio
+            label="Tutte"
+            active={!filtri.priorita}
+            onClick={() => updateFiltro('priorita', null)}
+          />
+          {(['urgente', 'alta', 'media', 'bassa'] as const).map((p) => {
+            const Icon = PRIORITA_META[p].Icon;
+            return (
+              <FiltroRadio
+                key={p}
+                label={PRIORITA_META[p].label}
+                icon={<Icon className="h-3 w-3" />}
+                active={filtri.priorita === p}
+                onClick={() => updateFiltro('priorita', p)}
+              />
+            );
+          })}
+        </FiltroGroup>
+
+        <FiltroGroup label="Commessa">
+          <select
+            value={filtri.commessa ?? ''}
+            onChange={(e) => updateFiltro('commessa', e.target.value || null)}
+            className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs"
+          >
+            <option value="">Tutte</option>
+            {commesseAttive.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.codice_interno} — {c.nome_cartella.slice(0, 30)}
               </option>
             ))}
-        </select>
+          </select>
+        </FiltroGroup>
+
+        <FiltroGroup label="Assegnato">
+          <select
+            value={filtri.assegnato ?? ''}
+            onChange={(e) => updateFiltro('assegnato', e.target.value || null)}
+            className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs"
+          >
+            <option value="">Chiunque</option>
+            <option value="nessuno">Non assegnato</option>
+            <option value={currentUserId}>A me</option>
+            {tecnici
+              .filter((t) => t.id !== currentUserId)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.display_name ?? t.id.slice(0, 8)}
+                </option>
+              ))}
+          </select>
+        </FiltroGroup>
 
         {activeFiltri > 0 ? (
           <button
             type="button"
             onClick={clearAll}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+            className="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <X className="h-3 w-3" />
-            Reset filtri
+            Reset filtri ({activeFiltri})
           </button>
         ) : null}
-      </div>
+      </aside>
 
-      {/* Lista TODO */}
-      {todos.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <CheckCircle2 className="h-7 w-7 opacity-50" />
-            <p className="font-medium">Nessun TODO con questi filtri.</p>
-            {activeFiltri > 0 ? (
-              <button
-                type="button"
-                onClick={clearAll}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Rimuovi tutti i filtri
-              </button>
-            ) : (
-              <p>Crea il primo dal pulsante &quot;Nuovo TODO&quot; in alto.</p>
-            )}
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="divide-y divide-border p-0">
-            {todos.map((t) => (
-              <TodoRow
-                key={t.id}
-                row={t}
-                isMine={t.assegnato_a === currentUserId}
-                pending={pending}
-                onComplete={() => onComplete(t.id)}
-              />
-            ))}
-          </CardContent>
-        </Card>
-      )}
+      {/* ─── MAIN CONTENT ────────────────────────────────────────── */}
+      <div className="min-w-0 space-y-3">
+        <div className="relative">
+          <Filter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            value={qDraft}
+            onChange={(e) => setQDraft(e.target.value)}
+            placeholder="Cerca nel titolo o descrizione task…"
+            className="pl-9"
+          />
+        </div>
+
+        {todos.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
+              <CheckCircle2 className="h-8 w-8 opacity-40" />
+              <p className="font-medium">Nessun task con questi filtri.</p>
+              {activeFiltri > 0 ? (
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Rimuovi tutti i filtri
+                </button>
+              ) : (
+                <p>Crea il primo dal pulsante &quot;Nuovo task&quot;.</p>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              {todos.map((t) => (
+                <TodoRow
+                  key={t.id}
+                  row={t}
+                  isMine={t.assegnato_a === currentUserId}
+                  pending={pending}
+                  onComplete={() => onComplete(t.id)}
+                />
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {creaOpen ? (
         <CreaTodoGlobaleDialog
@@ -293,34 +306,52 @@ export function TodoGlobaleBoard({
   );
 }
 
-// ─── Sub components ───────────────────────────────────────────────────
+function FiltroGroup({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
 
-function ChipFiltro({
+function FiltroRadio({
   label,
   active,
   onClick,
-  className,
+  icon,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
-  className?: string;
+  icon?: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+        'flex w-full items-center gap-1.5 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
         active
-          ? className ?? 'border-primary bg-primary/10 text-primary'
-          : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground',
+          ? 'border-primary/40 bg-primary/10 text-primary font-semibold'
+          : 'border-transparent bg-transparent text-foreground hover:bg-muted',
       )}
     >
-      {label}
+      {icon ? <span className="shrink-0">{icon}</span> : null}
+      <span className="truncate">{label}</span>
     </button>
   );
 }
+
+// ─── Sub components ───────────────────────────────────────────────────
 
 function TodoRow({
   row,

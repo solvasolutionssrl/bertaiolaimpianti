@@ -441,7 +441,9 @@ export function NuovaCommessaForm({
             },
         voci: [...state.voci].filter((id) => !vociDefault.includes(id)),
         descrizioneFinale: state.descrizione.trim(),
-        note: state.note || null,
+        // state.note è la versione AI-sistemata (popolata da applicaSuggerimenti).
+        // Salvarla come note_iniziali — il dettato grezzo non lo conserviamo.
+        noteIniziali: state.note || null,
         indirizzoCantiere: state.indirizzoCantiere || null,
         presetId: state.presetId || null,
       });
@@ -972,7 +974,10 @@ export function NuovaCommessaForm({
                   </span>
                   <div>
                     <CardTitle className="text-base">Descrizione</CardTitle>
-                    <CardDescription>Sintesi del lavoro + AI naming</CardDescription>
+                    <CardDescription>
+                      <strong>Note</strong>: contesto libero in italiano (resta visibile come "Dettagli" della commessa).<br />
+                      <strong>Descrizione</strong>: 1-3 parole CamelCase usate nel nome cartella.
+                    </CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -989,14 +994,20 @@ export function NuovaCommessaForm({
                     }
                     placeholder="Es. caldaia da sostituire, refurbishment bagno…"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Frase libera che resterà come "Dettagli" della commessa, visibile ai tecnici. Se hai dettato a voce, qui finisce la versione AI-sistemata (non il dettato grezzo).
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="desc" className="flex items-center gap-1">
-                    Descrizione (max 30, CamelCase)
+                    Descrizione cartella (max 30, CamelCase)
                     <span aria-hidden="true" className="text-destructive">*</span>
                     <span className="sr-only">campo obbligatorio</span>
                   </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sintesi breve usata nel nome cartella su Nextcloud. Es. "SostituzioneCaldaia", "BagnoRifacimento". Usa la bacchetta per il suggerimento AI.
+                  </p>
                   <div className="flex gap-2">
                     <Input
                       id="desc"
@@ -1076,11 +1087,13 @@ export function NuovaCommessaForm({
                 </div>
               </CardHeader>
               <CardContent>
-                <code className="block break-all rounded-md bg-muted/60 p-3 font-mono text-xs text-foreground">
+                <code className="block break-all rounded-md bg-muted/60 p-3 font-mono text-xs leading-relaxed text-foreground">
                   /{anteprima}/
                 </code>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  La cartella verrà creata su Nextcloud al momento della conferma.
+                <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
+                  La cartella nascerà su Nextcloud in <code className="font-mono">01_Richieste</code>.
+                  Il codice <code className="font-mono">BER-XXXX-XXX</code> viene assegnato al salvataggio
+                  (formato <em>BER-MM&shy;AA-progressivo annuale</em>) — qui è solo un placeholder.
                 </p>
               </CardContent>
             </Card>
@@ -1194,17 +1207,21 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function anteprimaCartella(
   rag: string,
-  tipo: 'persona_fisica' | 'azienda',
+  _tipo: 'persona_fisica' | 'azienda',
   desc: string,
 ): string {
-  const seg1 = sanitizeClient(
-    tipo === 'persona_fisica'
-      ? rag.trim().split(/\s+/).slice(-1)[0] ?? rag
-      : rag,
-  );
-  const seg2 = new Date().toISOString().slice(0, 10);
-  const seg3 = sanitizeClient(desc);
-  return `${seg1 || 'Cliente'}_${seg2}_${seg3 || 'Commessa'}`;
+  // Formato reale (allineato a crea-commessa.ts):
+  //   <codiceInterno>_<segCliente>_<segDescrizione>
+  //   es. BER-0526-001_MarioRossi_SostituzioneCaldaia
+  // Il codice è generato dalla RPC al salvataggio: qui mostriamo un
+  // placeholder con anno corrente (BER-MMYY-XXX).
+  const oggi = new Date();
+  const yy = String(oggi.getFullYear() % 100).padStart(2, '0');
+  const mm = String(oggi.getMonth() + 1).padStart(2, '0');
+  const codicePlaceholder = `BER-${mm}${yy}-XXX`;
+  const segCliente = sanitizeClient(rag) || 'Cliente';
+  const segDesc = sanitizeClient(desc) || 'Commessa';
+  return `01_Richieste/${codicePlaceholder}_${segCliente}_${segDesc}`;
 }
 
 function sanitizeClient(input: string): string {

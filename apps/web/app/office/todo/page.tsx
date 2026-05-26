@@ -14,7 +14,6 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { Badge, Card, CardContent, cn } from '@kommessa/ui';
 
-import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';
 import { elencaTecniciTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard } from './_components/todo-globale-board';
@@ -184,23 +183,24 @@ export default async function TodoGlobalePage({
   }>;
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
-      <SectionHeader
-        eyebrow="Lavori"
-        title="Task"
-        description="Tutti i task da fare sul tenant — assegnabili, prioritizzabili, ordinabili. Click su un task per aprirlo nel contesto della commessa."
-        icon={<CircleDot />}
-      />
+    <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">
+      {/* Header compatto: titolo + KPI inline */}
+      <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            Lavori
+          </p>
+          <h1 className="mt-0.5 text-xl font-bold tracking-tight">Task</h1>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <KpiChip icon={<CircleDot />} label="Aperti" value={kpi.aperti} />
+          <KpiChip icon={<Clock />} label="In corso" value={kpi.inCorso} tone="blue" />
+          <KpiChip icon={<Flame />} label="Urgenti" value={kpi.urgenti} tone="red" />
+          <KpiChip icon={<AlertCircle />} label="Scaduti" value={kpi.scaduti} tone="amber" />
+        </div>
+      </header>
 
-      {/* KPI sintetici */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <KpiTile icon={<CircleDot />} label="Aperti" value={kpi.aperti} />
-        <KpiTile icon={<Clock />} label="In corso" value={kpi.inCorso} tone="blue" />
-        <KpiTile icon={<Flame />} label="Urgenti" value={kpi.urgenti} tone="red" />
-        <KpiTile icon={<AlertCircle />} label="Scaduti" value={kpi.scaduti} tone="amber" />
-      </div>
-
-      {/* Board client: filtri + lista + dialog crea */}
+      {/* Board: sidebar filtri + lista */}
       <TodoGlobaleBoard
         todos={todos}
         currentUserId={ctx.userId}
@@ -219,7 +219,7 @@ export default async function TodoGlobalePage({
   );
 }
 
-function KpiTile({
+function KpiChip({
   icon,
   label,
   value,
@@ -231,20 +231,25 @@ function KpiTile({
   tone?: 'default' | 'blue' | 'red' | 'amber';
 }) {
   const toneCls = {
-    default: 'border-border bg-card text-foreground',
-    blue: 'border-blue-500/30 bg-blue-500/5 text-blue-700 dark:text-blue-400',
-    red: 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-400',
-    amber: 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400',
+    default: 'border-border text-foreground',
+    blue: 'border-blue-500/30 text-blue-700 dark:text-blue-400',
+    red: 'border-red-500/30 text-red-700 dark:text-red-400',
+    amber: 'border-amber-500/30 text-amber-700 dark:text-amber-400',
   }[tone];
   return (
-    <div className={cn('rounded-lg border p-3', toneCls)}>
-      <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] opacity-80">
-        {icon}
+    <div
+      className={cn(
+        'flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1',
+        toneCls,
+      )}
+    >
+      <span className="[&_svg]:h-3.5 [&_svg]:w-3.5">{icon}</span>
+      <span className="font-mono text-[10px] uppercase tracking-[0.14em] opacity-70">
         {label}
-      </p>
-      <p className="mt-1 font-mono text-2xl font-bold tabular-nums">
+      </span>
+      <span className="font-mono text-sm font-bold tabular-nums">
         {String(value).padStart(2, '0')}
-      </p>
+      </span>
     </div>
   );
 }

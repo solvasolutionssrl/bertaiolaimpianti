@@ -145,7 +145,11 @@ export class NextcloudStorageProvider implements StorageProvider {
       { Depth: '1', 'Content-Type': 'application/xml' },
     );
     const xml = await res.text();
-    const entries = parsePropfindXml(xml, path);
+    // Passiamo il path completo (con basePath del tenant) al parser: gli href
+    // Nextcloud includono il basePath, quindi il check _isParent deve
+    // confrontare segmenti omologhi. Altrimenti la cartella corrente
+    // verrebbe inclusa come prima entry (bug visto in /Documenti).
+    const entries = parsePropfindXml(xml, this.withBase(path));
     // Rimuovi il prefisso basePath dai path restituiti: il consumer lavora
     // con path "logici" relativi alla root del tenant.
     if (this.basePath && this.basePath !== '/') {
