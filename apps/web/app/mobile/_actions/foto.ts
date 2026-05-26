@@ -246,7 +246,7 @@ export async function uploadFoto(
         tenant_id: ctx.tenantId,
         file_ref_id: ref.id,
         version: 1,
-        layer_json: input.annotation.layer,
+        layer_json: input.annotation.layer as any,
         width_px: Math.round(input.annotation.width),
         height_px: Math.round(input.annotation.height),
         created_by: ctx.userId,

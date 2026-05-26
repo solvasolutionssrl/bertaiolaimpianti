@@ -70,7 +70,7 @@ async function logBulkAudit(params: {
       ids: params.ids,
       field: params.field,
     },
-  });
+  } as any);
 }
 
 // ---------------------------------------------------------------------------
@@ -92,11 +92,10 @@ export async function bulkAssegna(
     const parsed = bulkAssegnaSchema.parse({ ids, userId });
     const supabase = createServerSupabase();
 
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('tickets')
       .update({ assegnato_a: parsed.userId })
-      .in('id', parsed.ids)
-      .select('id', { count: 'exact', head: true });
+      .in('id', parsed.ids);
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -111,7 +110,7 @@ export async function bulkAssegna(
     });
 
     revalidatePath('/office/tickets');
-    return { ok: true, updated: count ?? parsed.ids.length };
+    return { ok: true, updated: parsed.ids.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Errore' };
   }
@@ -138,11 +137,10 @@ export async function bulkCambiaStato(
       updates.closed_at = new Date().toISOString();
     }
 
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('tickets')
       .update(updates)
-      .in('id', parsed.ids)
-      .select('id', { count: 'exact', head: true });
+      .in('id', parsed.ids);
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -157,7 +155,7 @@ export async function bulkCambiaStato(
     });
 
     revalidatePath('/office/tickets');
-    return { ok: true, updated: count ?? parsed.ids.length };
+    return { ok: true, updated: parsed.ids.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Errore' };
   }
@@ -242,11 +240,10 @@ export async function bulkCambiaStatoCommessa(
       .select('id, codice_interno, responsabile_id, cliente:clienti(ragione_sociale)')
       .in('id', parsed.ids);
 
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('commesse')
       .update({ stato: parsed.stato })
-      .in('id', parsed.ids)
-      .select('id', { count: 'exact', head: true });
+      .in('id', parsed.ids);
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -291,7 +288,7 @@ export async function bulkCambiaStatoCommessa(
     }
 
     revalidatePath('/office/commesse');
-    return { ok: true, updated: count ?? parsed.ids.length };
+    return { ok: true, updated: parsed.ids.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Errore' };
   }
@@ -319,11 +316,10 @@ export async function bulkAssegnaResponsabile(
       .select('id, codice_interno, cliente:clienti(ragione_sociale)')
       .in('id', parsed.ids);
 
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('commesse')
       .update({ responsabile_id: parsed.userId })
-      .in('id', parsed.ids)
-      .select('id', { count: 'exact', head: true });
+      .in('id', parsed.ids);
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -365,7 +361,7 @@ export async function bulkAssegnaResponsabile(
     }
 
     revalidatePath('/office/commesse');
-    return { ok: true, updated: count ?? parsed.ids.length };
+    return { ok: true, updated: parsed.ids.length };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Errore' };
   }

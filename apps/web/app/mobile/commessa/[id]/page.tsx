@@ -449,11 +449,13 @@ export default async function CommessaDetailPage({
           {(dettagliTesto || canEditDettagli) ? (
             <div className="relative mt-3 border-t border-primary-foreground/10 pt-3">
               {dettagliTesto ? (
-                <p className="pr-7 text-xs italic leading-relaxed text-primary-foreground/60 line-clamp-3">
+                <p className="pr-7 text-[13px] leading-relaxed text-primary-foreground/90 line-clamp-3">
+                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">Dettagli:</span>
                   {dettagliTesto}
                 </p>
               ) : (
-                <p className="pr-7 text-[11px] italic text-primary-foreground/35">
+                <p className="pr-7 text-[11px] italic text-primary-foreground/40">
+                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/35">Dettagli:</span>
                   Nessun dettaglio lavoro.
                 </p>
               )}
@@ -495,7 +497,7 @@ export default async function CommessaDetailPage({
           <TabsList className="grid h-10 w-full grid-cols-4 items-center rounded-none border-b border-border/60 bg-muted p-1">
             <TabsTrigger
               value="todo"
-              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               Lavori
               <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
@@ -504,7 +506,7 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
             <TabsTrigger
               value="foto"
-              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               Foto
               <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
@@ -513,7 +515,7 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
             <TabsTrigger
               value="file"
-              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               File
               <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
@@ -522,7 +524,7 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
             <TabsTrigger
               value="tecnici"
-              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               <User className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="ml-0.5">Team</span>
@@ -533,7 +535,7 @@ export default async function CommessaDetailPage({
           </TabsList>
 
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="m-0 p-3">
+          <TabsContent value="todo" className="m-0 p-3 pt-4">
             <CommessaLavoriMobile
               commessaId={params.id}
               contestoCommessa={[
@@ -552,7 +554,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
-          <TabsContent value="foto" className="m-0 p-3">
+          <TabsContent value="foto" className="m-0 p-3 pt-4">
             <FotoTab
               commessaId={params.id}
               sopralluogo={fotoSopralluogo}
@@ -562,7 +564,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE (cloud diretto) ───────────── */}
-          <TabsContent value="file" className="m-0 space-y-3 p-3">
+          <TabsContent value="file" className="m-0 space-y-3 p-3 pt-4">
             {cloudError ? (
               <CloudRetry />
             ) : sortedCloudEntries.length === 0 ? (
@@ -620,7 +622,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── TECNICI ───────────── */}
-          <TabsContent value="tecnici" className="m-0 p-3">
+          <TabsContent value="tecnici" className="m-0 p-3 pt-4">
             <TecniciMobile
               commessaId={params.id}
               assigned={tecniciAssegnati}
