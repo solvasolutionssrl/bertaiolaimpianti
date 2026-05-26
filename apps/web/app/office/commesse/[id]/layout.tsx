@@ -4,10 +4,8 @@ import { Button } from '@kommessa/ui';
 import type { StatoCommessa } from '@kommessa/api/types';
 
 import { loadCommessa } from './_lib/get-commessa';
-import { fmtData } from '../../_lib/format';
 import { CommessaTabs } from './_components/commessa-tabs';
-import { StatoChip, StatoControls } from './_components/stato-controls';
-import { TecniciPanel } from './_components/tecnici-panel';
+import { CommessaSidebar } from './_components/commessa-sidebar';
 import {
   elencaTecniciAssegnati,
   elencaTecniciTenant,
@@ -34,7 +32,7 @@ export default async function CommessaLayout({
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-7xl space-y-4 p-6">
       <Link
         href="/office/commesse"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -43,57 +41,51 @@ export default async function CommessaLayout({
         Torna alla lista
       </Link>
 
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-mono text-xl font-semibold">{c.codice_interno}</h1>
-          <span className="text-xl">·</span>
-          <span className="text-xl font-medium">
-            {cliente?.ragione_sociale ?? '—'}
-          </span>
-          <StatoChip
-            stato={c.stato as StatoCommessa}
-            isCritica={Boolean(c.is_critica)}
-          />
-          <div className="ml-auto">
-            <Button asChild variant="outline" size="sm" className="gap-2">
-              <Link
-                href={`/office/commesse/${params.id}/report`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <FileText className="h-4 w-4" />
-                Genera report di chiusura
-              </Link>
-            </Button>
-          </div>
+      {/* Header compatto: codice + cliente + report button, niente più
+          controlli stato inline (vivono nella sidebar) */}
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="font-mono text-xl font-semibold">{c.codice_interno}</h1>
+        <span className="text-xl text-muted-foreground">·</span>
+        <span className="text-xl font-medium">
+          {cliente?.ragione_sociale ?? '—'}
+        </span>
+        <div className="ml-auto">
+          <Button asChild variant="outline" size="sm" className="gap-2">
+            <Link
+              href={`/office/commesse/${params.id}/report`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <FileText className="h-4 w-4" />
+              Report di chiusura
+            </Link>
+          </Button>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {c.cliente_indirizzo_cantiere ? `${c.cliente_indirizzo_cantiere} · ` : ''}
-          Resp: {resp?.display_name ?? '—'} · Aperta il {fmtData(c.data_apertura)}
-        </p>
-        <p className="text-sm">
-          <span className="text-muted-foreground">Cartella: </span>
-          <span className="font-mono">{c.nome_cartella}</span>
-        </p>
-
-        {/* Controlli stato + critica */}
-        <StatoControls
-          commessaId={params.id}
-          currentStato={c.stato as StatoCommessa}
-          isCritica={Boolean(c.is_critica)}
-        />
       </header>
 
-      <TecniciPanel
-        commessaId={params.id}
-        assigned={tecniciAssegnati}
-        available={tecniciTenant}
-        canManage={canManageTecnici}
-      />
-
-      <CommessaTabs id={params.id} />
-
-      <div>{children}</div>
+      {/* Layout 2 colonne su desktop: main (tab + content) + sidebar
+          (stato, tecnici, meta). Su mobile la sidebar cade sopra (order). */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="min-w-0 space-y-4 lg:order-1">
+          <CommessaTabs id={params.id} />
+          <div>{children}</div>
+        </div>
+        <div className="lg:order-2">
+          <CommessaSidebar
+            commessaId={params.id}
+            stato={c.stato as StatoCommessa}
+            isCritica={Boolean(c.is_critica)}
+            nomeCartella={c.nome_cartella ?? ''}
+            cloudFolderPath={c.cloud_folder_path ?? null}
+            indirizzoCantiere={c.cliente_indirizzo_cantiere ?? null}
+            responsabileNome={resp?.display_name ?? null}
+            dataApertura={c.data_apertura ?? null}
+            tecniciAssegnati={tecniciAssegnati}
+            tecniciTenant={tecniciTenant}
+            canManageTecnici={canManageTecnici}
+          />
+        </div>
+      </div>
     </div>
   );
 }
