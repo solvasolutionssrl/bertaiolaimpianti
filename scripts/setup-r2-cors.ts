@@ -18,7 +18,12 @@ import {
   PutBucketCorsCommand,
   GetBucketCorsCommand,
 } from '@aws-sdk/client-s3';
-import 'dotenv/config';
+import { config as dotenvConfig } from 'dotenv';
+import { resolve } from 'node:path';
+// Next.js usa .env.local — dotenv/config di default cerca .env
+dotenvConfig({ path: resolve(process.cwd(), 'apps/web/.env.local') });
+dotenvConfig({ path: resolve(process.cwd(), '.env.local'), override: false });
+dotenvConfig({ override: false }); // fallback .env
 
 const accountId = process.env.R2_ACCOUNT_ID;
 const bucket = process.env.R2_BUCKET;

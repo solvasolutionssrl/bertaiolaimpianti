@@ -192,7 +192,7 @@ export function LavoriBoard({
   const askConfirm = useConfirm();
   const [pending, start] = React.useTransition();
   const [filtro, setFiltro] = React.useState<
-    'tutto' | 'todo' | 'riunioni' | 'foto' | 'stato'
+    'tutto' | 'riunioni' | 'todo' | 'stato'
   >('tutto');
   const [todoOpen, setTodoOpen] = React.useState(false);
   const [riunioneOpen, setRiunioneOpen] = React.useState(false);
@@ -267,10 +267,7 @@ export function LavoriBoard({
       else if (a.action === 'commessa.critica.toggle')
         all.push({ kind: 'critica', ts: a.created_at, audit: a });
     }
-    // File
-    for (const f of filesRecenti) {
-      if (f.uploaded_at) all.push({ kind: 'file', ts: f.uploaded_at, file: f });
-    }
+    // File e note granulari escluse: dettaglio in /cronologia.
 
     return all.sort((a, b) => (a.ts < b.ts ? 1 : -1));
   }, [todos, note, riunioni, auditEvents, filesRecenti]);
@@ -279,23 +276,28 @@ export function LavoriBoard({
     return timeline.filter((e) => {
       switch (filtro) {
         case 'tutto':
-          // note interne escluse dal default: troppo granulari per la cronologia
-          return e.kind !== 'todo_nota';
-        case 'todo':
-          return (
-            e.kind === 'todo_completato' ||
-            e.kind === 'todo_annullato' ||
-            e.kind === 'todo_nota'
-          );
+          return e.kind !== 'todo_nota' && e.kind !== 'file';
         case 'riunioni':
           return e.kind === 'riunione';
-        case 'foto':
-          return e.kind === 'file';
+        case 'todo':
+          return e.kind === 'todo_completato' || e.kind === 'todo_annullato';
         case 'stato':
           return e.kind === 'stato' || e.kind === 'critica';
       }
     });
   }, [timeline, filtro]);
+
+  // Raggruppa per giorno (YYYY-MM-DD) — più recente in cima
+  const timelineGruppi = React.useMemo(() => {
+    const map = new Map<string, typeof timelineFiltrata>();
+    for (const e of timelineFiltrata) {
+      const day = e.ts.slice(0, 10);
+      const list = map.get(day) ?? [];
+      list.push(e);
+      map.set(day, list);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [timelineFiltrata]);
 
   // ─── handlers ────────────────────────────────────────────────────────
 
@@ -423,8 +425,8 @@ export function LavoriBoard({
         )}
       </div>
 
-      {/* ── STORICO divider ──────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 pt-1">
+      {/* ── STORICO ──────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 pt-2">
         <div className="h-px flex-1 bg-border" />
         <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground/60">
           Storico
@@ -432,15 +434,14 @@ export function LavoriBoard({
         <div className="h-px flex-1 bg-border" />
       </div>
 
-      {/* Filtri timeline */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-        <Filter className="h-3 w-3 shrink-0 text-muted-foreground" />
+      {/* Filtri */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        <Filter className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
         {(
           [
             ['tutto', 'Tutto'],
-            ['todo', 'TODO'],
             ['riunioni', 'Riunioni'],
-            ['foto', 'Foto/File'],
+            ['todo', 'TODO'],
             ['stato', 'Stato'],
           ] as const
         ).map(([key, label]) => (
@@ -460,36 +461,48 @@ export function LavoriBoard({
         ))}
       </div>
 
-      {/* Timeline cronologica */}
-      {timelineFiltrata.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
-            <span>Nessun evento per questo filtro.</span>
-            {filtro !== 'tutto' && timeline.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setFiltro('tutto')}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Rimuovi filtro
-              </button>
-            ) : null}
-          </CardContent>
-        </Card>
+      {/* Timeline raggruppata per giorno */}
+      {timelineGruppi.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/60 py-10 text-center">
+          <CircleDot className="h-6 w-6 text-muted-foreground/30" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">Nessun evento nel registro.</p>
+          {filtro !== 'tutto' ? (
+            <button
+              type="button"
+              onClick={() => setFiltro('tutto')}
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Rimuovi filtro
+            </button>
+          ) : null}
+        </div>
       ) : (
-        <Card>
-          <CardContent className="divide-y divide-border p-0">
-            {timelineFiltrata.map((e, idx) => (
-              <TimelineEntry
-                key={`${e.kind}-${idx}`}
-                entry={e}
-                canWrite={canWrite}
-                onDeleteRiunione={onDeleteRiunione}
-                onReopenTodo={onReopen}
-              />
-            ))}
-          </CardContent>
-        </Card>
+        <div className="space-y-1 pb-4">
+          {timelineGruppi.map(([day, entries]) => (
+            <div key={day}>
+              {/* Chip data */}
+              <div className="flex items-center gap-3 py-2">
+                <div className="h-px flex-1 bg-border/40" />
+                <span className="rounded-full border border-border/60 bg-background px-2.5 py-0.5 font-mono text-[10px] font-medium tracking-[0.1em] text-muted-foreground/60">
+                  {fmtGiorno(day)}
+                </span>
+                <div className="h-px flex-1 bg-border/40" />
+              </div>
+              {/* Entries con rail verticale */}
+              <div className="relative ml-3.5 border-l-2 border-border/30">
+                {entries.map((e, idx) => (
+                  <TimelineEntryRail
+                    key={`${e.kind}-${idx}`}
+                    entry={e}
+                    canWrite={canWrite}
+                    onDeleteRiunione={onDeleteRiunione}
+                    onReopenTodo={onReopen}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Dialogs */}
@@ -958,10 +971,10 @@ function TodoRow({
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Timeline entry
+// Timeline entry — variante "rail" con dot sulla linea verticale
 // ═══════════════════════════════════════════════════════════════════════
 
-function TimelineEntry({
+function TimelineEntryRail({
   entry,
   canWrite,
   onDeleteRiunione,
@@ -974,128 +987,108 @@ function TimelineEntry({
 }) {
   const ts = entry.ts as string;
 
-  switch (entry.kind) {
-    case 'todo_creato': {
-      const t = entry.todo as TodoView;
-      const meta = PRIORITA_META[t.priorita];
-      return (
-        <Row icon={<Plus className="h-3.5 w-3.5 text-muted-foreground" />} ts={ts}>
-          <span className="text-muted-foreground">
-            {t.created_by_nome ?? '—'} ha creato il TODO{' '}
-          </span>
-          <span className="font-medium">{t.titolo}</span>
-          <Badge variant="outline" className={cn('ml-1.5 text-[9px]', meta.chip)}>
-            {meta.label}
-          </Badge>
-        </Row>
-      );
-    }
-    case 'todo_completato': {
-      const t = entry.todo as TodoView;
-      return (
-        <Row
-          icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
-          ts={ts}
-          actions={
-            canWrite ? (
-              <button
-                type="button"
-                onClick={() => onReopenTodo(t.id)}
-                className="text-[10px] uppercase tracking-wider text-primary hover:underline"
-              >
-                Riapri
-              </button>
-            ) : null
-          }
-        >
-          <span className="text-muted-foreground">
-            {t.completato_da_nome ?? '—'} ha completato{' '}
-          </span>
-          <span className="line-through">{t.titolo}</span>
-        </Row>
-      );
-    }
-    case 'todo_annullato': {
-      const t = entry.todo as TodoView;
-      return (
-        <Row icon={<X className="h-3.5 w-3.5 text-muted-foreground" />} ts={ts}>
-          <span className="text-muted-foreground">TODO annullato:</span>{' '}
-          <span className="line-through">{t.titolo}</span>
-        </Row>
-      );
-    }
-    case 'todo_nota': {
-      const t = entry.todo as TodoView;
-      const n = entry.nota as NotaView;
-      return (
-        <Row icon={<PencilLine className="h-3.5 w-3.5 text-muted-foreground" />} ts={ts}>
-          <span className="text-muted-foreground">
-            {n.author_nome ?? '—'} ha aggiunto una nota a{' '}
-          </span>
-          <span className="font-medium">{t.titolo}</span>
-          <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">
-            {n.body}
-          </p>
-        </Row>
-      );
-    }
-    case 'riunione': {
-      const r = entry.riunione as RiunioneView;
-      return (
+  if (entry.kind === 'riunione') {
+    const r = entry.riunione as RiunioneView;
+    return (
+      <div className="relative pl-6 pb-3 pt-1">
+        <span className="absolute -left-[5px] top-4 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
         <RiunioneTimelineEntry
           r={r}
           ts={ts}
           canWrite={canWrite}
           onDelete={() => onDeleteRiunione(r)}
         />
-      );
-    }
-    case 'stato': {
-      const a = entry.audit as AuditView;
-      const md = (a.metadata ?? {}) as { from_stato?: string; to_stato?: string };
-      return (
-        <Row icon={<CircleDot className="h-3.5 w-3.5 text-muted-foreground" />} ts={ts}>
-          <span className="text-muted-foreground">
-            {a.actor_nome ?? '—'} ha cambiato lo stato:{' '}
-          </span>
+      </div>
+    );
+  }
+
+  if (entry.kind === 'todo_completato') {
+    const t = entry.todo as TodoView;
+    return (
+      <div className="relative flex items-start gap-3 pl-6 py-2.5">
+        <span className="absolute -left-[5px] top-[15px] h-2 w-2 rounded-full border-2 border-background bg-emerald-500" />
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium line-through text-muted-foreground/80">
+            {t.titolo}
+          </p>
+          {t.completato_da_nome ? (
+            <p className="mt-0.5 text-xs text-muted-foreground/60">
+              da {t.completato_da_nome}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="font-mono text-[10px] text-muted-foreground">{fmtOra(ts)}</span>
+          {canWrite ? (
+            <button
+              type="button"
+              onClick={() => onReopenTodo(t.id)}
+              className="font-mono text-[9px] uppercase tracking-wider text-primary/70 hover:text-primary hover:underline"
+            >
+              Riapri
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (entry.kind === 'todo_annullato') {
+    const t = entry.todo as TodoView;
+    return (
+      <div className="relative flex items-center gap-3 pl-6 py-2.5">
+        <span className="absolute -left-[5px] top-1/2 -translate-y-1/2 h-2 w-2 rounded-full border-2 border-background bg-muted-foreground/30" />
+        <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40" />
+        <p className="min-w-0 flex-1 text-sm line-through text-muted-foreground/50">
+          {t.titolo}
+        </p>
+        <span className="font-mono text-[10px] text-muted-foreground/50 shrink-0">
+          {fmtOra(ts)}
+        </span>
+      </div>
+    );
+  }
+
+  if (entry.kind === 'stato') {
+    const a = entry.audit as AuditView;
+    const md = (a.metadata ?? {}) as { from_stato?: string; to_stato?: string };
+    return (
+      <div className="relative flex items-center gap-3 pl-6 py-2.5">
+        <span className="absolute -left-[5px] top-1/2 -translate-y-1/2 h-2 w-2 rounded-full border-2 border-background bg-secondary" />
+        <CircleDot className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+        <div className="min-w-0 flex-1 text-sm">
+          <span className="text-muted-foreground">{a.actor_nome ?? '—'} · </span>
           <span className="font-mono text-xs">
             {md.from_stato ?? '?'} → {md.to_stato ?? '?'}
           </span>
-        </Row>
-      );
-    }
-    case 'critica': {
-      const a = entry.audit as AuditView;
-      const md = (a.metadata ?? {}) as { is_critica?: boolean };
-      return (
-        <Row icon={<Flame className="h-3.5 w-3.5 text-destructive" />} ts={ts}>
-          <span className="text-muted-foreground">
-            {a.actor_nome ?? '—'} ha {md.is_critica ? 'marcato' : 'rimosso'} la
-            commessa come <strong>critica</strong>.
-          </span>
-        </Row>
-      );
-    }
-    case 'file': {
-      const f = entry.file as FileView;
-      const filename = f.filename ?? f.path?.split('/').pop() ?? f.id;
-      return (
-        <Row icon={<Plus className="h-3.5 w-3.5 text-muted-foreground" />} ts={ts}>
-          <span className="text-muted-foreground">
-            {f.uploader_nome ?? '—'} ha caricato{' '}
-          </span>
-          <span className="font-mono text-xs">{filename}</span>
-          {f.momento ? (
-            <span className="ml-1 text-[10px] uppercase text-muted-foreground">
-              · {f.momento}
-            </span>
-          ) : null}
-        </Row>
-      );
-    }
-    default:
-      return null;
+        </div>
+        <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+          {fmtOra(ts)}
+        </span>
+      </div>
+    );
   }
+
+  if (entry.kind === 'critica') {
+    const a = entry.audit as AuditView;
+    const md = (a.metadata ?? {}) as { is_critica?: boolean };
+    return (
+      <div className="relative flex items-center gap-3 pl-6 py-2.5">
+        <span className="absolute -left-[5px] top-1/2 -translate-y-1/2 h-2 w-2 rounded-full border-2 border-background bg-destructive" />
+        <Flame className="h-3.5 w-3.5 shrink-0 text-destructive" />
+        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{a.actor_nome ?? '—'}</span>{' '}
+          {md.is_critica ? 'ha marcato come critica' : 'ha rimosso il flag critica'}
+        </p>
+        <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+          {fmtOra(ts)}
+        </span>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function RiunioneTimelineEntry({
@@ -1111,169 +1104,125 @@ function RiunioneTimelineEntry({
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const hasReport = !!(r.reportino?.trim());
-  const previewText = hasReport
-    ? r.reportino!
-    : (r.corpo_libero || r.trascrizione || '');
 
   return (
-    <div className="flex items-start gap-3 px-4 py-4 text-sm">
-      <div className="mt-1 shrink-0">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <button
-          type="button"
-          onClick={() => setExpanded((o) => !o)}
-          className="flex w-full items-start gap-2 text-left"
-        >
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[15px] font-semibold leading-snug">
-                {r.titolo || `Riunione ${fmtData(r.data_riunione)}`}
+    <div className="rounded-lg border border-primary/20 bg-card p-3 shadow-soft">
+      <button
+        type="button"
+        onClick={() => setExpanded((o) => !o)}
+        className="flex w-full items-start gap-2 text-left"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-sm font-semibold leading-snug">
+              {r.titolo || `Riunione ${fmtData(r.data_riunione)}`}
+            </span>
+            {r.titolo ? (
+              <span className="text-xs text-muted-foreground">
+                {fmtData(r.data_riunione)}
               </span>
-              {r.titolo ? (
-                <span className="text-xs text-muted-foreground">
-                  {fmtData(r.data_riunione)}
-                </span>
-              ) : null}
-              {hasReport ? (
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
-                  <Sparkles className="h-2 w-2" />
-                  AI
-                </span>
-              ) : null}
-              {r.allegati.length > 0 ? (
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
-                  {r.allegati.length} allegati
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {r.created_by_nome ?? '—'}
-            </p>
-          </div>
-          <ChevronDown
-            className={cn(
-              'mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-              expanded && 'rotate-180',
-            )}
-          />
-        </button>
-
-        {expanded ? (
-          <div className="mt-3 space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+            ) : null}
             {hasReport ? (
-              <div>
-                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
-                  Report AI
-                </p>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {r.reportino}
-                </div>
-              </div>
-            ) : (r.corpo_libero || r.trascrizione) ? (
-              <div>
-                <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Verbale
-                </p>
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
-                  {r.corpo_libero || r.trascrizione}
-                </div>
-              </div>
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
+                <Sparkles className="h-2 w-2" />
+                AI
+              </span>
             ) : null}
-
             {r.allegati.length > 0 ? (
-              <div>
-                <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-                  Allegati ({r.allegati.length})
-                </p>
-                <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
-                  {r.allegati.slice(0, 8).map((al) => {
-                    const isFoto =
-                      al.kind === 'foto' || (al.mime ?? '').startsWith('image/');
-                    return isFoto ? (
-                      <a
-                        key={al.id}
-                        href={`/api/photo/${al.file_ref_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="aspect-square overflow-hidden rounded border border-border bg-card"
-                        title={al.filename}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/api/photo/${al.file_ref_id}`}
-                          alt={al.filename}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </a>
-                    ) : (
-                      <a
-                        key={al.id}
-                        href={
-                          al.path
-                            ? `/api/cloud/file?path=${encodeURIComponent(al.path)}`
-                            : '#'
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={al.filename}
-                        className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
-                      >
-                        <span className="font-mono text-[9px] font-bold">PDF</span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            {canWrite ? (
-              <div className="border-t border-border pt-2">
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-destructive"
-                >
-                  Elimina riunione
-                </button>
-              </div>
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                {r.allegati.length} all.
+              </span>
             ) : null}
           </div>
-        ) : null}
-      </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {r.created_by_nome ?? '—'} · {fmtOra(ts)}
+          </p>
+        </div>
+        <ChevronDown
+          className={cn(
+            'mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+            expanded && 'rotate-180',
+          )}
+        />
+      </button>
 
-      <div className="shrink-0 text-right">
-        <p className="font-mono text-xs text-muted-foreground">
-          {fmtDataOra(ts)}
-        </p>
-      </div>
-    </div>
-  );
-}
+      {expanded ? (
+        <div className="mt-3 space-y-3 rounded-md border border-border bg-muted/30 p-3">
+          {hasReport ? (
+            <div>
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+                Report AI
+              </p>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                {r.reportino}
+              </div>
+            </div>
+          ) : (r.corpo_libero || r.trascrizione) ? (
+            <div>
+              <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                Verbale
+              </p>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                {r.corpo_libero || r.trascrizione}
+              </div>
+            </div>
+          ) : null}
 
-function Row({
-  icon,
-  ts,
-  children,
-  actions,
-}: {
-  icon: React.ReactNode;
-  ts: string;
-  children: React.ReactNode;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3 px-4 py-3.5 text-sm">
-      <div className="mt-0.5 shrink-0">{icon}</div>
-      <div className="min-w-0 flex-1 leading-snug">{children}</div>
-      <div className="shrink-0 text-right">
-        <p className="font-mono text-xs text-muted-foreground">
-          {fmtDataOra(ts)}
-        </p>
-        {actions ? <div className="mt-0.5">{actions}</div> : null}
-      </div>
+          {r.allegati.length > 0 ? (
+            <div>
+              <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                Allegati ({r.allegati.length})
+              </p>
+              <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
+                {r.allegati.slice(0, 8).map((al) => {
+                  const isFoto = al.kind === 'foto' || (al.mime ?? '').startsWith('image/');
+                  return isFoto ? (
+                    <a
+                      key={al.id}
+                      href={`/api/photo/${al.file_ref_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="aspect-square overflow-hidden rounded border border-border bg-card"
+                      title={al.filename}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/photo/${al.file_ref_id}`}
+                        alt={al.filename}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      key={al.id}
+                      href={al.path ? `/api/cloud/file?path=${encodeURIComponent(al.path)}` : '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={al.filename}
+                      className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
+                    >
+                      <span className="font-mono text-[9px] font-bold">PDF</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {canWrite ? (
+            <div className="border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={onDelete}
+                className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-destructive"
+              >
+                Elimina riunione
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1305,15 +1254,31 @@ function fmtDataBreve(iso: string): string {
     return iso;
   }
 }
-function fmtDataOra(iso: string): string {
+function fmtOra(iso: string): string {
   try {
-    return new Date(iso).toLocaleString('it-IT', {
-      day: '2-digit',
-      month: 'short',
+    return new Date(iso).toLocaleTimeString('it-IT', {
       hour: '2-digit',
       minute: '2-digit',
     });
   } catch {
     return iso;
+  }
+}
+function fmtGiorno(dateStr: string): string {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    if (dateStr === today) return 'Oggi';
+    if (dateStr === yesterday) return 'Ieri';
+    const d = new Date(dateStr + 'T00:00:00');
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString('it-IT', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: sameYear ? undefined : 'numeric',
+    });
+  } catch {
+    return dateStr;
   }
 }
