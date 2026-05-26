@@ -444,92 +444,47 @@ export default async function CommessaDetailPage({
               {[commessa.cliente_indirizzo_cantiere, cliente?.citta].filter(Boolean).join(' · ')}
             </p>
           )}
+
+          {/* Dettagli nel hero — preview 3 righe, edit per admin */}
+          {(dettagliTesto || canEditDettagli) ? (
+            <div className="relative mt-3 border-t border-primary-foreground/10 pt-3">
+              {dettagliTesto ? (
+                <p className="pr-7 text-xs italic leading-relaxed text-primary-foreground/60 line-clamp-3">
+                  {dettagliTesto}
+                </p>
+              ) : (
+                <p className="pr-7 text-[11px] italic text-primary-foreground/35">
+                  Nessun dettaglio lavoro.
+                </p>
+              )}
+              <DettagliEdit
+                commessaId={params.id}
+                initial={commessa.note_iniziali ?? dettagliTesto ?? null}
+                canEdit={canEditDettagli}
+                triggerClassName="text-primary-foreground/40 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              />
+            </div>
+          ) : null}
+
+          {/* Telefono — pill compatta inline */}
+          {telefono ? (
+            <div className="mt-3">
+              <a
+                href={`tel:${telefono}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs text-primary-foreground/80 transition-colors hover:bg-primary-foreground/15 active:bg-primary-foreground/20"
+              >
+                <Phone className="h-3 w-3" aria-hidden="true" />
+                {telefono}
+              </a>
+            </div>
+          ) : null}
         </div>
       </Hero>
 
       <div className="flex flex-col gap-5 px-4 pt-4">
 
-      {/* Azioni rapide — overlap sull'hero */}
-      <section className="-mt-12 animate-fade-up">
-        <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-card p-2 shadow-soft-lg">
-          {telefono ? (
-            <a
-              href={`tel:${telefono}`}
-              className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 transition-all active:scale-[0.98] active:bg-muted"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <Phone className="h-3.5 w-3.5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Chiama
-                </span>
-                <span className="block truncate font-mono text-xs tabular-nums">{telefono}</span>
-              </div>
-            </a>
-          ) : (
-            <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2.5 opacity-50">
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted">
-                <Phone className="h-3.5 w-3.5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-                  Telefono
-                </span>
-                <span className="block truncate font-mono text-xs">—</span>
-              </div>
-            </div>
-          )}
-          <Link
-            href={`/mobile/commessa/${params.id}/scatto`}
-            className="group flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2.5 transition-all active:scale-[0.98] active:bg-primary/10"
-          >
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Camera className="h-3.5 w-3.5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <span className="block font-mono text-[9px] uppercase tracking-[0.18em] text-primary">
-                Scatta
-              </span>
-              <span className="block truncate text-xs font-semibold text-foreground">
-                Nuova foto
-              </span>
-            </div>
-          </Link>
-        </div>
-      </section>
-
-      {/* ── 02 / DETTAGLI (compatto) ─────────────────────────────────── */}
-      <section className="space-y-1.5 animate-fade-up [animation-delay:60ms]">
-        <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          Dettagli lavoro
-        </h2>
-        <article className="relative overflow-hidden rounded-lg border border-border bg-card p-2.5 shadow-soft">
-          {/* Linea brand verticale a sinistra */}
-          <span
-            aria-hidden="true"
-            className="absolute left-0 top-2.5 bottom-2.5 w-[2px] bg-gradient-to-b from-primary via-primary to-accent"
-          />
-          {dettagliTesto ? (
-            <p className="whitespace-pre-wrap pl-3 pr-7 text-[13px] leading-snug text-foreground">
-              {dettagliTesto}
-            </p>
-          ) : (
-            <p className="pl-3 pr-7 text-[13px] italic text-muted-foreground">
-              Nessun dettaglio salvato. Le commesse create via voice intake
-              memorizzano qui la nota completa del capo.
-            </p>
-          )}
-          <DettagliEdit
-            commessaId={params.id}
-            initial={commessa.note_iniziali ?? dettagliTesto ?? null}
-            canEdit={canEditDettagli}
-          />
-        </article>
-      </section>
-
-      {/* ── 03 / Tab principali — l'utente si muove qui dentro ─────────── */}
-      <section className="animate-fade-up [animation-delay:120ms]">
+      {/* ── Tab principali — l'utente si muove qui dentro ─────────── */}
+      <section className="animate-fade-up [animation-delay:60ms]">
         <Tabs
           defaultValue={
             todoApertiCount > 0 || riunioniMobile.length > 0 ? 'todo' : 'foto'
@@ -537,41 +492,41 @@ export default async function CommessaDetailPage({
           className="w-full"
         >
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
-          <TabsList className="grid h-11 w-full grid-cols-4 items-center rounded-none border-b border-border/50 bg-muted/50 p-1">
+          <TabsList className="grid h-10 w-full grid-cols-4 items-center rounded-none border-b border-border/60 bg-muted p-1">
             <TabsTrigger
               value="todo"
-              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               Lavori
-              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+              <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
                 {todoApertiCount + riunioniMobile.length}
               </span>
             </TabsTrigger>
             <TabsTrigger
               value="foto"
-              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               Foto
-              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+              <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
                 {fotoTot}
               </span>
             </TabsTrigger>
             <TabsTrigger
               value="file"
-              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               File
-              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+              <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
                 {cloudFileCount}
               </span>
             </TabsTrigger>
             <TabsTrigger
               value="tecnici"
-              className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
+              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
               <User className="h-3 w-3 shrink-0" aria-hidden="true" />
               <span className="ml-0.5">Team</span>
-              <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
+              <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
                 {tecniciAssegnati.length}
               </span>
             </TabsTrigger>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PencilLine, Plus, Loader2, AlertCircle, X } from 'lucide-react';
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -22,6 +23,8 @@ interface Props {
   initial: string | null;
   /** Se false il bottone "Modifica" è nascosto. */
   canEdit: boolean;
+  /** Override classi del trigger matita (es. per sfondi scuri). */
+  triggerClassName?: string;
 }
 
 /**
@@ -33,7 +36,7 @@ interface Props {
  *    esistente pre-aggiunto in cima (concatena con doppio newline).
  *  - Conferma "Esci senza salvare?" con ConfirmDialog custom (no confirm() browser).
  */
-export function DettagliEdit({ commessaId, initial, canEdit }: Props) {
+export function DettagliEdit({ commessaId, initial, canEdit, triggerClassName }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<'replace' | 'append'>('replace');
@@ -99,7 +102,10 @@ export function DettagliEdit({ commessaId, initial, canEdit }: Props) {
       <button
         type="button"
         onClick={startEdit}
-        className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground/50 hover:bg-muted hover:text-foreground transition-colors"
+        className={cn(
+          'absolute right-2 top-2 rounded-md p-1 text-muted-foreground/50 hover:bg-muted hover:text-foreground transition-colors',
+          triggerClassName,
+        )}
         title="Correggi il testo della nota iniziale"
         aria-label="Modifica dettagli lavoro"
       >

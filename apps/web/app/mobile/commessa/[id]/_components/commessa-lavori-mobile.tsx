@@ -114,7 +114,7 @@ export function CommessaLavoriMobile({
       ) : null}
 
       {/* Filtri — banda full-width con margini negativi per andare edge-to-edge */}
-      <div className="-mx-3 mb-3 grid grid-cols-4 gap-0.5 border-y border-border/40 bg-muted/30 px-1.5 py-1.5">
+      <div className="-mx-3 mb-3 grid grid-cols-4 gap-0.5 border-y border-border/40 bg-muted/30 px-1.5 py-1">
         <FiltroChip
           label="Tutto"
           count={totale}
@@ -223,22 +223,20 @@ function FiltroChip({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium transition-colors',
+        'flex w-full items-center justify-center gap-1 rounded-md px-1 py-1 text-[10px] font-medium transition-colors',
         active
           ? 'bg-primary text-primary-foreground shadow-sm'
           : muted
             ? 'text-muted-foreground hover:bg-muted/60'
-            : 'text-foreground hover:bg-muted/60',
+            : 'text-foreground/80 hover:bg-muted/60',
       )}
     >
-      <span className="flex items-center gap-1">
-        {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
-        <span className="truncate">{label}</span>
-      </span>
+      {Icon ? <Icon className="h-2.5 w-2.5 shrink-0" /> : null}
+      <span className="truncate">{label}</span>
       <span
         className={cn(
-          'rounded-full px-1.5 font-mono text-[9px] tabular-nums',
-          active ? 'bg-primary-foreground/25 text-primary-foreground' : 'bg-muted text-muted-foreground',
+          'font-mono text-[9px] tabular-nums',
+          active ? 'opacity-75' : 'text-muted-foreground',
         )}
       >
         {count}
