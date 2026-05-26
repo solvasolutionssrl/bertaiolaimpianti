@@ -4,9 +4,11 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   ChevronRight,
   CircleSlash,
+  FileCheck,
   Folder,
   FolderOpen,
   HelpCircle,
@@ -15,6 +17,8 @@ import {
   Save,
   Server,
   ShieldCheck,
+  Trash2,
+  Wrench,
   XCircle,
 } from 'lucide-react';
 import {
@@ -35,6 +39,14 @@ import {
   type StorageFolderEntry,
   type StorageTestResult,
 } from '../../../_actions/storage-tools';
+import {
+  cancellaCartellaOrfana,
+  rimettiAPostoCommessa,
+  verificaCartelle,
+  type CommessaCheck,
+  type FolderConsistencyResult,
+  type OrphanFolder,
+} from '../../../_actions/folder-consistency';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
 interface Props {
@@ -322,6 +334,11 @@ export function TabStorage({
       {/* ─── Contenuto basePath ───────────────────────────────────── */}
       {provider === 'nextcloud' && storageConfig?.basePath ? (
         <BasePathInspector tenantId={tenantId} />
+      ) : null}
+
+      {/* ─── Consistenza cartelle commesse ────────────────────────── */}
+      {provider === 'nextcloud' && storageConfig?.basePath ? (
+        <FolderConsistencyPanel tenantId={tenantId} />
       ) : null}
 
       {/* ─── Guida ────────────────────────────────────────────────── */}
@@ -809,6 +826,303 @@ function BasePathInspector({ tenantId }: { tenantId: string }) {
     </Card>
   );
 }
+
+function FolderConsistencyPanel({ tenantId }: { tenantId: string }) {
+  const [open, setOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [result, setResult] = React.useState<FolderConsistencyResult | null>(null);
+  const [fixingId, setFixingId] = React.useState<string | null>(null);
+  const [deletingPath, setDeletingPath] = React.useState<string | null>(null);
+  const showAlert = useAlert();
+  const askConfirm = useConfirm();
+
+  const load = React.useCallback(() => {
+    setLoading(true);
+    void verificaCartelle({ tenantId })
+      .then((r) => setResult(r))
+      .finally(() => setLoading(false));
+  }, [tenantId]);
+
+  React.useEffect(() => {
+    if (open && !result && !loading) load();
+  }, [open, result, loading, load]);
+
+  const fixCommessa = async (c: CommessaCheck) => {
+    const ok = await askConfirm({
+      title: `Riportare ${c.codice_interno} a posto?`,
+      description:
+        c.status === 'missing'
+          ? `Crea la cartella mancante in ${c.expected_path}.`
+          : `Sposta la cartella da ${c.found_in}/ a ${c.expected_folder}/. Il MOVE Nextcloud è atomico — i file dentro restano dove sono.`,
+    });
+    if (!ok) return;
+    setFixingId(c.id);
+    const res = await rimettiAPostoCommessa({ tenantId, commessaId: c.id });
+    setFixingId(null);
+    if (!res.ok) {
+      await showAlert({ title: 'Errore', body: res.error });
+      return;
+    }
+    load();
+  };
+
+  const deleteOrphan = async (o: OrphanFolder) => {
+    const ok = await askConfirm({
+      title: `Eliminare la cartella orfana "${o.name}"?`,
+      description: `Path: ${o.path}. Nessuna commessa nel DB punta qui. Operazione IRREVERSIBILE — i file dentro vengono cancellati.`,
+      destructive: true,
+      confirmLabel: 'Elimina',
+    });
+    if (!ok) return;
+    setDeletingPath(o.path);
+    const res = await cancellaCartellaOrfana({ tenantId, path: o.path });
+    setDeletingPath(null);
+    if (!res.ok) {
+      await showAlert({ title: 'Errore', body: res.error });
+      return;
+    }
+    load();
+  };
+
+  return (
+    <Card>
+      <CardContent className="py-4">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex w-full items-start justify-between gap-2 text-left"
+        >
+          <div className="flex-1">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <FileCheck className="h-3.5 w-3.5" />
+              Stato cartelle commesse
+            </h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Verifica che ogni commessa nel DB abbia la sua cartella nel
+              posto giusto su Nextcloud (in base allo stato), e che non ci
+              siano cartelle orfane senza commessa associata.
+            </p>
+            {result?.ok ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Pill ok>{result.totals.ok} OK</Pill>
+                {result.totals.wrong_position > 0 ? (
+                  <Pill warn>{result.totals.wrong_position} fuori posto</Pill>
+                ) : null}
+                {result.totals.missing > 0 ? (
+                  <Pill bad>{result.totals.missing} mancanti</Pill>
+                ) : null}
+                {result.totals.orphans > 0 ? (
+                  <Pill warn>{result.totals.orphans} orfane</Pill>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+          <ChevronRight
+            className={cn(
+              'mt-1 h-4 w-4 shrink-0 transition-transform',
+              open && 'rotate-90',
+            )}
+          />
+        </button>
+
+        {open ? (
+          <div className="mt-4 space-y-4">
+            {loading ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Analisi cartelle in corso…
+              </div>
+            ) : !result ? null : !result.ok ? (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                {result.error}
+              </div>
+            ) : (
+              <>
+                {/* Tabella commesse */}
+                {result.commesse.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nessuna commessa nel DB.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <th className="px-2 py-2 font-medium">Codice</th>
+                          <th className="px-2 py-2 font-medium">Cliente</th>
+                          <th className="px-2 py-2 font-medium">Stato</th>
+                          <th className="px-2 py-2 font-medium">Attesa in</th>
+                          <th className="px-2 py-2 font-medium">Cloud</th>
+                          <th className="px-2 py-2 text-right font-medium">Azione</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {result.commesse.map((c) => (
+                          <tr key={c.id}>
+                            <td className="px-2 py-2 font-mono">{c.codice_interno}</td>
+                            <td className="px-2 py-2">
+                              {c.cliente_ragione_sociale ?? '—'}
+                            </td>
+                            <td className="px-2 py-2">
+                              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                                {labelStato(c.stato, c.assegnata)}
+                              </span>
+                            </td>
+                            <td className="px-2 py-2 font-mono text-[10px] text-muted-foreground">
+                              {c.expected_folder}
+                            </td>
+                            <td className="px-2 py-2">
+                              {c.status === 'ok' ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  OK
+                                </span>
+                              ) : c.status === 'wrong_position' ? (
+                                <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  in {c.found_in}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-destructive">
+                                  <XCircle className="h-3 w-3" />
+                                  Mancante
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-2 py-2 text-right">
+                              {c.status !== 'ok' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => fixCommessa(c)}
+                                  disabled={fixingId === c.id}
+                                  className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+                                >
+                                  {fixingId === c.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Wrench className="h-3 w-3" />
+                                  )}
+                                  Sistema
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/40">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Sezione orfani */}
+                {result.orphans.length > 0 ? (
+                  <div>
+                    <h3 className="mb-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-3 w-3" />
+                      Cartelle orfane su cloud ({result.orphans.length})
+                    </h3>
+                    <p className="mb-2 text-[11px] text-muted-foreground">
+                      Cartelle presenti su Nextcloud senza commessa nel DB.
+                      Tipicamente residui di test o cancellazioni. Puoi
+                      eliminarle — operazione irreversibile.
+                    </p>
+                    <ul className="divide-y divide-border rounded-md border border-amber-500/30">
+                      {result.orphans.map((o) => (
+                        <li
+                          key={o.path}
+                          className="flex items-center gap-2 px-3 py-2 text-xs"
+                        >
+                          <Folder className="h-3.5 w-3.5 text-muted-foreground" />
+                          <code className="flex-1 font-mono">{o.path}</code>
+                          <button
+                            type="button"
+                            onClick={() => deleteOrphan(o)}
+                            disabled={deletingPath === o.path}
+                            className="inline-flex items-center gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          >
+                            {deletingPath === o.path ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
+                            Elimina
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={load}
+                    disabled={loading}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Ricarica
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Pill({
+  children,
+  ok,
+  warn,
+  bad,
+}: {
+  children: React.ReactNode;
+  ok?: boolean;
+  warn?: boolean;
+  bad?: boolean;
+}) {
+  const cls = ok
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+    : warn
+      ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+      : bad
+        ? 'border-destructive/30 bg-destructive/10 text-destructive'
+        : 'border-border bg-card text-muted-foreground';
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider',
+        cls,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function labelStato(stato: string, assegnata: boolean): string {
+  // Label umane per gli stati commessa, con sfumatura "non preso" quando
+  // lo stato è aperta/bozza e non ci sono tecnici assegnati.
+  if ((stato === 'aperta' || stato === 'bozza') && !assegnata) {
+    return 'Non preso';
+  }
+  return (
+    {
+      bozza: 'Bozza',
+      aperta: 'Aperta',
+      in_corso: 'In corso',
+      collaudo: 'Collaudo',
+      completata: 'Completata',
+      archiviata: 'Archiviata',
+    } as Record<string, string>
+  )[stato] ?? stato;
+}
+
+void ArrowRight;
 
 function GuidaSetupNextcloud() {
   return (

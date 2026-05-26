@@ -88,6 +88,20 @@ export default async function CommessePage({
   ]);
   const rows = error ? [] : data ?? [];
   const total = count ?? 0;
+
+  // Carica tecnici assegnati per le commesse mostrate, per derivare
+  // l'etichetta "Non preso" (aperta/bozza senza tecnici) lato UI.
+  const visibleIds = rows.map((r) => r.id as string);
+  let assegnateSet = new Set<string>();
+  if (visibleIds.length > 0) {
+    const { data: ass } = await supabase
+      .from('commessa_tecnici')
+      .select('commessa_id')
+      .in('commessa_id', visibleIds);
+    assegnateSet = new Set(
+      ((ass ?? []) as Array<{ commessa_id: string }>).map((r) => r.commessa_id),
+    );
+  }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasFilters = Boolean(
     searchParams.q ||
@@ -195,6 +209,7 @@ export default async function CommessePage({
               responsabile: resp
                 ? { id: resp.id, display_name: resp.display_name ?? null }
                 : null,
+              assegnata: assegnateSet.has(c.id),
             };
             return r;
           })}

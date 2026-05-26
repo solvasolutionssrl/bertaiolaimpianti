@@ -34,6 +34,8 @@ export interface CommessaRow {
   data_apertura: string | null;
   cliente: { id: string; ragione_sociale: string } | null;
   responsabile: { id: string; display_name: string | null } | null;
+  /** True se la commessa ha almeno un tecnico in commessa_tecnici. */
+  assegnata?: boolean;
 }
 
 export interface ResponsabileOption {
@@ -220,7 +222,15 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                         {c.cliente?.ragione_sociale ?? '—'}
                       </td>
                       <td className="px-4 py-3">
-                        <StatoBadge stato={c.stato} />
+                        <StatoBadge
+                          stato={c.stato}
+                          label={
+                            (c.stato === 'aperta' || c.stato === 'bozza') &&
+                            c.assegnata === false
+                              ? 'Non preso'
+                              : undefined
+                          }
+                        />
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {fmtData(c.data_apertura ?? null)}
