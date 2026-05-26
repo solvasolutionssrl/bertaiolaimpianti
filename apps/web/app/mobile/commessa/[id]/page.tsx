@@ -51,6 +51,7 @@ import {
   elencaTecniciTenant,
 } from '../../../_actions/commessa-tecnici';
 import { canView, loadFolderAclMap } from '../../../_lib/folder-acl';
+import { CloudRetry } from './_components/cloud-retry';
 
 export async function generateMetadata({
   params,
@@ -636,11 +637,7 @@ export default async function CommessaDetailPage({
           {/* ───────────── FILE (cloud diretto) ───────────── */}
           <TabsContent value="file" className="mt-5 space-y-3">
             {cloudError ? (
-              <EmptyBlock
-                icon={<FileText className="h-5 w-5" />}
-                title="Cloud non disponibile"
-                hint={cloudError}
-              />
+              <CloudRetry />
             ) : sortedCloudEntries.length === 0 ? (
               <EmptyBlock
                 icon={<Folder className="h-5 w-5" />}

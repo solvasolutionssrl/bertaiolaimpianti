@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, ChevronRight, Folder, FileText, FolderOpen } from 'lucide-react';
+import { ChevronRight, Folder, FileText, FolderOpen } from 'lucide-react';
 import { Card, CardContent } from '@kommessa/ui';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -9,6 +9,7 @@ import { loadCommessa } from '../_lib/get-commessa';
 import { fmtBytes, fmtData } from '../../../_lib/format';
 import { OpenLocalFolderButton } from './_components/open-local';
 import { PdfAnnotateButton } from './_components/pdf-annotate-button';
+import { DocumentiRetry } from './_components/documenti-retry';
 import { canView, loadFolderAclMap } from '../../../../_lib/folder-acl';
 
 export const dynamic = 'force-dynamic';
@@ -154,12 +155,7 @@ export default async function DocumentiTab({
       </div>
 
       {error ? (
-        <EmptyState
-          icon={AlertTriangle}
-          tone="accent"
-          title="Impossibile leggere la cartella"
-          description={error}
-        />
+        <DocumentiRetry />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={FolderOpen}

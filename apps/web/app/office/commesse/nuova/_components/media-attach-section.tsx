@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Camera, Video, X, Plus, AlertCircle, Smartphone, CheckCircle2, Loader2 } from 'lucide-react';
+import { Camera, Video, X, Plus, AlertCircle, Smartphone, CheckCircle2, Loader2, Paperclip } from 'lucide-react';
 import {
   Button,
   Card,
@@ -46,6 +46,7 @@ interface Props {
 
 export function MediaAttachSection({ files, onChange, uploading = false, uploadProgress, onCancel }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [skipOpen, setSkipOpen] = React.useState(false);
   const [validationErrors, setValidationErrors] = React.useState<ValidationError[]>([]);
   const [confirmCancel, setConfirmCancel] = React.useState(false);
@@ -121,15 +122,26 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
 
       <CardContent className="space-y-4">
         {files.length === 0 ? (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="flex min-h-[96px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/30 bg-primary-soft/20 text-primary transition hover:bg-primary-soft/40 active:scale-[.98]"
-          >
-            <Camera className="h-7 w-7 opacity-70" aria-hidden="true" />
-            <span className="text-sm font-medium">Aggiungi foto o video</span>
-            <span className="text-xs text-muted-foreground">Scatta o scegli dalla libreria</span>
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/30 bg-primary-soft/20 text-primary transition hover:bg-primary-soft/40 active:scale-[.98]"
+            >
+              <Camera className="h-6 w-6 opacity-70" aria-hidden="true" />
+              <span className="text-sm font-semibold">Scatta</span>
+              <span className="text-[11px] text-muted-foreground">Apri fotocamera</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition hover:bg-muted/40 active:scale-[.98]"
+            >
+              <Paperclip className="h-6 w-6 opacity-70" aria-hidden="true" />
+              <span className="text-sm font-semibold text-foreground">Allega</span>
+              <span className="text-[11px]">Scegli dalla libreria</span>
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {files.map((f) => {
@@ -228,11 +240,22 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
           </div>
         )}
 
+        {/* File picker — libreria (foto + video, multipli) */}
         <input
           ref={inputRef}
           type="file"
           accept="image/*,video/*"
           multiple
+          className="sr-only"
+          onChange={(e) => addFiles(e.target.files)}
+          onClick={(e) => ((e.target as HTMLInputElement).value = '')}
+        />
+        {/* Camera input — scatto diretto (solo immagini, fotocamera posteriore) */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
           className="sr-only"
           onChange={(e) => addFiles(e.target.files)}
           onClick={(e) => ((e.target as HTMLInputElement).value = '')}
