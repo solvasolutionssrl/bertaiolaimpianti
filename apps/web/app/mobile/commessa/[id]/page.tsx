@@ -108,7 +108,7 @@ export default async function CommessaDetailPage({
         id, codice_interno, nome_cartella, stato, tenant_id,
         cliente_indirizzo_cantiere, cloud_folder_path,
         descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, is_critica, data_apertura,
-        cliente:clienti ( ragione_sociale, email, telefoni ),
+        cliente:clienti ( ragione_sociale, email, telefoni, citta, cap, provincia ),
         responsabile:users!commesse_responsabile_id_fkey ( display_name )
       `,
     )
@@ -117,12 +117,14 @@ export default async function CommessaDetailPage({
 
   if (error || !rawCommessa) notFound();
 
-  // 2) Foto e video: separati per momento
+  // 2) Foto e video: solo quelle effettivamente caricate (esclude 'uploading'
+  //    bloccate da errori CORS/rete che creerebbero duplicati nella gallery).
   const fotoQuery = supabase
     .from('file_refs')
     .select('id, filename, thumbnail_url, momento, uploaded_at, mime, r2_key')
     .eq('commessa_id', params.id)
     .or('mime.like.image/%,mime.like.video/%')
+    .in('status', ['uploaded', 'syncing', 'synced', 'sync_failed'])
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
@@ -436,9 +438,9 @@ export default async function CommessaDetailPage({
           <p className="mt-1 text-sm font-medium text-primary-foreground/85">
             {cliente?.ragione_sociale ?? '—'}
           </p>
-          {commessa.cliente_indirizzo_cantiere && (
+          {(commessa.cliente_indirizzo_cantiere || cliente?.citta) && (
             <p className="mt-0.5 text-xs text-primary-foreground/70">
-              {commessa.cliente_indirizzo_cantiere}
+              {[commessa.cliente_indirizzo_cantiere, cliente?.citta].filter(Boolean).join(' · ')}
             </p>
           )}
         </div>
@@ -576,11 +578,11 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
           </TabsList>
 
-          {/* Connettore visivo: linea primaria che lega la pill attiva al contenuto */}
-          <div className="mx-2 mt-1 h-[2px] rounded-full bg-primary/40" />
-
+          {/* Box contenitore per ogni tab — stessa border del TabsList,
+              visivamente "aggancia" la pill attiva al contenuto sottostante. */}
+          <div className="mt-1.5 rounded-xl border border-primary/20">
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="mt-1">
+          <TabsContent value="todo" className="p-3">
             <CommessaLavoriMobile
               commessaId={params.id}
               contestoCommessa={[
@@ -599,7 +601,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
-          <TabsContent value="foto" className="mt-1">
+          <TabsContent value="foto" className="p-3">
             <FotoTab
               commessaId={params.id}
               sopralluogo={fotoSopralluogo}
@@ -609,7 +611,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE (cloud diretto) ───────────── */}
-          <TabsContent value="file" className="mt-1 space-y-3">
+          <TabsContent value="file" className="space-y-3 p-3">
             {cloudError ? (
               <CloudRetry />
             ) : sortedCloudEntries.length === 0 ? (
@@ -667,7 +669,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── TECNICI ───────────── */}
-          <TabsContent value="tecnici" className="mt-1">
+          <TabsContent value="tecnici" className="p-3">
             <TecniciMobile
               commessaId={params.id}
               assigned={tecniciAssegnati}
@@ -675,6 +677,7 @@ export default async function CommessaDetailPage({
               canManage={canManageTecnici}
             />
           </TabsContent>
+          </div>
         </Tabs>
       </section>
       </div>
