@@ -72,10 +72,57 @@ export async function aggiornaCliente(input: z.infer<typeof updateSchema>) {
   revalidatePath('/office/clienti');
 }
 
-export async function eliminaCliente(input: { id: string }) {
-  const { id } = z.object({ id: z.string().uuid() }).parse(input);
+export async function eliminaCliente(
+  input: { id: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  await requireTenantContext();
   const supabase = createServerSupabase();
-  const { error } = await supabase.from('clienti').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+
+  // Difesa: blocca se ci sono commesse legate al cliente. Postgres
+  // probabilmente già rifiuta via FK, ma diamo un errore parlante.
+  const { count } = await supabase
+    .from('commesse')
+    .select('id', { count: 'exact', head: true })
+    .eq('cliente_id', parsed.data.id);
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error: `Impossibile eliminare: il cliente ha ${count} commesse associate. Sposta o elimina prima le commesse.`,
+    };
+  }
+
+  const { error } = await supabase
+    .from('clienti')
+    .delete()
+    .eq('id', parsed.data.id);
+  if (error) return { ok: false, error: error.message };
   revalidatePath('/office/clienti');
+  return { ok: true };
+}
+
+const rinominaSchema = z.object({
+  id: z.string().uuid(),
+  ragioneSociale: z.string().trim().min(1).max(200),
+});
+
+export async function rinominaCliente(
+  input: z.infer<typeof rinominaSchema>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = rinominaSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.errors[0]?.message ?? 'Input non valido' };
+  }
+  await requireTenantContext();
+  const supabase = createServerSupabase();
+  const { error } = await supabase
+    .from('clienti')
+    .update({ ragione_sociale: parsed.data.ragioneSociale })
+    .eq('id', parsed.data.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/office/clienti/${parsed.data.id}`);
+  revalidatePath('/office/clienti');
+  return { ok: true };
 }

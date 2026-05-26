@@ -4,6 +4,7 @@ import { Button, Card, CardContent, Input } from '@kommessa/ui';
 import { Plus, Search, Users, UserPlus } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';
+import { ClienteRowActions } from './_components/cliente-row-actions';
 
 export const metadata = { title: 'Clienti' };
 export const dynamic = 'force-dynamic';
@@ -94,6 +95,7 @@ export default async function ClientiPage({
                   <th className="px-4 py-3 font-medium">Città</th>
                   <th className="px-4 py-3 font-medium">Telefono</th>
                   <th className="px-4 py-3 font-medium">Email</th>
+                  <th className="w-12 px-4 py-3" aria-label="Azioni"></th>
                 </tr>
               </thead>
               <tbody>
@@ -123,6 +125,12 @@ export default async function ClientiPage({
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {(c.email ?? []).join(', ') || '—'}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <ClienteRowActions
+                        clienteId={c.id as string}
+                        ragioneSocialeAttuale={c.ragione_sociale as string}
+                      />
                     </td>
                   </tr>
                 ))}

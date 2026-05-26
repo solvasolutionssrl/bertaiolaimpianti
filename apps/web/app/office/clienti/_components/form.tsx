@@ -183,9 +183,22 @@ export function ClienteForm({ initial }: { initial?: Initial }) {
             size="sm"
             disabled={pending}
             onClick={async () => {
-              if (!(await askConfirm({ title: 'Eliminare definitivamente questo cliente?', destructive: true }))) return;
+              if (
+                !(await askConfirm({
+                  title: 'Eliminare definitivamente questo cliente?',
+                  description:
+                    'Operazione irreversibile. Non sarà possibile se ci sono commesse associate.',
+                  destructive: true,
+                  confirmLabel: 'Elimina',
+                }))
+              )
+                return;
               start(async () => {
-                await eliminaCliente({ id: initial.id! });
+                const res = await eliminaCliente({ id: initial.id! });
+                if (!res.ok) {
+                  setErr(res.error);
+                  return;
+                }
                 router.push('/office/clienti');
               });
             }}
