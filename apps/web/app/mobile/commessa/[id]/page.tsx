@@ -271,6 +271,45 @@ export default async function CommessaDetailPage({
     (t) => t.stato === 'aperto' || t.stato === 'in_corso',
   ).length;
 
+  // Carica gli allegati delle riunioni con join su file_refs
+  const riunioniIds = riunioniRaw.map((r) => r.id);
+  let allegatiByRiu = new Map<
+    string,
+    Array<{
+      id: string;
+      file_ref_id: string;
+      filename: string;
+      mime: string;
+      path: string | null;
+      kind: 'foto' | 'pdf_acquisito';
+    }>
+  >();
+  if (riunioniIds.length > 0) {
+    const { data: allRes } = await supabase
+      .from('commessa_riunione_allegato' as never)
+      .select(
+        `id, riunione_id, kind,
+         file_ref:file_refs!commessa_riunione_allegato_file_ref_id_fkey (
+           id, filename, mime, path
+         )`,
+      )
+      .in('riunione_id', riunioniIds);
+    for (const a of (allRes ?? []) as Array<any>) {
+      const fr = Array.isArray(a.file_ref) ? a.file_ref[0] : a.file_ref;
+      if (!fr) continue;
+      const list = allegatiByRiu.get(a.riunione_id) ?? [];
+      list.push({
+        id: a.id as string,
+        file_ref_id: fr.id as string,
+        filename: (fr.filename as string) ?? 'allegato',
+        mime: (fr.mime as string) ?? '',
+        path: (fr.path as string | null) ?? null,
+        kind: a.kind as 'foto' | 'pdf_acquisito',
+      });
+      allegatiByRiu.set(a.riunione_id, list);
+    }
+  }
+
   const riunioniMobile: RiunioneMobileRow[] = riunioniRaw.map((r) => ({
     id: r.id,
     data_riunione: r.data_riunione,
@@ -279,6 +318,7 @@ export default async function CommessaDetailPage({
     corpo_libero: r.corpo_libero,
     trascrizione: r.trascrizione,
     created_by_nome: r.created_by ? (todoUsersMap.get(r.created_by) ?? null) : null,
+    allegati: allegatiByRiu.get(r.id) ?? [],
   }));
 
   const commessa = rawCommessa as any;
@@ -404,14 +444,20 @@ export default async function CommessaDetailPage({
         {/* Hero compattato — meno spazio sprecato, lascia più verticale al
             contenuto. Cliente in alto perché è quello che si cerca a colpo
             d'occhio; codice come "etichetta" sopra. */}
+        {/* Hero compatto — gerarchia ribilanciata: il TITOLO della commessa
+            (descrizione AI / nota capo) è la cosa più grande, cliente +
+            indirizzo come meta sotto, codice/data come micro-tag sopra. */}
         <div className="mt-4">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
             {commessa.codice_interno} · {fmtData(commessa.data_apertura)}
             {responsabile?.display_name ? ` · Resp ${responsabile.display_name}` : ''}
           </p>
-          <h1 className="mt-1 text-lg font-semibold leading-snug tracking-tight text-primary-foreground">
-            {cliente?.ragione_sociale ?? '—'}
+          <h1 className="mt-1 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
+            {pickCommessaTitolo(commessa) ?? commessa.nome_cartella ?? '—'}
           </h1>
+          <p className="mt-1 text-sm font-medium text-primary-foreground/85">
+            {cliente?.ragione_sociale ?? '—'}
+          </p>
           {commessa.cliente_indirizzo_cantiere && (
             <p className="mt-0.5 text-xs text-primary-foreground/70">
               {commessa.cliente_indirizzo_cantiere}
@@ -722,5 +768,24 @@ function EmptyBlock({
       <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
     </div>
   );
+}
+
+function pickCommessaTitolo(c: {
+  descrizione_ai_finale?: string | null;
+  descrizione_ai_proposta?: string | null;
+  note_iniziali?: string | null;
+}): string | null {
+  const raw =
+    c.descrizione_ai_finale ??
+    c.descrizione_ai_proposta ??
+    c.note_iniziali ??
+    null;
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const firstLine = trimmed.split(/\r?\n/)[0]!;
+  const firstPeriod = firstLine.indexOf('. ');
+  if (firstPeriod > 10) return firstLine.slice(0, firstPeriod).trim();
+  return firstLine;
 }
 

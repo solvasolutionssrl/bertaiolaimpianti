@@ -74,6 +74,15 @@ interface NotaView {
   created_at: string;
 }
 
+export interface RiunioneAllegatoView {
+  id: string;
+  file_ref_id: string;
+  filename: string;
+  mime: string;
+  path: string | null;
+  kind: 'foto' | 'pdf_acquisito';
+}
+
 interface RiunioneView {
   id: string;
   data_riunione: string;
@@ -87,6 +96,8 @@ interface RiunioneView {
   created_by_nome: string | null;
   created_at: string;
   updated_at: string;
+  /** Allegati linkati alla riunione (caricati lato server). */
+  allegati: RiunioneAllegatoView[];
 }
 
 interface AuditView {
@@ -1035,12 +1046,17 @@ function TimelineEntry({
               {r.created_by_nome ? ` · ${r.created_by_nome}` : ''}
             </span>
             {r.titolo ? (
-              <p className="flex items-center gap-1.5 font-medium">
+              <p className="flex flex-wrap items-center gap-1.5 font-medium">
                 {r.titolo}
                 {r.reportino ? (
                   <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
                     <Sparkles className="h-2 w-2" />
                     AI
+                  </span>
+                ) : null}
+                {r.allegati.length > 0 ? (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                    {r.allegati.length} allegati
                   </span>
                 ) : null}
               </p>
@@ -1059,6 +1075,49 @@ function TimelineEntry({
               <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                 {(r.corpo_libero || r.trascrizione || '').slice(0, 240)}
               </p>
+            ) : null}
+
+            {/* Allegati: griglia compatta foto + chip PDF */}
+            {r.allegati.length > 0 ? (
+              <div className="mt-2 grid grid-cols-6 gap-1 sm:grid-cols-8">
+                {r.allegati.slice(0, 8).map((al) => {
+                  const isFoto =
+                    al.kind === 'foto' || (al.mime ?? '').startsWith('image/');
+                  return isFoto ? (
+                    <a
+                      key={al.id}
+                      href={`/api/photo/${al.file_ref_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="aspect-square overflow-hidden rounded border border-border bg-card"
+                      title={al.filename}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/photo/${al.file_ref_id}`}
+                        alt={al.filename}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      key={al.id}
+                      href={
+                        al.path
+                          ? `/api/cloud/file?path=${encodeURIComponent(al.path)}`
+                          : '#'
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={al.filename}
+                      className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
+                    >
+                      <span className="font-mono text-[9px] font-bold">PDF</span>
+                    </a>
+                  );
+                })}
+              </div>
             ) : null}
           </div>
         </Row>

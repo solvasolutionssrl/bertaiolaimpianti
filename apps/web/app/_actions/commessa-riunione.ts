@@ -295,13 +295,14 @@ export async function generaReportRiunione(
   const system = `Sei un assistente che riepiloga riunioni di cantiere/sopralluogo per un'impresa di impianti idro-termo-sanitari italiana.
 
 Ricevi il verbale grezzo di una riunione (può essere scritto a mano o dettato a voce, italiano). Devi produrre:
-1. un "reportino": riassunto sintetico in italiano, max 6 punti chiave, in markdown leggero (- elenco puntato, **grassetto** per evidenze). Linguaggio asciutto, tecnico, professionale.
+1. un "reportino": riassunto sintetico in italiano, max 6 punti, in TESTO SEMPLICE (no markdown). Usa eventualmente "- " per elenchi puntati e a-capo per separare i punti. Linguaggio asciutto, tecnico, professionale.
 2. "todo_proposti": una lista di azioni concrete e verificabili emerse dalla riunione che sembrano "cose da fare". Ogni TODO ha titolo breve (max 80 caratteri, imperativo: "Ordinare pompa…", "Chiamare Mario…"), priorita (bassa/media/alta/urgente — desumi dal tono: "subito"/"entro domani" → urgente; "appena puoi"/"settimana prossima" → media; "quando capita" → bassa) e una note opzionale di contesto (max 200 caratteri).
 
 REGOLE:
 - Non inventare azioni: includi SOLO quelle esplicitamente menzionate o chiaramente implicate.
 - Se non emergono azioni, "todo_proposti" è un array vuoto.
 - Non mettere come TODO cose già fatte/risolte durante la riunione.
+- NESSUN markdown nel reportino: niente **grassetto**, niente *corsivo*, niente # heading, niente \`code\`. Solo testo piano con eventuali "- " per i bullet.
 - Output STRICT JSON, nessun testo prima/dopo.`;
 
   // Conteggio allegati per dare contesto al modello — non leggiamo il
@@ -364,10 +365,16 @@ REGOLE:
       return { ok: false, error: 'AI ha prodotto schema non valido. Riprova.' };
     }
 
+    // Sanitizer defensive: anche se il prompt dice "no markdown", a volte
+    // il modello slippa con **grassetto** o *corsivo*. Strippiamo gli
+    // asterischi delimitatori prima di restituire (mantenendo asterischi
+    // genuini come quelli in "10*5cm", ecc. niente conflitti).
+    const cleanReportino = stripBasicMarkdown(safe.data.reportino);
+
     return {
       ok: true,
       data: {
-        reportino: safe.data.reportino,
+        reportino: cleanReportino,
         todo_proposti: safe.data.todo_proposti,
         modello: completion.model,
       },
@@ -456,6 +463,31 @@ export async function materializzaTodoDaRiunione(
 // ─── helpers ────────────────────────────────────────────────────────
 
 /** Data odierna in fuso Europe/Rome, formato YYYY-MM-DD. */
+/**
+ * Strippa markdown basic dal reportino AI per uniformità di rendering
+ * (sia office che mobile usano whitespace-pre-wrap, NO renderer markdown):
+ *  - **bold** o __bold__ → bold (senza delimitatori)
+ *  - *italic* o _italic_ → italic
+ *  - `code` → code
+ *  - ### heading → heading
+ *
+ * Conservativo: non tocca asterischi singoli adiacenti a numeri o lettere
+ * non-space (es. "10*5cm" resta intatto).
+ */
+function stripBasicMarkdown(s: string): string {
+  return s
+    .replace(/\*\*([^*\n]+?)\*\*/g, '$1')
+    .replace(/__([^_\n]+?)__/g, '$1')
+    .replace(/(?:^|[\s(])\*([^*\n]+?)\*(?=[\s).,!?:;]|$)/g, (m, inner) =>
+      m.replace(`*${inner}*`, inner),
+    )
+    .replace(/(?:^|[\s(])_([^_\n]+?)_(?=[\s).,!?:;]|$)/g, (m, inner) =>
+      m.replace(`_${inner}_`, inner),
+    )
+    .replace(/`([^`\n]+?)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '');
+}
+
 function localDateISO(): string {
   // toLocaleDateString con sv-SE produce direttamente YYYY-MM-DD; il TZ
   // del server (Vercel di solito UTC) viene compensato.

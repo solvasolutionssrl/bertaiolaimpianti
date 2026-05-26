@@ -37,6 +37,8 @@ interface CommessaRow {
   is_critica: boolean;
   cliente_indirizzo_cantiere: string | null;
   data_apertura: string;
+  /** Descrizione del lavoro — è IL titolo della commessa, mostrato come h1. */
+  titolo: string | null;
   cliente: { id: string; ragione_sociale: string } | null;
 }
 
@@ -82,6 +84,7 @@ async function GestioneDashboard({
         `
           id, codice_interno, nome_cartella, stato, is_critica,
           cliente_indirizzo_cantiere, data_apertura,
+          descrizione_ai_finale, descrizione_ai_proposta, note_iniziali,
           cliente:clienti ( id, ragione_sociale )
         `,
       )
@@ -99,6 +102,7 @@ async function GestioneDashboard({
     is_critica: Boolean(r.is_critica),
     cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
     data_apertura: r.data_apertura,
+    titolo: pickTitolo(r),
     cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
   }));
 
@@ -256,6 +260,7 @@ async function CampoOggi({
         `
           id, codice_interno, nome_cartella, stato, is_critica,
           cliente_indirizzo_cantiere, data_apertura,
+          descrizione_ai_finale, descrizione_ai_proposta, note_iniziali,
           cliente:clienti ( id, ragione_sociale )
         `,
       )
@@ -331,6 +336,7 @@ async function CampoOggi({
     is_critica: Boolean(r.is_critica),
     cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
     data_apertura: r.data_apertura,
+    titolo: pickTitolo(r),
     cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
   }));
 
@@ -533,9 +539,10 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
       </span>
 
       <div className="min-w-0 flex-1">
+        {/* Riga 1: codice + stato + flag critica (meta) */}
         <div className="flex items-center gap-2">
           <StatoLed stato={commessa.stato} />
-          <span className="font-mono text-xs font-semibold tabular-nums text-muted-foreground">
+          <span className="font-mono text-[10px] font-semibold uppercase tabular-nums tracking-wider text-muted-foreground">
             {commessa.codice_interno}
           </span>
           {commessa.is_critica && (
@@ -544,15 +551,23 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
             </span>
           )}
         </div>
-        <p className="mt-1.5 truncate text-base font-semibold tracking-tight text-foreground">
-          {commessa.cliente?.ragione_sociale ?? '—'}
+        {/* Riga 2: TITOLO della commessa — testo principale, 2 righe max */}
+        <p className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-foreground">
+          {commessa.titolo ?? commessa.nome_cartella ?? '—'}
         </p>
-        {commessa.cliente_indirizzo_cantiere ? (
-          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span className="truncate">{commessa.cliente_indirizzo_cantiere}</span>
-          </p>
-        ) : null}
+        {/* Riga 3: cliente + indirizzo (sotto) */}
+        <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+          <span className="truncate">
+            {commessa.cliente?.ragione_sociale ?? '—'}
+          </span>
+          {commessa.cliente_indirizzo_cantiere ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{commessa.cliente_indirizzo_cantiere}</span>
+            </>
+          ) : null}
+        </p>
       </div>
 
       <ChevronRight
@@ -691,4 +706,31 @@ function formatToday() {
       month: 'long',
     })
     .toUpperCase();
+}
+
+/**
+ * Estrae il "titolo" di una commessa per il display nella lista:
+ *  1. descrizione_ai_finale (set quando la commessa è creata via voice
+ *     intake con AI extraction)
+ *  2. descrizione_ai_proposta (proposta AI non rivista)
+ *  3. note_iniziali (nota originale del capo)
+ *  4. null → il chiamante usa nome_cartella o "—"
+ *
+ * Tronca la prima riga / prima frase per evitare titoli con 3 paragrafi.
+ */
+function pickTitolo(r: Record<string, unknown>): string | null {
+  const raw =
+    (r.descrizione_ai_finale as string | null | undefined) ??
+    (r.descrizione_ai_proposta as string | null | undefined) ??
+    (r.note_iniziali as string | null | undefined) ??
+    null;
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Primo a-capo o prima frase
+  const firstLine = trimmed.split(/\r?\n/)[0]!;
+  // Se primo "punto" è troppo presto (<10 char), prendiamo prima riga intera
+  const firstPeriod = firstLine.indexOf('. ');
+  if (firstPeriod > 10) return firstLine.slice(0, firstPeriod).trim();
+  return firstLine;
 }

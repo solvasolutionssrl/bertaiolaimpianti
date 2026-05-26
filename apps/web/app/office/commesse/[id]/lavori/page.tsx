@@ -128,6 +128,45 @@ export default async function LavoriTab({
   }>;
   for (const r of riunioni) if (r.created_by) userIds.add(r.created_by);
 
+  // Carica gli allegati per tutte le riunioni in 1 query batch
+  const riunioniIds = riunioni.map((r) => r.id);
+  let allegatiByRiu = new Map<
+    string,
+    Array<{
+      id: string;
+      file_ref_id: string;
+      filename: string;
+      mime: string;
+      path: string | null;
+      kind: 'foto' | 'pdf_acquisito';
+    }>
+  >();
+  if (riunioniIds.length > 0) {
+    const { data: allRes } = await supabase
+      .from('commessa_riunione_allegato' as never)
+      .select(
+        `id, riunione_id, kind,
+         file_ref:file_refs!commessa_riunione_allegato_file_ref_id_fkey (
+           id, filename, mime, path
+         )`,
+      )
+      .in('riunione_id', riunioniIds);
+    for (const a of (allRes ?? []) as Array<any>) {
+      const fr = Array.isArray(a.file_ref) ? a.file_ref[0] : a.file_ref;
+      if (!fr) continue;
+      const list = allegatiByRiu.get(a.riunione_id) ?? [];
+      list.push({
+        id: a.id as string,
+        file_ref_id: fr.id as string,
+        filename: (fr.filename as string) ?? 'allegato',
+        mime: (fr.mime as string) ?? '',
+        path: (fr.path as string | null) ?? null,
+        kind: a.kind as 'foto' | 'pdf_acquisito',
+      });
+      allegatiByRiu.set(a.riunione_id, list);
+    }
+  }
+
   const audit = (auditRes.data ?? []) as Array<{
     id: string;
     action: string;
@@ -194,6 +233,7 @@ export default async function LavoriTab({
         created_by_nome: r.created_by
           ? (usersMap.get(r.created_by)?.display_name ?? null)
           : null,
+        allegati: allegatiByRiu.get(r.id) ?? [],
       }))}
       auditEvents={audit.map((a) => ({
         ...a,

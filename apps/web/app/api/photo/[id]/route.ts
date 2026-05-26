@@ -55,8 +55,14 @@ export async function GET(
     const baseUrl = (cfg.baseUrl ?? '').replace(/\/+$/, '');
     const user = cfg.user ?? '';
     const authHeader = `Basic ${Buffer.from(`${user}:${cfg.appPassword}`).toString('base64')}`;
+    // basePath: cartella condivisa del tenant dentro la home dell'app
+    // user Nextcloud (es. "/Bertaiola Impianti"). I path in file_refs sono
+    // relativi a quella root, vanno prepended. Senza questo, PROPFIND/GET
+    // ritorna 404 e le thumbnail appaiono come placeholder grigio.
+    const basePathRaw = (cfg.basePath ?? '').replace(/^\/+|\/+$/g, '');
+    const basePath = basePathRaw ? `/${basePathRaw}` : '';
     const path = ref.path.startsWith('/') ? ref.path : `/${ref.path}`;
-    const url = `${baseUrl}/remote.php/dav/files/${user}${path}`;
+    const url = `${baseUrl}/remote.php/dav/files/${user}${basePath}${path}`;
 
     const upstream = await fetch(url, { headers: { Authorization: authHeader } });
     if (!upstream.ok) return new Response('Errore storage', { status: 502 });

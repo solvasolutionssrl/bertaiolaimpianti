@@ -120,7 +120,14 @@ export async function GET(req: Request) {
       if (!cfg.baseUrl || !cfg.user || !cfg.appPassword) {
         return NextResponse.json({ error: 'nextcloud_not_configured' }, { status: 503 });
       }
-      const ncUrl = `${cfg.baseUrl.replace(/\/+$/, '')}/remote.php/dav/files/${cfg.user}/${encodeURI(safePath)}`;
+      // basePath del tenant (es. "/Bertaiola Impianti") va prepended al
+      // safePath che è relativo alla root commessa. Senza, 404.
+      const basePathRaw =
+        typeof cfg.basePath === 'string'
+          ? cfg.basePath.replace(/^\/+|\/+$/g, '')
+          : '';
+      const basePathSeg = basePathRaw ? `${encodeURI(basePathRaw)}/` : '';
+      const ncUrl = `${cfg.baseUrl.replace(/\/+$/, '')}/remote.php/dav/files/${cfg.user}/${basePathSeg}${encodeURI(safePath)}`;
       const auth = Buffer.from(`${cfg.user}:${cfg.appPassword}`).toString('base64');
 
       // Forward del Range del client → Nextcloud. Indispensabile per il
