@@ -66,12 +66,19 @@ export async function invitaUtente(
     };
   }
 
+  // Costruisce l'URL di redirect dove l'utente arriva dopo aver cliccato il link.
+  // NEXT_PUBLIC_APP_URL va impostato in Vercel env vars con la URL di produzione.
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const redirectTo = `${appUrl}/auth/callback?next=/accetta-invito`;
+
   const { data: invited, error: errInv } = await admin.auth.admin.inviteUserByEmail(
     parsed.data.email,
     {
       data: parsed.data.displayName
         ? { display_name: parsed.data.displayName }
         : undefined,
+      redirectTo,
     },
   );
   if (errInv || !invited?.user) {
@@ -103,6 +110,7 @@ export async function invitaUtente(
       role: parsed.data.role,
       display_name: parsed.data.displayName?.trim() || null,
       attivo: true,
+      invite_sent_at: new Date().toISOString(),
     },
     { onConflict: 'id' },
   );

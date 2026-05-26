@@ -346,7 +346,8 @@ export default async function CommessaDetailPage({
           appPassword: cfg.appPassword,
         basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
         });
-        cloudEntries = await provider.listFolder(commessa.nome_cartella);
+        const cloudRoot = (commessa.cloud_folder_path ?? commessa.nome_cartella).replace(/^\/+|\/+$/g, '');
+        cloudEntries = await provider.listFolder(cloudRoot);
       } else if (providerName === 'supabase') {
         const provider = getStorageProvider({
           provider: 'supabase',
@@ -653,7 +654,7 @@ export default async function CommessaDetailPage({
                 entries={sortedCloudEntries}
                 commessaId={params.id}
                 subPath=""
-                rootName={commessa.nome_cartella}
+                rootName={(commessa.cloud_folder_path ?? commessa.nome_cartella).replace(/^\/+|\/+$/g, '')}
               />
             )}
 

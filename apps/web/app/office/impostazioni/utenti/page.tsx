@@ -40,6 +40,17 @@ export default async function UtentiPage() {
     .order('attivo', { ascending: false })
     .order('display_name', { ascending: true });
 
+  // Query separata per le colonne aggiunte dalla migration invite_tracking
+  // (non ancora nei tipi generati da Supabase, cast esplicito).
+  const { data: inviteRaw } = await (supabase as unknown as any)
+    .from('users')
+    .select('id, invite_sent_at, invite_accepted_at')
+    .eq('tenant_id', ctx.tenantId);
+  const inviteMap = new Map<string, { invite_sent_at: string | null; invite_accepted_at: string | null }>(
+    ((inviteRaw ?? []) as Array<{ id: string; invite_sent_at: string | null; invite_accepted_at: string | null }>)
+      .map((r) => [r.id, { invite_sent_at: r.invite_sent_at, invite_accepted_at: r.invite_accepted_at }]),
+  );
+
   const enriched: UtenteRow[] = [];
   if (appUsers && appUsers.length > 0) {
     let admin;
@@ -74,6 +85,8 @@ export default async function UtentiPage() {
           avatar_url: u.avatar_url,
           email: meta?.email ?? '',
           last_sign_in_at: meta?.last_sign_in_at ?? null,
+          invite_sent_at: inviteMap.get(u.id)?.invite_sent_at ?? null,
+          invite_accepted_at: inviteMap.get(u.id)?.invite_accepted_at ?? null,
           permission_overrides: (u.permissions as UserPermissionOverrides | null) ?? null,
         });
       }
@@ -87,6 +100,8 @@ export default async function UtentiPage() {
           avatar_url: u.avatar_url,
           email: '—',
           last_sign_in_at: null,
+          invite_sent_at: inviteMap.get(u.id)?.invite_sent_at ?? null,
+          invite_accepted_at: inviteMap.get(u.id)?.invite_accepted_at ?? null,
           permission_overrides: (u.permissions as UserPermissionOverrides | null) ?? null,
         });
       }

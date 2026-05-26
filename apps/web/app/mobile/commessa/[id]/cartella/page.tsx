@@ -49,7 +49,7 @@ export default async function CartellaPage({
 
   const { data: commessa } = await supabase
     .from('commesse')
-    .select('id, codice_interno, nome_cartella, tenant_id, cliente:clienti(ragione_sociale)')
+    .select('id, codice_interno, nome_cartella, cloud_folder_path, tenant_id, cliente:clienti(ragione_sociale)')
     .eq('id', params.id)
     .single();
 
@@ -63,7 +63,10 @@ export default async function CartellaPage({
     .replace(/\.\./g, '')
     .replace(/^\/+/, '')
     .replace(/\/+$/, '');
-  const fullPath = subPath ? `${c.nome_cartella}/${subPath}` : c.nome_cartella;
+  // cloud_folder_path include il prefisso di stato (es. "01_Richieste/BER-26-001_Test")
+  // nome_cartella è solo il nome base, senza prefisso stato → non funziona con Nextcloud
+  const cloudRoot = (c.cloud_folder_path ?? c.nome_cartella).replace(/^\/+|\/+$/g, '');
+  const fullPath = subPath ? `${cloudRoot}/${subPath}` : cloudRoot;
 
   // Carica config storage del tenant
   const service = createServiceSupabase();
@@ -208,7 +211,7 @@ export default async function CartellaPage({
               entries={sortedEntries}
               commessaId={params.id}
               subPath={subPath}
-              rootName={c.nome_cartella}
+              rootName={cloudRoot}
             />
           </section>
         )}

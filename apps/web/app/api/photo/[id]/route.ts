@@ -60,9 +60,9 @@ export async function GET(
     // relativi a quella root, vanno prepended. Senza questo, PROPFIND/GET
     // ritorna 404 e le thumbnail appaiono come placeholder grigio.
     const basePathRaw = (cfg.basePath ?? '').replace(/^\/+|\/+$/g, '');
-    const basePath = basePathRaw ? `/${basePathRaw}` : '';
-    const path = ref.path.startsWith('/') ? ref.path : `/${ref.path}`;
-    const url = `${baseUrl}/remote.php/dav/files/${user}${basePath}${path}`;
+    const basePathSeg = basePathRaw ? `${encodeURI(basePathRaw)}/` : '';
+    const rawPath = ref.path.replace(/^\/+/, '');
+    const url = `${baseUrl}/remote.php/dav/files/${user}/${basePathSeg}${encodeURI(rawPath)}`;
 
     const upstream = await fetch(url, { headers: { Authorization: authHeader } });
     if (!upstream.ok) return new Response('Errore storage', { status: 502 });
