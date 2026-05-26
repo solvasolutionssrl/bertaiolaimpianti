@@ -15,52 +15,51 @@ import {
 } from 'lucide-react';
 import { cn } from '@kommessa/ui';
 
-interface Tab {
+interface NavItem {
   id: string;
   label: string;
   href: string;
   icon: LucideIcon;
+  adminOnly?: boolean;
 }
 
-const TABS: Tab[] = [
-  { id: 'profilo',  label: 'Profilo',          href: '/office/impostazioni/profilo',  icon: User },
-  { id: 'voci',     label: 'Voci catalogo',    href: '/office/impostazioni/voci',     icon: ListTree },
-  { id: 'preset',   label: 'Preset di lavoro', href: '/office/impostazioni/preset',   icon: Sparkles },
-  { id: 'sla',      label: 'SLA',              href: '/office/impostazioni/sla',      icon: Timer },
-  { id: 'utenti',   label: 'Utenti',           href: '/office/impostazioni/utenti',   icon: UsersRound },
-  { id: 'branding', label: 'Branding',         href: '/office/impostazioni/branding', icon: Brush },
-  { id: 'storage',  label: 'Storage',          href: '/office/impostazioni/storage',  icon: HardDrive },
-  { id: 'cartelle', label: 'Permessi cartelle',href: '/office/impostazioni/cartelle', icon: FolderLock },
+const NAV_ITEMS: NavItem[] = [
+  { id: 'profilo',  label: 'Profilo',           href: '/office/impostazioni/profilo',  icon: User },
+  { id: 'voci',     label: 'Voci catalogo',     href: '/office/impostazioni/voci',     icon: ListTree,    adminOnly: true },
+  { id: 'preset',   label: 'Preset lavoro',     href: '/office/impostazioni/preset',   icon: Sparkles,    adminOnly: true },
+  { id: 'sla',      label: 'SLA',               href: '/office/impostazioni/sla',      icon: Timer,       adminOnly: true },
+  { id: 'utenti',   label: 'Utenti',            href: '/office/impostazioni/utenti',   icon: UsersRound,  adminOnly: true },
+  { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding', icon: Brush,       adminOnly: true },
+  { id: 'storage',  label: 'Storage',           href: '/office/impostazioni/storage',  icon: HardDrive,   adminOnly: true },
+  { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle', icon: FolderLock,  adminOnly: true },
 ];
 
-export function SettingsTabs() {
+/** Sidebar verticale per la sezione impostazioni. */
+export function SettingsSideNav() {
   const pathname = usePathname() ?? '';
 
   return (
-    <nav
-      aria-label="Sezioni impostazioni"
-      className="sticky top-16 z-20 -mx-6 border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/80"
-    >
-      <ul className="-mb-px flex gap-1 overflow-x-auto pt-1">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
+    <nav aria-label="Sezioni impostazioni" className="sticky top-6">
+      <ul className="space-y-0.5">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
           const active =
-            pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
-            <li key={tab.id} className="shrink-0">
+            <li key={item.id}>
               <Link
-                href={tab.href}
+                href={item.href}
                 prefetch
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'group inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors',
+                  'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors',
                   active
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? 'bg-primary/10 font-medium text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >
-                <Icon className="h-4 w-4" aria-hidden="true" />
-                <span>{tab.label}</span>
+                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{item.label}</span>
               </Link>
             </li>
           );
@@ -69,3 +68,9 @@ export function SettingsTabs() {
     </nav>
   );
 }
+
+/**
+ * @deprecated usa SettingsSideNav
+ * Mantenuto per compatibilità nel caso venga importato altrove.
+ */
+export { SettingsSideNav as SettingsTabs };

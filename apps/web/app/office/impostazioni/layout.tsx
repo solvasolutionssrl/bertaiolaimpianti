@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
-import { Settings2 } from 'lucide-react';
-import { SectionHeader } from '../../_components/section-header';
-import { SettingsTabs } from './_components/settings-tabs';
+import { SettingsSideNav } from './_components/settings-tabs';
 
 export const metadata = { title: 'Impostazioni · Kommessa' };
 
@@ -11,19 +9,19 @@ export default function ImpostazioniLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-8">
-      <SectionHeader
-        eyebrow="Impostazioni"
-        title="Configura il tuo spazio di lavoro"
-        description="Profilo, catalogo lavori, preset, accessi, branding e storage. Le modifiche al tenant sono riservate agli amministratori."
-        icon={<Settings2 />}
-      />
+    <div className="mx-auto w-full max-w-5xl px-6 py-6">
+      <div className="flex gap-8 lg:gap-10">
+        {/* Sidebar navigazione impostazioni */}
+        <aside className="w-44 shrink-0">
+          <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Impostazioni
+          </p>
+          <SettingsSideNav />
+        </aside>
 
-      <div className="mt-8">
-        <SettingsTabs />
+        {/* Contenuto sezione */}
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
-
-      <div className="pt-8">{children}</div>
     </div>
   );
 }
