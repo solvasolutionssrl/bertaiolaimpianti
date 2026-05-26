@@ -501,7 +501,7 @@ export default async function CommessaDetailPage({
       {/* ── 02 / DETTAGLI (compatto) ─────────────────────────────────── */}
       <section className="space-y-1.5 animate-fade-up [animation-delay:60ms]">
         <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-          Nota del capo
+          Dettagli lavoro
         </h2>
         <article className="relative overflow-hidden rounded-lg border border-border bg-card p-2.5 shadow-soft">
           {/* Linea brand verticale a sinistra */}
