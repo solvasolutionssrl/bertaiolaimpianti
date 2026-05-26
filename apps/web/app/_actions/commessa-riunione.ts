@@ -245,6 +245,10 @@ const GeneraInput = z.object({
   trascrizione: z.string().max(20000).optional(),
   /** Contesto: nome cliente, codice commessa, indirizzo (per dare contesto al modello). */
   contestoCommessa: z.string().max(500).optional(),
+  /** Numero foto allegate alla riunione (info al modello). */
+  fotoCount: z.number().int().min(0).max(100).optional(),
+  /** Numero PDF acquisiti allegati alla riunione. */
+  pdfCount: z.number().int().min(0).max(100).optional(),
 });
 
 /**
@@ -300,7 +304,17 @@ REGOLE:
 - Non mettere come TODO cose già fatte/risolte durante la riunione.
 - Output STRICT JSON, nessun testo prima/dopo.`;
 
-  const userPrompt = `${parsed.data.contestoCommessa ? `Contesto commessa: ${parsed.data.contestoCommessa}\n\n` : ''}Verbale grezzo:\n"""\n${testo}\n"""\n\nRispondi con JSON: { "reportino": "...", "todo_proposti": [{ "titolo": "...", "priorita": "bassa|media|alta|urgente", "note": "..." }] }`;
+  // Conteggio allegati per dare contesto al modello — non leggiamo il
+  // contenuto visivo/OCR (vision è scope futuro), ma il modello sa che
+  // ci sono N foto e M PDF e può menzionarli nel reportino se rilevanti.
+  const fotoN = parsed.data.fotoCount ?? 0;
+  const pdfN = parsed.data.pdfCount ?? 0;
+  const allegatiInfo =
+    fotoN > 0 || pdfN > 0
+      ? `\n\nAllegati alla riunione: ${fotoN} foto, ${pdfN} PDF acquisiti. Puoi citare la loro presenza nel reportino se il testo si riferisce a essi (es. "vedi foto allegate", "schema in PDF").`
+      : '';
+
+  const userPrompt = `${parsed.data.contestoCommessa ? `Contesto commessa: ${parsed.data.contestoCommessa}\n\n` : ''}Verbale grezzo:\n"""\n${testo}\n"""${allegatiInfo}\n\nRispondi con JSON: { "reportino": "...", "todo_proposti": [{ "titolo": "...", "priorita": "bassa|media|alta|urgente", "note": "..." }] }`;
 
   // gpt-5-mini va benissimo per reasoning + JSON; usiamo lo stesso default
   // del resto del progetto (configurabile via OPENAI_MODEL_CHAT).

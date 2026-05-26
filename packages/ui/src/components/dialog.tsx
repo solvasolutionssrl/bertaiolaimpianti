@@ -37,9 +37,20 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      // Container responsivo:
+      // - max-w-[calc(100vw-1rem)] lascia 8px su ciascun lato anche su
+      //   iPhone SE (375px) → niente crop verticale, niente bordi
+      //   appiccicati al display.
+      // - max-h-[calc(100dvh-2rem)] + overflow-y-auto → content scrollabile
+      //   se più lungo del viewport. `dvh` segue la barra Safari dinamica.
+      // - padding-bottom safe-area-inset-bottom → niente overlap con la
+      //   home indicator iPhone in standalone PWA.
+      // - p-4 su mobile, sm:p-6 desktop → meno spazio sprecato su 375px.
       className={cn(
-        // max-width 640px da Mockup
-        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-[640px] translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-6 shadow-lg duration-200 sm:rounded-lg',
+        'fixed left-[50%] top-[50%] z-50 grid translate-x-[-50%] translate-y-[-50%] gap-4',
+        'w-full max-w-[calc(100vw-1rem)] sm:max-w-[640px]',
+        'max-h-[calc(100dvh-2rem)] overflow-y-auto',
+        'rounded-lg border border-border bg-background p-4 sm:p-6 shadow-lg duration-200',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -47,11 +58,15 @@ const DialogContent = React.forwardRef<
         'data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
         className,
       )}
+      style={{
+        paddingBottom:
+          'max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))',
+      }}
       {...props}
     >
       {children}
       <DialogPrimitive.Close
-        className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
+        className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground opacity-80 ring-offset-background transition-opacity hover:bg-muted hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none"
         aria-label="Chiudi"
       >
         <X className="h-4 w-4" />

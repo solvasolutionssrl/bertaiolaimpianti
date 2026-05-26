@@ -104,6 +104,28 @@
     font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
     font-variant-ligatures: none;
   }
+
+  /* iOS Safari auto-zoom-on-focus su form fields con font-size < 16px è
+   * la causa più comune di "il dialog si zoomma all'apertura, devo
+   * rimpicciolire a mano". Forziamo font-size = 16px sotto md (~768px)
+   * su input/textarea/select. Sopra md (desktop) ricadiamo sui valori
+   * Tailwind text-sm settati nei singoli componenti. */
+  @media (max-width: 767px) {
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="search"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
+  }
 }
 
 @layer utilities {

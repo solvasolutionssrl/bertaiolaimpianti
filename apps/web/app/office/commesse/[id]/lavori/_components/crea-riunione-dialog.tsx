@@ -230,10 +230,18 @@ export function CreaRiunioneDialog({
 
   const generaReport = async () => {
     setGenerating(true);
+    // Conteggio allegati passato al modello come metadata — il prompt AI
+    // sa così che ci sono foto/PDF anche se non legge il contenuto
+    // visivo (per ora). Utile per menzionarli nel reportino e per non
+    // far "inventare" che non ci sono allegati.
+    const fotoN = attachments.filter((a) => a.kind === 'foto').length;
+    const pdfN = attachments.filter((a) => a.kind === 'pdf_acquisito').length;
     const res = await generaReportRiunione({
       corpoLibero,
       trascrizione,
       contestoCommessa,
+      fotoCount: fotoN,
+      pdfCount: pdfN,
     });
     setGenerating(false);
     if (!res.ok) {
@@ -277,32 +285,37 @@ export function CreaRiunioneDialog({
         });
       }
 
-      // Upload allegati
+      // Upload allegati nel folder dedicato /Riunioni/<data>[_titolo]/
+      // Il nuovo endpoint crea sia la cartella Riunioni che la sottocartella
+      // per data/titolo (idempotente), inserisce file_ref + linka
+      // l'allegato_riunione in una sola call atomica.
+      const titoloSlug = titolo.trim() || '';
       for (const a of attachments) {
         try {
           const fd = new FormData();
           fd.append('file', a.blob, a.filename);
-          const headers: Record<string, string> = {
-            'x-file-size': String(a.blob.size),
-          };
-          const url = `/api/upload/media?commessaId=${commessaId}&momento=sopralluogo`;
-          const upRes = await fetch(url, {
-            method: 'POST',
-            headers,
-            body: fd,
-          });
+          const url =
+            `/api/upload/riunione-allegato` +
+            `?commessaId=${commessaId}` +
+            `&riunioneId=${riunioneId}` +
+            `&kind=${encodeURIComponent(a.kind)}` +
+            `&data=${encodeURIComponent(dataRiunione)}` +
+            `&titolo=${encodeURIComponent(titoloSlug)}`;
+          const upRes = await fetch(url, { method: 'POST', body: fd });
           if (!upRes.ok) {
-            console.warn('upload allegato riunione fallito', a.filename);
+            const j = (await upRes.json().catch(() => null)) as {
+              error?: string;
+              detail?: string;
+            } | null;
+            console.warn(
+              'upload allegato riunione fallito',
+              a.filename,
+              j?.error,
+              j?.detail,
+            );
             continue;
           }
-          const j = (await upRes.json()) as { ok: boolean; fileRefId?: string };
-          if (j.fileRefId) {
-            await aggiungiAllegatoRiunione({
-              riunioneId,
-              fileRefId: j.fileRefId,
-              kind: a.kind,
-            });
-          }
+          // L'endpoint linka già l'allegato — niente aggiungiAllegatoRiunione qui
         } catch (e) {
           console.warn('upload riunione exception', e);
         }

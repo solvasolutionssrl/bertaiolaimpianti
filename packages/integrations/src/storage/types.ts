@@ -88,5 +88,6 @@ export const SCAFFOLD_TREE: readonly string[] = Object.freeze([
   'Documenti/Cassette_DPI',
   'Documenti/Certificazioni',
   'Materiali',
+  'Riunioni',
   'Chiusura',
 ]);

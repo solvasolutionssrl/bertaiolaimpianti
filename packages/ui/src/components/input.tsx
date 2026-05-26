@@ -15,7 +15,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         type={type}
         ref={ref}
         className={cn(
-          'flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground',
+          // text-base (16px) su mobile per evitare l'auto-zoom di iOS Safari
+          // quando l'input riceve focus. Su tablet+ (sm:) torniamo a text-sm.
+          'flex h-10 w-full rounded-md border border-input bg-card px-3 py-2 text-base text-foreground sm:text-sm',
           'ring-offset-background shadow-soft transition-[box-shadow,border-color] duration-150',
           'file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
           'placeholder:text-muted-foreground/70',
