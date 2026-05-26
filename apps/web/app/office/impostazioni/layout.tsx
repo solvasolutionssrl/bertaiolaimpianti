@@ -1,27 +1,28 @@
 import type { ReactNode } from 'react';
-import { SettingsSideNav } from './_components/settings-tabs';
+import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import { SettingsTopNav } from './_components/settings-tabs';
 
 export const metadata = { title: 'Impostazioni · Kommessa' };
 
-export default function ImpostazioniLayout({
+export default async function ImpostazioniLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  return (
-    <div className="mx-auto w-full max-w-5xl px-6 py-6">
-      <div className="flex gap-8 lg:gap-10">
-        {/* Sidebar navigazione impostazioni */}
-        <aside className="w-44 shrink-0">
-          <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Impostazioni
-          </p>
-          <SettingsSideNav />
-        </aside>
+  const ctx = await requireTenantContext();
+  const supabase = createServerSupabase();
+  const { data } = await supabase.auth.getUser();
+  const meta = (data.user?.app_metadata ?? {}) as Record<string, unknown>;
+  const isPlatformAdmin =
+    meta.platform_admin === true ||
+    meta.platform_admin === 'true' ||
+    ctx.email.toLowerCase() === 'dev@solva.it';
 
-        {/* Contenuto sezione */}
-        <main className="min-w-0 flex-1">{children}</main>
-      </div>
+  return (
+    <div className="mx-auto w-full max-w-5xl px-6 pt-4">
+      <SettingsTopNav isPlatformAdmin={isPlatformAdmin} />
+      <div className="py-6">{children}</div>
     </div>
   );
 }
