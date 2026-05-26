@@ -92,7 +92,7 @@ export function CommessaLavoriMobile({
     <div className="space-y-0">
       {/* Action bar — solo per admin/office */}
       {canWrite ? (
-        <div className="mb-3 grid grid-cols-2 gap-2">
+        <div className="mb-4 grid grid-cols-2 gap-2">
           <Button
             onClick={() => setTodoOpen(true)}
             size="sm"
@@ -113,11 +113,13 @@ export function CommessaLavoriMobile({
         </div>
       ) : null}
 
-      {/* Titolo sezione + filtri */}
-      <p className="mb-1.5 px-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+      {/* Sezione da fare — titolo + filtri */}
+      <h3 className="mb-2 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+        <CircleDot className="h-3 w-3" />
         Da fare
-      </p>
-      <div className="-mx-3 mb-3 grid grid-cols-4 gap-0.5 border-y border-border/40 bg-muted/20 px-1.5 py-1">
+        <span className="ml-auto font-sans text-[9px] tabular-nums">{todosAperti.length}</span>
+      </h3>
+      <div className="mb-3 grid grid-cols-4 gap-1">
         <FiltroChip
           label="Tutto"
           count={totale}
@@ -173,7 +175,7 @@ export function CommessaLavoriMobile({
 
         {/* Riunioni list */}
         {mostraRiunioni && riunioni.length > 0 ? (
-          <section className="space-y-2">
+          <section className="-mx-3 space-y-2 rounded-lg bg-blue-50/60 px-3 py-2.5 dark:bg-blue-950/20">
             <h3 className="flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
               <span
                 className="inline-block h-1 w-1 rounded-full bg-primary"
