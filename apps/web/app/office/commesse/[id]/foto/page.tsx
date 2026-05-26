@@ -31,7 +31,7 @@ export default async function FotoTab({
     .from('file_refs')
     .select(
       `
-        id, path, filename, mime, thumbnail_url, taken_at, uploaded_at,
+        id, path, filename, mime, thumbnail_url, r2_key, taken_at, uploaded_at,
         momento, voce_id,
         voce:voce_id ( id, nome ),
         annotations:file_annotations ( id, layer_json, width_px, height_px, version )
@@ -39,6 +39,8 @@ export default async function FotoTab({
     )
     .eq('commessa_id', params.id)
     .like('mime', 'image/%')
+    .in('status', ['uploaded', 'syncing', 'synced', 'sync_failed'])
+    .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
@@ -74,6 +76,7 @@ export default async function FotoTab({
       filename: f.filename,
       mime: f.mime,
       thumbnail_url: f.thumbnail_url ?? null,
+      r2_key: f.r2_key ?? null,
       taken_at: f.taken_at ?? null,
       uploaded_at: f.uploaded_at ?? null,
       momento: f.momento ?? null,

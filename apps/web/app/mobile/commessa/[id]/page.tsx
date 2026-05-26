@@ -125,6 +125,7 @@ export default async function CommessaDetailPage({
     .eq('commessa_id', params.id)
     .or('mime.like.image/%,mime.like.video/%')
     .in('status', ['uploaded', 'syncing', 'synced', 'sync_failed'])
+    .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
     .limit(60);
 

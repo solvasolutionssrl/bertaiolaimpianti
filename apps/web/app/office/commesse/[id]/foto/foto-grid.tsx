@@ -37,6 +37,8 @@ export interface FotoItem {
   filename: string;
   mime: string;
   thumbnail_url: string | null;
+  /** Presente per file del nuovo flusso R2: fallback thumbnail via /api/media/[id] */
+  r2_key: string | null;
   taken_at: string | null;
   uploaded_at: string | null;
   momento: string | null;
@@ -153,10 +155,11 @@ export function FotoGrid({ foto }: FotoGridProps) {
                 aria-label={`Annota foto ${f.filename}`}
                 className="block w-full text-left"
               >
-                {f.thumbnail_url ? (
+                {/* thumbnail_url = Nextcloud/Supabase; fallback /api/media per file R2 */}
+                {(f.thumbnail_url || f.r2_key) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={f.thumbnail_url}
+                    src={f.thumbnail_url ?? `/api/media/${f.id}`}
                     alt={f.filename}
                     className="aspect-square w-full object-cover transition-transform group-hover:scale-[1.02]"
                   />
