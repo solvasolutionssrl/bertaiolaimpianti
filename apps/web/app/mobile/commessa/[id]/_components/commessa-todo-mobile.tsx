@@ -101,9 +101,6 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
     [todos],
   );
 
-  const miei = aperti.filter((t) => t.assegnato_a === currentUserId);
-  const altri = aperti.filter((t) => t.assegnato_a !== currentUserId);
-
   if (aperti.length === 0 && completati.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -114,30 +111,12 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
 
   return (
     <div className="space-y-3">
-      {miei.length > 0 ? (
-        <section>
-          <h3 className="mb-1.5 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
-            <User className="h-3 w-3" /> Assegnati a te ({miei.length})
-          </h3>
-          <ul className="space-y-1.5">
-            {miei.map((t) => (
-              <TodoCard key={t.id} todo={t} isMine />
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {altri.length > 0 ? (
-        <section>
-          <h3 className="mb-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-            Altri sulla commessa ({altri.length})
-          </h3>
-          <ul className="space-y-1.5">
-            {altri.map((t) => (
-              <TodoCard key={t.id} todo={t} isMine={false} />
-            ))}
-          </ul>
-        </section>
+      {aperti.length > 0 ? (
+        <ul className="space-y-1.5">
+          {aperti.map((t) => (
+            <TodoCard key={t.id} todo={t} isMine={t.assegnato_a === currentUserId} />
+          ))}
+        </ul>
       ) : null}
 
       {completati.length > 0 ? (
