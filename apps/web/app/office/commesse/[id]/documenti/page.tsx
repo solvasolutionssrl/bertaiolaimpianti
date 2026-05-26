@@ -2,12 +2,14 @@ import Link from 'next/link';
 import { AlertTriangle, ChevronRight, Folder, FileText, FolderOpen } from 'lucide-react';
 import { Card, CardContent } from '@kommessa/ui';
 import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import { getStorageProvider, type StorageObject } from '@kommessa/integrations/storage';
 import { EmptyState } from '../../../../_components/empty-state';
 import { loadCommessa } from '../_lib/get-commessa';
 import { fmtBytes, fmtData } from '../../../_lib/format';
 import { OpenLocalFolderButton } from './_components/open-local';
 import { PdfAnnotateButton } from './_components/pdf-annotate-button';
+import { canView, loadFolderAclMap } from '../../../../_lib/folder-acl';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,9 +36,10 @@ export default async function DocumentiTab({
       .eq('id', c0.tenant_id)
       .maybeSingle();
   })();
-  const [c, { data: tenant }] = await Promise.all([
+  const [c, { data: tenant }, ctx] = await Promise.all([
     loadCommessa(params.id),
     tenantPromise,
+    requireTenantContext(),
   ]);
 
   // Normalizza il root: rimuovi leading/trailing slash così la concat con
@@ -72,6 +75,24 @@ export default async function DocumentiTab({
       error = err instanceof Error ? err.message : 'Errore lettura cartella.';
     }
   }
+
+  // ACL filter: l'office layout già blocca i tecnici, quindi qui entrano
+  // solo admin/office che hanno visibilità completa per default. Il filtro
+  // è defense-in-depth: se in futuro abilitiamo override per-commessa che
+  // limitano alcuni admin/office su specifiche cartelle, lo enforcement
+  // c'è già qui. Stesso pattern delle pagine mobile (`mobile/commessa/[id]/
+  // page.tsx` + `cartella/page.tsx`).
+  const aclMap = await loadFolderAclMap(c.tenant_id, c.id);
+  entries = entries.filter((e) => {
+    if (!e.name || e.name.startsWith('.')) return false;
+    // Path relativo dell'entry rispetto alla root commessa
+    const relPath = sub ? `${sub}/${e.name}` : e.name;
+    // Per le directory controlliamo direttamente; per i file controlliamo
+    // la directory che li contiene (se vedi la cartella, vedi i file dentro).
+    const checkPath = e.isDirectory ? relPath : sub || relPath;
+    if (!checkPath) return ctx.role === 'admin' || ctx.role === 'office';
+    return canView(ctx.role, checkPath, aclMap);
+  });
 
   const crumbs = sub.split('/').filter(Boolean);
 

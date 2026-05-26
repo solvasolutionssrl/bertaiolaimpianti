@@ -38,6 +38,18 @@ export default async function OfficeLayout({
     redirect('/login');
   }
 
+  // Guard ruolo: i tecnici NON hanno accesso a /office/* (l'ufficio è
+  // pensato per admin/office). I tecnici operano dal mobile PWA. Se un
+  // tecnico finisce qui (es. login da desktop + pickHomeForDevice errato),
+  // lo reindirizziamo. Stesso trattamento per 'cliente' che ha il suo
+  // portal dedicato.
+  if (ctx.role === 'tecnico') {
+    redirect('/mobile');
+  }
+  if (ctx.role === 'cliente') {
+    redirect('/portal');
+  }
+
   const supabase = createServerSupabase();
 
   // Unifichiamo tenant + user-profile in una sola query con join: una
