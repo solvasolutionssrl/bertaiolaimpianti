@@ -536,10 +536,8 @@ export default async function CommessaDetailPage({
           }
           className="w-full"
         >
-          {/* TabsList contrastata — attiva = blu pieno con testo bianco,
-              inattive = grigio chiaro con testo soft. Tap target h-11
-              touch-friendly. */}
-          <TabsList className="grid h-11 w-full grid-cols-4 items-center rounded-xl border border-primary/25 bg-muted p-1 shadow-soft">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
+          <TabsList className="grid h-11 w-full grid-cols-4 items-center rounded-none border-b border-border/50 bg-muted/50 p-1">
             <TabsTrigger
               value="todo"
               className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
@@ -579,11 +577,8 @@ export default async function CommessaDetailPage({
             </TabsTrigger>
           </TabsList>
 
-          {/* Box contenitore per ogni tab — stessa border del TabsList,
-              visivamente "aggancia" la pill attiva al contenuto sottostante. */}
-          <div className="mt-1.5 rounded-xl border border-primary/20">
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="p-3">
+          <TabsContent value="todo" className="m-0 p-3">
             <CommessaLavoriMobile
               commessaId={params.id}
               contestoCommessa={[
@@ -602,7 +597,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
-          <TabsContent value="foto" className="p-3">
+          <TabsContent value="foto" className="m-0 p-3">
             <FotoTab
               commessaId={params.id}
               sopralluogo={fotoSopralluogo}
@@ -612,7 +607,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE (cloud diretto) ───────────── */}
-          <TabsContent value="file" className="space-y-3 p-3">
+          <TabsContent value="file" className="m-0 space-y-3 p-3">
             {cloudError ? (
               <CloudRetry />
             ) : sortedCloudEntries.length === 0 ? (
@@ -670,7 +665,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── TECNICI ───────────── */}
-          <TabsContent value="tecnici" className="p-3">
+          <TabsContent value="tecnici" className="m-0 p-3">
             <TecniciMobile
               commessaId={params.id}
               assigned={tecniciAssegnati}

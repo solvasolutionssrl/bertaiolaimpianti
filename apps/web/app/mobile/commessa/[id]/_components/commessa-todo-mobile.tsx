@@ -107,7 +107,7 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
   if (aperti.length === 0 && completati.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-        Nessun TODO su questa commessa.
+        Nessun da fare su questa commessa.
       </div>
     );
   }
@@ -150,14 +150,11 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
             <div className="absolute bottom-1 left-2 top-1 w-px bg-border" aria-hidden="true" />
             {completati.map((t) => (
               <div key={t.id} className="relative mb-2 last:mb-0">
-                {/* UN solo dot verde, centrato verticalmente sulla prima riga */}
                 <span
-                  className="absolute -left-[11px] top-[18px] h-2 w-2 rounded-full bg-emerald-500"
+                  className="absolute -left-4 top-5 z-10 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card"
                   aria-hidden="true"
                 />
-                <div className="opacity-70">
-                  <TodoCard todo={t} isMine={t.assegnato_a === currentUserId} readonly />
-                </div>
+                <TodoCard todo={t} isMine={t.assegnato_a === currentUserId} readonly />
               </div>
             ))}
           </div>

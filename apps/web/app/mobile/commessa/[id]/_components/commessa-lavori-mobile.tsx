@@ -90,101 +90,97 @@ export function CommessaLavoriMobile({
 
   return (
     <div className="space-y-0">
-      {/* Container visivo — raggruppa azioni + filtri + lista */}
-      <div className="overflow-hidden rounded-2xl border border-border/50 bg-muted/20">
+      {/* Action bar — solo per admin/office */}
+      {canWrite ? (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <Button
+            onClick={() => setTodoOpen(true)}
+            size="sm"
+            className="h-9 justify-center gap-1.5 text-[13px] font-semibold"
+          >
+            <Plus className="h-4 w-4" />
+            Nuovo Da Fare
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRiunOpen(true)}
+            className="h-9 justify-center gap-1.5 border-primary/40 text-[13px] font-semibold text-primary"
+          >
+            <Sparkles className="h-4 w-4" />
+            Riunione AI
+          </Button>
+        </div>
+      ) : null}
 
-        {/* Action bar — solo per admin/office */}
-        {canWrite ? (
-          <div className="grid grid-cols-2 gap-2 border-b border-border/40 bg-muted/10 p-3">
-            <Button
-              onClick={() => setTodoOpen(true)}
-              size="sm"
-              className="h-9 justify-center gap-1.5 text-[13px] font-semibold"
-            >
-              <Plus className="h-4 w-4" />
-              Nuovo TODO
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRiunOpen(true)}
-              className="h-9 justify-center gap-1.5 border-primary/40 text-[13px] font-semibold text-primary"
-            >
-              <Sparkles className="h-4 w-4" />
-              Riunione AI
-            </Button>
+      {/* Filtri — banda full-width con margini negativi per andare edge-to-edge */}
+      <div className="-mx-3 mb-3 grid grid-cols-4 gap-0.5 border-y border-border/40 bg-muted/30 px-1.5 py-1.5">
+        <FiltroChip
+          label="Tutto"
+          count={totale}
+          active={filtro === 'tutto'}
+          onClick={() => setFiltro('tutto')}
+        />
+        <FiltroChip
+          label="Da Fare"
+          count={todosAperti.length}
+          active={filtro === 'todo_aperti'}
+          onClick={() => setFiltro('todo_aperti')}
+          Icon={CircleDot}
+        />
+        <FiltroChip
+          label="Riunioni"
+          count={riunioni.length}
+          active={filtro === 'riunioni'}
+          onClick={() => setFiltro('riunioni')}
+          Icon={Sparkles}
+        />
+        <FiltroChip
+          label="Fatti"
+          count={todosCompletati.length}
+          active={filtro === 'todo_completati'}
+          onClick={() => setFiltro('todo_completati')}
+          Icon={CheckCircle2}
+          muted
+        />
+      </div>
+
+      {/* Lista contenuti */}
+      <div className="space-y-2">
+        {/* Da Fare list */}
+        {todosShown.length > 0 ? (
+          <CommessaTodoMobile
+            todos={todosShown}
+            currentUserId={currentUserId}
+          />
+        ) : filtro !== 'riunioni' ? (
+          <div className="rounded-lg border border-dashed border-border/60 bg-background/50 p-5 text-center text-sm text-muted-foreground">
+            {filtro === 'todo_completati' ? (
+              <p>Nessun da fare completato di recente.</p>
+            ) : filtro === 'tutto' && riunioni.length === 0 ? (
+              <p>
+                Nessun lavoro tracciato.
+                {canWrite ? ' Crea il primo dai bottoni sopra.' : ''}
+              </p>
+            ) : (
+              <p>Nessun da fare aperto.</p>
+            )}
           </div>
         ) : null}
 
-        {/* Filtri a griglia fissa — 4 opzioni, no scroll */}
-        <div className="grid grid-cols-4 gap-0.5 border-b border-border/40 bg-muted/30 p-1.5">
-          <FiltroChip
-            label="Tutto"
-            count={totale}
-            active={filtro === 'tutto'}
-            onClick={() => setFiltro('tutto')}
-          />
-          <FiltroChip
-            label="TODO"
-            count={todosAperti.length}
-            active={filtro === 'todo_aperti'}
-            onClick={() => setFiltro('todo_aperti')}
-            Icon={CircleDot}
-          />
-          <FiltroChip
-            label="Riunioni"
-            count={riunioni.length}
-            active={filtro === 'riunioni'}
-            onClick={() => setFiltro('riunioni')}
-            Icon={Sparkles}
-          />
-          <FiltroChip
-            label="Fatti"
-            count={todosCompletati.length}
-            active={filtro === 'todo_completati'}
-            onClick={() => setFiltro('todo_completati')}
-            Icon={CheckCircle2}
-            muted
-          />
-        </div>
-
-        {/* Lista contenuti */}
-        <div className="space-y-2 p-3">
-          {/* TODO list */}
-          {todosShown.length > 0 ? (
-            <CommessaTodoMobile
-              todos={todosShown}
-              currentUserId={currentUserId}
-            />
-          ) : filtro !== 'riunioni' ? (
-            <div className="rounded-lg border border-dashed border-border/60 bg-background/50 p-5 text-center text-sm text-muted-foreground">
-              {filtro === 'todo_completati' ? (
-                <p>Nessun TODO completato di recente.</p>
-              ) : filtro === 'tutto' && riunioni.length === 0 ? (
-                <p>
-                  Nessun lavoro tracciato.
-                  {canWrite ? ' Crea il primo dai bottoni sopra.' : ''}
-                </p>
-              ) : (
-                <p>Nessun TODO aperto.</p>
-              )}
-            </div>
-          ) : null}
-
-          {/* Riunioni list */}
-          {mostraRiunioni && riunioni.length > 0 ? (
-            <section className="space-y-2">
-              <h3 className="flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
-                <span
-                  className="inline-block h-1 w-1 rounded-full bg-primary"
-                  aria-hidden="true"
-                />
-                Riunioni ({riunioni.length})
-              </h3>
-              <CommessaRiunioniMobile riunioni={riunioni} />
-            </section>
-          ) : null}
-        </div>
+        {/* Riunioni list */}
+        {mostraRiunioni && riunioni.length > 0 ? (
+          <section className="space-y-2">
+            <h3 className="flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+              <span
+                className="inline-block h-1 w-1 rounded-full bg-primary"
+                aria-hidden="true"
+              />
+              Riunioni ({riunioni.length})
+            </h3>
+            <CommessaRiunioniMobile riunioni={riunioni} />
+          </section>
+        ) : null}
       </div>
 
       {/* Dialogs */}

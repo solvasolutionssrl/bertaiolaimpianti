@@ -55,8 +55,8 @@ export function CommessaRiunioniMobile({ riunioni }: Props) {
           {/* Dot sul rail — primary se ha report AI, altrimenti muted */}
           <span
             className={cn(
-              'absolute -left-[11px] top-[18px] h-2 w-2 rounded-full',
-              r.reportino?.trim() ? 'bg-primary' : 'bg-border border border-muted-foreground/30',
+              'absolute -left-4 top-5 z-10 h-2 w-2 rounded-full ring-2 ring-card',
+              r.reportino?.trim() ? 'bg-primary' : 'bg-muted-foreground/40',
             )}
             aria-hidden="true"
           />
