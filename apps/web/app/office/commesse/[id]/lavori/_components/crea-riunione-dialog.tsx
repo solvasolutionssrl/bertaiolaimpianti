@@ -11,6 +11,7 @@ import {
   Mic,
   Save,
   Sparkles,
+  Square,
   X,
 } from 'lucide-react';
 import {
@@ -46,13 +47,9 @@ interface Props {
 type Step = 'contenuto' | 'report';
 
 interface AttachmentDraft {
-  /** Blob locale del file da uploadare al submit. */
   blob: Blob;
-  /** Anteprima URL.createObjectURL (revoke al cleanup). */
   previewUrl: string;
-  /** Nome file proposto. */
   filename: string;
-  /** Tipo logico. */
   kind: 'foto' | 'pdf_acquisito';
 }
 
@@ -84,7 +81,7 @@ export function CreaRiunioneDialog({
   const [dataRiunione, setDataRiunione] = React.useState(today);
   const [titolo, setTitolo] = React.useState('');
 
-  // ─── Step 1: Contenuto (scrivi+ditta unificato) ───────────────────
+  // ─── Step 1: Contenuto ────────────────────────────────────────────
   const [corpoLibero, setCorpoLibero] = React.useState('');
   const [trascrizione, setTrascrizione] = React.useState('');
   const [attachments, setAttachments] = React.useState<AttachmentDraft[]>([]);
@@ -92,8 +89,10 @@ export function CreaRiunioneDialog({
   // ─── Dettatura ─────────────────────────────────────────────────────
   const [recording, setRecording] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
+  const [recSecs, setRecSecs] = React.useState(0);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<BlobPart[]>([]);
+  const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startRec = async () => {
     try {
@@ -105,6 +104,11 @@ export function CreaRiunioneDialog({
       };
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        setRecSecs(0);
         const blob = new Blob(chunksRef.current, { type: mr.mimeType });
         if (blob.size === 0) return;
         setTranscribing(true);
@@ -121,8 +125,6 @@ export function CreaRiunioneDialog({
               error?: string;
               detail?: string;
             } | null;
-            // Mostra anche il detail (es. messaggio OpenAI "Invalid file
-            // format" o "Audio file is too short") per facilitare debug.
             const msg = j
               ? j.detail
                 ? `${j.error ?? 'Errore'} — ${j.detail}`
@@ -131,7 +133,6 @@ export function CreaRiunioneDialog({
             throw new Error(msg);
           }
           const j = (await res.json()) as { transcript: string };
-          // Appende al campo unificato (visibile all'utente) e salva raw per il DB
           setCorpoLibero((prev) =>
             prev ? `${prev}\n\n${j.transcript}` : j.transcript,
           );
@@ -147,9 +148,12 @@ export function CreaRiunioneDialog({
           setTranscribing(false);
         }
       };
-      mr.start();
+      // timeslice=500ms: flush ogni mezzo secondo → robusto su mobile/Safari
+      mr.start(500);
       recorderRef.current = mr;
       setRecording(true);
+      setRecSecs(0);
+      timerRef.current = setInterval(() => setRecSecs((s) => s + 1), 1000);
     } catch (e) {
       await showAlert({
         title: 'Microfono non disponibile',
@@ -157,12 +161,24 @@ export function CreaRiunioneDialog({
       });
     }
   };
+
   const stopRec = () => {
     recorderRef.current?.stop();
     setRecording(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
 
-  // ─── Foto: due input separati per scatta (camera) e allega (galleria) ──
+  // cleanup timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  // ─── Foto ─────────────────────────────────────────────────────────
   const fotoCameraRef = React.useRef<HTMLInputElement | null>(null);
   const fotoGalleryRef = React.useRef<HTMLInputElement | null>(null);
   const onFotoSelected = (files: FileList | null) => {
@@ -204,10 +220,6 @@ export function CreaRiunioneDialog({
     });
   };
 
-  // cleanup previewUrl al unmount.
-  // Usiamo un ref per evitare lo stale-closure bug: useEffect con deps
-  // vuoto cattura attachments=[] al mount → revoke non sarebbe mai chiamato
-  // per gli allegati aggiunti dopo. Con il ref leggiamo lo stato attuale.
   const attachmentsRef = React.useRef(attachments);
   React.useEffect(() => {
     attachmentsRef.current = attachments;
@@ -218,7 +230,7 @@ export function CreaRiunioneDialog({
     };
   }, []);
 
-  // ─── Step 3: Report AI ─────────────────────────────────────────────
+  // ─── Step 2: Report AI ─────────────────────────────────────────────
   const [generating, setGenerating] = React.useState(false);
   const [reportino, setReportino] = React.useState('');
   const [reportModello, setReportModello] = React.useState('');
@@ -226,10 +238,6 @@ export function CreaRiunioneDialog({
 
   const generaReport = async () => {
     setGenerating(true);
-    // Conteggio allegati passato al modello come metadata — il prompt AI
-    // sa così che ci sono foto/PDF anche se non legge il contenuto
-    // visivo (per ora). Utile per menzionarli nel reportino e per non
-    // far "inventare" che non ci sono allegati.
     const fotoN = attachments.filter((a) => a.kind === 'foto').length;
     const pdfN = attachments.filter((a) => a.kind === 'pdf_acquisito').length;
     const res = await generaReportRiunione({
@@ -256,7 +264,7 @@ export function CreaRiunioneDialog({
     setStep('report');
   };
 
-  // ─── Step 4: Salva ─────────────────────────────────────────────────
+  // ─── Step 3: Salva ─────────────────────────────────────────────────
   const [submitting, setSubmitting] = React.useState(false);
 
   const submit = async () => {
@@ -272,7 +280,6 @@ export function CreaRiunioneDialog({
       if (!created.ok) throw new Error(created.error);
       const riunioneId = created.data.id;
 
-      // Salva reportino se presente
       if (reportino.trim()) {
         await aggiornaRiunione({
           id: riunioneId,
@@ -281,10 +288,6 @@ export function CreaRiunioneDialog({
         });
       }
 
-      // Upload allegati nel folder dedicato /Riunioni/<data>[_titolo]/
-      // Il nuovo endpoint crea sia la cartella Riunioni che la sottocartella
-      // per data/titolo (idempotente), inserisce file_ref + linka
-      // l'allegato_riunione in una sola call atomica.
       const titoloSlug = titolo.trim() || '';
       for (const a of attachments) {
         try {
@@ -311,13 +314,11 @@ export function CreaRiunioneDialog({
             );
             continue;
           }
-          // L'endpoint linka già l'allegato — niente aggiungiAllegatoRiunione qui
         } catch (e) {
           console.warn('upload riunione exception', e);
         }
       }
 
-      // Materializza TODO selezionati
       const selezionati = todosConferma.filter((t) => t.selezionato);
       if (selezionati.length > 0) {
         await materializzaTodoDaRiunione({
@@ -344,13 +345,10 @@ export function CreaRiunioneDialog({
     }
   };
 
-  const hasContent =
-    corpoLibero.trim().length > 0 ||
-    trascrizione.trim().length > 0 ||
-    attachments.length > 0;
+  const hasTextContent =
+    corpoLibero.trim().length > 0 || trascrizione.trim().length > 0;
+  const hasContent = hasTextContent || attachments.length > 0;
 
-  // Chiusura "intelligente": se l'utente ha già contenuto o un reportino
-  // AI generato, chiediamo conferma prima di buttare via il lavoro.
   const handleClose = async () => {
     const hasUnsavedAI = reportino.trim().length > 0;
     if (hasUnsavedAI || hasContent) {
@@ -372,85 +370,95 @@ export function CreaRiunioneDialog({
     <Dialog open onOpenChange={(o) => !o && void handleClose()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-primary" />
             Nuova riunione
           </DialogTitle>
         </DialogHeader>
 
-        {/* Step indicator */}
         <StepIndicator step={step} />
 
-        {/* ─── STEP 1 — CONTENUTO (scrivi + ditta unificati) ──────── */}
+        {/* ─── STEP 1 — CONTENUTO ──────────────────────────────── */}
         {step === 'contenuto' ? (
-          <div className="space-y-4">
-            {/* Data + Titolo inline */}
+          <div className="space-y-5">
+            {/* Data + Titolo */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="r_data">Data</Label>
+                <Label htmlFor="r_data" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Data</Label>
                 <Input
                   id="r_data"
                   type="date"
                   value={dataRiunione}
                   onChange={(e) => setDataRiunione(e.target.value)}
-                  className="mt-1 h-9"
+                  className="mt-1.5 h-9"
                 />
               </div>
               <div>
-                <Label htmlFor="r_tit">
-                  Titolo{' '}
-                  <span className="font-normal text-[11px] text-muted-foreground">(opzionale)</span>
+                <Label htmlFor="r_tit" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Titolo <span className="normal-case font-normal">(opzionale)</span>
                 </Label>
                 <Input
                   id="r_tit"
                   value={titolo}
                   onChange={(e) => setTitolo(e.target.value)}
                   placeholder="Es. Sopralluogo, Allineamento…"
-                  className="mt-1 h-9"
+                  className="mt-1.5 h-9"
                 />
               </div>
             </div>
 
-            {/* Textarea unificata: scrivi oppure ditta */}
+            {/* Contenuto con dettatura */}
             <div>
               <div className="mb-1.5 flex items-center justify-between">
-                <Label>Contenuto</Label>
-                {!recording && !transcribing ? (
-                  <button
-                    type="button"
-                    onClick={startRec}
-                    className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
-                  >
-                    <Mic className="h-3.5 w-3.5" />
-                    Ditta
-                  </button>
-                ) : recording ? (
-                  <button
-                    type="button"
-                    onClick={stopRec}
-                    className="inline-flex items-center gap-1 rounded-full border border-destructive/50 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
-                  >
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" />
-                    Ferma
-                  </button>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Trascrizione…
-                  </span>
-                )}
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Contenuto
+                </Label>
+                <RecordingButton
+                  recording={recording}
+                  transcribing={transcribing}
+                  recSecs={recSecs}
+                  onStart={startRec}
+                  onStop={stopRec}
+                />
               </div>
+
+              {/* Recording banner */}
+              {recording ? (
+                <div className="mb-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-destructive" />
+                  <span className="font-medium">Registrazione in corso — {fmtSecs(recSecs)}</span>
+                  <span className="ml-auto text-destructive/70">Premi «Ferma» quando hai finito</span>
+                </div>
+              ) : null}
+
+              {transcribing ? (
+                <div className="mb-2 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Trascrizione in corso — attendere…
+                </div>
+              ) : null}
+
               <textarea
                 value={corpoLibero}
                 onChange={(e) => setCorpoLibero(e.target.value)}
-                rows={8}
-                placeholder={'Punti discussi, decisioni, cose da fare…\n\nOppure premi «Ditta» per registrare la voce: la trascrizione verrà aggiunta qui.'}
-                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
+                rows={7}
+                placeholder={
+                  'Punti discussi, decisioni, cose da fare…\n\nOppure premi «Ditta» per registrare la voce: la trascrizione verrà aggiunta qui automaticamente.'
+                }
+                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
               />
+              {corpoLibero.length > 0 ? (
+                <p className="mt-1 text-right text-[10px] text-muted-foreground">
+                  {corpoLibero.length} car.
+                </p>
+              ) : null}
             </div>
 
-            {/* Allegati: foto + PDF */}
+            {/* Allegati */}
             <div>
+              <Label className="mb-2 block text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Allegati
+              </Label>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={fotoCameraRef}
@@ -472,50 +480,52 @@ export function CreaRiunioneDialog({
                 <button
                   type="button"
                   onClick={() => fotoCameraRef.current?.click()}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
-                  <Camera className="h-3.5 w-3.5" />
-                  Scatta
+                  <Camera className="h-4 w-4" />
+                  + Scatta
                 </button>
                 <button
                   type="button"
                   onClick={() => fotoGalleryRef.current?.click()}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  Galleria
+                  <ImageIcon className="h-4 w-4" />
+                  + Allega
                 </button>
                 <button
                   type="button"
                   onClick={() => setPdfCaptureOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                  className="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
-                  <FileText className="h-3.5 w-3.5" />
-                  PDF
+                  <FileText className="h-4 w-4" />
+                  + File
                 </button>
-                {attachments.length > 0 ? (
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {attachments.length} allegati
-                  </span>
-                ) : null}
               </div>
               {attachments.length > 0 ? (
-                <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                <ul className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-5">
                   {attachments.map((a, idx) => (
-                    <li key={idx} className="relative overflow-hidden rounded-md border border-border bg-muted/20">
+                    <li
+                      key={idx}
+                      className="relative overflow-hidden rounded-md border border-border bg-muted/20"
+                    >
                       {a.kind === 'foto' ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={a.previewUrl} alt={a.filename} className="aspect-square w-full object-cover" />
+                        <img
+                          src={a.previewUrl}
+                          alt={a.filename}
+                          className="aspect-square w-full object-cover"
+                        />
                       ) : (
                         <div className="flex aspect-square w-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
-                          <FileText className="h-7 w-7" />
-                          <span className="font-mono">PDF</span>
+                          <FileText className="h-6 w-6" />
+                          <span className="font-mono text-[10px]">PDF</span>
                         </div>
                       )}
                       <button
                         type="button"
                         onClick={() => removeAttachment(idx)}
-                        className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                        className="absolute right-1 top-1 rounded-full bg-background/90 p-0.5 text-muted-foreground hover:text-destructive"
                         aria-label="Rimuovi"
                       >
                         <X className="h-3 w-3" />
@@ -528,34 +538,41 @@ export function CreaRiunioneDialog({
           </div>
         ) : null}
 
-        {/* ─── STEP 3 — REPORT ────────────────────────────────────── */}
+        {/* ─── STEP 2 — REPORT ─────────────────────────────────── */}
         {step === 'report' ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div>
-              <Label>Reportino generato</Label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Reportino generato
+                </Label>
+                {reportModello ? (
+                  <span className="text-[10px] text-muted-foreground">
+                    {reportModello}
+                  </span>
+                ) : null}
+              </div>
               <textarea
                 value={reportino}
                 onChange={(e) => setReportino(e.target.value)}
                 rows={8}
-                className="mt-1.5 w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring"
               />
-              {reportModello ? (
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  Modello: <code>{reportModello}</code> · Puoi modificare il
-                  testo prima di salvare.
-                </p>
-              ) : null}
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Puoi modificare il testo prima di salvare.
+              </p>
             </div>
 
             {todosConferma.length > 0 ? (
               <div>
-                <Label className="mb-2 flex items-center justify-between">
-                  <span>TODO proposti dal report</span>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    {todosConferma.filter((t) => t.selezionato).length} di{' '}
-                    {todosConferma.length} selezionati
+                <div className="mb-2 flex items-center justify-between">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    TODO proposti
+                  </Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    {todosConferma.filter((t) => t.selezionato).length}/{todosConferma.length} selezionati
                   </span>
-                </Label>
+                </div>
                 <ul className="space-y-2">
                   {todosConferma.map((t, i) => (
                     <li
@@ -567,7 +584,7 @@ export function CreaRiunioneDialog({
                           : 'border-border bg-card opacity-60',
                       )}
                     >
-                      <div className="flex items-start gap-2">
+                      <div className="flex items-start gap-2.5">
                         <input
                           type="checkbox"
                           checked={t.selezionato}
@@ -579,9 +596,9 @@ export function CreaRiunioneDialog({
                               ),
                             );
                           }}
-                          className="mt-1"
+                          className="mt-0.5"
                         />
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="flex-1 text-sm font-medium">
                               {t.titolo}
@@ -601,7 +618,7 @@ export function CreaRiunioneDialog({
                               {t.note}
                             </p>
                           ) : null}
-                          <div className="mt-1.5">
+                          <div className="mt-2">
                             <select
                               value={t.assegnatoA ?? ''}
                               onChange={(e) => {
@@ -630,37 +647,65 @@ export function CreaRiunioneDialog({
                 </ul>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">
-                Il report non ha proposto TODO automatici. Puoi sempre crearli a
-                mano dopo aver salvato la riunione.
+              <p className="rounded-md border border-border bg-muted/20 px-3 py-2.5 text-xs text-muted-foreground">
+                Nessun TODO automatico estratto. Puoi crearne a mano dopo aver salvato la riunione.
               </p>
             )}
           </div>
         ) : null}
 
         {/* ─── FOOTER ──────────────────────────────────────────────── */}
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter className="mt-2 flex-col gap-2 sm:flex-row sm:gap-2">
           {step === 'contenuto' ? (
             <>
-              <Button variant="outline" onClick={() => void handleClose()}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void handleClose()}
+                className="sm:mr-auto"
+              >
                 Annulla
               </Button>
-              <Button variant="outline" onClick={submit} disabled={submitting || !hasContent}>
-                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={submit}
+                disabled={submitting || !hasContent}
+              >
+                {submitting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 Salva senza AI
               </Button>
-              <Button onClick={generaReport} disabled={generating || !hasContent}>
-                {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                Genera report AI
+              <Button
+                size="sm"
+                onClick={generaReport}
+                disabled={generating || !hasTextContent}
+                title={!hasTextContent ? 'Scrivi o detta del contenuto per usare il report AI' : undefined}
+              >
+                {generating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {generating ? 'Generazione…' : 'Genera report AI'}
               </Button>
             </>
           ) : null}
           {step === 'report' ? (
             <>
-              <Button variant="outline" onClick={() => setStep('contenuto')} disabled={submitting}>
-                Indietro
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep('contenuto')}
+                disabled={submitting}
+                className="sm:mr-auto"
+              >
+                ← Indietro
               </Button>
-              <Button onClick={submit} disabled={submitting}>
+              <Button size="sm" onClick={submit} disabled={submitting}>
                 {submitting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
@@ -691,35 +736,44 @@ export function CreaRiunioneDialog({
 function StepIndicator({ step }: { step: Step }) {
   const steps: Array<{ key: Step; label: string }> = [
     { key: 'contenuto', label: 'Contenuto' },
-    { key: 'report', label: 'Report' },
+    { key: 'report', label: 'Report AI' },
   ];
   const idx = steps.findIndex((s) => s.key === step);
   return (
-    <div className="-mt-2 mb-3 flex items-center gap-2 text-[11px] uppercase tracking-wider">
+    <div className="-mt-1 mb-4 flex items-center gap-1">
       {steps.map((s, i) => (
         <React.Fragment key={s.key}>
-          <span
+          <div
             className={cn(
-              'flex items-center gap-1.5',
-              i <= idx ? 'text-primary' : 'text-muted-foreground',
+              'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              i === idx
+                ? 'bg-primary text-primary-foreground'
+                : i < idx
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground',
             )}
           >
             <span
               className={cn(
                 'flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold',
                 i < idx
-                  ? 'bg-primary text-primary-foreground'
+                  ? 'bg-primary/30'
                   : i === idx
-                    ? 'border-2 border-primary'
+                    ? 'bg-white/20'
                     : 'border border-muted-foreground/30',
               )}
             >
               {i < idx ? <Check className="h-2.5 w-2.5" /> : i + 1}
             </span>
             {s.label}
-          </span>
+          </div>
           {i < steps.length - 1 ? (
-            <span className="text-muted-foreground/30">·</span>
+            <div
+              className={cn(
+                'h-px flex-1 transition-colors',
+                i < idx ? 'bg-primary/30' : 'bg-border',
+              )}
+            />
           ) : null}
         </React.Fragment>
       ))}
@@ -728,7 +782,62 @@ function StepIndicator({ step }: { step: Step }) {
 }
 
 // ────────────────────────────────────────────────────────────
-// utils audio
+
+interface RecordingButtonProps {
+  recording: boolean;
+  transcribing: boolean;
+  recSecs: number;
+  onStart: () => void;
+  onStop: () => void;
+}
+
+function RecordingButton({
+  recording,
+  transcribing,
+  recSecs,
+  onStart,
+  onStop,
+}: RecordingButtonProps) {
+  if (transcribing) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Trascrizione…
+      </span>
+    );
+  }
+  if (recording) {
+    return (
+      <button
+        type="button"
+        onClick={onStop}
+        className="inline-flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm font-semibold text-destructive hover:bg-destructive/15 transition-colors"
+      >
+        <Square className="h-4 w-4 fill-current" />
+        Ferma · {fmtSecs(recSecs)}
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onStart}
+      className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
+    >
+      <Mic className="h-4 w-4" />
+      Vocale
+    </button>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
+// utils
+
+function fmtSecs(s: number): string {
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${rem.toString().padStart(2, '0')}`;
+}
 
 function pickAudioMime(): string {
   if (typeof MediaRecorder === 'undefined') return 'audio/webm';
@@ -743,10 +852,9 @@ function pickAudioMime(): string {
   }
   return 'audio/webm';
 }
+
 function blobExt(b: Blob): string {
   const m = (b.type || '').toLowerCase();
-  // iOS Safari emette audio/mp4 (con o senza codecs=...); Whisper preferisce
-  // "m4a" per file mp4-audio.
   if (m.includes('mp4') || m.includes('m4a')) return 'm4a';
   if (m.includes('ogg')) return 'ogg';
   if (m.includes('wav')) return 'wav';
