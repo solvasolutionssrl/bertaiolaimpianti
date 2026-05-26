@@ -7,9 +7,9 @@ import {
   Phone,
   FileText,
   Folder,
-  PencilLine,
   ChevronRight,
   CloudUpload,
+  User,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -23,15 +23,11 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { guardMobile } from '../../_lib/guard';
-import { fmtData, fmtDataOra } from '../../../office/_lib/format';
+import { fmtData } from '../../../office/_lib/format';
 import {
-  SectionNumber,
-  MetaLine,
   Divider,
-  Stagger,
   CornerTicks,
   Hero,
-  HeroMeta,
 } from '../../_components/blueprint';
 import { FotoTab, type FotoItem } from './_components/foto-tab';
 import {
@@ -130,18 +126,6 @@ export default async function CommessaDetailPage({
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
-  // 4) Aggiornamenti — interventi con note
-  const updatesQuery = supabase
-    .from('interventi')
-    .select(`
-      id, start_at, note,
-      autore:users!interventi_user_id_fkey ( display_name )
-    `)
-    .eq('commessa_id', params.id)
-    .not('note', 'is', null)
-    .order('start_at', { ascending: false })
-    .limit(10);
-
   // 4-bis) TODO della commessa (aperti + completati recenti)
   const todoQuery = supabase
     .from('commessa_todo' as never)
@@ -162,9 +146,8 @@ export default async function CommessaDetailPage({
     .order('data_riunione', { ascending: false })
     .limit(20);
 
-  const [fotoRes, updatesRes, todoRes, riunioniRes] = await Promise.all([
+  const [fotoRes, todoRes, riunioniRes] = await Promise.all([
     fotoQuery,
-    updatesQuery,
     todoQuery,
     riunioniQuery,
   ]);
@@ -391,13 +374,6 @@ export default async function CommessaDetailPage({
   const fotoFinali = tutteFoto.filter((f) => f.momento === 'finale');
   const fotoTot = tutteFoto.length;
 
-  const updates = ((updatesRes.data ?? []) as any[]).map((i) => ({
-    id: i.id as string,
-    start_at: i.start_at as string,
-    note: i.note as string,
-    autore: (Array.isArray(i.autore) ? i.autore[0] : i.autore)?.display_name as string | null,
-  }));
-
   // "Dettagli" = trascrizione integrale del capo (verità sacrosanta).
   // Fallback su descrizione AI per le commesse create prima dell'introduzione
   // del campo note_iniziali.
@@ -560,7 +536,7 @@ export default async function CommessaDetailPage({
           {/* TabsList contrastata — attiva = blu pieno con testo bianco,
               inattive = grigio chiaro con testo soft. Tap target h-11
               touch-friendly. */}
-          <TabsList className="grid h-11 w-full grid-cols-4 items-center rounded-xl border border-border bg-muted p-1 shadow-soft">
+          <TabsList className="grid h-11 w-full grid-cols-4 items-center rounded-xl border border-primary/25 bg-muted p-1 shadow-soft">
             <TabsTrigger
               value="todo"
               className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
@@ -589,24 +565,22 @@ export default async function CommessaDetailPage({
               </span>
             </TabsTrigger>
             <TabsTrigger
-              value="updates"
+              value="tecnici"
               className="h-9 rounded-lg font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground transition-all data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md"
             >
-              Note
+              <User className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="ml-0.5">Team</span>
               <span className="ml-1 font-sans text-[10px] tabular-nums opacity-80">
-                {updates.length}
+                {tecniciAssegnati.length}
               </span>
             </TabsTrigger>
           </TabsList>
 
+          {/* Connettore visivo: linea primaria che lega la pill attiva al contenuto */}
+          <div className="mx-2 mt-1 h-[2px] rounded-full bg-primary/40" />
+
           {/* ───────────── LAVORI (TODO + Riunioni) ───────────── */}
-          <TabsContent value="todo" className="mt-3 space-y-3">
-            <TecniciMobile
-              commessaId={params.id}
-              assigned={tecniciAssegnati}
-              available={tecniciTenant}
-              canManage={canManageTecnici}
-            />
+          <TabsContent value="todo" className="mt-1">
             <CommessaLavoriMobile
               commessaId={params.id}
               contestoCommessa={[
@@ -625,7 +599,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FOTO/VIDEO ───────────── */}
-          <TabsContent value="foto">
+          <TabsContent value="foto" className="mt-1">
             <FotoTab
               commessaId={params.id}
               sopralluogo={fotoSopralluogo}
@@ -635,7 +609,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE (cloud diretto) ───────────── */}
-          <TabsContent value="file" className="mt-5 space-y-3">
+          <TabsContent value="file" className="mt-1 space-y-3">
             {cloudError ? (
               <CloudRetry />
             ) : sortedCloudEntries.length === 0 ? (
@@ -692,37 +666,14 @@ export default async function CommessaDetailPage({
             </div>
           </TabsContent>
 
-          {/* ───────────── AGGIORNAMENTI ───────────── */}
-          <TabsContent value="updates" className="mt-5 space-y-2">
-            {updates.length === 0 ? (
-              <EmptyBlock
-                icon={<PencilLine className="h-5 w-5" />}
-                title="Nessuna nota"
-                hint="Le note dei tecnici durante gli interventi compaiono qui"
-              />
-            ) : (
-              <Stagger className="flex flex-col gap-2">
-                {updates.map((u, i) => (
-                  <article
-                    key={u.id}
-                    className="rounded-lg border border-border bg-card p-3 shadow-soft"
-                  >
-                    <header className="mb-1.5 flex items-baseline justify-between gap-3">
-                      <p className="flex items-baseline gap-2">
-                        <span className="font-mono text-[10px] tabular-nums text-muted-foreground/60">
-                          {String(updates.length - i).padStart(2, '0')}
-                        </span>
-                        <span className="text-sm font-semibold text-foreground">
-                          {u.autore ?? 'Tecnico'}
-                        </span>
-                      </p>
-                      <MetaLine>{fmtDataOra(u.start_at)}</MetaLine>
-                    </header>
-                    <p className="text-sm leading-relaxed text-foreground/90">{u.note}</p>
-                  </article>
-                ))}
-              </Stagger>
-            )}
+          {/* ───────────── TECNICI ───────────── */}
+          <TabsContent value="tecnici" className="mt-1">
+            <TecniciMobile
+              commessaId={params.id}
+              assigned={tecniciAssegnati}
+              available={tecniciTenant}
+              canManage={canManageTecnici}
+            />
           </TabsContent>
         </Tabs>
       </section>
