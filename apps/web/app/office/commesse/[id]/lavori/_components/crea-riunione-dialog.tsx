@@ -3,19 +3,14 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
-  ArrowRight,
   Camera,
   Check,
   FileText,
   Image as ImageIcon,
   Loader2,
   Mic,
-  PencilLine,
   Save,
   Sparkles,
-  Square,
-  Trash2,
   X,
 } from 'lucide-react';
 import {
@@ -32,7 +27,6 @@ import {
 } from '@kommessa/ui';
 
 import {
-  aggiungiAllegatoRiunione,
   aggiornaRiunione,
   creaRiunione,
   generaReportRiunione,
@@ -49,7 +43,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Step = 'dati' | 'contenuto' | 'report' | 'salva';
+type Step = 'contenuto' | 'report';
 
 interface AttachmentDraft {
   /** Blob locale del file da uploadare al submit. */
@@ -83,16 +77,14 @@ export function CreaRiunioneDialog({
   const router = useRouter();
   const showAlert = useAlert();
   const askConfirm = useConfirm();
-  const [step, setStep] = React.useState<Step>('dati');
+  const [step, setStep] = React.useState<Step>('contenuto');
 
   // ─── Step 1: Dati ─────────────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
   const [dataRiunione, setDataRiunione] = React.useState(today);
   const [titolo, setTitolo] = React.useState('');
 
-  // ─── Step 2: Contenuto ────────────────────────────────────────────
-  type ContentTab = 'scrivi' | 'detta' | 'foto' | 'pdf';
-  const [tab, setTab] = React.useState<ContentTab>('scrivi');
+  // ─── Step 1: Contenuto (scrivi+ditta unificato) ───────────────────
   const [corpoLibero, setCorpoLibero] = React.useState('');
   const [trascrizione, setTrascrizione] = React.useState('');
   const [attachments, setAttachments] = React.useState<AttachmentDraft[]>([]);
@@ -139,6 +131,10 @@ export function CreaRiunioneDialog({
             throw new Error(msg);
           }
           const j = (await res.json()) as { transcript: string };
+          // Appende al campo unificato (visibile all'utente) e salva raw per il DB
+          setCorpoLibero((prev) =>
+            prev ? `${prev}\n\n${j.transcript}` : j.transcript,
+          );
           setTrascrizione((prev) =>
             prev ? `${prev}\n\n${j.transcript}` : j.transcript,
           );
@@ -357,7 +353,7 @@ export function CreaRiunioneDialog({
   // AI generato, chiediamo conferma prima di buttare via il lavoro.
   const handleClose = async () => {
     const hasUnsavedAI = reportino.trim().length > 0;
-    if (hasUnsavedAI || (hasContent && step !== 'dati')) {
+    if (hasUnsavedAI || hasContent) {
       const ok = await askConfirm({
         title: 'Chiudere senza salvare?',
         description: hasUnsavedAI
@@ -385,139 +381,77 @@ export function CreaRiunioneDialog({
         {/* Step indicator */}
         <StepIndicator step={step} />
 
-        {/* ─── STEP 1 — DATI ──────────────────────────────────────── */}
-        {step === 'dati' ? (
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="r_data">Data della riunione</Label>
-              <Input
-                id="r_data"
-                type="date"
-                value={dataRiunione}
-                onChange={(e) => setDataRiunione(e.target.value)}
-                className="mt-1.5 h-10"
-              />
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Default: oggi. Cambia se stai verbalizzando una riunione di
-                un'altra data.
-              </p>
-            </div>
-            <div>
-              <Label htmlFor="r_tit">Titolo (opzionale)</Label>
-              <Input
-                id="r_tit"
-                value={titolo}
-                onChange={(e) => setTitolo(e.target.value)}
-                placeholder="Es. Sopralluogo prima posa, Allineamento col cliente…"
-                className="mt-1.5 h-10"
-              />
-            </div>
-          </div>
-        ) : null}
-
-        {/* ─── STEP 2 — CONTENUTO ─────────────────────────────────── */}
+        {/* ─── STEP 1 — CONTENUTO (scrivi + ditta unificati) ──────── */}
         {step === 'contenuto' ? (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Aggiungi il contenuto della riunione: puoi combinare più modalità
-              (scrivere + dettare + foto + PDF). Il sistema farà il riassunto
-              alla fine.
-            </p>
-
-            {/* Tabs */}
-            <div className="flex gap-1 rounded-md bg-muted/40 p-1">
-              {(
-                [
-                  ['scrivi', 'Scrivi', PencilLine],
-                  ['detta', 'Detta', Mic],
-                  ['foto', 'Foto', ImageIcon],
-                  ['pdf', 'Acquisisci PDF', FileText],
-                ] as const
-              ).map(([k, l, Icon]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setTab(k)}
-                  className={cn(
-                    'flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-1.5 text-xs transition-colors',
-                    tab === k
-                      ? 'bg-card font-medium shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {l}
-                </button>
-              ))}
+          <div className="space-y-4">
+            {/* Data + Titolo inline */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="r_data">Data</Label>
+                <Input
+                  id="r_data"
+                  type="date"
+                  value={dataRiunione}
+                  onChange={(e) => setDataRiunione(e.target.value)}
+                  className="mt-1 h-9"
+                />
+              </div>
+              <div>
+                <Label htmlFor="r_tit">
+                  Titolo{' '}
+                  <span className="font-normal text-[11px] text-muted-foreground">(opzionale)</span>
+                </Label>
+                <Input
+                  id="r_tit"
+                  value={titolo}
+                  onChange={(e) => setTitolo(e.target.value)}
+                  placeholder="Es. Sopralluogo, Allineamento…"
+                  className="mt-1 h-9"
+                />
+              </div>
             </div>
 
-            {/* Contenuto tab */}
-            {tab === 'scrivi' ? (
+            {/* Textarea unificata: scrivi oppure ditta */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <Label>Contenuto</Label>
+                {!recording && !transcribing ? (
+                  <button
+                    type="button"
+                    onClick={startRec}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    <Mic className="h-3.5 w-3.5" />
+                    Ditta
+                  </button>
+                ) : recording ? (
+                  <button
+                    type="button"
+                    onClick={stopRec}
+                    className="inline-flex items-center gap-1 rounded-full border border-destructive/50 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive"
+                  >
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" />
+                    Ferma
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Trascrizione…
+                  </span>
+                )}
+              </div>
               <textarea
                 value={corpoLibero}
                 onChange={(e) => setCorpoLibero(e.target.value)}
-                rows={10}
-                placeholder="Scrivi un riepilogo della riunione, i punti principali, le decisioni prese, le cose da fare…"
+                rows={8}
+                placeholder={'Punti discussi, decisioni, cose da fare…\n\nOppure premi «Ditta» per registrare la voce: la trascrizione verrà aggiunta qui.'}
                 className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
-            ) : null}
+            </div>
 
-            {tab === 'detta' ? (
-              <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
-                <div className="flex items-center gap-3">
-                  {!recording ? (
-                    <Button
-                      type="button"
-                      onClick={startRec}
-                      disabled={transcribing}
-                    >
-                      <Mic className="h-4 w-4" />
-                      Avvia registrazione
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={stopRec}
-                      className="border-destructive text-destructive"
-                    >
-                      <Square className="h-4 w-4 fill-current" />
-                      Ferma e trascrivi
-                    </Button>
-                  )}
-                  {transcribing ? (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Trascrizione in corso…
-                    </span>
-                  ) : null}
-                  {recording ? (
-                    <span className="flex items-center gap-1 text-xs">
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                      Recording…
-                    </span>
-                  ) : null}
-                </div>
-                <textarea
-                  value={trascrizione}
-                  onChange={(e) => setTrascrizione(e.target.value)}
-                  rows={8}
-                  placeholder="La trascrizione apparirà qui. Puoi anche correggerla a mano."
-                  className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Suggerimento: registra più clip separate per spezzare la
-                  riunione (verranno concatenate sotto).
-                </p>
-              </div>
-            ) : null}
-
-            {tab === 'foto' ? (
-              <div className="space-y-3">
-                {/* Due input separati: camera vs galleria. Su mobile il
-                    primo apre direttamente la fotocamera, il secondo
-                    apre il picker file/galleria. Su desktop entrambi
-                    aprono il file picker (capture viene ignorato). */}
+            {/* Allegati: foto + PDF */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   ref={fotoCameraRef}
                   type="file"
@@ -535,59 +469,61 @@ export function CreaRiunioneDialog({
                   onChange={(e) => onFotoSelected(e.target.files)}
                   className="hidden"
                 />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    onClick={() => fotoCameraRef.current?.click()}
-                  >
-                    <Camera className="h-4 w-4" />
-                    Scatta foto
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => fotoGalleryRef.current?.click()}
-                  >
-                    <ImageIcon className="h-4 w-4" />
-                    Allega da galleria
-                  </Button>
-                </div>
-                <AttachmentsGridFiltered
-                  attachments={attachments}
-                  kind="foto"
-                  onRemoveGlobalIdx={removeAttachment}
-                />
+                <button
+                  type="button"
+                  onClick={() => fotoCameraRef.current?.click()}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                  Scatta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fotoGalleryRef.current?.click()}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  Galleria
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfCaptureOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  PDF
+                </button>
+                {attachments.length > 0 ? (
+                  <span className="font-mono text-[10px] text-muted-foreground">
+                    {attachments.length} allegati
+                  </span>
+                ) : null}
               </div>
-            ) : null}
-
-            {tab === 'pdf' ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setPdfCaptureOpen(true)}
-                  >
-                    <FileText className="h-4 w-4" />
-                    Acquisisci foglio
-                  </Button>
-                  <p className="text-[11px] text-muted-foreground">
-                    Apre fotocamera, rileva i bordi del foglio e produce un PDF
-                    single-page.
-                  </p>
-                </div>
-                <AttachmentsGridFiltered
-                  attachments={attachments}
-                  kind="pdf_acquisito"
-                  onRemoveGlobalIdx={removeAttachment}
-                />
-              </div>
-            ) : null}
-
-            <div className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
-              <strong>Contenuto totale:</strong>{' '}
-              {corpoLibero.length + trascrizione.length} caratteri ·{' '}
-              {attachments.length} allegati
+              {attachments.length > 0 ? (
+                <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {attachments.map((a, idx) => (
+                    <li key={idx} className="relative overflow-hidden rounded-md border border-border bg-muted/20">
+                      {a.kind === 'foto' ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.previewUrl} alt={a.filename} className="aspect-square w-full object-cover" />
+                      ) : (
+                        <div className="flex aspect-square w-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
+                          <FileText className="h-7 w-7" />
+                          <span className="font-mono">PDF</span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(idx)}
+                        className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                        aria-label="Rimuovi"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -704,22 +640,10 @@ export function CreaRiunioneDialog({
 
         {/* ─── FOOTER ──────────────────────────────────────────────── */}
         <DialogFooter className="gap-2 sm:gap-2">
-          {step === 'dati' ? (
-            <>
-              <Button variant="outline" onClick={onClose}>
-                Annulla
-              </Button>
-              <Button onClick={() => setStep('contenuto')} disabled={!dataRiunione}>
-                Avanti
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          ) : null}
           {step === 'contenuto' ? (
             <>
-              <Button variant="outline" onClick={() => setStep('dati')}>
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Indietro
+              <Button variant="outline" onClick={() => void handleClose()}>
+                Annulla
               </Button>
               <Button variant="outline" onClick={submit} disabled={submitting || !hasContent}>
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -734,7 +658,6 @@ export function CreaRiunioneDialog({
           {step === 'report' ? (
             <>
               <Button variant="outline" onClick={() => setStep('contenuto')} disabled={submitting}>
-                <ArrowLeft className="h-3.5 w-3.5" />
                 Indietro
               </Button>
               <Button onClick={submit} disabled={submitting}>
@@ -767,7 +690,6 @@ export function CreaRiunioneDialog({
 
 function StepIndicator({ step }: { step: Step }) {
   const steps: Array<{ key: Step; label: string }> = [
-    { key: 'dati', label: 'Data' },
     { key: 'contenuto', label: 'Contenuto' },
     { key: 'report', label: 'Report' },
   ];
@@ -802,59 +724,6 @@ function StepIndicator({ step }: { step: Step }) {
         </React.Fragment>
       ))}
     </div>
-  );
-}
-
-/**
- * Filtra gli allegati per kind, ma mantiene gli indici globali in modo
- * che onRemove possa rimuovere la voce corretta dall'array originale.
- */
-function AttachmentsGridFiltered({
-  attachments,
-  kind,
-  onRemoveGlobalIdx,
-}: {
-  attachments: AttachmentDraft[];
-  kind: AttachmentDraft['kind'];
-  onRemoveGlobalIdx: (idx: number) => void;
-}) {
-  const items = attachments
-    .map((a, idx) => ({ a, idx }))
-    .filter(({ a }) => a.kind === kind);
-  if (items.length === 0) {
-    return (
-      <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-        Nessun allegato.
-      </p>
-    );
-  }
-  return (
-    <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      {items.map(({ a, idx }) => (
-        <li key={idx} className="relative overflow-hidden rounded-md border border-border bg-muted/20">
-          {a.kind === 'foto' ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={a.previewUrl} alt={a.filename} className="aspect-square w-full object-cover" />
-          ) : (
-            <div className="flex aspect-square w-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
-              <FileText className="h-7 w-7" />
-              <span className="font-mono">PDF</span>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => onRemoveGlobalIdx(idx)}
-            className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
-            aria-label="Rimuovi"
-          >
-            <X className="h-3 w-3" />
-          </button>
-          <p className="truncate px-1.5 py-1 text-[10px] text-muted-foreground">
-            {a.filename}
-          </p>
-        </li>
-      ))}
-    </ul>
   );
 }
 

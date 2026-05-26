@@ -92,11 +92,11 @@ export function CommessaSidebar({
             </MetaRow>
           ) : null}
           <MetaRow icon={<Folder />} label="Cartella">
-            <code className="break-all font-mono text-[11px]">{nomeCartella}</code>
+            <code className="block truncate font-mono text-[11px]" title={nomeCartella}>{nomeCartella}</code>
           </MetaRow>
           {cloudFolderPath ? (
             <MetaRow icon={<Folder />} label="Path cloud">
-              <code className="break-all font-mono text-[10px] text-muted-foreground">
+              <code className="block truncate font-mono text-[10px] text-muted-foreground" title={cloudFolderPath}>
                 {cloudFolderPath}
               </code>
             </MetaRow>

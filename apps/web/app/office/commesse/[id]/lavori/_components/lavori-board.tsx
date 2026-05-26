@@ -1025,102 +1025,12 @@ function TimelineEntry({
     case 'riunione': {
       const r = entry.riunione as RiunioneView;
       return (
-        <Row
-          icon={<Sparkles className="h-3.5 w-3.5 text-primary" />}
+        <RiunioneTimelineEntry
+          r={r}
           ts={ts}
-          actions={
-            canWrite ? (
-              <button
-                type="button"
-                onClick={() => onDeleteRiunione(r)}
-                className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-destructive"
-              >
-                Elimina
-              </button>
-            ) : null
-          }
-        >
-          <div>
-            <span className="text-muted-foreground">
-              Riunione del {fmtData(r.data_riunione)}
-              {r.created_by_nome ? ` · ${r.created_by_nome}` : ''}
-            </span>
-            {r.titolo ? (
-              <p className="flex flex-wrap items-center gap-1.5 font-medium">
-                {r.titolo}
-                {r.reportino ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
-                    <Sparkles className="h-2 w-2" />
-                    AI
-                  </span>
-                ) : null}
-                {r.allegati.length > 0 ? (
-                  <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
-                    {r.allegati.length} allegati
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
-            {r.reportino ? (
-              <details className="mt-1 rounded-md border border-primary/20 bg-primary/5">
-                <summary className="cursor-pointer px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10">
-                  <Sparkles className="mr-1 inline h-3 w-3" />
-                  Mostra reportino AI
-                </summary>
-                <div className="whitespace-pre-wrap border-t border-primary/15 bg-card px-2 py-2 text-xs leading-relaxed">
-                  {r.reportino}
-                </div>
-              </details>
-            ) : r.corpo_libero || r.trascrizione ? (
-              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                {(r.corpo_libero || r.trascrizione || '').slice(0, 240)}
-              </p>
-            ) : null}
-
-            {/* Allegati: griglia compatta foto + chip PDF */}
-            {r.allegati.length > 0 ? (
-              <div className="mt-2 grid grid-cols-6 gap-1 sm:grid-cols-8">
-                {r.allegati.slice(0, 8).map((al) => {
-                  const isFoto =
-                    al.kind === 'foto' || (al.mime ?? '').startsWith('image/');
-                  return isFoto ? (
-                    <a
-                      key={al.id}
-                      href={`/api/photo/${al.file_ref_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="aspect-square overflow-hidden rounded border border-border bg-card"
-                      title={al.filename}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/photo/${al.file_ref_id}`}
-                        alt={al.filename}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    </a>
-                  ) : (
-                    <a
-                      key={al.id}
-                      href={
-                        al.path
-                          ? `/api/cloud/file?path=${encodeURIComponent(al.path)}`
-                          : '#'
-                      }
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={al.filename}
-                      className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
-                    >
-                      <span className="font-mono text-[9px] font-bold">PDF</span>
-                    </a>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        </Row>
+          canWrite={canWrite}
+          onDelete={() => onDeleteRiunione(r)}
+        />
       );
     }
     case 'stato': {
@@ -1169,6 +1079,166 @@ function TimelineEntry({
     default:
       return null;
   }
+}
+
+function RiunioneTimelineEntry({
+  r,
+  ts,
+  canWrite,
+  onDelete,
+}: {
+  r: RiunioneView;
+  ts: string;
+  canWrite: boolean;
+  onDelete: () => void;
+}) {
+  const [expanded, setExpanded] = React.useState(false);
+  const hasReport = !!(r.reportino?.trim());
+  const previewText = hasReport
+    ? r.reportino!
+    : (r.corpo_libero || r.trascrizione || '');
+
+  return (
+    <div className="flex items-start gap-3 p-3 text-sm">
+      <div className="mt-0.5 shrink-0">
+        <Sparkles className="h-3.5 w-3.5 text-primary" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={() => setExpanded((o) => !o)}
+          className="flex w-full items-start gap-2 text-left"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-medium">
+                {r.titolo || `Riunione ${fmtData(r.data_riunione)}`}
+              </span>
+              {r.titolo ? (
+                <span className="text-xs text-muted-foreground">
+                  {fmtData(r.data_riunione)}
+                </span>
+              ) : null}
+              {hasReport ? (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  <Sparkles className="h-2 w-2" />
+                  AI
+                </span>
+              ) : null}
+              {r.allegati.length > 0 ? (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                  {r.allegati.length} allegati
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {r.created_by_nome ?? '—'}
+            </p>
+            {!expanded && previewText ? (
+              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                {previewText}
+              </p>
+            ) : null}
+          </div>
+          <ChevronDown
+            className={cn(
+              'mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
+              expanded && 'rotate-180',
+            )}
+          />
+        </button>
+
+        {expanded ? (
+          <div className="mt-3 space-y-3 rounded-md border border-border bg-muted/30 p-3">
+            {hasReport ? (
+              <div>
+                <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.16em] text-primary">
+                  Report AI
+                </p>
+                <div className="whitespace-pre-wrap text-xs leading-relaxed">
+                  {r.reportino}
+                </div>
+              </div>
+            ) : (r.corpo_libero || r.trascrizione) ? (
+              <div>
+                <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Verbale
+                </p>
+                <div className="whitespace-pre-wrap text-xs leading-relaxed text-foreground/90">
+                  {r.corpo_libero || r.trascrizione}
+                </div>
+              </div>
+            ) : null}
+
+            {r.allegati.length > 0 ? (
+              <div>
+                <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                  Allegati ({r.allegati.length})
+                </p>
+                <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
+                  {r.allegati.slice(0, 8).map((al) => {
+                    const isFoto =
+                      al.kind === 'foto' || (al.mime ?? '').startsWith('image/');
+                    return isFoto ? (
+                      <a
+                        key={al.id}
+                        href={`/api/photo/${al.file_ref_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="aspect-square overflow-hidden rounded border border-border bg-card"
+                        title={al.filename}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/photo/${al.file_ref_id}`}
+                          alt={al.filename}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </a>
+                    ) : (
+                      <a
+                        key={al.id}
+                        href={
+                          al.path
+                            ? `/api/cloud/file?path=${encodeURIComponent(al.path)}`
+                            : '#'
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={al.filename}
+                        className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
+                      >
+                        <span className="font-mono text-[9px] font-bold">PDF</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {canWrite ? (
+              <div className="border-t border-border pt-2">
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-destructive"
+                >
+                  Elimina riunione
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          {fmtDataOra(ts)}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function Row({

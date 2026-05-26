@@ -17,7 +17,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
-import { Button, Input, Label } from '@kommessa/ui';
+import { Button, Input, Label, cn } from '@kommessa/ui';
 import { ContactPickerButton } from './contact-picker-button';
 
 /**
@@ -655,7 +655,7 @@ function ReviewCard({
             type="button"
             size="sm"
             variant={isConfirmed ? 'ghost' : 'default'}
-            className="min-h-[40px]"
+            className={cn('min-h-[40px]', !isConfirmed && '!bg-emerald-600 !text-white hover:!bg-emerald-700 active:!bg-emerald-800')}
             onClick={onConfirm}
             disabled={isConfirmed}
             aria-label={`Conferma ${title}`}

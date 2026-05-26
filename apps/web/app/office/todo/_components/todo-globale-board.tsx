@@ -150,7 +150,7 @@ export function TodoGlobaleBoard({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_1fr] lg:gap-5">
       {/* ─── SIDEBAR FILTRI (sticky desktop) ─────────────────────── */}
-      <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+      <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
         {canWrite ? (
           <Button onClick={() => setCreaOpen(true)} className="w-full">
             <Plus className="h-3.5 w-3.5" />
@@ -314,11 +314,11 @@ function FiltroGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
-      <div className="space-y-1">{children}</div>
+      <div className="space-y-0.5">{children}</div>
     </div>
   );
 }
@@ -339,7 +339,7 @@ function FiltroRadio({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-1.5 rounded-md border px-2 py-1.5 text-left text-xs transition-colors',
+        'flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-xs transition-colors',
         active
           ? 'border-primary/40 bg-primary/10 text-primary font-semibold'
           : 'border-transparent bg-transparent text-foreground hover:bg-muted',
