@@ -44,7 +44,7 @@ export function SlaForm({
   const byPriorita = new Map(policies.map((p) => [p.priorita, p]));
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {ORDER.map((p) => (
         <SlaPolicyCard
           key={p}

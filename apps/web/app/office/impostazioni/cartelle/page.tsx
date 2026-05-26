@@ -1,4 +1,4 @@
-import { FolderLock } from 'lucide-react';
+import { FolderLock, Eye, Upload, Info } from 'lucide-react';
 
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
@@ -34,33 +34,44 @@ export default async function PermessiCartellePage() {
   const rows = (presets as PresetRow[] | null) ?? [];
 
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Permessi cartelle"
-        description="Definisci quali ruoli vedono e caricano in ciascuna sottocartella standard delle commesse. Le impostazioni si applicano a tutte le nuove commesse del tenant."
-        icon={<FolderLock />}
-      />
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px]">
+      {/* Matrice principale */}
+      <div className="space-y-4">
+        <SectionHeader
+          title="Permessi cartelle"
+          description="Definisci quali ruoli vedono e caricano in ciascuna sottocartella delle commesse."
+          icon={<FolderLock />}
+        />
+        {!canEdit && <AdminRequiredNotice />}
+        <PresetsEditor presets={rows} canEdit={canEdit} />
+      </div>
 
-      {!canEdit && <AdminRequiredNotice />}
-
-      <PresetsEditor presets={rows} canEdit={canEdit} />
-
-      <div className="rounded-lg border border-border bg-card p-4 text-xs text-muted-foreground">
-        <p className="font-medium text-foreground">Come funziona</p>
-        <ul className="mt-2 list-disc space-y-1 pl-5">
-          <li>
-            <strong>Visibilità</strong>: ruoli che possono <em>vedere</em> e aprire i file dentro la cartella.
-          </li>
-          <li>
-            <strong>Caricamento</strong>: ruoli che possono <em>caricare</em> nuovi file. Più restrittivo di solito.
-          </li>
-          <li>
-            Le cartelle non classificate (es. create manualmente da Nextcloud) sono visibili solo a admin e office (deny by default).
-          </li>
-          <li>
-            Eccezioni puntuali per singola commessa si gestiscono dalla pagina commessa → tab Permessi.
-          </li>
-        </ul>
+      {/* Sidebar: legenda */}
+      <div className="pt-[52px]">
+        <div className="sticky top-6 space-y-3 rounded-lg border border-border bg-muted/30 p-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-1.5 font-semibold text-foreground">
+            <Info className="h-3.5 w-3.5" />
+            Come funziona
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-start gap-2">
+              <Eye className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <p>
+                <strong className="text-foreground">Visibilità</strong> — ruoli che possono vedere e aprire i file nella cartella.
+              </p>
+            </div>
+            <div className="flex items-start gap-2">
+              <Upload className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <p>
+                <strong className="text-foreground">Caricamento</strong> — ruoli che possono caricare nuovi file. Solitamente più restrittivo.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-border pt-3 space-y-1.5">
+            <p>Cartelle non classificate visibili solo ad Admin e Office (deny by default).</p>
+            <p>Eccezioni per singola commessa: tab Permessi nella pagina commessa.</p>
+          </div>
+        </div>
       </div>
     </div>
   );

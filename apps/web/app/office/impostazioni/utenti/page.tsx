@@ -21,6 +21,13 @@ interface UserAppRow {
   permissions: UserPermissionOverrides | null;
 }
 
+const ROLE_LABEL: Record<AppRole, string> = {
+  admin: 'Admin',
+  office: 'Office',
+  tecnico: 'Tecnico',
+  cliente: 'Cliente',
+};
+
 export default async function UtentiPage() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
@@ -33,8 +40,6 @@ export default async function UtentiPage() {
     .order('attivo', { ascending: false })
     .order('display_name', { ascending: true });
 
-  // Per arricchire con email + ultimo accesso usiamo la service-role
-  // (auth.users non è esposta dietro RLS in modo praticabile).
   const enriched: UtenteRow[] = [];
   if (appUsers && appUsers.length > 0) {
     let admin;
@@ -46,7 +51,6 @@ export default async function UtentiPage() {
 
     if (admin) {
       const ids = (appUsers as unknown as UserAppRow[]).map((u) => u.id);
-      // listUsers non supporta filtro by-id batch: leggiamo i singoli via getUserById in parallelo
       const lookups = await Promise.all(
         ids.map((id) =>
           admin!.auth.admin
@@ -89,13 +93,38 @@ export default async function UtentiPage() {
     }
   }
 
+  // Calcola stats per la strip
+  const totale = enriched.length;
+  const attivi = enriched.filter((u) => u.attivo).length;
+  const perRuolo = (['admin', 'office', 'tecnico', 'cliente'] as AppRole[]).map(
+    (r) => ({
+      role: r,
+      label: ROLE_LABEL[r],
+      count: enriched.filter((u) => u.role === r && u.attivo).length,
+    }),
+  );
+
   return (
-    <div className="space-y-6">
-      <SectionHeader
-        title="Utenti del tenant"
-        description="Gestisci accessi, ruoli e disattivazioni. L'invito invia un'email con link per impostare la password."
-        icon={<Users />}
-      />
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <SectionHeader
+          title="Utenti del tenant"
+          description="Gestisci accessi, ruoli e disattivazioni."
+          icon={<Users />}
+        />
+        {/* Stats strip inline */}
+        <div className="flex shrink-0 items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-2">
+          <Stat label="Totale" value={totale} />
+          <div className="h-6 w-px bg-border" />
+          <Stat label="Attivi" value={attivi} accent />
+          <div className="h-6 w-px bg-border" />
+          {perRuolo
+            .filter((r) => r.count > 0)
+            .map((r) => (
+              <Stat key={r.role} label={r.label} value={r.count} />
+            ))}
+        </div>
+      </div>
 
       {error ? (
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -110,6 +139,27 @@ export default async function UtentiPage() {
         canEdit={canEdit}
         currentUserId={ctx.userId}
       />
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent?: boolean;
+}) {
+  return (
+    <div className="text-center">
+      <p className={`text-base font-semibold tabular-nums ${accent ? 'text-primary' : 'text-foreground'}`}>
+        {value}
+      </p>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
     </div>
   );
 }

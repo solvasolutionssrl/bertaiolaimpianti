@@ -126,25 +126,35 @@ export function VociList({
   }, [filtered]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs uppercase tracking-wider text-muted-foreground">
-          Filtra per categoria
-        </span>
-        <FiltroButton active={filtro === 'all'} onClick={() => setFiltro('all')}>
-          Tutte
-        </FiltroButton>
-        {categorie.map((c) => (
-          <FiltroButton
-            key={c}
-            active={filtro === c}
-            onClick={() => setFiltro(c)}
+    <div className="flex gap-6">
+      {/* Sidebar categorie */}
+      <aside className="w-40 shrink-0">
+        <nav className="sticky top-6 space-y-0.5">
+          <p className="mb-2 px-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+            Categoria
+          </p>
+          <SidebarItem
+            active={filtro === 'all'}
+            onClick={() => setFiltro('all')}
+            count={merged.length}
           >
-            {CATEGORIA_LABEL[c] ?? c}
-          </FiltroButton>
-        ))}
-      </div>
+            Tutte
+          </SidebarItem>
+          {categorie.map((c) => (
+            <SidebarItem
+              key={c}
+              active={filtro === c}
+              onClick={() => setFiltro(c)}
+              count={merged.filter((v) => v.categoria === c).length}
+            >
+              {CATEGORIA_LABEL[c] ?? c}
+            </SidebarItem>
+          ))}
+        </nav>
+      </aside>
 
+      {/* Contenuto principale */}
+      <div className="min-w-0 flex-1">
       {grouped.size === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -250,34 +260,39 @@ export function VociList({
           onOpenChange={(o) => !o && setEditing(null)}
         />
       ) : null}
+      </div>
     </div>
   );
 }
 
-function FiltroButton({
+function SidebarItem({
   active,
   children,
   onClick,
+  count,
 }: {
   active: boolean;
   children: React.ReactNode;
   onClick: () => void;
+  count: number;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        'flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-sm transition-colors',
         active
-          ? 'border-primary bg-primary/10 text-primary'
-          : 'border-border text-muted-foreground hover:bg-muted',
+          ? 'bg-primary/10 font-medium text-primary'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
       )}
     >
-      {children}
+      <span className="truncate">{children}</span>
+      <span className="ml-2 shrink-0 font-mono text-[10px] opacity-60">{count}</span>
     </button>
   );
 }
+
 
 function SaveBtn() {
   const { pending } = useFormStatus();

@@ -20,9 +20,9 @@ export default async function ImpostazioniLayout({
     ctx.email.toLowerCase() === 'dev@solva.it';
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 pt-4">
+    <div className="w-full">
       <SettingsTopNav isPlatformAdmin={isPlatformAdmin} />
-      <div className="py-6">{children}</div>
+      <div className="mt-6">{children}</div>
     </div>
   );
 }
