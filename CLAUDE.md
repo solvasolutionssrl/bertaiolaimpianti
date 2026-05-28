@@ -2,27 +2,42 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Stato produzione
+
+> **L'app è in produzione dal 28/05/2026.** Bertaiola Impianti è il cliente reale attivo. Ogni push su `main` viene deployato automaticamente. Tratta il DB e i dati come produzione — no test casuali, no reset senza conferma esplicita.
+
 ## What this repository is
 
-This is the working repo for the **Bertaiola Impianti × SOLVA (impiantiXplus)** project. It contains:
+This is the working repo for the **Bertaiola Impianti × SOLVA (Kommessa)** project. It contains:
 
 1. **Codice di prodotto** (sviluppo attivo):
    - `apps/web/` — Next.js 14 App Router (3 superfici sotto un solo app: `office/`, `mobile/`, `portal/`)
-   - `packages/api/`, `packages/ui/`, `packages/integrations/` — pacchetti workspace
-   - `supabase/migrations/` — schema versionato (17+ migrazioni applicate)
+   - `packages/api/`, `packages/ui/`, `packages/integrations/` — pacchetti workspace (`@kommessa/*`)
+   - `supabase/migrations/` — schema versionato (39 migrazioni applicate al cloud)
    - `supabase/functions/` — Edge Functions (Deno)
-   - `scripts/` — script one-time (es. Freshdesk migration)
+   - `scripts/` — script operativi (es. `reset-tenant-data.mjs`, `freshdesk-migration`)
 2. **Documentazione di prodotto** sotto `documentazione_generale/` — kickoff, architettura, brand, roadmap, mockup, preventivo, presentazioni.
 
 Working language for the app UI is **Italian**. Preserve it.
 
-### Supabase Cloud (progetto pilot)
-- Progetto: `BertaiolaImpianti_GestioneCommesse`, region **West EU (Ireland)**, ref `vuhqioixvgaadyxnerfg`.
-- Credenziali (URL, anon key, service-role, password DB) vivono in `apps/web/.env.local` (gitignored). **Mai citare la password in chiaro in prompt/transcript/commit.** Quando un task richiede modifiche allo schema, scrivere solo il file SQL della migration in `supabase/migrations/` — l'apply al DB cloud lo esegue l'umano (o un agente esplicitamente autorizzato) con `psql` o `supabase db push`.
+### Infrastruttura produzione
+
+| Servizio | Dettaglio |
+|---|---|
+| **Vercel** | team `solvasolutions`, progetto `bertaiolaimpianti`. Deploy automatico da `main`. URL: `https://bertaiolaimpianti.vercel.app` |
+| **Supabase** | progetto `BertaiolaImpianti_GestioneCommesse`, ref `vuhqioixvgaadyxnerfg`, region **West EU (Ireland)**. Dashboard: `https://supabase.com/dashboard/project/vuhqioixvgaadyxnerfg` |
+| **Nextcloud** | Hetzner Storage Share managed, già acquistato e configurato dal cliente. `basePath` e credenziali in `apps/web/.env.local` sotto `STORAGE_*`. |
+| **Cloudflare R2** | Bucket staging per upload media. Credenziali `R2_*` in `.env.local`. I file vengono inviati prima su R2 poi sincronizzati su Nextcloud. |
+
+**Credenziali**: tutte in `apps/web/.env.local` (gitignored). **Mai citare password in chiaro in prompt/transcript/commit.**
+
+**Migrazioni DB**: scrivere solo il file SQL in `supabase/migrations/` — l'apply al DB cloud lo esegue l'umano con `supabase db push` o `psql`.
+
+**Deploy**: solo `git push origin main`. La GitHub integration Vercel fa tutto. Non usare `vercel deploy --prod` manualmente (raddoppia la build sul piano Hobby).
 
 Working language for all documents is **Italian**. Preserve it when editing; do not translate existing content unless asked.
 
-> **Working product name**: `impiantiXplus`. The name is provisional and may change repeatedly — keep it consistent within and across documents, but don't be surprised by future renames.
+> **Product name**: `Kommessa` (rebrand definitivo da `impiantiXplus`, maggio 2026). Pacchetti workspace: `@kommessa/api`, `@kommessa/ui`, `@kommessa/integrations`, `@kommessa/web`.
 
 ## Repository layout (purpose-ordered, not alphabetical)
 
@@ -45,7 +60,7 @@ These decisions evolved across versions — the current state is **v3** (commit 
 
 | Decision | Status |
 |---|---|
-| **Product working name** | **impiantiXplus** (provisional, replaces earlier "Cantiera"). The legacy alternatives in `03_BRAND/` are historical context, not active proposals. |
+| **Product name** | **Kommessa** (definitivo dal maggio 2026, rebrand da `impiantiXplus`). Legacy alternatives in `03_BRAND/` sono solo contesto storico. |
 | **Freshdesk** | **Abandoned** post go-live. One-time API migration script, then native ticketing in the new app. Do not describe it as "integrated". |
 | **Mobile tecnici** | **PWA** (Next.js + Service Worker + Web App Manifest). **Not** Expo, **not** React Native, **not** native iOS/Android. No App Store / Play Store. |
 | **Storage cloud** | ✅ **Nextcloud confirmed** (Hetzner Storage Share managed). Decisione chiusa: il cliente Bertaiola ha già acquistato e configurato Nextcloud, il file browser mobile vede i file reali. Mantenere comunque l'astrazione `StorageProvider` nel codice per supportare in futuro altri tenant con provider diversi. |
