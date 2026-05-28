@@ -6,9 +6,10 @@ import {
   FileText,
   Paperclip,
   Sparkles,
-  User,
 } from 'lucide-react';
 import { cn } from '@kommessa/ui';
+
+import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
 
 export interface RiunioneAllegatoMobile {
   id: string;
@@ -69,8 +70,35 @@ export function CommessaRiunioniMobile({ riunioni }: Props) {
 
 function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
   const [open, setOpen] = React.useState(false);
+  const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
   const hasReport = !!(r.reportino && r.reportino.trim());
   const fallbackText = (r.corpo_libero || r.trascrizione || '').trim();
+
+  // Solo le foto sono visualizzabili nel lightbox. I PDF restano link diretti.
+  const fotoAllegati = React.useMemo(
+    () =>
+      r.allegati.filter(
+        (a) => a.kind === 'foto' || (a.mime ?? '').startsWith('image/'),
+      ),
+    [r.allegati],
+  );
+
+  const lightboxItems = React.useMemo<MediaItem[]>(
+    () =>
+      fotoAllegati.map((a) => ({
+        id: a.file_ref_id,
+        mime: a.mime,
+        filename: a.filename,
+        src: `/api/photo/${a.file_ref_id}`,
+        annotation: { fileRefId: a.file_ref_id },
+      })),
+    [fotoAllegati],
+  );
+
+  const openLightboxAt = (fileRefId: string) => {
+    const idx = fotoAllegati.findIndex((a) => a.file_ref_id === fileRefId);
+    if (idx >= 0) setLightboxIdx(idx);
+  };
 
   return (
     <li
@@ -157,12 +185,12 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
                   const isFoto = a.kind === 'foto' || (a.mime ?? '').startsWith('image/');
                   if (isFoto) {
                     return (
-                      <a
+                      <button
                         key={a.id}
-                        href={`/api/photo/${a.file_ref_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="aspect-square overflow-hidden rounded-md border border-border bg-card"
+                        type="button"
+                        onClick={() => openLightboxAt(a.file_ref_id)}
+                        aria-label={`Apri ${a.filename}`}
+                        className="group relative aspect-square overflow-hidden rounded-md border border-border bg-card transition-transform active:scale-[0.96]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -171,7 +199,7 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
                           className="h-full w-full object-cover"
                           loading="lazy"
                         />
-                      </a>
+                      </button>
                     );
                   }
                   return (
@@ -199,6 +227,17 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
             </p>
           ) : null}
         </div>
+      ) : null}
+
+      {lightboxItems.length > 0 ? (
+        <MediaLightbox
+          items={lightboxItems}
+          initialIndex={lightboxIdx}
+          open={lightboxIdx !== null}
+          onOpenChange={(o) => {
+            if (!o) setLightboxIdx(null);
+          }}
+        />
       ) : null}
     </li>
   );
