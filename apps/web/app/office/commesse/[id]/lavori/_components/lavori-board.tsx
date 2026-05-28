@@ -1237,22 +1237,12 @@ function RiunioneTimelineEntry({
                   const isVideo = al.kind === 'video' || mime.startsWith('video/');
                   if (isFoto) {
                     return (
-                      <button
+                      <ThumbFotoButtonDesktop
                         key={al.id}
-                        type="button"
-                        onClick={() => openLightboxAt(al.file_ref_id)}
-                        title={al.filename}
-                        aria-label={`Apri ${al.filename}`}
-                        className="aspect-square overflow-hidden rounded border border-border bg-card transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/api/photo/${al.file_ref_id}`}
-                          alt={al.filename}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </button>
+                        fileRefId={al.file_ref_id}
+                        filename={al.filename}
+                        onOpen={() => openLightboxAt(al.file_ref_id)}
+                      />
                     );
                   }
                   if (isVideo) {
@@ -1472,5 +1462,51 @@ function RiunioneAllegatiAttacherDesktop({
         }}
       />
     </div>
+  );
+}
+
+/** Thumbnail foto allegato riunione desktop con skeleton/spinner finché
+ *  l'immagine carica — niente "salto" visivo quando si espande una riunione
+ *  con molte foto pesanti. */
+function ThumbFotoButtonDesktop({
+  fileRefId,
+  filename,
+  onOpen,
+}: {
+  fileRefId: string;
+  filename: string;
+  onOpen: () => void;
+}) {
+  const [loaded, setLoaded] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={filename}
+      aria-label={`Apri ${filename}`}
+      className="relative aspect-square overflow-hidden rounded border border-border bg-muted/40 transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
+    >
+      {!loaded ? (
+        <span
+          className="absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/60" />
+        </span>
+      ) : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/photo/${fileRefId}`}
+        alt={filename}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        className={
+          'h-full w-full object-cover transition-opacity duration-200 ' +
+          (loaded ? 'opacity-100' : 'opacity-0')
+        }
+      />
+    </button>
   );
 }

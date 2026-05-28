@@ -7,6 +7,7 @@ import {
   ChevronDown,
   FileText,
   ImagePlus,
+  Loader2,
   Paperclip,
   Sparkles,
 } from 'lucide-react';
@@ -220,21 +221,12 @@ function RiunioneCard({
                   const isVideo = a.kind === 'video' || mime.startsWith('video/');
                   if (isFoto) {
                     return (
-                      <button
+                      <ThumbFotoButton
                         key={a.id}
-                        type="button"
-                        onClick={() => openLightboxAt(a.file_ref_id)}
-                        aria-label={`Apri ${a.filename}`}
-                        className="group relative aspect-square overflow-hidden rounded-md border border-border bg-card transition-transform active:scale-[0.96]"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/api/photo/${a.file_ref_id}`}
-                          alt={a.filename}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      </button>
+                        fileRefId={a.file_ref_id}
+                        filename={a.filename}
+                        onOpen={() => openLightboxAt(a.file_ref_id)}
+                      />
                     );
                   }
                   if (isVideo) {
@@ -429,6 +421,51 @@ function AllegatiAttacher({
         }}
       />
     </div>
+  );
+}
+
+/** Thumbnail foto allegato riunione con skeleton/spinner finché l'img
+ *  carica. Evita il "salto" visivo della galleria allegati con file pesanti
+ *  serviti come full-size da /api/photo/<id>. */
+function ThumbFotoButton({
+  fileRefId,
+  filename,
+  onOpen,
+}: {
+  fileRefId: string;
+  filename: string;
+  onOpen: () => void;
+}) {
+  const [loaded, setLoaded] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Apri ${filename}`}
+      className="group relative aspect-square overflow-hidden rounded-md border border-border bg-muted/40 transition-transform active:scale-[0.96]"
+    >
+      {!loaded ? (
+        <span
+          className="absolute inset-0 flex items-center justify-center"
+          aria-hidden="true"
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/60" />
+        </span>
+      ) : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`/api/photo/${fileRefId}`}
+        alt={filename}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        className={cn(
+          'h-full w-full object-cover transition-opacity duration-200',
+          loaded ? 'opacity-100' : 'opacity-0',
+        )}
+      />
+    </button>
   );
 }
 
