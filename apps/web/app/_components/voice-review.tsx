@@ -15,6 +15,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  X,
 } from 'lucide-react';
 
 import { Button, Input, Label, cn } from '@kommessa/ui';
@@ -451,9 +452,8 @@ export function VoiceReview({
               ))}
             </ul>
             <p className="mt-2 text-[10px] text-muted-foreground">
-              Verranno aggiunti alla rubrica di questa commessa. Per
-              modificare ruolo/email o promuoverli a contatto cliente
-              permanente, usa la scheda della commessa dopo la creazione.
+              Salvati come referenti di questa commessa. Modifica completa
+              dalla scheda commessa.
             </p>
           </div>
         ) : null}
@@ -862,9 +862,8 @@ function VociPicker({
 
 /**
  * Riga referente nel review: nome + ruolo + email sono read-only (vengono
- * dall'AI). Il TELEFONO è editabile inline:
- *  - se presente: appare come testo cliccabile, click → switch in input
- *  - se assente: chip "+ tel" → click → input
+ * dall'AI). Il TELEFONO è editabile in un panel che si apre SOTTO la riga
+ * (non inline), per dare spazio a tap target grande su mobile.
  *
  * Filosofia: feedback Bertaiola — "compatto ed efficace, no dialog, il
  * referente lo confermo qui e gli aggiungo il numero al volo".
@@ -879,76 +878,95 @@ function ReferenteRow({
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(referente.telefono ?? '');
 
+  const open = () => {
+    setDraft(referente.telefono ?? '');
+    setEditing(true);
+  };
   const commit = () => {
     onTelChange(draft);
     setEditing(false);
   };
+  const cancel = () => {
+    setDraft(referente.telefono ?? '');
+    setEditing(false);
+  };
 
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground/90">
-      <span className="font-medium">{referente.nome}</span>
-      {referente.ruolo ? (
-        <span className="text-muted-foreground">· {referente.ruolo}</span>
-      ) : null}
-      {referente.email ? (
-        <span className="break-all text-muted-foreground">
-          · {referente.email}
-        </span>
+    <li className="space-y-1.5 text-xs text-foreground/90">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <span className="font-medium">{referente.nome}</span>
+        {referente.ruolo ? (
+          <span className="text-muted-foreground">· {referente.ruolo}</span>
+        ) : null}
+        {referente.email ? (
+          <span className="break-all text-muted-foreground">
+            · {referente.email}
+          </span>
+        ) : null}
+        {referente.telefono && !editing ? (
+          <button
+            type="button"
+            onClick={open}
+            className="ml-auto inline-flex items-center gap-1 font-mono text-primary hover:underline"
+            title="Modifica telefono"
+          >
+            <Phone className="h-3 w-3" aria-hidden="true" />
+            {referente.telefono}
+          </button>
+        ) : null}
+      </div>
+
+      {!referente.telefono && !editing ? (
+        <button
+          type="button"
+          onClick={open}
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-primary/40 bg-primary/[0.06] px-3 text-xs font-medium text-primary transition-colors hover:bg-primary/10 active:scale-[0.97]"
+        >
+          <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+          Aggiungi telefono
+        </button>
       ) : null}
 
       {editing ? (
-        <span className="inline-flex items-center gap-1">
-          <Phone
-            className="h-3 w-3 shrink-0 text-primary"
-            aria-hidden="true"
-          />
+        <div className="flex items-center gap-1.5 rounded-md border border-primary/40 bg-card p-1.5">
+          <Phone className="ml-1 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
           <input
             type="tel"
             inputMode="tel"
             value={draft}
             autoFocus
             onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
                 commit();
               } else if (e.key === 'Escape') {
-                setDraft(referente.telefono ?? '');
-                setEditing(false);
+                cancel();
               }
             }}
-            placeholder="333 1234567"
+            placeholder="es. 333 1234567"
             maxLength={40}
-            className="h-6 w-32 rounded border border-primary/40 bg-card px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/60"
+            className="h-8 flex-1 rounded bg-transparent px-1 text-sm focus:outline-none"
           />
-        </span>
-      ) : referente.telefono ? (
-        <button
-          type="button"
-          onClick={() => {
-            setDraft(referente.telefono ?? '');
-            setEditing(true);
-          }}
-          className="inline-flex items-center gap-1 font-mono text-primary hover:underline"
-          title="Modifica telefono"
-        >
-          <Phone className="h-3 w-3" aria-hidden="true" />
-          {referente.telefono}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setDraft('');
-            setEditing(true);
-          }}
-          className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 active:scale-[0.97]"
-          aria-label={`Aggiungi telefono per ${referente.nome}`}
-        >
-          <Phone className="h-2.5 w-2.5" aria-hidden="true" />+ tel
-        </button>
-      )}
+          <button
+            type="button"
+            onClick={commit}
+            disabled={draft.trim().length < 3}
+            aria-label="Salva telefono"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-primary hover:bg-primary/10 disabled:opacity-40"
+          >
+            <Check className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            aria-label="Annulla"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
     </li>
   );
 }
