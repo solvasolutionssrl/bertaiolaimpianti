@@ -3,20 +3,30 @@ import { type NextRequest } from 'next/server';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import {
+  getR2ProviderFromEnv,
+  getR2ProviderFromTenantConfig,
+} from '@kommessa/integrations/storage';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/photo/[id]
+ * GET /api/photo/[id]?size=thumb
  *
- * Proxy autenticato per immagini su Nextcloud.
- * Usato come src nelle thumbnail della commessa (thumbnail_url mai popolato
- * dal pipeline di upload → deriviamo l'URL dal fileRefId).
- * Non serve per video (troppo pesanti da proxare).
+ * Proxy autenticato per immagini.
+ *
+ * Modalità:
+ *  - Default (no `size` o `size=full`): proxy del full-size da Nextcloud.
+ *  - `size=thumb`: redirect (302) a signed GET R2 del thumbnail 400x400 webp
+ *    se `file_refs.r2_thumb_key` è valorizzato. Se assente o non risolvibile,
+ *    fallback automatico al proxy full-size (così le foto vecchie senza
+ *    thumb generato continuano a funzionare).
+ *
+ * Non serve per video.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
@@ -28,19 +38,58 @@ export async function GET(
   const supabase = createServerSupabase();
   const service = createServiceSupabase();
 
+  const url = new URL(req.url);
+  const sizeParam = (url.searchParams.get('size') ?? '').toLowerCase();
+  const wantThumb = sizeParam === 'thumb';
+
   // RLS garantisce che l'utente possa leggere solo i file_refs del proprio tenant
-  const { data: ref } = await supabase
+  const { data: refRaw } = await supabase
     .from('file_refs')
-    .select('path, mime, tenant_id')
+    .select('path, mime, tenant_id, r2_thumb_key')
     .eq('id', params.id)
     .single();
+  // Cast: r2_thumb_key è introdotta dalla migration 20260528010000,
+  // i types Supabase la rifletteranno al prossimo `supabase gen types`.
+  const ref = refRaw as unknown as {
+    path: string | null;
+    mime: string | null;
+    tenant_id: string;
+    r2_thumb_key: string | null;
+  } | null;
 
   if (!ref?.path) return new Response('Non trovato', { status: 404 });
   if (ref.mime?.startsWith('video/')) {
     return new Response('Video non supportato come proxy', { status: 400 });
   }
 
-  // Config storage (service-role, bypassa RLS)
+  // ----- Modalità thumb: redirect a signed GET R2 (se disponibile) ---------
+  if (wantThumb && ref.r2_thumb_key) {
+    const { data: tenantR2 } = await service
+      .from('tenants')
+      .select('r2_config')
+      .eq('id', ref.tenant_id)
+      .maybeSingle();
+    const r2 =
+      getR2ProviderFromTenantConfig(
+        (tenantR2?.r2_config as Record<string, unknown> | null) ?? null,
+      ) ?? getR2ProviderFromEnv();
+    if (r2) {
+      try {
+        // TTL allineato al Cache-Control sotto (5 min) per evitare che il
+        // browser tenga in cache un URL già scaduto.
+        const signed = await r2.createPresignedGetUrl(ref.r2_thumb_key, {
+          ttlSec: 5 * 60,
+        });
+        return Response.redirect(signed.url, 302);
+      } catch {
+        // Fallback al full-size sotto
+      }
+    }
+    // Se R2 non risponde o thumb_key punta a oggetto inesistente: silently
+    // cade al full-size (proxy Nextcloud) sotto. Niente errore UI.
+  }
+
+  // ----- Modalità default (full-size) o fallback thumb ---------------------
   const { data: tenant } = await service
     .from('tenants')
     .select('storage_provider, storage_config')
@@ -62,9 +111,9 @@ export async function GET(
     const basePathRaw = (cfg.basePath ?? '').replace(/^\/+|\/+$/g, '');
     const basePathSeg = basePathRaw ? `${encodeURI(basePathRaw)}/` : '';
     const rawPath = ref.path.replace(/^\/+/, '');
-    const url = `${baseUrl}/remote.php/dav/files/${user}/${basePathSeg}${encodeURI(rawPath)}`;
+    const ncUrl = `${baseUrl}/remote.php/dav/files/${user}/${basePathSeg}${encodeURI(rawPath)}`;
 
-    const upstream = await fetch(url, { headers: { Authorization: authHeader } });
+    const upstream = await fetch(ncUrl, { headers: { Authorization: authHeader } });
     if (!upstream.ok) return new Response('Errore storage', { status: 502 });
 
     return new Response(upstream.body, {

@@ -425,8 +425,10 @@ function AllegatiAttacher({
 }
 
 /** Thumbnail foto allegato riunione con skeleton/spinner finché l'img
- *  carica. Evita il "salto" visivo della galleria allegati con file pesanti
- *  serviti come full-size da /api/photo/<id>. */
+ *  carica. Usa /api/photo/<id>?size=thumb: l'endpoint redirige a un
+ *  thumbnail 400x400 webp su R2 (generato al complete dell'upload).
+ *  Fallback automatico al full-size se il thumb non esiste (foto legacy
+ *  o generazione thumb non andata a buon fine). */
 function ThumbFotoButton({
   fileRefId,
   filename,
@@ -454,7 +456,7 @@ function ThumbFotoButton({
       ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`/api/photo/${fileRefId}`}
+        src={`/api/photo/${fileRefId}?size=thumb`}
         alt={filename}
         loading="lazy"
         decoding="async"

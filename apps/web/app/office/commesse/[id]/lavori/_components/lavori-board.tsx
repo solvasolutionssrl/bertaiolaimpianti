@@ -1496,7 +1496,7 @@ function ThumbFotoButtonDesktop({
       ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`/api/photo/${fileRefId}`}
+        src={`/api/photo/${fileRefId}?size=thumb`}
         alt={filename}
         loading="lazy"
         decoding="async"

@@ -11,6 +11,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import type { CompleteResponse } from '../../../../../_lib/media-upload-types';
+import { generateAndUploadThumb } from '../../../../../_lib/thumbnails';
 
 export const maxDuration = 60;
 
@@ -233,6 +234,13 @@ export async function POST(
   // 10. Fire-and-forget: avvia sync R2 → Nextcloud per questo file.
   // Il cron */10min cattura comunque ciò che fallisce qui.
   triggerSyncForFile(request, ref.id).catch(() => {});
+
+  // 11. Fire-and-forget: genera thumbnail 400x400 webp su R2 (solo immagini).
+  // Path parallelo: .../{section}/thumbs/{shortId}.webp. Se fallisce, la UI
+  // ricade silenziosamente sul proxy full-size via /api/photo/[id].
+  if (ref.mime && ref.mime.startsWith('image/')) {
+    generateAndUploadThumb(ctx.tenantId, ref.id).catch(() => {});
+  }
 
   return Response.json({
     ok: true,

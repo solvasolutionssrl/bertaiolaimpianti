@@ -182,12 +182,16 @@ function FotoCell({
   const isVideo = item.mime.startsWith('video/');
   const [imgLoaded, setImgLoaded] = React.useState(false);
 
+  // Thumbnail strategy:
+  //  - Per le immagini usiamo SEMPRE /api/photo/<id>?size=thumb: l'endpoint
+  //    redirige al thumb 400x400 webp persistente su R2 (~30 KB cad) quando
+  //    disponibile, altrimenti fa fallback al full-size via proxy Nextcloud.
+  //  - Per i video manteniamo /api/media/<id> (Range-requests, preload=
+  //    metadata in <video>): niente thumb statico ancora.
   const thumbSrc = item.thumbnail_url
-    ?? (item.r2_key
-      ? `/api/media/${item.id}`
-      : !isVideo
-        ? `/api/photo/${item.id}`
-        : null);
+    ?? (isVideo
+      ? (item.r2_key ? `/api/media/${item.id}` : null)
+      : `/api/photo/${item.id}?size=thumb`);
 
   return (
     <button
