@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CloudUpload,
   HardHat,
+  MapPin,
   User,
 } from 'lucide-react';
 
@@ -427,6 +428,23 @@ export default async function CommessaDetailPage({
         })
     : [];
 
+  // Card azione del hero: contatto chiamabile principale + indirizzo per Maps.
+  const contattoChiamabile = contattiCliente.find((c) => c.telefono) ?? null;
+  const telefonoCard = contattoChiamabile?.telefono ?? telefono ?? null;
+  const nomeContattoCard = contattoChiamabile ? titoloCase(contattoChiamabile.nome) : null;
+  const altriContatti = contattiCliente.filter((c) => c.id !== contattoChiamabile?.id);
+  const indirizzoMapsQuery = [
+    commessa.cliente_indirizzo_cantiere,
+    cliente?.citta,
+    cliente?.cap,
+    cliente?.provincia,
+  ]
+    .filter(Boolean)
+    .join(', ');
+  const mapsUrl = indirizzoMapsQuery
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(indirizzoMapsQuery)}`
+    : null;
+
   return (
     <div className="flex min-h-[100dvh] flex-col pb-28">
       {/* Hero dark con codice + cliente + LED */}
@@ -473,19 +491,10 @@ export default async function CommessaDetailPage({
             {responsabile?.display_name ? ` · Resp ${titoloCase(responsabile.display_name)}` : ''}
           </p>
 
-          {/* Titolone + matita di modifica inline (solo admin).
-              Il "titolo" È il dettaglio del lavoro: non lo ripetiamo più sotto. */}
-          <div className="mt-1 flex items-start gap-2">
-            <h1 className="min-w-0 flex-1 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
-              {titoloCase(pickCommessaTitolo(commessa)) || commessa.nome_cartella || '—'}
-            </h1>
-            <DettagliEdit
-              commessaId={params.id}
-              initial={commessa.note_iniziali ?? dettagliTesto ?? null}
-              canEdit={canEditDettagli}
-              triggerClassName="static mt-1 shrink-0 text-primary-foreground/55 hover:bg-primary-foreground/10 hover:text-primary-foreground"
-            />
-          </div>
+          {/* Titolone — la modifica vive nel blocco "Dettagli" sotto la righetta */}
+          <h1 className="mt-1 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
+            {titoloCase(pickCommessaTitolo(commessa)) || commessa.nome_cartella || '—'}
+          </h1>
 
           {/* Cliente + Indirizzo etichettati (stesso stile dell'ex "Dettagli:") */}
           <p className="mt-2 text-sm font-medium text-primary-foreground/85">
@@ -507,15 +516,65 @@ export default async function CommessaDetailPage({
             </p>
           )}
 
-          {/* Contatti referente — chip tap-to-call per ciascuno.
-              Stile differenziato:
-                - Contatti del cliente: chip neutro (white/10 backdrop)
-                - Contatti della commessa: chip con accent amber + icona HardHat
-                  → riconoscibile come "specifico di questo cantiere"
-              Fallback al vecchio singolo telefono se la rubrica è vuota. */}
-          {contattiCliente.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-primary-foreground/10 pt-3">
-              {contattiCliente.slice(0, 5).map((c) => {
+          {/* Azioni rapide: Chiama (lancia la chiamata) + Mappa (apre Google
+              Maps sull'indirizzo). Sopra la righetta, a portata di pollice. */}
+          {(telefonoCard || mapsUrl) ? (
+            <div
+              className={`mt-3 grid gap-2 ${
+                telefonoCard && mapsUrl ? 'grid-cols-2' : 'grid-cols-1'
+              }`}
+            >
+              {telefonoCard ? (
+                <a
+                  href={`tel:${telefonoCard}`}
+                  className="group flex items-center gap-2.5 rounded-xl border border-primary-foreground/15 bg-primary-foreground/10 p-3 transition-all hover:bg-primary-foreground/15 active:scale-[0.98]"
+                  title={
+                    nomeContattoCard
+                      ? `Chiama ${nomeContattoCard}`
+                      : `Chiama ${telefonoCard}`
+                  }
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-400 text-emerald-950 shadow-sm">
+                    <Phone className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/55">
+                      Chiama
+                    </span>
+                    <span className="block truncate text-[13px] font-semibold text-primary-foreground">
+                      {nomeContattoCard ?? telefonoCard}
+                    </span>
+                  </span>
+                </a>
+              ) : null}
+              {mapsUrl ? (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-center gap-2.5 rounded-xl border border-primary-foreground/15 bg-primary-foreground/10 p-3 transition-all hover:bg-primary-foreground/15 active:scale-[0.98]"
+                  title="Apri l'indirizzo in Google Maps"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-sm">
+                    <MapPin className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/55">
+                      Mappa
+                    </span>
+                    <span className="block truncate text-[13px] font-semibold text-primary-foreground">
+                      Apri in Maps
+                    </span>
+                  </span>
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Altri referenti (oltre al principale) — chip tap-to-call compatti */}
+          {altriContatti.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {altriContatti.slice(0, 5).map((c) => {
                 const isCantiere = Boolean(c.commessa_id);
                 const baseChip = isCantiere
                   ? 'border border-amber-300/40 bg-amber-300/15 text-amber-50'
@@ -563,15 +622,33 @@ export default async function CommessaDetailPage({
                 );
               })}
             </div>
-          ) : telefono ? (
-            <div className="mt-3 border-t border-primary-foreground/10 pt-3">
-              <a
-                href={`tel:${telefono}`}
-                className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs text-primary-foreground/80 transition-colors hover:bg-primary-foreground/15 active:bg-primary-foreground/20"
-              >
-                <Phone className="h-3 w-3" aria-hidden="true" />
-                {telefono}
-              </a>
+          ) : null}
+
+          {/* Dettagli del lavoro — sotto la righetta. Testo integrale del capo
+              + matita di modifica (admin). È la "verità sacrosanta" del lavoro. */}
+          {(dettagliTesto || canEditDettagli) ? (
+            <div className="relative mt-3 border-t border-primary-foreground/10 pt-3">
+              {dettagliTesto ? (
+                <p className="pr-7 text-[13px] leading-relaxed text-primary-foreground/90 line-clamp-3">
+                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">
+                    Dettagli:
+                  </span>
+                  {dettagliTesto}
+                </p>
+              ) : (
+                <p className="pr-7 text-[11px] italic text-primary-foreground/40">
+                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/35">
+                    Dettagli:
+                  </span>
+                  Nessun dettaglio lavoro.
+                </p>
+              )}
+              <DettagliEdit
+                commessaId={params.id}
+                initial={commessa.note_iniziali ?? dettagliTesto ?? null}
+                canEdit={canEditDettagli}
+                triggerClassName="text-primary-foreground/40 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              />
             </div>
           ) : null}
         </div>

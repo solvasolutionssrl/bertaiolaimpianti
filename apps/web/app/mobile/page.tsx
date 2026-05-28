@@ -136,7 +136,7 @@ async function GestioneDashboard({
       <div className="flex flex-col gap-7 px-4 pt-4">
         {/* ── 01 / METRICHE ──────── (overlap parziale sull'hero) ────────────── */}
         <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
-          <div className="relative overflow-hidden rounded-xl border border-primary/15 bg-gradient-to-br from-primary-soft/30 via-card to-accent-soft/35 p-5 shadow-soft-lg">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft-lg">
             <CornerTicks />
             {/* Grid pattern decorativo sullo sfondo */}
             <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.18]" aria-hidden="true" />

@@ -187,10 +187,10 @@
    * Pensato per il wrapper del layout /mobile. */
   .bg-canvas-mobile {
     background:
-      radial-gradient(640px 440px at 112% 13%, hsl(28 100% 90%) 0%, transparent 60%),
-      radial-gradient(720px 540px at -14% 30%, hsl(220 94% 92%) 0%, transparent 58%),
-      radial-gradient(600px 660px at 50% 103%, hsl(220 78% 94%) 0%, transparent 62%),
-      hsl(34 32% 96%);
+      radial-gradient(640px 440px at 112% 13%, hsl(28 100% 91%) 0%, transparent 60%),
+      radial-gradient(720px 540px at -14% 30%, hsl(214 92% 91%) 0%, transparent 58%),
+      radial-gradient(600px 660px at 50% 103%, hsl(214 80% 93%) 0%, transparent 62%),
+      hsl(213 46% 94%);
   }
   .dark .bg-canvas-mobile {
     background:
