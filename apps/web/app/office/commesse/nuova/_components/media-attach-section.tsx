@@ -5,7 +5,6 @@ import {
   Camera,
   Video,
   X,
-  Plus,
   AlertCircle,
   Smartphone,
   CheckCircle2,
@@ -264,15 +263,36 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
               );
             })}
 
+            {/* Quando ci sono già file, mostriamo DUE tile rapidi:
+                "Scatta" (camera) primary + "Allega" (gallery) secondary.
+                Prima c'era solo un "+" generico che apriva la GALLERIA,
+                rendendo impossibile scattare in sequenza dal terzo step
+                voice-intake. Fix richiesto da Bertaiola. */}
             {!atLimit && !uploading && (
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                aria-label="Aggiungi altri file"
-                className="flex aspect-square items-center justify-center rounded-lg border-2 border-dashed border-primary/30 bg-primary-soft/20 text-primary transition hover:bg-primary-soft/40 active:scale-[.98]"
-              >
-                <Plus className="h-5 w-5" aria-hidden="true" />
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  aria-label="Scatta un'altra foto"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-primary/40 bg-primary-soft/30 text-primary transition hover:bg-primary-soft/50 active:scale-[.98]"
+                >
+                  <Camera className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Scatta
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  aria-label="Allega altri file dalla libreria"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
+                >
+                  <Paperclip className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    Allega
+                  </span>
+                </button>
+              </>
             )}
           </div>
         )}

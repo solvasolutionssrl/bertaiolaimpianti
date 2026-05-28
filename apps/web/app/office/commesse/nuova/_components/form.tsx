@@ -1300,7 +1300,7 @@ function VoiceSuggestionPreview({
         <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
           <strong>Modalità preview.</strong>{' '}
           {result.previewReason ??
-            'API key Whisper/Claude non configurate, suggerimenti basati su pattern locali.'}
+            'API key AI non configurate, suggerimenti basati su pattern locali.'}
         </div>
       ) : null}
 

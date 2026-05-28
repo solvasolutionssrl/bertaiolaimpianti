@@ -418,7 +418,7 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
             {state.phase === 'uploading'
               ? 'Carico l’audio…'
               : state.phase === 'transcribing'
-                ? 'Trascrivo con Whisper…'
+                ? 'Trascrivo l’audio con AI…'
                 : 'Estraggo i campi con AI…'}
           </p>
           <p className="text-xs text-muted-foreground">
