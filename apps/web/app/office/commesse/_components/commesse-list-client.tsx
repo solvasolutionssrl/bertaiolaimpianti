@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Button,
@@ -36,6 +35,8 @@ export interface CommessaRow {
   responsabile: { id: string; display_name: string | null } | null;
   /** True se la commessa ha almeno un tecnico in commessa_tecnici. */
   assegnata?: boolean;
+  /** Titolo umano del lavoro (es. "Agri Campeggio Località Gatti"). */
+  cantiere: string | null;
 }
 
 export interface ResponsabileOption {
@@ -175,7 +176,7 @@ export function CommesseListClient({ rows, responsabili }: Props) {
             <table className="w-full text-sm">
               <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="w-10 px-3 py-3">
+                  <th className="w-10 px-3 py-2.5">
                     <input
                       type="checkbox"
                       aria-label="Seleziona tutte"
@@ -184,44 +185,77 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                       className="h-4 w-4 cursor-pointer rounded border-input accent-primary"
                     />
                   </th>
-                  <th className="px-4 py-3 font-medium">Codice</th>
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium">Stato</th>
-                  <th className="px-4 py-3 font-medium">Apertura</th>
-                  <th className="px-4 py-3 font-medium">Responsabile</th>
+                  <th className="px-4 py-2.5 font-medium">Codice</th>
+                  <th className="px-4 py-2.5 font-medium">Cliente</th>
+                  <th className="px-4 py-2.5 font-medium">Cantiere</th>
+                  <th className="px-4 py-2.5 font-medium">Stato</th>
+                  <th className="px-4 py-2.5 font-medium">Apertura</th>
+                  <th className="px-4 py-2.5 font-medium">Responsabile</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((c, i) => {
                   const sel = isSelected(c.id);
                   const baseCls = sel
-                    ? 'border-b border-primary/40 bg-primary-soft transition-colors hover:bg-primary-soft'
+                    ? 'cursor-pointer border-b border-primary/40 bg-primary-soft transition-colors hover:bg-primary-soft'
                     : i % 2 === 0
-                      ? 'border-b border-border transition-colors hover:bg-primary-soft/50'
-                      : 'border-b border-border bg-muted/20 transition-colors hover:bg-primary-soft/50';
+                      ? 'cursor-pointer border-b border-border transition-colors hover:bg-primary-soft/50'
+                      : 'cursor-pointer border-b border-border bg-muted/20 transition-colors hover:bg-primary-soft/50';
+                  const go = () => router.push(`/office/commesse/${c.id}`);
+                  // Tastiera: Enter o Space → naviga. Le checkbox interne
+                  // intercettano già il click e fanno stopPropagation sotto.
+                  const onKey = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      go();
+                    }
+                  };
                   return (
-                    <tr key={c.id} className={baseCls}>
-                      <td className="px-3 py-3">
+                    <tr
+                      key={c.id}
+                      className={baseCls}
+                      onClick={go}
+                      onKeyDown={onKey}
+                      tabIndex={0}
+                      role="link"
+                      aria-label={`Apri commessa ${c.codice_interno}${
+                        c.cliente?.ragione_sociale
+                          ? ' — ' + c.cliente.ragione_sociale
+                          : ''
+                      }`}
+                    >
+                      <td
+                        className="px-3 py-2.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <input
                           type="checkbox"
                           aria-label={`Seleziona commessa ${c.codice_interno}`}
                           checked={sel}
                           onChange={() => toggle(c.id)}
+                          onClick={(e) => e.stopPropagation()}
                           className="h-4 w-4 cursor-pointer rounded border-input accent-primary"
                         />
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs font-medium">
-                        <Link
-                          href={`/office/commesse/${c.id}`}
-                          className="text-primary hover:underline"
-                        >
-                          {c.codice_interno}
-                        </Link>
+                      <td className="px-4 py-2.5 font-mono text-xs font-medium text-primary">
+                        {c.codice_interno}
                       </td>
-                      <td className="px-4 py-3">
-                        {c.cliente?.ragione_sociale ?? '—'}
+                      <td className="px-4 py-2.5">
+                        <span className="font-medium">
+                          {c.cliente?.ragione_sociale ?? '—'}
+                        </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2.5 text-foreground/85">
+                        {c.cantiere ? (
+                          <span className="line-clamp-1" title={c.cantiere}>
+                            {c.cantiere}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
                         <StatoBadge
                           stato={c.stato}
                           label={
@@ -232,10 +266,10 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                           }
                         />
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-2.5 text-muted-foreground">
                         {fmtData(c.data_apertura ?? null)}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-2.5 text-muted-foreground">
                         {c.responsabile?.display_name ?? '—'}
                       </td>
                     </tr>

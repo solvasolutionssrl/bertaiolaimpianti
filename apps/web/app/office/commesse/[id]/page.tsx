@@ -64,7 +64,7 @@ export default async function AnagraficaTab({
           Sotto, il nome cartella tecnico in mono come metadata. */}
       {titoloUmano ? (
         <Card className="border-primary/15 bg-gradient-to-br from-primary/[0.04] via-transparent to-transparent">
-          <CardContent className="space-y-1.5 p-5">
+          <CardContent className="space-y-1 px-4 py-3">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/80">
               Descrizione cantiere
             </p>
@@ -72,7 +72,7 @@ export default async function AnagraficaTab({
               {titoloUmano}
             </h2>
             {c.nome_cartella ? (
-              <p className="break-all pt-1 font-mono text-[11px] text-muted-foreground">
+              <p className="break-all pt-0.5 font-mono text-[11px] text-muted-foreground">
                 {c.nome_cartella}
               </p>
             ) : null}
@@ -80,10 +80,10 @@ export default async function AnagraficaTab({
         </Card>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {/* CLIENTE — leggero tinto warm + bottone EDIT */}
         <Card className="border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/10">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 pb-2 pt-3">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               <User2 className="h-3.5 w-3.5" aria-hidden="true" />
               Cliente
@@ -117,7 +117,7 @@ export default async function AnagraficaTab({
               />
             ) : null}
           </CardHeader>
-          <CardContent className="space-y-2.5 text-sm">
+          <CardContent className="space-y-2 px-4 pb-3 text-sm">
             <Field
               label="Ragione sociale"
               value={cliente?.ragione_sociale}
@@ -144,17 +144,23 @@ export default async function AnagraficaTab({
               label="Email"
               value={email.length > 0 ? email.join(' · ') : null}
             />
+            {(cliente as { note?: string | null })?.note?.trim() ? (
+              <FieldNote
+                label="Note"
+                value={(cliente as { note?: string | null }).note as string}
+              />
+            ) : null}
           </CardContent>
         </Card>
 
         {/* COMMESSA — dettagli tecnici, no truncate, grassetti su valori chiave */}
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="px-4 pb-2 pt-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Commessa
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2.5 text-sm">
+          <CardContent className="space-y-2 px-4 pb-3 text-sm">
             <Field label="Codice interno" value={c.codice_interno} mono bold />
             <Field
               label="Indirizzo cantiere"
@@ -166,7 +172,7 @@ export default async function AnagraficaTab({
               label="Origine"
               value={ticket?.codice ? `Ticket ${ticket.codice}` : 'Manuale'}
             />
-            <hr className="my-2 border-border/60" />
+            <hr className="my-1.5 border-border/60" />
             <Field label="Nome cartella" value={c.nome_cartella} mono small />
             <Field
               label="Cartella cloud"
@@ -174,7 +180,7 @@ export default async function AnagraficaTab({
               mono
               small
             />
-            <hr className="my-2 border-border/60" />
+            <hr className="my-1.5 border-border/60" />
             <Field
               label="Creata il"
               value={fmtData(c.created_at as string | null | undefined)}
@@ -191,13 +197,13 @@ export default async function AnagraficaTab({
 
       {/* Tag liberi — categorizzazione trasversale */}
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="px-4 pb-2 pt-3">
           <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
             <TagIcon className="h-3.5 w-3.5" aria-hidden="true" />
             Tag
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-3">
           <TagEditor
             commessaId={params.id}
             initialTags={tags}
@@ -206,6 +212,21 @@ export default async function AnagraficaTab({
           />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/** Variante di Field per testi multi-riga (note): label sopra, body
+ *  in whitespace-pre-wrap per preservare a-capo e spazi del cliente. */
+function FieldNote({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-0.5 pt-1">
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="whitespace-pre-wrap break-words rounded-md border border-amber-500/20 bg-amber-50/50 px-2.5 py-1.5 text-xs leading-relaxed text-foreground/90 dark:bg-amber-950/20">
+        {value}
+      </dd>
     </div>
   );
 }

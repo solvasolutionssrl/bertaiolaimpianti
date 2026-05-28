@@ -49,6 +49,9 @@ export default async function CommessePage({
         id,
         codice_interno,
         nome_cartella,
+        descrizione_ai_finale,
+        descrizione_ai_proposta,
+        cliente_indirizzo_cantiere,
         stato,
         data_apertura,
         cliente:cliente_id ( id, ragione_sociale ),
@@ -112,11 +115,11 @@ export default async function CommessePage({
   );
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 p-6">
+    <div className="w-full space-y-4 px-4 pb-6 pt-1 md:px-6 md:pb-8 md:pt-2">
       <SectionHeader
         eyebrow="Commesse"
         title="Lista commesse"
-        description="Filtra per stato, anno o responsabile. Clicca un codice per aprire il dettaglio."
+        description="Filtra per stato, anno o responsabile. Clicca una riga per aprire il dettaglio."
         icon={<Briefcase />}
         actions={
           <Button asChild>
@@ -198,6 +201,13 @@ export default async function CommessePage({
           rows={rows.map((c: any) => {
             const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
             const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
+            // "Cantiere" = il titolo umano della commessa: descrizione AI finale,
+            // poi la proposta, fallback indirizzo cantiere.
+            const cantiere: string | null =
+              ((c.descrizione_ai_finale as string | null) ?? '').trim() ||
+              ((c.descrizione_ai_proposta as string | null) ?? '').trim() ||
+              ((c.cliente_indirizzo_cantiere as string | null) ?? '').trim() ||
+              null;
             const r: CommessaRow = {
               id: c.id,
               codice_interno: c.codice_interno,
@@ -210,6 +220,7 @@ export default async function CommessePage({
                 ? { id: resp.id, display_name: resp.display_name ?? null }
                 : null,
               assegnata: assegnateSet.has(c.id),
+              cantiere,
             };
             return r;
           })}

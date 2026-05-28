@@ -32,7 +32,7 @@ export default async function CommessaLayout({
   ]);
 
   return (
-    <div className="w-full space-y-3 px-4 pb-6 pt-3 md:px-6 md:pb-8 md:pt-4">
+    <div className="w-full space-y-3 px-4 pb-6 pt-1 md:px-6 md:pb-8 md:pt-2">
       <Link
         href="/office/commesse"
         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
