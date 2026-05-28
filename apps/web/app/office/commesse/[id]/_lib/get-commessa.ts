@@ -31,7 +31,10 @@ export const loadCommessa = cache(async (id: string) => {
         data_apertura,
         created_at,
         updated_at,
-        cliente:clienti ( id, ragione_sociale, tipo, telefoni, email, indirizzo, citta, cap, provincia, partita_iva, codice_fiscale, note ),
+        cliente:clienti (
+          id, ragione_sociale, tipo, telefoni, email, indirizzo, citta, cap, provincia, partita_iva, codice_fiscale, note,
+          contatti:contatto_cliente ( id, nome, ruolo, telefono, email, is_primary, ordine )
+        ),
         responsabile:users!commesse_responsabile_id_fkey ( id, display_name ),
         ticket:tickets ( id, codice )
       `,

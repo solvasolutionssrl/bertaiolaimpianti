@@ -1,5 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
-import { Tag as TagIcon, User2 } from 'lucide-react';
+import { Badge, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
+import { Mail, Phone, Star, Tag as TagIcon, User2, Users } from 'lucide-react';
+import Link from 'next/link';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -57,6 +58,28 @@ export default async function AnagraficaTab({
 
   const telefoni = (cliente?.telefoni as string[] | null | undefined) ?? [];
   const email = (cliente?.email as string[] | null | undefined) ?? [];
+
+  // Contatti referente (Ondata 4): se presenti rappresentano la fonte di verità.
+  // I telefoni[]/email[] restano come fallback legacy.
+  type Contatto = {
+    id: string;
+    nome: string;
+    ruolo: string | null;
+    telefono: string | null;
+    email: string | null;
+    is_primary: boolean;
+    ordine: number;
+  };
+  const contatti: Contatto[] = Array.isArray(
+    (cliente as { contatti?: unknown })?.contatti,
+  )
+    ? ([...((cliente as { contatti?: Contatto[] }).contatti ?? [])].sort(
+        (a, b) =>
+          (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) ||
+          a.ordine - b.ordine ||
+          a.nome.localeCompare(b.nome),
+      ) as Contatto[])
+    : [];
 
   return (
     <div className="space-y-4">
@@ -136,14 +159,20 @@ export default async function AnagraficaTab({
                 .filter(Boolean)
                 .join(' ')}
             />
-            <Field
-              label="Telefono"
-              value={telefoni.length > 0 ? telefoni.join(' · ') : null}
-            />
-            <Field
-              label="Email"
-              value={email.length > 0 ? email.join(' · ') : null}
-            />
+            {contatti.length > 0 ? (
+              <ContattiList contatti={contatti} clienteId={cliente?.id as string} />
+            ) : (
+              <>
+                <Field
+                  label="Telefono"
+                  value={telefoni.length > 0 ? telefoni.join(' · ') : null}
+                />
+                <Field
+                  label="Email"
+                  value={email.length > 0 ? email.join(' · ') : null}
+                />
+              </>
+            )}
             {(cliente as { note?: string | null })?.note?.trim() ? (
               <FieldNote
                 label="Note"
@@ -212,6 +241,85 @@ export default async function AnagraficaTab({
           />
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/** Lista compatta dei contatti referente del cliente. Mostra nome + ruolo,
+ *  link tel/mail tappabili, badge "Primario" sul principale. CTA finale
+ *  per gestire i contatti dalla scheda cliente. */
+function ContattiList({
+  contatti,
+  clienteId,
+}: {
+  contatti: Array<{
+    id: string;
+    nome: string;
+    ruolo: string | null;
+    telefono: string | null;
+    email: string | null;
+    is_primary: boolean;
+    ordine: number;
+  }>;
+  clienteId: string;
+}) {
+  return (
+    <div className="grid grid-cols-3 items-start gap-2">
+      <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <Users className="h-3 w-3" aria-hidden="true" />
+          Contatti
+        </span>
+      </dt>
+      <dd className="col-span-2 min-w-0 space-y-1.5">
+        <ul className="space-y-1">
+          {contatti.map((c) => (
+            <li key={c.id} className="text-xs">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <span className="font-medium text-foreground">{c.nome}</span>
+                {c.ruolo ? (
+                  <span className="text-muted-foreground">· {c.ruolo}</span>
+                ) : null}
+                {c.is_primary ? (
+                  <Badge
+                    variant="outline"
+                    className="border-primary/40 bg-primary/10 px-1 py-0 text-[9px] font-semibold uppercase tracking-wider text-primary"
+                  >
+                    <Star className="mr-0.5 h-2 w-2" />
+                    Primario
+                  </Badge>
+                ) : null}
+              </div>
+              <div className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-0.5">
+                {c.telefono ? (
+                  <a
+                    href={`tel:${c.telefono}`}
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <Phone className="h-3 w-3" aria-hidden="true" />
+                    {c.telefono}
+                  </a>
+                ) : null}
+                {c.email ? (
+                  <a
+                    href={`mailto:${c.email}`}
+                    className="inline-flex items-center gap-1 break-all text-foreground/80 hover:text-primary"
+                  >
+                    <Mail className="h-3 w-3" aria-hidden="true" />
+                    {c.email}
+                  </a>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <Link
+          href={`/office/clienti/${clienteId}`}
+          className="inline-block text-[10px] uppercase tracking-wider text-muted-foreground hover:text-primary"
+        >
+          Gestisci contatti →
+        </Link>
+      </dd>
     </div>
   );
 }

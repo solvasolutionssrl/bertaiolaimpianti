@@ -54,6 +54,20 @@ const OUTPUT_SCHEMA = z.object({
   descrizione: z.string().trim().min(1).max(200).optional().catch(undefined),
   note: z.string().trim().min(1).max(2000).optional().catch(undefined),
   tag_suggeriti: z.array(z.string().trim().min(1).max(40)).max(5).optional().catch(undefined),
+  // Ondata 4: referenti del cliente. Estratti quando il dettato dice
+  // esplicitamente "il referente è …", "chiamare …", "tecnico Mario, 333…".
+  referenti: z
+    .array(
+      z.object({
+        nome: z.string().trim().min(1).max(160).catch(''),
+        ruolo: z.string().trim().min(1).max(80).optional().catch(undefined),
+        telefono: z.string().trim().min(4).max(40).optional().catch(undefined),
+        email: z.string().trim().email().max(200).optional().catch(undefined),
+      }),
+    )
+    .max(5)
+    .optional()
+    .catch(undefined),
 });
 
 type SuggestedFields = z.infer<typeof OUTPUT_SCHEMA>;

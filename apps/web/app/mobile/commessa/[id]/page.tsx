@@ -108,7 +108,10 @@ export default async function CommessaDetailPage({
         id, codice_interno, nome_cartella, stato, tenant_id,
         cliente_indirizzo_cantiere, cloud_folder_path,
         descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, is_critica, data_apertura,
-        cliente:clienti ( ragione_sociale, email, telefoni, citta, cap, provincia ),
+        cliente:clienti (
+          ragione_sociale, email, telefoni, citta, cap, provincia,
+          contatti:contatto_cliente ( id, nome, ruolo, telefono, email, is_primary, ordine )
+        ),
         responsabile:users!commesse_responsabile_id_fkey ( display_name )
       `,
     )
@@ -388,6 +391,28 @@ export default async function CommessaDetailPage({
 
   const telefono = (cliente?.telefoni as string[] | undefined)?.[0];
 
+  // Contatti referente (Ondata 4): se presenti hanno priorità sul vecchio
+  // pill "telefono unico" — mostriamo nome + ruolo + tap-to-call.
+  type ContattoMobile = {
+    id: string;
+    nome: string;
+    ruolo: string | null;
+    telefono: string | null;
+    email: string | null;
+    is_primary: boolean;
+    ordine: number;
+  };
+  const contattiClienteRaw = (cliente as { contatti?: ContattoMobile[] } | null)
+    ?.contatti;
+  const contattiCliente: ContattoMobile[] = Array.isArray(contattiClienteRaw)
+    ? [...contattiClienteRaw].sort(
+        (a, b) =>
+          (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) ||
+          a.ordine - b.ordine ||
+          a.nome.localeCompare(b.nome),
+      )
+    : [];
+
   return (
     <div className="flex min-h-[100dvh] flex-col pb-28">
       {/* Hero dark con codice + cliente + LED */}
@@ -468,8 +493,39 @@ export default async function CommessaDetailPage({
             </div>
           ) : null}
 
-          {/* Telefono — pill compatta inline */}
-          {telefono ? (
+          {/* Contatti referente — chip tap-to-call per ciascuno.
+              Fallback al vecchio singolo telefono se la rubrica è vuota. */}
+          {contattiCliente.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {contattiCliente.slice(0, 4).map((c) =>
+                c.telefono ? (
+                  <a
+                    key={c.id}
+                    href={`tel:${c.telefono}`}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs text-primary-foreground/85 transition-colors hover:bg-primary-foreground/15 active:bg-primary-foreground/20"
+                    title={`Chiama ${c.nome}${c.ruolo ? ` (${c.ruolo})` : ''}`}
+                  >
+                    <Phone className="h-3 w-3" aria-hidden="true" />
+                    <span className="font-medium">{c.nome}</span>
+                    {c.ruolo ? (
+                      <span className="text-primary-foreground/60">· {c.ruolo}</span>
+                    ) : null}
+                  </a>
+                ) : (
+                  <span
+                    key={c.id}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-3 py-1 text-xs text-primary-foreground/60"
+                    title={c.nome}
+                  >
+                    {c.nome}
+                    {c.ruolo ? (
+                      <span className="text-primary-foreground/45">· {c.ruolo}</span>
+                    ) : null}
+                  </span>
+                ),
+              )}
+            </div>
+          ) : telefono ? (
             <div className="mt-3">
               <a
                 href={`tel:${telefono}`}

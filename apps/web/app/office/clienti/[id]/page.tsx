@@ -1,17 +1,23 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import {
   ArrowLeft,
   Briefcase,
   Building2,
   CircleDot,
   User,
+  Users,
 } from 'lucide-react';
 import { Card, CardContent, StatoBadge } from '@kommessa/ui';
 
 import { EmptyState } from '../../../_components/empty-state';
 import { ClienteForm } from '../_components/form';
+import {
+  ContattiEditor,
+  type ContattoRow,
+} from '../_components/contatti-editor';
 import { fmtData } from '../../_lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -21,8 +27,9 @@ export default async function ClienteDetailPage({
 }: {
   params: { id: string };
 }) {
+  const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
-  const [clRes, comRes] = await Promise.all([
+  const [clRes, comRes, ctRes] = await Promise.all([
     supabase
       .from('clienti')
       .select(
@@ -36,8 +43,14 @@ export default async function ClienteDetailPage({
       .eq('cliente_id', params.id)
       .order('data_apertura', { ascending: false })
       .limit(50),
+    supabase
+      .from('contatto_cliente' as never)
+      .select('id, nome, ruolo, telefono, email, note, is_primary, ordine')
+      .eq('cliente_id', params.id),
   ]);
   if (clRes.error || !clRes.data) notFound();
+  const canEditContatti = ctx.role === 'admin' || ctx.role === 'office';
+  const contatti = ((ctRes.data ?? []) as unknown as ContattoRow[]) ?? [];
 
   const cliente = clRes.data;
   const commesse = comRes.data ?? [];
@@ -84,11 +97,33 @@ export default async function ClienteDetailPage({
 
       {/* Layout 2 colonne su lg+: form + lista commesse affianco */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="min-w-0 space-y-3">
-          <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            Anagrafica
-          </h2>
-          <ClienteForm initial={cliente as any} />
+        <div className="min-w-0 space-y-4">
+          <div>
+            <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              Anagrafica
+            </h2>
+            <div className="mt-2">
+              <ClienteForm initial={cliente as any} />
+            </div>
+          </div>
+
+          {/* Contatti referente (Ondata 4): 1-N rubrica per cliente. */}
+          <div>
+            <h2 className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <Users className="h-3 w-3" aria-hidden="true" />
+                Contatti referente
+              </span>
+              <span className="tabular-nums">{contatti.length}</span>
+            </h2>
+            <div className="mt-2">
+              <ContattiEditor
+                clienteId={cliente.id as string}
+                initial={contatti}
+                canEdit={canEditContatti}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-3">

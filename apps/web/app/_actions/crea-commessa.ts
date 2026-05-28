@@ -181,6 +181,54 @@ export async function creaCommessa(
     }
   }
 
+  // 3b) Aggiunta referenti del cliente (Ondata 4).
+  // Su cliente esistente: aggiungiamo solo i referenti NUOVI (match per
+  // lower(nome) + telefono normalizzato). Su cliente nuovo: inseriamo tutti.
+  // L'indice unique partial blocca duplicati esatti — qui pre-filtriamo
+  // per evitare di accendere l'errore SQL su ogni doppione.
+  if (data.referenti && data.referenti.length > 0) {
+    const { data: existing } = await supabase
+      .from('contatto_cliente' as never)
+      .select('id, nome, telefono, is_primary')
+      .eq('cliente_id', clienteId);
+    const existingRows = (existing ?? []) as Array<{
+      id: string;
+      nome: string;
+      telefono: string | null;
+      is_primary: boolean;
+    }>;
+    const dedupKey = (n: string, t: string | null) =>
+      `${n.trim().toLowerCase()}|${(t ?? '').trim()}`;
+    const seen = new Set(existingRows.map((r) => dedupKey(r.nome, r.telefono)));
+    const noPrimaryYet = !existingRows.some((r) => r.is_primary);
+
+    const toInsert = data.referenti
+      .map((r, idx) => ({
+        tenant_id: ctx.tenantId,
+        cliente_id: clienteId,
+        nome: r.nome.trim(),
+        ruolo: r.ruolo?.trim() || null,
+        telefono: r.telefono?.trim() || null,
+        email: r.email?.trim() || null,
+        is_primary: noPrimaryYet && idx === 0,
+        ordine: existingRows.length + idx,
+      }))
+      .filter((r) => !seen.has(dedupKey(r.nome, r.telefono)));
+
+    if (toInsert.length > 0) {
+      const { error: refErr } = await supabase
+        .from('contatto_cliente' as never)
+        .insert(toInsert as never);
+      if (refErr) {
+        // Non blocchiamo la creazione commessa per un fallimento di rubrica.
+        console.warn(
+          '[crea-commessa] INSERT referenti fallito (non-fatal):',
+          refErr.message,
+        );
+      }
+    }
+  }
+
   // 4) Codice progressivo via RPC (atomico, format BER-YY-NNN, reset annuale)
   const annoCorrente = new Date().getFullYear() % 100; // 26 per 2026
   const { data: codiceRpc, error: rpcErr } = await supabase.rpc('genera_codice_commessa', {

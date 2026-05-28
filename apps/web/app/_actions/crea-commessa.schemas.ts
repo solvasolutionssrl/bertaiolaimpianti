@@ -20,11 +20,21 @@ export const clienteNewSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
+/** Referente del cliente, opzionalmente estratto dall'AI voice extraction. */
+export const referenteInputSchema = z.object({
+  nome: z.string().trim().min(1).max(160),
+  ruolo: z.string().trim().max(80).optional().nullable(),
+  telefono: z.string().trim().max(40).optional().nullable(),
+  email: z.string().trim().max(200).optional().nullable(),
+});
+
 export const creaCommessaServerInputSchema = z
   .object({
     clienteId: z.string().uuid().optional(),
     clienteNew: clienteNewSchema.optional(),
-    voci: z.array(z.number().int().min(1).max(38)).default([]),
+    // Range esteso a 32767 per accogliere la voce 39 e le custom-tenant 1000+
+    // (vedi migration 20260528004100_voci_catalogo_tenant_custom.sql).
+    voci: z.array(z.number().int().min(1).max(32767)).default([]),
     descrizioneFinale: z.string().min(1).max(60),
     note: z.string().optional().nullable(),
     /**
@@ -35,6 +45,12 @@ export const creaCommessaServerInputSchema = z
     noteIniziali: z.string().optional().nullable(),
     presetId: z.string().uuid().optional().nullable(),
     indirizzoCantiere: z.string().optional().nullable(),
+    /**
+     * Referenti del cliente, da AI voice extraction o input manuale.
+     * Vengono UPSERT-ati su contatto_cliente dopo la creazione del cliente.
+     * Il primo della lista diventa is_primary se non esiste ancora un primary.
+     */
+    referenti: z.array(referenteInputSchema).max(10).optional(),
   })
   .refine((v) => Boolean(v.clienteId) || Boolean(v.clienteNew), {
     message: 'Specificare clienteId oppure clienteNew',

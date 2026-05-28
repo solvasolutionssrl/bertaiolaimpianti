@@ -72,6 +72,13 @@ REGOLE INDEROGABILI:
   • "azienda" se il cliente è nominato con: "S.r.l.", "S.p.A.", "S.a.s.", "S.n.c.", "S.r.l.s.", "Ditta", "Impresa", "Studio", "Cooperativa", "Coop.", "Soc.", "ASD", "Comune di", "Parrocchia", "Condominio", "Hotel", "Ristorante", "Albergo", forme similari, OPPURE se il transcript dice esplicitamente "azienda" / "società" / "impresa" / "ditta" parlando del cliente.
   • "persona_fisica" se il cliente è chiamato per nome+cognome (es. "Rossi Mario", "Signor Bianchi", "Signora Verdi") senza qualifica societaria. Se nel dubbio, default "persona_fisica".
 - "note" è una sintesi (max 280 caratteri) della parte libera della nota, in italiano.
+- "referenti" (array, max 5) — ESTRAI quando il capo nomina ESPLICITAMENTE una persona di riferimento DIVERSA dal cliente intestatario:
+  • Marker linguistici: "il referente è …", "chiamare …", "riferimento Marco", "il tecnico Mario, telefono 333…", "geometra X", "la moglie Anna 348…", "il figlio Luca", "il padre …", "il responsabile X".
+  • Ogni referente ha: nome obbligatorio, ruolo opzionale (es. "geometra", "moglie", "tecnico", "figlio", "responsabile cantiere"), telefono opzionale, email opzionale.
+  • Se il telefono del CLIENTE è uno e quello del REFERENTE è un altro, mettili separati: telefono=cliente, referenti[0].telefono=referente.
+  • Se il transcript dice "il referente è Mario Rossi al 333…", il telefono va in referenti[0].telefono, NON nel telefono cliente.
+  • NON estrarre come referente se il nome è già la ragione_sociale del cliente (è la stessa persona).
+  • Se NESSUN referente è esplicitato, ometti il campo (non array vuoto).
 
 OUTPUT:
 Restituisci ESCLUSIVAMENTE un JSON valido (un oggetto JSON, non un array) conforme allo schema. NIENTE testo prima o dopo. NIENTE code fence markdown.`;
@@ -83,10 +90,10 @@ Transcript: "Allora sopralluogo da Rossi Mario via Roma 12 Treviso, mi ha chiest
 Output JSON:
 {"ragione_sociale":"Rossi Mario","tipo":"persona_fisica","telefono":"+39 333 4567890","indirizzo":"via Roma 12","citta":"Treviso","voci_ids":[19,13,31],"descrizione":"CaldaiaEDueBagni","note":"Sostituzione caldaia + rifacimento due bagni completi. Parte febbraio.","tag_suggeriti":["urgente"]}
 
-[2] Azienda:
-Transcript: "Sopralluogo dalla ditta Edilizia Tre S.r.l. in via dell'Industria 8 Castelfranco Veneto, vogliono rifare l'impianto gas dello stabilimento. Riferimento Marco Bianchi 0423 987654."
+[2] Azienda con referente esplicito:
+Transcript: "Sopralluogo dalla ditta Edilizia Tre S.r.l. in via dell'Industria 8 Castelfranco Veneto, vogliono rifare l'impianto gas dello stabilimento. Riferimento Marco Bianchi al 0423 987654."
 Output JSON:
-{"ragione_sociale":"Edilizia Tre S.r.l.","tipo":"azienda","telefono":"0423 987654","indirizzo":"via dell'Industria 8","citta":"Castelfranco Veneto","voci_ids":[15],"descrizione":"ImpiantoGasStabilimento","note":"Rifacimento impianto gas stabilimento. Riferimento: Marco Bianchi.","tag_suggeriti":[]}
+{"ragione_sociale":"Edilizia Tre S.r.l.","tipo":"azienda","indirizzo":"via dell'Industria 8","citta":"Castelfranco Veneto","voci_ids":[15],"descrizione":"ImpiantoGasStabilimento","note":"Rifacimento impianto gas stabilimento.","tag_suggeriti":[],"referenti":[{"nome":"Marco Bianchi","ruolo":"referente","telefono":"0423 987654"}]}
 
 [3] Ente pubblico → azienda:
 Transcript: "Sopralluogo al Comune di Castagnole, lavoro sull'impianto termico della scuola elementare."
@@ -107,6 +114,16 @@ Output JSON:
 Transcript: "Il cliente in via Primo Maggio 27 a Bussolengo vuole una pompa di calore installata in casa, uno split in camera da letto e uno in salotto."
 Output JSON — NOTARE: niente ragione_sociale (è solo "il cliente", non un nome vero):
 {"indirizzo":"via Primo Maggio 27","citta":"Bussolengo","voci_ids":[14],"descrizione":"PompaDiCaloreESplit","note":"Pompa di calore in casa, split in camera da letto e in salotto."}
+
+[7] Referenti multipli (moglie + geometra):
+Transcript: "Da Rossi Mario via Verdi 10, c'è la moglie Anna al 333 1112233 che è quella di riferimento, e il geometra Luca Bianchi 348 5566778 segue i lavori. Vogliono rifare l'impianto sanitario."
+Output JSON:
+{"ragione_sociale":"Rossi Mario","tipo":"persona_fisica","indirizzo":"via Verdi 10","voci_ids":[13],"descrizione":"ImpiantoSanitario","note":"Rifacimento impianto sanitario.","referenti":[{"nome":"Anna Rossi","ruolo":"moglie","telefono":"333 1112233"},{"nome":"Luca Bianchi","ruolo":"geometra","telefono":"348 5566778"}]}
+
+[8] Tecnico responsabile cantiere:
+Transcript: "Sopralluogo Edilizia Bianchi S.r.l. corso Italia 5 Padova, da contattare per le decisioni il responsabile cantiere Marco Verdi 339 4445566."
+Output JSON:
+{"ragione_sociale":"Edilizia Bianchi S.r.l.","tipo":"azienda","indirizzo":"corso Italia 5","citta":"Padova","note":"Sopralluogo cantiere.","referenti":[{"nome":"Marco Verdi","ruolo":"responsabile cantiere","telefono":"339 4445566"}]}
 
 (Gli id voci negli esempi sono illustrativi: usa SEMPRE gli id reali del catalogo fornito qui sotto.)`;
 
@@ -184,6 +201,8 @@ export const VOCI_KEYWORDS: ReadonlyArray<{
   { id: 36, keywords: ['supporto tecnico', 'consulenza'] },
   { id: 37, keywords: ['progetto', 'progettazione'] },
   { id: 38, keywords: ['quadro elettrico', 'alimentazione', 'cablaggio', 'elettrico'] },
+  // Voce 39 — aggiunta 28/05/2026 post-go-live Bertaiola.
+  { id: 39, keywords: ['nuovo impianto', 'prima installazione', 'da zero', 'casa nuova', 'installazione completa', 'realizzazione ex novo'] },
 ];
 
 const TAG_KEYWORDS: ReadonlyArray<{ tag: string; keywords: string[] }> = [

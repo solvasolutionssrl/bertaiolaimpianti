@@ -222,6 +222,17 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         // mode senza API key), fallback sul transcript per non perdere dati.
         noteIniziali: (d.note?.trim() || state.transcript?.trim()) || null,
         indirizzoCantiere: d.indirizzo || null,
+        // Ondata 4: referenti del cliente estratti dall'AI (max 5).
+        referenti: Array.isArray(d.referenti) && d.referenti.length > 0
+          ? d.referenti
+              .filter((r) => r.nome && r.nome.trim().length > 0)
+              .map((r) => ({
+                nome: r.nome.trim(),
+                ruolo: r.ruolo?.trim() || null,
+                telefono: r.telefono?.trim() || null,
+                email: r.email?.trim() || null,
+              }))
+          : undefined,
       });
       if (!res.ok) {
         setState((s) => ({ ...s, phase: 'confirm', error: res.error }));
@@ -562,11 +573,23 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
             size="lg"
             className="min-h-[52px] w-full"
             onClick={() =>
+              router.push(
+                `/mobile/commessa/${state.result!.commessaId}/scatto`,
+              )
+            }
+          >
+            Scatta foto al cantiere
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className="min-h-[48px] w-full"
+            onClick={() =>
               router.push(`/mobile/commessa/${state.result!.commessaId}`)
             }
           >
             Apri commessa
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </Button>
           <Button
             variant="outline"

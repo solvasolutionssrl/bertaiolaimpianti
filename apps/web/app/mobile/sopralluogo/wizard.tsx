@@ -293,6 +293,9 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
           result={result}
           uploadResults={uploadResults}
           onOpen={() => router.push(`/mobile/commessa/${result.commessaId}`)}
+          onScatta={() =>
+            router.push(`/mobile/commessa/${result.commessaId}/scatto`)
+          }
         />
       )}
 
@@ -1049,10 +1052,12 @@ function Step8Success({
   result,
   uploadResults,
   onOpen,
+  onScatta,
 }: {
   result: { commessaId: string; codiceInterno: string; nomeCartella: string; cloudFolderPath: string };
   uploadResults: UploadMediaResult[];
   onOpen: () => void;
+  onScatta: () => void;
 }) {
   const uploadOk = uploadResults.filter((r) => r.ok).length;
   const uploadErr = uploadResults.filter((r) => !r.ok).length;
@@ -1091,9 +1096,17 @@ function Step8Success({
         </p>
       </div>
 
-      <Button size="lg" className="min-h-[48px] w-full" onClick={onOpen}>
-        Vedi commessa
+      <Button size="lg" className="min-h-[52px] w-full" onClick={onScatta}>
+        Scatta foto al cantiere
         <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      <Button
+        variant="outline"
+        size="lg"
+        className="min-h-[48px] w-full"
+        onClick={onOpen}
+      >
+        Apri commessa
       </Button>
     </section>
   );

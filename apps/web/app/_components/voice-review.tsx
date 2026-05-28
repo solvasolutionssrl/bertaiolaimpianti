@@ -45,6 +45,13 @@ import { ContactPickerButton } from './contact-picker-button';
  *    intervallate, dà senso di "AI ha appena trovato N cose".
  */
 
+export interface VoiceReferente {
+  nome: string;
+  ruolo?: string;
+  telefono?: string;
+  email?: string;
+}
+
 export interface VoiceReviewData {
   ragione_sociale?: string;
   tipo?: 'persona_fisica' | 'azienda';
@@ -56,6 +63,7 @@ export interface VoiceReviewData {
   descrizione?: string;
   note?: string;
   tag_suggeriti?: string[];
+  referenti?: VoiceReferente[];
 }
 
 export interface VoceOption {
@@ -165,6 +173,10 @@ export function VoiceReview({
       descrizione: descrizione.value.trim() || undefined,
       note: note.value.trim() || undefined,
       tag_suggeriti: data.tag_suggeriti,
+      // Referenti: pass-through di quelli proposti dall'AI (editing inline
+      // sarà aggiunto in iter successiva — per ora si modificano dal form
+      // cliente dopo la creazione della commessa).
+      referenti: data.referenti,
     });
   };
 
@@ -401,6 +413,40 @@ export function VoiceReview({
             </div>
           )}
         </ReviewCard>
+
+        {/* Referenti suggeriti dall'AI (read-only nel review).
+            La modifica completa avviene poi dalla scheda cliente. */}
+        {Array.isArray(data.referenti) && data.referenti.length > 0 ? (
+          <div className="rounded-lg border border-primary/25 bg-primary/[0.04] px-4 py-3">
+            <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">
+              Referenti rilevati ({data.referenti.length})
+            </p>
+            <ul className="space-y-1">
+              {data.referenti.map((r, i) => (
+                <li key={i} className="text-xs text-foreground/90">
+                  <span className="font-medium">{r.nome}</span>
+                  {r.ruolo ? (
+                    <span className="text-muted-foreground"> · {r.ruolo}</span>
+                  ) : null}
+                  {r.telefono ? (
+                    <span className="ml-2 font-mono text-primary">
+                      {r.telefono}
+                    </span>
+                  ) : null}
+                  {r.email ? (
+                    <span className="ml-2 break-all text-muted-foreground">
+                      {r.email}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              Verranno aggiunti alla rubrica del cliente. Potrai modificarli
+              dopo la creazione dalla scheda cliente.
+            </p>
+          </div>
+        ) : null}
 
         {/* Voci */}
         <ReviewCard
