@@ -135,7 +135,7 @@ async function GestioneDashboard({
       <div className="flex flex-col gap-7 px-4 pt-4">
         {/* ── 01 / METRICHE ──────── (overlap parziale sull'hero) ────────────── */}
         <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
-          <div className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft-lg">
+          <div className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary-soft/45 p-5 shadow-soft-lg">
             <CornerTicks />
             {/* Grid pattern decorativo sullo sfondo */}
             <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.18]" aria-hidden="true" />
@@ -528,7 +528,7 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
     <Link
       href={`/mobile/commessa/${commessa.id}`}
       data-tour={index === 1 ? 'commessa-card' : undefined}
-      className="group relative flex items-stretch gap-3 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-soft transition-all active:scale-[0.99] active:bg-muted"
+      className="group relative flex items-stretch gap-3 overflow-hidden rounded-lg border border-border bg-card p-3 shadow-soft-md transition-all active:scale-[0.99] active:bg-muted"
     >
       {/* Numerazione laterale */}
       <span
@@ -617,7 +617,7 @@ function TodoMiniCard({
     <li>
       <Link
         href={`/mobile/commessa/${todo.commessa_id}#lavori`}
-        className="flex items-center gap-2 rounded-md border border-border bg-card p-2.5 transition-colors active:bg-muted"
+        className="flex items-center gap-2 rounded-md border border-border bg-card p-2.5 shadow-soft transition-colors active:bg-muted"
       >
         <span
           className={[

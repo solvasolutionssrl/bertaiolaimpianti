@@ -586,8 +586,8 @@ export default async function CommessaDetailPage({
           }
           className="w-full"
         >
-          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
-          <TabsList className="grid h-10 w-full grid-cols-4 items-center rounded-none border-b border-border/60 bg-muted p-1">
+          <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft-md">
+          <TabsList className="grid h-10 w-full grid-cols-4 items-center rounded-none border-b border-border/60 bg-primary-soft/60 p-1">
             <TabsTrigger
               value="todo"
               className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"

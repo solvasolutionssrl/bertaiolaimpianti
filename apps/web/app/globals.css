@@ -181,6 +181,24 @@
       hsl(var(--background));
   }
 
+  /* Canvas PWA mobile: tinte morbidissime concentrate nella zona contenuto
+   * (sotto l'Hero blu, che copre la parte alta). Base leggermente più calda
+   * del background piatto così le card bianche non "galleggiano sul bianco".
+   * Pensato per il wrapper del layout /mobile. */
+  .bg-canvas-mobile {
+    background:
+      radial-gradient(620px 420px at 112% 15%, hsl(28 100% 94%) 0%, transparent 58%),
+      radial-gradient(700px 520px at -12% 33%, hsl(220 92% 95%) 0%, transparent 55%),
+      radial-gradient(560px 640px at 50% 102%, hsl(220 70% 96%) 0%, transparent 60%),
+      hsl(34 26% 97%);
+  }
+  .dark .bg-canvas-mobile {
+    background:
+      radial-gradient(620px 420px at 112% 15%, hsl(22 60% 16% / 0.5) 0%, transparent 58%),
+      radial-gradient(700px 520px at -12% 33%, hsl(220 70% 16% / 0.6) 0%, transparent 55%),
+      hsl(var(--background));
+  }
+
   /* ===== Bordo "vivo" — gradient blu→arancio ===== */
   .border-brand-line {
     background:

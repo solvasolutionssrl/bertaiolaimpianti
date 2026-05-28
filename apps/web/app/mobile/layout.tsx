@@ -58,7 +58,7 @@ export default async function MobileLayout({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-background">
+    <div className="min-h-[100dvh] bg-canvas-mobile">
       <SwRegistrar />
 
       <main
