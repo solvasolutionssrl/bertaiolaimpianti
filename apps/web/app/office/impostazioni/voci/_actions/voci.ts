@@ -19,6 +19,22 @@ const overrideSchema = z.object({
     .union([z.coerce.number().int().min(0).max(999), z.literal(''), z.null()])
     .optional(),
   attiva: z.boolean().default(true),
+  /**
+   * Path cartella (es. "Preventivi/NuoviImpianti") che la voce genera
+   * su Nextcloud. Stringa vuota = esplicita assenza, NULL = eredita.
+   *
+   * Per voci GLOBALI (tenant_id NULL): scritto come
+   *   tenant_voci_override.cartella_template_override.
+   * Per voci CUSTOM (tenant_id valorizzato): scritto direttamente come
+   *   voci_catalogo.cartella_template (è del proprio tenant).
+   */
+  cartellaTemplate: z
+    .string()
+    .trim()
+    .max(200)
+    .or(z.literal(''))
+    .nullable()
+    .optional(),
 });
 
 export type VoceFormState =
@@ -45,6 +61,10 @@ export async function salvaVoceOverride(
     nomeOverride: formData.get('nomeOverride')?.toString() ?? '',
     minFotoOverride: formData.get('minFotoOverride')?.toString() ?? '',
     attiva: formData.get('attiva') === 'on' || formData.get('attiva') === 'true',
+    cartellaTemplate:
+      formData.has('cartellaTemplate')
+        ? (formData.get('cartellaTemplate')?.toString() ?? '')
+        : undefined,
   });
   if (!parsed.success) {
     return {
@@ -64,22 +84,77 @@ export async function salvaVoceOverride(
     parsed.data.minFotoOverride === undefined
       ? null
       : Number(parsed.data.minFotoOverride);
+  const cartellaNorm =
+    parsed.data.cartellaTemplate === undefined
+      ? undefined // non passato → non toccare
+      : parsed.data.cartellaTemplate === null ||
+          parsed.data.cartellaTemplate === '' ||
+          parsed.data.cartellaTemplate.trim() === ''
+        ? null
+        : parsed.data.cartellaTemplate.trim();
 
   const supabase = createServerSupabase();
-  const { error } = await supabase
-    .from('tenant_voci_override' as never)
-    .upsert(
-      {
-        tenant_id: ctx.tenantId,
-        voce_id: parsed.data.voceId,
-        nome_override: nomeNorm,
-        min_foto_richieste_override: minFotoNorm,
-        attiva: parsed.data.attiva,
-      } as never,
-      { onConflict: 'tenant_id,voce_id' },
-    );
 
-  if (error) return { status: 'error', message: error.message };
+  // Sceglie il path in base alla provenienza della voce:
+  // - GLOBALE (tenant_id NULL): UPSERT su tenant_voci_override.
+  // - CUSTOM del tenant (tenant_id NOT NULL): UPDATE diretto su voci_catalogo
+  //   (passato via RLS: solo l'admin del tenant proprietario può scrivere).
+  const { data: voceRow } = await supabase
+    .from('voci_catalogo')
+    .select('id, tenant_id')
+    .eq('id', parsed.data.voceId)
+    .maybeSingle();
+  const isCustom = Boolean(
+    (voceRow as { tenant_id?: string | null } | null)?.tenant_id,
+  );
+
+  if (isCustom) {
+    // Per le custom: nome / cartella / (note di info) vivono nel record stesso.
+    // attiva / min_foto restano su override per coerenza UX (anche se nascondibili).
+    const updatePayload: Record<string, unknown> = {};
+    if (nomeNorm) updatePayload.nome = nomeNorm;
+    if (cartellaNorm !== undefined)
+      updatePayload.cartella_template = cartellaNorm;
+    if (Object.keys(updatePayload).length > 0) {
+      const { error: upErr } = await supabase
+        .from('voci_catalogo')
+        .update(updatePayload as never)
+        .eq('id', parsed.data.voceId);
+      if (upErr) return { status: 'error', message: upErr.message };
+    }
+    // Anche per le custom usiamo l'override per attiva + min_foto.
+    const { error } = await supabase
+      .from('tenant_voci_override' as never)
+      .upsert(
+        {
+          tenant_id: ctx.tenantId,
+          voce_id: parsed.data.voceId,
+          nome_override: null, // sulla custom il nome vive sul record
+          min_foto_richieste_override: minFotoNorm,
+          attiva: parsed.data.attiva,
+          cartella_template_override: null,
+        } as never,
+        { onConflict: 'tenant_id,voce_id' },
+      );
+    if (error) return { status: 'error', message: error.message };
+  } else {
+    // Voce globale: override per nome/min_foto/attiva/cartella.
+    const upsertPayload: Record<string, unknown> = {
+      tenant_id: ctx.tenantId,
+      voce_id: parsed.data.voceId,
+      nome_override: nomeNorm,
+      min_foto_richieste_override: minFotoNorm,
+      attiva: parsed.data.attiva,
+    };
+    if (cartellaNorm !== undefined) {
+      upsertPayload.cartella_template_override = cartellaNorm;
+    }
+    const { error } = await supabase
+      .from('tenant_voci_override' as never)
+      .upsert(upsertPayload as never, { onConflict: 'tenant_id,voce_id' });
+    if (error) return { status: 'error', message: error.message };
+  }
+
   revalidatePath('/office/impostazioni/voci');
   return { status: 'success', message: 'Voce aggiornata.' };
 }

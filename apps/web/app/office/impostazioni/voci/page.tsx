@@ -28,7 +28,9 @@ export default async function VociPage() {
       .order('ordine_visualizzazione'),
     supabase
       .from('tenant_voci_override' as never)
-      .select('voce_id, nome_override, min_foto_richieste_override, attiva')
+      .select(
+        'voce_id, nome_override, min_foto_richieste_override, attiva, cartella_template_override',
+      )
       .eq('tenant_id', ctx.tenantId),
   ]);
 
@@ -41,7 +43,22 @@ export default async function VociPage() {
     <div className="space-y-6">
       <SectionHeader
         title="Voci catalogo"
-        description="Le voci canoniche sono globali e condivise. Puoi personalizzarne nome, foto minime e disponibilità per il tuo tenant, e aggiungere voci custom specifiche del tuo workflow."
+        description={
+          <span className="block space-y-1">
+            <span className="block">
+              Le voci canoniche sono globali e condivise. Puoi personalizzarne
+              nome, foto minime, cartella generata e disponibilità per il tuo
+              tenant, e aggiungere voci custom specifiche del tuo workflow.
+            </span>
+            <span className="block text-[11px] text-muted-foreground/80">
+              <strong>Cartella</strong>: alcune voci (es. <em>Preventivo</em>,{' '}
+              <em>POS + Documenti</em>) generano una sottocartella su Nextcloud
+              quando attive. Altre (es. <em>Cliente / Cantiere</em>,{' '}
+              <em>Ticket</em>) sono solo dati strutturati nel DB e non creano
+              cartelle. Puoi sovrascrivere o aggiungere un path dalla modifica.
+            </span>
+          </span>
+        }
         icon={<ListTree />}
       />
 

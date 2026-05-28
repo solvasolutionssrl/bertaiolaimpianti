@@ -45,6 +45,8 @@ export interface VoceOverride {
   nome_override: string | null;
   min_foto_richieste_override: number | null;
   attiva: boolean;
+  /** Null = eredita dal catalogo. Stringa vuota: convenzione non usata. */
+  cartella_template_override: string | null;
 }
 
 interface VoceMerged extends VoceCatalogo {
@@ -54,6 +56,8 @@ interface VoceMerged extends VoceCatalogo {
   attivaEffettiva: boolean;
   hasOverride: boolean;
   isCustom: boolean;
+  /** Path effettivo (COALESCE override → catalogo). Null = nessuna cartella. */
+  cartellaEffettiva: string | null;
 }
 
 const CATEGORIA_LABEL: Record<string, string> = {
@@ -77,6 +81,14 @@ function mergeVoci(
   );
   return voci.map((v) => {
     const ovr = ovrMap.get(v.id) ?? null;
+    // Cartella effettiva: override (se valorizzato) > base catalogo.
+    const ovrCart = ovr?.cartella_template_override;
+    const cartellaEffettiva =
+      ovrCart && ovrCart.trim().length > 0
+        ? ovrCart
+        : v.cartella_template && v.cartella_template.trim().length > 0
+          ? v.cartella_template
+          : null;
     return {
       ...v,
       override: ovr,
@@ -85,6 +97,7 @@ function mergeVoci(
       attivaEffettiva: ovr ? ovr.attiva : true,
       hasOverride: Boolean(ovr),
       isCustom: v.tenant_id !== null,
+      cartellaEffettiva,
     };
   });
 }
@@ -264,9 +277,29 @@ export function VociList({
                             {v.minFotoEffettive != null
                               ? `Min foto override: ${v.minFotoEffettive}`
                               : 'Min foto: ereditato dalla commessa'}
-                            {v.cartella_template
-                              ? ` · Cartella: ${v.cartella_template}`
-                              : ''}
+                            {v.cartellaEffettiva ? (
+                              <>
+                                {' · '}
+                                <span className="text-foreground/80">
+                                  Cartella:
+                                </span>{' '}
+                                <code className="font-mono text-[11px]">
+                                  {v.cartellaEffettiva}
+                                </code>
+                                {v.override?.cartella_template_override ? (
+                                  <span
+                                    className="ml-1 text-[10px] text-primary"
+                                    title="Cartella personalizzata per il tuo tenant"
+                                  >
+                                    (override)
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <span className="ml-1 italic text-muted-foreground/70">
+                                · non genera cartella (solo dato strutturato)
+                              </span>
+                            )}
                           </p>
                         </div>
                         {canEdit ? (
@@ -463,6 +496,40 @@ function VoceEditDialog({
               }
               placeholder="Lascia vuoto per ereditare"
             />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="cartellaTemplate">Cartella associata (opzionale)</Label>
+            <Input
+              id="cartellaTemplate"
+              name="cartellaTemplate"
+              defaultValue={
+                voce.override?.cartella_template_override ??
+                voce.cartella_template ??
+                ''
+              }
+              placeholder={
+                voce.cartella_template
+                  ? `Default catalogo: ${voce.cartella_template}`
+                  : 'Es. Preventivi/NuoviImpianti — lascia vuoto se non deve generare cartella'
+              }
+              maxLength={200}
+            />
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {voce.isCustom ? (
+                <>
+                  Quando attiva su una commessa, la voce genera una
+                  sottocartella con questo path. Lascia vuoto per non
+                  generare alcuna cartella.
+                </>
+              ) : (
+                <>
+                  Sovrascrive solo per il tuo tenant il path di default
+                  della voce globale. Stringa vuota = nessuna cartella per il
+                  tuo tenant. Il catalogo globale resta immutato.
+                </>
+              )}
+            </p>
           </div>
 
           <label className="flex items-center gap-3 rounded-md border border-border px-3 py-2 text-sm">
