@@ -204,8 +204,23 @@ function CommessaRow({ c }: { c: BrowserRow }) {
             </span>
           ) : null}
         </div>
-        <p className="truncate text-sm font-semibold tracking-tight text-foreground">
-          {c.cliente_nome ?? c.nome_cartella}
+        {/* Riga 2: cliente in grassetto — lavoro/nome_cartella regular accanto.
+            Senza il lavoro l'utente identifica la commessa solo dal cliente,
+            ma più clienti con più progetti diventano indistinguibili in lista. */}
+        <p className="truncate text-sm tracking-tight text-foreground">
+          <span className="font-semibold">
+            {c.cliente_nome ?? c.nome_cartella}
+          </span>
+          {c.cliente_nome &&
+          c.nome_cartella &&
+          c.cliente_nome.toLowerCase() !== c.nome_cartella.toLowerCase() ? (
+            <>
+              <span className="text-muted-foreground/60"> — </span>
+              <span className="font-normal text-muted-foreground">
+                {c.nome_cartella}
+              </span>
+            </>
+          ) : null}
         </p>
         {c.cliente_indirizzo_cantiere ? (
           <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">

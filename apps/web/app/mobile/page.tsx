@@ -551,23 +551,35 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
             </span>
           )}
         </div>
-        {/* Riga 2: TITOLO della commessa — testo principale, 2 righe max */}
-        <p className="mt-1 line-clamp-2 text-[15px] font-semibold leading-snug tracking-tight text-foreground">
-          {commessa.titolo ?? commessa.nome_cartella ?? '—'}
-        </p>
-        {/* Riga 3: cliente + indirizzo (sotto) */}
-        <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-          <span className="truncate">
-            {commessa.cliente?.ragione_sociale ?? '—'}
-          </span>
-          {commessa.cliente_indirizzo_cantiere ? (
-            <>
-              <span aria-hidden="true">·</span>
-              <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-              <span className="truncate">{commessa.cliente_indirizzo_cantiere}</span>
-            </>
-          ) : null}
-        </p>
+        {/* Riga 2: Cliente (semibold dominante) — lavoro/titolo regular muted.
+            Coerente con desktop: il cliente è il primo agganciamento mentale,
+            il "lavoro" lo distingue tra più commesse dello stesso cliente. */}
+        {(() => {
+          const cliente = commessa.cliente?.ragione_sociale?.trim() ?? '';
+          const lavoro = (commessa.titolo ?? commessa.nome_cartella ?? '').trim();
+          const showBoth =
+            cliente && lavoro && cliente.toLowerCase() !== lavoro.toLowerCase();
+          return (
+            <p className="mt-1 line-clamp-2 text-[15px] leading-snug tracking-tight text-foreground">
+              <span className="font-semibold">{cliente || lavoro || '—'}</span>
+              {showBoth ? (
+                <>
+                  <span className="text-muted-foreground/60"> — </span>
+                  <span className="font-normal text-muted-foreground">
+                    {lavoro}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          );
+        })()}
+        {/* Riga 3: indirizzo cantiere (il cliente è ora già nella riga 2). */}
+        {commessa.cliente_indirizzo_cantiere ? (
+          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">{commessa.cliente_indirizzo_cantiere}</span>
+          </p>
+        ) : null}
       </div>
 
       <ChevronRight
