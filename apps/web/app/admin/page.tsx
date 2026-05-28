@@ -1,13 +1,18 @@
 import Link from 'next/link';
 import {
   Activity,
+  AlertTriangle,
+  ArrowUpFromLine,
   BarChart3,
   Building2,
   Briefcase,
-  Database,
+  CheckCircle2,
+  CloudUpload,
   HardDrive,
+  Loader2,
   RefreshCw,
   Users,
+  XCircle,
 } from 'lucide-react';
 import { Badge, Button, Card, CardContent, KpiCard } from '@kommessa/ui';
 import { createServiceSupabase } from '@kommessa/api/service';
@@ -77,33 +82,76 @@ export default async function AdminDashboardPage() {
   });
 
   // Tutti i fetch in parallelo
-  const [tenantsRes, usageRes, plansRes, quotaRes, auditRes, totalUsersRes] =
-    await Promise.all([
-      supabase
-        .from('tenants')
-        .select('id, slug, nome, sospeso, sospeso_motivo, plan_id'),
-      supabase
-        .from('tenant_usage_snapshot')
-        .select(
-          'tenant_id, utenti_attivi, commesse_anno, commesse_totali, tickets_mese, storage_gb, ultima_attivita',
-        ),
-      supabase
-        .from('plans')
-        .select('id, code, nome, max_utenti, max_commesse_anno, max_storage_gb, max_tickets_mese'),
-      supabase
-        .from('tenant_quotas')
-        .select('tenant_id, max_utenti, max_commesse_anno, max_storage_gb, max_tickets_mese'),
-      supabase
-        .from('audit_events')
-        .select('id, created_at, tenant_id, entity_type, action, metadata')
-        .order('created_at', { ascending: false })
-        .limit(10),
-      supabase
-        .from('users')
+  const mediaStatusList = [
+    'uploading',
+    'uploaded',
+    'syncing',
+    'synced',
+    'sync_failed',
+    'failed',
+  ] as const;
+  const mediaCountsPromise = Promise.all(
+    mediaStatusList.map(async (s) => {
+      const { count } = await supabase
+        .from('file_refs')
         .select('id', { count: 'exact', head: true })
-        .eq('attivo', true)
-        .eq('is_platform_admin', false),
-    ]);
+        .eq('status', s);
+      return [s, count ?? 0] as const;
+    }),
+  );
+
+  const [
+    tenantsRes,
+    usageRes,
+    plansRes,
+    quotaRes,
+    auditRes,
+    totalUsersRes,
+    mediaCounts,
+  ] = await Promise.all([
+    supabase
+      .from('tenants')
+      .select('id, slug, nome, sospeso, sospeso_motivo, plan_id'),
+    supabase
+      .from('tenant_usage_snapshot')
+      .select(
+        'tenant_id, utenti_attivi, commesse_anno, commesse_totali, tickets_mese, storage_gb, ultima_attivita',
+      ),
+    supabase
+      .from('plans')
+      .select('id, code, nome, max_utenti, max_commesse_anno, max_storage_gb, max_tickets_mese'),
+    supabase
+      .from('tenant_quotas')
+      .select('tenant_id, max_utenti, max_commesse_anno, max_storage_gb, max_tickets_mese'),
+    supabase
+      .from('audit_events')
+      .select('id, created_at, tenant_id, entity_type, action, metadata')
+      .order('created_at', { ascending: false })
+      .limit(10),
+    supabase
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('attivo', true)
+      .eq('is_platform_admin', false),
+    mediaCountsPromise,
+  ]);
+
+  const mediaCountByStatus = new Map<string, number>(mediaCounts);
+  const mediaPendingSync =
+    (mediaCountByStatus.get('uploaded') ?? 0) +
+    (mediaCountByStatus.get('sync_failed') ?? 0);
+  const mediaErrors =
+    (mediaCountByStatus.get('sync_failed') ?? 0) +
+    (mediaCountByStatus.get('failed') ?? 0);
+  const mediaInFlight =
+    (mediaCountByStatus.get('uploading') ?? 0) +
+    (mediaCountByStatus.get('syncing') ?? 0);
+  const mediaHealth: 'green' | 'yellow' | 'red' =
+    mediaErrors > 50 || mediaPendingSync > 200
+      ? 'red'
+      : mediaErrors > 5 || mediaPendingSync > 20
+        ? 'yellow'
+        : 'green';
 
   const tenants = (tenantsRes.data ?? []) as TenantRow[];
   const usage = (usageRes.data ?? []) as UsageRow[];
@@ -285,6 +333,120 @@ export default async function AdminDashboardPage() {
         )}
       </section>
 
+      {/* ===== Media health platform ===== */}
+      <section className="space-y-4">
+        <SectionHeader
+          eyebrow="Storage"
+          title="Media health platform"
+          description="Pipeline upload R2 → sync Nextcloud cross-tenant. Click sui counter per filtrare in /admin/media."
+          icon={<CloudUpload />}
+          actions={
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/media">
+                Apri pannello media →
+              </Link>
+            </Button>
+          }
+        />
+        <Card
+          className={
+            mediaHealth === 'red'
+              ? 'border-destructive/30 bg-destructive/[0.02]'
+              : mediaHealth === 'yellow'
+                ? 'border-amber-500/30 bg-amber-500/[0.02]'
+                : 'border-emerald-500/25 bg-emerald-500/[0.02]'
+          }
+        >
+          <CardContent className="space-y-3 py-4">
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`flex h-3 w-3 shrink-0 rounded-full ${
+                  mediaHealth === 'red'
+                    ? 'bg-destructive'
+                    : mediaHealth === 'yellow'
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                }`}
+                aria-hidden="true"
+              />
+              <p className="text-sm font-semibold">
+                {mediaHealth === 'green'
+                  ? 'Pipeline media in salute'
+                  : mediaHealth === 'yellow'
+                    ? 'Pipeline da monitorare'
+                    : 'Intervento richiesto sulla pipeline media'}
+              </p>
+              <Badge
+                variant="outline"
+                className="ml-auto font-mono text-[10px]"
+              >
+                in-flight: {mediaInFlight}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="font-mono text-[10px]"
+              >
+                pending sync: {mediaPendingSync}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={`font-mono text-[10px] ${
+                  mediaErrors > 0
+                    ? 'border-destructive/40 text-destructive'
+                    : ''
+                }`}
+              >
+                errors: {mediaErrors}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              <MediaStatusChip
+                href="/admin/media?status=uploading"
+                label="Uploading"
+                count={mediaCountByStatus.get('uploading') ?? 0}
+                icon={ArrowUpFromLine}
+                tone="muted"
+              />
+              <MediaStatusChip
+                href="/admin/media?status=uploaded"
+                label="Su R2"
+                count={mediaCountByStatus.get('uploaded') ?? 0}
+                icon={ArrowUpFromLine}
+                tone="primary"
+              />
+              <MediaStatusChip
+                href="/admin/media?status=syncing"
+                label="Syncing"
+                count={mediaCountByStatus.get('syncing') ?? 0}
+                icon={Loader2}
+                tone="primary"
+              />
+              <MediaStatusChip
+                href="/admin/media?status=synced"
+                label="Synced"
+                count={mediaCountByStatus.get('synced') ?? 0}
+                icon={CheckCircle2}
+                tone="success"
+              />
+              <MediaStatusChip
+                href="/admin/media?status=sync_failed"
+                label="Sync failed"
+                count={mediaCountByStatus.get('sync_failed') ?? 0}
+                icon={AlertTriangle}
+                tone="warning"
+              />
+              <MediaStatusChip
+                href="/admin/media?status=failed"
+                label="Failed"
+                count={mediaCountByStatus.get('failed') ?? 0}
+                icon={XCircle}
+                tone="destructive"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
       {/* ===== Attività recente ===== */}
       <section className="space-y-4">
         <SectionHeader
@@ -336,5 +498,44 @@ export default async function AdminDashboardPage() {
         </Card>
       </section>
     </div>
+  );
+}
+
+function MediaStatusChip({
+  href,
+  label,
+  count,
+  icon: Icon,
+  tone,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: 'muted' | 'primary' | 'success' | 'warning' | 'destructive';
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400'
+      : tone === 'warning'
+        ? 'border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400'
+        : tone === 'destructive'
+          ? 'border-destructive/30 bg-destructive/5 text-destructive'
+          : tone === 'primary'
+            ? 'border-primary/30 bg-primary/5 text-primary'
+            : 'border-border bg-card text-muted-foreground';
+  return (
+    <Link
+      href={href}
+      className={`flex flex-col gap-1 rounded-md border px-3 py-2 transition-colors hover:bg-muted/30 ${toneClass}`}
+    >
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide">
+        <Icon className="h-3 w-3" />
+        <span>{label}</span>
+      </div>
+      <p className="font-mono text-xl font-bold tabular-nums">
+        {count.toLocaleString('it-IT')}
+      </p>
+    </Link>
   );
 }
