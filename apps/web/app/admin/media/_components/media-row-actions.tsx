@@ -8,10 +8,15 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
-import { forceResetFile, retrySyncFile } from '../_actions/sync';
+import {
+  forceResetFile,
+  hardDeleteFile,
+  retrySyncFile,
+} from '../_actions/sync';
 import { useConfirm } from '@/app/_components/confirm-provider';
 
 interface Props {
@@ -76,6 +81,34 @@ export function MediaRowActions({ fileRefId, canRetry, status }: Props) {
   // intermedio o failed-recoverable. Per 'synced' non serve. Per 'uploading'
   // l'upload R2 è ancora in atto sul client → non resettare.
   const canForceReset = ['syncing', 'sync_failed'].includes(status);
+  // Hard delete: tutti gli stati tranne 'deleted'.
+  const canDelete = status !== 'deleted';
+
+  const onHardDelete = async () => {
+    const ok = await askConfirm({
+      title: 'Eliminare definitivamente questo file?',
+      description:
+        'Verrà rimosso da R2 e dai link applicativi (es. allegati riunione). La copia su Nextcloud NON viene toccata — la elimini a mano dal client Nextcloud se serve. Audit registrato. Operazione non reversibile.',
+      confirmLabel: 'Sì, elimina',
+      destructive: true,
+    });
+    if (!ok) return;
+    setPending(true);
+    setResult(null);
+    try {
+      const r = await hardDeleteFile(fileRefId);
+      setResult(r);
+      router.refresh();
+    } catch (e) {
+      setResult({
+        ok: false,
+        message: e instanceof Error ? e.message : 'Errore sconosciuto',
+      });
+    } finally {
+      setPending(false);
+      setTimeout(() => setResult(null), 6000);
+    }
+  };
 
   return (
     <div className="flex items-center justify-end gap-1.5">
@@ -109,6 +142,19 @@ export function MediaRowActions({ fileRefId, canRetry, status }: Props) {
           className="text-muted-foreground hover:text-foreground"
         >
           <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      ) : null}
+      {canDelete ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onHardDelete}
+          disabled={pending}
+          title="Elimina file: rimuove da R2 + link applicativi (Nextcloud lo elimini a mano)"
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
         </Button>
       ) : null}
       {result && (
