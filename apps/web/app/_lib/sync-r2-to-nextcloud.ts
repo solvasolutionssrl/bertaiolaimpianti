@@ -32,6 +32,16 @@ import {
 /** File più grandi di così vengono saltati dal worker (per ora). */
 export const SYNC_MAX_BUFFER_BYTES = 500 * 1024 * 1024;
 
+/**
+ * Soglia "stale" per i file in stato 'syncing': se un file è in syncing
+ * da più di questo intervallo, lo consideriamo orfano (function crash/
+ * timeout/OOM tra il claim e il commit). Il batch lo recupererà.
+ *
+ * 10 minuti > maxDuration function (300s = 5 min) → garantito che nessuna
+ * function attiva stia ancora lavorando su quel file.
+ */
+const STALE_SYNCING_MINUTES = 10;
+
 export interface SyncResult {
   fileRefId: string;
   ok: boolean;
@@ -77,7 +87,13 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
     return { fileRefId, ok: false, reason: 'skipped', detail: 'file troppo grande' };
   }
 
-  // 2. Claim atomico: status='syncing' solo se era uploaded/sync_failed
+  // 2. Claim atomico: status='syncing' se era uploaded/sync_failed.
+  // Permettiamo anche il re-claim di un 'syncing' stale (orfano da function
+  // crashata/timeout/OOM): la guard updated_at < now-STALE_SYNCING_MINUTES
+  // è applicata server-side da una sub-query OR.
+  const staleThreshold = new Date(
+    Date.now() - STALE_SYNCING_MINUTES * 60 * 1000,
+  ).toISOString();
   const { data: claimed, error: claimErr } = await service
     .from('file_refs')
     .update({
@@ -86,7 +102,9 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
       last_sync_error: null,
     })
     .eq('id', fileRefId)
-    .in('status', ['uploaded', 'sync_failed'])
+    .or(
+      `status.in.(uploaded,sync_failed),and(status.eq.syncing,updated_at.lt.${staleThreshold})`,
+    )
     .select('id')
     .maybeSingle();
 
@@ -302,13 +320,19 @@ export async function syncBatch(maxFiles = 10): Promise<{
 }> {
   const service = createServiceSupabase();
 
-  // Prendi i candidati (RLS bypass via service role)
+  // Prendi i candidati (RLS bypass via service role).
+  // Include: uploaded + sync_failed + syncing-stale (function crashata).
+  const staleThreshold = new Date(
+    Date.now() - STALE_SYNCING_MINUTES * 60 * 1000,
+  ).toISOString();
   const { data: candidates } = await service
     .from('file_refs')
     .select('id')
-    .in('status', ['uploaded', 'sync_failed'])
     .is('deleted_at', null)
     .not('r2_key', 'is', null)
+    .or(
+      `status.in.(uploaded,sync_failed),and(status.eq.syncing,updated_at.lt.${staleThreshold})`,
+    )
     .order('uploaded_at', { ascending: true })
     .limit(maxFiles);
 
