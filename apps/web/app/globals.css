@@ -91,6 +91,11 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Riserva sempre lo spazio per la scrollbar verticale. Evita lo
+       "shift" orizzontale di qualche px quando si naviga fra tab con
+       contenuto di altezza diversa (alcune con scroll, altre senza).
+       Supportato da Safari 16+, Chrome 94+, Firefox 91+. */
+    scrollbar-gutter: stable;
   }
   body {
     @apply bg-background text-foreground;
