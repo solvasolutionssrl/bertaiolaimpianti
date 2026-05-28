@@ -447,8 +447,8 @@ export default async function CommessaDetailPage({
 
   return (
     <div className="flex min-h-[100dvh] flex-col pb-28">
-      {/* Hero dark con codice + cliente + LED */}
-      <Hero>
+      {/* Hero dark con codice + cliente + LED — pb un pelo ridotto vs default */}
+      <Hero className="pb-10">
         <div className="flex items-center justify-between">
           <Link
             href="/mobile"
