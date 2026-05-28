@@ -17,7 +17,7 @@ COMMENT ON COLUMN file_refs.r2_thumb_key IS
 
 -- Index parziale per query future di backfill / cleanup
 CREATE INDEX IF NOT EXISTS file_refs_thumb_missing_idx
-  ON file_refs (created_at DESC)
+  ON file_refs (uploaded_at DESC)
   WHERE r2_thumb_key IS NULL
     AND mime LIKE 'image/%'
     AND status IN ('uploaded','syncing','synced');

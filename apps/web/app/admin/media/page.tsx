@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   XCircle,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { Badge, Card, CardContent } from '@kommessa/ui';
 import { createServiceSupabase } from '@kommessa/api/service';
@@ -75,10 +76,11 @@ export default async function MediaSyncPage({ searchParams }: Props) {
   );
 
   // ----- Lista file (limit 50) -----
+  // Nota: `r2_thumb_key` introdotta dalla migration 20260528010000.
   let listQuery = supabase
     .from('file_refs')
     .select(
-      'id, tenant_id, commessa_id, filename, mime, size_bytes, status, r2_key, path, sync_attempts, last_sync_error, uploaded_at, uploaded_by',
+      'id, tenant_id, commessa_id, filename, mime, size_bytes, status, r2_key, r2_thumb_key, path, sync_attempts, last_sync_error, uploaded_at, uploaded_by',
     )
     .order('uploaded_at', { ascending: false })
     .limit(50);
@@ -105,11 +107,35 @@ export default async function MediaSyncPage({ searchParams }: Props) {
   // ----- Tenant names (per visualizzare slug nella tabella) -----
   const tenantsPromise = supabase.from('tenants').select('id, slug, nome');
 
-  const [stats, listRes, tenantsRes] = await Promise.all([
+  // ----- Thumbnail coverage (solo immagini in stato "vivo") -----
+  // Quante immagini totali "vive" + quante hanno il thumb persistente su R2.
+  const thumbStatsPromise = Promise.all([
+    supabase
+      .from('file_refs')
+      .select('id', { count: 'exact', head: true })
+      .like('mime', 'image/%')
+      .in('status', ['uploaded', 'syncing', 'synced']),
+    supabase
+      .from('file_refs')
+      .select('id', { count: 'exact', head: true })
+      .like('mime', 'image/%')
+      .in('status', ['uploaded', 'syncing', 'synced'])
+      .not('r2_thumb_key' as never, 'is', null),
+  ]);
+
+  const [stats, listRes, tenantsRes, thumbStats] = await Promise.all([
     statsPromise,
     listQuery,
     tenantsPromise,
+    thumbStatsPromise,
   ]);
+
+  const totalImages = thumbStats[0].count ?? 0;
+  const imagesWithThumb = thumbStats[1].count ?? 0;
+  const imagesWithoutThumb = Math.max(0, totalImages - imagesWithThumb);
+  const pctThumb = totalImages > 0
+    ? Math.round((imagesWithThumb / totalImages) * 100)
+    : 100;
 
   const statsMap = new Map(stats);
   const total = stats.reduce((acc, [, n]) => acc + n, 0);
@@ -139,7 +165,9 @@ export default async function MediaSyncPage({ searchParams }: Props) {
     ]),
   );
 
-  const rows = (listRes.data ?? []) as Array<{
+  // Cast: r2_thumb_key è introdotta dalla migration 20260528010000, i types
+  // Supabase generati non la conoscono ancora.
+  const rows = (listRes.data ?? []) as unknown as Array<{
     id: string;
     tenant_id: string;
     commessa_id: string;
@@ -148,6 +176,7 @@ export default async function MediaSyncPage({ searchParams }: Props) {
     size_bytes: number;
     status: Status;
     r2_key: string | null;
+    r2_thumb_key: string | null;
     path: string;
     sync_attempts: number;
     last_sync_error: string | null;
@@ -171,6 +200,9 @@ export default async function MediaSyncPage({ searchParams }: Props) {
         pctSynced={pctSynced}
         backlog={pendingSync}
         erroriTot={erroriTot}
+        pctThumb={pctThumb}
+        imagesWithThumb={imagesWithThumb}
+        imagesWithoutThumb={imagesWithoutThumb}
       />
 
       {/* Stats cards */}
@@ -307,26 +339,44 @@ export default async function MediaSyncPage({ searchParams }: Props) {
                   {rows.map((r) => {
                     const t = tenantById.get(r.tenant_id);
                     const isVideo = r.mime.startsWith('video/');
+                    const isImage = r.mime.startsWith('image/');
                     const canRetry =
                       r.status === 'uploaded' || r.status === 'sync_failed';
+                    // "Tutto a posto": synced + (per le immagini) thumb pure
+                    // generato. La riga si tinge di emerald tenue per dare
+                    // un colpo d'occhio "verde = OK".
+                    const fullyOk =
+                      r.status === 'synced' &&
+                      (!isImage || !!r.r2_thumb_key);
                     return (
                       <tr
                         key={r.id}
-                        className="border-b border-border last:border-b-0 hover:bg-muted/20"
+                        className={
+                          'border-b border-border last:border-b-0 ' +
+                          (fullyOk
+                            ? 'bg-emerald-50/40 hover:bg-emerald-50/70 dark:bg-emerald-950/15 dark:hover:bg-emerald-950/25'
+                            : 'hover:bg-muted/20')
+                        }
                       >
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-2">
                             {isVideo ? (
                               <Video className="h-3.5 w-3.5 text-primary" />
-                            ) : r.mime.startsWith('image/') ? (
+                            ) : isImage ? (
                               <ImageIcon className="h-3.5 w-3.5 text-success" />
                             ) : (
                               <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
                             )}
                             <div className="min-w-0">
-                              <p className="truncate font-medium" title={r.filename}>
-                                {r.filename}
-                              </p>
+                              <div className="flex items-center gap-1.5">
+                                <p
+                                  className="truncate font-medium"
+                                  title={r.filename}
+                                >
+                                  {r.filename}
+                                </p>
+                                {isImage ? <ThumbFlag present={!!r.r2_thumb_key} /> : null}
+                              </div>
                               <p
                                 className="truncate font-mono text-[10px] text-muted-foreground"
                                 title={r.path}
@@ -438,10 +488,20 @@ function StatusCard({
 }
 
 function StatusBadge({ status }: { status: Status }) {
+  // `synced` ha trattamento speciale: badge custom emerald (la chip è il
+  // segnale "tutto a posto" più letto nella tabella). Gli altri stati
+  // restano sul sistema variants di shadcn.
+  if (status === 'synced') {
+    return (
+      <Badge className="gap-1 border-transparent bg-emerald-100 font-mono text-[10px] text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/50 dark:text-emerald-200 dark:hover:bg-emerald-900/50">
+        <CheckCircle2 className="h-3 w-3" />
+        synced
+      </Badge>
+    );
+  }
+
   const variant: 'default' | 'secondary' | 'destructive' | 'outline' = (() => {
     switch (status) {
-      case 'synced':
-        return 'default';
       case 'uploaded':
       case 'syncing':
         return 'secondary';
@@ -459,14 +519,14 @@ function StatusBadge({ status }: { status: Status }) {
         return <Loader2 className="h-3 w-3 animate-spin" />;
       case 'uploaded':
         return <ArrowUpFromLine className="h-3 w-3" />;
-      case 'synced':
-        return <CheckCircle2 className="h-3 w-3" />;
       case 'sync_failed':
         return <AlertTriangle className="h-3 w-3" />;
       case 'failed':
         return <XCircle className="h-3 w-3" />;
       case 'deleted':
         return <Trash2 className="h-3 w-3" />;
+      default:
+        return null;
     }
   })();
   return (
@@ -477,16 +537,51 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
+/**
+ * Mini-flag "thumb" accanto al filename: verde con checkmark se il file ha
+ * il proprio thumbnail R2 generato; outline rosso tenue se manca (utile per
+ * scoprire visivamente i file su cui la generazione è fallita).
+ * Solo per immagini — non si mostra per video o pdf.
+ */
+function ThumbFlag({ present }: { present: boolean }) {
+  if (present) {
+    return (
+      <span
+        title="Thumbnail 400x400 webp generato su R2"
+        className="inline-flex items-center gap-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300"
+      >
+        <Sparkles className="h-2.5 w-2.5" aria-hidden="true" />
+        thumb
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Thumbnail R2 non generato (foto vecchia o generazione fallita)"
+      className="inline-flex items-center gap-0.5 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wider text-amber-700 dark:text-amber-300"
+    >
+      <AlertTriangle className="h-2.5 w-2.5" aria-hidden="true" />
+      no thumb
+    </span>
+  );
+}
+
 function HealthBanner({
   health,
   pctSynced,
   backlog,
   erroriTot,
+  pctThumb,
+  imagesWithThumb,
+  imagesWithoutThumb,
 }: {
   health: 'green' | 'yellow' | 'red';
   pctSynced: number;
   backlog: number;
   erroriTot: number;
+  pctThumb: number;
+  imagesWithThumb: number;
+  imagesWithoutThumb: number;
 }) {
   const palette =
     health === 'green'
@@ -529,10 +624,27 @@ function HealthBanner({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">{palette.title}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">{palette.msg}</p>
-          <p className="mt-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
-            <span className="font-medium text-foreground">{pctSynced}%</span> dei
-            file (esclusi i deleted) sono già su Nextcloud.
-          </p>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+            <span>
+              <span className="font-medium text-foreground">{pctSynced}%</span> già
+              su Nextcloud
+              <span className="ml-1 text-muted-foreground/70">
+                (synced / non-deleted)
+              </span>
+            </span>
+            <span>
+              <Sparkles className="-mt-0.5 mr-0.5 inline h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+              <span className="font-medium text-foreground">{pctThumb}%</span> thumb
+              generate
+              <span className="ml-1 text-muted-foreground/70">
+                ({imagesWithThumb.toLocaleString('it-IT')} ok
+                {imagesWithoutThumb > 0
+                  ? ` · ${imagesWithoutThumb.toLocaleString('it-IT')} da rigenerare`
+                  : ''}
+                )
+              </span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -576,6 +688,11 @@ function HealthBanner({
             icon={<Trash2 className="h-3.5 w-3.5 text-muted-foreground" />}
             label="deleted"
             description="Soft delete dell'app. Il record resta per audit; la pulizia R2 effettiva arriverà in Fase 3."
+          />
+          <LegendItem
+            icon={<Sparkles className="h-3.5 w-3.5 text-emerald-600" />}
+            label="thumb"
+            description="Solo immagini: il file ha una miniatura 400x400 webp persistente su R2 (~30 KB) usata dalle gallerie per essere reattive. Il flag 'no thumb' su un file recente vuol dire che la generazione è fallita: l'app continua a funzionare ricadendo sul full-size, ma la galleria sarà più lenta su quel file."
           />
         </div>
       </details>
