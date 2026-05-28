@@ -1006,43 +1006,51 @@ export function NuovaCommessaForm({
                     <span className="sr-only">campo obbligatorio</span>
                   </Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Sintesi breve usata nel nome cartella su Nextcloud. Es. "SostituzioneCaldaia", "BagnoRifacimento". Usa la bacchetta per il suggerimento AI.
+                    Sintesi breve usata nel nome cartella su Nextcloud. Es. "SostituzioneCaldaia", "BagnoRifacimento".
                   </p>
-                  <div className="flex gap-2">
-                    <Input
-                      id="desc"
-                      ref={descrizioneRef}
-                      maxLength={30}
-                      aria-invalid={Boolean(fieldErrors.descrizione)}
-                      aria-describedby={fieldErrors.descrizione ? 'desc-error' : undefined}
-                      className={
-                        fieldErrors.descrizione
-                          ? 'border-destructive bg-destructive/5 ring-2 ring-destructive/30 focus-visible:ring-destructive/40'
-                          : undefined
-                      }
-                      value={state.descrizione}
-                      onChange={(e) => {
-                        clearFieldError('descrizione');
-                        setState((s) => ({ ...s, descrizione: e.target.value }));
-                      }}
-                      placeholder="SistemazioneBagno"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={suggerisci}
-                      disabled={genPending}
-                      aria-label="Suggerisci descrizione"
-                      title="Genera suggerimento AI"
-                    >
-                      {genPending ? (
+
+                  {/* CTA AI prominente: prima era un'icona "stellina" silenziosa
+                      a destra dell'input → gli utenti non capivano che era il
+                      generatore. Ora è un bottone full-width col testo esplicito. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={suggerisci}
+                    disabled={genPending}
+                    className="w-full justify-center gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary"
+                    aria-label="Genera descrizione con AI dalle note iniziali"
+                  >
+                    {genPending ? (
+                      <>
                         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 text-accent" aria-hidden="true" />
-                      )}
-                    </Button>
-                  </div>
+                        Genero…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" aria-hidden="true" />
+                        {state.descrizione ? 'Rigenera con AI' : 'Genera con AI dalle note'}
+                      </>
+                    )}
+                  </Button>
+
+                  <Input
+                    id="desc"
+                    ref={descrizioneRef}
+                    maxLength={30}
+                    aria-invalid={Boolean(fieldErrors.descrizione)}
+                    aria-describedby={fieldErrors.descrizione ? 'desc-error' : undefined}
+                    className={
+                      fieldErrors.descrizione
+                        ? 'border-destructive bg-destructive/5 ring-2 ring-destructive/30 focus-visible:ring-destructive/40'
+                        : undefined
+                    }
+                    value={state.descrizione}
+                    onChange={(e) => {
+                      clearFieldError('descrizione');
+                      setState((s) => ({ ...s, descrizione: e.target.value }));
+                    }}
+                    placeholder="SistemazioneBagno (oppure usa il bottone qui sopra)"
+                  />
                   {fieldErrors.descrizione ? (
                     <p
                       id="desc-error"
