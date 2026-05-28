@@ -192,16 +192,22 @@ function CommessaRow({ c }: { c: BrowserRow }) {
       href={`/mobile/commessa/${c.id}`}
       className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft transition-all active:scale-[0.995] active:bg-muted"
     >
+      <StatoLed stato={c.stato} />
       <div className="min-w-0 flex-1">
-        {/* Riga 1 meta: stesso layout della dashboard — LED + codice mono. */}
-        <div className="flex items-center gap-2">
-          <StatoLed stato={c.stato} />
-          <span className="font-mono text-[10px] font-semibold uppercase tabular-nums tracking-wider text-muted-foreground">
+        {/* Riga 1 meta: codice + responsabile (layout compatto originale). */}
+        <div className="flex items-baseline gap-2">
+          <span className="font-mono text-[11px] font-semibold tabular-nums text-muted-foreground">
             {c.codice_interno}
           </span>
+          {c.responsabile_nome ? (
+            <span className="truncate font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/60">
+              · {c.responsabile_nome}
+            </span>
+          ) : null}
         </div>
-        {/* Riga 2: cliente in grassetto — lavoro/nome_cartella regular accanto. */}
-        <p className="mt-1 truncate text-sm tracking-tight text-foreground">
+        {/* Riga 2: cliente in grassetto — nome cartella regular accanto
+            (stesso pattern della card "ultime commesse" sulla dashboard). */}
+        <p className="truncate text-sm tracking-tight text-foreground">
           <span className="font-semibold">
             {c.cliente_nome ?? c.nome_cartella}
           </span>
@@ -217,7 +223,7 @@ function CommessaRow({ c }: { c: BrowserRow }) {
           ) : null}
         </p>
         {c.cliente_indirizzo_cantiere ? (
-          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+          <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
             <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             <span className="truncate">{c.cliente_indirizzo_cantiere}</span>
           </p>
