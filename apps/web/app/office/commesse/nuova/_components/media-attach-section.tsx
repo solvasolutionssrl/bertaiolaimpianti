@@ -44,8 +44,14 @@ export interface MediaFile {
 
 const MAX_VIDEO_MB = 500;
 const MAX_PHOTO_MB = 25;
-const MAX_FILES = 6;
+// Cap pratico: 30 file in un singolo intake (foto + video). Sopra è quasi
+// sempre un errore (sopralluogo lungo = meglio scattarne 30, creare la
+// commessa, poi continuare dal pannello commessa). 30 lascia tantissimo
+// spazio per sopralluoghi reali (10-15 foto + 1-2 video tipici).
+const MAX_FILES = 30;
 const WARN_VIDEO_MB = 200;
+// Soft warning quando ci si avvicina al cap: 80% = 24/30.
+const WARN_NEAR_LIMIT = Math.floor(MAX_FILES * 0.8);
 
 interface ValidationError {
   name: string;
@@ -128,6 +134,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
   const hasVideo = files.some((f) => f.kind === 'video');
   const hasLargeVideo = files.some((f) => f.kind === 'video' && f.sizeMB > WARN_VIDEO_MB);
   const atLimit = files.length >= MAX_FILES;
+  const nearLimit = files.length >= WARN_NEAR_LIMIT && !atLimit;
 
   return (
     <Card>
@@ -146,6 +153,34 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Counter X/MAX + warning quando vicino o al limite. Mostrato solo
+            quando ci sono già file (in vuoto-state non serve confondere). */}
+        {files.length > 0 ? (
+          <div
+            className={`flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs ${
+              atLimit
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200'
+                : nearLimit
+                  ? 'border-amber-500/30 bg-amber-500/[0.04] text-amber-900/85 dark:text-amber-200/85'
+                  : 'border-border bg-muted/30 text-muted-foreground'
+            }`}
+          >
+            <span>
+              <span className="font-mono font-semibold tabular-nums">
+                {files.length}/{MAX_FILES}
+              </span>{' '}
+              file allegati{totalMB > 0 ? ` · ${totalMB.toFixed(0)} MB` : ''}
+            </span>
+            {atLimit ? (
+              <span className="font-medium">
+                Limite raggiunto — rimuovi un file per aggiungerne altri
+              </span>
+            ) : nearLimit ? (
+              <span>vicino al limite</span>
+            ) : null}
+          </div>
+        ) : null}
+
         {files.length === 0 ? (
           <div className="grid grid-cols-2 gap-2">
             <button
