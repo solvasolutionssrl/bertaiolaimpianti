@@ -39,6 +39,11 @@ const InitBody = z.object({
   sizeBytes: z.number().int().positive().max(MAX_SIZE_BYTES),
   geoLat: z.number().finite().nullable().optional(),
   geoLng: z.number().finite().nullable().optional(),
+  // Allegato di una riunione (variant). Se valorizzato, il path Nextcloud
+  // sarà Riunioni/<YYYY-MM-DD>[_titolo]/<filename> e il complete linkerà
+  // anche commessa_riunione_allegato.
+  riunioneId: z.string().uuid().nullable().optional(),
+  kind: z.enum(['foto', 'video', 'pdf_acquisito']).nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -116,27 +121,58 @@ export async function POST(request: NextRequest) {
   const rand = randomUUID().slice(0, 6);
   const generatedFilename = `${timestamp}_${rand}${ext}`;
 
-  // Sotto-cartella per voce (parità con il vecchio Server Action uploadFoto)
-  let voceFolder = '';
-  if (body.voceId != null) {
-    const { data: voce } = await supabase
-      .from('voci_catalogo')
-      .select('nome')
-      .eq('id', body.voceId)
-      .maybeSingle();
-    if (voce?.nome) {
-      voceFolder = sanitizeFolderSegment(voce.nome);
-    }
-  }
-
   const root = commessa.cloud_folder_path.replace(/^\/+|\/+$/g, '');
-  const pathSegments = [
-    root,
-    'Foto',
-    MOMENTO_FOLDER[momento],
-    voceFolder || null,
-    generatedFilename,
-  ].filter(Boolean) as string[];
+
+  // Path branch: allegato riunione vs foto/video standard
+  let pathSegments: string[];
+  if (body.riunioneId) {
+    // Verifica che la riunione esista e appartenga alla stessa commessa.
+    // (RLS scopata su tenant: se è di un'altra commessa o tenant, query vuota.)
+    const { data: riunioneRaw } = await supabase
+      .from('commessa_riunione' as never)
+      .select('id, data_riunione, titolo, commessa_id')
+      .eq('id', body.riunioneId)
+      .eq('commessa_id' as never, body.commessaId)
+      .maybeSingle();
+    const riunione = riunioneRaw as unknown as {
+      id: string;
+      data_riunione: string;
+      titolo: string | null;
+      commessa_id: string;
+    } | null;
+    if (!riunione) {
+      return Response.json(
+        { error: 'Riunione non trovata o non collegata a questa commessa' },
+        { status: 404 },
+      );
+    }
+    const dataRiunione = String(riunione.data_riunione).slice(0, 10); // YYYY-MM-DD
+    const titoloSlug = riunione.titolo
+      ? sanitizeFolderSegment(String(riunione.titolo))
+      : '';
+    const subFolder = titoloSlug ? `${dataRiunione}_${titoloSlug}` : dataRiunione;
+    pathSegments = [root, 'Riunioni', subFolder, generatedFilename];
+  } else {
+    // Sotto-cartella per voce (parità con il vecchio Server Action uploadFoto)
+    let voceFolder = '';
+    if (body.voceId != null) {
+      const { data: voce } = await supabase
+        .from('voci_catalogo')
+        .select('nome')
+        .eq('id', body.voceId)
+        .maybeSingle();
+      if (voce?.nome) {
+        voceFolder = sanitizeFolderSegment(voce.nome);
+      }
+    }
+    pathSegments = [
+      root,
+      'Foto',
+      MOMENTO_FOLDER[momento],
+      voceFolder || null,
+      generatedFilename,
+    ].filter(Boolean) as string[];
+  }
   // Path Nextcloud (destinazione finale, usato dal worker di Fase 2)
   const nextcloudPath = pathSegments.join('/');
   // Chiave R2 (staging buffer)
@@ -198,12 +234,15 @@ export async function POST(request: NextRequest) {
   }
 
   // 7. Insert file_refs (status='uploading'). Se fallisce: abort multipart su R2.
+  // Per le righe allegato-riunione: voce_id null, momento qualsiasi (verrà
+  // ignorato dalle query foto-tab perché filtrate da riunione_id IS NULL),
+  // riunione_id valorizzato.
   const { error: rErr } = await supabase.from('file_refs').insert({
     id: fileRefId,
     tenant_id: ctx.tenantId,
     commessa_id: body.commessaId,
-    voce_id: body.voceId ?? null,
-    momento,
+    voce_id: body.riunioneId ? null : body.voceId ?? null,
+    momento: body.riunioneId ? 'sopralluogo' : momento,
     path: nextcloudPath,
     filename: generatedFilename,
     mime: body.mime,
@@ -215,7 +254,8 @@ export async function POST(request: NextRequest) {
     status: 'uploading',
     r2_key: r2Key,
     r2_upload_id: r2UploadId,
-  });
+    riunione_id: body.riunioneId ?? null,
+  } as never);
 
   if (rErr) {
     if (isMultipart && r2UploadId) {

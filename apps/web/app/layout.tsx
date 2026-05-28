@@ -3,6 +3,8 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { ConfirmAlertProvider } from './_components/confirm-provider';
+import { UploadQueueProvider } from './_components/upload-queue-provider';
+import { UploadTray } from './_components/upload-tray';
 
 export const metadata: Metadata = {
   title: {
@@ -46,7 +48,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${GeistSans.variable} ${GeistMono.variable}`}
     >
       <body className={GeistSans.className}>
-        <ConfirmAlertProvider>{children}</ConfirmAlertProvider>
+        <ConfirmAlertProvider>
+          <UploadQueueProvider>
+            {children}
+            <UploadTray />
+          </UploadQueueProvider>
+        </ConfirmAlertProvider>
       </body>
     </html>
   );

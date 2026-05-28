@@ -57,11 +57,28 @@ export async function POST(
 
   // 3. Carica file_ref via RLS (verifica accesso commessa)
   const supabase = createServerSupabase();
-  const { data: ref, error: rErr } = await supabase
+  const { data: refRaw, error: rErr } = await supabase
     .from('file_refs')
-    .select('id, tenant_id, commessa_id, r2_key, r2_upload_id, status, mime, size_bytes')
+    .select(
+      'id, tenant_id, commessa_id, r2_key, r2_upload_id, status, mime, size_bytes, filename, path, riunione_id',
+    )
     .eq('id', fileRefId)
     .single();
+  // Cast: riunione_id è introdotta dalla migration 28/05/2026 (Ondata 2),
+  // i types Supabase la rifletteranno al prossimo `supabase gen types`.
+  const ref = refRaw as unknown as {
+    id: string;
+    tenant_id: string;
+    commessa_id: string;
+    r2_key: string | null;
+    r2_upload_id: string | null;
+    status: 'uploading' | 'uploaded' | 'syncing' | 'synced' | 'sync_failed' | 'failed' | 'deleted';
+    mime: string;
+    size_bytes: number;
+    filename: string;
+    path: string;
+    riunione_id: string | null;
+  } | null;
 
   if (rErr || !ref) {
     return Response.json({ error: 'Media non trovato' }, { status: 404 });
@@ -159,6 +176,38 @@ export async function POST(
     );
   }
 
+  // 8.b — Se è un allegato di riunione: linka in commessa_riunione_allegato.
+  // INSERT idempotente: ON CONFLICT non possibile (no unique), ma il complete
+  // è già protetto da idempotency a monte (status===uploaded skip), quindi
+  // questo INSERT viene eseguito esattamente 1 volta per file_ref.
+  const refRiunioneId = ref.riunione_id;
+  if (refRiunioneId) {
+    const kind = deriveAllegatoKind(ref.mime);
+    const { error: linkErr } = await supabase
+      .from('commessa_riunione_allegato' as never)
+      .insert({
+        riunione_id: refRiunioneId,
+        file_ref_id: fileRefId,
+        kind,
+      } as never);
+    if (linkErr) {
+      // Non blocchiamo l'upload: il file è già su R2. Loggiamo come audit
+      // ma restituiamo comunque ok — la UI potrà trovare il file via /api/photo.
+      await supabase.from('audit_events').insert({
+        tenant_id: ctx.tenantId,
+        actor_user_id: ctx.userId,
+        actor_role: ctx.role,
+        entity_type: 'commessa_riunione_allegato',
+        entity_id: fileRefId,
+        action: 'media.upload.link_riunione_failed',
+        metadata: {
+          riunione_id: refRiunioneId,
+          error: linkErr.message,
+        },
+      });
+    }
+  }
+
   // 9. Audit
   await supabase.from('audit_events').insert({
     tenant_id: ctx.tenantId,
@@ -190,6 +239,22 @@ export async function POST(
     sizeBytes: head.size,
     status: 'uploaded',
   } satisfies CompleteResponse);
+}
+
+/**
+ * Deriva il `kind` dell'allegato riunione dal MIME del file.
+ * - image/* → 'foto'
+ * - video/* → 'video'
+ * - application/pdf → 'pdf_acquisito'
+ * - fallback → 'foto' (il vincolo CHECK accetta solo i 3 valori)
+ */
+function deriveAllegatoKind(mime: string): 'foto' | 'video' | 'pdf_acquisito' {
+  const m = mime.toLowerCase();
+  if (m.startsWith('video/')) return 'video';
+  if (m === 'application/pdf' || m.startsWith('application/pdf')) {
+    return 'pdf_acquisito';
+  }
+  return 'foto';
 }
 
 /**
