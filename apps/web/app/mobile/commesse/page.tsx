@@ -8,6 +8,7 @@ import { getMobileShell } from '@kommessa/api/types';
 import { guardMobile } from '../_lib/guard';
 import { Hero, HeroMeta } from '../_components/blueprint';
 import { CommesseBrowser, type BrowserRow } from './_components/commesse-browser';
+import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 export const metadata: Metadata = {
   title: 'Tutte le commesse',
@@ -26,8 +27,9 @@ export default async function MobileCommessePage() {
     .from('commesse')
     .select(
       `
-        id, codice_interno, nome_cartella, stato,
+        id, codice_interno, nome_cartella, stato, is_critica,
         cliente_indirizzo_cantiere, data_apertura,
+        descrizione_ai_finale, descrizione_ai_proposta, note_iniziali,
         cliente:clienti ( id, ragione_sociale ),
         responsabile:responsabile_id ( id, display_name )
       `,
@@ -49,14 +51,28 @@ export default async function MobileCommessePage() {
   const rows: BrowserRow[] = ((data ?? []) as any[]).map((r) => {
     const cli = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
     const resp = Array.isArray(r.responsabile) ? r.responsabile[0] : r.responsabile;
+    const cliente_nome = cli?.ragione_sociale ?? null;
+    // Titolo "vivo": stessa logica della dashboard /mobile (pickTitolo).
+    // Fallback nome_cartella ripulito da codice+cliente. Mai mostriamo
+    // il nome_cartella raw del DB (è la dir Nextcloud, brutto in UI).
+    const titolo = risolviTitoloCommessa({
+      descrizione_ai_finale: r.descrizione_ai_finale,
+      descrizione_ai_proposta: r.descrizione_ai_proposta,
+      note_iniziali: r.note_iniziali,
+      nome_cartella: r.nome_cartella,
+      codice_interno: r.codice_interno,
+      cliente_nome,
+    });
     return {
       id: r.id,
       codice_interno: r.codice_interno,
       nome_cartella: r.nome_cartella,
+      titolo,
+      is_critica: !!r.is_critica,
       stato: r.stato as StatoCommessa,
       cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
       data_apertura: r.data_apertura,
-      cliente_nome: cli?.ragione_sociale ?? null,
+      cliente_nome,
       responsabile_nome: resp?.display_name ?? null,
     };
   });

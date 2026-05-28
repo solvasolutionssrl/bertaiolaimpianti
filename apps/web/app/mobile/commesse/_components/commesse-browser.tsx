@@ -13,6 +13,10 @@ export interface BrowserRow {
   id: string;
   codice_interno: string;
   nome_cartella: string;
+  /** Titolo display: descrizione_ai_finale → proposta → note_iniziali →
+   *  fallback nome_cartella ripulito. Calcolato server-side. */
+  titolo: string;
+  is_critica: boolean;
   stato: StatoCommessa;
   cliente_indirizzo_cantiere: string | null;
   data_apertura: string;
@@ -205,19 +209,20 @@ function CommessaRow({ c }: { c: BrowserRow }) {
             </span>
           ) : null}
         </div>
-        {/* Riga 2: cliente in grassetto — nome cartella regular accanto
-            (stesso pattern della card "ultime commesse" sulla dashboard). */}
+        {/* Riga 2: cliente bold — titolo del lavoro regular muted.
+            `c.titolo` viene popolato server-side da risolviTitoloCommessa()
+            (stessa logica della card dashboard). */}
         <p className="truncate text-sm tracking-tight text-foreground">
           <span className="font-semibold">
-            {c.cliente_nome ?? c.nome_cartella}
+            {c.cliente_nome ?? c.titolo ?? c.nome_cartella}
           </span>
           {c.cliente_nome &&
-          c.nome_cartella &&
-          c.cliente_nome.toLowerCase() !== c.nome_cartella.toLowerCase() ? (
+          c.titolo &&
+          c.cliente_nome.toLowerCase() !== c.titolo.toLowerCase() ? (
             <>
               <span className="text-muted-foreground/60"> — </span>
               <span className="font-normal text-muted-foreground">
-                {c.nome_cartella}
+                {c.titolo}
               </span>
             </>
           ) : null}
