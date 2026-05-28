@@ -24,6 +24,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { guardMobile } from '../../_lib/guard';
+import { titoloCase } from '../../_lib/display-case';
 import { fmtData } from '../../../office/_lib/format';
 import {
   Divider,
@@ -469,42 +470,42 @@ export default async function CommessaDetailPage({
         <div className="mt-4">
           <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
             {commessa.codice_interno} · {fmtData(commessa.data_apertura)}
-            {responsabile?.display_name ? ` · Resp ${responsabile.display_name}` : ''}
+            {responsabile?.display_name ? ` · Resp ${titoloCase(responsabile.display_name)}` : ''}
           </p>
-          <h1 className="mt-1 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
-            {pickCommessaTitolo(commessa) ?? commessa.nome_cartella ?? '—'}
-          </h1>
-          <p className="mt-1 text-sm font-medium text-primary-foreground/85">
-            {cliente?.ragione_sociale ?? '—'}
+
+          {/* Titolone + matita di modifica inline (solo admin).
+              Il "titolo" È il dettaglio del lavoro: non lo ripetiamo più sotto. */}
+          <div className="mt-1 flex items-start gap-2">
+            <h1 className="min-w-0 flex-1 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
+              {titoloCase(pickCommessaTitolo(commessa)) || commessa.nome_cartella || '—'}
+            </h1>
+            <DettagliEdit
+              commessaId={params.id}
+              initial={commessa.note_iniziali ?? dettagliTesto ?? null}
+              canEdit={canEditDettagli}
+              triggerClassName="static mt-1 shrink-0 text-primary-foreground/55 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+            />
+          </div>
+
+          {/* Cliente + Indirizzo etichettati (stesso stile dell'ex "Dettagli:") */}
+          <p className="mt-2 text-sm font-medium text-primary-foreground/85">
+            <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">
+              Cliente:
+            </span>
+            {titoloCase(cliente?.ragione_sociale) || '—'}
           </p>
           {(commessa.cliente_indirizzo_cantiere || cliente?.citta) && (
-            <p className="mt-0.5 text-xs text-primary-foreground/70">
-              {[commessa.cliente_indirizzo_cantiere, cliente?.citta].filter(Boolean).join(' · ')}
+            <p className="mt-1 text-xs text-primary-foreground/70">
+              <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">
+                Indirizzo:
+              </span>
+              {titoloCase(
+                [commessa.cliente_indirizzo_cantiere, cliente?.citta]
+                  .filter(Boolean)
+                  .join(' · '),
+              )}
             </p>
           )}
-
-          {/* Dettagli nel hero — preview 3 righe, edit per admin */}
-          {(dettagliTesto || canEditDettagli) ? (
-            <div className="relative mt-3 border-t border-primary-foreground/10 pt-3">
-              {dettagliTesto ? (
-                <p className="pr-7 text-[13px] leading-relaxed text-primary-foreground/90 line-clamp-3">
-                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">Dettagli:</span>
-                  {dettagliTesto}
-                </p>
-              ) : (
-                <p className="pr-7 text-[11px] italic text-primary-foreground/40">
-                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/35">Dettagli:</span>
-                  Nessun dettaglio lavoro.
-                </p>
-              )}
-              <DettagliEdit
-                commessaId={params.id}
-                initial={commessa.note_iniziali ?? dettagliTesto ?? null}
-                canEdit={canEditDettagli}
-                triggerClassName="text-primary-foreground/40 hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              />
-            </div>
-          ) : null}
 
           {/* Contatti referente — chip tap-to-call per ciascuno.
               Stile differenziato:
@@ -513,7 +514,7 @@ export default async function CommessaDetailPage({
                   → riconoscibile come "specifico di questo cantiere"
               Fallback al vecchio singolo telefono se la rubrica è vuota. */}
           {contattiCliente.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-primary-foreground/10 pt-3">
               {contattiCliente.slice(0, 5).map((c) => {
                 const isCantiere = Boolean(c.commessa_id);
                 const baseChip = isCantiere
@@ -540,9 +541,9 @@ export default async function CommessaDetailPage({
                       }
                     >
                       <Icon className="h-3 w-3" aria-hidden="true" />
-                      <span className="font-medium">{c.nome}</span>
+                      <span className="font-medium">{titoloCase(c.nome)}</span>
                       {c.ruolo ? (
-                        <span className={ruoloColor}>· {c.ruolo}</span>
+                        <span className={ruoloColor}>· {titoloCase(c.ruolo)}</span>
                       ) : null}
                     </a>
                   );
@@ -554,16 +555,16 @@ export default async function CommessaDetailPage({
                     title={isCantiere ? `Cantiere · ${c.nome}` : c.nome}
                   >
                     <Icon className="h-3 w-3" aria-hidden="true" />
-                    {c.nome}
+                    {titoloCase(c.nome)}
                     {c.ruolo ? (
-                      <span className={ruoloColor}>· {c.ruolo}</span>
+                      <span className={ruoloColor}>· {titoloCase(c.ruolo)}</span>
                     ) : null}
                   </span>
                 );
               })}
             </div>
           ) : telefono ? (
-            <div className="mt-3">
+            <div className="mt-3 border-t border-primary-foreground/10 pt-3">
               <a
                 href={`tel:${telefono}`}
                 className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs text-primary-foreground/80 transition-colors hover:bg-primary-foreground/15 active:bg-primary-foreground/20"

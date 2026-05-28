@@ -8,6 +8,7 @@ import { StatoLed } from '@kommessa/ui';
 import type { StatoCommessa } from '@kommessa/api/types';
 
 import { Stagger } from '../../_components/blueprint';
+import { titoloCase } from '../../_lib/display-case';
 
 export interface BrowserRow {
   id: string;
@@ -205,7 +206,7 @@ function CommessaRow({ c }: { c: BrowserRow }) {
           </span>
           {c.responsabile_nome ? (
             <span className="truncate font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground/60">
-              · {c.responsabile_nome}
+              · {titoloCase(c.responsabile_nome)}
             </span>
           ) : null}
         </div>
@@ -214,7 +215,7 @@ function CommessaRow({ c }: { c: BrowserRow }) {
             (stessa logica della card dashboard). */}
         <p className="truncate text-sm tracking-tight text-foreground">
           <span className="font-semibold">
-            {c.cliente_nome ?? c.titolo ?? c.nome_cartella}
+            {titoloCase(c.cliente_nome ?? c.titolo ?? c.nome_cartella)}
           </span>
           {c.cliente_nome &&
           c.titolo &&
@@ -222,7 +223,7 @@ function CommessaRow({ c }: { c: BrowserRow }) {
             <>
               <span className="text-muted-foreground/60"> — </span>
               <span className="font-normal text-muted-foreground">
-                {c.titolo}
+                {titoloCase(c.titolo)}
               </span>
             </>
           ) : null}
@@ -230,7 +231,7 @@ function CommessaRow({ c }: { c: BrowserRow }) {
         {c.cliente_indirizzo_cantiere ? (
           <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
             <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{c.cliente_indirizzo_cantiere}</span>
+            <span className="truncate">{titoloCase(c.cliente_indirizzo_cantiere)}</span>
           </p>
         ) : null}
       </div>

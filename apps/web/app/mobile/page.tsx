@@ -23,6 +23,7 @@ import type { StatoCommessa } from '@kommessa/api/types';
 import { getMobileShell } from '@kommessa/api/types';
 
 import { guardMobile } from './_lib/guard';
+import { titoloCase } from './_lib/display-case';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 
 export const metadata: Metadata = {
@@ -561,12 +562,12 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
             cliente && lavoro && cliente.toLowerCase() !== lavoro.toLowerCase();
           return (
             <p className="mt-1 line-clamp-2 text-[15px] leading-snug tracking-tight text-foreground">
-              <span className="font-semibold">{cliente || lavoro || '—'}</span>
+              <span className="font-semibold">{titoloCase(cliente) || titoloCase(lavoro) || '—'}</span>
               {showBoth ? (
                 <>
                   <span className="text-muted-foreground/60"> — </span>
                   <span className="font-normal text-muted-foreground">
-                    {lavoro}
+                    {titoloCase(lavoro)}
                   </span>
                 </>
               ) : null}
@@ -577,7 +578,7 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
         {commessa.cliente_indirizzo_cantiere ? (
           <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
             <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-            <span className="truncate">{commessa.cliente_indirizzo_cantiere}</span>
+            <span className="truncate">{titoloCase(commessa.cliente_indirizzo_cantiere)}</span>
           </p>
         ) : null}
       </div>
