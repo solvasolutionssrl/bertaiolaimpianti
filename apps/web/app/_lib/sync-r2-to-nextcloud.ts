@@ -89,7 +89,23 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
   }
 
   if (!ref.r2_key) {
-    return { fileRefId, ok: false, reason: 'failed', detail: 'r2_key mancante' };
+    // File LEGACY: caricato prima dell'introduzione del flusso R2 staging.
+    // Il file è già su Nextcloud dal flusso vecchio. Niente da sincronizzare:
+    // lo marchiamo direttamente synced (idempotente). Nessun PUT, nessuna
+    // banda consumata. L'utente lo vede risolto subito.
+    if (ref.status === 'uploaded') {
+      await service
+        .from('file_refs')
+        .update({ status: 'synced', last_sync_error: null })
+        .eq('id', fileRefId);
+    }
+    return {
+      fileRefId,
+      ok: true,
+      reason: 'synced',
+      detail: 'legacy senza r2_key — già su Nextcloud dal flusso pre-R2',
+      durationMs: Date.now() - t0,
+    };
   }
   if (ref.size_bytes > SYNC_MAX_BUFFER_BYTES) {
     await markFailed(
