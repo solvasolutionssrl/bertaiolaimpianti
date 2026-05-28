@@ -183,7 +183,11 @@ export function CommessaLavoriMobile({
               />
               Riunioni ({riunioni.length})
             </h3>
-            <CommessaRiunioniMobile riunioni={riunioni} />
+            <CommessaRiunioniMobile
+              riunioni={riunioni}
+              commessaId={commessaId}
+              canUpload={canWrite}
+            />
           </section>
         ) : null}
       </div>

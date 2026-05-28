@@ -35,6 +35,8 @@ import {
   type TodoProposto,
 } from '../../../../../_actions/commessa-riunione';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { useUploadQueue } from '@/app/_components/upload-queue-provider';
+import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
 import { PdfCameraCapture } from '@/app/_components/pdf-camera-capture';
 
 interface Props {
@@ -50,7 +52,8 @@ interface AttachmentDraft {
   blob: Blob;
   previewUrl: string;
   filename: string;
-  kind: 'foto' | 'pdf_acquisito';
+  mime: string;
+  kind: 'foto' | 'video' | 'pdf_acquisito';
 }
 
 interface TodoConferma extends TodoProposto {
@@ -74,6 +77,7 @@ export function CreaRiunioneDialog({
   const router = useRouter();
   const showAlert = useAlert();
   const askConfirm = useConfirm();
+  const uploadQueue = useUploadQueue();
   const [step, setStep] = React.useState<Step>('contenuto');
 
   // ─── Step 1: Dati ─────────────────────────────────────────────────
@@ -184,16 +188,30 @@ export function CreaRiunioneDialog({
   const onFotoSelected = (files: FileList | null) => {
     if (!files) return;
     const drafts: AttachmentDraft[] = [];
+    const oversizedVideo: string[] = [];
     for (const f of Array.from(files)) {
-      if (!f.type.startsWith('image/')) continue;
+      const isImage = f.type.startsWith('image/');
+      const isVideo = f.type.startsWith('video/');
+      if (!isImage && !isVideo) continue;
+      if (isVideo && f.size > VIDEO_MAX_SIZE_BYTES) {
+        oversizedVideo.push(f.name);
+        continue;
+      }
       drafts.push({
         blob: f,
         previewUrl: URL.createObjectURL(f),
-        filename: f.name || `foto-${Date.now()}.jpg`,
-        kind: 'foto',
+        filename: f.name || (isVideo ? `video-${Date.now()}.mp4` : `foto-${Date.now()}.jpg`),
+        mime: f.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+        kind: isVideo ? 'video' : 'foto',
       });
     }
     setAttachments((a) => [...a, ...drafts]);
+    if (oversizedVideo.length > 0) {
+      void showAlert({
+        title: 'Alcuni video sono troppo grandi',
+        body: `Limite: 500 MB.\n\nFile esclusi:\n${oversizedVideo.join('\n')}`,
+      });
+    }
   };
 
   // ─── PDF camera capture ───────────────────────────────────────────
@@ -205,6 +223,7 @@ export function CreaRiunioneDialog({
         blob,
         previewUrl: URL.createObjectURL(blob),
         filename,
+        mime: blob.type || 'application/pdf',
         kind: 'pdf_acquisito',
       },
     ]);
@@ -288,35 +307,21 @@ export function CreaRiunioneDialog({
         });
       }
 
-      const titoloSlug = titolo.trim() || '';
+      // Allegati: NON più bloccanti. Vanno nella UploadQueue globale che
+      // li carica su R2 (staging) e il server crea il link
+      // commessa_riunione_allegato al complete. Il dialog si chiude subito,
+      // l'utente vede il progress nel tray in basso a destra e gli allegati
+      // appaiono nell'espansione della riunione man mano che si caricano.
       for (const a of attachments) {
-        try {
-          const fd = new FormData();
-          fd.append('file', a.blob, a.filename);
-          const url =
-            `/api/upload/riunione-allegato` +
-            `?commessaId=${commessaId}` +
-            `&riunioneId=${riunioneId}` +
-            `&kind=${encodeURIComponent(a.kind)}` +
-            `&data=${encodeURIComponent(dataRiunione)}` +
-            `&titolo=${encodeURIComponent(titoloSlug)}`;
-          const upRes = await fetch(url, { method: 'POST', body: fd });
-          if (!upRes.ok) {
-            const j = (await upRes.json().catch(() => null)) as {
-              error?: string;
-              detail?: string;
-            } | null;
-            console.warn(
-              'upload allegato riunione fallito',
-              a.filename,
-              j?.error,
-              j?.detail,
-            );
-            continue;
-          }
-        } catch (e) {
-          console.warn('upload riunione exception', e);
-        }
+        uploadQueue.enqueue({
+          fileBlob: a.blob,
+          fileName: a.filename,
+          fileMime: a.mime,
+          fileSize: a.blob.size,
+          commessaId,
+          riunioneId,
+          kind: a.kind,
+        });
       }
 
       const selezionati = todosConferma.filter((t) => t.selezionato);
@@ -459,15 +464,21 @@ export function CreaRiunioneDialog({
                   accept="image/*"
                   capture="environment"
                   multiple
-                  onChange={(e) => onFotoSelected(e.target.files)}
+                  onChange={(e) => {
+                    onFotoSelected(e.target.files);
+                    e.target.value = '';
+                  }}
                   className="hidden"
                 />
                 <input
                   ref={fotoGalleryRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
-                  onChange={(e) => onFotoSelected(e.target.files)}
+                  onChange={(e) => {
+                    onFotoSelected(e.target.files);
+                    e.target.value = '';
+                  }}
                   className="hidden"
                 />
                 <button
@@ -484,7 +495,7 @@ export function CreaRiunioneDialog({
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   <ImageIcon className="h-4 w-4" />
-                  + Allega
+                  + Foto / video
                 </button>
                 <button
                   type="button"
@@ -509,6 +520,19 @@ export function CreaRiunioneDialog({
                           alt={a.filename}
                           className="aspect-square w-full object-cover"
                         />
+                      ) : a.kind === 'video' ? (
+                        <div className="relative aspect-square w-full bg-black">
+                          <video
+                            src={a.previewUrl}
+                            preload="metadata"
+                            muted
+                            playsInline
+                            className="h-full w-full object-cover"
+                          />
+                          <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-1.5 py-px font-mono text-[9px] font-bold text-white">
+                            ▶ VIDEO
+                          </span>
+                        </div>
                       ) : (
                         <div className="flex aspect-square w-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
                           <FileText className="h-6 w-6" />

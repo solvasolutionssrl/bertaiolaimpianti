@@ -38,6 +38,8 @@ import {
 } from '../../../../../_actions/commessa-todo';
 import { eliminaRiunione } from '../../../../../_actions/commessa-riunione';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { useUploadQueue } from '@/app/_components/upload-queue-provider';
+import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
 
 import { CreaTodoDialog } from './crea-todo-dialog';
 import { CreaRiunioneDialog } from './crea-riunione-dialog';
@@ -495,6 +497,7 @@ export function LavoriBoard({
                     key={`${e.kind}-${idx}`}
                     entry={e}
                     canWrite={canWrite}
+                    commessaId={commessaId}
                     onDeleteRiunione={onDeleteRiunione}
                     onReopenTodo={onReopen}
                   />
@@ -977,11 +980,13 @@ function TodoRow({
 function TimelineEntryRail({
   entry,
   canWrite,
+  commessaId,
   onDeleteRiunione,
   onReopenTodo,
 }: {
   entry: any;
   canWrite: boolean;
+  commessaId: string;
   onDeleteRiunione: (r: RiunioneView) => void;
   onReopenTodo: (id: string) => void;
 }) {
@@ -996,6 +1001,7 @@ function TimelineEntryRail({
           r={r}
           ts={ts}
           canWrite={canWrite}
+          commessaId={commessaId}
           onDelete={() => onDeleteRiunione(r)}
         />
       </div>
@@ -1095,11 +1101,13 @@ function RiunioneTimelineEntry({
   r,
   ts,
   canWrite,
+  commessaId,
   onDelete,
 }: {
   r: RiunioneView;
   ts: string;
   canWrite: boolean;
+  commessaId: string;
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -1211,15 +1219,21 @@ function RiunioneTimelineEntry({
           ) : null}
 
           {canWrite ? (
-            <div className="border-t border-border pt-2">
-              <button
-                type="button"
-                onClick={onDelete}
-                className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-destructive"
-              >
-                Elimina riunione
-              </button>
-            </div>
+            <>
+              <RiunioneAllegatiAttacherDesktop
+                commessaId={commessaId}
+                riunioneId={r.id}
+              />
+              <div className="border-t border-border pt-2">
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-destructive"
+                >
+                  Elimina riunione
+                </button>
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}
@@ -1281,4 +1295,92 @@ function fmtGiorno(dateStr: string): string {
   } catch {
     return dateStr;
   }
+}
+
+// ─── Allegati attacher desktop ────────────────────────────────────────────
+
+function RiunioneAllegatiAttacherDesktop({
+  commessaId,
+  riunioneId,
+}: {
+  commessaId: string;
+  riunioneId: string;
+}) {
+  const queue = useUploadQueue();
+  const router = useRouter();
+  const showAlert = useAlert();
+  const galleryRef = React.useRef<HTMLInputElement | null>(null);
+  const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
+  const completedJobIdsRef = React.useRef<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    let triggered = false;
+    for (const job of queue.jobs) {
+      if (
+        enqueuedJobIdsRef.current.has(job.id) &&
+        job.status === 'done' &&
+        !completedJobIdsRef.current.has(job.id)
+      ) {
+        completedJobIdsRef.current.add(job.id);
+        triggered = true;
+      }
+    }
+    if (triggered) router.refresh();
+  }, [queue.jobs, router]);
+
+  const enqueueFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const oversized: string[] = [];
+    for (const file of Array.from(files)) {
+      const isVideo = file.type.startsWith('video/');
+      if (isVideo && file.size > VIDEO_MAX_SIZE_BYTES) {
+        oversized.push(file.name);
+        continue;
+      }
+      const id = queue.enqueue({
+        fileBlob: file,
+        fileName: file.name,
+        fileMime: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+        fileSize: file.size,
+        commessaId,
+        riunioneId,
+        kind: isVideo ? 'video' : 'foto',
+      });
+      enqueuedJobIdsRef.current.add(id);
+    }
+    if (oversized.length > 0) {
+      void showAlert({
+        title: 'Alcuni video sono troppo grandi',
+        body: `Limite: 500 MB.\n\nFile esclusi:\n${oversized.join('\n')}`,
+      });
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-dashed border-primary/30 bg-primary/[0.03] px-2.5 py-2">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 font-mono text-[9px] uppercase tracking-[0.16em] text-primary/80">
+          Aggiungi foto / video alla riunione
+        </p>
+        <button
+          type="button"
+          onClick={() => galleryRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-card px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5"
+        >
+          + Foto / video
+        </button>
+      </div>
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          enqueueFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </div>
+  );
 }

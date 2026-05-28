@@ -1,15 +1,21 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
+  Camera,
   ChevronDown,
   FileText,
+  ImagePlus,
   Paperclip,
   Sparkles,
 } from 'lucide-react';
-import { cn } from '@kommessa/ui';
+import { Button, cn } from '@kommessa/ui';
 
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
+import { useUploadQueue } from '../../../../_components/upload-queue-provider';
+import { VIDEO_MAX_SIZE_BYTES } from '../../../../_lib/upload-queue/types';
+import { useAlert } from '../../../../_components/confirm-provider';
 
 export interface RiunioneAllegatoMobile {
   id: string;
@@ -36,9 +42,12 @@ export interface RiunioneMobileRow {
 
 interface Props {
   riunioni: RiunioneMobileRow[];
+  commessaId: string;
+  /** Se true, mostra i bottoni "Aggiungi foto/video" e "Scatta" sull'espansione. */
+  canUpload: boolean;
 }
 
-export function CommessaRiunioniMobile({ riunioni }: Props) {
+export function CommessaRiunioniMobile({ riunioni, commessaId, canUpload }: Props) {
   if (riunioni.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -61,14 +70,22 @@ export function CommessaRiunioniMobile({ riunioni }: Props) {
             )}
             aria-hidden="true"
           />
-          <RiunioneCard r={r} />
+          <RiunioneCard r={r} commessaId={commessaId} canUpload={canUpload} />
         </div>
       ))}
     </div>
   );
 }
 
-function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
+function RiunioneCard({
+  r,
+  commessaId,
+  canUpload,
+}: {
+  r: RiunioneMobileRow;
+  commessaId: string;
+  canUpload: boolean;
+}) {
   const [open, setOpen] = React.useState(false);
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
   const hasReport = !!(r.reportino && r.reportino.trim());
@@ -226,6 +243,10 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
               Riunione senza contenuto.
             </p>
           ) : null}
+
+          {canUpload ? (
+            <AllegatiAttacher commessaId={commessaId} riunioneId={r.id} />
+          ) : null}
         </div>
       ) : null}
 
@@ -240,6 +261,130 @@ function RiunioneCard({ r }: { r: RiunioneMobileRow }) {
         />
       ) : null}
     </li>
+  );
+}
+
+/**
+ * Blocco "aggiungi allegati a una riunione esistente". L'upload va dalla
+ * UploadQueue globale → R2 staging → server crea il link
+ * commessa_riunione_allegato al complete. Quando un job di questa riunione
+ * va in "done", facciamo router.refresh() per mostrare l'allegato.
+ */
+function AllegatiAttacher({
+  commessaId,
+  riunioneId,
+}: {
+  commessaId: string;
+  riunioneId: string;
+}) {
+  const queue = useUploadQueue();
+  const router = useRouter();
+  const showAlert = useAlert();
+  const galleryRef = React.useRef<HTMLInputElement | null>(null);
+  const cameraRef = React.useRef<HTMLInputElement | null>(null);
+  const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
+  const completedJobIdsRef = React.useRef<Set<string>>(new Set());
+
+  // Rileva il done dei job di questa riunione → refresh server-side.
+  React.useEffect(() => {
+    let triggered = false;
+    for (const job of queue.jobs) {
+      if (
+        enqueuedJobIdsRef.current.has(job.id) &&
+        job.status === 'done' &&
+        !completedJobIdsRef.current.has(job.id)
+      ) {
+        completedJobIdsRef.current.add(job.id);
+        triggered = true;
+      }
+    }
+    if (triggered) router.refresh();
+  }, [queue.jobs, router]);
+
+  const enqueueFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const oversized: string[] = [];
+    for (const file of Array.from(files)) {
+      const isVideo = file.type.startsWith('video/');
+      if (isVideo && file.size > VIDEO_MAX_SIZE_BYTES) {
+        oversized.push(file.name);
+        continue;
+      }
+      const kind: 'foto' | 'video' = isVideo ? 'video' : 'foto';
+      const id = queue.enqueue({
+        fileBlob: file,
+        fileName: file.name,
+        fileMime: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+        fileSize: file.size,
+        commessaId,
+        riunioneId,
+        kind,
+      });
+      enqueuedJobIdsRef.current.add(id);
+    }
+    if (oversized.length > 0) {
+      void showAlert({
+        title: 'Alcuni video sono troppo grandi',
+        body: `Limite: 500 MB.\n\nFile esclusi:\n${oversized.join('\n')}`,
+      });
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-dashed border-primary/30 bg-primary/[0.03] p-2.5">
+      <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-primary/80">
+        Aggiungi alla riunione
+      </p>
+      <div className="grid grid-cols-[1fr_auto] gap-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-9 justify-center gap-1.5 border-primary/40 bg-card text-primary hover:bg-primary/5 hover:text-primary"
+          onClick={() => galleryRef.current?.click()}
+        >
+          <ImagePlus className="h-4 w-4" aria-hidden="true" />
+          <span className="text-xs font-medium">Foto / video</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1 px-2 text-muted-foreground hover:text-foreground"
+          onClick={() => cameraRef.current?.click()}
+          aria-label="Scatta foto"
+          title="Scatta foto"
+        >
+          <Camera className="h-4 w-4" aria-hidden="true" />
+          <span className="text-[10px] font-medium uppercase tracking-wider">
+            Scatta
+          </span>
+        </Button>
+      </div>
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*,video/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          enqueueFiles(e.target.files);
+          // reset così riselezionare lo stesso file riemette l'evento.
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          enqueueFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </div>
   );
 }
 

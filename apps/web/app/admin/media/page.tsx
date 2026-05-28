@@ -5,6 +5,7 @@ import {
   Video,
   ArrowUpFromLine,
   CheckCircle2,
+  Info,
   Loader2,
   AlertTriangle,
   XCircle,
@@ -45,8 +46,13 @@ interface Props {
     status?: string;
     tenant?: string;
     q?: string;
+    /** Quick filter: '1' = solo problemi (uploaded vecchio + sync_failed + failed). */
+    soloProblemi?: string;
   };
 }
+
+// Soglia per considerare un file "uploaded da troppo tempo senza sync".
+const STALE_UPLOADED_MINUTES = 30;
 
 export default async function MediaSyncPage({ searchParams }: Props) {
   await requirePlatformAdmin();
@@ -55,6 +61,7 @@ export default async function MediaSyncPage({ searchParams }: Props) {
   const statusFilter = (searchParams.status ?? '').trim() as Status | '';
   const tenantFilter = (searchParams.tenant ?? '').trim();
   const qFilter = (searchParams.q ?? '').trim();
+  const soloProblemi = searchParams.soloProblemi === '1';
 
   // ----- Stats (count per status, parallelo) -----
   const statsPromise = Promise.all(
@@ -85,6 +92,15 @@ export default async function MediaSyncPage({ searchParams }: Props) {
   if (qFilter) {
     listQuery = listQuery.ilike('filename', `%${qFilter}%`);
   }
+  if (soloProblemi) {
+    // Solo file con problemi: failed + sync_failed + uploaded "vecchio".
+    const staleThreshold = new Date(
+      Date.now() - STALE_UPLOADED_MINUTES * 60 * 1000,
+    ).toISOString();
+    listQuery = listQuery.or(
+      `status.eq.failed,status.eq.sync_failed,and(status.eq.uploaded,uploaded_at.lt.${staleThreshold})`,
+    );
+  }
 
   // ----- Tenant names (per visualizzare slug nella tabella) -----
   const tenantsPromise = supabase.from('tenants').select('id, slug, nome');
@@ -98,6 +114,23 @@ export default async function MediaSyncPage({ searchParams }: Props) {
   const statsMap = new Map(stats);
   const total = stats.reduce((acc, [, n]) => acc + n, 0);
   const pendingSync = (statsMap.get('uploaded') ?? 0) + (statsMap.get('sync_failed') ?? 0);
+
+  // ----- Health globale -----
+  // verde:  errori < 5 e backlog (uploaded+sync_failed) ≤ 20 → tutto sotto controllo.
+  // giallo: backlog tra 21 e 200 oppure errori 5-50.
+  // rosso:  backlog > 200 o errori > 50.
+  const erroriTot =
+    (statsMap.get('sync_failed') ?? 0) + (statsMap.get('failed') ?? 0);
+  const health: 'green' | 'yellow' | 'red' =
+    erroriTot > 50 || pendingSync > 200
+      ? 'red'
+      : erroriTot > 5 || pendingSync > 20
+        ? 'yellow'
+        : 'green';
+  const syncedTot = statsMap.get('synced') ?? 0;
+  const totReachable = total - (statsMap.get('deleted') ?? 0);
+  const pctSynced =
+    totReachable > 0 ? Math.round((syncedTot / totReachable) * 100) : 100;
 
   const tenantById = new Map(
     (tenantsRes.data ?? []).map((t: { id: string; slug: string; nome: string }) => [
@@ -130,6 +163,14 @@ export default async function MediaSyncPage({ searchParams }: Props) {
         description={`${total.toLocaleString('it-IT')} media totali · ${pendingSync.toLocaleString('it-IT')} in attesa di sync su Nextcloud`}
         icon={<CloudUpload />}
         actions={<SyncBatchButton />}
+      />
+
+      {/* Health globale + legenda stati */}
+      <HealthBanner
+        health={health}
+        pctSynced={pctSynced}
+        backlog={pendingSync}
+        erroriTot={erroriTot}
       />
 
       {/* Stats cards */}
@@ -215,13 +256,23 @@ export default async function MediaSyncPage({ searchParams }: Props) {
             className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
           />
         </div>
+        <label className="flex items-center gap-2 self-end pb-1 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            name="soloProblemi"
+            value="1"
+            defaultChecked={soloProblemi}
+            className="h-4 w-4 cursor-pointer rounded accent-destructive"
+          />
+          <span className="font-medium">Solo problemi</span>
+        </label>
         <button
           type="submit"
           className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           Filtra
         </button>
-        {(statusFilter || tenantFilter || qFilter) && (
+        {(statusFilter || tenantFilter || qFilter || soloProblemi) && (
           <Link
             href="/admin/media"
             className="h-9 rounded-md border border-border px-3 text-sm leading-9 text-muted-foreground hover:bg-muted"
@@ -416,6 +467,132 @@ function StatusBadge({ status }: { status: Status }) {
       {icon}
       {status}
     </Badge>
+  );
+}
+
+function HealthBanner({
+  health,
+  pctSynced,
+  backlog,
+  erroriTot,
+}: {
+  health: 'green' | 'yellow' | 'red';
+  pctSynced: number;
+  backlog: number;
+  erroriTot: number;
+}) {
+  const palette =
+    health === 'green'
+      ? {
+          ring: 'ring-emerald-500/30',
+          bg: 'bg-emerald-50/60 dark:bg-emerald-950/20',
+          dot: 'bg-emerald-500',
+          title: 'Tutto sotto controllo',
+          msg: 'La pipeline sta lavorando correttamente. R2 archivia i file in tempo reale, Nextcloud si sincronizza in background.',
+        }
+      : health === 'yellow'
+        ? {
+            ring: 'ring-amber-500/30',
+            bg: 'bg-amber-50/60 dark:bg-amber-950/20',
+            dot: 'bg-amber-500',
+            title: 'Da tenere d’occhio',
+            msg: `Backlog o errori sopra la norma (backlog: ${backlog}, errori: ${erroriTot}). I file sono al sicuro su R2 ma la copia su Nextcloud è in ritardo.`,
+          }
+        : {
+            ring: 'ring-destructive/30',
+            bg: 'bg-destructive/5',
+            dot: 'bg-destructive',
+            title: 'Intervento richiesto',
+            msg: `Backlog elevato (${backlog}) o errori frequenti (${erroriTot}). Esegui "Esegui batch ora" e controlla i sync_failed. Niente è perso: i file sono su R2.`,
+          };
+
+  return (
+    <div
+      className={`flex flex-col gap-4 rounded-lg p-4 ring-1 ${palette.bg} ${palette.ring}`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`mt-0.5 flex h-3 w-3 shrink-0 items-center justify-center rounded-full ${palette.dot}`}
+          aria-hidden="true"
+        >
+          {health !== 'green' ? (
+            <span className={`h-3 w-3 animate-ping rounded-full ${palette.dot} opacity-60`} />
+          ) : null}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">{palette.title}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{palette.msg}</p>
+          <p className="mt-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+            <span className="font-medium text-foreground">{pctSynced}%</span> dei
+            file (esclusi i deleted) sono già su Nextcloud.
+          </p>
+        </div>
+      </div>
+
+      <details className="group rounded-md border border-border/60 bg-background/50">
+        <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium">
+          <Info className="h-3.5 w-3.5 text-muted-foreground" />
+          Cosa significano gli stati? — clicca per la legenda
+        </summary>
+        <div className="space-y-2 border-t border-border/60 px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          <LegendItem
+            icon={<ArrowUpFromLine className="h-3.5 w-3.5 text-muted-foreground" />}
+            label="uploading"
+            description="Il client sta ancora caricando il file su R2 (presigned URL emesso). Se resta a lungo qui: probabilmente connessione cliente lenta o tab chiusa a metà."
+          />
+          <LegendItem
+            icon={<ArrowUpFromLine className="h-3.5 w-3.5 text-primary" />}
+            label="uploaded"
+            description="Il file è ARRIVATO SU R2 ed è già al sicuro (durabilità 11×9). L'utente può andare avanti. La copia su Nextcloud arriverà col prossimo batch (cron */10min)."
+          />
+          <LegendItem
+            icon={<Loader2 className="h-3.5 w-3.5 text-primary" />}
+            label="syncing"
+            description="Il worker sta copiando il file da R2 a Nextcloud. Stato transitorio."
+          />
+          <LegendItem
+            icon={<CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+            label="synced"
+            description="Tutto a posto: il file è sia su R2 che su Nextcloud. Nextcloud è la source of truth aziendale."
+          />
+          <LegendItem
+            icon={<AlertTriangle className="h-3.5 w-3.5 text-amber-600" />}
+            label="sync_failed"
+            description="L'ultimo tentativo di copia su Nextcloud è fallito (rete, permessi, quota). Il file è comunque su R2 e l'app continua a servirlo. 'Re-sync' o 'Esegui batch ora' ritentano."
+          />
+          <LegendItem
+            icon={<XCircle className="h-3.5 w-3.5 text-destructive" />}
+            label="failed"
+            description="L'upload su R2 non si è mai concluso (sessione abortita, MAX_ATTEMPTS esauriti). Stato terminale: il file non è disponibile, ma non c'è nulla da recuperare."
+          />
+          <LegendItem
+            icon={<Trash2 className="h-3.5 w-3.5 text-muted-foreground" />}
+            label="deleted"
+            description="Soft delete dell'app. Il record resta per audit; la pulizia R2 effettiva arriverà in Fase 3."
+          />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function LegendItem({
+  icon,
+  label,
+  description,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="grid grid-cols-[16px_120px_1fr] items-start gap-2">
+      <span className="mt-px">{icon}</span>
+      <Badge variant="outline" className="font-mono text-[10px]">
+        {label}
+      </Badge>
+      <p className="text-foreground/80">{description}</p>
+    </div>
   );
 }
 
