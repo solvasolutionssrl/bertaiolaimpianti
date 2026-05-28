@@ -125,8 +125,25 @@ export default async function TenantsListPage({ searchParams }: Props) {
                   tenants.map((t) => {
                     const u: any = usageById.get(t.id);
                     const p: any = t.plan_id ? planById.get(t.plan_id) : null;
+                    // Counter "ok" tone:
+                    //  - Utenti attivi > 0 → verde (tenant vivo)
+                    //  - Commesse anno > 0 → verde
+                    //  - Storage > 0 → verde
+                    //  - Ultima attività entro 7 giorni → verde
+                    const utentiOk = (u?.utenti_attivi ?? 0) > 0 && !t.sospeso;
+                    const commesseOk = (u?.commesse_anno ?? 0) > 0 && !t.sospeso;
+                    const storageOk = Number(u?.storage_gb ?? 0) > 0 && !t.sospeso;
+                    const lastAct = u?.ultima_attivita
+                      ? new Date(u.ultima_attivita)
+                      : null;
+                    const isActive7d =
+                      lastAct &&
+                      Date.now() - lastAct.getTime() < 7 * 24 * 60 * 60 * 1000;
                     return (
-                      <tr key={t.id} className="transition-colors hover:bg-muted/30">
+                      <tr
+                        key={t.id}
+                        className="group transition-colors hover:bg-emerald-500/[0.02]"
+                      >
                         <td className="px-4 py-3">
                           <Link
                             href={`/admin/tenants/${t.id}`}
@@ -147,21 +164,43 @@ export default async function TenantsListPage({ searchParams }: Props) {
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                        <td
+                          className={
+                            'px-4 py-3 font-mono text-xs tabular-nums ' +
+                            (utentiOk ? 'text-emerald-700 dark:text-emerald-400' : '')
+                          }
+                        >
                           {u?.utenti_attivi ?? 0}
                           {p ? (
                             <span className="text-muted-foreground"> / {p.max_utenti}</span>
                           ) : null}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                        <td
+                          className={
+                            'px-4 py-3 font-mono text-xs tabular-nums ' +
+                            (commesseOk ? 'text-emerald-700 dark:text-emerald-400' : '')
+                          }
+                        >
                           {u?.commesse_anno ?? 0}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs tabular-nums">
+                        <td
+                          className={
+                            'px-4 py-3 font-mono text-xs tabular-nums ' +
+                            (storageOk ? 'text-emerald-700 dark:text-emerald-400' : '')
+                          }
+                        >
                           {u?.storage_gb ? Number(u.storage_gb).toFixed(2) : '0.00'}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                          {u?.ultima_attivita
-                            ? new Date(u.ultima_attivita).toLocaleDateString('it-IT')
+                        <td
+                          className={
+                            'px-4 py-3 font-mono text-xs ' +
+                            (isActive7d
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : 'text-muted-foreground')
+                          }
+                        >
+                          {lastAct
+                            ? lastAct.toLocaleDateString('it-IT')
                             : '—'}
                         </td>
                         <td className="px-4 py-3">
