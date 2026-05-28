@@ -89,7 +89,10 @@ INSERT INTO public.voci_catalogo (id, nome, categoria, "default", cartella_templ
   (37, 'Adesivi info cliente',        'supporto',         false, 'Materiali/Adesivi',           37, 'Etichette su impianti consegnati'),
 
   -- ===== Sezione B — alimentazione (38) =====
-  (38, 'Alimentazione (220 / 380 / ecc.)', 'alimentazione', false, 'Documenti/Allacci',         38, 'Specifica tensione richiesta')
+  (38, 'Alimentazione (220 / 380 / ecc.)', 'alimentazione', false, 'Documenti/Allacci',         38, 'Specifica tensione richiesta'),
+
+  -- ===== Sezione B — Nuovo impianto (39, aggiunta 28/05/2026 post-go-live) =====
+  (39, 'Nuovo Impianto',                   'impiantistica', false, NULL,                        39, 'Installazione ex novo. cartella_template predisposto: popolarlo via UI admin per attivare la creazione automatica della cartella.')
 ON CONFLICT (id) DO UPDATE
   SET nome                  = EXCLUDED.nome,
       categoria             = EXCLUDED.categoria,

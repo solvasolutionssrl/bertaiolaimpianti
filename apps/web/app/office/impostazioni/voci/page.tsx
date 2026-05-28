@@ -23,7 +23,7 @@ export default async function VociPage() {
     supabase
       .from('voci_catalogo')
       .select(
-        'id, nome, categoria, "default", cartella_template, ordine_visualizzazione',
+        'id, nome, categoria, "default", cartella_template, ordine_visualizzazione, tenant_id',
       )
       .order('ordine_visualizzazione'),
     supabase
@@ -32,14 +32,16 @@ export default async function VociPage() {
       .eq('tenant_id', ctx.tenantId),
   ]);
 
-  const voci = (vociRes.data ?? []) as VoceCatalogo[];
+  // Cast via unknown: tenant_id è introdotta dalla migration 28/05/2026,
+  // i types generati la includeranno al prossimo `supabase gen types`.
+  const voci = (vociRes.data ?? []) as unknown as VoceCatalogo[];
   const overrides = (overridesRes.data ?? []) as VoceOverride[];
 
   return (
     <div className="space-y-6">
       <SectionHeader
         title="Voci catalogo"
-        description="Le 38 voci canoniche sono globali. Qui puoi personalizzarne il nome, le foto minime e la disponibilità per il tuo tenant — senza modificare il catalogo condiviso."
+        description="Le voci canoniche sono globali e condivise. Puoi personalizzarne nome, foto minime e disponibilità per il tuo tenant, e aggiungere voci custom specifiche del tuo workflow."
         icon={<ListTree />}
       />
 

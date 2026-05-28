@@ -32,10 +32,10 @@ export default async function CommessaLayout({
   ]);
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 p-6">
+    <div className="w-full space-y-3 px-4 pb-6 pt-3 md:px-6 md:pb-8 md:pt-4">
       <Link
         href="/office/commesse"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3 w-3" />
         Torna alla lista
@@ -46,7 +46,7 @@ export default async function CommessaLayout({
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="font-mono text-xl font-semibold">{c.codice_interno}</h1>
         <span className="text-xl text-muted-foreground">·</span>
-        <span className="text-xl font-medium">
+        <span className="break-words text-xl font-medium">
           {cliente?.ragione_sociale ?? '—'}
         </span>
         <div className="ml-auto">
@@ -64,8 +64,9 @@ export default async function CommessaLayout({
       </header>
 
       {/* Layout 2 colonne su desktop: main (tab + content) + sidebar
-          (stato, tecnici, meta). Su mobile la sidebar cade sopra (order). */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+          (stato, tecnici, meta). Su mobile la sidebar cade sopra (order).
+          Sidebar 340px su xl, 300px su lg per dare più respiro al main. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4 lg:order-1">
           <CommessaTabs id={params.id} />
           <div>{children}</div>

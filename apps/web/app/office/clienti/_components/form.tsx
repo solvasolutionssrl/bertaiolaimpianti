@@ -21,7 +21,17 @@ interface Initial {
   note?: string | null;
 }
 
-export function ClienteForm({ initial }: { initial?: Initial }) {
+export function ClienteForm({
+  initial,
+  onCancel,
+  onSuccess,
+}: {
+  initial?: Initial;
+  /** Se passato, il bottone "Annulla" chiama questo callback invece di navigare a /office/clienti. */
+  onCancel?: () => void;
+  /** Se passato, viene invocato dopo un save/elimina riusciti (es. chiudere il dialog). */
+  onSuccess?: (action: 'updated' | 'created' | 'deleted') => void;
+}) {
   const router = useRouter();
   const askConfirm = useConfirm();
   const [pending, start] = useTransition();
@@ -60,9 +70,15 @@ export function ClienteForm({ initial }: { initial?: Initial }) {
             if (isEdit && initial?.id) {
               await aggiornaCliente({ id: initial.id, ...payload });
               router.refresh();
+              onSuccess?.('updated');
             } else {
               const res = await creaCliente(payload);
-              router.push(`/office/clienti/${res.id}`);
+              if (onSuccess) {
+                router.refresh();
+                onSuccess('created');
+              } else {
+                router.push(`/office/clienti/${res.id}`);
+              }
             }
           } catch (e) {
             setErr(e instanceof Error ? e.message : 'Errore.');
@@ -199,7 +215,12 @@ export function ClienteForm({ initial }: { initial?: Initial }) {
                   setErr(res.error);
                   return;
                 }
-                router.push('/office/clienti');
+                if (onSuccess) {
+                  router.refresh();
+                  onSuccess('deleted');
+                } else {
+                  router.push('/office/clienti');
+                }
               });
             }}
           >
@@ -207,9 +228,15 @@ export function ClienteForm({ initial }: { initial?: Initial }) {
           </Button>
         ) : <span />}
         <div className="flex items-center gap-2">
-          <Button asChild type="button" variant="ghost">
-            <a href="/office/clienti">Annulla</a>
-          </Button>
+          {onCancel ? (
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Annulla
+            </Button>
+          ) : (
+            <Button asChild type="button" variant="ghost">
+              <a href="/office/clienti">Annulla</a>
+            </Button>
+          )}
           <Button type="submit" disabled={pending}>
             {pending ? 'Salvataggio…' : isEdit ? 'Salva modifiche' : 'Crea cliente'}
           </Button>

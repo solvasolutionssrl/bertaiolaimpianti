@@ -18,13 +18,16 @@ import {
   Label,
   cn,
 } from '@kommessa/ui';
-import { ChevronDown, RotateCcw } from 'lucide-react';
+import { ChevronDown, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import {
+  creaVoceCustom,
+  eliminaVoceCustom,
   resetVoceOverride,
   salvaVoceOverride,
   type VoceFormState,
+  type VoceSimile,
 } from '../_actions/voci';
-import { useConfirm } from '@/app/_components/confirm-provider';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
 export interface VoceCatalogo {
   id: number;
@@ -33,6 +36,8 @@ export interface VoceCatalogo {
   default: boolean;
   cartella_template: string | null;
   ordine_visualizzazione: number;
+  /** NULL = voce globale (seed 1..39); UUID = custom del tenant. */
+  tenant_id: string | null;
 }
 
 export interface VoceOverride {
@@ -48,6 +53,7 @@ interface VoceMerged extends VoceCatalogo {
   minFotoEffettive: number | null;
   attivaEffettiva: boolean;
   hasOverride: boolean;
+  isCustom: boolean;
 }
 
 const CATEGORIA_LABEL: Record<string, string> = {
@@ -78,6 +84,7 @@ function mergeVoci(
       minFotoEffettive: ovr?.min_foto_richieste_override ?? null,
       attivaEffettiva: ovr ? ovr.attiva : true,
       hasOverride: Boolean(ovr),
+      isCustom: v.tenant_id !== null,
     };
   });
 }
@@ -108,6 +115,7 @@ export function VociList({
 
   const [filtro, setFiltro] = useState<string>('all');
   const [editing, setEditing] = useState<VoceMerged | null>(null);
+  const [creating, setCreating] = useState(false);
   const [openCat, setOpenCat] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(categorie.map((c) => [c, true])),
   );
@@ -155,6 +163,24 @@ export function VociList({
 
       {/* Contenuto principale */}
       <div className="min-w-0 flex-1">
+      {canEdit ? (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            {merged.filter((v) => v.isCustom).length > 0
+              ? `${merged.filter((v) => v.isCustom).length} voci custom create per il tuo tenant.`
+              : 'Aggiungi voci specifiche del tuo workflow quando il catalogo standard non basta.'}
+          </p>
+          <Button
+            size="sm"
+            onClick={() => setCreating(true)}
+            className="shrink-0"
+          >
+            <Plus className="mr-1.5 h-4 w-4" />
+            Nuova voce
+          </Button>
+        </div>
+      ) : null}
+
       {grouped.size === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
@@ -214,6 +240,15 @@ export function VociList({
                                 Default
                               </Badge>
                             ) : null}
+                            {v.isCustom ? (
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 border-primary/30 bg-primary/5 text-primary"
+                              >
+                                <Sparkles className="mr-1 h-3 w-3" />
+                                Custom
+                              </Badge>
+                            ) : null}
                             {v.hasOverride ? (
                               <Badge variant="outline" className="shrink-0">
                                 Override
@@ -235,13 +270,21 @@ export function VociList({
                           </p>
                         </div>
                         {canEdit ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditing(v)}
-                          >
-                            Modifica
-                          </Button>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditing(v)}
+                            >
+                              Modifica
+                            </Button>
+                            {v.isCustom ? (
+                              <DeleteCustomButton
+                                voceId={v.id}
+                                nome={v.nomeEffettivo}
+                              />
+                            ) : null}
+                          </div>
                         ) : null}
                       </li>
                     ))}
@@ -260,8 +303,55 @@ export function VociList({
           onOpenChange={(o) => !o && setEditing(null)}
         />
       ) : null}
+
+      {creating ? (
+        <NuovaVoceDialog
+          open={creating}
+          onOpenChange={(o) => setCreating(o)}
+        />
+      ) : null}
       </div>
     </div>
+  );
+}
+
+function DeleteCustomButton({ voceId, nome }: { voceId: number; nome: string }) {
+  const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
+  const [pending, start] = useTransition();
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={pending}
+      onClick={async () => {
+        const ok = await askConfirm({
+          title: `Eliminare la voce "${nome}"?`,
+          description:
+            'La voce sarà rimossa dal catalogo del tuo tenant. Le commesse che la usano la mostreranno come riferimento mancante.',
+          destructive: true,
+          confirmLabel: 'Sì, elimina',
+        });
+        if (!ok) return;
+        start(async () => {
+          try {
+            await eliminaVoceCustom({ voceId });
+            router.refresh();
+          } catch (e) {
+            await showAlert({
+              title: 'Impossibile eliminare la voce',
+              body: e instanceof Error ? e.message : 'Errore sconosciuto',
+            });
+          }
+        });
+      }}
+      className="text-muted-foreground hover:text-destructive"
+      aria-label={`Elimina ${nome}`}
+    >
+      <Trash2 className="h-4 w-4" />
+    </Button>
   );
 }
 
@@ -443,6 +533,228 @@ function VoceEditDialog({
             </div>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =====================================================================
+// Dialog "Nuova voce" custom-tenant con check fuzzy duplicati
+// =====================================================================
+
+const CATEGORIE_OPZIONI: Array<{ value: string; label: string }> = [
+  { value: 'impiantistica', label: 'Impiantistica' },
+  { value: 'documentazione', label: 'Documentazione' },
+  { value: 'tubazioni', label: 'Tubazioni' },
+  { value: 'montaggi', label: 'Montaggi' },
+  { value: 'allacci', label: 'Allacci' },
+  { value: 'ventilazione', label: 'Ventilazione' },
+  { value: 'supporto', label: 'Supporto' },
+  { value: 'alimentazione', label: 'Alimentazione' },
+];
+
+function NuovaVoceDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const router = useRouter();
+  const showAlert = useAlert();
+  const [nome, setNome] = useState('');
+  const [categoria, setCategoria] = useState<string>('impiantistica');
+  const [cartellaTemplate, setCartellaTemplate] = useState('');
+  const [pending, start] = useTransition();
+  const [similar, setSimilar] = useState<VoceSimile[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setNome('');
+    setCategoria('impiantistica');
+    setCartellaTemplate('');
+    setSimilar(null);
+    setError(null);
+  };
+
+  const submit = (force: boolean) => {
+    if (nome.trim().length < 2) {
+      setError('Inserisci un nome di almeno 2 caratteri.');
+      return;
+    }
+    setError(null);
+    start(async () => {
+      const res = await creaVoceCustom({
+        nome: nome.trim(),
+        categoria: categoria as
+          | 'impiantistica'
+          | 'documentazione'
+          | 'tubazioni'
+          | 'montaggi'
+          | 'allacci'
+          | 'ventilazione'
+          | 'supporto'
+          | 'alimentazione',
+        cartellaTemplate: cartellaTemplate.trim() || null,
+        forceSimilar: force,
+      });
+      if (res.ok) {
+        router.refresh();
+        reset();
+        onOpenChange(false);
+        return;
+      }
+      if (res.reason === 'similar') {
+        setSimilar(res.similar);
+        return;
+      }
+      if (res.reason === 'duplicate') {
+        setError(res.message);
+        return;
+      }
+      await showAlert({
+        title: 'Errore creazione voce',
+        body: 'message' in res ? res.message : 'Errore sconosciuto',
+      });
+    });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o && !pending) {
+          reset();
+          onOpenChange(false);
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nuova voce del catalogo</DialogTitle>
+          <DialogDescription>
+            Aggiungi una voce specifica del tuo workflow. Sarà visibile solo
+            al tuo tenant e selezionabile nelle nuove commesse.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="nuovaVoceNome">Nome voce</Label>
+            <Input
+              id="nuovaVoceNome"
+              value={nome}
+              onChange={(e) => {
+                setNome(e.target.value);
+                if (similar) setSimilar(null);
+                if (error) setError(null);
+              }}
+              placeholder="Es. Allaccio fibra ottica"
+              maxLength={160}
+              autoFocus
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="nuovaVoceCategoria">Categoria</Label>
+            <select
+              id="nuovaVoceCategoria"
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {CATEGORIE_OPZIONI.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="nuovaVoceCartella">
+              Cartella associata (opzionale)
+            </Label>
+            <Input
+              id="nuovaVoceCartella"
+              value={cartellaTemplate}
+              onChange={(e) => setCartellaTemplate(e.target.value)}
+              placeholder="Es. Preventivi/NuoviImpianti — lascia vuoto se non genera cartella"
+              maxLength={200}
+            />
+            <p className="text-xs text-muted-foreground">
+              Se valorizzato, la voce — quando attiva su una commessa — predispone
+              la creazione di una cartella con questo template. Lascia vuoto per
+              non generare alcuna cartella automatica.
+            </p>
+          </div>
+
+          {similar && similar.length > 0 ? (
+            <div className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
+              <p className="mb-2 font-medium text-amber-900 dark:text-amber-200">
+                Attenzione: ho trovato voci già esistenti con nome simile.
+              </p>
+              <ul className="mb-3 space-y-1 text-xs text-amber-900/80 dark:text-amber-200/80">
+                {similar.map((s) => (
+                  <li key={s.id} className="flex items-center gap-2">
+                    <span className="font-mono opacity-60">
+                      #{String(s.id).padStart(2, '0')}
+                    </span>
+                    <span className="flex-1 font-medium">{s.nome}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {s.scope === 'globale' ? 'globale' : 'custom'}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
+                Se è davvero una voce diversa, conferma. Altrimenti modifica
+                quella esistente o cambia nome.
+              </p>
+            </div>
+          ) : null}
+
+          {error ? (
+            <p
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+            >
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              reset();
+              onOpenChange(false);
+            }}
+            disabled={pending}
+          >
+            Annulla
+          </Button>
+          {similar && similar.length > 0 ? (
+            <Button
+              type="button"
+              variant="default"
+              disabled={pending}
+              onClick={() => submit(true)}
+            >
+              {pending ? 'Creazione…' : 'Crea comunque'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              disabled={pending || nome.trim().length < 2}
+              onClick={() => submit(false)}
+            >
+              {pending ? 'Verifica…' : 'Crea voce'}
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
-import { Tag as TagIcon } from 'lucide-react';
+import { Tag as TagIcon, User2 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -7,8 +7,24 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { loadCommessa } from './_lib/get-commessa';
 import { elencaTagTenant } from '../../../_actions/commessa-tag';
 import { TagEditor } from '../../../_components/tag-editor';
+import { ClienteEditDialog } from './_components/cliente-edit-dialog';
 
 export const dynamic = 'force-dynamic';
+
+const FMT_DATA = new Intl.DateTimeFormat('it-IT', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+});
+
+function fmtData(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    return FMT_DATA.format(new Date(iso));
+  } catch {
+    return '—';
+  }
+}
 
 export default async function AnagraficaTab({
   params,
@@ -31,53 +47,143 @@ export default async function AnagraficaTab({
     .map((t) => t.tag)
     .sort();
   const canEditTags = ctx.role === 'admin' || ctx.role === 'office';
+  const canEditCliente = ctx.role === 'admin' || ctx.role === 'office';
+
+  // Titolo umano (con spazi): preferisce la descrizione AI finale, poi la
+  // proposta. È il "cosa è davvero" della commessa, da mostrare leggibile
+  // sopra il nome_cartella tecnico (che è ScritroCosìPerNextcloud).
+  const titoloUmano =
+    (c.descrizione_ai_finale ?? c.descrizione_ai_proposta ?? '').trim() || null;
+
+  const telefoni = (cliente?.telefoni as string[] | null | undefined) ?? [];
+  const email = (cliente?.email as string[] | null | undefined) ?? [];
 
   return (
     <div className="space-y-4">
+      {/* HERO — Titolo umano della commessa (leggibile, con spazi).
+          Sotto, il nome cartella tecnico in mono come metadata. */}
+      {titoloUmano ? (
+        <Card className="border-primary/15 bg-gradient-to-br from-primary/[0.04] via-transparent to-transparent">
+          <CardContent className="space-y-1.5 p-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary/80">
+              Descrizione cantiere
+            </p>
+            <h2 className="break-words text-lg font-semibold leading-snug text-foreground">
+              {titoloUmano}
+            </h2>
+            {c.nome_cartella ? (
+              <p className="break-all pt-1 font-mono text-[11px] text-muted-foreground">
+                {c.nome_cartella}
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Cliente</CardTitle>
+        {/* CLIENTE — leggero tinto warm + bottone EDIT */}
+        <Card className="border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/10">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <User2 className="h-3.5 w-3.5" aria-hidden="true" />
+              Cliente
+            </CardTitle>
+            {canEditCliente && cliente?.id ? (
+              <ClienteEditDialog
+                cliente={{
+                  id: cliente.id as string,
+                  ragione_sociale: (cliente.ragione_sociale as string) ?? null,
+                  tipo:
+                    (cliente as { tipo?: 'persona_fisica' | 'azienda' | null })
+                      .tipo ?? null,
+                  indirizzo: (cliente.indirizzo as string | null) ?? null,
+                  citta: (cliente.citta as string | null) ?? null,
+                  cap:
+                    (cliente as { cap?: string | null }).cap ?? null,
+                  provincia:
+                    (cliente as { provincia?: string | null }).provincia ??
+                    null,
+                  partita_iva:
+                    (cliente as { partita_iva?: string | null }).partita_iva ??
+                    null,
+                  codice_fiscale:
+                    (cliente as { codice_fiscale?: string | null })
+                      .codice_fiscale ?? null,
+                  telefoni,
+                  email,
+                  note:
+                    (cliente as { note?: string | null }).note ?? null,
+                }}
+              />
+            ) : null}
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <Field label="Ragione sociale" value={cliente?.ragione_sociale} />
+          <CardContent className="space-y-2.5 text-sm">
+            <Field
+              label="Ragione sociale"
+              value={cliente?.ragione_sociale}
+              bold
+            />
             <Field label="Indirizzo" value={cliente?.indirizzo} />
-            <Field label="Città" value={cliente?.citta} />
+            <Field
+              label="Città"
+              value={[
+                (cliente as { cap?: string | null })?.cap,
+                cliente?.citta,
+                (cliente as { provincia?: string | null })?.provincia
+                  ? `(${(cliente as { provincia?: string | null }).provincia})`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            />
             <Field
               label="Telefono"
-              value={(cliente?.telefoni ?? []).join(', ') || '—'}
+              value={telefoni.length > 0 ? telefoni.join(' · ') : null}
             />
             <Field
               label="Email"
-              value={(cliente?.email ?? []).join(', ') || '—'}
+              value={email.length > 0 ? email.join(' · ') : null}
             />
           </CardContent>
         </Card>
 
+        {/* COMMESSA — dettagli tecnici, no truncate, grassetti su valori chiave */}
         <Card>
-          <CardHeader>
-            <CardTitle>Commessa</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Commessa
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <Field label="Codice interno" value={c.codice_interno} mono />
-            <Field label="Nome cartella" value={c.nome_cartella} mono />
+          <CardContent className="space-y-2.5 text-sm">
+            <Field label="Codice interno" value={c.codice_interno} mono bold />
             <Field
               label="Indirizzo cantiere"
               value={c.cliente_indirizzo_cantiere}
+              bold
             />
-            <Field label="Responsabile" value={resp?.display_name} />
+            <Field label="Responsabile" value={resp?.display_name} bold />
             <Field
               label="Origine"
               value={ticket?.codice ? `Ticket ${ticket.codice}` : 'Manuale'}
             />
-            <Field
-              label="Descrizione"
-              value={c.descrizione_ai_finale ?? c.descrizione_ai_proposta}
-            />
+            <hr className="my-2 border-border/60" />
+            <Field label="Nome cartella" value={c.nome_cartella} mono small />
             <Field
               label="Cartella cloud"
               value={c.cloud_folder_path}
               mono
+              small
+            />
+            <hr className="my-2 border-border/60" />
+            <Field
+              label="Creata il"
+              value={fmtData(c.created_at as string | null | undefined)}
+              small
+            />
+            <Field
+              label="Apertura cantiere"
+              value={fmtData(c.data_apertura as string | null | undefined)}
+              small
             />
           </CardContent>
         </Card>
@@ -85,7 +191,7 @@ export default async function AnagraficaTab({
 
       {/* Tag liberi — categorizzazione trasversale */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm uppercase tracking-wide text-muted-foreground">
             <TagIcon className="h-3.5 w-3.5" aria-hidden="true" />
             Tag
@@ -108,21 +214,33 @@ function Field({
   label,
   value,
   mono,
+  bold,
+  small,
 }: {
   label: string;
   value: string | null | undefined;
   mono?: boolean;
+  bold?: boolean;
+  small?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 items-start gap-2">
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </dt>
       <dd
-        className={`col-span-2 min-w-0 truncate ${mono ? 'font-mono text-xs' : ''}`}
-        title={value ?? undefined}
+        className={[
+          'col-span-2 min-w-0 break-words',
+          mono ? 'font-mono' : '',
+          mono && small ? 'text-xs' : '',
+          mono && !small ? 'text-xs' : '',
+          !mono && small ? 'text-xs' : '',
+          bold ? 'font-medium text-foreground' : 'text-foreground/90',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
-        {value || '—'}
+        {value || <span className="text-muted-foreground">—</span>}
       </dd>
     </div>
   );
