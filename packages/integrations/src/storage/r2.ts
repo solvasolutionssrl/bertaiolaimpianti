@@ -318,13 +318,58 @@ export const MULTIPART_THRESHOLD_BYTES = 100 * 1024 * 1024; // 100 MB
 /** Dimensione delle parti multipart (R2 minimo: 5 MB per le parti non finali). */
 export const MULTIPART_PART_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-/** Costruisce la chiave R2 secondo lo schema convenzionale. */
+/** Costruisce la chiave R2 con path leggibile per debugging dal bucket.
+ *  Schema: tenants/{slug}/commesse/{codice}[_{nome-cartella}]/{section}/{filename}
+ *  Es: tenants/BER/commesse/BER-0526-007_AgriCampeggio/media/abc12345_foto.jpg
+ *
+ *  - Lo slug del tenant è leggibile (vs UUID).
+ *  - Il codice interno + nome cartella umano identificano la commessa a colpo
+ *    d'occhio. Niente più cartelle UUID nel bucket.
+ *  - Il fileRefId resta come prefix corto (8 char) per garantire unicità
+ *    anche se due file hanno stesso nome.
+ *  - Per allegati riunione (sectionLabel='riunioni') il path resta neutro,
+ *    perché la sotto-cartella per data è già nel Nextcloud path.
+ *
+ *  Fallback: se mancano slug/codice (es. seed/test) si usa UUID come prima.
+ *  Backward compatible: i file vecchi mantengono la r2_key salvata in DB.
+ */
 export function buildR2Key(input: {
   tenantId: string;
   commessaId: string;
   fileRefId: string;
   filename: string;
+  /** Slug breve del tenant (es. "BER"). Se assente: usa tenantId UUID. */
+  tenantSlug?: string | null;
+  /** Codice interno commessa (es. "BER-0526-007"). Se assente: usa commessaId. */
+  codiceInterno?: string | null;
+  /** Nome cartella umano della commessa (es. "AgriCampeggio"). Opzionale. */
+  nomeCartella?: string | null;
+  /** Etichetta della section R2 (default "media"). */
+  sectionLabel?: string;
 }): string {
-  const safeName = input.filename.replace(/[/\\]+/g, '_');
-  return `tenants/${input.tenantId}/commesse/${input.commessaId}/media/${input.fileRefId}/original/${safeName}`;
+  const safeName = sanitizeKeySegment(input.filename, 100);
+  const tenantSeg = sanitizeKeySegment(input.tenantSlug ?? input.tenantId, 40);
+  const codiceSeg = sanitizeKeySegment(input.codiceInterno ?? input.commessaId, 40);
+  const cartellaSlug = input.nomeCartella
+    ? sanitizeKeySegment(input.nomeCartella, 40)
+    : '';
+  const commessaSeg = cartellaSlug ? `${codiceSeg}_${cartellaSlug}` : codiceSeg;
+  const fileIdShort = input.fileRefId.replace(/-/g, '').slice(0, 8);
+  const section = input.sectionLabel
+    ? sanitizeKeySegment(input.sectionLabel, 20)
+    : 'media';
+  return `tenants/${tenantSeg}/commesse/${commessaSeg}/${section}/${fileIdShort}_${safeName}`;
+}
+
+/** Sanitizza un segmento di chiave R2: rimuove caratteri non sicuri,
+ *  preserva alfanumerici + `-` `_` `.`, sostituisce gli spazi con `_`. */
+function sanitizeKeySegment(input: string, maxLen: number): string {
+  return input
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, maxLen)
+    || 'item';
 }

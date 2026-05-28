@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   const supabase = createServerSupabase();
   const { data: commessa, error: cErr } = await supabase
     .from('commesse')
-    .select('id, cloud_folder_path')
+    .select('id, cloud_folder_path, codice_interno, nome_cartella')
     .eq('id', body.commessaId)
     .single();
 
@@ -82,11 +82,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 4. Risolvi R2 provider (tenant config con fallback env)
+  // 4. Risolvi R2 provider (tenant config con fallback env) + slug tenant
+  // (per usare path R2 leggibili invece di UUID).
   const service = createServiceSupabase();
   const { data: tenantRow } = await service
     .from('tenants')
-    .select('r2_config')
+    .select('r2_config, slug')
     .eq('id', ctx.tenantId)
     .maybeSingle();
 
@@ -175,12 +176,17 @@ export async function POST(request: NextRequest) {
   }
   // Path Nextcloud (destinazione finale, usato dal worker di Fase 2)
   const nextcloudPath = pathSegments.join('/');
-  // Chiave R2 (staging buffer)
+  // Chiave R2 (staging buffer) — usa slug + codice + nome cartella per
+  // path leggibile. Section "riunioni" se è un allegato di riunione.
   const r2Key = buildR2Key({
     tenantId: ctx.tenantId,
     commessaId: body.commessaId,
     fileRefId,
     filename: generatedFilename,
+    tenantSlug: (tenantRow?.slug as string | undefined) ?? null,
+    codiceInterno: (commessa.codice_interno as string | undefined) ?? null,
+    nomeCartella: (commessa.nome_cartella as string | undefined) ?? null,
+    sectionLabel: body.riunioneId ? 'riunioni' : 'media',
   });
 
   // 6. Decidi mode (single vs multipart) e prepara presigned URL

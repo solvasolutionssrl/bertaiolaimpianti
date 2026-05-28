@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { usePathname } from 'next/navigation';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -29,6 +30,11 @@ const AFTERGLOW_MS = 5_000;
 
 export function UploadTray() {
   const ctx = useUploadQueueOptional();
+  const pathname = usePathname();
+  // PWA mobile: la bottom nav è fissa con h-16 (64px) + safe-area-inset-bottom.
+  // Posizioniamo il tray centrato sopra la nav. Su office desktop / portal /
+  // login resta in basso a destra come prima.
+  const isMobilePwa = (pathname ?? '').startsWith('/mobile');
   const [expanded, setExpanded] = React.useState(true);
   const [hideAt, setHideAt] = React.useState<number | null>(null);
 
@@ -87,7 +93,15 @@ export function UploadTray() {
     <div
       role="region"
       aria-label="Upload in corso"
-      className="pointer-events-auto fixed bottom-4 right-4 z-50 w-[320px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5"
+      className={cn(
+        'pointer-events-auto fixed z-50 w-[320px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-border bg-card shadow-xl ring-1 ring-black/5',
+        isMobilePwa
+          ? // PWA mobile: centrato in basso, ~5.5rem sopra il viewport per
+            // stare appena sopra la bottom nav (h-16) + safe-area-inset-bottom.
+            'bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2'
+          : // Desktop / office: in basso a destra.
+            'bottom-4 right-4',
+      )}
     >
       {/* Header */}
       <button

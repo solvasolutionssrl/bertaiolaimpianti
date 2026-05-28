@@ -186,6 +186,7 @@ export async function POST(
     const { error: linkErr } = await supabase
       .from('commessa_riunione_allegato' as never)
       .insert({
+        tenant_id: ctx.tenantId,
         riunione_id: refRiunioneId,
         file_ref_id: fileRefId,
         kind,
