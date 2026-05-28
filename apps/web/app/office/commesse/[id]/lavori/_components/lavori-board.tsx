@@ -40,6 +40,10 @@ import { eliminaRiunione } from '../../../../../_actions/commessa-riunione';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { useUploadQueue } from '@/app/_components/upload-queue-provider';
 import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
+import {
+  MediaLightbox,
+  type MediaItem,
+} from '@/app/_components/media-lightbox';
 
 import { CreaTodoDialog } from './crea-todo-dialog';
 import { CreaRiunioneDialog } from './crea-riunione-dialog';
@@ -1111,6 +1115,42 @@ function RiunioneTimelineEntry({
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = React.useState(false);
+  const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
+
+  // Lightbox: foto + video. PDF restano link separati.
+  const mediaAllegati = React.useMemo(
+    () =>
+      r.allegati.filter((a) => {
+        const m = a.mime ?? '';
+        return (
+          a.kind === 'foto' ||
+          a.kind === 'video' ||
+          m.startsWith('image/') ||
+          m.startsWith('video/')
+        );
+      }),
+    [r.allegati],
+  );
+  const lightboxItems = React.useMemo<MediaItem[]>(
+    () =>
+      mediaAllegati.map((a) => {
+        const isVideo = a.kind === 'video' || (a.mime ?? '').startsWith('video/');
+        return {
+          id: a.file_ref_id,
+          mime: a.mime,
+          filename: a.filename,
+          src: isVideo
+            ? `/api/media/${a.file_ref_id}`
+            : `/api/photo/${a.file_ref_id}`,
+          annotation: { fileRefId: a.file_ref_id },
+        };
+      }),
+    [mediaAllegati],
+  );
+  const openLightboxAt = (fileRefId: string) => {
+    const idx = mediaAllegati.findIndex((a) => a.file_ref_id === fileRefId);
+    if (idx >= 0) setLightboxIdx(idx);
+  };
   const hasReport = !!(r.reportino?.trim());
 
   return (
@@ -1188,13 +1228,13 @@ function RiunioneTimelineEntry({
                   const isVideo = al.kind === 'video' || mime.startsWith('video/');
                   if (isFoto) {
                     return (
-                      <a
+                      <button
                         key={al.id}
-                        href={`/api/photo/${al.file_ref_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="aspect-square overflow-hidden rounded border border-border bg-card"
+                        type="button"
+                        onClick={() => openLightboxAt(al.file_ref_id)}
                         title={al.filename}
+                        aria-label={`Apri ${al.filename}`}
+                        className="aspect-square overflow-hidden rounded border border-border bg-card transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -1203,18 +1243,18 @@ function RiunioneTimelineEntry({
                           className="h-full w-full object-cover"
                           loading="lazy"
                         />
-                      </a>
+                      </button>
                     );
                   }
                   if (isVideo) {
                     return (
-                      <a
+                      <button
                         key={al.id}
-                        href={`/api/media/${al.file_ref_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        type="button"
+                        onClick={() => openLightboxAt(al.file_ref_id)}
                         title={al.filename}
-                        className="group relative aspect-square overflow-hidden rounded border border-border bg-black"
+                        aria-label={`Apri ${al.filename}`}
+                        className="group relative aspect-square overflow-hidden rounded border border-border bg-black transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
                       >
                         <video
                           src={`/api/media/${al.file_ref_id}`}
@@ -1228,7 +1268,7 @@ function RiunioneTimelineEntry({
                             ▶
                           </span>
                         </span>
-                      </a>
+                      </button>
                     );
                   }
                   return (
@@ -1266,6 +1306,17 @@ function RiunioneTimelineEntry({
             </>
           ) : null}
         </div>
+      ) : null}
+
+      {lightboxItems.length > 0 ? (
+        <MediaLightbox
+          items={lightboxItems}
+          initialIndex={lightboxIdx}
+          open={lightboxIdx !== null}
+          onOpenChange={(o) => {
+            if (!o) setLightboxIdx(null);
+          }}
+        />
       ) : null}
     </div>
   );
