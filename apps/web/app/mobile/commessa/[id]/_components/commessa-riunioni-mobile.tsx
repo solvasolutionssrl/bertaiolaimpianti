@@ -25,7 +25,7 @@ export interface RiunioneAllegatoMobile {
   mime: string;
   /** Path relativo (cloud_folder_path completo) — usato per il viewer cartella. */
   path: string | null;
-  kind: 'foto' | 'pdf_acquisito';
+  kind: 'foto' | 'video' | 'pdf_acquisito';
 }
 
 export interface RiunioneMobileRow {
@@ -91,29 +91,45 @@ function RiunioneCard({
   const hasReport = !!(r.reportino && r.reportino.trim());
   const fallbackText = (r.corpo_libero || r.trascrizione || '').trim();
 
-  // Solo le foto sono visualizzabili nel lightbox. I PDF restano link diretti.
-  const fotoAllegati = React.useMemo(
+  // Foto e video sono visualizzabili nel lightbox (che ha già VideoPlayer
+  // integrato). I PDF restano link diretti.
+  const mediaAllegati = React.useMemo(
     () =>
-      r.allegati.filter(
-        (a) => a.kind === 'foto' || (a.mime ?? '').startsWith('image/'),
-      ),
+      r.allegati.filter((a) => {
+        const m = a.mime ?? '';
+        return (
+          a.kind === 'foto' ||
+          a.kind === 'video' ||
+          m.startsWith('image/') ||
+          m.startsWith('video/')
+        );
+      }),
     [r.allegati],
   );
 
   const lightboxItems = React.useMemo<MediaItem[]>(
     () =>
-      fotoAllegati.map((a) => ({
-        id: a.file_ref_id,
-        mime: a.mime,
-        filename: a.filename,
-        src: `/api/photo/${a.file_ref_id}`,
-        annotation: { fileRefId: a.file_ref_id },
-      })),
-    [fotoAllegati],
+      mediaAllegati.map((a) => {
+        const isVideo =
+          a.kind === 'video' || (a.mime ?? '').startsWith('video/');
+        return {
+          id: a.file_ref_id,
+          mime: a.mime,
+          filename: a.filename,
+          // I video sono solo sul nuovo flusso R2 → resolver /api/media/<id>
+          // gestisce sia presigned GET R2 che redirect (Range-requests OK).
+          // Per le foto resta /api/photo per compat con righe legacy.
+          src: isVideo
+            ? `/api/media/${a.file_ref_id}`
+            : `/api/photo/${a.file_ref_id}`,
+          annotation: { fileRefId: a.file_ref_id },
+        };
+      }),
+    [mediaAllegati],
   );
 
   const openLightboxAt = (fileRefId: string) => {
-    const idx = fotoAllegati.findIndex((a) => a.file_ref_id === fileRefId);
+    const idx = mediaAllegati.findIndex((a) => a.file_ref_id === fileRefId);
     if (idx >= 0) setLightboxIdx(idx);
   };
 
@@ -199,7 +215,9 @@ function RiunioneCard({
               </p>
               <div className="grid grid-cols-3 gap-1.5">
                 {r.allegati.map((a) => {
-                  const isFoto = a.kind === 'foto' || (a.mime ?? '').startsWith('image/');
+                  const mime = a.mime ?? '';
+                  const isFoto = a.kind === 'foto' || mime.startsWith('image/');
+                  const isVideo = a.kind === 'video' || mime.startsWith('video/');
                   if (isFoto) {
                     return (
                       <button
@@ -219,16 +237,42 @@ function RiunioneCard({
                       </button>
                     );
                   }
+                  if (isVideo) {
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => openLightboxAt(a.file_ref_id)}
+                        aria-label={`Apri ${a.filename}`}
+                        className="group relative aspect-square overflow-hidden rounded-md border border-border bg-black transition-transform active:scale-[0.96]"
+                      >
+                        <video
+                          src={`/api/media/${a.file_ref_id}`}
+                          preload="metadata"
+                          muted
+                          playsInline
+                          className="h-full w-full object-cover"
+                        />
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white">
+                            <span aria-hidden="true" className="text-[10px]">▶</span>
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  }
+                  // PDF / altro: chip con nome troncato e link al file su Nextcloud.
                   return (
                     <a
                       key={a.id}
                       href={a.path ? `/api/cloud/file?path=${encodeURIComponent(a.path)}` : '#'}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-md border border-border bg-card p-1 text-center"
+                      className="flex aspect-square flex-col items-center justify-center gap-1 overflow-hidden rounded-md border border-border bg-card p-1.5 text-center"
+                      title={a.filename}
                     >
-                      <FileText className="h-5 w-5 text-muted-foreground" />
-                      <span className="line-clamp-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+                      <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+                      <span className="line-clamp-2 w-full break-all font-mono text-[8px] uppercase tracking-wider text-muted-foreground">
                         {a.filename.replace(/\.pdf$/i, '')}
                       </span>
                     </a>

@@ -82,7 +82,7 @@ export interface RiunioneAllegatoView {
   filename: string;
   mime: string;
   path: string | null;
-  kind: 'foto' | 'pdf_acquisito';
+  kind: 'foto' | 'video' | 'pdf_acquisito';
 }
 
 interface RiunioneView {
@@ -1183,25 +1183,55 @@ function RiunioneTimelineEntry({
               </p>
               <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
                 {r.allegati.slice(0, 8).map((al) => {
-                  const isFoto = al.kind === 'foto' || (al.mime ?? '').startsWith('image/');
-                  return isFoto ? (
-                    <a
-                      key={al.id}
-                      href={`/api/photo/${al.file_ref_id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="aspect-square overflow-hidden rounded border border-border bg-card"
-                      title={al.filename}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`/api/photo/${al.file_ref_id}`}
-                        alt={al.filename}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    </a>
-                  ) : (
+                  const mime = al.mime ?? '';
+                  const isFoto = al.kind === 'foto' || mime.startsWith('image/');
+                  const isVideo = al.kind === 'video' || mime.startsWith('video/');
+                  if (isFoto) {
+                    return (
+                      <a
+                        key={al.id}
+                        href={`/api/photo/${al.file_ref_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="aspect-square overflow-hidden rounded border border-border bg-card"
+                        title={al.filename}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`/api/photo/${al.file_ref_id}`}
+                          alt={al.filename}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </a>
+                    );
+                  }
+                  if (isVideo) {
+                    return (
+                      <a
+                        key={al.id}
+                        href={`/api/media/${al.file_ref_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={al.filename}
+                        className="group relative aspect-square overflow-hidden rounded border border-border bg-black"
+                      >
+                        <video
+                          src={`/api/media/${al.file_ref_id}`}
+                          preload="metadata"
+                          muted
+                          playsInline
+                          className="h-full w-full object-cover"
+                        />
+                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/30">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white text-[10px]">
+                            ▶
+                          </span>
+                        </span>
+                      </a>
+                    );
+                  }
+                  return (
                     <a
                       key={al.id}
                       href={al.path ? `/api/cloud/file?path=${encodeURIComponent(al.path)}` : '#'}
