@@ -321,39 +321,48 @@ export function LavoriBoard({
       router.refresh();
     });
 
-  const onDelete = (todo: TodoView) =>
+  const onDelete = async (todo: TodoView) => {
+    // askConfirm FUORI da startTransition (vedi nota su onDeleteRiunione).
+    const ok = await askConfirm({
+      title: 'Eliminare il TODO?',
+      description: `"${todo.titolo}" — l'azione cancella anche le note e gli allegati associati.`,
+      destructive: true,
+      confirmLabel: 'Elimina',
+    });
+    if (!ok) return;
     start(async () => {
-      if (
-        !(await askConfirm({
-          title: 'Eliminare il TODO?',
-          description: `"${todo.titolo}" — l'azione cancella anche le note e gli allegati associati.`,
-          destructive: true,
-          confirmLabel: 'Elimina',
-        }))
-      )
-        return;
       const res = await eliminaTodo({ id: todo.id });
-      if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
-      router.refresh();
-    });
-
-  const onDeleteRiunione = (r: RiunioneView) =>
-    start(async () => {
-      if (
-        !(await askConfirm({
-          title: 'Eliminare la riunione?',
-          description: r.titolo
-            ? `"${r.titolo}" del ${fmtData(r.data_riunione)} — cancellazione definitiva.`
-            : `Riunione del ${fmtData(r.data_riunione)} — cancellazione definitiva.`,
-          destructive: true,
-          confirmLabel: 'Elimina',
-        }))
-      )
+      if (!res.ok) {
+        await showAlert({ title: 'Errore', body: res.error });
         return;
-      const res = await eliminaRiunione({ id: r.id });
-      if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
+      }
       router.refresh();
     });
+  };
+
+  const onDeleteRiunione = async (r: RiunioneView) => {
+    // askConfirm FUORI da startTransition: il dialog Radix gestisce il suo
+    // proprio state e startTransition+async può abortire la callback prima
+    // che l'utente risponda al popup. Fix: confirm prima, poi delete in
+    // transition (utile solo per il pending state).
+    const ok = await askConfirm({
+      title: 'Eliminare la riunione?',
+      description: r.titolo
+        ? `"${r.titolo}" del ${fmtData(r.data_riunione)} — cancellazione definitiva.`
+        : `Riunione del ${fmtData(r.data_riunione)} — cancellazione definitiva.`,
+      destructive: true,
+      confirmLabel: 'Elimina',
+    });
+    if (!ok) return;
+    start(async () => {
+      const res = await eliminaRiunione({ id: r.id });
+      if (!res.ok) {
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   // ─── render ──────────────────────────────────────────────────────────
 
