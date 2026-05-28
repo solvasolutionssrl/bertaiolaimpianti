@@ -169,10 +169,10 @@
    * main wrapper dell'OfficeShell. */
   .bg-canvas {
     background:
-      radial-gradient(1100px 700px at 0% 0%, hsl(220 95% 96%) 0%, transparent 55%),
-      radial-gradient(900px 600px at 100% 0%, hsl(28 100% 96%) 0%, transparent 55%),
-      radial-gradient(800px 500px at 50% 100%, hsl(220 80% 97%) 0%, transparent 60%),
-      hsl(var(--background));
+      radial-gradient(1100px 700px at 0% 0%, hsl(220 95% 94%) 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 0%, hsl(28 100% 95%) 0%, transparent 55%),
+      radial-gradient(800px 500px at 50% 100%, hsl(220 80% 96%) 0%, transparent 60%),
+      hsl(34 28% 97%);
   }
   .dark .bg-canvas {
     background:
@@ -187,10 +187,10 @@
    * Pensato per il wrapper del layout /mobile. */
   .bg-canvas-mobile {
     background:
-      radial-gradient(620px 420px at 112% 15%, hsl(28 100% 94%) 0%, transparent 58%),
-      radial-gradient(700px 520px at -12% 33%, hsl(220 92% 95%) 0%, transparent 55%),
-      radial-gradient(560px 640px at 50% 102%, hsl(220 70% 96%) 0%, transparent 60%),
-      hsl(34 26% 97%);
+      radial-gradient(640px 440px at 112% 13%, hsl(28 100% 90%) 0%, transparent 60%),
+      radial-gradient(720px 540px at -14% 30%, hsl(220 94% 92%) 0%, transparent 58%),
+      radial-gradient(600px 660px at 50% 103%, hsl(220 78% 94%) 0%, transparent 62%),
+      hsl(34 32% 96%);
   }
   .dark .bg-canvas-mobile {
     background:

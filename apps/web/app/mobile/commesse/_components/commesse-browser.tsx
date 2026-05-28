@@ -194,7 +194,7 @@ function CommessaRow({ c }: { c: BrowserRow }) {
   return (
     <Link
       href={`/mobile/commessa/${c.id}`}
-      className="group flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft-md transition-all active:scale-[0.995] active:bg-muted"
+      className="group flex items-center gap-3 rounded-lg border border-border bg-gradient-to-br from-card via-card to-primary-soft/35 px-3 py-2.5 shadow-soft-md transition-all active:scale-[0.995] active:bg-muted"
     >
       <StatoLed stato={c.stato} />
       <div className="min-w-0 flex-1">

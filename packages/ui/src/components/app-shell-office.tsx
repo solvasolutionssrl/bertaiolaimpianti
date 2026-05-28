@@ -561,7 +561,7 @@ function OfficeShell({
         ) : null}
 
         {/* ===================== Main ===================== */}
-        <main className="flex min-w-0 flex-1 flex-col bg-background">
+        <main className="flex min-w-0 flex-1 flex-col bg-canvas">
           <div className="mx-auto w-full max-w-screen-2xl flex-1 px-6 py-8 md:px-10 md:py-10">
             {children}
           </div>
