@@ -29,8 +29,22 @@ import {
  * sovrascrive, e la verifica size garantisce coerenza).
  */
 
-/** File più grandi di così vengono saltati dal worker (per ora). */
-export const SYNC_MAX_BUFFER_BYTES = 500 * 1024 * 1024;
+/**
+ * Limite massimo file sync. Con streaming non c'è OOM, il limite è
+ * solo banda × maxDuration. 5GB copre i video più grandi realistici
+ * (iPhone 4K @ 60fps ≈ 400MB / minuto).
+ */
+export const SYNC_MAX_BUFFER_BYTES = 5 * 1024 * 1024 * 1024;
+
+/**
+ * Sotto questa soglia → modalità buffered con SHA-256 verify (più sicuro
+ * per integrità). Sopra → streaming diretto R2 → Nextcloud, niente
+ * memoria, niente OOM su Vercel Hobby (1GB heap).
+ *
+ * 50 MB è il punto in cui il buffer è ancora trascurabile su Vercel ma
+ * la SHA verify rallenta poco.
+ */
+const SYNC_STREAMING_THRESHOLD_BYTES = 50 * 1024 * 1024;
 
 /**
  * Soglia "stale" per i file in stato 'syncing': se un file è in syncing
@@ -186,59 +200,79 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
     );
   }
 
-  // 5. Download buffered
-  let buffer: Uint8Array;
-  try {
-    buffer = await downloadFromR2(r2, ref.r2_key);
-  } catch (e) {
-    return finalizeFailed(
-      service,
-      fileRefId,
-      ref.sync_attempts + 1,
-      `download R2: ${e instanceof Error ? e.message : 'unknown'}`,
-      t0,
-    );
-  }
+  // 5-7. Trasferimento R2 → Nextcloud.
+  // Branch dinamico:
+  //   - File ≤ SYNC_STREAMING_THRESHOLD_BYTES → modalità buffered con
+  //     SHA-256 verify (più sicuro: integrità garantita).
+  //   - File > threshold → streaming diretto: ReadableStream pipato a
+  //     uploadStream. Memoria costante (~10MB), nessun OOM, supporto
+  //     fino a 5GB.
+  const isStreaming = r2Size > SYNC_STREAMING_THRESHOLD_BYTES;
+  const streamingSupported = typeof nextcloud.uploadStream === 'function';
 
-  if (buffer.byteLength !== r2Size) {
-    return finalizeFailed(
-      service,
-      fileRefId,
-      ref.sync_attempts + 1,
-      `size mismatch download vs HEAD R2: ${buffer.byteLength} vs ${r2Size}`,
-      t0,
-    );
-  }
-
-  // 6. Verifica SHA-256 se dichiarato dal client
-  if (ref.sha256) {
-    const actual = createHash('sha256').update(buffer).digest('hex');
-    if (actual !== ref.sha256.toLowerCase()) {
-      return finalizeFailed(
-        service,
-        fileRefId,
-        ref.sync_attempts + 1,
-        `sha256 mismatch: atteso ${ref.sha256}, ricevuto ${actual}`,
-        t0,
-      );
-    }
-  }
-
-  // 7. Crea cartella parent + PUT su Nextcloud
   try {
     const parentPath = ref.path.split('/').slice(0, -1).join('/');
     if (parentPath) await nextcloud.createFolder(parentPath);
 
-    await nextcloud.uploadFile(ref.path, buffer, {
-      contentType: ref.mime,
-      upsert: true,
-    });
+    if (isStreaming && streamingSupported) {
+      // ----- Modalità streaming (file grandi) -----
+      const { url } = await r2.createPresignedGetUrl(ref.r2_key, {
+        ttlSec: 60 * 30, // 30 min: copre anche file molto grandi con banda lenta
+      });
+      const r2Res = await fetch(url, { cache: 'no-store' });
+      if (!r2Res.ok || !r2Res.body) {
+        return finalizeFailed(
+          service,
+          fileRefId,
+          ref.sync_attempts + 1,
+          `GET R2 stream ${r2Res.status}`,
+          t0,
+        );
+      }
+      // uploadStream invia il body direttamente con Content-Length noto
+      // (presigned URL R2 garantisce stesso size del HEAD). Nessun buffer
+      // intermedio.
+      await nextcloud.uploadStream!(ref.path, r2Res.body, r2Size, {
+        contentType: ref.mime,
+      });
+    } else {
+      // ----- Modalità buffered (file piccoli, retrocompat per provider
+      //       che non implementano uploadStream) -----
+      const buffer = await downloadFromR2(r2, ref.r2_key);
+      if (buffer.byteLength !== r2Size) {
+        return finalizeFailed(
+          service,
+          fileRefId,
+          ref.sync_attempts + 1,
+          `size mismatch download vs HEAD R2: ${buffer.byteLength} vs ${r2Size}`,
+          t0,
+        );
+      }
+      if (ref.sha256) {
+        const actual = createHash('sha256').update(buffer).digest('hex');
+        if (actual !== ref.sha256.toLowerCase()) {
+          return finalizeFailed(
+            service,
+            fileRefId,
+            ref.sync_attempts + 1,
+            `sha256 mismatch: atteso ${ref.sha256}, ricevuto ${actual}`,
+            t0,
+          );
+        }
+      }
+      await nextcloud.uploadFile(ref.path, buffer, {
+        contentType: ref.mime,
+        upsert: true,
+      });
+    }
   } catch (e) {
+    const msg = e instanceof Error ? e.message : 'unknown';
+    const mode = isStreaming && streamingSupported ? 'stream' : 'buffer';
     return finalizeFailed(
       service,
       fileRefId,
       ref.sync_attempts + 1,
-      `PUT Nextcloud: ${e instanceof Error ? e.message : 'unknown'}`,
+      `PUT Nextcloud (${mode}): ${msg}`,
       t0,
     );
   }
@@ -293,8 +327,13 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
       nextcloud_path: ref.path,
       size_bytes: r2Size,
       sync_attempts: ref.sync_attempts + 1,
-      sha256_verified: Boolean(ref.sha256),
+      sha256_verified: Boolean(ref.sha256) && !isStreaming,
+      mode: isStreaming && streamingSupported ? 'stream' : 'buffer',
       duration_ms: Date.now() - t0,
+      throughput_mbps:
+        Date.now() - t0 > 0
+          ? Number(((r2Size / (Date.now() - t0)) * 1000 / 1024 / 1024).toFixed(2))
+          : null,
     },
   });
 

@@ -348,12 +348,15 @@ export default async function MediaSyncPage({ searchParams }: Props) {
                         <td className="px-3 py-2 align-top">
                           <StatusBadge status={r.status} />
                           {r.last_sync_error && (
-                            <p
-                              className="mt-1 max-w-[260px] truncate font-mono text-[10px] text-destructive"
-                              title={r.last_sync_error}
-                            >
-                              {r.last_sync_error}
-                            </p>
+                            <details className="mt-1 max-w-[320px]">
+                              <summary className="cursor-pointer truncate font-mono text-[10px] text-destructive">
+                                {r.last_sync_error.slice(0, 60)}
+                                {r.last_sync_error.length > 60 ? '…' : ''}
+                              </summary>
+                              <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded border border-destructive/30 bg-destructive/5 px-2 py-1 font-mono text-[10px] text-destructive">
+                                {r.last_sync_error}
+                              </pre>
+                            </details>
                           )}
                         </td>
                         <td className="px-3 py-2 text-right align-top font-mono text-xs tabular-nums">
@@ -372,7 +375,11 @@ export default async function MediaSyncPage({ searchParams }: Props) {
                           })}
                         </td>
                         <td className="px-3 py-2 align-top">
-                          <MediaRowActions fileRefId={r.id} canRetry={canRetry} />
+                          <MediaRowActions
+                            fileRefId={r.id}
+                            canRetry={canRetry}
+                            status={r.status}
+                          />
                         </td>
                       </tr>
                     );
