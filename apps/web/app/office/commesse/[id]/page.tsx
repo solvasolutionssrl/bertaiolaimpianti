@@ -178,7 +178,13 @@ export default async function AnagraficaTab({
                 .join(' ')}
             />
             {contatti.length > 0 ? (
-              <ContattiList contatti={contatti} clienteId={cliente?.id as string} />
+              <ContattiList
+                contatti={contatti}
+                contattiCommessa={contattiCommessa}
+                clienteId={cliente?.id as string}
+                commessaId={params.id}
+                canEdit={canEditCliente}
+              />
             ) : (
               <>
                 <Field
@@ -189,6 +195,16 @@ export default async function AnagraficaTab({
                   label="Email"
                   value={email.length > 0 ? email.join(' · ') : null}
                 />
+                {/* Editor scope commessa anche quando i contatti cliente sono
+                    vuoti: l'utente potrebbe voler aggiungere subito un
+                    referente di cantiere. */}
+                {cliente?.id && canEditCliente ? (
+                  <ContattiCommessaSection
+                    clienteId={cliente.id as string}
+                    commessaId={params.id}
+                    initial={contattiCommessa}
+                  />
+                ) : null}
               </>
             )}
             {(cliente as { note?: string | null })?.note?.trim() ? (
@@ -242,37 +258,6 @@ export default async function AnagraficaTab({
         </Card>
       </div>
 
-      {/* Contatti SPECIFICI di questa commessa (Ondata 4.1):
-          geometra del cantiere, capocantiere, vicino di casa, fornitore
-          dedicato — gente che NON appartiene alla rubrica permanente del
-          cliente ma serve solo per questo lavoro. */}
-      {cliente?.id ? (
-        <Card>
-          <CardHeader className="px-4 pb-2 pt-3">
-            <CardTitle className="flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              <span className="flex items-center gap-2">
-                <HardHat className="h-3.5 w-3.5" aria-hidden="true" />
-                Contatti di questa commessa
-              </span>
-              <span className="tabular-nums">{contattiCommessa.length}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-3">
-            <p className="mb-2 text-xs text-muted-foreground">
-              Persone specifiche di questo cantiere (es. geometra, capocantiere,
-              referente in loco). Restano legati a questa commessa: non
-              compaiono nelle altre del cliente.
-            </p>
-            <ContattiEditor
-              clienteId={cliente.id as string}
-              commessaId={params.id}
-              initial={contattiCommessa}
-              canEdit={canEditCliente}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
-
       {/* Tag liberi — categorizzazione trasversale */}
       <Card>
         <CardHeader className="px-4 pb-2 pt-3">
@@ -294,23 +279,21 @@ export default async function AnagraficaTab({
   );
 }
 
-/** Lista compatta dei contatti referente del cliente. Mostra nome + ruolo,
- *  link tel/mail tappabili, badge "Primario" sul principale. CTA finale
- *  per gestire i contatti dalla scheda cliente. */
+/** Lista contatti del cliente (passive view) + sezione "Referenti per
+ *  questa commessa" (CRUD inline via ContattiCommessaSection).
+ *  Visivamente integrata nella stessa "riga" della card cliente. */
 function ContattiList({
   contatti,
+  contattiCommessa,
   clienteId,
+  commessaId,
+  canEdit,
 }: {
-  contatti: Array<{
-    id: string;
-    nome: string;
-    ruolo: string | null;
-    telefono: string | null;
-    email: string | null;
-    is_primary: boolean;
-    ordine: number;
-  }>;
+  contatti: ContattoRow[];
+  contattiCommessa: ContattoRow[];
   clienteId: string;
+  commessaId: string;
+  canEdit: boolean;
 }) {
   return (
     <div className="grid grid-cols-3 items-start gap-2">
@@ -320,55 +303,103 @@ function ContattiList({
           Contatti
         </span>
       </dt>
-      <dd className="col-span-2 min-w-0 space-y-1.5">
+      <dd className="col-span-2 min-w-0 space-y-2">
+        {/* Contatti del cliente (riusabili su tutte le sue commesse) */}
         <ul className="space-y-1">
           {contatti.map((c) => (
-            <li key={c.id} className="text-xs">
-              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                <span className="font-medium text-foreground">{c.nome}</span>
-                {c.ruolo ? (
-                  <span className="text-muted-foreground">· {c.ruolo}</span>
-                ) : null}
-                {c.is_primary ? (
-                  <Badge
-                    variant="outline"
-                    className="border-primary/40 bg-primary/10 px-1 py-0 text-[9px] font-semibold uppercase tracking-wider text-primary"
-                  >
-                    <Star className="mr-0.5 h-2 w-2" />
-                    Primario
-                  </Badge>
-                ) : null}
-              </div>
-              <div className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-0.5">
-                {c.telefono ? (
-                  <a
-                    href={`tel:${c.telefono}`}
-                    className="inline-flex items-center gap-1 text-primary hover:underline"
-                  >
-                    <Phone className="h-3 w-3" aria-hidden="true" />
-                    {c.telefono}
-                  </a>
-                ) : null}
-                {c.email ? (
-                  <a
-                    href={`mailto:${c.email}`}
-                    className="inline-flex items-center gap-1 break-all text-foreground/80 hover:text-primary"
-                  >
-                    <Mail className="h-3 w-3" aria-hidden="true" />
-                    {c.email}
-                  </a>
-                ) : null}
-              </div>
-            </li>
+            <ContattoLine key={c.id} c={c} />
           ))}
         </ul>
         <Link
           href={`/office/clienti/${clienteId}`}
           className="inline-block text-[10px] uppercase tracking-wider text-muted-foreground hover:text-primary"
         >
-          Gestisci contatti →
+          Gestisci contatti cliente →
         </Link>
+
+        {/* Sezione scope-commessa visivamente staccata. Stesso "spazio"
+            della card cliente — non un'altra card. Il colore amber soft
+            la distingue come "specifica di questo cantiere". */}
+        <ContattiCommessaSection
+          clienteId={clienteId}
+          commessaId={commessaId}
+          initial={contattiCommessa}
+          canEdit={canEdit}
+        />
       </dd>
+    </div>
+  );
+}
+
+function ContattoLine({ c }: { c: ContattoRow }) {
+  return (
+    <li className="text-xs">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <span className="font-medium text-foreground">{c.nome}</span>
+        {c.ruolo ? (
+          <span className="text-muted-foreground">· {c.ruolo}</span>
+        ) : null}
+        {c.is_primary ? (
+          <Badge
+            variant="outline"
+            className="border-primary/40 bg-primary/10 px-1 py-0 text-[9px] font-semibold uppercase tracking-wider text-primary"
+          >
+            <Star className="mr-0.5 h-2 w-2" />
+            Primario
+          </Badge>
+        ) : null}
+      </div>
+      <div className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-0.5">
+        {c.telefono ? (
+          <a
+            href={`tel:${c.telefono}`}
+            className="inline-flex items-center gap-1 text-primary hover:underline"
+          >
+            <Phone className="h-3 w-3" aria-hidden="true" />
+            {c.telefono}
+          </a>
+        ) : null}
+        {c.email ? (
+          <a
+            href={`mailto:${c.email}`}
+            className="inline-flex items-center gap-1 break-all text-foreground/80 hover:text-primary"
+          >
+            <Mail className="h-3 w-3" aria-hidden="true" />
+            {c.email}
+          </a>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
+/** Sezione "Referenti per questa commessa" — visivamente staccata dalla
+ *  rubrica cliente con accent amber, ma DENTRO la stessa card cliente.
+ *  Usa il ContattiEditor in modalità scope=commessa. */
+function ContattiCommessaSection({
+  clienteId,
+  commessaId,
+  initial,
+  canEdit = true,
+}: {
+  clienteId: string;
+  commessaId: string;
+  initial: ContattoRow[];
+  canEdit?: boolean;
+}) {
+  if (!canEdit && initial.length === 0) return null;
+  return (
+    <div className="mt-2 rounded-md border-l-2 border-amber-500/40 bg-amber-50/40 px-2.5 py-2 dark:bg-amber-950/15">
+      <p className="mb-1.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">
+        <HardHat className="h-2.5 w-2.5" aria-hidden="true" />
+        Referenti di questa commessa
+      </p>
+      <ContattiEditor
+        clienteId={clienteId}
+        commessaId={commessaId}
+        initial={initial}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   Folder,
   ChevronRight,
   CloudUpload,
+  HardHat,
   User,
 } from 'lucide-react';
 
@@ -506,36 +507,60 @@ export default async function CommessaDetailPage({
           ) : null}
 
           {/* Contatti referente — chip tap-to-call per ciascuno.
+              Stile differenziato:
+                - Contatti del cliente: chip neutro (white/10 backdrop)
+                - Contatti della commessa: chip con accent amber + icona HardHat
+                  → riconoscibile come "specifico di questo cantiere"
               Fallback al vecchio singolo telefono se la rubrica è vuota. */}
           {contattiCliente.length > 0 ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {contattiCliente.slice(0, 4).map((c) =>
-                c.telefono ? (
-                  <a
-                    key={c.id}
-                    href={`tel:${c.telefono}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-3 py-1 text-xs text-primary-foreground/85 transition-colors hover:bg-primary-foreground/15 active:bg-primary-foreground/20"
-                    title={`Chiama ${c.nome}${c.ruolo ? ` (${c.ruolo})` : ''}`}
-                  >
-                    <Phone className="h-3 w-3" aria-hidden="true" />
-                    <span className="font-medium">{c.nome}</span>
-                    {c.ruolo ? (
-                      <span className="text-primary-foreground/60">· {c.ruolo}</span>
-                    ) : null}
-                  </a>
-                ) : (
+              {contattiCliente.slice(0, 5).map((c) => {
+                const isCantiere = Boolean(c.commessa_id);
+                const baseChip = isCantiere
+                  ? 'border border-amber-300/40 bg-amber-300/15 text-amber-50'
+                  : 'border border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground/85';
+                const hoverChip = isCantiere
+                  ? 'hover:bg-amber-300/25 active:bg-amber-300/30'
+                  : 'hover:bg-primary-foreground/15 active:bg-primary-foreground/20';
+                const Icon = isCantiere ? HardHat : Phone;
+                const ruoloColor = isCantiere
+                  ? 'text-amber-100/70'
+                  : 'text-primary-foreground/60';
+
+                if (c.telefono) {
+                  return (
+                    <a
+                      key={c.id}
+                      href={`tel:${c.telefono}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors ${baseChip} ${hoverChip}`}
+                      title={
+                        isCantiere
+                          ? `Cantiere · chiama ${c.nome}${c.ruolo ? ` (${c.ruolo})` : ''}`
+                          : `Chiama ${c.nome}${c.ruolo ? ` (${c.ruolo})` : ''}`
+                      }
+                    >
+                      <Icon className="h-3 w-3" aria-hidden="true" />
+                      <span className="font-medium">{c.nome}</span>
+                      {c.ruolo ? (
+                        <span className={ruoloColor}>· {c.ruolo}</span>
+                      ) : null}
+                    </a>
+                  );
+                }
+                return (
                   <span
                     key={c.id}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-primary-foreground/20 bg-primary-foreground/5 px-3 py-1 text-xs text-primary-foreground/60"
-                    title={c.nome}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs opacity-80 ${baseChip}`}
+                    title={isCantiere ? `Cantiere · ${c.nome}` : c.nome}
                   >
+                    <Icon className="h-3 w-3" aria-hidden="true" />
                     {c.nome}
                     {c.ruolo ? (
-                      <span className="text-primary-foreground/45">· {c.ruolo}</span>
+                      <span className={ruoloColor}>· {c.ruolo}</span>
                     ) : null}
                   </span>
-                ),
-              )}
+                );
+              })}
             </div>
           ) : telefono ? (
             <div className="mt-3">

@@ -108,15 +108,25 @@ export default async function ClienteDetailPage({
             </div>
           </div>
 
-          {/* Contatti referente (Ondata 4): 1-N rubrica per cliente. */}
+          {/* Contatti referente del cliente (Ondata 4): rubrica permanente
+              riusabile su tutte le commesse del cliente. I contatti specifici
+              di una singola commessa (geometra del cantiere ecc.) vivono
+              invece dentro la scheda della commessa. */}
           <div>
             <h2 className="flex items-center justify-between px-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <Users className="h-3 w-3" aria-hidden="true" />
-                Contatti referente
+                Contatti del cliente
               </span>
               <span className="tabular-nums">{contatti.length}</span>
             </h2>
+            <p className="mb-2 mt-1 px-1 text-[11px] leading-relaxed text-muted-foreground">
+              Rubrica permanente: il <strong className="font-medium text-foreground">Primario</strong>
+              è l&apos;intestatario o referente principale; gli altri sono
+              contatti aggiuntivi sempre validi (es. moglie, figlio, geometra
+              di fiducia). Per i referenti di una <strong className="font-medium text-foreground">singola
+              commessa</strong> aggiungili dalla scheda di quella commessa.
+            </p>
             <div className="mt-2">
               <ContattiEditor
                 clienteId={cliente.id as string}
