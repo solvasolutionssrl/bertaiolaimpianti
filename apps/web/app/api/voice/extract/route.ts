@@ -12,7 +12,7 @@ import {
 import {
   chatCompletion,
   getChatModel,
-  getTranscribeModel,
+  resolveTranscribeModelForTenant,
   isOpenAIConfigured,
   transcribeAudio,
 } from '../../../_lib/openai';
@@ -155,11 +155,16 @@ export async function POST(req: NextRequest) {
       console.warn(
         `[voice/extract] transcribe start — size=${audio.size}B mime="${mime}" → ext=${ext}`,
       );
+      // Modello configurabile per tenant dal pannello super admin.
+      // Fallback: OPENAI_MODEL_TRANSCRIBE env → 'whisper-1'.
+      const transcribeModelForTenant = await resolveTranscribeModelForTenant(
+        ctx.tenantId,
+      );
       const r = await transcribeAudio({
         audio,
         filename: `voicenote.${ext}`,
         language: 'it',
-        model: getTranscribeModel(),
+        model: transcribeModelForTenant,
       });
       transcript = r.text;
       usedTranscribeModel = r.model;

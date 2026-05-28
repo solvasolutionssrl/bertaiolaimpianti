@@ -21,6 +21,7 @@ import { TabQuote } from './_components/tab-quote';
 import { TabStorage } from './_components/tab-storage';
 import { TabBranding } from './_components/tab-branding';
 import { TabNoteInterne } from './_components/tab-note-interne';
+import { TabAi } from './_components/tab-ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -159,6 +160,7 @@ export default async function TenantDetailPage({
           <TabsTrigger value="utenti">Utenti</TabsTrigger>
           <TabsTrigger value="quote">Quote</TabsTrigger>
           <TabsTrigger value="storage">Storage</TabsTrigger>
+          <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="note">Note interne</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -225,6 +227,15 @@ export default async function TenantDetailPage({
             tenantNome={tenant.nome}
             storageProvider={tenant.storage_provider}
             storageConfig={tenant.storage_config ?? {}}
+          />
+        </TabsContent>
+
+        {/* ===== AI (modello trascrizione audio) ===== */}
+        <TabsContent value="ai">
+          <TabAi
+            tenantId={tenant.id}
+            tenantNome={tenant.nome}
+            currentModel={tenant.transcribe_model ?? null}
           />
         </TabsContent>
 

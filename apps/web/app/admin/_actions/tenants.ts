@@ -645,3 +645,55 @@ export async function endImpersonation() {
 
   redirect('/admin');
 }
+
+// ---------------------------------------------------------------------
+// Modello trascrizione audio per tenant
+// ---------------------------------------------------------------------
+
+const TRANSCRIBE_MODEL_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  // null = usa env fallback (OPENAI_MODEL_TRANSCRIBE o whisper-1).
+  model: z
+    .enum(['whisper-1', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe'])
+    .nullable(),
+});
+
+export async function aggiornaModelloTrascrizione(input: {
+  tenantId: string;
+  model: 'whisper-1' | 'gpt-4o-mini-transcribe' | 'gpt-4o-transcribe' | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = TRANSCRIBE_MODEL_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+  const { data: prev } = await supabase
+    .from('tenants')
+    .select('transcribe_model')
+    .eq('id', parsed.data.tenantId)
+    .maybeSingle();
+  const previousModel = (prev as { transcribe_model?: string | null } | null)
+    ?.transcribe_model ?? null;
+
+  const { error } = await supabase
+    .from('tenants')
+    .update({ transcribe_model: parsed.data.model } as never)
+    .eq('id', parsed.data.tenantId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.transcribe_model.update',
+    before: { transcribe_model: previousModel },
+    after: { transcribe_model: parsed.data.model },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  revalidatePath('/admin/tenants');
+  return { ok: true };
+}

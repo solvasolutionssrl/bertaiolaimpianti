@@ -54,6 +54,51 @@ export function getTranscribeModel(): string {
   return process.env.OPENAI_MODEL_TRANSCRIBE?.trim() || 'whisper-1';
 }
 
+/** Set dei modelli di trascrizione audio supportati (allineato col CHECK
+ *  Postgres su tenants.transcribe_model). */
+export const SUPPORTED_TRANSCRIBE_MODELS = [
+  'whisper-1',
+  'gpt-4o-mini-transcribe',
+  'gpt-4o-transcribe',
+] as const;
+export type TranscribeModelId = (typeof SUPPORTED_TRANSCRIBE_MODELS)[number];
+
+export function isSupportedTranscribeModel(s: string): s is TranscribeModelId {
+  return (SUPPORTED_TRANSCRIBE_MODELS as readonly string[]).includes(s);
+}
+
+/**
+ * Modello di trascrizione effettivo per un tenant:
+ *   1) tenants.transcribe_model (override super-admin) se valorizzato
+ *   2) altrimenti OPENAI_MODEL_TRANSCRIBE env
+ *   3) altrimenti 'whisper-1' (fallback più sicuro)
+ *
+ * NB: la query usa service role: il super admin sceglie per tenant, e
+ *     il voice/extract gira lato server prima di restituire al client.
+ */
+export async function resolveTranscribeModelForTenant(
+  tenantId: string,
+): Promise<string> {
+  try {
+    // import dinamico per evitare ciclicità con @kommessa/api
+    const { createServiceSupabase } = await import('@kommessa/api/service');
+    const supabase = createServiceSupabase();
+    const { data } = await supabase
+      .from('tenants')
+      .select('transcribe_model')
+      .eq('id', tenantId)
+      .maybeSingle();
+    const override = (data as { transcribe_model?: string | null } | null)
+      ?.transcribe_model;
+    if (override && isSupportedTranscribeModel(override)) {
+      return override;
+    }
+  } catch {
+    // se la query fallisce, non bloccare il dettato: usiamo l'env fallback.
+  }
+  return getTranscribeModel();
+}
+
 // ---------------------------------------------------------------------
 // Chat completion (non-streaming)
 // ---------------------------------------------------------------------
