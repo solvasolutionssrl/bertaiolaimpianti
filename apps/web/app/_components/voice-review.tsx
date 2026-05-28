@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Check,
   Edit3,
@@ -16,10 +17,16 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  Search,
 } from 'lucide-react';
 
 import { Button, Input, Label, cn } from '@kommessa/ui';
 import { ContactPickerButton } from './contact-picker-button';
+import {
+  creaVoceCustom,
+  vociSimili,
+  type VoceSimile as NuovaVoceSimile,
+} from '../office/impostazioni/voci/_actions/voci';
 
 /**
  * Voice Review (Schermo 2 del voice-intake flow).
@@ -775,16 +782,31 @@ function VociPicker({
   onChange: (next: number[]) => void;
   onDone: () => void;
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const [showNuova, setShowNuova] = React.useState(false);
   const selectedSet = new Set(selected);
 
-  // Mostra prima le selezionate, poi le altre se "expanded"
-  const visibleNotSelected = expanded
-    ? voci.filter((v) => !selectedSet.has(v.id))
-    : [];
+  // Filtra + ordina alfabeticamente. La ricerca normalizza accenti.
+  const visibleNotSelected = React.useMemo(() => {
+    if (!expanded) return [];
+    const norm = (s: string) =>
+      s
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+    const q = norm(search.trim());
+    return voci
+      .filter((v) => !selectedSet.has(v.id))
+      .filter((v) => (q.length > 0 ? norm(v.nome).includes(q) : true))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voci, selected, expanded, search]);
 
   return (
     <div className="space-y-2 pt-1">
+      {/* Selezionate (chip rimovibili) */}
       <div className="flex flex-wrap gap-1.5 text-xs">
         {selected.length === 0 ? (
           <p className="text-xs italic text-muted-foreground">
@@ -811,27 +833,66 @@ function VociPicker({
       </div>
 
       {expanded ? (
-        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-border bg-background p-2">
-          {visibleNotSelected.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">
-              Tutte le voci sono già selezionate.
-            </p>
-          ) : (
-            visibleNotSelected.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => onChange([...selected, v.id])}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
-              >
-                <Plus
-                  className="h-3.5 w-3.5 text-muted-foreground"
-                  aria-hidden="true"
-                />
-                {v.nome}
-              </button>
-            ))
-          )}
+        <div className="rounded-md border border-border bg-background p-2">
+          {/* Search compatta sticky in alto */}
+          <div className="sticky top-0 z-10 mb-1.5 flex items-center gap-1.5 bg-background pb-1.5">
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cerca voce…"
+                className="h-9 pl-8 pr-7 text-sm"
+              />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Pulisci ricerca"
+                  className="absolute right-2 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowNuova(true)}
+              className="inline-flex h-9 items-center gap-1 rounded-md border border-primary/30 bg-primary/[0.04] px-2.5 text-[11px] font-medium text-primary hover:bg-primary/10 active:scale-[0.97]"
+              title="Aggiungi una voce custom al catalogo"
+            >
+              <Plus className="h-3 w-3" aria-hidden="true" />
+              Nuova
+            </button>
+          </div>
+          {/* Lista alta ~55vh con scroll interno */}
+          <div className="max-h-[55vh] space-y-1 overflow-y-auto">
+            {visibleNotSelected.length === 0 ? (
+              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                {search
+                  ? `Nessuna voce per "${search}". Prova "Nuova" qui sopra.`
+                  : 'Tutte le voci sono già selezionate.'}
+              </p>
+            ) : (
+              visibleNotSelected.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => onChange([...selected, v.id])}
+                  className="flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm hover:bg-muted active:bg-muted/70"
+                >
+                  <Plus
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  {v.nome}
+                </button>
+              ))
+            )}
+          </div>
         </div>
       ) : null}
 
@@ -855,6 +916,225 @@ function VociPicker({
           <Check className="h-4 w-4" aria-hidden="true" />
           Conferma voci
         </Button>
+      </div>
+
+      {showNuova ? (
+        <NuovaVoceQuickDialog
+          initialNome={search.trim()}
+          onClose={() => setShowNuova(false)}
+          onCreated={() => {
+            // Ricarica i dati server (la nuova voce arriverà al prossimo
+            // render del parent) e riapre la lista per selezionarla.
+            router.refresh();
+            setSearch('');
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** Dialog mobile-friendly per aggiungere una voce custom al catalogo
+ *  direttamente dal review AI. Stesso pattern del wizard 8-step. */
+function NuovaVoceQuickDialog({
+  initialNome,
+  onClose,
+  onCreated,
+}: {
+  initialNome: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [nome, setNome] = React.useState(initialNome);
+  const [categoria, setCategoria] = React.useState<
+    | 'impiantistica'
+    | 'documentazione'
+    | 'tubazioni'
+    | 'montaggi'
+    | 'allacci'
+    | 'ventilazione'
+    | 'supporto'
+    | 'alimentazione'
+  >('impiantistica');
+  const [pending, start] = React.useTransition();
+  const [similar, setSimilar] = React.useState<NuovaVoceSimile[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Pre-check fuzzy on blur (non bloccante, solo warning).
+  const checkSimilar = async () => {
+    if (nome.trim().length < 2) return;
+    try {
+      const sim = await vociSimili({ nome: nome.trim() });
+      if (sim.length > 0) setSimilar(sim);
+    } catch {
+      /* silent */
+    }
+  };
+
+  const submit = (force: boolean) => {
+    if (nome.trim().length < 2) {
+      setError('Almeno 2 caratteri.');
+      return;
+    }
+    setError(null);
+    start(async () => {
+      const res = await creaVoceCustom({
+        nome: nome.trim(),
+        categoria,
+        cartellaTemplate: null,
+        forceSimilar: force,
+      });
+      if (res.ok) {
+        onCreated();
+        onClose();
+        return;
+      }
+      if (res.reason === 'similar') {
+        setSimilar(res.similar);
+        return;
+      }
+      if (res.reason === 'duplicate') {
+        setError(res.message);
+        return;
+      }
+      setError('message' in res ? res.message : 'Errore creazione voce');
+    });
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-2xl border border-border bg-card p-4 shadow-xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold">Nuova voce</h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Prima di aggiungerla, controlla se esiste già con un nome
+              simile.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Chiudi"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs" htmlFor="voci-review-nuova-nome">
+              Nome voce
+            </label>
+            <Input
+              id="voci-review-nuova-nome"
+              value={nome}
+              onChange={(e) => {
+                setNome(e.target.value);
+                if (similar) setSimilar(null);
+                if (error) setError(null);
+              }}
+              onBlur={checkSimilar}
+              placeholder="Es. Allaccio fibra ottica"
+              maxLength={160}
+              autoFocus
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <label className="text-xs" htmlFor="voci-review-nuova-cat">
+              Categoria
+            </label>
+            <select
+              id="voci-review-nuova-cat"
+              value={categoria}
+              onChange={(e) =>
+                setCategoria(e.target.value as typeof categoria)
+              }
+              className="mt-1 block h-10 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+            >
+              <option value="impiantistica">Impiantistica</option>
+              <option value="documentazione">Documentazione</option>
+              <option value="tubazioni">Tubazioni</option>
+              <option value="montaggi">Montaggi</option>
+              <option value="allacci">Allacci</option>
+              <option value="ventilazione">Ventilazione</option>
+              <option value="supporto">Supporto</option>
+              <option value="alimentazione">Alimentazione</option>
+            </select>
+          </div>
+
+          {similar && similar.length > 0 ? (
+            <div className="rounded-md border border-amber-500/40 bg-amber-50 p-2.5 text-xs dark:bg-amber-950/30">
+              <p className="mb-1 font-medium text-amber-900 dark:text-amber-200">
+                Esistono già voci simili:
+              </p>
+              <ul className="space-y-0.5 text-[11px] text-amber-900/85 dark:text-amber-200/85">
+                {similar.map((s) => (
+                  <li key={s.id} className="flex items-center gap-1.5">
+                    <span className="font-mono opacity-60">
+                      #{String(s.id).padStart(2, '0')}
+                    </span>
+                    <span className="flex-1 font-medium">{s.nome}</span>
+                    <span className="text-[9px] uppercase opacity-60">
+                      {s.scope}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[10px] text-amber-900/70 dark:text-amber-200/70">
+                Se è davvero diversa, conferma. Altrimenti seleziona quella
+                già esistente dall'elenco.
+              </p>
+            </div>
+          ) : null}
+
+          {error ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            disabled={pending}
+          >
+            Annulla
+          </Button>
+          {similar && similar.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending}
+              onClick={() => submit(true)}
+            >
+              {pending ? 'Creo…' : 'Crea comunque'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending || nome.trim().length < 2}
+              onClick={() => submit(false)}
+            >
+              {pending ? 'Verifica…' : 'Crea voce'}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
