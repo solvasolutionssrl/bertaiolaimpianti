@@ -66,6 +66,14 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   const runningRef = React.useRef<Set<string>>(new Set());
   // Timer per il pump del worker pool.
   const pumpTimerRef = React.useRef<number | null>(null);
+  // Wake Lock attivo durante upload (per non far spegnere lo schermo iOS/Android).
+  const wakeLockRef = React.useRef<{ release: () => Promise<void> } | null>(null);
+  // Contatore "sessione" — quanti job sono terminati con done DA QUANDO la
+  // queue è ripartita da 0. Serve a inviare UNA push aggregata alla fine
+  // ("3 foto caricate") invece che una per file.
+  const sessionDoneRef = React.useRef(0);
+  // Per detectare il fronte di discesa activeCount > 0 → 0.
+  const prevActiveRef = React.useRef(0);
 
   // ---- Persistenza helpers --------------------------------------------------
   const updateJob = React.useCallback(
@@ -176,6 +184,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
           fileRefId: result.fileRefId,
           lastError: null,
         });
+        sessionDoneRef.current += 1;
       } catch (e) {
         const aborted = controller.signal.aborted;
         const msg = e instanceof Error ? e.message : String(e);
@@ -367,6 +376,92 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       j.status === 'uploading' ||
       j.status === 'finalizing',
   ).length;
+
+  // ---- Wake Lock screen mentre ci sono upload attivi ------------------------
+  // Tiene il display acceso così l'utente non spegne lo schermo a metà
+  // caricamento (in PWA iOS questo è l'unico modo per non far morire il JS).
+  // L'API è Wake Lock screen: best-effort, niente errore se non supportata.
+  React.useEffect(() => {
+    if (typeof navigator === 'undefined') return;
+    const wl: any = (navigator as any).wakeLock;
+    if (!wl || typeof wl.request !== 'function') return;
+
+    let cancelled = false;
+
+    const acquire = async () => {
+      if (wakeLockRef.current || cancelled) return;
+      try {
+        const sentinel = await wl.request('screen');
+        if (cancelled) {
+          await sentinel.release?.();
+          return;
+        }
+        wakeLockRef.current = sentinel;
+        // Se il sistema lo revoca (es. tab in background), pulisci ref così
+        // possiamo riacquisire al ritorno in foreground.
+        sentinel.addEventListener?.('release', () => {
+          if (wakeLockRef.current === sentinel) {
+            wakeLockRef.current = null;
+          }
+        });
+      } catch {
+        // Permission negata o non supportato: continua silenzioso.
+      }
+    };
+
+    const release = async () => {
+      const wlk = wakeLockRef.current;
+      if (!wlk) return;
+      wakeLockRef.current = null;
+      try {
+        await wlk.release?.();
+      } catch {
+        /* ignore */
+      }
+    };
+
+    if (activeCount > 0) {
+      void acquire();
+    } else {
+      void release();
+    }
+
+    // Re-acquire al ritorno in foreground (il browser rilascia automaticamente
+    // il wake lock quando la tab va in background).
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && activeCount > 0) {
+        void acquire();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      // Non release qui — se passa da activeCount>0 a >0 (cambia il numero),
+      // l'effect rilancia ma vogliamo tenere il lock. Release esplicita la
+      // fa il branch sopra quando activeCount diventa 0.
+    };
+  }, [activeCount]);
+
+  // ---- Notifica push aggregata "Caricamento completato" --------------------
+  // Trigger: activeCount passa da >0 a 0 e nella sessione abbiamo terminato
+  // almeno 1 job con success. Invia UNA push aggregata col conteggio.
+  React.useEffect(() => {
+    const prev = prevActiveRef.current;
+    prevActiveRef.current = activeCount;
+    if (prev > 0 && activeCount === 0 && sessionDoneRef.current > 0) {
+      const count = sessionDoneRef.current;
+      sessionDoneRef.current = 0;
+      // Fire-and-forget: non interessano errori/permessi push qui.
+      void fetch('/api/upload/notify-batch-done', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count, label: 'media' }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+  }, [activeCount]);
 
   const value: UploadQueueContextValue = {
     jobs,

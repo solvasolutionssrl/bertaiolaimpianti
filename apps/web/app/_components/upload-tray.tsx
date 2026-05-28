@@ -146,6 +146,17 @@ export function UploadTray() {
           ))}
         </ul>
       )}
+
+      {/* Avviso "Mantieni l'app aperta" visibile solo quando ci sono upload
+          attivi. iOS/Android sospendono il JS quando l'app va in background
+          (tranne Background Fetch su Android Chrome): per la maggior parte
+          dei casi d'uso conviene tenere il telefono in mano fino a fine. */}
+      {activeCount > 0 ? (
+        <p className="border-t border-border bg-amber-50/60 px-3 py-1.5 text-[10px] leading-tight text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          Mantieni l&apos;app aperta finché finisce — ti arriva una notifica al
+          completamento.
+        </p>
+      ) : null}
     </div>
   );
 }
