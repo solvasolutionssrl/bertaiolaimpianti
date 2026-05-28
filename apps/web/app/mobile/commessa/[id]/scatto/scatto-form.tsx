@@ -3,14 +3,12 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Camera,
   Clock,
   MapPin,
   Upload,
-  Image as ImageIcon,
-  Loader2,
   CheckCircle2,
   PencilLine,
-  X as XIcon,
 } from 'lucide-react';
 
 import { Button, Label } from '@kommessa/ui';
@@ -18,7 +16,7 @@ import { Button, Label } from '@kommessa/ui';
 import { PhotoCaptureInput } from '../../../_components/photo-capture-input';
 import { PhotoAnnotationEditor } from '../../../../_components/photo-annotation-loader';
 import type { Shape } from '../../../../_lib/annotation-shapes';
-import { useChunkedUpload } from '../../../../_lib/use-chunked-upload';
+import { useUploadQueue } from '../../../../_components/upload-queue-provider';
 import { salvaAnnotazione } from '../../../../_actions/annotations';
 
 export interface VoceOption {
@@ -55,9 +53,13 @@ export function ScattoForm({
   const router = useRouter();
   const formRef = React.useRef<HTMLFormElement>(null);
   const [file, setFile] = React.useState<File | null>(null);
+  const [takenAt, setTakenAt] = React.useState<Date | null>(null);
   const [geo, setGeo] = React.useState<Geo | null>(null);
   const [geoError, setGeoError] = React.useState<string | null>(null);
-  const [success, setSuccess] = React.useState(false);
+  // Counter foto scattate in questa sessione (multi-scatto sopralluogo).
+  const [sessionCount, setSessionCount] = React.useState(0);
+  // Banner "appena enqueuata" — dura ~3s o finché l'utente scatta la prossima.
+  const [justEnqueued, setJustEnqueued] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
   const [now, setNow] = React.useState<Date>(() => new Date());
 
@@ -70,11 +72,14 @@ export function ScattoForm({
   } | null>(null);
   const [photoBlobUrl, setPhotoBlobUrl] = React.useState<string | null>(null);
 
-  const { state: uploadState, upload, cancel } = useChunkedUpload();
-  const busy =
-    uploadState.phase === 'init' ||
-    uploadState.phase === 'uploading' ||
-    uploadState.phase === 'finalizing';
+  const queue = useUploadQueue();
+  // Mappa { jobId → annotation pending } per salvare l'annotazione quando il
+  // job arriva a 'done'. Il job può durare diversi secondi → il salvataggio
+  // dell'annotazione viaggia in background mentre l'utente scatta la prossima.
+  const pendingAnnotationsRef = React.useRef<
+    Map<string, { layer: Shape[]; width: number; height: number }>
+  >(new Map());
+  const handledJobsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     if (!file) {
@@ -93,6 +98,34 @@ export function ScattoForm({
     const id = setInterval(() => setNow(new Date()), 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // Quando un job in coda diventa 'done': salva l'annotazione pendente
+  // (se c'era) + ricarica il server data (router.refresh per la lista
+  // "Ultime caricate (oggi)"). Idempotente via handledJobsRef.
+  React.useEffect(() => {
+    let triggeredRefresh = false;
+    for (const job of queue.jobs) {
+      if (job.status !== 'done' || handledJobsRef.current.has(job.id)) continue;
+      handledJobsRef.current.add(job.id);
+      const ann = pendingAnnotationsRef.current.get(job.id);
+      if (ann && ann.layer.length > 0 && job.fileRefId) {
+        pendingAnnotationsRef.current.delete(job.id);
+        void salvaAnnotazione({
+          fileRefId: job.fileRefId,
+          layer: ann.layer,
+          width: ann.width,
+          height: ann.height,
+        }).catch((err) => {
+          // Log silenzioso: la foto è caricata, l'annotazione si può rifare
+          // dall'ufficio. Non spaventiamo il tecnico in cantiere.
+          // eslint-disable-next-line no-console
+          console.warn('[scatto] salvataggio annotazione fallito:', err);
+        });
+      }
+      triggeredRefresh = true;
+    }
+    if (triggeredRefresh) router.refresh();
+  }, [queue.jobs, router]);
 
   React.useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -115,64 +148,115 @@ export function ScattoForm({
     );
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  // Modalità sopralluogo: NON aspettiamo il completamento dell'upload.
+  // La queue (Ondata 2) gestisce il caricamento in background → il tecnico
+  // può subito scattare la prossima foto. La pagina mostra il counter delle
+  // foto scattate nella sessione + un banner di conferma temporaneo.
+  // L'annotazione viene salvata in background quando il job arriva a 'done'.
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setServerError(null);
     if (!file) {
       setServerError('Foto mancante');
       return;
     }
-
     const form = formRef.current;
     if (!form) return;
     const data = new FormData(form);
     const faseVoceIdRaw = data.get('faseVoceId');
     const voceId =
       faseVoceIdRaw && faseVoceIdRaw !== '' ? Number(faseVoceIdRaw) : null;
-    const momento = (String(data.get('momento') ?? 'in_corso') as Momento);
+    const momento = String(data.get('momento') ?? 'in_corso') as Momento;
 
-    try {
-      const result = await upload({
-        file,
-        commessaId,
-        momento,
-        voceId,
-        geoLat: geo?.lat ?? null,
-        geoLng: geo?.lng ?? null,
-      });
+    const jobId = queue.enqueue({
+      fileBlob: file,
+      fileName: file.name,
+      fileMime: file.type || 'image/jpeg',
+      fileSize: file.size,
+      commessaId,
+      momento,
+      voceId,
+      geoLat: geo?.lat ?? null,
+      geoLng: geo?.lng ?? null,
+      takenAtIso: takenAt ? takenAt.toISOString() : null,
+    });
 
-      // Annotazione pre-upload (best-effort, non blocca il successo)
-      if (annotation && annotation.layer.length > 0) {
-        const annRes = await salvaAnnotazione({
-          fileRefId: result.fileRefId,
-          layer: annotation.layer,
-          width: annotation.width,
-          height: annotation.height,
-        });
-        if (!annRes.ok) {
-          // Log silenzioso: la foto è caricata, l'annotazione si potrà
-          // ri-creare dall'ufficio.
-          console.warn('[scatto] annotazione fallita:', annRes.error);
-        }
-      }
-
-      setSuccess(true);
-      form.reset();
-      setFile(null);
-      setAnnotation(null);
-      router.refresh();
-      setTimeout(() => setSuccess(false), 2500);
-    } catch (e) {
-      setServerError(e instanceof Error ? e.message : 'Upload fallito');
+    // Memorizza l'annotazione pendente per questo job: verrà committata
+    // al server quando il job arriva a 'done' (vedi useEffect sopra).
+    if (annotation && annotation.layer.length > 0) {
+      pendingAnnotationsRef.current.set(jobId, annotation);
     }
+
+    setSessionCount((n) => n + 1);
+    setJustEnqueued(true);
+    setFile(null);
+    setAnnotation(null);
+    // Manteniamo fase/momento/nota per il prossimo scatto consecutivo.
+    // Il banner "appena enqueuata" sparisce dopo 3 secondi.
+    setTimeout(() => setJustEnqueued(false), 3000);
+  };
+
+  /** Apre subito la fotocamera per il prossimo scatto. */
+  const triggerNextCapture = () => {
+    setJustEnqueued(false);
+    // Microtask per assicurare che il reset del file abbia finito.
+    setTimeout(() => {
+      document.getElementById('photo-input')?.click();
+    }, 0);
   };
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
+      {/* Banner "modalità sopralluogo": appare dopo la prima foto della
+          sessione. Conferma e CTA prominente per la prossima. */}
+      {sessionCount > 0 && !file ? (
+        <div
+          className={`rounded-xl border p-3 transition-colors ${
+            justEnqueued
+              ? 'border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/20'
+              : 'border-primary/30 bg-primary/[0.04]'
+          }`}
+        >
+          <div className="flex items-start gap-2.5">
+            <span
+              className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                justEnqueued
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                  : 'bg-primary/15 text-primary'
+              }`}
+              aria-hidden="true"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">
+                {justEnqueued ? 'Foto in coda' : 'Sessione attiva'}
+                {' · '}
+                <span className="font-mono tabular-nums">{sessionCount}</span>{' '}
+                {sessionCount === 1 ? 'foto' : 'foto'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Fase/momento sono già impostati. Tap qui sotto per scattare la
+                prossima.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="lg"
+            onClick={triggerNextCapture}
+            className="mt-3 min-h-[52px] w-full text-base"
+          >
+            <Camera className="h-5 w-5" aria-hidden="true" />
+            Scatta un'altra foto
+          </Button>
+        </div>
+      ) : null}
+
       {/* Capture */}
       <div>
         <Label htmlFor="photo-input" className="mb-2 block">
-          Foto cantiere
+          {sessionCount > 0 ? 'Prossima foto' : 'Foto cantiere'}
         </Label>
         <PhotoCaptureInput
           name="file"
@@ -180,6 +264,7 @@ export function ScattoForm({
           required
           allowGallery
           onFileChange={setFile}
+          onTakenAtChange={setTakenAt}
         />
         {file && photoBlobUrl ? (
           <div className="mt-2">
@@ -189,7 +274,6 @@ export function ScattoForm({
               size="lg"
               onClick={() => setAnnotating(true)}
               className="min-h-[48px] w-full"
-              disabled={busy}
             >
               <PencilLine className="h-4 w-4" aria-hidden="true" />
               {annotation && annotation.layer.length > 0
@@ -208,7 +292,6 @@ export function ScattoForm({
           name="faseVoceId"
           defaultValue={preselectedVoceId ?? ''}
           className="block h-12 w-full rounded-md border border-input bg-background px-3 text-base"
-          disabled={busy}
         >
           <option value="">— Seleziona fase —</option>
           {voci.map((v) => (
@@ -226,7 +309,7 @@ export function ScattoForm({
       </div>
 
       {/* Momento */}
-      <fieldset className="space-y-2" disabled={busy}>
+      <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Momento</legend>
         <div className="grid grid-cols-3 gap-2" role="radiogroup">
           {MOMENTI.map((m, idx) => (
@@ -288,19 +371,8 @@ export function ScattoForm({
           rows={3}
           placeholder="Es. tubazioni passaggio…"
           className="block w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-          disabled={busy}
         />
       </div>
-
-      {success ? (
-        <p
-          role="status"
-          className="flex items-center gap-2 rounded-md border border-stato-aperta/40 bg-stato-aperta/10 px-3 py-2 text-sm text-stato-aperta"
-        >
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-          Foto caricata.
-        </p>
-      ) : null}
 
       {serverError ? (
         <p
@@ -311,13 +383,18 @@ export function ScattoForm({
         </p>
       ) : null}
 
-      <UploadButton
+      <Button
+        type="submit"
+        size="lg"
         disabled={!file}
-        busy={busy}
-        phase={uploadState.phase}
-        progressPct={uploadState.progressPct}
-        onCancel={cancel}
-      />
+        className="min-h-[52px] w-full text-base"
+      >
+        <Upload className="h-4 w-4" aria-hidden="true" />
+        {sessionCount > 0 ? 'Carica e continua →' : 'Carica foto →'}
+      </Button>
+      <p className="text-center text-[11px] text-muted-foreground">
+        L&apos;upload va in background. Vedi lo stato nel pannello in basso.
+      </p>
 
       {/* Editor annotazione pre-upload */}
       {annotating && photoBlobUrl ? (
@@ -335,95 +412,6 @@ export function ScattoForm({
           onClose={() => setAnnotating(false)}
         />
       ) : null}
-
-      {/* Ultime foto di oggi */}
-      <section className="pt-4">
-        <h2 className="text-sm font-semibold text-muted-foreground">
-          Ultime caricate (oggi)
-        </h2>
-        {ultimeOggi.length === 0 ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Ancora nessuna foto caricata oggi su questa commessa.
-          </p>
-        ) : (
-          <div className="mt-2 grid grid-cols-4 gap-2">
-            {ultimeOggi.map((f) => (
-              <div
-                key={f.id}
-                className="flex aspect-square items-center justify-center overflow-hidden rounded border bg-muted"
-                title={f.filename}
-              >
-                <ImageIcon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
     </form>
-  );
-}
-
-function UploadButton({
-  disabled,
-  busy,
-  phase,
-  progressPct,
-  onCancel,
-}: {
-  disabled: boolean;
-  busy: boolean;
-  phase: string;
-  progressPct: number;
-  onCancel: () => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Button
-        type="submit"
-        size="lg"
-        disabled={disabled || busy}
-        className="min-h-[52px] w-full text-base"
-      >
-        {busy ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            {phase === 'init'
-              ? 'Inizializzo…'
-              : phase === 'finalizing'
-                ? 'Finalizzo…'
-                : `Carico ${progressPct}%`}
-          </>
-        ) : (
-          <>
-            <Upload className="h-4 w-4" aria-hidden="true" />
-            Carica foto →
-          </>
-        )}
-      </Button>
-      {busy ? (
-        <div className="space-y-2">
-          <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-            role="progressbar"
-            aria-valuenow={progressPct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full bg-primary transition-[width] duration-200"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex w-full items-center justify-center gap-1 text-xs text-muted-foreground hover:text-destructive"
-          >
-            <XIcon className="h-3 w-3" aria-hidden="true" />
-            Annulla upload
-          </button>
-        </div>
-      ) : null}
-    </div>
   );
 }

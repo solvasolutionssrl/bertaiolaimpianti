@@ -1,7 +1,18 @@
 'use client';
 
 import * as React from 'react';
-import { Camera, Video, X, Plus, AlertCircle, Smartphone, CheckCircle2, Loader2, Paperclip } from 'lucide-react';
+import {
+  Camera,
+  Video,
+  X,
+  Plus,
+  AlertCircle,
+  Smartphone,
+  CheckCircle2,
+  Loader2,
+  Paperclip,
+  CalendarClock,
+} from 'lucide-react';
 import {
   Button,
   Card,
@@ -17,6 +28,10 @@ import {
   DialogFooter,
 } from '@kommessa/ui';
 import type { UploadProgressMap } from '../_lib/upload-media';
+import {
+  fmtScattoDate,
+  readImageDate,
+} from '../../../../_lib/read-image-date';
 
 export interface MediaFile {
   id: string;
@@ -24,6 +39,8 @@ export interface MediaFile {
   kind: 'image' | 'video';
   previewUrl: string;
   sizeMB: number;
+  /** Data di scatto da EXIF o fallback File.lastModified. null se non rilevabile. */
+  takenAt: Date | null;
 }
 
 const MAX_VIDEO_MB = 500;
@@ -51,7 +68,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
   const [validationErrors, setValidationErrors] = React.useState<ValidationError[]>([]);
   const [confirmCancel, setConfirmCancel] = React.useState(false);
 
-  const addFiles = (list: FileList | null) => {
+  const addFiles = async (list: FileList | null) => {
     if (!list || list.length === 0) return;
     const errors: ValidationError[] = [];
     const accepted: MediaFile[] = [];
@@ -79,10 +96,19 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
         kind: isVideo ? 'video' : 'image',
         previewUrl: URL.createObjectURL(f),
         sizeMB,
+        takenAt: null,
       });
     });
     if (errors.length > 0) setValidationErrors(errors);
-    if (accepted.length > 0) onChange([...files, ...accepted]);
+    if (accepted.length === 0) return;
+
+    // Lettura EXIF in parallelo (exifr legge ~64KB head di ogni file → 50-200ms cad.).
+    // Aggiunge la data a ogni MediaFile prima di esporlo al parent: la UI mostra
+    // direttamente la pill con la data corretta.
+    const withDates = await Promise.all(
+      accepted.map(async (m) => ({ ...m, takenAt: await readImageDate(m.file) })),
+    );
+    onChange([...files, ...withDates]);
   };
 
   const remove = (id: string) => {
@@ -202,15 +228,26 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
 
                   {/* Badges (hidden during upload) */}
                   {!prog && (
-                    <div className="absolute bottom-1 left-1 flex gap-1">
-                      {f.kind === 'video' && (
-                        <span className="rounded-full bg-black/70 px-1.5 py-px text-[10px] font-semibold text-white">
-                          ▶
+                    <div className="absolute inset-x-1 bottom-1 flex flex-col items-start gap-1">
+                      <div className="flex gap-1">
+                        {f.kind === 'video' && (
+                          <span className="rounded-full bg-black/70 px-1.5 py-px text-[10px] font-semibold text-white">
+                            ▶
+                          </span>
+                        )}
+                        <span className="rounded-full bg-black/60 px-1.5 py-px text-[10px] text-white">
+                          {f.sizeMB.toFixed(1)} MB
                         </span>
-                      )}
-                      <span className="rounded-full bg-black/60 px-1.5 py-px text-[10px] text-white">
-                        {f.sizeMB.toFixed(1)} MB
-                      </span>
+                      </div>
+                      {f.takenAt ? (
+                        <span
+                          className="inline-flex max-w-full items-center gap-0.5 truncate rounded-full bg-black/65 px-1.5 py-px text-[9px] font-medium text-white backdrop-blur-sm"
+                          title={f.takenAt.toLocaleString('it-IT')}
+                        >
+                          <CalendarClock className="h-2.5 w-2.5" aria-hidden="true" />
+                          {fmtScattoDate(f.takenAt)}
+                        </span>
+                      ) : null}
                     </div>
                   )}
 

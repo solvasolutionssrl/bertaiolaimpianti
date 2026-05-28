@@ -44,6 +44,9 @@ const InitBody = z.object({
   // anche commessa_riunione_allegato.
   riunioneId: z.string().uuid().nullable().optional(),
   kind: z.enum(['foto', 'video', 'pdf_acquisito']).nullable().optional(),
+  // Data di scatto reale del media (EXIF DateTimeOriginal o lastModified).
+  // Se assente: il server usa now() come fallback.
+  takenAtIso: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -254,7 +257,9 @@ export async function POST(request: NextRequest) {
     mime: body.mime,
     size_bytes: body.sizeBytes,
     uploaded_by: ctx.userId,
-    taken_at: ts.toISOString(),
+    // Usa la data EXIF del client (DateTimeOriginal o lastModified) se
+    // valida e plausibile (entro 30 giorni nel futuro). Fallback now().
+    taken_at: pickTakenAt(body.takenAtIso, ts).toISOString(),
     geo_lat: body.geoLat ?? null,
     geo_lng: body.geoLng ?? null,
     status: 'uploading',
@@ -298,6 +303,18 @@ export async function POST(request: NextRequest) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Sceglie taken_at: preferisce la data EXIF dal client se è valida e
+ *  non più di 30 giorni nel futuro (sanity check contro orologi sballati).
+ *  Altrimenti ricade sul timestamp server-side. */
+function pickTakenAt(iso: string | null | undefined, fallback: Date): Date {
+  if (!iso) return fallback;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return fallback;
+  const futureCap = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  if (d.getTime() > futureCap) return fallback;
+  return d;
+}
 
 function sanitizeFolderSegment(s: string): string {
   return s

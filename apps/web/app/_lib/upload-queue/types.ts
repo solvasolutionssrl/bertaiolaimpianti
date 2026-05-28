@@ -43,6 +43,8 @@ export interface UploadJobPayload {
   kind?: 'foto' | 'video' | 'pdf_acquisito' | null;
   geoLat?: number | null;
   geoLng?: number | null;
+  /** Data scatto reale (EXIF DateTimeOriginal o lastModified) in ISO 8601. */
+  takenAtIso?: string | null;
 }
 
 export interface UploadJob {

@@ -96,6 +96,8 @@ export async function uploadMediaBatch(
           notify();
         },
         signal,
+        2,
+        mf.takenAt ? mf.takenAt.toISOString() : null,
       );
       progress.set(mf.id, { pct: 1, step: r.ok ? 'done' : 'error' });
       notify();
@@ -120,6 +122,8 @@ export async function uploadMediaBatch(
         notify();
       },
       signal,
+      2,
+      mf.takenAt ? mf.takenAt.toISOString() : null,
     );
     progress.set(mf.id, { pct: 1, step: r.ok ? 'done' : 'error' });
     notify();
@@ -136,6 +140,7 @@ async function uploadOneWithRetry(
   onProgress: (pct: number, step?: UploadProgressStep) => void,
   signal?: AbortSignal,
   maxRetries = 2,
+  takenAtIso?: string | null,
 ): Promise<UploadMediaResult> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (signal?.aborted) {
@@ -152,7 +157,13 @@ async function uploadOneWithRetry(
       }
     }
     try {
-      const fileRefId = await r2Upload(file, commessaId, onProgress, signal);
+      const fileRefId = await r2Upload(
+        file,
+        commessaId,
+        onProgress,
+        signal,
+        takenAtIso ?? null,
+      );
       return { id: mf.id, name: mf.file.name, ok: true, fileRefId };
     } catch (e) {
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
@@ -181,6 +192,7 @@ async function r2Upload(
   commessaId: string,
   onProgress: (pct: number, step?: UploadProgressStep) => void,
   signal?: AbortSignal,
+  takenAtIso?: string | null,
 ): Promise<string> {
   // 1. init
   const initRes = await fetch('/api/upload/media/init', {
@@ -192,6 +204,7 @@ async function r2Upload(
       filename: file.name,
       mime: file.type || 'application/octet-stream',
       sizeBytes: file.size,
+      takenAtIso: takenAtIso ?? null,
     }),
     signal,
   });

@@ -1,9 +1,11 @@
 'use client';
 
 import * as React from 'react';
-import { Camera, ImagePlus, X } from 'lucide-react';
+import { Camera, CalendarClock, ImagePlus, X } from 'lucide-react';
 
 import { cn } from '@kommessa/ui';
+
+import { fmtScattoDate, readImageDate } from '../../_lib/read-image-date';
 
 /**
  * PhotoCaptureInput — wrapper su `<input type="file" capture>` che:
@@ -31,6 +33,8 @@ export interface PhotoCaptureInputProps {
   /** Se true mostra ANCHE un bottone "Da galleria". Default false (solo camera). */
   allowGallery?: boolean;
   onFileChange?: (file: File | null) => void;
+  /** Callback con la data di scatto rilevata da EXIF o lastModified. */
+  onTakenAtChange?: (date: Date | null) => void;
   className?: string;
 }
 
@@ -40,12 +44,16 @@ export function PhotoCaptureInput({
   required,
   allowGallery = false,
   onFileChange,
+  onTakenAtChange,
   className,
 }: PhotoCaptureInputProps) {
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
   const [fileName, setFileName] = React.useState<string | null>(null);
+  const [takenAt, setTakenAt] = React.useState<Date | null>(null);
+  // Token monotono per scartare risultati EXIF di file già rimossi.
+  const exifTokenRef = React.useRef(0);
 
   // Cleanup objectURL per evitare memory leak
   React.useEffect(() => {
@@ -57,10 +65,20 @@ export function PhotoCaptureInput({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
     if (preview) URL.revokeObjectURL(preview);
+    setTakenAt(null);
+    onTakenAtChange?.(null);
     if (file) {
       const url = URL.createObjectURL(file);
       setPreview(url);
       setFileName(file.name);
+      // Lettura asincrona EXIF: non blocca il preview, aggiorna la pill
+      // quando arriva. Token previene race se l'utente cambia foto subito.
+      const myToken = ++exifTokenRef.current;
+      void readImageDate(file).then((d) => {
+        if (exifTokenRef.current !== myToken) return;
+        setTakenAt(d);
+        onTakenAtChange?.(d);
+      });
     } else {
       setPreview(null);
       setFileName(null);
@@ -72,9 +90,12 @@ export function PhotoCaptureInput({
     if (cameraInputRef.current) cameraInputRef.current.value = '';
     if (galleryInputRef.current) galleryInputRef.current.value = '';
     if (preview) URL.revokeObjectURL(preview);
+    exifTokenRef.current++;
     setPreview(null);
     setFileName(null);
+    setTakenAt(null);
     onFileChange?.(null);
+    onTakenAtChange?.(null);
   };
 
   return (
@@ -111,6 +132,12 @@ export function PhotoCaptureInput({
             alt={`Anteprima foto ${fileName ?? ''}`}
             className="aspect-[4/3] w-full object-cover"
           />
+          {takenAt ? (
+            <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white backdrop-blur-sm">
+              <CalendarClock className="h-3 w-3" aria-hidden="true" />
+              {fmtScattoDate(takenAt)}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={reset}

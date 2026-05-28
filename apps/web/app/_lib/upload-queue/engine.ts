@@ -50,6 +50,7 @@ export interface UploadInputForEngine {
   kind?: 'foto' | 'video' | 'pdf_acquisito' | null;
   geoLat?: number | null;
   geoLng?: number | null;
+  takenAtIso?: string | null;
 }
 
 /**
@@ -81,6 +82,7 @@ export async function runUpload(
   const initBody: InitRequestBody & {
     riunioneId?: string | null;
     kind?: 'foto' | 'video' | 'pdf_acquisito' | null;
+    takenAtIso?: string | null;
   } = {
     commessaId: input.commessaId,
     momento: input.momento ?? undefined,
@@ -92,6 +94,7 @@ export async function runUpload(
     geoLng: input.geoLng ?? null,
     riunioneId: input.riunioneId ?? null,
     kind: input.kind ?? null,
+    takenAtIso: input.takenAtIso ?? null,
   };
   const initRes = await fetch('/api/upload/media/init', {
     method: 'POST',

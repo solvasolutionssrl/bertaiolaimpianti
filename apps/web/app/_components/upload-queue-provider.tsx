@@ -153,6 +153,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
             kind: job.payload.kind,
             geoLat: job.payload.geoLat,
             geoLng: job.payload.geoLng,
+            takenAtIso: job.payload.takenAtIso,
           },
           {
             abort: controller,

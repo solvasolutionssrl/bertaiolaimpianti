@@ -28,6 +28,8 @@ export interface UploadInput {
   // Variant allegato riunione
   riunioneId?: string | null;
   kind?: 'foto' | 'video' | 'pdf_acquisito' | null;
+  /** Data scatto reale (EXIF/lastModified) ISO 8601. Server fallback now(). */
+  takenAtIso?: string | null;
 }
 
 export interface UploadOptions {
@@ -129,6 +131,7 @@ export function useChunkedUpload(_options: UploadOptions = {}) {
         kind: input.kind ?? null,
         geoLat: input.geoLat ?? null,
         geoLng: input.geoLng ?? null,
+        takenAtIso: input.takenAtIso ?? null,
       });
       setJobId(id);
       setState({
