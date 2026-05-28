@@ -38,6 +38,7 @@ import { createBrowserSupabase } from '@kommessa/api/client';
 
 import { creaCommessa } from '../../../../_actions/crea-commessa';
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
+import { camelCaseToWords } from '../../../../_lib/camel-to-words';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
 import { uploadMediaBatch, type UploadProgressMap } from '../_lib/upload-media';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
@@ -1095,6 +1096,15 @@ export function NuovaCommessaForm({
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Versione "leggibile" sopra: la stessa descrizione CamelCase
+                    spezzata in parole. È quella che l'utente immagina di leggere
+                    in app. Sotto, in monospace, la versione tecnica che finisce
+                    nel nome cartella su Nextcloud. */}
+                {state.descrizione ? (
+                  <p className="mb-2 break-words text-sm font-medium leading-snug text-foreground">
+                    {camelCaseToWords(state.descrizione)}
+                  </p>
+                ) : null}
                 <code className="block break-all rounded-md bg-muted/60 p-3 font-mono text-xs leading-relaxed text-foreground">
                   /{anteprima}/
                 </code>

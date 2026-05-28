@@ -2,7 +2,16 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Phone, Mail, Plus, Star, Trash2, Pencil, Check, X } from 'lucide-react';
+import {
+  Phone,
+  Mail,
+  Plus,
+  Star,
+  Trash2,
+  Pencil,
+  Check,
+  X,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -137,6 +146,36 @@ function ContattoRowView({
   const askConfirm = useConfirm();
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
+  // Quick-add telefono inline: mini form che appare al click di "+ tel"
+  // quando il contatto è senza telefono. UX da contatto-mobile-like:
+  // veloce, niente dialog, focus immediato, Enter per salvare.
+  const [quickTel, setQuickTel] = React.useState<string | null>(null);
+
+  const saveQuickTel = (value: string) => {
+    const tel = value.trim();
+    if (tel.length === 0) {
+      setQuickTel(null);
+      return;
+    }
+    start(async () => {
+      const res = await aggiornaContatto({
+        id: row.id,
+        nome: row.nome,
+        ruolo: row.ruolo,
+        telefono: tel,
+        email: row.email,
+        note: row.note,
+        isPrimary: row.is_primary,
+        ordine: row.ordine,
+      });
+      if (!res.ok) {
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      setQuickTel(null);
+      router.refresh();
+    });
+  };
 
   return (
     <li
@@ -163,7 +202,7 @@ function ContattoRowView({
             </Badge>
           ) : null}
         </div>
-        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
           {row.telefono ? (
             <a
               href={`tel:${row.telefono}`}
@@ -172,6 +211,15 @@ function ContattoRowView({
               <Phone className="h-3 w-3" aria-hidden="true" />
               {row.telefono}
             </a>
+          ) : canEdit && quickTel === null ? (
+            <button
+              type="button"
+              onClick={() => setQuickTel('')}
+              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.04] px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 active:scale-[0.97]"
+              aria-label="Aggiungi telefono"
+            >
+              <Phone className="h-2.5 w-2.5" aria-hidden="true" />+ tel
+            </button>
           ) : null}
           {row.email ? (
             <a
@@ -183,6 +231,52 @@ function ContattoRowView({
             </a>
           ) : null}
         </div>
+        {/* Quick-add tel: appare in linea sotto i dati, niente dialog.
+            Enter → salva, Esc → annulla. */}
+        {quickTel !== null ? (
+          <div className="mt-1 flex items-center gap-1">
+            <Phone
+              className="h-3 w-3 shrink-0 text-primary"
+              aria-hidden="true"
+            />
+            <input
+              type="tel"
+              inputMode="tel"
+              value={quickTel}
+              autoFocus
+              placeholder="es. 333 1234567"
+              onChange={(e) => setQuickTel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  saveQuickTel(quickTel);
+                } else if (e.key === 'Escape') {
+                  setQuickTel(null);
+                }
+              }}
+              maxLength={40}
+              className="h-7 flex-1 rounded-md border border-primary/40 bg-card px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/60"
+            />
+            <button
+              type="button"
+              onClick={() => saveQuickTel(quickTel)}
+              disabled={pending || quickTel.trim().length < 3}
+              aria-label="Salva telefono"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-primary hover:bg-primary/10 disabled:opacity-40"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickTel(null)}
+              disabled={pending}
+              aria-label="Annulla"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : null}
         {row.note ? (
           <p className="mt-0.5 whitespace-pre-wrap text-[11px] text-muted-foreground">
             {row.note}

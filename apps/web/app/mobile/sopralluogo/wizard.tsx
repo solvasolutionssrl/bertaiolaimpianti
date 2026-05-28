@@ -7,11 +7,14 @@ import {
   ChevronRight,
   Check,
   Loader2,
+  Plus,
+  Search,
   Sparkles,
   CheckCircle2,
   Mic,
   Wand2,
   Camera,
+  X,
 } from 'lucide-react';
 
 import {
@@ -22,6 +25,12 @@ import {
 } from '@kommessa/ui';
 
 import { creaCommessa } from '../../_actions/crea-commessa';
+import {
+  creaVoceCustom,
+  vociSimili,
+  type VoceSimile,
+} from '../../office/impostazioni/voci/_actions/voci';
+import { useAlert } from '../../_components/confirm-provider';
 import { ContactPickerButton } from '../../_components/contact-picker-button';
 import { VoiceRecorder } from '../../_components/voice-recorder';
 import {
@@ -768,14 +777,42 @@ function Step3Voci({
   preset: PresetOption[];
   vociDefault: number[];
 }) {
+  const router = useRouter();
+  const [search, setSearch] = React.useState('');
+  const [showNuova, setShowNuova] = React.useState(false);
+
+  // Filtra + raggruppa + ordina alfabeticamente.
+  // Le voci default ("sempre attive") restano sempre visibili anche durante
+  // la ricerca, in cima al gruppo "sempre attive" — sono informative.
   const groups = React.useMemo(() => {
+    const norm = (s: string) =>
+      s
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+    const q = norm(search.trim());
+    const filtered = q
+      ? voci.filter((v) => v.default || norm(v.nome).includes(q))
+      : voci;
     const map = new Map<string, VoceCatalogoOption[]>();
-    for (const v of voci) {
+    for (const v of filtered) {
       if (!map.has(v.categoria)) map.set(v.categoria, []);
       map.get(v.categoria)!.push(v);
     }
+    // Ordina alfabeticamente dentro ogni gruppo (default prima).
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        if (a.default !== b.default) return a.default ? -1 : 1;
+        return a.nome.localeCompare(b.nome, 'it');
+      });
+    }
     return [...map.entries()];
-  }, [voci]);
+  }, [voci, search]);
+
+  const matchCount = React.useMemo(
+    () => groups.reduce((acc, [, items]) => acc + items.length, 0),
+    [groups],
+  );
 
   const toggle = (id: number, isDefault: boolean) => {
     if (isDefault) return;
@@ -795,15 +832,27 @@ function Step3Voci({
   };
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-base font-semibold">3 · Selezione voci</h2>
+    <section className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">3 · Selezione voci</h2>
+        <button
+          type="button"
+          onClick={() => setShowNuova(true)}
+          className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.04] px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/10 active:scale-[0.97]"
+        >
+          <Plus className="h-3 w-3" aria-hidden="true" />
+          Nuova voce
+        </button>
+      </div>
 
       {preset.length > 0 ? (
-        <div className="space-y-2">
-          <Label htmlFor="preset">Parti da preset…</Label>
+        <div className="space-y-1">
+          <Label htmlFor="preset" className="text-xs">
+            Parti da preset…
+          </Label>
           <select
             id="preset"
-            className="block h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+            className="block h-10 w-full rounded-md border border-input bg-background px-2.5 text-sm"
             onChange={(e) => applyPreset(e.target.value)}
           >
             <option value="">— nessuno —</option>
@@ -814,41 +863,314 @@ function Step3Voci({
         </div>
       ) : null}
 
-      <p className="text-xs text-muted-foreground">Sezione A (1-10, 26): sempre attive · Sezione B: selezione del capo.</p>
-
-      <div className="space-y-4">
-        {groups.map(([cat, items]) => (
-          <fieldset key={cat} className="rounded-md border border-border p-3">
-            <legend className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {cat.replace(/_/g, ' ')}
-            </legend>
-            <div className="space-y-2">
-              {items.map((v) => {
-                const checked = state.vociSelezionate.has(v.id);
-                return (
-                  <label
-                    key={v.id}
-                    className={'flex min-h-[48px] items-center gap-3 rounded-md px-2 py-1.5 text-sm ' + (v.default ? 'bg-muted/50' : 'hover:bg-muted/40')}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={v.default}
-                      onChange={() => toggle(v.id, v.default)}
-                      className="h-5 w-5 accent-[color:hsl(var(--primary))]"
-                    />
-                    <span className="flex-1">{v.nome}</span>
-                    {v.default ? (
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">sempre</span>
-                    ) : null}
-                  </label>
-                );
-              })}
-            </div>
-          </fieldset>
-        ))}
+      {/* Search compatta sticky in alto del container scrollabile */}
+      <div className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 pt-1 backdrop-blur-sm">
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cerca voce…"
+            className="h-9 pl-8 pr-8 text-sm"
+          />
+          {search ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Pulisci ricerca"
+              className="absolute right-2 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
+        {search ? (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {matchCount === 0
+              ? 'Nessuna voce — prova "Nuova voce" qui sopra.'
+              : `${matchCount} risultat${matchCount === 1 ? 'o' : 'i'}`}
+          </p>
+        ) : (
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Sezione A: sempre attive · Sezione B: selezione del capo.
+          </p>
+        )}
       </div>
+
+      {/* Lista scrollabile più alta (~65vh) con search persistente sopra */}
+      <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-0.5">
+        {groups.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border bg-muted/20 p-6 text-center text-xs text-muted-foreground">
+            Nessuna voce trovata per "{search}".
+            <br />
+            Se serve davvero, aggiungila con <span className="font-medium text-foreground">+ Nuova voce</span>.
+          </div>
+        ) : (
+          groups.map(([cat, items]) => (
+            <fieldset key={cat} className="rounded-md border border-border p-2.5">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {cat.replace(/_/g, ' ')}
+              </legend>
+              <div className="space-y-1.5">
+                {items.map((v) => {
+                  const checked = state.vociSelezionate.has(v.id);
+                  return (
+                    <label
+                      key={v.id}
+                      className={
+                        'flex min-h-[44px] items-center gap-3 rounded-md px-2 py-1 text-sm ' +
+                        (v.default ? 'bg-muted/50' : 'hover:bg-muted/40 active:bg-muted/60')
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={v.default}
+                        onChange={() => toggle(v.id, v.default)}
+                        className="h-5 w-5 accent-[color:hsl(var(--primary))]"
+                      />
+                      <span className="flex-1">{v.nome}</span>
+                      {v.default ? (
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">sempre</span>
+                      ) : null}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          ))
+        )}
+      </div>
+
+      {showNuova ? (
+        <NuovaVoceMobileDialog
+          initialNome={search.trim()}
+          onClose={() => setShowNuova(false)}
+          onCreated={() => {
+            // Ricarica il server data per vedere la nuova voce nei selettori.
+            router.refresh();
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * Dialog compatto per aggiungere una nuova voce custom dalla PWA.
+ * Filosofia (come da indicazione cliente): "non aggiungere mille cose a
+ * caso, scrivi e verifica cosa c'è già". Il server fa il check fuzzy
+ * (Levenshtein + accenti) e se trova voci simili le mostra prima di
+ * insertare. L'utente può "Crea comunque" o cambiare nome.
+ */
+function NuovaVoceMobileDialog({
+  initialNome,
+  onClose,
+  onCreated,
+}: {
+  initialNome: string;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const showAlert = useAlert();
+  const [nome, setNome] = React.useState(initialNome);
+  const [categoria, setCategoria] = React.useState<
+    | 'impiantistica'
+    | 'documentazione'
+    | 'tubazioni'
+    | 'montaggi'
+    | 'allacci'
+    | 'ventilazione'
+    | 'supporto'
+    | 'alimentazione'
+  >('impiantistica');
+  const [pending, start] = React.useTransition();
+  const [similar, setSimilar] = React.useState<VoceSimile[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Pre-fetch fuzzy on-blur: dà feedback "ehi c'è già X" prima del submit.
+  const checkSimilar = async () => {
+    if (nome.trim().length < 2) return;
+    try {
+      const sim = await vociSimili({ nome: nome.trim() });
+      if (sim.length > 0) setSimilar(sim);
+    } catch {
+      /* silent: il check finale lo fa il submit */
+    }
+  };
+
+  const submit = (force: boolean) => {
+    if (nome.trim().length < 2) {
+      setError('Almeno 2 caratteri.');
+      return;
+    }
+    setError(null);
+    start(async () => {
+      const res = await creaVoceCustom({
+        nome: nome.trim(),
+        categoria,
+        cartellaTemplate: null,
+        forceSimilar: force,
+      });
+      if (res.ok) {
+        onCreated();
+        onClose();
+        return;
+      }
+      if (res.reason === 'similar') {
+        setSimilar(res.similar);
+        return;
+      }
+      if (res.reason === 'duplicate') {
+        setError(res.message);
+        return;
+      }
+      await showAlert({
+        title: 'Creazione voce fallita',
+        body: 'message' in res ? res.message : 'Errore sconosciuto',
+      });
+    });
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-t-2xl border border-border bg-card p-4 shadow-xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold">Nuova voce custom</h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Prima di aggiungere, cerca: probabilmente esiste già con un
+              nome simile. Niente doppioni.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Chiudi"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <Label htmlFor="nuova-voce-nome" className="text-xs">
+              Nome voce
+            </Label>
+            <Input
+              id="nuova-voce-nome"
+              value={nome}
+              onChange={(e) => {
+                setNome(e.target.value);
+                if (similar) setSimilar(null);
+                if (error) setError(null);
+              }}
+              onBlur={checkSimilar}
+              placeholder="Es. Allaccio fibra ottica"
+              maxLength={160}
+              autoFocus
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor="nuova-voce-cat" className="text-xs">
+              Categoria
+            </Label>
+            <select
+              id="nuova-voce-cat"
+              value={categoria}
+              onChange={(e) =>
+                setCategoria(e.target.value as typeof categoria)
+              }
+              className="mt-1 block h-10 w-full rounded-md border border-input bg-background px-2.5 text-sm"
+            >
+              <option value="impiantistica">Impiantistica</option>
+              <option value="documentazione">Documentazione</option>
+              <option value="tubazioni">Tubazioni</option>
+              <option value="montaggi">Montaggi</option>
+              <option value="allacci">Allacci</option>
+              <option value="ventilazione">Ventilazione</option>
+              <option value="supporto">Supporto</option>
+              <option value="alimentazione">Alimentazione</option>
+            </select>
+          </div>
+
+          {similar && similar.length > 0 ? (
+            <div className="rounded-md border border-amber-500/40 bg-amber-50 p-2.5 text-xs dark:bg-amber-950/30">
+              <p className="mb-1 font-medium text-amber-900 dark:text-amber-200">
+                Esistono già voci simili:
+              </p>
+              <ul className="space-y-0.5 text-[11px] text-amber-900/85 dark:text-amber-200/85">
+                {similar.map((s) => (
+                  <li key={s.id} className="flex items-center gap-1.5">
+                    <span className="font-mono opacity-60">
+                      #{String(s.id).padStart(2, '0')}
+                    </span>
+                    <span className="flex-1 font-medium">{s.nome}</span>
+                    <span className="text-[9px] uppercase opacity-60">
+                      {s.scope}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[10px] text-amber-900/70 dark:text-amber-200/70">
+                Se è davvero diversa, conferma. Altrimenti seleziona quella
+                già esistente dall'elenco.
+              </p>
+            </div>
+          ) : null}
+
+          {error ? (
+            <p className="rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            disabled={pending}
+          >
+            Annulla
+          </Button>
+          {similar && similar.length > 0 ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending}
+              onClick={() => submit(true)}
+            >
+              {pending ? 'Creo…' : 'Crea comunque'}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending || nome.trim().length < 2}
+              onClick={() => submit(false)}
+            >
+              {pending ? 'Verifica…' : 'Crea voce'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
