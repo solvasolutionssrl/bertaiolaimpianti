@@ -46,7 +46,8 @@ export default async function ClienteDetailPage({
     supabase
       .from('contatto_cliente' as never)
       .select('id, nome, ruolo, telefono, email, note, is_primary, ordine')
-      .eq('cliente_id', params.id),
+      .eq('cliente_id', params.id)
+      .is('commessa_id', null),
   ]);
   if (clRes.error || !clRes.data) notFound();
   const canEditContatti = ctx.role === 'admin' || ctx.role === 'office';

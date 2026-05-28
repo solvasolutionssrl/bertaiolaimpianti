@@ -181,53 +181,9 @@ export async function creaCommessa(
     }
   }
 
-  // 3b) Aggiunta referenti del cliente (Ondata 4).
-  // Su cliente esistente: aggiungiamo solo i referenti NUOVI (match per
-  // lower(nome) + telefono normalizzato). Su cliente nuovo: inseriamo tutti.
-  // L'indice unique partial blocca duplicati esatti — qui pre-filtriamo
-  // per evitare di accendere l'errore SQL su ogni doppione.
-  if (data.referenti && data.referenti.length > 0) {
-    const { data: existing } = await supabase
-      .from('contatto_cliente' as never)
-      .select('id, nome, telefono, is_primary')
-      .eq('cliente_id', clienteId);
-    const existingRows = (existing ?? []) as Array<{
-      id: string;
-      nome: string;
-      telefono: string | null;
-      is_primary: boolean;
-    }>;
-    const dedupKey = (n: string, t: string | null) =>
-      `${n.trim().toLowerCase()}|${(t ?? '').trim()}`;
-    const seen = new Set(existingRows.map((r) => dedupKey(r.nome, r.telefono)));
-    const noPrimaryYet = !existingRows.some((r) => r.is_primary);
-
-    const toInsert = data.referenti
-      .map((r, idx) => ({
-        tenant_id: ctx.tenantId,
-        cliente_id: clienteId,
-        nome: r.nome.trim(),
-        ruolo: r.ruolo?.trim() || null,
-        telefono: r.telefono?.trim() || null,
-        email: r.email?.trim() || null,
-        is_primary: noPrimaryYet && idx === 0,
-        ordine: existingRows.length + idx,
-      }))
-      .filter((r) => !seen.has(dedupKey(r.nome, r.telefono)));
-
-    if (toInsert.length > 0) {
-      const { error: refErr } = await supabase
-        .from('contatto_cliente' as never)
-        .insert(toInsert as never);
-      if (refErr) {
-        // Non blocchiamo la creazione commessa per un fallimento di rubrica.
-        console.warn(
-          '[crea-commessa] INSERT referenti fallito (non-fatal):',
-          refErr.message,
-        );
-      }
-    }
-  }
+  // I referenti estratti dall'AI vengono inseriti più avanti (vedi 6b),
+  // perché vogliamo legarli alla commessa appena creata (scope commessa),
+  // non al cliente. Niente da fare qui.
 
   // 4) Codice progressivo via RPC (atomico, format BER-YY-NNN, reset annuale)
   const annoCorrente = new Date().getFullYear() % 100; // 26 per 2026
@@ -310,6 +266,39 @@ export async function creaCommessa(
     .single();
   if (comErr || !commessa) {
     return { ok: false, error: `Creazione commessa fallita: ${comErr?.message ?? 'errore'}` };
+  }
+
+  // 6b) Referenti estratti dall'AI: legati a QUESTA commessa
+  // (scope commessa, non cliente). Razionale: chi parla in un sopralluogo
+  // nuovo nomina persone specifiche del cantiere (geometra, capocantiere,
+  // referente in loco), non l'anagrafica permanente del cliente.
+  // L'utente può sempre "promuovere" un referente a contatto del cliente
+  // dalla scheda anagrafica.
+  if (data.referenti && data.referenti.length > 0) {
+    const toInsert = data.referenti
+      .filter((r) => r.nome && r.nome.trim().length > 0)
+      .map((r, idx) => ({
+        tenant_id: ctx.tenantId,
+        cliente_id: clienteId,
+        commessa_id: commessa.id,
+        nome: r.nome.trim(),
+        ruolo: r.ruolo?.trim() || null,
+        telefono: r.telefono?.trim() || null,
+        email: r.email?.trim() || null,
+        is_primary: false, // primary ha senso solo a scope cliente
+        ordine: idx,
+      }));
+    if (toInsert.length > 0) {
+      const { error: refErr } = await supabase
+        .from('contatto_cliente' as never)
+        .insert(toInsert as never);
+      if (refErr) {
+        console.warn(
+          '[crea-commessa] INSERT referenti commessa fallito (non-fatal):',
+          refErr.message,
+        );
+      }
+    }
   }
 
   // 7) Unione voci A (default) + voci B selezionate, recuperando metadati

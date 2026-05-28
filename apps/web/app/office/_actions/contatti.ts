@@ -49,10 +49,17 @@ const contattoBase = z.object({
 
 const creaSchema = contattoBase.extend({
   clienteId: z.string().uuid(),
+  /**
+   * Se valorizzato, il contatto è legato SOLO a questa commessa
+   * (es. geometra del cantiere). Se null/undefined è un contatto del
+   * cliente, riusabile su tutte le sue commesse.
+   */
+  commessaId: z.string().uuid().nullable().optional(),
 });
 
 const aggiornaSchema = contattoBase.extend({
   id: z.string().uuid(),
+  commessaId: z.string().uuid().nullable().optional(),
 });
 
 export async function creaContatto(
@@ -64,13 +71,19 @@ export async function creaContatto(
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
   }
   const supabase = createServerSupabase();
-  // Se questo contatto è dichiarato primary, sblocca il vecchio primary del
-  // cliente prima di insert (l'indice unique parziale lo rifiuterebbe).
-  if (parsed.data.isPrimary) {
+  // is_primary ha senso solo per i contatti del cliente (commessa_id NULL):
+  // un contatto specifico di una commessa non è "il principale" del cliente.
+  const isClienteScope = !parsed.data.commessaId;
+  const wantsPrimary = Boolean(parsed.data.isPrimary) && isClienteScope;
+
+  // Se questo contatto è primary del cliente, sblocca il vecchio primary
+  // del cliente (l'indice unique parziale lo rifiuterebbe).
+  if (wantsPrimary) {
     await supabase
       .from('contatto_cliente' as never)
       .update({ is_primary: false } as never)
       .eq('cliente_id', parsed.data.clienteId)
+      .is('commessa_id', null)
       .eq('is_primary', true);
   }
   const { data, error } = await supabase
@@ -78,12 +91,13 @@ export async function creaContatto(
     .insert({
       tenant_id: ctx.tenantId,
       cliente_id: parsed.data.clienteId,
+      commessa_id: parsed.data.commessaId ?? null,
       nome: parsed.data.nome,
       ruolo: parsed.data.ruolo,
       telefono: parsed.data.telefono,
       email: parsed.data.email,
       note: parsed.data.note,
-      is_primary: parsed.data.isPrimary ?? false,
+      is_primary: wantsPrimary,
       ordine: parsed.data.ordine ?? 0,
     } as never)
     .select('id')
@@ -93,6 +107,9 @@ export async function creaContatto(
   }
   revalidatePath(`/office/clienti/${parsed.data.clienteId}`);
   revalidatePath('/office/clienti');
+  if (parsed.data.commessaId) {
+    revalidatePath(`/office/commesse/${parsed.data.commessaId}`);
+  }
   return { ok: true, id: (data as { id: string }).id };
 }
 
@@ -106,23 +123,28 @@ export async function aggiornaContatto(
   }
   const supabase = createServerSupabase();
 
-  // Per gestire la transizione di is_primary: prima leggi il cliente_id,
-  // poi se isPrimary=true sblocca gli altri primary di quel cliente.
-  if (parsed.data.isPrimary) {
-    const { data: row } = await supabase
+  // Carica il record per leggere cliente_id + commessa_id correnti — serve
+  // sia per la gestione is_primary che per i revalidate path.
+  const { data: row } = await supabase
+    .from('contatto_cliente' as never)
+    .select('cliente_id, commessa_id')
+    .eq('id', parsed.data.id)
+    .maybeSingle();
+  const clienteId = (row as { cliente_id?: string } | null)?.cliente_id;
+  const currentCommessaId = (row as { commessa_id?: string | null } | null)
+    ?.commessa_id;
+  // is_primary valido solo per i contatti del cliente (commessa_id NULL).
+  const isClienteScope = !currentCommessaId;
+  const wantsPrimary = Boolean(parsed.data.isPrimary) && isClienteScope;
+
+  if (wantsPrimary && clienteId) {
+    await supabase
       .from('contatto_cliente' as never)
-      .select('cliente_id')
-      .eq('id', parsed.data.id)
-      .maybeSingle();
-    const clienteId = (row as { cliente_id?: string } | null)?.cliente_id;
-    if (clienteId) {
-      await supabase
-        .from('contatto_cliente' as never)
-        .update({ is_primary: false } as never)
-        .eq('cliente_id', clienteId)
-        .eq('is_primary', true)
-        .neq('id', parsed.data.id);
-    }
+      .update({ is_primary: false } as never)
+      .eq('cliente_id', clienteId)
+      .is('commessa_id', null)
+      .eq('is_primary', true)
+      .neq('id', parsed.data.id);
   }
 
   const { error } = await supabase
@@ -133,12 +155,15 @@ export async function aggiornaContatto(
       telefono: parsed.data.telefono,
       email: parsed.data.email,
       note: parsed.data.note,
-      is_primary: parsed.data.isPrimary ?? false,
+      is_primary: wantsPrimary,
       ordine: parsed.data.ordine ?? 0,
     } as never)
     .eq('id', parsed.data.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/office/clienti');
+  if (currentCommessaId) {
+    revalidatePath(`/office/commesse/${currentCommessaId}`);
+  }
   return { ok: true };
 }
 

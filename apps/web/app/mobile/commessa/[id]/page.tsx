@@ -109,8 +109,8 @@ export default async function CommessaDetailPage({
         cliente_indirizzo_cantiere, cloud_folder_path,
         descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, is_critica, data_apertura,
         cliente:clienti (
-          ragione_sociale, email, telefoni, citta, cap, provincia,
-          contatti:contatto_cliente ( id, nome, ruolo, telefono, email, is_primary, ordine )
+          id, ragione_sociale, email, telefoni, citta, cap, provincia,
+          contatti:contatto_cliente ( id, nome, ruolo, telefono, email, is_primary, ordine, commessa_id )
         ),
         responsabile:users!commesse_responsabile_id_fkey ( display_name )
       `,
@@ -391,8 +391,10 @@ export default async function CommessaDetailPage({
 
   const telefono = (cliente?.telefoni as string[] | undefined)?.[0];
 
-  // Contatti referente (Ondata 4): se presenti hanno priorità sul vecchio
-  // pill "telefono unico" — mostriamo nome + ruolo + tap-to-call.
+  // Contatti referente (Ondata 4.1): union dei contatti del cliente
+  // (commessa_id NULL) + contatti specifici di QUESTA commessa
+  // (commessa_id = params.id). Ordine: primary cliente prima, poi gli
+  // altri cliente, poi i contatti commessa.
   type ContattoMobile = {
     id: string;
     nome: string;
@@ -401,16 +403,26 @@ export default async function CommessaDetailPage({
     email: string | null;
     is_primary: boolean;
     ordine: number;
+    commessa_id?: string | null;
   };
   const contattiClienteRaw = (cliente as { contatti?: ContattoMobile[] } | null)
     ?.contatti;
   const contattiCliente: ContattoMobile[] = Array.isArray(contattiClienteRaw)
-    ? [...contattiClienteRaw].sort(
-        (a, b) =>
-          (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) ||
-          a.ordine - b.ordine ||
-          a.nome.localeCompare(b.nome),
-      )
+    ? [...contattiClienteRaw]
+        .filter((c) => !c.commessa_id || c.commessa_id === params.id)
+        .sort((a, b) => {
+          // 1) Contatti del cliente prima, poi quelli della commessa
+          const aScope = a.commessa_id == null ? 0 : 1;
+          const bScope = b.commessa_id == null ? 0 : 1;
+          if (aScope !== bScope) return aScope - bScope;
+          // 2) Tra i cliente, primary first
+          if (a.commessa_id == null) {
+            if (a.is_primary !== b.is_primary) {
+              return a.is_primary ? -1 : 1;
+            }
+          }
+          return a.ordine - b.ordine || a.nome.localeCompare(b.nome);
+        })
     : [];
 
   return (

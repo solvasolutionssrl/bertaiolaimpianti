@@ -30,25 +30,29 @@ export interface ContattoRow {
 }
 
 /**
- * Editor inline dei contatti referente di un cliente.
+ * Editor inline dei contatti referente.
+ *
+ * Scope (Ondata 4.1):
+ *  - commessaId === undefined → contatti del CLIENTE (riusabili su tutte
+ *    le sue commesse). Mostriamo la stella "Primario" e relativi toggle.
+ *  - commessaId valorizzato     → contatti specifici di QUELLA commessa
+ *    (es. geometra del cantiere). Niente "primary" — sono semplici elenchi.
  *
  * UX:
  *  - Lista compatta dei contatti esistenti (nome + ruolo + telefono tappabile).
- *  - Badge "Primario" sul contatto principale.
  *  - "+ Aggiungi contatto" apre un mini form inline.
  *  - Click "Modifica" su una riga la espande in edit mode.
  *  - Trash con conferma destructive.
- *
- * NB: la sezione legacy del form clienti (telefoni/email come CSV) resta
- * read-only per non perdere dati storici. La fonte di verità per le UI
- * nuove è questa rubrica.
  */
 export function ContattiEditor({
   clienteId,
+  commessaId,
   initial,
   canEdit,
 }: {
   clienteId: string;
+  /** Se passato, i nuovi contatti vengono salvati con scope commessa. */
+  commessaId?: string;
   initial: ContattoRow[];
   canEdit: boolean;
 }) {
@@ -78,6 +82,7 @@ export function ContattiEditor({
             <ContattoForm
               key={c.id}
               clienteId={clienteId}
+              commessaId={commessaId}
               initial={c}
               onClose={() => setEditingId(null)}
             />
@@ -86,6 +91,7 @@ export function ContattiEditor({
               key={c.id}
               row={c}
               canEdit={canEdit}
+              showPrimary={!commessaId}
               onEdit={() => setEditingId(c.id)}
             />
           ),
@@ -93,6 +99,7 @@ export function ContattiEditor({
         {adding ? (
           <ContattoForm
             clienteId={clienteId}
+            commessaId={commessaId}
             initial={null}
             onClose={() => setAdding(false)}
           />
@@ -117,10 +124,13 @@ export function ContattiEditor({
 function ContattoRowView({
   row,
   canEdit,
+  showPrimary,
   onEdit,
 }: {
   row: ContattoRow;
   canEdit: boolean;
+  /** Se false (scope commessa), nasconde il badge Primario. */
+  showPrimary: boolean;
   onEdit: () => void;
 }) {
   const router = useRouter();
@@ -132,7 +142,7 @@ function ContattoRowView({
     <li
       className={cn(
         'flex items-start gap-2 rounded-md border bg-card px-3 py-2',
-        row.is_primary
+        row.is_primary && showPrimary
           ? 'border-primary/30 bg-primary/[0.03]'
           : 'border-border',
       )}
@@ -143,7 +153,7 @@ function ContattoRowView({
           {row.ruolo ? (
             <span className="text-xs text-muted-foreground">· {row.ruolo}</span>
           ) : null}
-          {row.is_primary ? (
+          {row.is_primary && showPrimary ? (
             <Badge
               variant="outline"
               className="border-primary/40 bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-primary"
@@ -226,13 +236,17 @@ function ContattoRowView({
 
 function ContattoForm({
   clienteId,
+  commessaId,
   initial,
   onClose,
 }: {
   clienteId: string;
+  /** Scope. Se valorizzato, il toggle "Primario" è nascosto. */
+  commessaId?: string;
   initial: ContattoRow | null;
   onClose: () => void;
 }) {
+  const isClienteScope = !commessaId;
   const router = useRouter();
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
@@ -257,7 +271,11 @@ function ContattoForm({
       };
       const res = initial
         ? await aggiornaContatto({ id: initial.id, ...payload })
-        : await creaContatto({ clienteId, ...payload });
+        : await creaContatto({
+            clienteId,
+            commessaId: commessaId ?? null,
+            ...payload,
+          });
       if (!res.ok) {
         await showAlert({
           title: 'Salvataggio contatto fallito',
@@ -342,18 +360,26 @@ function ContattoForm({
             className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           />
         </div>
-        <label className="flex cursor-pointer items-center gap-2 sm:col-span-2">
-          <input
-            type="checkbox"
-            checked={isPrimary}
-            onChange={(e) => setIsPrimary(e.target.checked)}
-            className="h-4 w-4 cursor-pointer rounded accent-primary"
-          />
-          <span className="text-xs">
-            <span className="font-medium">Contatto principale</span> — viene
-            mostrato per primo nella commessa e nel mobile (uno solo per cliente)
-          </span>
-        </label>
+        {isClienteScope ? (
+          <label className="flex cursor-pointer items-center gap-2 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={isPrimary}
+              onChange={(e) => setIsPrimary(e.target.checked)}
+              className="h-4 w-4 cursor-pointer rounded accent-primary"
+            />
+            <span className="text-xs">
+              <span className="font-medium">Contatto principale</span> — viene
+              mostrato per primo nella commessa e nel mobile (uno solo per cliente)
+            </span>
+          </label>
+        ) : (
+          <p className="text-[11px] text-muted-foreground sm:col-span-2">
+            Contatto legato a <strong className="font-medium">questa
+            commessa</strong> — verrà mostrato qui ma non nelle altre commesse
+            dello stesso cliente.
+          </p>
+        )}
       </div>
       <div className="mt-3 flex items-center justify-end gap-1">
         <Button

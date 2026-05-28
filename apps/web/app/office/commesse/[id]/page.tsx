@@ -1,5 +1,13 @@
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
-import { Mail, Phone, Star, Tag as TagIcon, User2, Users } from 'lucide-react';
+import {
+  HardHat,
+  Mail,
+  Phone,
+  Star,
+  Tag as TagIcon,
+  User2,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -9,6 +17,10 @@ import { loadCommessa } from './_lib/get-commessa';
 import { elencaTagTenant } from '../../../_actions/commessa-tag';
 import { TagEditor } from '../../../_components/tag-editor';
 import { ClienteEditDialog } from './_components/cliente-edit-dialog';
+import {
+  ContattiEditor,
+  type ContattoRow,
+} from '../../clienti/_components/contatti-editor';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,12 +50,30 @@ export default async function AnagraficaTab({
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
   const ticket = Array.isArray(c.ticket) ? c.ticket[0] : c.ticket;
 
-  // Carica i tag della commessa + la rosa di tag esistenti nel tenant
+  // Carica i tag della commessa + la rosa di tag esistenti nel tenant +
+  // contatti del cliente (scope NULL) e contatti specifici della commessa.
   const supabase = createServerSupabase();
-  const [tagsRes, tenantTags] = await Promise.all([
-    supabase.from('commessa_tags').select('tag').eq('commessa_id', params.id),
-    elencaTagTenant(),
-  ]);
+  const clienteIdParam = (cliente?.id as string | undefined) ?? null;
+  const [tagsRes, tenantTags, contattiClienteRes, contattiCommessaRes] =
+    await Promise.all([
+      supabase.from('commessa_tags').select('tag').eq('commessa_id', params.id),
+      elencaTagTenant(),
+      clienteIdParam
+        ? supabase
+            .from('contatto_cliente' as never)
+            .select(
+              'id, nome, ruolo, telefono, email, note, is_primary, ordine',
+            )
+            .eq('cliente_id', clienteIdParam)
+            .is('commessa_id', null)
+        : Promise.resolve({ data: [] as ContattoRow[], error: null }),
+      supabase
+        .from('contatto_cliente' as never)
+        .select('id, nome, ruolo, telefono, email, note, is_primary, ordine')
+        .eq('commessa_id', params.id),
+    ]);
+  const contattiCliente = (contattiClienteRes.data ?? []) as unknown as ContattoRow[];
+  const contattiCommessa = (contattiCommessaRes.data ?? []) as unknown as ContattoRow[];
   const tags = ((tagsRes.data ?? []) as Array<{ tag: string }>)
     .map((t) => t.tag)
     .sort();
@@ -59,27 +89,15 @@ export default async function AnagraficaTab({
   const telefoni = (cliente?.telefoni as string[] | null | undefined) ?? [];
   const email = (cliente?.email as string[] | null | undefined) ?? [];
 
-  // Contatti referente (Ondata 4): se presenti rappresentano la fonte di verità.
-  // I telefoni[]/email[] restano come fallback legacy.
-  type Contatto = {
-    id: string;
-    nome: string;
-    ruolo: string | null;
-    telefono: string | null;
-    email: string | null;
-    is_primary: boolean;
-    ordine: number;
-  };
-  const contatti: Contatto[] = Array.isArray(
-    (cliente as { contatti?: unknown })?.contatti,
-  )
-    ? ([...((cliente as { contatti?: Contatto[] }).contatti ?? [])].sort(
-        (a, b) =>
-          (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) ||
-          a.ordine - b.ordine ||
-          a.nome.localeCompare(b.nome),
-      ) as Contatto[])
-    : [];
+  // Contatti del cliente (scope NULL): rappresentano la rubrica del cliente,
+  // riusabile su tutte le sue commesse. I telefoni[]/email[] restano come
+  // fallback legacy quando la rubrica è vuota.
+  const contatti: ContattoRow[] = [...contattiCliente].sort(
+    (a, b) =>
+      (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0) ||
+      a.ordine - b.ordine ||
+      a.nome.localeCompare(b.nome),
+  );
 
   return (
     <div className="space-y-4">
@@ -223,6 +241,37 @@ export default async function AnagraficaTab({
           </CardContent>
         </Card>
       </div>
+
+      {/* Contatti SPECIFICI di questa commessa (Ondata 4.1):
+          geometra del cantiere, capocantiere, vicino di casa, fornitore
+          dedicato — gente che NON appartiene alla rubrica permanente del
+          cliente ma serve solo per questo lavoro. */}
+      {cliente?.id ? (
+        <Card>
+          <CardHeader className="px-4 pb-2 pt-3">
+            <CardTitle className="flex items-center justify-between gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <HardHat className="h-3.5 w-3.5" aria-hidden="true" />
+                Contatti di questa commessa
+              </span>
+              <span className="tabular-nums">{contattiCommessa.length}</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-3">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Persone specifiche di questo cantiere (es. geometra, capocantiere,
+              referente in loco). Restano legati a questa commessa: non
+              compaiono nelle altre del cliente.
+            </p>
+            <ContattiEditor
+              clienteId={cliente.id as string}
+              commessaId={params.id}
+              initial={contattiCommessa}
+              canEdit={canEditCliente}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Tag liberi — categorizzazione trasversale */}
       <Card>
