@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **L'app è in produzione dal 28/05/2026.** Bertaiola Impianti è il cliente reale attivo. Ogni push su `main` viene deployato automaticamente. Tratta il DB e i dati come produzione — no test casuali, no reset senza conferma esplicita.
 
+### Stack AI (28/05/2026)
+
+| Fase | Modello | Override |
+|---|---|---|
+| Trascrizione audio dettato | **`gpt-4o-mini-transcribe`** (per-tenant override su Bertaiola) | `tenants.transcribe_model` o env `OPENAI_MODEL_TRANSCRIBE` |
+| Estrazione campi strutturati da transcript | `gpt-4o-mini` | env `OPENAI_MODEL_EXTRACT` |
+| Suggerimento nome cartella + copilot | `gpt-5-mini` (fallback `gpt-4o-mini`) | env `OPENAI_MODEL_CHAT` |
+
+Il modello di trascrizione è scegliebile per tenant dal pannello super admin (`/admin/tenants/[id]` → tab "AI"): whisper-1 / gpt-4o-mini-transcribe / gpt-4o-transcribe. Bertaiola usa `gpt-4o-mini-transcribe` (più accurato di whisper-1 su rumore di cantiere, costa la metà).
+
 ## What this repository is
 
 This is the working repo for the **Bertaiola Impianti × SOLVA (Kommessa)** project. It contains:
@@ -13,7 +23,7 @@ This is the working repo for the **Bertaiola Impianti × SOLVA (Kommessa)** proj
 1. **Codice di prodotto** (sviluppo attivo):
    - `apps/web/` — Next.js 14 App Router (3 superfici sotto un solo app: `office/`, `mobile/`, `portal/`)
    - `packages/api/`, `packages/ui/`, `packages/integrations/` — pacchetti workspace (`@kommessa/*`)
-   - `supabase/migrations/` — schema versionato (39 migrazioni applicate al cloud)
+   - `supabase/migrations/` — schema versionato (49 migrazioni applicate al cloud al 28/05/2026)
    - `supabase/functions/` — Edge Functions (Deno)
    - `scripts/` — script operativi (es. `reset-tenant-data.mjs`, `freshdesk-migration`)
 2. **Documentazione di prodotto** sotto `documentazione_generale/` — kickoff, architettura, brand, roadmap, mockup, preventivo, presentazioni.
