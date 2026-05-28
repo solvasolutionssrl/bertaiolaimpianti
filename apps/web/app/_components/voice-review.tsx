@@ -148,6 +148,24 @@ export function VoiceReview({
     value: data.note ?? '',
   });
 
+  // Referenti: state locale editabile per consentire all'utente di
+  // aggiungere/correggere i telefoni dei referenti estratti dall'AI
+  // (compatto e veloce — niente dialog, solo input inline).
+  const [referenti, setReferenti] = React.useState<VoiceReferente[]>(
+    () => (data.referenti ?? []).map((r) => ({ ...r })),
+  );
+  const updateReferenteTel = (idx: number, telefono: string) => {
+    setReferenti((rs) => {
+      const next = rs.slice();
+      const trimmed = telefono.trim();
+      next[idx] = {
+        ...next[idx]!,
+        telefono: trimmed.length > 0 ? trimmed : undefined,
+      };
+      return next;
+    });
+  };
+
   const allConfirmed =
     cliente.status === 'confirmed' &&
     vociState.status === 'confirmed' &&
@@ -173,10 +191,10 @@ export function VoiceReview({
       descrizione: descrizione.value.trim() || undefined,
       note: note.value.trim() || undefined,
       tag_suggeriti: data.tag_suggeriti,
-      // Referenti: pass-through di quelli proposti dall'AI (editing inline
-      // sarà aggiunto in iter successiva — per ora si modificano dal form
-      // cliente dopo la creazione della commessa).
-      referenti: data.referenti,
+      // Referenti: usa lo state locale (potenzialmente editato — l'utente
+      // può aggiungere/correggere il telefono di un referente dalla
+      // sezione "Referenti rilevati" qui sotto).
+      referenti: referenti.length > 0 ? referenti : undefined,
     });
   };
 
@@ -414,36 +432,28 @@ export function VoiceReview({
           )}
         </ReviewCard>
 
-        {/* Referenti suggeriti dall'AI (read-only nel review).
-            La modifica completa avviene poi dalla scheda cliente. */}
-        {Array.isArray(data.referenti) && data.referenti.length > 0 ? (
+        {/* Referenti rilevati dall'AI. Telefono editable inline (quick-add):
+            se manca, l'utente lo aggiunge subito senza tornare dopo.
+            Nome/ruolo/email restano read-only qui — modifica completa dalla
+            scheda cliente post-creazione. */}
+        {referenti.length > 0 ? (
           <div className="rounded-lg border border-primary/25 bg-primary/[0.04] px-4 py-3">
             <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary/80">
-              Referenti rilevati ({data.referenti.length})
+              Referenti rilevati ({referenti.length})
             </p>
-            <ul className="space-y-1">
-              {data.referenti.map((r, i) => (
-                <li key={i} className="text-xs text-foreground/90">
-                  <span className="font-medium">{r.nome}</span>
-                  {r.ruolo ? (
-                    <span className="text-muted-foreground"> · {r.ruolo}</span>
-                  ) : null}
-                  {r.telefono ? (
-                    <span className="ml-2 font-mono text-primary">
-                      {r.telefono}
-                    </span>
-                  ) : null}
-                  {r.email ? (
-                    <span className="ml-2 break-all text-muted-foreground">
-                      {r.email}
-                    </span>
-                  ) : null}
-                </li>
+            <ul className="space-y-2">
+              {referenti.map((r, i) => (
+                <ReferenteRow
+                  key={i}
+                  referente={r}
+                  onTelChange={(tel) => updateReferenteTel(i, tel)}
+                />
               ))}
             </ul>
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
-              Verranno aggiunti alla rubrica del cliente. Potrai modificarli
-              dopo la creazione dalla scheda cliente.
+            <p className="mt-2 text-[10px] text-muted-foreground">
+              Verranno aggiunti alla rubrica di questa commessa. Per
+              modificare ruolo/email o promuoverli a contatto cliente
+              permanente, usa la scheda della commessa dopo la creazione.
             </p>
           </div>
         ) : null}
@@ -847,5 +857,98 @@ function VociPicker({
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Riga referente nel review: nome + ruolo + email sono read-only (vengono
+ * dall'AI). Il TELEFONO è editabile inline:
+ *  - se presente: appare come testo cliccabile, click → switch in input
+ *  - se assente: chip "+ tel" → click → input
+ *
+ * Filosofia: feedback Bertaiola — "compatto ed efficace, no dialog, il
+ * referente lo confermo qui e gli aggiungo il numero al volo".
+ */
+function ReferenteRow({
+  referente,
+  onTelChange,
+}: {
+  referente: VoiceReferente;
+  onTelChange: (tel: string) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(referente.telefono ?? '');
+
+  const commit = () => {
+    onTelChange(draft);
+    setEditing(false);
+  };
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground/90">
+      <span className="font-medium">{referente.nome}</span>
+      {referente.ruolo ? (
+        <span className="text-muted-foreground">· {referente.ruolo}</span>
+      ) : null}
+      {referente.email ? (
+        <span className="break-all text-muted-foreground">
+          · {referente.email}
+        </span>
+      ) : null}
+
+      {editing ? (
+        <span className="inline-flex items-center gap-1">
+          <Phone
+            className="h-3 w-3 shrink-0 text-primary"
+            aria-hidden="true"
+          />
+          <input
+            type="tel"
+            inputMode="tel"
+            value={draft}
+            autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                commit();
+              } else if (e.key === 'Escape') {
+                setDraft(referente.telefono ?? '');
+                setEditing(false);
+              }
+            }}
+            placeholder="333 1234567"
+            maxLength={40}
+            className="h-6 w-32 rounded border border-primary/40 bg-card px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/60"
+          />
+        </span>
+      ) : referente.telefono ? (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(referente.telefono ?? '');
+            setEditing(true);
+          }}
+          className="inline-flex items-center gap-1 font-mono text-primary hover:underline"
+          title="Modifica telefono"
+        >
+          <Phone className="h-3 w-3" aria-hidden="true" />
+          {referente.telefono}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft('');
+            setEditing(true);
+          }}
+          className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/10 active:scale-[0.97]"
+          aria-label={`Aggiungi telefono per ${referente.nome}`}
+        >
+          <Phone className="h-2.5 w-2.5" aria-hidden="true" />+ tel
+        </button>
+      )}
+    </li>
   );
 }
