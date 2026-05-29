@@ -38,7 +38,7 @@ export default async function FotoTab({
       `,
     )
     .eq('commessa_id', params.id)
-    .like('mime', 'image/%')
+    .or('mime.like.image/%,mime.like.video/%')
     .in('status', ['uploaded', 'syncing', 'synced', 'sync_failed'])
     .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
@@ -146,8 +146,8 @@ export default async function FotoTab({
       {foto.length === 0 ? (
         <EmptyState
           icon={ImgIcon}
-          title="Nessuna foto"
-          description="Le foto vengono caricate dai tecnici tramite l'app mobile (PWA), tab Scatto, durante sopralluoghi e cantieri."
+          title="Nessun media"
+          description="Foto e video vengono caricati dai tecnici tramite l'app mobile (PWA), tab Scatto, durante sopralluoghi e cantieri."
         />
       ) : (
         <FotoGrid foto={foto} />

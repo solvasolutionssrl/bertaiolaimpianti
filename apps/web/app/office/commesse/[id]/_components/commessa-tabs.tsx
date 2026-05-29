@@ -14,7 +14,7 @@ const TABS = [
   { key: 'fasi', label: 'Fasi', sub: 'fasi' },
   { key: 'timeline', label: 'Timeline', sub: 'timeline' },
   { key: 'documenti', label: 'Documenti', sub: 'documenti' },
-  { key: 'foto', label: 'Foto', sub: 'foto' },
+  { key: 'foto', label: 'Media', sub: 'foto' },
   { key: 'note', label: 'Note', sub: 'note' },
   { key: 'cronologia', label: 'Cronologia', sub: 'cronologia' },
 ];

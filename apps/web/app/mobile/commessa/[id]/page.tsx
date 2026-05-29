@@ -679,7 +679,7 @@ export default async function CommessaDetailPage({
               value="foto"
               className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
             >
-              Foto
+              Media
               <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
                 {fotoTot}
               </span>
