@@ -88,10 +88,18 @@ export default async function SalutePage() {
     let stato: Stato = 'OK';
     let dettaglio = '';
     try {
-      const origin =
-        process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
-          : 'http://localhost:3000';
+      // Usa il dominio di PRODUZIONE (VERCEL_PROJECT_PRODUCTION_URL): l'URL del
+      // singolo deployment (VERCEL_URL) è protetto da Vercel Deployment
+      // Protection → le fetch server-to-server riceverebbero 401 (falso negativo).
+      const host =
+        process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+        process.env.VERCEL_URL ||
+        'localhost:3000';
+      const origin = host.startsWith('http')
+        ? host
+        : host.includes('localhost')
+          ? `http://${host}`
+          : `https://${host}`;
       const controller = new AbortController();
       const tid = setTimeout(() => controller.abort(), 3000);
       const t0 = Date.now();
@@ -106,6 +114,10 @@ export default async function SalutePage() {
           | { status?: string; dbLatencyMs?: number; version?: string }
           | null;
         dettaglio = `HTTP ${res.status} · ${ms} ms · build ${j?.version ?? '—'}`;
+      } else if (res.status === 401) {
+        // 401 = Vercel Deployment Protection sul deployment URL, non un guasto app.
+        stato = 'WARN';
+        dettaglio = '401 — Deployment Protection (probe, non l’app)';
       } else {
         stato = res.status === 503 ? 'WARN' : 'FAIL';
         dettaglio = `HTTP ${res.status}`;
@@ -144,19 +156,28 @@ export default async function SalutePage() {
         stato = 'WARN';
         dettaglio = `Config incompleta (baseUrl=${hasBase}, user=${hasUser}, appPassword=${hasPwd})`;
       } else {
-        // probe WebDAV: PROPFIND su radice (Depth: 0). 5s timeout.
+        // probe WebDAV: PROPFIND (Depth: 0) sull'endpoint dav REALE, non sul
+        // baseUrl nudo (la web UI Nextcloud rifiuta PROPFIND → 405). Mirror della
+        // costruzione URL del provider: {baseUrl}/remote.php/dav/files/{user}/{basePath}
         try {
           const controller = new AbortController();
           const tid = setTimeout(() => controller.abort(), 5000);
           const auth =
             'Basic ' +
             Buffer.from(`${cfg.user}:${cfg.appPassword}`).toString('base64');
-          const res = await fetch(String(cfg.baseUrl), {
+          const base = String(cfg.baseUrl).replace(/\/+$/, '');
+          const bp =
+            typeof cfg.basePath === 'string'
+              ? cfg.basePath.replace(/^\/+|\/+$/g, '')
+              : '';
+          const davUrl = `${base}/remote.php/dav/files/${cfg.user}/${bp}`;
+          const res = await fetch(davUrl, {
             method: 'PROPFIND',
             headers: { Authorization: auth, Depth: '0' },
             signal: controller.signal,
           });
           clearTimeout(tid);
+          // Nextcloud risponde 207 Multi-Status sul successo (rientra in <400).
           if (res.status >= 200 && res.status < 400) {
             dettaglio = `WebDAV reachable (${res.status})`;
           } else {
