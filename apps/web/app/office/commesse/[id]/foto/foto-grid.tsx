@@ -101,7 +101,7 @@ function FotoCell({ f, onOpen }: { f: FotoItem; onOpen: () => void }) {
         type="button"
         onClick={onOpen}
         aria-label={`Apri ${f.filename}`}
-        className="block w-full text-left"
+        className="relative block w-full text-left"
       >
         {thumbSrc ? (
           isVideo ? (
@@ -126,9 +126,9 @@ function FotoCell({ f, onOpen }: { f: FotoItem; onOpen: () => void }) {
           </div>
         )}
 
-        {/* Badge video */}
+        {/* Badge video — in alto a destra (sotto non sfora sulla didascalia) */}
         {isVideo ? (
-          <span className="absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+          <span className="absolute right-1.5 top-1.5 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
             <VideoIcon className="h-3 w-3" aria-hidden="true" /> Video
           </span>
         ) : null}
