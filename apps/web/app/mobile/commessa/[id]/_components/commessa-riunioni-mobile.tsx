@@ -439,6 +439,31 @@ function ThumbFotoButton({
   onOpen: () => void;
 }) {
   const [loaded, setLoaded] = React.useState(false);
+  // Subito dopo la creazione della riunione thumb (R2) e full-size (Nextcloud)
+  // possono non essere ancora pronti → /api/photo dà 404/502 e l'img va in
+  // errore. Ritentiamo qualche volta con backoff + cache-busting finché la
+  // pipeline async non ha completato (così le thumb compaiono da sole, senza
+  // dover riaprire la riunione più tardi).
+  const [attempt, setAttempt] = React.useState(0);
+  const MAX_RETRY = 3;
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+  const handleError = () => {
+    if (attempt < MAX_RETRY) {
+      timerRef.current = setTimeout(
+        () => setAttempt((a) => a + 1),
+        2000 * (attempt + 1),
+      );
+    } else {
+      setLoaded(true);
+    }
+  };
+  const src =
+    `/api/photo/${fileRefId}?size=thumb` + (attempt > 0 ? `&r=${attempt}` : '');
   return (
     <button
       type="button"
@@ -456,12 +481,13 @@ function ThumbFotoButton({
       ) : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`/api/photo/${fileRefId}?size=thumb`}
+        key={attempt}
+        src={src}
         alt={filename}
-        loading="lazy"
+        loading="eager"
         decoding="async"
         onLoad={() => setLoaded(true)}
-        onError={() => setLoaded(true)}
+        onError={handleError}
         className={cn(
           'h-full w-full object-cover transition-opacity duration-200',
           loaded ? 'opacity-100' : 'opacity-0',
