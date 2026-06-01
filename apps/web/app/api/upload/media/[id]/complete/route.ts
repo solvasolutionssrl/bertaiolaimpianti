@@ -1,5 +1,6 @@
 import { type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
+import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -12,6 +13,7 @@ import {
 
 import type { CompleteResponse } from '../../../../../_lib/media-upload-types';
 import { generateAndUploadThumb } from '../../../../../_lib/thumbnails';
+import { syncOneFile } from '../../../../../_lib/sync-r2-to-nextcloud';
 
 export const maxDuration = 60;
 
@@ -231,16 +233,28 @@ export async function POST(
   revalidatePath(`/office/commesse/${ref.commessa_id}`);
   revalidatePath(`/mobile/commessa/${ref.commessa_id}`);
 
-  // 10. Fire-and-forget: avvia sync R2 → Nextcloud per questo file.
-  // Il cron */10min cattura comunque ciò che fallisce qui.
-  triggerSyncForFile(request, ref.id).catch(() => {});
+  // 10. Lavoro in background GARANTITO con waitUntil.
+  // Senza waitUntil, su Vercel la function viene congelata appena ritorna la
+  // Response: i task non-awaited che non hanno fatto in tempo a girare vengono
+  // persi. In un burst da N foto (a volte 20) se ne perdeva una parte → file
+  // su R2 ma senza thumb / non sincronizzati. waitUntil tiene viva la function
+  // finché i task finiscono (entro maxDuration), senza ritardare la Response.
 
-  // 11. Fire-and-forget: genera thumbnail 400x400 webp su R2 (solo immagini).
-  // Path parallelo: .../{section}/thumbs/{shortId}.webp. Se fallisce, la UI
-  // ricade silenziosamente sul proxy full-size via /api/photo/[id].
+  // 10.a — Thumbnail 400x400 webp su R2 (solo immagini). È parte del "file
+  // corretto su R2": la UI serve il thumb da R2 via /api/photo?size=thumb,
+  // indipendentemente dalla sync su Nextcloud.
   if (ref.mime && ref.mime.startsWith('image/')) {
-    generateAndUploadThumb(ctx.tenantId, ref.id).catch(() => {});
+    waitUntil(
+      generateAndUploadThumb(ctx.tenantId, ref.id).catch(() => {}),
+    );
   }
+
+  // 10.b — Clone secondario R2 → Nextcloud. Chiamata diretta a syncOneFile
+  // (niente più self-fetch a /api/sync, che spawnava un'altra function
+  // ugualmente uccidibile). syncOneFile fa claim atomico, quindi è safe anche
+  // se il cron-backstop gira in parallelo. R2 NON viene mai toccato qui: resta
+  // il source of truth.
+  waitUntil(syncOneFile(ref.id).catch(() => {}));
 
   return Response.json({
     ok: true,
@@ -264,26 +278,4 @@ function deriveAllegatoKind(mime: string): 'foto' | 'video' | 'pdf_acquisito' {
     return 'pdf_acquisito';
   }
   return 'foto';
-}
-
-/**
- * Avvia il sync di un singolo file in background (fire-and-forget).
- * Usa CRON_SECRET come bearer interno: in produzione Vercel risolve l'URL
- * via origine della request; in dev locale punta a localhost.
- */
-async function triggerSyncForFile(request: NextRequest, fileRefId: string): Promise<void> {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return; // in dev senza CRON_SECRET, cron periodico catturerà comunque
-
-  const origin = new URL(request.url).origin;
-  await fetch(`${origin}/api/sync/r2-to-nextcloud`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Internal-Sync-Secret': secret,
-    },
-    body: JSON.stringify({ fileRefId }),
-    // Non aspettiamo la risposta: lasciamo che giri in background
-    keepalive: true,
-  });
 }

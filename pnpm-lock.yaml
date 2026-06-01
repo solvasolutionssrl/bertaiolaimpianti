@@ -74,6 +74,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ~2.45.4
         version: 2.45.6
+      '@vercel/functions':
+        specifier: ^3.6.1
+        version: 3.6.1(@aws-sdk/credential-provider-web-identity@3.972.42)
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -2230,6 +2233,19 @@ packages:
     resolution: {integrity: sha512-lrW200hZdbfRtztbygyaq/6jP6AKE8qQN2KvPcJ+x7wiD038YtnYtZ82IMNJ69GJibV7bwL3y9FgK+5w/pYt6g==}
     cpu: [x64]
     os: [win32]
+
+  '@vercel/functions@3.6.1':
+    resolution: {integrity: sha512-xz+zZvj/XE6KDHZ8kYNO25Axpjng/kTJd/87SwONa6hzlq94K69OdqH1ZC/CehbtwWknpeyHqUHmpnfoaCbLZQ==}
+    engines: {node: '>= 20'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-web-identity': '*'
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-web-identity':
+        optional: true
+
+  '@vercel/oidc@3.5.0':
+    resolution: {integrity: sha512-jo7GgeJx2YMkjg9A28pFM5p88n5SnSHvDeNlf9898bRWiG9jPxwedj/gn/2XTw4UOTyQ50uHlrTGSlf/XU5tgw==}
+    engines: {node: '>= 20'}
 
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
@@ -6689,6 +6705,14 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.11.1':
     optional: true
+
+  '@vercel/functions@3.6.1(@aws-sdk/credential-provider-web-identity@3.972.42)':
+    dependencies:
+      '@vercel/oidc': 3.5.0
+    optionalDependencies:
+      '@aws-sdk/credential-provider-web-identity': 3.972.42
+
+  '@vercel/oidc@3.5.0': {}
 
   '@webassemblyjs/ast@1.14.1':
     dependencies:
