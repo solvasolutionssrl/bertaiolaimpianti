@@ -560,14 +560,12 @@ function Architettura() {
   return (
     <section
       id="architettura"
-      className="dark relative isolate overflow-hidden bg-background py-20 text-foreground"
+      style={{ background: 'linear-gradient(180deg, hsl(221 39% 17%), hsl(223 43% 11%))' }}
+      className="dark relative isolate overflow-hidden py-20 text-foreground"
     >
-      {/* atmosfera: griglia + alone brand */}
-      <div className="absolute inset-0 -z-10 bg-grid opacity-[0.18]" aria-hidden />
-      <div
-        aria-hidden
-        className="absolute -top-24 left-1/2 -z-10 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
-      />
+      {/* atmosfera: parallasse tenue + griglia + filo brand */}
+      <HeroParallax tone="dark" />
+      <div className="absolute inset-0 -z-10 bg-grid opacity-[0.12]" aria-hidden />
       <div aria-hidden className="border-brand-line absolute inset-x-0 top-0 h-0.5" />
 
       <div className="mx-auto max-w-6xl px-6">
@@ -581,7 +579,7 @@ function Architettura() {
           {garanzie.map((g) => (
             <div
               key={g}
-              className="flex items-start gap-2.5 rounded-lg border border-border bg-card/70 px-4 py-3 text-sm shadow-soft backdrop-blur"
+              className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-3 text-sm shadow-soft backdrop-blur"
             >
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
               <span className="text-foreground/90">{g}</span>

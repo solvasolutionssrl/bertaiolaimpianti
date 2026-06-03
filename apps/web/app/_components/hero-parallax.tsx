@@ -3,16 +3,63 @@
 import * as React from 'react';
 
 /**
- * Parallasse decorativa dietro l'Hero della landing. Tre strati di "orbite"
- * brand sfocate (blu/arancio) che scorrono a velocità diverse rispetto al
- * contenuto → profondità. CSS-only non basta (background-attachment:fixed è
- * rotto su iOS), quindi muoviamo gli strati con scrollY + requestAnimationFrame.
+ * Sfondo "gradient mesh" con parallasse. Più blob a gradiente radiale, colori
+ * variati e sfocati, sovrapposti, che scorrono a velocità diverse rispetto al
+ * contenuto. CSS-only non basta (background-attachment:fixed è rotto su iOS),
+ * quindi muoviamo gli strati con scrollY + requestAnimationFrame.
  * Rispetta prefers-reduced-motion. Puramente estetico (aria-hidden).
+ *
+ * `tone='hero'` (default): blob vivaci su fondo chiaro.
+ * `tone='dark'`: glow tenui (chiari) pensati per stagliarsi su un fondo scuro.
  */
-export function HeroParallax() {
-  const a = React.useRef<HTMLDivElement>(null);
-  const b = React.useRef<HTMLDivElement>(null);
-  const c = React.useRef<HTMLDivElement>(null);
+type Blob = { bg: string; cls: string; speed: number; centered?: boolean };
+
+const HERO_BLOBS: Blob[] = [
+  {
+    bg: 'radial-gradient(circle at 35% 35%, hsl(222 92% 56% / 0.55), transparent 68%)',
+    cls: 'left-[-8%] top-[-6rem] h-[34rem] w-[34rem]',
+    speed: 0.22,
+  },
+  {
+    bg: 'radial-gradient(circle at 60% 40%, hsl(24 95% 56% / 0.5), transparent 66%)',
+    cls: 'right-[-10%] top-[-3rem] h-[32rem] w-[32rem]',
+    speed: 0.4,
+  },
+  {
+    bg: 'radial-gradient(circle at 50% 50%, hsl(258 88% 62% / 0.4), transparent 70%)',
+    cls: 'left-1/2 top-[9rem] h-[30rem] w-[44rem] -translate-x-1/2',
+    speed: -0.12,
+    centered: true,
+  },
+  {
+    bg: 'radial-gradient(circle at 50% 50%, hsl(196 92% 56% / 0.38), transparent 70%)',
+    cls: 'left-[8%] top-[20rem] h-[28rem] w-[28rem]',
+    speed: 0.55,
+  },
+];
+
+const DARK_BLOBS: Blob[] = [
+  {
+    bg: 'radial-gradient(circle at 40% 40%, hsl(218 95% 62% / 0.28), transparent 70%)',
+    cls: 'left-[-6%] top-[-4rem] h-[26rem] w-[26rem]',
+    speed: 0.18,
+  },
+  {
+    bg: 'radial-gradient(circle at 55% 45%, hsl(258 90% 66% / 0.22), transparent 72%)',
+    cls: 'right-[-8%] top-[2rem] h-[28rem] w-[28rem]',
+    speed: 0.34,
+  },
+  {
+    bg: 'radial-gradient(circle at 50% 50%, hsl(24 92% 58% / 0.14), transparent 70%)',
+    cls: 'left-1/2 top-[6rem] h-[22rem] w-[40rem] -translate-x-1/2',
+    speed: -0.1,
+    centered: true,
+  },
+];
+
+export function HeroParallax({ tone = 'hero' }: { tone?: 'hero' | 'dark' }) {
+  const blobs = tone === 'dark' ? DARK_BLOBS : HERO_BLOBS;
+  const refs = React.useRef<Array<HTMLDivElement | null>>([]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -23,9 +70,12 @@ export function HeroParallax() {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const y = window.scrollY;
-        if (a.current) a.current.style.transform = `translate3d(0, ${y * 0.2}px, 0)`;
-        if (b.current) b.current.style.transform = `translate3d(0, ${y * 0.36}px, 0)`;
-        if (c.current) c.current.style.transform = `translate3d(-50%, ${y * -0.14}px, 0)`;
+        blobs.forEach((b, i) => {
+          const el = refs.current[i];
+          if (!el) return;
+          const x = b.centered ? '-50%' : '0';
+          el.style.transform = `translate3d(${x}, ${(y * b.speed).toFixed(1)}px, 0)`;
+        });
       });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -34,25 +84,25 @@ export function HeroParallax() {
       window.removeEventListener('scroll', onScroll);
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [blobs]);
 
   return (
     <div
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[130vh] overflow-hidden"
+      className={`pointer-events-none absolute inset-x-0 top-0 -z-10 overflow-hidden ${
+        tone === 'dark' ? 'h-full' : 'h-[140vh]'
+      }`}
     >
-      <div
-        ref={a}
-        className="absolute left-[2%] top-20 h-80 w-80 rounded-full bg-primary/40 blur-[90px] will-change-transform sm:h-96 sm:w-96"
-      />
-      <div
-        ref={b}
-        className="absolute right-[-2%] top-6 h-80 w-80 rounded-full bg-accent/40 blur-[90px] will-change-transform sm:h-[26rem] sm:w-[26rem]"
-      />
-      <div
-        ref={c}
-        className="absolute left-1/2 top-52 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-primary/20 blur-[100px] will-change-transform"
-      />
+      {blobs.map((b, i) => (
+        <div
+          key={i}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          style={{ background: b.bg }}
+          className={`absolute rounded-full blur-2xl will-change-transform ${b.cls}`}
+        />
+      ))}
     </div>
   );
 }
