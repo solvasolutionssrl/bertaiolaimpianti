@@ -24,8 +24,8 @@ const HERO_BLOBS: Blob[] = [
     centered: true,
   },
   {
-    // azzurro, alto-sinistra
-    bg: 'radial-gradient(circle at 35% 35%, hsl(218 92% 58% / 0.4), transparent 68%)',
+    // azzurro, alto-sinistra (un filo più trasparente, meno carico in cima)
+    bg: 'radial-gradient(circle at 35% 35%, hsl(218 92% 58% / 0.3), transparent 68%)',
     cls: 'left-[-8%] top-[-6rem] h-[34rem] w-[34rem]',
     speed: 0.22,
   },

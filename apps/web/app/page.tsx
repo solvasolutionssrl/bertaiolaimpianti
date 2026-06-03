@@ -29,18 +29,20 @@ export const metadata = {
 
 export default function RootPage() {
   return (
-    <main className="relative isolate min-h-screen bg-aurora-brand">
+    <main className="relative isolate min-h-screen bg-aurora-brand pt-3">
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
       {/* Fascia colorata al bordo top: riempie la striscia bianca tra il filo
-          brand e il mesh, sfumando verso il basso (blu↘arancio come il filo). */}
+          brand e il mesh. Tinta brand blu↘pesca PIENA su tutta la larghezza
+          (niente stop quasi-bianco al centro), con una banda solida subito
+          sotto il filo che poi sfuma nel mesh. */}
       <div
         aria-hidden
         className="absolute inset-x-0 top-0 -z-10 h-40"
         style={{
           background:
-            'linear-gradient(100deg, hsl(218 84% 86%), hsl(34 30% 97%) 52%, hsl(28 92% 89%))',
-          maskImage: 'linear-gradient(180deg, black, transparent)',
-          WebkitMaskImage: 'linear-gradient(180deg, black, transparent)',
+            'linear-gradient(105deg, hsl(214 82% 80%) 0%, hsl(217 64% 83%) 50%, hsl(27 84% 83%) 100%)',
+          maskImage: 'linear-gradient(180deg, black 0%, black 16%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(180deg, black 0%, black 16%, transparent 100%)',
         }}
       />
       <HeroParallax />
@@ -80,7 +82,7 @@ export default function RootPage() {
 
 function SiteNav() {
   return (
-    <nav className="sticky top-3 z-40 mx-3 mt-3 flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-5 py-3 shadow-soft backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-background/55 sm:mx-auto sm:px-6">
+    <nav className="sticky top-3 z-40 mx-3 flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-5 py-3 shadow-soft backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-background/55 sm:mx-auto sm:px-6">
       <Link href="/" className="flex items-center gap-2.5">
         <BrandMark />
         <span className="flex flex-col leading-none">
