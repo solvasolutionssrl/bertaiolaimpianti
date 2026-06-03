@@ -270,4 +270,23 @@
     opacity: 0.6;
     animation: ping-soft 2s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
+
+  /* ===== Landing showcase: waveform del dettato + float dei mockup ===== */
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.32); }
+    50%      { transform: scaleY(1); }
+  }
+  .animate-wave {
+    transform-origin: center;
+    animation: wave 1.1s ease-in-out infinite;
+  }
+  @keyframes float-soft {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-7px); }
+  }
+  .animate-float-soft { animation: float-soft 7s ease-in-out infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-wave, .animate-float-soft { animation: none; }
+  }
 }

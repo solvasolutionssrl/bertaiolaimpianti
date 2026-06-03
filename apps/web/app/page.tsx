@@ -15,6 +15,9 @@ import {
   Image as ImageIcon,
   PenLine,
   ExternalLink,
+  MapPin,
+  ListChecks,
+  User,
 } from 'lucide-react';
 
 export const metadata = {
@@ -35,6 +38,8 @@ export default function RootPage() {
       <SiteNav />
 
       <Hero />
+
+      <HeroShowcase />
 
       <TrustBar />
 
@@ -185,6 +190,137 @@ function Hero() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
+/*  HERO SHOWCASE — render "il dettato": voce → commessa estratta            */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+function HeroShowcase() {
+  const campi = [
+    { icon: User, label: 'Cliente', value: 'Rossi S.r.l.' },
+    { icon: Hammer, label: 'Lavoro', value: 'Rifacimento impianto idrico' },
+    { icon: MapPin, label: 'Indirizzo', value: 'Via Po 12, Torino' },
+    { icon: ListChecks, label: 'Fasi generate', value: '4 voci di lavoro' },
+  ];
+  return (
+    <section
+      className="mx-auto max-w-5xl px-6 pb-20 animate-fade-up"
+      style={{ animationDelay: '240ms' }}
+      aria-label="Esempio: dal dettato vocale alla commessa pronta"
+    >
+      <div className="relative animate-float-soft">
+        {/* alone brand dietro al pannello */}
+        <div
+          aria-hidden
+          className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-tr from-primary/10 via-transparent to-accent/15 blur-2xl"
+        />
+        <div className="overflow-hidden rounded-2xl border border-border bg-card/90 shadow-soft-lg backdrop-blur">
+          {/* window bar */}
+          <div className="flex items-center gap-2 border-b border-border/70 bg-muted/40 px-4 py-2.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-destructive/60" />
+            <span className="h-2.5 w-2.5 rounded-full bg-warning/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-success/70" />
+            <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Kommessa · nuova commessa
+            </span>
+          </div>
+
+          <div className="grid gap-px bg-border/60 md:grid-cols-2">
+            {/* ── Sinistra: il dettato ── */}
+            <div className="bg-card p-6">
+              <div className="flex items-center gap-3">
+                <span className="relative inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-glow-brand">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/40" />
+                  <Mic className="relative h-5 w-5" />
+                </span>
+                {/* waveform */}
+                <span className="flex h-10 items-end gap-1" aria-hidden>
+                  {[0.6, 1, 0.45, 0.85, 0.35, 0.95, 0.55, 0.75, 0.4].map((h, i) => (
+                    <span
+                      key={i}
+                      className="w-1 animate-wave rounded-full bg-accent/70"
+                      style={{
+                        height: `${Math.round(h * 36)}px`,
+                        animationDelay: `${i * 90}ms`,
+                      }}
+                    />
+                  ))}
+                </span>
+                <span className="ml-auto font-mono text-xs text-muted-foreground">0:08</span>
+              </div>
+
+              <p className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-accent">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                In ascolto
+              </p>
+
+              <p className="mt-3 rounded-xl rounded-tl-sm bg-muted/60 px-4 py-3 text-sm leading-relaxed text-foreground/90">
+                «Sopralluogo da Rossi, bagno al primo piano, rifacimento
+                impianto idrico, materiale da ordinare, tre giorni di lavoro.»
+              </p>
+            </div>
+
+            {/* ── Destra: estratto AI ── */}
+            <div className="bg-card p-6">
+              <p className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
+                <Sparkles className="h-3.5 w-3.5" />
+                Estratto in automatico
+              </p>
+              <ul className="mt-4 space-y-2.5">
+                {campi.map(({ icon: Icon, label, value }) => (
+                  <li
+                    key={label}
+                    className="flex items-center gap-3 rounded-lg border border-border/70 bg-background/60 px-3 py-2"
+                  >
+                    <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+                        {label}
+                      </span>
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {value}
+                      </span>
+                    </span>
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* footer del pannello: foto sync + cta */}
+          <div className="flex flex-wrap items-center gap-3 border-t border-border/70 bg-muted/30 px-6 py-3">
+            <span className="flex items-center gap-1.5" aria-hidden>
+              {['from-primary/30 to-primary/10', 'from-accent/30 to-accent/10', 'from-success/30 to-success/10'].map(
+                (g, i) => (
+                  <span
+                    key={i}
+                    className={`h-7 w-7 rounded-md bg-gradient-to-br ${g} ring-1 ring-border`}
+                  />
+                ),
+              )}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              foto del cantiere già sincronizzate
+            </span>
+            <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success">
+              <CloudUpload className="h-3.5 w-3.5" />
+              sync ✓
+            </span>
+          </div>
+        </div>
+
+        {/* badge flottante */}
+        <span className="absolute -top-3 right-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-medium text-foreground shadow-soft-md">
+          <Sparkles className="h-3 w-3 text-accent" />
+          voce → commessa in ~8&nbsp;secondi
+        </span>
+      </div>
+    </section>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
 /*  TRUST BAR (loghi + claim sintetici)                                     */
 /* ──────────────────────────────────────────────────────────────────────── */
 
@@ -313,30 +449,29 @@ function Funzionalita() {
     },
   ];
   return (
-    <section
-      id="funzionalita"
-      className="relative mx-auto max-w-6xl px-6 py-20"
-    >
-      <SectionHeading
-        eyebrow="Funzionalità"
-        title="Tutto ciò che serve in cantiere, niente di più"
-        subtitle="Scelte fatte: dialogo con la voce, upload che reggono la rete debole, annotazioni reali, sync con quello che già usate."
-      />
-      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map(({ icon: Icon, title, body }) => (
-          <div
-            key={title}
-            className="rounded-xl border border-border bg-card/80 p-5 backdrop-blur transition hover:border-primary/30 hover:shadow-soft-md"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary-soft text-primary">
-                <Icon className="h-4 w-4" />
-              </span>
-              <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+    <section id="funzionalita" className="relative border-y border-border/60 bg-muted/40">
+      <div className="mx-auto max-w-6xl px-6 py-20">
+        <SectionHeading
+          eyebrow="Funzionalità"
+          title="Tutto ciò che serve in cantiere, niente di più"
+          subtitle="Scelte fatte: dialogo con la voce, upload che reggono la rete debole, annotazioni reali, sync con quello che già usate."
+        />
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map(({ icon: Icon, title, body }) => (
+            <div
+              key={title}
+              className="rounded-xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-md"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary-soft text-primary">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -422,24 +557,34 @@ function Architettura() {
   return (
     <section
       id="architettura"
-      className="relative mx-auto max-w-6xl px-6 py-20"
+      className="dark relative isolate overflow-hidden bg-background py-20 text-foreground"
     >
-      <SectionHeading
-        eyebrow="Garanzie"
-        title="Sicurezza, conformità e continuità del dato"
-        subtitle="Costruita in Italia, ospitata in Europa. Tutti i dati restano dove devono restare, anche dopo la chiusura della commessa."
+      {/* atmosfera: griglia + alone brand */}
+      <div className="absolute inset-0 -z-10 bg-grid opacity-[0.18]" aria-hidden />
+      <div
+        aria-hidden
+        className="absolute -top-24 left-1/2 -z-10 h-64 w-[42rem] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl"
       />
+      <div aria-hidden className="border-brand-line absolute inset-x-0 top-0 h-0.5" />
 
-      <div className="mt-12 grid gap-2 sm:grid-cols-2">
-        {garanzie.map((g) => (
-          <div
-            key={g}
-            className="flex items-start gap-2 rounded-md border border-border/60 bg-card/40 px-3 py-2.5 text-sm backdrop-blur"
-          >
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
-            <span className="text-foreground/85">{g}</span>
-          </div>
-        ))}
+      <div className="mx-auto max-w-6xl px-6">
+        <SectionHeading
+          eyebrow="Garanzie"
+          title="Sicurezza, conformità e continuità del dato"
+          subtitle="Costruita in Italia, ospitata in Europa. Tutti i dati restano dove devono restare, anche dopo la chiusura della commessa."
+        />
+
+        <div className="mt-12 grid gap-2.5 sm:grid-cols-2">
+          {garanzie.map((g) => (
+            <div
+              key={g}
+              className="flex items-start gap-2.5 rounded-lg border border-border bg-card/70 px-4 py-3 text-sm shadow-soft backdrop-blur"
+            >
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+              <span className="text-foreground/90">{g}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -451,15 +596,18 @@ function Architettura() {
 
 function FinalCta() {
   return (
-    <section className="mx-auto max-w-3xl px-6 py-20 text-center">
-      <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-        Pronto a portare le commesse fuori dal caos?
-      </h2>
-      <p className="mx-auto mt-3 max-w-xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
-        Se hai già un account, apri l&apos;applicativo. Altrimenti scrivici per
-        una demo personalizzata sulla tua realtà cantieristica.
-      </p>
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+    <section className="mx-auto max-w-5xl px-6 py-20">
+      <div className="relative isolate overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-card to-accent/10 px-6 py-14 text-center shadow-soft-lg sm:py-16">
+        <div className="absolute inset-0 -z-10 bg-grid-radial opacity-50" aria-hidden />
+        <div aria-hidden className="border-brand-line absolute inset-x-0 top-0 h-1" />
+        <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+          Pronto a portare le commesse fuori dal caos?
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
+          Se hai già un account, apri l&apos;applicativo. Altrimenti scrivici per
+          una demo personalizzata sulla tua realtà cantieristica.
+        </p>
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
         <Link
           href="/login"
           prefetch
@@ -477,6 +625,7 @@ function FinalCta() {
           Contattaci
           <ExternalLink className="h-3.5 w-3.5" />
         </a>
+        </div>
       </div>
     </section>
   );
