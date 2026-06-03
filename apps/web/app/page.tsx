@@ -29,8 +29,8 @@ export const metadata = {
 
 export default function RootPage() {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-aurora-brand">
-      <div className="absolute inset-0 -z-10 bg-grid-radial opacity-60" aria-hidden />
+    <main className="relative isolate min-h-screen overflow-hidden bg-aurora-brand">
+      <div className="absolute inset-0 -z-10 bg-grid-radial opacity-40" aria-hidden />
       <HeroParallax />
       <div
         aria-hidden
@@ -450,7 +450,7 @@ function Funzionalita() {
     },
   ];
   return (
-    <section id="funzionalita" className="relative border-y border-primary/10 bg-primary-soft/70">
+    <section id="funzionalita" className="relative border-y border-primary/10 bg-gradient-to-br from-primary-soft via-primary-soft/50 to-accent-soft/40">
       <div className="mx-auto max-w-6xl px-6 py-20">
         <SectionHeading
           eyebrow="Funzionalità"
@@ -509,7 +509,7 @@ function PerChi() {
   return (
     <section
       id="per-chi"
-      className="relative border-y border-accent/15 bg-accent-soft/70"
+      className="relative border-y border-accent/15 bg-gradient-to-br from-accent-soft via-accent-soft/50 to-primary-soft/40"
     >
       <div className="mx-auto max-w-6xl px-6 py-20">
       <SectionHeading
