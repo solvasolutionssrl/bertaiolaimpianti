@@ -73,6 +73,7 @@ function formatDate(iso: string | null) {
   if (!iso) return '—';
   try {
     return new Date(iso).toLocaleString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',

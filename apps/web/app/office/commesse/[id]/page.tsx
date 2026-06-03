@@ -28,6 +28,7 @@ const FMT_DATA = new Intl.DateTimeFormat('it-IT', {
   day: '2-digit',
   month: 'short',
   year: 'numeric',
+  timeZone: 'Europe/Rome',
 });
 
 function fmtData(iso: string | null | undefined): string {

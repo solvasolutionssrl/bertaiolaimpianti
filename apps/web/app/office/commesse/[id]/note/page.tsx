@@ -178,6 +178,7 @@ export default async function NoteTab({
 function fmtData(iso: string): string {
   try {
     return new Date(iso).toLocaleString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: 'short',
       year: 'numeric',

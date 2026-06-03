@@ -276,7 +276,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
                       {f.takenAt ? (
                         <span
                           className="inline-flex max-w-full items-center gap-0.5 truncate rounded-full bg-black/65 px-1.5 py-px text-[9px] font-medium text-white backdrop-blur-sm"
-                          title={f.takenAt.toLocaleString('it-IT')}
+                          title={f.takenAt.toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
                         >
                           <CalendarClock className="h-2.5 w-2.5" aria-hidden="true" />
                           {fmtScattoDate(f.takenAt)}

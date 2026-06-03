@@ -198,7 +198,7 @@ export default async function TenantDetailPage({
               </div>
               <p className="pt-3 font-mono text-[11px] text-muted-foreground">
                 Snapshot: {usage?.snapshot_at
-                  ? new Date(usage.snapshot_at).toLocaleString('it-IT')
+                  ? new Date(usage.snapshot_at).toLocaleString('it-IT', { timeZone: 'Europe/Rome' })
                   : 'mai aggiornato'}
               </p>
             </CardContent>
@@ -283,6 +283,7 @@ export default async function TenantDetailPage({
                     ) : null}
                     <span className="ml-auto font-mono text-xs text-muted-foreground">
                       {new Date(e.created_at).toLocaleString('it-IT', {
+                        timeZone: 'Europe/Rome',
                         dateStyle: 'short',
                         timeStyle: 'short',
                       })}

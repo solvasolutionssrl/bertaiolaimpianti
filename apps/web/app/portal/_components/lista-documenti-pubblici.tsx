@@ -70,6 +70,7 @@ export function ListaDocumentiPubblici({ documenti }: ListaDocumentiPubbliciProp
                   <p className="text-xs text-muted-foreground">
                     {formatBytes(doc.sizeBytes)} ·{' '}
                     {new Date(doc.uploadedAt).toLocaleDateString('it-IT', {
+                      timeZone: 'Europe/Rome',
                       day: '2-digit',
                       month: 'short',
                       year: 'numeric',

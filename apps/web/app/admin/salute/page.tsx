@@ -228,7 +228,7 @@ export default async function SalutePage() {
         </CardContent>
       </Card>
       <p className="text-right font-mono text-[11px] text-muted-foreground">
-        Ultimo check: {new Date().toLocaleString('it-IT')}
+        Ultimo check: {new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
       </p>
     </div>
   );

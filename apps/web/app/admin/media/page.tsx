@@ -417,6 +417,7 @@ export default async function MediaSyncPage({ searchParams }: Props) {
                         </td>
                         <td className="px-3 py-2 align-top text-xs text-muted-foreground">
                           {new Date(r.uploaded_at).toLocaleString('it-IT', {
+                            timeZone: 'Europe/Rome',
                             day: '2-digit',
                             month: '2-digit',
                             year: '2-digit',

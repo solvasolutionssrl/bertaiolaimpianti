@@ -139,7 +139,7 @@ export default async function ReportPageMobile({
 
   const brandColor = tenant?.brand_color ?? '#1340A6';
   const dataReport = new Date().toLocaleDateString('it-IT', {
-    day: '2-digit', month: 'long', year: 'numeric',
+    timeZone: 'Europe/Rome', day: '2-digit', month: 'long', year: 'numeric',
   });
 
   return (

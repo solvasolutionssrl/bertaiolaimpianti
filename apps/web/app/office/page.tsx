@@ -51,6 +51,7 @@ export default async function DashboardPage() {
   const now = new Date();
   const nome = ctx.email ? ctx.email.split('@')[0] : '';
   const oggi = now.toLocaleDateString('it-IT', {
+    timeZone: 'Europe/Rome',
     weekday: 'long',
     day: 'numeric',
     month: 'long',

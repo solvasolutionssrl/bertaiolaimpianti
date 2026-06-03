@@ -56,12 +56,14 @@ export async function GET(req: NextRequest) {
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
     });
   const fmtHM = (iso: string) =>
     new Date(iso).toLocaleTimeString('it-IT', {
+      timeZone: 'Europe/Rome',
       hour: '2-digit',
       minute: '2-digit',
     });

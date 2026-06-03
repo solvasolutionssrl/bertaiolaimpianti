@@ -70,11 +70,11 @@ function daysBetween(a: Date, b: Date): number {
 }
 
 function fmtGiorno(d: Date): string {
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+  return d.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: 'short' });
 }
 
 function fmtMese(d: Date): string {
-  return d.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' });
+  return d.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', month: 'short', year: '2-digit' });
 }
 
 export function TimelineChart({
@@ -316,13 +316,13 @@ function BarLink({
             <div className="flex justify-between">
               <dt>Inizio</dt>
               <dd className="font-mono text-foreground">
-                {new Date(row.start).toLocaleDateString('it-IT')}
+                {new Date(row.start).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
               </dd>
             </div>
             <div className="flex justify-between">
               <dt>Fine</dt>
               <dd className="font-mono text-foreground">
-                {new Date(row.end).toLocaleDateString('it-IT')}
+                {new Date(row.end).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
               </dd>
             </div>
           </dl>

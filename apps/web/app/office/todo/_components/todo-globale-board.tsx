@@ -452,6 +452,7 @@ function fmtDataBreve(iso: string): string {
     const now = new Date();
     const sameYear = d.getFullYear() === now.getFullYear();
     return d.toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: 'short',
       year: sameYear ? undefined : '2-digit',

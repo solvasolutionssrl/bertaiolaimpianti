@@ -373,6 +373,7 @@ function fmtRelative(iso: string): string {
   const d = Math.floor(h / 24);
   if (d < 7) return `${d}g fa`;
   return date.toLocaleDateString('it-IT', {
+    timeZone: 'Europe/Rome',
     day: '2-digit',
     month: '2-digit',
     year: '2-digit',

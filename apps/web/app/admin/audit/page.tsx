@@ -209,6 +209,7 @@ export default async function AuditPage({
                         </span>
                         <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                           {new Date(e.created_at).toLocaleString('it-IT', {
+                            timeZone: 'Europe/Rome',
                             dateStyle: 'short',
                             timeStyle: 'medium',
                           })}

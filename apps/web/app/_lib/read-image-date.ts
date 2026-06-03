@@ -61,11 +61,13 @@ export function fmtScattoDate(d: Date): string {
   const now = new Date();
   const sameYear = d.getFullYear() === now.getFullYear();
   const date = d.toLocaleDateString('it-IT', {
+    timeZone: 'Europe/Rome',
     day: '2-digit',
     month: 'short',
     year: sameYear ? undefined : '2-digit',
   });
   const time = d.toLocaleTimeString('it-IT', {
+    timeZone: 'Europe/Rome',
     hour: '2-digit',
     minute: '2-digit',
   });

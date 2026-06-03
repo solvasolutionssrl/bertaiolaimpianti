@@ -200,7 +200,7 @@ export default async function TenantsListPage({ searchParams }: Props) {
                           }
                         >
                           {lastAct
-                            ? lastAct.toLocaleDateString('it-IT')
+                            ? lastAct.toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })
                             : '—'}
                         </td>
                         <td className="px-4 py-3">

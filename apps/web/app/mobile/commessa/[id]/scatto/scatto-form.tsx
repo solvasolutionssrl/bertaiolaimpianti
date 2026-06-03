@@ -351,6 +351,7 @@ export function ScattoForm({
             Allegato:{' '}
             <span className="font-mono">
               {now.toLocaleString('it-IT', {
+                timeZone: 'Europe/Rome',
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric',

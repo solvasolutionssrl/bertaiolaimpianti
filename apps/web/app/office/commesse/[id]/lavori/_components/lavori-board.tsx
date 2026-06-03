@@ -1326,6 +1326,7 @@ function RiunioneTimelineEntry({
 function fmtData(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -1340,6 +1341,7 @@ function fmtDataBreve(iso: string): string {
     const now = new Date();
     const sameYear = d.getFullYear() === now.getFullYear();
     return d.toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: 'short',
       year: sameYear ? undefined : '2-digit',
@@ -1351,6 +1353,7 @@ function fmtDataBreve(iso: string): string {
 function fmtOra(iso: string): string {
   try {
     return new Date(iso).toLocaleTimeString('it-IT', {
+      timeZone: 'Europe/Rome',
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -1367,6 +1370,7 @@ function fmtGiorno(dateStr: string): string {
     const d = new Date(dateStr + 'T00:00:00');
     const sameYear = d.getFullYear() === new Date().getFullYear();
     return d.toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       weekday: 'long',
       day: 'numeric',
       month: 'long',

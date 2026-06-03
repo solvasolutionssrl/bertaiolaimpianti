@@ -6,6 +6,7 @@ export function fmtData(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
     return new Date(iso).toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -19,6 +20,7 @@ export function fmtDataOra(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
     return new Date(iso).toLocaleString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -34,6 +36,7 @@ export function fmtOra(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
     return new Date(iso).toLocaleTimeString('it-IT', {
+      timeZone: 'Europe/Rome',
       hour: '2-digit',
       minute: '2-digit',
     });

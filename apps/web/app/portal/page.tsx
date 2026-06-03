@@ -207,6 +207,7 @@ function umanizzaNomeCartella(s: string): string {
 function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: 'short',
       year: 'numeric',

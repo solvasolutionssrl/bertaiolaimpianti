@@ -98,6 +98,7 @@ export function TimelineComunicazioni({ items }: TimelineComunicazioniProps) {
 function formatDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString('it-IT', {
+      timeZone: 'Europe/Rome',
       day: '2-digit',
       month: 'short',
       year: 'numeric',

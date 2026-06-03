@@ -222,6 +222,7 @@ function TurnoApertoCard({
           Avviato alle{' '}
           <span className="font-mono tabular-nums">
             {new Date(aperto.start_at).toLocaleTimeString('it-IT', {
+              timeZone: 'Europe/Rome',
               hour: '2-digit',
               minute: '2-digit',
             })}
@@ -305,6 +306,7 @@ export function InterventiOggiList({ items }: { items: InterventoRecente[] }) {
 
 function formatHM(iso: string) {
   return new Date(iso).toLocaleTimeString('it-IT', {
+    timeZone: 'Europe/Rome',
     hour: '2-digit',
     minute: '2-digit',
   });

@@ -75,6 +75,7 @@ export default async function AdminDashboardPage() {
   await requirePlatformAdmin();
   const supabase = createServiceSupabase();
   const oggi = new Date().toLocaleDateString('it-IT', {
+    timeZone: 'Europe/Rome',
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -486,6 +487,7 @@ export default async function AdminDashboardPage() {
                     ) : null}
                     <span className="ml-auto font-mono text-xs text-muted-foreground">
                       {new Date(e.created_at).toLocaleString('it-IT', {
+                        timeZone: 'Europe/Rome',
                         dateStyle: 'short',
                         timeStyle: 'short',
                       })}

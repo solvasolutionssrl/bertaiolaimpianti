@@ -142,6 +142,7 @@ export default async function ReportPage({
 
   const brandColor = tenant?.brand_color ?? '#1340A6';
   const dataReport = new Date().toLocaleDateString('it-IT', {
+    timeZone: 'Europe/Rome',
     day: '2-digit',
     month: 'long',
     year: 'numeric',
