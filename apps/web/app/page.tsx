@@ -33,6 +33,12 @@ export default function RootPage() {
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
       <HeroParallax />
 
+      {/* Filo brand sottile, inchiodato in cima alla viewport (resta su allo scroll) */}
+      <div
+        aria-hidden
+        className="border-brand-line fixed inset-x-0 top-0 z-50 h-[3px]"
+      />
+
       <SiteNav />
 
       <Hero />
