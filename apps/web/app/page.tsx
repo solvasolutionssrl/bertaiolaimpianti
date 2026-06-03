@@ -66,7 +66,7 @@ export default function RootPage() {
 
 function SiteNav() {
   return (
-    <nav className="sticky top-0 z-40 mx-auto flex max-w-6xl items-center justify-between gap-3 border-b border-transparent bg-background/80 px-6 py-4 backdrop-blur transition-colors supports-[backdrop-filter]:bg-background/60">
+    <nav className="sticky top-3 z-40 mx-3 mt-3 flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-5 py-3 shadow-soft backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-background/55 sm:mx-auto sm:px-6">
       <Link href="/" className="flex items-center gap-2.5">
         <BrandMark />
         <span className="flex flex-col leading-none">
@@ -388,7 +388,7 @@ function ComeFunziona() {
         {steps.map(({ n, icon: Icon, title, body }) => (
           <div
             key={n}
-            className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 backdrop-blur transition hover:-translate-y-0.5 hover:shadow-soft-md"
+            className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 shadow-soft-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-soft-lg"
           >
             <span
               aria-hidden="true"
@@ -450,7 +450,20 @@ function Funzionalita() {
     },
   ];
   return (
-    <section id="funzionalita" className="relative border-y border-primary/10 bg-gradient-to-br from-primary-soft via-primary-soft/50 to-accent-soft/40">
+    <section
+      id="funzionalita"
+      className="relative isolate overflow-hidden border-y border-primary/10 bg-gradient-to-br from-primary-soft/80 via-card to-accent-soft/40"
+    >
+      <div
+        aria-hidden
+        style={{ background: 'radial-gradient(circle at 50% 50%, hsl(218 92% 60% / 0.22), transparent 70%)' }}
+        className="absolute -left-24 -top-16 -z-10 h-80 w-80 rounded-full blur-3xl"
+      />
+      <div
+        aria-hidden
+        style={{ background: 'radial-gradient(circle at 50% 50%, hsl(24 95% 58% / 0.18), transparent 70%)' }}
+        className="absolute -right-20 -bottom-10 -z-10 h-72 w-72 rounded-full blur-3xl"
+      />
       <div className="mx-auto max-w-6xl px-6 py-20">
         <SectionHeading
           eyebrow="Funzionalità"
@@ -461,7 +474,7 @@ function Funzionalita() {
           {items.map(({ icon: Icon, title, body }) => (
             <div
               key={title}
-              className="rounded-xl border border-border bg-card p-5 shadow-soft transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-md"
+              className="rounded-xl border border-border bg-card p-5 shadow-soft-md transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-lg"
             >
               <div className="flex items-center gap-2.5">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary-soft text-primary">
@@ -509,7 +522,7 @@ function PerChi() {
   return (
     <section
       id="per-chi"
-      className="relative border-y border-accent/15 bg-gradient-to-br from-accent-soft via-accent-soft/50 to-primary-soft/40"
+      className="relative"
     >
       <div className="mx-auto max-w-6xl px-6 py-20">
       <SectionHeading
@@ -521,7 +534,7 @@ function PerChi() {
         {profili.map(({ icon: Icon, label, title, body, tag }) => (
           <div
             key={label}
-            className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 transition hover:shadow-soft-md"
+            className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-soft-md transition hover:-translate-y-0.5 hover:shadow-soft-lg"
           >
             <div className="flex items-center justify-between">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -756,15 +769,15 @@ function SectionHeading({
   subtitle?: string;
 }) {
   return (
-    <div className="mx-auto max-w-2xl text-center">
+    <div className="mx-auto max-w-4xl text-center">
       <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
         {eyebrow}
       </p>
-      <h2 className="mt-2 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+      <h2 className="mx-auto mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
         {title}
       </h2>
       {subtitle && (
-        <p className="mx-auto mt-3 max-w-xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
+        <p className="mx-auto mt-3 max-w-2xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
           {subtitle}
         </p>
       )}
