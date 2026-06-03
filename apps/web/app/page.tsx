@@ -139,7 +139,7 @@ function BrandMark() {
 
 function Hero() {
   return (
-    <section className="mx-auto max-w-3xl px-6 pb-16 pt-16 text-center sm:pb-24 sm:pt-24">
+    <section className="mx-auto max-w-4xl px-6 pb-16 pt-16 text-center sm:pb-24 sm:pt-24">
       <div className="animate-fade-up">
         <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
           <span className="relative inline-flex h-1.5 w-1.5">
@@ -151,16 +151,15 @@ function Hero() {
       </div>
 
       <h1
-        className="mt-7 text-balance text-5xl font-semibold tracking-tighter text-foreground sm:text-6xl md:text-7xl animate-fade-up"
+        className="mt-7 text-balance text-5xl font-semibold tracking-tighter text-foreground sm:text-6xl md:text-[5rem] md:leading-[1.02] animate-fade-up"
         style={{ animationDelay: '60ms' }}
       >
-        Le commesse di cantiere,
-        <br />
+        Le commesse di cantiere,{' '}
         <span className="text-brand-grad">finalmente al passo dei tecnici.</span>
       </h1>
 
       <p
-        className="mx-auto mt-6 max-w-xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg animate-fade-up"
+        className="mx-auto mt-6 max-w-2xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg animate-fade-up"
         style={{ animationDelay: '120ms' }}
       >
         Dal sopralluogo dettato a voce alla consegna del report, in
@@ -451,7 +450,7 @@ function Funzionalita() {
     },
   ];
   return (
-    <section id="funzionalita" className="relative border-y border-border/60 bg-muted/40">
+    <section id="funzionalita" className="relative border-y border-primary/10 bg-primary-soft/70">
       <div className="mx-auto max-w-6xl px-6 py-20">
         <SectionHeading
           eyebrow="Funzionalità"
@@ -510,7 +509,7 @@ function PerChi() {
   return (
     <section
       id="per-chi"
-      className="relative border-y border-border/50 bg-primary/[0.04]"
+      className="relative border-y border-accent/15 bg-accent-soft/70"
     >
       <div className="mx-auto max-w-6xl px-6 py-20">
       <SectionHeading

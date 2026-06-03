@@ -43,15 +43,15 @@ export function HeroParallax() {
     >
       <div
         ref={a}
-        className="absolute left-[6%] top-24 h-72 w-72 rounded-full bg-primary/20 blur-3xl will-change-transform"
+        className="absolute left-[2%] top-20 h-80 w-80 rounded-full bg-primary/40 blur-[90px] will-change-transform sm:h-96 sm:w-96"
       />
       <div
         ref={b}
-        className="absolute right-[4%] top-10 h-80 w-80 rounded-full bg-accent/20 blur-3xl will-change-transform"
+        className="absolute right-[-2%] top-6 h-80 w-80 rounded-full bg-accent/40 blur-[90px] will-change-transform sm:h-[26rem] sm:w-[26rem]"
       />
       <div
         ref={c}
-        className="absolute left-1/2 top-56 h-64 w-[38rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl will-change-transform"
+        className="absolute left-1/2 top-52 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-primary/20 blur-[100px] will-change-transform"
       />
     </div>
   );
