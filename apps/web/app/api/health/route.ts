@@ -23,7 +23,6 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const startedAt = Date.now();
   const ts = new Date().toISOString();
-  const region = process.env.VERCEL_REGION ?? 'local';
   // Vercel automatically sets the build commit; useful for traceability
   const version =
     process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev';
@@ -55,13 +54,16 @@ export async function GET() {
 
   const ok = dbStatus === 'up';
 
+  // Payload pubblico volutamente minimale: niente `dbReason` (può rivelare
+  // dettagli interni/errori DB) né `region` a occhi esterni. `version` resta
+  // per la dashboard interna /admin/salute. Il motivo del down è nei log.
+  if (dbReason) console.warn('[health] db down:', dbReason);
+
   return NextResponse.json(
     {
       status: ok ? 'ok' : 'degraded',
       db: dbStatus,
       dbLatencyMs,
-      dbReason,
-      region,
       version,
       ts,
       uptimeMs: Date.now() - startedAt,

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { HeroParallax } from './_components/hero-parallax';
 import {
   ArrowRight,
   Mic,
@@ -21,7 +22,7 @@ import {
 } from 'lucide-react';
 
 export const metadata = {
-  title: 'Kommessa — gestione commesse cantiere',
+  title: 'Kommessa · gestione commesse cantiere',
   description:
     'Sopralluogo vocale, foto/video dal cantiere, sync cloud, annotazioni e report. La suite SOLVA per impiantisti.',
 };
@@ -30,6 +31,7 @@ export default function RootPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-aurora-brand">
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-60" aria-hidden />
+      <HeroParallax />
       <div
         aria-hidden
         className="border-brand-line absolute inset-x-0 top-0 -z-10 h-1"
@@ -162,8 +164,8 @@ function Hero() {
         style={{ animationDelay: '120ms' }}
       >
         Dal sopralluogo dettato a voce alla consegna del report, in
-        un&apos;unica app. Ticket, fasi, foto da cantiere, documenti annotati —
-        tutto sincronizzato in cloud, tutto pronto per l&apos;ufficio.
+        un&apos;unica app. Ticket, fasi, foto da cantiere, documenti annotati.
+        Tutto sincronizzato in cloud, tutto pronto per l&apos;ufficio.
       </p>
 
       <div
@@ -327,7 +329,7 @@ function HeroShowcase() {
 function TrustBar() {
   const items = [
     { icon: ShieldCheck, label: 'Conforme GDPR' },
-    { icon: CloudUpload, label: 'Sync automatico col cloud aziendale' },
+    { icon: CloudUpload, label: 'Sync automatico con il cloud aziendale' },
     { icon: Folder, label: 'Cartelle create da sole' },
     { icon: Sparkles, label: 'Voce → commessa pronta' },
   ];
@@ -424,7 +426,7 @@ function Funzionalita() {
     },
     {
       icon: CloudUpload,
-      title: 'Sync col cloud aziendale',
+      title: 'Sync con il cloud aziendale',
       body: 'Foto e video appaiono nel vostro cloud d\'ufficio entro un minuto, dove i ragazzi li cercano già.',
     },
     {
@@ -508,8 +510,9 @@ function PerChi() {
   return (
     <section
       id="per-chi"
-      className="relative mx-auto max-w-6xl px-6 py-20"
+      className="relative border-y border-border/50 bg-primary/[0.04]"
     >
+      <div className="mx-auto max-w-6xl px-6 py-20">
       <SectionHeading
         eyebrow="Per chi"
         title="Tre ruoli, una sola fonte di verità"
@@ -537,6 +540,7 @@ function PerChi() {
           </div>
         ))}
       </div>
+      </div>
     </section>
   );
 }
@@ -549,7 +553,7 @@ function Architettura() {
   const garanzie = [
     'Conforme GDPR: tutti i dati restano in Europa',
     'Dati separati per azienda, accessi tracciati',
-    'Sincronizzazione automatica entro un minuto col cloud che già usate',
+    'Sincronizzazione automatica entro un minuto con il cloud che già usate',
     'Storico completo: chi ha caricato cosa, quando, da dove',
     'Backup giornaliero, ripristino disponibile per 30 giorni',
     'Accesso da web e telefono con lo stesso account',
