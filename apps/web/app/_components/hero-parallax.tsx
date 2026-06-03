@@ -16,6 +16,14 @@ type Blob = { bg: string; cls: string; speed: number; centered?: boolean };
 
 const HERO_BLOBS: Blob[] = [
   {
+    // wash morbido in cima al centro: riempie la fascia bianca dietro la
+    // navbar e sfuma ben prima del titolo (non lo sporca).
+    bg: 'radial-gradient(ellipse at 50% 0%, hsl(216 88% 78% / 0.45), transparent 62%)',
+    cls: 'left-1/2 top-[-18rem] h-[26rem] w-[64rem] -translate-x-1/2',
+    speed: 0.08,
+    centered: true,
+  },
+  {
     // azzurro, alto-sinistra
     bg: 'radial-gradient(circle at 35% 35%, hsl(218 92% 58% / 0.4), transparent 68%)',
     cls: 'left-[-8%] top-[-6rem] h-[34rem] w-[34rem]',
