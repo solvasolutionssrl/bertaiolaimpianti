@@ -29,7 +29,7 @@ export const metadata = {
 
 export default function RootPage() {
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-aurora-brand">
+    <main className="relative isolate min-h-screen bg-aurora-brand">
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
       <HeroParallax />
       <div
@@ -452,7 +452,8 @@ function Funzionalita() {
   return (
     <section
       id="funzionalita"
-      className="relative isolate overflow-hidden border-y border-primary/10 bg-gradient-to-br from-primary-soft/80 via-card to-accent-soft/40"
+      style={{ background: 'linear-gradient(160deg, hsl(220 34% 88%), hsl(222 26% 92%) 48%, hsl(26 50% 90%))' }}
+      className="relative isolate overflow-hidden border-y border-primary/15"
     >
       <div
         aria-hidden
