@@ -30,7 +30,7 @@ export const metadata = {
 export default function RootPage() {
   return (
     <main className="relative isolate min-h-screen overflow-hidden bg-aurora-brand">
-      <div className="absolute inset-0 -z-10 bg-grid-radial opacity-40" aria-hidden />
+      <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
       <HeroParallax />
       <div
         aria-hidden

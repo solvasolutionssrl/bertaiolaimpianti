@@ -16,25 +16,16 @@ type Blob = { bg: string; cls: string; speed: number; centered?: boolean };
 
 const HERO_BLOBS: Blob[] = [
   {
-    bg: 'radial-gradient(circle at 35% 35%, hsl(222 92% 56% / 0.55), transparent 68%)',
+    // azzurro, alto-sinistra
+    bg: 'radial-gradient(circle at 35% 35%, hsl(218 92% 58% / 0.4), transparent 68%)',
     cls: 'left-[-8%] top-[-6rem] h-[34rem] w-[34rem]',
     speed: 0.22,
   },
   {
-    bg: 'radial-gradient(circle at 60% 40%, hsl(24 95% 56% / 0.5), transparent 66%)',
+    // arancio, alto-destra
+    bg: 'radial-gradient(circle at 60% 40%, hsl(24 95% 56% / 0.38), transparent 66%)',
     cls: 'right-[-10%] top-[-3rem] h-[32rem] w-[32rem]',
     speed: 0.4,
-  },
-  {
-    bg: 'radial-gradient(circle at 50% 50%, hsl(258 88% 62% / 0.4), transparent 70%)',
-    cls: 'left-1/2 top-[9rem] h-[30rem] w-[44rem] -translate-x-1/2',
-    speed: -0.12,
-    centered: true,
-  },
-  {
-    bg: 'radial-gradient(circle at 50% 50%, hsl(196 92% 56% / 0.38), transparent 70%)',
-    cls: 'left-[8%] top-[20rem] h-[28rem] w-[28rem]',
-    speed: 0.55,
   },
 ];
 
