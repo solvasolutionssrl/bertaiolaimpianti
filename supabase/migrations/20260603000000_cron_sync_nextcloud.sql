@@ -7,10 +7,11 @@
 -- Nextcloud); qui lo invochiamo soltanto.
 --
 -- Cadenza richiesta dal cliente:
---   - ogni 5 min di giorno (05:00–20:00 Italia)
+--   - ogni 5 min di giorno (05:00–20:00 ora italiana)
 --   - ogni 30 min di notte (per alleggerire)
--- pg_cron gira in UTC. Italia CEST = UTC+2 → giorno = UTC 03–18.
--- NB DST: d'inverno (CET, UTC+1) la finestra si sposta di 1h (04:00–19:00).
+-- Il job pg_cron parte ogni 5 min sempre; è la funzione a decidere se è
+-- giorno/notte usando l'ora 'Europe/Rome', che gestisce da sola il passaggio
+-- ora solare/legale (niente da aggiustare ai cambi d'ora).
 --
 -- Auth: l'endpoint richiede `Authorization: Bearer $CRON_SECRET`. Il valore
 -- NON è in questo file: va messo una volta in Supabase Vault con nome
@@ -19,7 +20,7 @@
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- Funzione helper: chiama l'endpoint sync con il Bearer preso dal Vault.
+-- Funzione helper: gating orario (ora IT) + chiamata all'endpoint col Bearer.
 create or replace function public.trigger_nextcloud_sync(max_files int default 10)
 returns void
 language plpgsql
@@ -28,7 +29,19 @@ set search_path = public, vault, net, extensions
 as $$
 declare
   v_secret text;
+  v_hour int;
+  v_min int;
 begin
+  -- Ora locale italiana: gestisce automaticamente ora solare/legale (DST).
+  v_hour := extract(hour   from (now() at time zone 'Europe/Rome'))::int;
+  v_min  := extract(minute from (now() at time zone 'Europe/Rome'))::int;
+
+  -- Giorno (05:00–19:59 IT): ogni 5 min (il cron è */5, quindi sempre).
+  -- Notte: solo ai minuti 00 e 30 → ogni 30 min.
+  if not (v_hour >= 5 and v_hour < 20) and v_min not in (0, 30) then
+    return;
+  end if;
+
   select decrypted_secret into v_secret
   from vault.decrypted_secrets
   where name = 'cron_secret'
@@ -48,27 +61,20 @@ begin
 end;
 $$;
 
--- Idempotenza: rimuovi i job omonimi prima di ricrearli.
+-- Idempotenza: rimuovi job omonimi (incluse le vecchie 2 finestre UTC).
 do $$
 begin
   perform cron.unschedule(jobid)
   from cron.job
-  where jobname in ('sync-nextcloud-giorno', 'sync-nextcloud-notte');
+  where jobname in ('sync-nextcloud-giorno', 'sync-nextcloud-notte', 'sync-nextcloud');
 exception when others then
   null;
 end $$;
 
--- Giorno: ogni 5 min, UTC 03–18 (≈ 05:00–20:55 Italia CEST).
+-- Un solo job ogni 5 min; la finestra oraria la decide la funzione (ora IT).
 select cron.schedule(
-  'sync-nextcloud-giorno',
-  '*/5 3-18 * * *',
-  $$select public.trigger_nextcloud_sync(10)$$
-);
-
--- Notte: ogni 30 min, UTC 19–23 e 00–02 (le ore non coperte dal giorno).
-select cron.schedule(
-  'sync-nextcloud-notte',
-  '*/30 0-2,19-23 * * *',
+  'sync-nextcloud',
+  '*/5 * * * *',
   $$select public.trigger_nextcloud_sync(10)$$
 );
 
