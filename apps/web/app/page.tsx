@@ -31,6 +31,18 @@ export default function RootPage() {
   return (
     <main className="relative isolate min-h-screen bg-aurora-brand">
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
+      {/* Fascia colorata al bordo top: riempie la striscia bianca tra il filo
+          brand e il mesh, sfumando verso il basso (blu↘arancio come il filo). */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 top-0 -z-10 h-40"
+        style={{
+          background:
+            'linear-gradient(100deg, hsl(218 84% 86%), hsl(34 30% 97%) 52%, hsl(28 92% 89%))',
+          maskImage: 'linear-gradient(180deg, black, transparent)',
+          WebkitMaskImage: 'linear-gradient(180deg, black, transparent)',
+        }}
+      />
       <HeroParallax />
 
       {/* Filo brand sottile, inchiodato in cima alla viewport (resta su allo scroll) */}
