@@ -32,10 +32,6 @@ export default function RootPage() {
     <main className="relative isolate min-h-screen bg-aurora-brand">
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
       <HeroParallax />
-      <div
-        aria-hidden
-        className="border-brand-line absolute inset-x-0 top-0 -z-10 h-1"
-      />
 
       <SiteNav />
 
