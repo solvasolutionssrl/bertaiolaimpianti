@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 
 import { suggerisciDescrizione } from '../../_lib/suggerisci-nome';
 import {
@@ -64,6 +65,14 @@ Note: duplex nuovo, pavimento radiante + centrale termica
 }`;
 
 export async function POST(req: Request) {
+  // Solo utenti autenticati: l'endpoint chiama l'AI (costo) ed è interno
+  // ai flussi office. Senza questo, un estraneo potrebbe abusarne da fuori.
+  try {
+    await requireTenantContext();
+  } catch {
+    return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
