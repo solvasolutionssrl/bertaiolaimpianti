@@ -261,6 +261,7 @@ async function caricaDocumentiPubblici(input: {
       .from('file_refs')
       .select('id, filename, mime, size_bytes, uploaded_at, path')
       .eq('commessa_id', input.commessaId)
+      .is('deleted_at', null)
       .order('uploaded_at', { ascending: false })
       .returns<FileRow[]>();
     rows = (rowsRefs ?? []).filter((r) =>

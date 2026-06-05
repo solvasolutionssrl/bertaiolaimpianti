@@ -78,7 +78,8 @@ async function GestioneDashboard({
       .from('file_refs')
       .select('id', { count: 'exact', head: true })
       .gte('uploaded_at', `${todayIso}T00:00:00Z`)
-      .like('mime', 'image/%'),
+      .like('mime', 'image/%')
+      .is('deleted_at', null),
     supabase
       .from('commesse')
       .select(

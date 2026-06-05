@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { createServerSupabase } from '@kommessa/api/server';
+import { getTenantContext } from '@kommessa/api/tenant';
 import { Image as ImgIcon } from 'lucide-react';
 import { EmptyState } from '../../../../_components/empty-state';
 import { FotoGrid, type FotoItem } from './foto-grid';
@@ -51,15 +52,18 @@ export default async function FotoTab({
     q = q.eq('voce_id', Number(searchParams.voce));
   }
 
-  // Le foto della commessa e l'elenco fasi (per la select filtro) sono
-  // indipendenti: parallelizziamo per dimezzare la latenza.
-  const [{ data, error }, fasi] = await Promise.all([
+  // Le foto della commessa, l'elenco fasi (per la select filtro) e il
+  // contesto utente (per i permessi di eliminazione) sono indipendenti:
+  // parallelizziamo per dimezzare la latenza.
+  const [{ data, error }, fasi, ctx] = await Promise.all([
     q,
     supabase
       .from('commessa_voci')
       .select('voce_id, voce:voce_id ( id, nome )')
       .eq('commessa_id', params.id),
+    getTenantContext(),
   ]);
+  const canDelete = ctx?.role === 'admin' || ctx?.role === 'office';
   const rawFoto = error ? [] : data ?? [];
 
   // Riduci a max-version per ciascuna foto (la join è 1:N su versioni)
@@ -150,7 +154,7 @@ export default async function FotoTab({
           description="Foto e video vengono caricati dai tecnici tramite l'app mobile (PWA), tab Scatto, durante sopralluoghi e cantieri."
         />
       ) : (
-        <FotoGrid foto={foto} />
+        <FotoGrid foto={foto} commessaId={params.id} canDelete={canDelete} />
       )}
     </div>
   );

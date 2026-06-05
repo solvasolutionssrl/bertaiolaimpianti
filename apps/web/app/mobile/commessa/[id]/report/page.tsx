@@ -69,6 +69,7 @@ export default async function ReportPageMobile({
     .eq('commessa_id', params.id)
     .like('mime', 'image/%')
     .in('momento', MOMENTI_FINALI as unknown as string[])
+    .is('deleted_at', null)
     .order('taken_at', { ascending: true })
     .limit(60);
 
@@ -77,6 +78,7 @@ export default async function ReportPageMobile({
     .select('id, path, filename, mime, uploaded_at, size_bytes')
     .eq('commessa_id', params.id)
     .or('path.ilike.%Documenti/DICO/%,path.ilike.%Documenti/Certificazioni/%')
+    .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
     .limit(40);
 

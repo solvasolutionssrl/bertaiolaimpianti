@@ -9,13 +9,26 @@
  *
  * Niente più apertura diretta dell'editor al click: l'annotazione è un'azione
  * esplicita dentro il lightbox (gestita da AnnotationOverlay: lock, load, save).
+ *
+ * Eliminazione (solo office/admin, solo desktop): icona cestino in hover su
+ * ogni cella. Conferma di sicurezza, poi il file finisce nel cestino con
+ * retention 30 giorni (vedi media-cestino). Su mobile l'icona è nascosta.
  */
 
 import * as React from 'react';
-import { Image as ImgIcon, Video as VideoIcon, MessageSquareDashed } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  Image as ImgIcon,
+  Video as VideoIcon,
+  MessageSquareDashed,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
 
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
+import { useConfirm, useAlert } from '../../../../_components/confirm-provider';
 import { fmtDataOra } from '../../../_lib/format';
+import { eliminaMediaOffice } from './_actions/media';
 
 export interface FotoItem {
   id: string;
@@ -38,14 +51,29 @@ export interface FotoItem {
 
 export interface FotoGridProps {
   foto: FotoItem[];
+  commessaId: string;
+  /** Se true mostra il cestino sulle celle (solo office/admin). */
+  canDelete?: boolean;
 }
 
-export function FotoGrid({ foto }: FotoGridProps) {
+export function FotoGrid({ foto, commessaId, canDelete = false }: FotoGridProps) {
+  const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
+  // Nascondi ottimisticamente le celle eliminate (il refresh poi le toglie
+  // anche dal server). Non perdiamo l'allineamento degli indici lightbox.
+  const [hiddenIds, setHiddenIds] = React.useState<Set<string>>(new Set());
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
+
+  const visible = React.useMemo(
+    () => foto.filter((f) => !hiddenIds.has(f.id)),
+    [foto, hiddenIds],
+  );
 
   const lightboxItems = React.useMemo<MediaItem[]>(
     () =>
-      foto.map((f) => ({
+      visible.map((f) => ({
         id: f.id,
         mime: f.mime,
         filename: f.filename,
@@ -60,16 +88,53 @@ export function FotoGrid({ foto }: FotoGridProps) {
         // Solo le immagini sono annotabili: abilita il bottone "Annota".
         annotation: f.mime.startsWith('image/') ? { fileRefId: f.id } : undefined,
       })),
-    [foto],
+    [visible],
   );
 
-  if (foto.length === 0) return null;
+  const onDelete = React.useCallback(
+    async (f: FotoItem) => {
+      const ok = await askConfirm({
+        title: 'Spostare questo media nel cestino?',
+        description: `"${f.filename}" sparirà dalla commessa e anche dalla cartella Nextcloud del cliente. Resta recuperabile per 30 giorni dal pannello SOLVA, poi viene eliminato in via definitiva.`,
+        confirmLabel: 'Sì, elimina',
+        cancelLabel: 'Annulla',
+        destructive: true,
+      });
+      if (!ok) return;
+      setDeletingId(f.id);
+      try {
+        const res = await eliminaMediaOffice(f.id, commessaId);
+        if (res.ok) {
+          setHiddenIds((prev) => new Set(prev).add(f.id));
+          router.refresh();
+        } else {
+          await showAlert({ title: 'Eliminazione non riuscita', body: res.message });
+        }
+      } catch (e) {
+        await showAlert({
+          title: 'Errore',
+          body: e instanceof Error ? e.message : 'Errore sconosciuto',
+        });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [askConfirm, showAlert, router, commessaId],
+  );
+
+  if (visible.length === 0) return null;
 
   return (
     <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {foto.map((f, idx) => (
-          <FotoCell key={f.id} f={f} onOpen={() => setLightboxIdx(idx)} />
+        {visible.map((f, idx) => (
+          <FotoCell
+            key={f.id}
+            f={f}
+            onOpen={() => setLightboxIdx(idx)}
+            onDelete={canDelete ? () => onDelete(f) : undefined}
+            deleting={deletingId === f.id}
+          />
         ))}
       </div>
 
@@ -85,7 +150,17 @@ export function FotoGrid({ foto }: FotoGridProps) {
   );
 }
 
-function FotoCell({ f, onOpen }: { f: FotoItem; onOpen: () => void }) {
+function FotoCell({
+  f,
+  onOpen,
+  onDelete,
+  deleting,
+}: {
+  f: FotoItem;
+  onOpen: () => void;
+  onDelete?: () => void;
+  deleting?: boolean;
+}) {
   const isVideo = f.mime.startsWith('video/');
   const hasAnnotation = !!f.annotation;
 
@@ -144,6 +219,25 @@ function FotoCell({ f, onOpen }: { f: FotoItem; onOpen: () => void }) {
           </span>
         ) : null}
       </button>
+
+      {/* Cestino — solo office/admin, solo desktop (hidden sotto md). Sta in
+          alto a sinistra per non sovrapporsi ai badge a destra. */}
+      {onDelete ? (
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={deleting}
+          aria-label={`Elimina ${f.filename}`}
+          title="Sposta nel cestino (recuperabile 30 giorni)"
+          className="absolute left-1.5 top-1.5 hidden h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-destructive focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-100 group-hover:opacity-100 md:flex"
+        >
+          {deleting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+        </button>
+      ) : null}
 
       <figcaption className="px-2 py-1.5 text-[11px] text-muted-foreground">
         <p className="truncate font-medium text-foreground">{f.filename}</p>

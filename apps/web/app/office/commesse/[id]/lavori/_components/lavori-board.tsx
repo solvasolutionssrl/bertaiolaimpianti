@@ -37,6 +37,7 @@ import {
   riordinaTodo,
 } from '../../../../../_actions/commessa-todo';
 import { eliminaRiunione } from '../../../../../_actions/commessa-riunione';
+import { eliminaMediaOffice } from '../../foto/_actions/media';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { useUploadQueue } from '@/app/_components/upload-queue-provider';
 import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
@@ -1123,13 +1124,55 @@ function RiunioneTimelineEntry({
   commessaId: string;
   onDelete: () => void;
 }) {
+  const router = useRouter();
+  const askConfirm = useConfirm();
+  const showAlert = useAlert();
   const [expanded, setExpanded] = React.useState(false);
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
+  // Cestino allegati (solo office/admin): nascondi ottimisticamente.
+  const [hiddenAtt, setHiddenAtt] = React.useState<Set<string>>(new Set());
+  const [deletingAtt, setDeletingAtt] = React.useState<string | null>(null);
+
+  const allegati = React.useMemo(
+    () => r.allegati.filter((a) => !hiddenAtt.has(a.file_ref_id)),
+    [r.allegati, hiddenAtt],
+  );
+
+  const onDeleteAllegato = React.useCallback(
+    async (a: RiunioneAllegatoView) => {
+      const ok = await askConfirm({
+        title: 'Spostare questo allegato nel cestino?',
+        description: `"${a.filename}" sparirà dalla riunione e dalla cartella Nextcloud del cliente. Resta recuperabile per 30 giorni dal pannello SOLVA.`,
+        confirmLabel: 'Sì, elimina',
+        cancelLabel: 'Annulla',
+        destructive: true,
+      });
+      if (!ok) return;
+      setDeletingAtt(a.file_ref_id);
+      try {
+        const res = await eliminaMediaOffice(a.file_ref_id, commessaId);
+        if (res.ok) {
+          setHiddenAtt((prev) => new Set(prev).add(a.file_ref_id));
+          router.refresh();
+        } else {
+          await showAlert({ title: 'Eliminazione non riuscita', body: res.message });
+        }
+      } catch (e) {
+        await showAlert({
+          title: 'Errore',
+          body: e instanceof Error ? e.message : 'Errore sconosciuto',
+        });
+      } finally {
+        setDeletingAtt(null);
+      }
+    },
+    [askConfirm, showAlert, router, commessaId],
+  );
 
   // Lightbox: foto + video. PDF restano link separati.
   const mediaAllegati = React.useMemo(
     () =>
-      r.allegati.filter((a) => {
+      allegati.filter((a) => {
         const m = a.mime ?? '';
         return (
           a.kind === 'foto' ||
@@ -1138,7 +1181,7 @@ function RiunioneTimelineEntry({
           m.startsWith('video/')
         );
       }),
-    [r.allegati],
+    [allegati],
   );
   const lightboxItems = React.useMemo<MediaItem[]>(
     () =>
@@ -1185,9 +1228,9 @@ function RiunioneTimelineEntry({
                 AI
               </span>
             ) : null}
-            {r.allegati.length > 0 ? (
+            {allegati.length > 0 ? (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
-                {r.allegati.length} all.
+                {allegati.length} all.
               </span>
             ) : null}
           </div>
@@ -1225,35 +1268,33 @@ function RiunioneTimelineEntry({
             </div>
           ) : null}
 
-          {r.allegati.length > 0 ? (
+          {allegati.length > 0 ? (
             <div>
               <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-                Allegati ({r.allegati.length})
+                Allegati ({allegati.length})
               </p>
               <div className="grid grid-cols-6 gap-1 sm:grid-cols-8">
-                {r.allegati.slice(0, 8).map((al) => {
+                {allegati.slice(0, 8).map((al) => {
                   const mime = al.mime ?? '';
                   const isFoto = al.kind === 'foto' || mime.startsWith('image/');
                   const isVideo = al.kind === 'video' || mime.startsWith('video/');
+                  let inner: React.ReactNode;
                   if (isFoto) {
-                    return (
+                    inner = (
                       <ThumbFotoButtonDesktop
-                        key={al.id}
                         fileRefId={al.file_ref_id}
                         filename={al.filename}
                         onOpen={() => openLightboxAt(al.file_ref_id)}
                       />
                     );
-                  }
-                  if (isVideo) {
-                    return (
+                  } else if (isVideo) {
+                    inner = (
                       <button
-                        key={al.id}
                         type="button"
                         onClick={() => openLightboxAt(al.file_ref_id)}
                         title={al.filename}
                         aria-label={`Apri ${al.filename}`}
-                        className="group relative aspect-square overflow-hidden rounded border border-border bg-black transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
+                        className="group relative aspect-square w-full overflow-hidden rounded border border-border bg-black transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
                       >
                         <video
                           src={`/api/media/${al.file_ref_id}`}
@@ -1269,18 +1310,39 @@ function RiunioneTimelineEntry({
                         </span>
                       </button>
                     );
+                  } else {
+                    inner = (
+                      <a
+                        href={al.path ? `/api/cloud/file?path=${encodeURIComponent(al.path)}` : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={al.filename}
+                        className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
+                      >
+                        <span className="font-mono text-[9px] font-bold">PDF</span>
+                      </a>
+                    );
                   }
                   return (
-                    <a
-                      key={al.id}
-                      href={al.path ? `/api/cloud/file?path=${encodeURIComponent(al.path)}` : '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={al.filename}
-                      className="flex aspect-square items-center justify-center rounded border border-border bg-card text-muted-foreground"
-                    >
-                      <span className="font-mono text-[9px] font-bold">PDF</span>
-                    </a>
+                    <div key={al.id} className="group relative">
+                      {inner}
+                      {canWrite ? (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteAllegato(al)}
+                          disabled={deletingAtt === al.file_ref_id}
+                          aria-label={`Elimina ${al.filename}`}
+                          title="Sposta nel cestino (recuperabile 30 giorni)"
+                          className="absolute left-0.5 top-0.5 z-10 hidden h-5 w-5 items-center justify-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-sm transition-opacity hover:bg-destructive focus-visible:opacity-100 disabled:opacity-100 group-hover:opacity-100 md:flex"
+                        >
+                          {deletingAtt === al.file_ref_id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                        </button>
+                      ) : null}
+                    </div>
                   );
                 })}
               </div>

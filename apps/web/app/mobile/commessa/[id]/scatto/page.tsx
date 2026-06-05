@@ -71,6 +71,7 @@ export default async function ScattoPage({
     .eq('commessa_id', params.id)
     .like('mime', 'image/%')
     .gte('uploaded_at', startToday.toISOString())
+    .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
     .limit(8);
 

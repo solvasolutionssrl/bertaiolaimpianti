@@ -63,6 +63,7 @@ export default async function LavoriTab({
         .from('file_refs')
         .select('id, filename, path, taken_at, uploaded_at, uploaded_by, mime, momento')
         .eq('commessa_id', params.id)
+        .is('deleted_at', null)
         .order('uploaded_at', { ascending: false })
         .limit(30),
       canWrite ? elencaTecniciTenant() : Promise.resolve([]),
@@ -147,13 +148,15 @@ export default async function LavoriTab({
       .select(
         `id, riunione_id, kind,
          file_ref:file_refs!commessa_riunione_allegato_file_ref_id_fkey (
-           id, filename, mime, path
+           id, filename, mime, path, deleted_at
          )`,
       )
       .in('riunione_id', riunioniIds);
     for (const a of (allRes ?? []) as Array<any>) {
       const fr = Array.isArray(a.file_ref) ? a.file_ref[0] : a.file_ref;
       if (!fr) continue;
+      // Salta gli allegati il cui file è nel cestino (soft-delete).
+      if (fr.deleted_at) continue;
       const list = allegatiByRiu.get(a.riunione_id) ?? [];
       list.push({
         id: a.id as string,

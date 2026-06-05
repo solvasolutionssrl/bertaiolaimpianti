@@ -80,7 +80,7 @@ export default async function MediaSyncPage({ searchParams }: Props) {
   let listQuery = supabase
     .from('file_refs')
     .select(
-      'id, tenant_id, commessa_id, filename, mime, size_bytes, status, r2_key, r2_thumb_key, path, sync_attempts, last_sync_error, uploaded_at, uploaded_by',
+      'id, tenant_id, commessa_id, filename, mime, size_bytes, status, r2_key, r2_thumb_key, path, sync_attempts, last_sync_error, uploaded_at, uploaded_by, deleted_at, purge_after',
     )
     .order('uploaded_at', { ascending: false })
     .limit(50);
@@ -182,6 +182,8 @@ export default async function MediaSyncPage({ searchParams }: Props) {
     last_sync_error: string | null;
     uploaded_at: string;
     uploaded_by: string | null;
+    deleted_at: string | null;
+    purge_after: string | null;
   }>;
 
   return (
@@ -430,6 +432,7 @@ export default async function MediaSyncPage({ searchParams }: Props) {
                             fileRefId={r.id}
                             canRetry={canRetry}
                             status={r.status}
+                            purgeAfter={r.purge_after}
                           />
                         </td>
                       </tr>
@@ -688,7 +691,7 @@ function HealthBanner({
           <LegendItem
             icon={<Trash2 className="h-3.5 w-3.5 text-muted-foreground" />}
             label="deleted"
-            description="Soft delete dell'app. Il record resta per audit; la pulizia R2 effettiva arriverà in Fase 3."
+            description="Nel cestino. Il file è sparito da Nextcloud e dall'app, ma il backup su R2 resta 30 giorni: da qui si può Ripristinare. Oltre la scadenza il cron lo elimina in via definitiva."
           />
           <LegendItem
             icon={<Sparkles className="h-3.5 w-3.5 text-emerald-600" />}
