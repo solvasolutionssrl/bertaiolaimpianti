@@ -191,7 +191,11 @@ export async function softDeleteMediaFile(opts: {
     // Nessun backup R2 (file solo-Nextcloud: legacy oppure R2 già purgato a
     // 90gg). NON cancelliamo: spostiamo in dotfolder nascosta, recuperabile.
     trashNcPath = deriveTrashNcPath(row.path as string);
+    const trashDir = trashNcPath.slice(0, trashNcPath.lastIndexOf('/'));
     try {
+      // WebDAV MOVE richiede che il parent di destinazione esista (MKCOL non
+      // è ricorsivo). createFolder è idempotente: crea la dotfolder se manca.
+      await nc.createFolder(trashDir);
       await nc.move(row.path as string, trashNcPath);
     } catch (e) {
       // Se il move fallisce non lasciamo il record incoerente: abortiamo.
