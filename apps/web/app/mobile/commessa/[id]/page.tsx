@@ -44,6 +44,7 @@ import {
 import { CommessaLavoriMobile } from './_components/commessa-lavori-mobile';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
+import { CommessaEditMobile } from './_components/commessa-edit-mobile';
 import { TecniciMobile } from './_components/tecnici-mobile';
 import {
   elencaTecniciAssegnati,
@@ -80,6 +81,7 @@ export default async function CommessaDetailPage({
   const supabase = createServerSupabase();
   const canEditDettagli = ctx.role === 'admin';
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
+  const canEditCommessa = ctx.role === 'admin' || ctx.role === 'office';
 
   // Carica tecnici assegnati + rosa disponibile (rosa solo se admin/office)
   const [tecniciAssegnati, tecniciTenant] = await Promise.all([
@@ -517,6 +519,15 @@ export default async function CommessaDetailPage({
               )}
             </p>
           )}
+
+          {canEditCommessa ? (
+            <CommessaEditMobile
+              commessaId={commessa.id}
+              nomeCartella={commessa.nome_cartella}
+              descrizione={commessa.descrizione_ai_finale ?? null}
+              indirizzoCantiere={commessa.cliente_indirizzo_cantiere ?? null}
+            />
+          ) : null}
 
           {/* Azioni rapide: Chiama (lancia la chiamata) + Mappa (apre Google
               Maps sull'indirizzo). Sopra la righetta, a portata di pollice. */}

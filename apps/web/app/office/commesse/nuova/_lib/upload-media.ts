@@ -21,6 +21,20 @@ export type UploadProgressMap = Map<
 >;
 
 /**
+ * Destinazione dell'upload: una commessa esistente (string = commessaId,
+ * retrocompatibile) oppure una bozza in staging ({ bozzaId }).
+ */
+export type UploadTarget = string | { commessaId?: string; bozzaId?: string };
+
+function targetInitFields(t: UploadTarget): {
+  commessaId?: string;
+  bozzaId?: string;
+} {
+  if (typeof t === 'string') return { commessaId: t };
+  return { commessaId: t.commessaId, bozzaId: t.bozzaId };
+}
+
+/**
  * Carica un batch di file media via R2 staging (Fase 1).
  *
  * Flusso per ciascun file:
@@ -41,7 +55,7 @@ export type UploadProgressMap = Map<
  */
 export async function uploadMediaBatch(
   files: MediaFile[],
-  commessaId: string,
+  target: UploadTarget,
   onProgress: (progress: UploadProgressMap) => void,
   signal?: AbortSignal,
 ): Promise<UploadMediaResult[]> {
@@ -90,7 +104,7 @@ export async function uploadMediaBatch(
       const r = await uploadOneWithRetry(
         mf,
         compressed.get(mf.id) ?? mf.file,
-        commessaId,
+        target,
         (pct, step) => {
           progress.set(mf.id, { pct, step: step ?? 'uploading' });
           notify();
@@ -116,7 +130,7 @@ export async function uploadMediaBatch(
     const r = await uploadOneWithRetry(
       mf,
       mf.file,
-      commessaId,
+      target,
       (pct, step) => {
         progress.set(mf.id, { pct, step: step ?? 'uploading' });
         notify();
@@ -136,7 +150,7 @@ export async function uploadMediaBatch(
 async function uploadOneWithRetry(
   mf: MediaFile,
   file: File,
-  commessaId: string,
+  target: UploadTarget,
   onProgress: (pct: number, step?: UploadProgressStep) => void,
   signal?: AbortSignal,
   maxRetries = 2,
@@ -159,7 +173,7 @@ async function uploadOneWithRetry(
     try {
       const fileRefId = await r2Upload(
         file,
-        commessaId,
+        target,
         onProgress,
         signal,
         takenAtIso ?? null,
@@ -189,7 +203,7 @@ async function uploadOneWithRetry(
  */
 async function r2Upload(
   file: File,
-  commessaId: string,
+  target: UploadTarget,
   onProgress: (pct: number, step?: UploadProgressStep) => void,
   signal?: AbortSignal,
   takenAtIso?: string | null,
@@ -199,7 +213,7 @@ async function r2Upload(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      commessaId,
+      ...targetInitFields(target),
       momento: 'sopralluogo',
       filename: file.name,
       mime: file.type || 'application/octet-stream',

@@ -25,6 +25,7 @@ import { getMobileShell } from '@kommessa/api/types';
 import { guardMobile } from './_lib/guard';
 import { titoloCase } from './_lib/display-case';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
+import { BozzeDaCompletare } from '../_components/bozze-da-completare';
 
 export const metadata: Metadata = {
   title: 'Kommessa mobile',
@@ -175,6 +176,9 @@ async function GestioneDashboard({
             </div>
           </div>
         </section>
+
+      {/* Bozze da completare (solo se presenti) — resume del dettato/form */}
+      <BozzeDaCompletare resumeBase="/mobile/voice-intake" variant="mobile" />
 
       {/* ── 02 / AZIONI RAPIDE ─────────────────────────────────────────────── */}
       <section className="space-y-3 animate-fade-up [animation-delay:80ms]">

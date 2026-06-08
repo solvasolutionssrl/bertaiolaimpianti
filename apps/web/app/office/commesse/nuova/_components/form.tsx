@@ -36,12 +36,13 @@ import {
 } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
 
-import { creaCommessa } from '../../../../_actions/crea-commessa';
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
 import { camelCaseToWords } from '../../../../_lib/camel-to-words';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
-import { uploadMediaBatch, type UploadProgressMap } from '../_lib/upload-media';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
+import { useBozzaDraft } from '../../../../_lib/bozze/use-bozza-draft';
+import { useBozzaMedia } from '../../../../_lib/bozze/use-bozza-media';
+import type { BozzaPayload } from '../../../../_lib/bozze/types';
 
 // ---------------------------------------------------------------------
 // Types
@@ -115,6 +116,51 @@ function initialState(vociDefault: number[]): FormState {
   };
 }
 
+/** Mappa lo stato del form nel payload bozza (= input di creaCommessa). */
+function buildBozzaPayload(state: FormState, vociDefault: number[]): BozzaPayload {
+  const hasId = Boolean(state.cliente.id);
+  return {
+    clienteId: state.cliente.id,
+    clienteNew: hasId
+      ? undefined
+      : {
+          ragione_sociale: state.cliente.ragione_sociale,
+          tipo: state.cliente.tipo,
+          indirizzo: state.cliente.indirizzo || null,
+          citta: state.cliente.citta || null,
+          telefoni: state.cliente.telefono ? [state.cliente.telefono] : [],
+          email: state.cliente.email ? [state.cliente.email] : [],
+          note: null,
+        },
+    voci: [...state.voci].filter((id) => !vociDefault.includes(id)),
+    descrizioneFinale: state.descrizione.trim(),
+    noteIniziali: state.note || null,
+    indirizzoCantiere: state.indirizzoCantiere || null,
+    presetId: state.presetId || null,
+    _clienteLabel: state.cliente.ragione_sociale || undefined,
+  };
+}
+
+/** Ricostruisce lo stato del form da un payload bozza (resume). */
+function seedFromPayload(p: BozzaPayload, vociDefault: number[]): FormState {
+  return {
+    cliente: {
+      id: p.clienteId,
+      ragione_sociale: p.clienteNew?.ragione_sociale ?? p._clienteLabel ?? '',
+      tipo: p.clienteNew?.tipo ?? 'persona_fisica',
+      indirizzo: p.clienteNew?.indirizzo ?? '',
+      citta: p.clienteNew?.citta ?? '',
+      telefono: p.clienteNew?.telefoni?.[0] ?? '',
+      email: p.clienteNew?.email?.[0] ?? '',
+    },
+    voci: new Set<number>([...vociDefault, ...((p.voci as number[] | undefined) ?? [])]),
+    presetId: p.presetId ?? '',
+    descrizione: p.descrizioneFinale ?? '',
+    note: p.noteIniziali ?? '',
+    indirizzoCantiere: p.indirizzoCantiere ?? '',
+  };
+}
+
 const CATEGORIA_LABEL: Record<string, string> = {
   sempre_attiva: 'Sempre attiva (base)',
   impiantistica: 'Impiantistica',
@@ -134,9 +180,12 @@ const CATEGORIA_LABEL: Record<string, string> = {
 export function NuovaCommessaForm({
   voci,
   preset,
+  resumeBozzaId,
 }: {
   voci: VoceItem[];
   preset: PresetItem[];
+  /** Se valorizzato: riprende una bozza esistente (sezione "Da completare"). */
+  resumeBozzaId?: string;
 }) {
   const router = useRouter();
   const vociDefault = React.useMemo(
@@ -144,12 +193,36 @@ export function NuovaCommessaForm({
     [voci],
   );
   const [state, setState] = React.useState<FormState>(() => initialState(vociDefault));
+
+  // Bozza offline-first: autosave locale + sync server, finalizzazione esplicita.
+  const draft = useBozzaDraft({ bozzaId: resumeBozzaId });
+  const {
+    bozzaId,
+    save: saveDraft,
+    flush: flushDraft,
+    finalize: finalizeDraft,
+    ready: draftReady,
+    created: draftCreated,
+    loadedPayload: draftLoaded,
+    numeroBozza,
+    syncState,
+  } = draft;
+  // Upload media DURANTE la bozza (staging R2), così non si perdono se
+  // l'utente viene interrotto prima di finalizzare.
+  const {
+    progress: bozzaMediaProgress,
+    uploading: bozzaMediaUploading,
+    stage: stageMedia,
+    finalizeMedia,
+  } = useBozzaMedia(bozzaId, flushDraft);
+  // Ref allo stato corrente: usata da callback con deps stabili (es. dettato).
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
   const [submitting, setSubmitting] = React.useState(false);
   const [genPending, setGenPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<CreaCommessaServerData | null>(null);
   const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
-  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
   const [uploadResults, setUploadResults] = React.useState<Array<{ name: string; ok: boolean }>>([]);
 
   // Errori per-field (mostrati inline accanto al campo, niente solo banner)
@@ -229,6 +302,28 @@ export function NuovaCommessaForm({
     }, 200);
     return () => clearTimeout(handle);
   }, [state.cliente.ragione_sociale, state.cliente.id, cercaClienti]);
+
+  // -------- Bozza: resume (seed) + autosave --------
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (draftReady && draftLoaded && !seededRef.current) {
+      seededRef.current = true;
+      setState(seedFromPayload(draftLoaded, vociDefault));
+    }
+  }, [draftReady, draftLoaded, vociDefault]);
+
+  React.useEffect(() => {
+    if (!draftReady) return;
+    if (success) return; // dopo la finalizzazione non risalviamo la bozza
+    saveDraft(buildBozzaPayload(state, vociDefault));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, draftReady, saveDraft, vociDefault]);
+
+  // Carica gli allegati in staging sulla bozza appena esiste (eager).
+  React.useEffect(() => {
+    if (success) return;
+    stageMedia(mediaFiles, draftCreated);
+  }, [mediaFiles, draftCreated, stageMedia, success]);
 
   const selezionaCliente = (c: ClienteSuggest) => {
     setState((s) => ({
@@ -331,6 +426,16 @@ export function NuovaCommessaForm({
           previewReason: data._previewReason,
           model: data._model,
         });
+        // CRITICO: persisti SUBITO il dettato nella bozza, prima ancora che
+        // l'utente clicchi "Applica". Così se cade la rete o chiude l'app,
+        // il transcript è già al sicuro (locale + sync server).
+        const cur = stateRef.current;
+        saveDraft(
+          buildBozzaPayload(
+            { ...cur, note: cur.note.trim() ? cur.note : data.transcript },
+            vociDefault,
+          ),
+        );
       } catch (e) {
         setVoiceError(
           e instanceof Error ? e.message : 'Errore durante la trascrizione',
@@ -341,7 +446,7 @@ export function NuovaCommessaForm({
         void durationSec;
       }
     },
-    [],
+    [saveDraft, vociDefault],
   );
 
   const applicaSuggerimenti = (s: VoiceSuggested) => {
@@ -426,27 +531,16 @@ export function NuovaCommessaForm({
 
     setSubmitting(true);
     try {
-      // Fase 1: crea commessa
-      const result = await creaCommessa({
-        clienteId: state.cliente.id,
-        clienteNew: state.cliente.id
-          ? undefined
-          : {
-              ragione_sociale: state.cliente.ragione_sociale,
-              tipo: state.cliente.tipo,
-              indirizzo: state.cliente.indirizzo || null,
-              citta: state.cliente.citta || null,
-              telefoni: state.cliente.telefono ? [state.cliente.telefono] : [],
-              email: state.cliente.email ? [state.cliente.email] : [],
-              note: null,
-            },
-        voci: [...state.voci].filter((id) => !vociDefault.includes(id)),
-        descrizioneFinale: state.descrizione.trim(),
-        // state.note è la versione AI-sistemata (popolata da applicaSuggerimenti).
-        // Salvarla come note_iniziali — il dettato grezzo non lo conserviamo.
-        noteIniziali: state.note || null,
-        indirizzoCantiere: state.indirizzoCantiere || null,
-        presetId: state.presetId || null,
+      // Fase 1: assicura che gli allegati siano in staging sulla bozza
+      // (eager + eventuali rimasti). keepIds = i file ancora presenti.
+      const mediaRes = await finalizeMedia(mediaFiles);
+      if (mediaRes.results.length > 0) setUploadResults(mediaRes.results);
+
+      // Fase 2: finalizza la bozza → commessa ufficiale (codice gapless,
+      // cartelle, cliente/dedup, voci, referenti). I file staged vengono
+      // spostati nella cartella reale; quelli rimossi (non in keep) eliminati.
+      const result = await finalizeDraft(buildBozzaPayload(state, vociDefault), {
+        keepFileRefIds: mediaRes.keep,
       });
 
       if (!result.ok) {
@@ -454,17 +548,13 @@ export function NuovaCommessaForm({
         return;
       }
 
-      // Fase 2: comprimi + carica allegati in parallelo con progresso reale
-      if (mediaFiles.length > 0) {
-        const batchResults = await uploadMediaBatch(
-          mediaFiles,
-          result.data.commessaId,
-          (progress) => setUploadProgress(new Map(progress)),
-        );
-        setUploadResults(batchResults.map((r) => ({ name: r.name, ok: r.ok })));
-      }
-
-      setSuccess(result.data);
+      setSuccess({
+        commessaId: result.commessaId,
+        codiceInterno: result.codiceInterno,
+        nomeCartella: result.nomeCartella,
+        cloudFolderPath: result.cloudFolderPath,
+        codiceCliente: '',
+      });
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Creazione commessa fallita');
@@ -1124,8 +1214,8 @@ export function NuovaCommessaForm({
         <MediaAttachSection
           files={mediaFiles}
           onChange={setMediaFiles}
-          uploading={submitting && uploadProgress.size > 0}
-          uploadProgress={uploadProgress.size > 0 ? uploadProgress : undefined}
+          uploading={bozzaMediaUploading}
+          uploadProgress={bozzaMediaProgress.size > 0 ? bozzaMediaProgress : undefined}
         />
       </div>
 
@@ -1160,14 +1250,14 @@ export function NuovaCommessaForm({
       {/* Action bar sticky in basso */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur md:left-64">
         <div className="mx-auto flex max-w-screen-2xl items-center gap-3 px-6 py-4 md:px-10">
-          {submitting && uploadProgress.size > 0 ? (
+          {bozzaMediaUploading ? (
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
               <ImageUp className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
                 Caricamento{' '}
-                {[...uploadProgress.values()].filter((p) => p.step === 'done' || p.step === 'error').length}
-                /{uploadProgress.size} file…
+                {[...bozzaMediaProgress.values()].filter((p) => p.step === 'done' || p.step === 'error').length}
+                /{bozzaMediaProgress.size} file…
               </span>
             </span>
           ) : (
@@ -1187,6 +1277,28 @@ export function NuovaCommessaForm({
               )}
             </span>
           )}
+          {!submitting && syncState !== 'idle' ? (
+            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+              <span
+                className={
+                  'h-1.5 w-1.5 rounded-full ' +
+                  (syncState === 'synced'
+                    ? 'bg-success'
+                    : syncState === 'pending'
+                      ? 'bg-primary animate-pulse'
+                      : 'bg-warning')
+                }
+                aria-hidden
+              />
+              {syncState === 'synced'
+                ? `Bozza salvata${numeroBozza ? ` · #${numeroBozza}` : ''}`
+                : syncState === 'pending'
+                  ? 'Salvataggio…'
+                  : syncState === 'offline'
+                    ? 'Offline · salvata sul dispositivo'
+                    : 'Salvataggio in sospeso'}
+            </span>
+          ) : null}
           <div className="ml-auto flex items-center gap-2">
             <Button asChild type="button" variant="ghost" disabled={submitting}>
               <Link href="/office/commesse">Annulla</Link>
@@ -1195,7 +1307,7 @@ export function NuovaCommessaForm({
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {uploadProgress.size > 0 ? 'Caricamento…' : 'Creazione…'}
+                  {bozzaMediaUploading ? 'Caricamento…' : 'Creazione…'}
                 </>
               ) : (
                 <>Crea commessa</>

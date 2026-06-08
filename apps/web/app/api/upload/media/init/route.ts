@@ -30,9 +30,13 @@ const MOMENTO_FOLDER = {
   finale: 'Finali',
 } as const;
 
-const InitBody = z.object({
-  commessaId: z.string().uuid(),
-  momento: z.enum(['sopralluogo', 'in_corso', 'finale']).optional(),
+const InitBody = z
+  .object({
+    commessaId: z.string().uuid().optional(),
+    // Upload su una BOZZA (staging R2, non ancora su Nextcloud). Alternativo
+    // a commessaId: esattamente uno dei due dev'essere presente.
+    bozzaId: z.string().uuid().optional(),
+    momento: z.enum(['sopralluogo', 'in_corso', 'finale']).optional(),
   voceId: z.number().int().nullable().optional(),
   filename: z.string().min(1).max(255),
   mime: z.string().min(1).max(127),
@@ -47,7 +51,10 @@ const InitBody = z.object({
   // Data di scatto reale del media (EXIF DateTimeOriginal o lastModified).
   // Se assente: il server usa now() come fallback.
   takenAtIso: z.string().datetime({ offset: true }).nullable().optional(),
-});
+  })
+  .refine((v) => Boolean(v.commessaId) !== Boolean(v.bozzaId), {
+    message: 'Specificare commessaId oppure bozzaId (esattamente uno)',
+  });
 
 export async function POST(request: NextRequest) {
   // 1. Auth
@@ -70,19 +77,44 @@ export async function POST(request: NextRequest) {
   const body = parsed.data;
   const momento = body.momento ?? 'sopralluogo';
 
-  // 3. Commessa accessibile via RLS + ha cartella cloud
+  // 3. Target: commessa vera (con cartella cloud) OPPURE bozza (staging R2).
   const supabase = createServerSupabase();
-  const { data: commessa, error: cErr } = await supabase
-    .from('commesse')
-    .select('id, cloud_folder_path, codice_interno, nome_cartella')
-    .eq('id', body.commessaId)
-    .single();
+  const isBozza = Boolean(body.bozzaId);
 
-  if (cErr || !commessa?.cloud_folder_path) {
-    return Response.json(
-      { error: 'Commessa non trovata o senza cartella cloud' },
-      { status: 404 },
-    );
+  let commessa: {
+    id: string;
+    cloud_folder_path: string;
+    codice_interno: string | null;
+    nome_cartella: string | null;
+  } | null = null;
+
+  if (isBozza) {
+    // RLS author-scoped: la query ritorna la bozza solo se è dell'utente.
+    const { data: bozzaRaw, error: bErr } = await supabase
+      .from('commessa_bozze' as never)
+      .select('id, stato')
+      .eq('id', body.bozzaId as string)
+      .maybeSingle();
+    const bozza = bozzaRaw as unknown as { id: string; stato: string } | null;
+    if (bErr || !bozza) {
+      return Response.json({ error: 'Bozza non trovata' }, { status: 404 });
+    }
+    if (bozza.stato !== 'attiva') {
+      return Response.json({ error: 'Bozza già finalizzata' }, { status: 409 });
+    }
+  } else {
+    const { data: c, error: cErr } = await supabase
+      .from('commesse')
+      .select('id, cloud_folder_path, codice_interno, nome_cartella')
+      .eq('id', body.commessaId as string)
+      .single();
+    if (cErr || !c?.cloud_folder_path) {
+      return Response.json(
+        { error: 'Commessa non trovata o senza cartella cloud' },
+        { status: 404 },
+      );
+    }
+    commessa = c as unknown as typeof commessa;
   }
 
   // 4. Risolvi R2 provider (tenant config con fallback env) + slug tenant
@@ -125,18 +157,21 @@ export async function POST(request: NextRequest) {
   const rand = randomUUID().slice(0, 6);
   const generatedFilename = `${timestamp}_${rand}${ext}`;
 
-  const root = commessa.cloud_folder_path.replace(/^\/+|\/+$/g, '');
+  // Path branch: allegato riunione vs foto/video standard.
+  // Per le bozze il path è RELATIVO (senza root): la cartella vera non
+  // esiste ancora. Alla finalizzazione (finalizzaBozza) viene prefissato
+  // con il cloud_folder_path reale della commessa materializzata.
+  const root = isBozza ? '' : commessa!.cloud_folder_path.replace(/^\/+|\/+$/g, '');
 
-  // Path branch: allegato riunione vs foto/video standard
   let pathSegments: string[];
-  if (body.riunioneId) {
+  if (body.riunioneId && !isBozza) {
     // Verifica che la riunione esista e appartenga alla stessa commessa.
     // (RLS scopata su tenant: se è di un'altra commessa o tenant, query vuota.)
     const { data: riunioneRaw } = await supabase
       .from('commessa_riunione' as never)
       .select('id, data_riunione, titolo, commessa_id')
       .eq('id', body.riunioneId)
-      .eq('commessa_id' as never, body.commessaId)
+      .eq('commessa_id' as never, body.commessaId as string)
       .maybeSingle();
     const riunione = riunioneRaw as unknown as {
       id: string;
@@ -183,13 +218,15 @@ export async function POST(request: NextRequest) {
   // path leggibile. Section "riunioni" se è un allegato di riunione.
   const r2Key = buildR2Key({
     tenantId: ctx.tenantId,
-    commessaId: body.commessaId,
+    // Per le bozze usiamo il bozzaId come identificatore di staging; alla
+    // finalizzazione l'oggetto verrà copiato sulla chiave R2 definitiva.
+    commessaId: (body.commessaId ?? body.bozzaId) as string,
     fileRefId,
     filename: generatedFilename,
     tenantSlug: (tenantRow?.slug as string | undefined) ?? null,
-    codiceInterno: (commessa.codice_interno as string | undefined) ?? null,
-    nomeCartella: (commessa.nome_cartella as string | undefined) ?? null,
-    sectionLabel: body.riunioneId ? 'riunioni' : 'media',
+    codiceInterno: isBozza ? null : (commessa!.codice_interno ?? null),
+    nomeCartella: isBozza ? null : (commessa!.nome_cartella ?? null),
+    sectionLabel: isBozza ? 'bozze' : body.riunioneId ? 'riunioni' : 'media',
   });
 
   // 6. Decidi mode (single vs multipart) e prepara presigned URL
@@ -201,7 +238,8 @@ export async function POST(request: NextRequest) {
     if (isMultipart) {
       const session = await r2.createMultipartUpload(r2Key, body.mime, {
         tenant_id: ctx.tenantId,
-        commessa_id: body.commessaId,
+        commessa_id: body.commessaId ?? '',
+        bozza_id: body.bozzaId ?? '',
         file_ref_id: fileRefId,
       });
       r2UploadId = session.uploadId;
@@ -249,9 +287,10 @@ export async function POST(request: NextRequest) {
   const { error: rErr } = await supabase.from('file_refs').insert({
     id: fileRefId,
     tenant_id: ctx.tenantId,
-    commessa_id: body.commessaId,
-    voce_id: body.riunioneId ? null : body.voceId ?? null,
-    momento: body.riunioneId ? 'sopralluogo' : momento,
+    commessa_id: isBozza ? null : (body.commessaId as string),
+    bozza_id: isBozza ? (body.bozzaId as string) : null,
+    voce_id: body.riunioneId && !isBozza ? null : body.voceId ?? null,
+    momento: body.riunioneId && !isBozza ? 'sopralluogo' : momento,
     path: nextcloudPath,
     filename: generatedFilename,
     mime: body.mime,
@@ -265,7 +304,7 @@ export async function POST(request: NextRequest) {
     status: 'uploading',
     r2_key: r2Key,
     r2_upload_id: r2UploadId,
-    riunione_id: body.riunioneId ?? null,
+    riunione_id: body.riunioneId && !isBozza ? body.riunioneId : null,
   } as never);
 
   if (rErr) {
@@ -287,7 +326,8 @@ export async function POST(request: NextRequest) {
     entity_id: fileRefId,
     action: 'media.upload.init',
     metadata: {
-      commessa_id: body.commessaId,
+      commessa_id: body.commessaId ?? null,
+      bozza_id: body.bozzaId ?? null,
       momento,
       voce_id: body.voceId ?? null,
       mode: isMultipart ? 'multipart' : 'single',

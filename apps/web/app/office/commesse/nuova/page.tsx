@@ -6,7 +6,12 @@ import { NuovaCommessaForm, type VoceItem, type PresetItem } from './_components
 export const metadata = { title: 'Nuova commessa' };
 export const dynamic = 'force-dynamic';
 
-export default async function NuovaCommessaPage() {
+export default async function NuovaCommessaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ bozza?: string }>;
+}) {
+  const { bozza } = await searchParams;
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
 
@@ -54,7 +59,11 @@ export default async function NuovaCommessaPage() {
         </div>
       </header>
 
-      <NuovaCommessaForm voci={vociItems} preset={presetItems} />
+      <NuovaCommessaForm
+        voci={vociItems}
+        preset={presetItems}
+        resumeBozzaId={bozza}
+      />
     </div>
   );
 }

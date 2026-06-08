@@ -25,7 +25,12 @@ export const metadata: Metadata = {
  * mostrare il nome leggibile delle voci_ids estratte dall'AI) e i preset
  * eventuali (al momento non usati, ma pronti).
  */
-export default async function VoiceIntakePage() {
+export default async function VoiceIntakePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ bozza?: string }>;
+}) {
+  const { bozza } = await searchParams;
   await guardMobile();
   const supabase = createServerSupabase();
 
@@ -48,7 +53,7 @@ export default async function VoiceIntakePage() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 bg-grid-radial" />
       {/* Contenuto: z-[1] per stare sopra alla griglia */}
       <div className="relative z-[1]">
-        <VoiceIntakeFlow voci={voci} vociDefault={vociDefault} />
+        <VoiceIntakeFlow voci={voci} vociDefault={vociDefault} resumeBozzaId={bozza} />
       </div>
     </div>
   );

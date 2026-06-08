@@ -17,6 +17,7 @@ import { loadCommessa } from './_lib/get-commessa';
 import { elencaTagTenant } from '../../../_actions/commessa-tag';
 import { TagEditor } from '../../../_components/tag-editor';
 import { ClienteEditDialog } from './_components/cliente-edit-dialog';
+import { CommessaEditDialog } from './_components/commessa-edit-dialog';
 import {
   ContattiEditor,
   type ContattoRow,
@@ -219,10 +220,20 @@ export default async function AnagraficaTab({
 
         {/* COMMESSA — dettagli tecnici, no truncate, grassetti su valori chiave */}
         <Card>
-          <CardHeader className="px-4 pb-2 pt-3">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 px-4 pb-2 pt-3">
             <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               Commessa
             </CardTitle>
+            {canEditCliente ? (
+              <CommessaEditDialog
+                commessaId={params.id}
+                nomeCartella={c.nome_cartella as string | null}
+                descrizione={titoloUmano}
+                indirizzoCantiere={
+                  (c.cliente_indirizzo_cantiere as string | null) ?? null
+                }
+              />
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-2 px-4 pb-3 text-sm">
             <Field label="Codice interno" value={c.codice_interno} mono bold />
