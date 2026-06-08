@@ -27,16 +27,12 @@ import {
   type VoiceReviewData,
 } from '../../../_components/voice-review';
 import { useBozzaDraft } from '../../../_lib/bozze/use-bozza-draft';
+import { useBozzaMedia } from '../../../_lib/bozze/use-bozza-media';
 import type { BozzaPayload } from '../../../_lib/bozze/types';
 import {
   MediaAttachSection,
   type MediaFile,
 } from '../../../office/commesse/nuova/_components/media-attach-section';
-import {
-  uploadMediaBatch,
-  type UploadProgressMap,
-  type UploadMediaResult,
-} from '../../../office/commesse/nuova/_lib/upload-media';
 
 export interface VoceOption {
   id: number;
@@ -148,11 +144,20 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
   // Bozza offline-first: il dettato e i campi vengono salvati subito.
   const draft = useBozzaDraft({ bozzaId: resumeBozzaId });
   const {
+    bozzaId,
     save: saveDraft,
+    flush: flushDraft,
     finalize: finalizeDraft,
     ready: draftReady,
+    created: draftCreated,
     loadedPayload: draftLoaded,
   } = draft;
+  const {
+    progress: bozzaMediaProgress,
+    uploading: bozzaMediaUploading,
+    stage: stageMedia,
+    finalizeMedia,
+  } = useBozzaMedia(bozzaId, flushDraft);
   const transcriptRef = React.useRef('');
   transcriptRef.current = state.transcript;
 
@@ -171,10 +176,15 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
   }, [draftReady, draftLoaded]);
   const [tipsOpen, setTipsOpen] = React.useState(false);
   const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
-  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
-  const [uploadResults, setUploadResults] = React.useState<UploadMediaResult[]>([]);
-  const [uploading, setUploading] = React.useState(false);
-  const uploadAbortRef = React.useRef<AbortController | null>(null);
+  const [uploadResults, setUploadResults] = React.useState<
+    Array<{ name: string; ok: boolean }>
+  >([]);
+
+  // Carica gli allegati in staging sulla bozza appena esiste (eager).
+  React.useEffect(() => {
+    if (state.phase === 'done') return;
+    stageMedia(mediaFiles, draftCreated);
+  }, [mediaFiles, draftCreated, stageMedia, state.phase]);
 
   const stepNum =
     state.phase === 'record'
@@ -291,31 +301,19 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
 
     setState((s) => ({ ...s, phase: 'creating', error: null }));
     try {
-      // Finalizza la bozza → commessa ufficiale. La bozza ha già fatto da
-      // rete di sicurezza per dettato e campi rivisti.
+      // Assicura gli allegati in staging sulla bozza (eager + rimasti).
+      const mediaRes = await finalizeMedia(mediaFiles);
+      if (mediaRes.results.length > 0) setUploadResults(mediaRes.results);
+
+      // Finalizza la bozza → commessa ufficiale. I file staged vengono
+      // spostati nella cartella reale; i rimossi (non in keep) eliminati.
       const res = await finalizeDraft(
         reviewToPayload(d, transcriptRef.current, vociDefault),
+        { keepFileRefIds: mediaRes.keep },
       );
       if (!res.ok) {
         setState((s) => ({ ...s, phase: 'confirm', error: res.error }));
         return;
-      }
-      const commessaId = res.commessaId;
-
-      // Upload foto/video se presenti
-      if (mediaFiles.length > 0) {
-        const controller = new AbortController();
-        uploadAbortRef.current = controller;
-        setUploading(true);
-        const results = await uploadMediaBatch(
-          mediaFiles,
-          commessaId,
-          (map) => setUploadProgress(new Map(map)),
-          controller.signal,
-        );
-        uploadAbortRef.current = null;
-        setUploadResults(results);
-        setUploading(false);
       }
 
       setState((s) => ({
@@ -330,7 +328,6 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
         error: null,
       }));
     } catch (e) {
-      setUploading(false);
       setState((s) => ({
         ...s,
         phase: 'confirm',
@@ -519,9 +516,8 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             <MediaAttachSection
               files={mediaFiles}
               onChange={setMediaFiles}
-              uploading={uploading}
-              uploadProgress={uploadProgress}
-              onCancel={() => { uploadAbortRef.current?.abort(); setUploading(false); }}
+              uploading={bozzaMediaUploading}
+              uploadProgress={bozzaMediaProgress}
             />
           )}
 
@@ -553,9 +549,9 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             size="lg"
             className="min-h-[56px] w-full text-base"
             onClick={handleCreate}
-            disabled={state.phase === 'creating' || uploading}
+            disabled={state.phase === 'creating' || bozzaMediaUploading}
           >
-            {uploading ? (
+            {bozzaMediaUploading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Carico foto/video ({mediaFiles.length} file)…
@@ -579,7 +575,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             size="sm"
             className="w-full text-muted-foreground"
             onClick={() => setState((s) => ({ ...s, phase: 'review' }))}
-            disabled={state.phase === 'creating' || uploading}
+            disabled={state.phase === 'creating' || bozzaMediaUploading}
           >
             Torna a modificare
           </Button>

@@ -66,6 +66,7 @@ interface BozzaFileRow {
 
 export async function finalizzaBozza(
   bozzaId: string,
+  opts?: { keepFileRefIds?: string[] },
 ): Promise<FinalizzaBozzaResult> {
   // 1) Auth
   let ctx;
@@ -136,6 +137,8 @@ export async function finalizzaBozza(
   const { commessaId, codiceInterno, nomeCartella, cloudFolderPath } = res.data;
 
   // 5) Sposta i file da staging R2 alla chiave/cartella definitiva.
+  //    keepFileRefIds: se passato, i file staged NON nell'elenco (rimossi
+  //    dall'utente prima di finalizzare) vengono eliminati, non spostati.
   await spostaFileBozza({
     bozzaId,
     tenantId: ctx.tenantId,
@@ -144,6 +147,7 @@ export async function finalizzaBozza(
     codiceInterno,
     nomeCartella,
     cloudFolderPath,
+    keepFileRefIds: opts?.keepFileRefIds,
   });
 
   // 6) Marca la bozza finalizzata (service: la bozza resta dell'autore ma
@@ -170,6 +174,7 @@ async function spostaFileBozza(opts: {
   codiceInterno: string;
   nomeCartella: string;
   cloudFolderPath: string;
+  keepFileRefIds?: string[];
 }): Promise<void> {
   const service = createServiceSupabase();
 
@@ -178,8 +183,14 @@ async function spostaFileBozza(opts: {
     .select('id, filename, path, mime, r2_key, r2_thumb_key, status')
     .eq('bozza_id', opts.bozzaId as never)
     .is('deleted_at', null);
-  const files = (filesRaw as unknown as BozzaFileRow[]) ?? [];
-  if (files.length === 0) return;
+  const allFiles = (filesRaw as unknown as BozzaFileRow[]) ?? [];
+  if (allFiles.length === 0) return;
+
+  // Partiziona: i file da tenere (presenti nel keep-set) vs quelli rimossi
+  // dall'utente. Senza keep-set, teniamo tutto (retrocompat).
+  const keepSet = opts.keepFileRefIds ? new Set(opts.keepFileRefIds) : null;
+  const files = keepSet ? allFiles.filter((f) => keepSet.has(f.id)) : allFiles;
+  const drop = keepSet ? allFiles.filter((f) => !keepSet.has(f.id)) : [];
 
   const { data: tenantRow } = await service
     .from('tenants')
@@ -193,6 +204,22 @@ async function spostaFileBozza(opts: {
   if (!r2) {
     console.error('[finalizza-bozza] R2 non configurato: file non spostati');
     return;
+  }
+
+  // Elimina i file staged rimossi dall'utente prima di finalizzare
+  // (R2 originale + thumb + riga DB). Non finiscono nella commessa.
+  if (drop.length > 0) {
+    for (const f of drop) {
+      if (f.r2_key) await r2.delete(f.r2_key).catch(() => {});
+      if (f.r2_thumb_key) await r2.delete(f.r2_thumb_key).catch(() => {});
+    }
+    await service
+      .from('file_refs')
+      .delete()
+      .in(
+        'id',
+        drop.map((f) => f.id),
+      );
   }
 
   const root = opts.cloudFolderPath.replace(/^\/+|\/+$/g, '');

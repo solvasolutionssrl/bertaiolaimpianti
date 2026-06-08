@@ -15,7 +15,8 @@ export const dynamic = 'force-dynamic';
 
 const STATI: Array<{ value: string; label: string }> = [
   { value: '', label: 'Tutti gli stati' },
-  { value: 'bozza', label: 'Bozza' },
+  // 'bozza' non è più qui: le bozze vivono in commessa_bozze (tabella
+  // dedicata, private all'autore) e si riprendono da "Da completare".
   { value: 'aperta', label: 'Aperta' },
   { value: 'in_corso', label: 'In corso' },
   { value: 'collaudo', label: 'Collaudo' },

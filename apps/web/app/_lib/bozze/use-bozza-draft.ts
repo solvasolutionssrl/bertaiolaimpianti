@@ -31,11 +31,18 @@ export interface UseBozzaDraft {
   numeroBozza: number | null;
   /** true quando il caricamento iniziale (resume) è completo. */
   ready: boolean;
+  /** true quando la bozza è stata materializzata (primo contenuto reale). */
+  created: boolean;
   /** Payload della bozza ripresa (null se è una bozza nuova). */
   loadedPayload: BozzaPayload | null;
   syncState: BozzaSyncState;
   save: (payload: BozzaPayload) => void;
-  finalize: (payload: BozzaPayload) => Promise<FinalizzaBozzaResult>;
+  /** Forza un sync immediato sul server (usato prima dell'upload media). */
+  flush: () => Promise<void>;
+  finalize: (
+    payload: BozzaPayload,
+    opts?: { keepFileRefIds?: string[] },
+  ) => Promise<FinalizzaBozzaResult>;
   discard: () => Promise<void>;
 }
 
@@ -62,6 +69,7 @@ export function useBozzaDraft(options?: { bozzaId?: string }): UseBozzaDraft {
   const [bozzaId] = useState<string>(() => resumeId ?? newId());
   const [numeroBozza, setNumeroBozza] = useState<number | null>(null);
   const [ready, setReady] = useState<boolean>(!resumeId);
+  const [created, setCreated] = useState<boolean>(false);
   const [loadedPayload, setLoadedPayload] = useState<BozzaPayload | null>(null);
   const [syncState, setSyncState] = useState<BozzaSyncState>('idle');
 
@@ -78,11 +86,46 @@ export function useBozzaDraft(options?: { bozzaId?: string }): UseBozzaDraft {
       if (!alive) return;
       if (local) {
         createdRef.current = true;
+        setCreated(true);
         setNumeroBozza(local.numeroBozza);
         setLoadedPayload(local.payload);
         latestPayloadRef.current = local.payload;
+        setReady(true);
+        return;
       }
-      setReady(true);
+      // Miss locale (es. resume da un ALTRO dispositivo): recupera dal server.
+      try {
+        const res = await fetch('/api/bozze', { cache: 'no-store' });
+        if (res.ok && alive) {
+          const json = (await res.json()) as {
+            bozze: Array<{
+              id: string;
+              numeroBozza: number | null;
+              payload: BozzaPayload;
+            }>;
+          };
+          const found = json.bozze?.find((b) => b.id === resumeId);
+          if (found && alive) {
+            createdRef.current = true;
+            setCreated(true);
+            setNumeroBozza(found.numeroBozza);
+            setLoadedPayload(found.payload);
+            latestPayloadRef.current = found.payload;
+            // Popola IndexedDB locale per i salvataggi successivi.
+            await putBozza({
+              id: resumeId,
+              numeroBozza: found.numeroBozza,
+              payload: found.payload,
+              updatedAt: Date.now(),
+              lastSyncedAt: Date.now(),
+              dirty: false,
+            });
+          }
+        }
+      } catch {
+        // offline: niente fallback, resta una bozza nuova vuota
+      }
+      if (alive) setReady(true);
     })();
     return () => {
       alive = false;
@@ -138,6 +181,7 @@ export function useBozzaDraft(options?: { bozzaId?: string }): UseBozzaDraft {
       latestPayloadRef.current = payload;
       // Niente bozze vuote: crea solo al primo contenuto reale.
       if (!createdRef.current && !hasContenutoReale(payload)) return;
+      if (!createdRef.current) setCreated(true);
       createdRef.current = true;
 
       const local: LocalBozza = {
@@ -167,12 +211,24 @@ export function useBozzaDraft(options?: { bozzaId?: string }): UseBozzaDraft {
     return undefined;
   }, [pushToServer]);
 
+  // --- flush(): sync immediato (es. prima dell'upload media sulla bozza) ---
+  const flush = useCallback(async () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const p = latestPayloadRef.current;
+    if (!p || !createdRef.current) return;
+    await pushToServer(p);
+  }, [pushToServer]);
+
   // --- finalize(): flush sincrono poi server action ---
   const finalize = useCallback(
-    async (payload: BozzaPayload): Promise<FinalizzaBozzaResult> => {
+    async (
+      payload: BozzaPayload,
+      opts?: { keepFileRefIds?: string[] },
+    ): Promise<FinalizzaBozzaResult> => {
       if (timerRef.current) clearTimeout(timerRef.current);
       latestPayloadRef.current = payload;
       createdRef.current = true;
+      setCreated(true);
       // La finalizzazione richiede il server (codice gapless + cartelle cloud).
       // Offline: la bozza è già salvata in locale, l'utente riprova online.
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -193,7 +249,7 @@ export function useBozzaDraft(options?: { bozzaId?: string }): UseBozzaDraft {
         dirty: true,
       });
       await pushToServer(payload);
-      const res = await finalizzaBozza(bozzaId);
+      const res = await finalizzaBozza(bozzaId, opts);
       if (res.ok) {
         await deleteBozza(bozzaId);
       }
@@ -222,9 +278,11 @@ export function useBozzaDraft(options?: { bozzaId?: string }): UseBozzaDraft {
     bozzaId,
     numeroBozza,
     ready,
+    created,
     loadedPayload,
     syncState,
     save,
+    flush,
     finalize,
     discard,
   };

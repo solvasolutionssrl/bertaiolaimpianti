@@ -39,9 +39,9 @@ import { createBrowserSupabase } from '@kommessa/api/client';
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
 import { camelCaseToWords } from '../../../../_lib/camel-to-words';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
-import { uploadMediaBatch, type UploadProgressMap } from '../_lib/upload-media';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
 import { useBozzaDraft } from '../../../../_lib/bozze/use-bozza-draft';
+import { useBozzaMedia } from '../../../../_lib/bozze/use-bozza-media';
 import type { BozzaPayload } from '../../../../_lib/bozze/types';
 
 // ---------------------------------------------------------------------
@@ -197,13 +197,24 @@ export function NuovaCommessaForm({
   // Bozza offline-first: autosave locale + sync server, finalizzazione esplicita.
   const draft = useBozzaDraft({ bozzaId: resumeBozzaId });
   const {
+    bozzaId,
     save: saveDraft,
+    flush: flushDraft,
     finalize: finalizeDraft,
     ready: draftReady,
+    created: draftCreated,
     loadedPayload: draftLoaded,
     numeroBozza,
     syncState,
   } = draft;
+  // Upload media DURANTE la bozza (staging R2), così non si perdono se
+  // l'utente viene interrotto prima di finalizzare.
+  const {
+    progress: bozzaMediaProgress,
+    uploading: bozzaMediaUploading,
+    stage: stageMedia,
+    finalizeMedia,
+  } = useBozzaMedia(bozzaId, flushDraft);
   // Ref allo stato corrente: usata da callback con deps stabili (es. dettato).
   const stateRef = React.useRef(state);
   stateRef.current = state;
@@ -212,7 +223,6 @@ export function NuovaCommessaForm({
   const [error, setError] = React.useState<string | null>(null);
   const [success, setSuccess] = React.useState<CreaCommessaServerData | null>(null);
   const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
-  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
   const [uploadResults, setUploadResults] = React.useState<Array<{ name: string; ok: boolean }>>([]);
 
   // Errori per-field (mostrati inline accanto al campo, niente solo banner)
@@ -308,6 +318,12 @@ export function NuovaCommessaForm({
     saveDraft(buildBozzaPayload(state, vociDefault));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, draftReady, saveDraft, vociDefault]);
+
+  // Carica gli allegati in staging sulla bozza appena esiste (eager).
+  React.useEffect(() => {
+    if (success) return;
+    stageMedia(mediaFiles, draftCreated);
+  }, [mediaFiles, draftCreated, stageMedia, success]);
 
   const selezionaCliente = (c: ClienteSuggest) => {
     setState((s) => ({
@@ -515,25 +531,21 @@ export function NuovaCommessaForm({
 
     setSubmitting(true);
     try {
-      // Fase 1: finalizza la bozza → commessa ufficiale (codice gapless,
-      // cartelle, cliente/dedup, voci, referenti). La bozza ha già fatto da
-      // rete di sicurezza per tutto ciò che l'utente ha digitato/dettato.
-      const result = await finalizeDraft(buildBozzaPayload(state, vociDefault));
+      // Fase 1: assicura che gli allegati siano in staging sulla bozza
+      // (eager + eventuali rimasti). keepIds = i file ancora presenti.
+      const mediaRes = await finalizeMedia(mediaFiles);
+      if (mediaRes.results.length > 0) setUploadResults(mediaRes.results);
+
+      // Fase 2: finalizza la bozza → commessa ufficiale (codice gapless,
+      // cartelle, cliente/dedup, voci, referenti). I file staged vengono
+      // spostati nella cartella reale; quelli rimossi (non in keep) eliminati.
+      const result = await finalizeDraft(buildBozzaPayload(state, vociDefault), {
+        keepFileRefIds: mediaRes.keep,
+      });
 
       if (!result.ok) {
         setError(result.error);
         return;
-      }
-
-      // Fase 2: comprimi + carica allegati in parallelo con progresso reale,
-      // sull'id reale appena ottenuto.
-      if (mediaFiles.length > 0) {
-        const batchResults = await uploadMediaBatch(
-          mediaFiles,
-          result.commessaId,
-          (progress) => setUploadProgress(new Map(progress)),
-        );
-        setUploadResults(batchResults.map((r) => ({ name: r.name, ok: r.ok })));
       }
 
       setSuccess({
@@ -1202,8 +1214,8 @@ export function NuovaCommessaForm({
         <MediaAttachSection
           files={mediaFiles}
           onChange={setMediaFiles}
-          uploading={submitting && uploadProgress.size > 0}
-          uploadProgress={uploadProgress.size > 0 ? uploadProgress : undefined}
+          uploading={bozzaMediaUploading}
+          uploadProgress={bozzaMediaProgress.size > 0 ? bozzaMediaProgress : undefined}
         />
       </div>
 
@@ -1238,14 +1250,14 @@ export function NuovaCommessaForm({
       {/* Action bar sticky in basso */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/95 backdrop-blur md:left-64">
         <div className="mx-auto flex max-w-screen-2xl items-center gap-3 px-6 py-4 md:px-10">
-          {submitting && uploadProgress.size > 0 ? (
+          {bozzaMediaUploading ? (
             <span className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
               <ImageUp className="h-3.5 w-3.5" aria-hidden="true" />
               <span>
                 Caricamento{' '}
-                {[...uploadProgress.values()].filter((p) => p.step === 'done' || p.step === 'error').length}
-                /{uploadProgress.size} file…
+                {[...bozzaMediaProgress.values()].filter((p) => p.step === 'done' || p.step === 'error').length}
+                /{bozzaMediaProgress.size} file…
               </span>
             </span>
           ) : (
@@ -1295,7 +1307,7 @@ export function NuovaCommessaForm({
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {uploadProgress.size > 0 ? 'Caricamento…' : 'Creazione…'}
+                  {bozzaMediaUploading ? 'Caricamento…' : 'Creazione…'}
                 </>
               ) : (
                 <>Crea commessa</>
