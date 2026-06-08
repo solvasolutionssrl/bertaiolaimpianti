@@ -71,20 +71,55 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
   const service = createServiceSupabase();
 
   // 1. Carica il file_ref (service bypass RLS)
-  const { data: ref, error: refErr } = await service
+  const { data: refData, error: refErr } = await service
     .from('file_refs')
     .select(
-      'id, tenant_id, commessa_id, path, filename, mime, size_bytes, sha256, status, r2_key, sync_attempts',
+      'id, tenant_id, commessa_id, bozza_id, path, filename, mime, size_bytes, sha256, status, r2_key, sync_attempts',
     )
     .eq('id', fileRefId)
     .maybeSingle();
 
-  if (refErr || !ref) {
+  if (refErr || !refData) {
     return {
       fileRefId,
       ok: false,
       reason: 'failed',
       detail: refErr?.message ?? 'file_ref non trovato',
+    };
+  }
+  // Cast: bozza_id (migration 20260608000000) non è ancora nei generated
+  // types di Supabase; senza cast l'intera riga diventa SelectQueryError.
+  const ref = refData as unknown as {
+    id: string;
+    tenant_id: string;
+    commessa_id: string | null;
+    bozza_id: string | null;
+    path: string;
+    filename: string;
+    mime: string;
+    size_bytes: number;
+    sha256: string | null;
+    status:
+      | 'uploading'
+      | 'uploaded'
+      | 'syncing'
+      | 'synced'
+      | 'sync_failed'
+      | 'failed'
+      | 'deleted';
+    r2_key: string | null;
+    sync_attempts: number;
+  };
+
+  // Guardia bozze: i file in staging di una bozza (bozza_id valorizzato) non
+  // vanno su Nextcloud finché la commessa non è ufficializzata. La cartella
+  // vera non esiste e `path` è provvisorio. Skippiamo senza claim.
+  if (ref.bozza_id) {
+    return {
+      fileRefId,
+      ok: true,
+      reason: 'skipped',
+      detail: 'file in staging bozza — sync rimandato alla finalizzazione',
     };
   }
 
@@ -384,6 +419,7 @@ export async function syncBatch(maxFiles = 10): Promise<{
     .from('file_refs')
     .select('id')
     .is('deleted_at', null)
+    .is('bozza_id', null) // esclude i file in staging delle bozze (sync al finalize)
     .not('r2_key', 'is', null)
     .or(
       `status.in.(uploaded,sync_failed),and(status.eq.syncing,updated_at.lt.${staleThreshold})`,

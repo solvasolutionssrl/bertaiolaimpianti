@@ -63,16 +63,18 @@ export async function POST(
   const { data: refRaw, error: rErr } = await supabase
     .from('file_refs')
     .select(
-      'id, tenant_id, commessa_id, r2_key, r2_upload_id, status, mime, size_bytes, filename, path, riunione_id',
+      'id, tenant_id, commessa_id, bozza_id, r2_key, r2_upload_id, status, mime, size_bytes, filename, path, riunione_id',
     )
     .eq('id', fileRefId)
     .single();
   // Cast: riunione_id è introdotta dalla migration 28/05/2026 (Ondata 2),
-  // i types Supabase la rifletteranno al prossimo `supabase gen types`.
+  // bozza_id dalla 08/06/2026 (bozze autosave); i types Supabase le
+  // rifletteranno al prossimo `supabase gen types`.
   const ref = refRaw as unknown as {
     id: string;
     tenant_id: string;
-    commessa_id: string;
+    commessa_id: string | null;
+    bozza_id: string | null;
     r2_key: string | null;
     r2_upload_id: string | null;
     status: 'uploading' | 'uploaded' | 'syncing' | 'synced' | 'sync_failed' | 'failed' | 'deleted';
@@ -230,8 +232,10 @@ export async function POST(
     },
   });
 
-  revalidatePath(`/office/commesse/${ref.commessa_id}`);
-  revalidatePath(`/mobile/commessa/${ref.commessa_id}`);
+  if (ref.commessa_id) {
+    revalidatePath(`/office/commesse/${ref.commessa_id}`);
+    revalidatePath(`/mobile/commessa/${ref.commessa_id}`);
+  }
 
   // 10. Lavoro in background GARANTITO con waitUntil.
   // Senza waitUntil, su Vercel la function viene congelata appena ritorna la
@@ -254,7 +258,15 @@ export async function POST(
   // ugualmente uccidibile). syncOneFile fa claim atomico, quindi è safe anche
   // se il cron-backstop gira in parallelo. R2 NON viene mai toccato qui: resta
   // il source of truth.
-  waitUntil(syncOneFile(ref.id).catch(() => {}));
+  //
+  // ECCEZIONE bozze: i file in staging di una bozza (bozza_id valorizzato,
+  // commessa_id NULL) NON vanno su Nextcloud finché la commessa non è
+  // ufficializzata. La cartella vera non esiste ancora; il sync avverrà
+  // alla finalizzazione (finalizzaBozza ri-aggancia il file e lo rimette in
+  // stato 'uploaded' con il path Nextcloud reale).
+  if (!ref.bozza_id) {
+    waitUntil(syncOneFile(ref.id).catch(() => {}));
+  }
 
   return Response.json({
     ok: true,
