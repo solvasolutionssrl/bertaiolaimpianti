@@ -4,6 +4,7 @@ import { Button, Input } from '@kommessa/ui';
 import { Briefcase, FolderPlus, Plus, Search } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';
+import { BozzeDaCompletare } from '../../_components/bozze-da-completare';
 import {
   CommesseListClient,
   type CommessaRow,
@@ -130,6 +131,8 @@ export default async function CommessePage({
           </Button>
         }
       />
+
+      <BozzeDaCompletare resumeBase="/office/commesse/nuova" variant="office" />
 
       <form method="GET" className="space-y-3">
         <div className="relative">

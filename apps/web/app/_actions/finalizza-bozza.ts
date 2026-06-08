@@ -38,7 +38,13 @@ import { syncOneFile } from '../_lib/sync-r2-to-nextcloud';
  */
 
 export type FinalizzaBozzaResult =
-  | { ok: true; commessaId: string; codiceInterno: string; nomeCartella: string }
+  | {
+      ok: true;
+      commessaId: string;
+      codiceInterno: string;
+      nomeCartella: string;
+      cloudFolderPath: string;
+    }
   | { ok: false; error: string };
 
 interface BozzaRow {
@@ -86,16 +92,22 @@ export async function finalizzaBozza(
   if (bozza.stato === 'finalizzata' && bozza.commessa_id) {
     const { data: comRaw } = await supabase
       .from('commesse')
-      .select('id, codice_interno, nome_cartella')
+      .select('id, codice_interno, nome_cartella, cloud_folder_path')
       .eq('id', bozza.commessa_id)
       .maybeSingle();
-    const com = comRaw as { id: string; codice_interno: string; nome_cartella: string } | null;
+    const com = comRaw as {
+      id: string;
+      codice_interno: string;
+      nome_cartella: string;
+      cloud_folder_path: string | null;
+    } | null;
     if (com) {
       return {
         ok: true,
         commessaId: com.id,
         codiceInterno: com.codice_interno,
         nomeCartella: com.nome_cartella,
+        cloudFolderPath: com.cloud_folder_path ?? '',
       };
     }
   }
@@ -141,7 +153,7 @@ export async function finalizzaBozza(
     .update({ stato: 'finalizzata', commessa_id: commessaId } as never)
     .eq('id', bozzaId);
 
-  return { ok: true, commessaId, codiceInterno, nomeCartella };
+  return { ok: true, commessaId, codiceInterno, nomeCartella, cloudFolderPath };
 }
 
 /**

@@ -36,12 +36,13 @@ import {
 } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
 
-import { creaCommessa } from '../../../../_actions/crea-commessa';
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
 import { camelCaseToWords } from '../../../../_lib/camel-to-words';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
 import { uploadMediaBatch, type UploadProgressMap } from '../_lib/upload-media';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
+import { useBozzaDraft } from '../../../../_lib/bozze/use-bozza-draft';
+import type { BozzaPayload } from '../../../../_lib/bozze/types';
 
 // ---------------------------------------------------------------------
 // Types
@@ -115,6 +116,51 @@ function initialState(vociDefault: number[]): FormState {
   };
 }
 
+/** Mappa lo stato del form nel payload bozza (= input di creaCommessa). */
+function buildBozzaPayload(state: FormState, vociDefault: number[]): BozzaPayload {
+  const hasId = Boolean(state.cliente.id);
+  return {
+    clienteId: state.cliente.id,
+    clienteNew: hasId
+      ? undefined
+      : {
+          ragione_sociale: state.cliente.ragione_sociale,
+          tipo: state.cliente.tipo,
+          indirizzo: state.cliente.indirizzo || null,
+          citta: state.cliente.citta || null,
+          telefoni: state.cliente.telefono ? [state.cliente.telefono] : [],
+          email: state.cliente.email ? [state.cliente.email] : [],
+          note: null,
+        },
+    voci: [...state.voci].filter((id) => !vociDefault.includes(id)),
+    descrizioneFinale: state.descrizione.trim(),
+    noteIniziali: state.note || null,
+    indirizzoCantiere: state.indirizzoCantiere || null,
+    presetId: state.presetId || null,
+    _clienteLabel: state.cliente.ragione_sociale || undefined,
+  };
+}
+
+/** Ricostruisce lo stato del form da un payload bozza (resume). */
+function seedFromPayload(p: BozzaPayload, vociDefault: number[]): FormState {
+  return {
+    cliente: {
+      id: p.clienteId,
+      ragione_sociale: p.clienteNew?.ragione_sociale ?? p._clienteLabel ?? '',
+      tipo: p.clienteNew?.tipo ?? 'persona_fisica',
+      indirizzo: p.clienteNew?.indirizzo ?? '',
+      citta: p.clienteNew?.citta ?? '',
+      telefono: p.clienteNew?.telefoni?.[0] ?? '',
+      email: p.clienteNew?.email?.[0] ?? '',
+    },
+    voci: new Set<number>([...vociDefault, ...((p.voci as number[] | undefined) ?? [])]),
+    presetId: p.presetId ?? '',
+    descrizione: p.descrizioneFinale ?? '',
+    note: p.noteIniziali ?? '',
+    indirizzoCantiere: p.indirizzoCantiere ?? '',
+  };
+}
+
 const CATEGORIA_LABEL: Record<string, string> = {
   sempre_attiva: 'Sempre attiva (base)',
   impiantistica: 'Impiantistica',
@@ -134,9 +180,12 @@ const CATEGORIA_LABEL: Record<string, string> = {
 export function NuovaCommessaForm({
   voci,
   preset,
+  resumeBozzaId,
 }: {
   voci: VoceItem[];
   preset: PresetItem[];
+  /** Se valorizzato: riprende una bozza esistente (sezione "Da completare"). */
+  resumeBozzaId?: string;
 }) {
   const router = useRouter();
   const vociDefault = React.useMemo(
@@ -144,6 +193,20 @@ export function NuovaCommessaForm({
     [voci],
   );
   const [state, setState] = React.useState<FormState>(() => initialState(vociDefault));
+
+  // Bozza offline-first: autosave locale + sync server, finalizzazione esplicita.
+  const draft = useBozzaDraft({ bozzaId: resumeBozzaId });
+  const {
+    save: saveDraft,
+    finalize: finalizeDraft,
+    ready: draftReady,
+    loadedPayload: draftLoaded,
+    numeroBozza,
+    syncState,
+  } = draft;
+  // Ref allo stato corrente: usata da callback con deps stabili (es. dettato).
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
   const [submitting, setSubmitting] = React.useState(false);
   const [genPending, setGenPending] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -229,6 +292,22 @@ export function NuovaCommessaForm({
     }, 200);
     return () => clearTimeout(handle);
   }, [state.cliente.ragione_sociale, state.cliente.id, cercaClienti]);
+
+  // -------- Bozza: resume (seed) + autosave --------
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (draftReady && draftLoaded && !seededRef.current) {
+      seededRef.current = true;
+      setState(seedFromPayload(draftLoaded, vociDefault));
+    }
+  }, [draftReady, draftLoaded, vociDefault]);
+
+  React.useEffect(() => {
+    if (!draftReady) return;
+    if (success) return; // dopo la finalizzazione non risalviamo la bozza
+    saveDraft(buildBozzaPayload(state, vociDefault));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, draftReady, saveDraft, vociDefault]);
 
   const selezionaCliente = (c: ClienteSuggest) => {
     setState((s) => ({
@@ -331,6 +410,16 @@ export function NuovaCommessaForm({
           previewReason: data._previewReason,
           model: data._model,
         });
+        // CRITICO: persisti SUBITO il dettato nella bozza, prima ancora che
+        // l'utente clicchi "Applica". Così se cade la rete o chiude l'app,
+        // il transcript è già al sicuro (locale + sync server).
+        const cur = stateRef.current;
+        saveDraft(
+          buildBozzaPayload(
+            { ...cur, note: cur.note.trim() ? cur.note : data.transcript },
+            vociDefault,
+          ),
+        );
       } catch (e) {
         setVoiceError(
           e instanceof Error ? e.message : 'Errore durante la trascrizione',
@@ -341,7 +430,7 @@ export function NuovaCommessaForm({
         void durationSec;
       }
     },
-    [],
+    [saveDraft, vociDefault],
   );
 
   const applicaSuggerimenti = (s: VoiceSuggested) => {
@@ -426,45 +515,34 @@ export function NuovaCommessaForm({
 
     setSubmitting(true);
     try {
-      // Fase 1: crea commessa
-      const result = await creaCommessa({
-        clienteId: state.cliente.id,
-        clienteNew: state.cliente.id
-          ? undefined
-          : {
-              ragione_sociale: state.cliente.ragione_sociale,
-              tipo: state.cliente.tipo,
-              indirizzo: state.cliente.indirizzo || null,
-              citta: state.cliente.citta || null,
-              telefoni: state.cliente.telefono ? [state.cliente.telefono] : [],
-              email: state.cliente.email ? [state.cliente.email] : [],
-              note: null,
-            },
-        voci: [...state.voci].filter((id) => !vociDefault.includes(id)),
-        descrizioneFinale: state.descrizione.trim(),
-        // state.note è la versione AI-sistemata (popolata da applicaSuggerimenti).
-        // Salvarla come note_iniziali — il dettato grezzo non lo conserviamo.
-        noteIniziali: state.note || null,
-        indirizzoCantiere: state.indirizzoCantiere || null,
-        presetId: state.presetId || null,
-      });
+      // Fase 1: finalizza la bozza → commessa ufficiale (codice gapless,
+      // cartelle, cliente/dedup, voci, referenti). La bozza ha già fatto da
+      // rete di sicurezza per tutto ciò che l'utente ha digitato/dettato.
+      const result = await finalizeDraft(buildBozzaPayload(state, vociDefault));
 
       if (!result.ok) {
         setError(result.error);
         return;
       }
 
-      // Fase 2: comprimi + carica allegati in parallelo con progresso reale
+      // Fase 2: comprimi + carica allegati in parallelo con progresso reale,
+      // sull'id reale appena ottenuto.
       if (mediaFiles.length > 0) {
         const batchResults = await uploadMediaBatch(
           mediaFiles,
-          result.data.commessaId,
+          result.commessaId,
           (progress) => setUploadProgress(new Map(progress)),
         );
         setUploadResults(batchResults.map((r) => ({ name: r.name, ok: r.ok })));
       }
 
-      setSuccess(result.data);
+      setSuccess({
+        commessaId: result.commessaId,
+        codiceInterno: result.codiceInterno,
+        nomeCartella: result.nomeCartella,
+        cloudFolderPath: result.cloudFolderPath,
+        codiceCliente: '',
+      });
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Creazione commessa fallita');
@@ -1187,6 +1265,28 @@ export function NuovaCommessaForm({
               )}
             </span>
           )}
+          {!submitting && syncState !== 'idle' ? (
+            <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+              <span
+                className={
+                  'h-1.5 w-1.5 rounded-full ' +
+                  (syncState === 'synced'
+                    ? 'bg-success'
+                    : syncState === 'pending'
+                      ? 'bg-primary animate-pulse'
+                      : 'bg-warning')
+                }
+                aria-hidden
+              />
+              {syncState === 'synced'
+                ? `Bozza salvata${numeroBozza ? ` · #${numeroBozza}` : ''}`
+                : syncState === 'pending'
+                  ? 'Salvataggio…'
+                  : syncState === 'offline'
+                    ? 'Offline · salvata sul dispositivo'
+                    : 'Salvataggio in sospeso'}
+            </span>
+          ) : null}
           <div className="ml-auto flex items-center gap-2">
             <Button asChild type="button" variant="ghost" disabled={submitting}>
               <Link href="/office/commesse">Annulla</Link>

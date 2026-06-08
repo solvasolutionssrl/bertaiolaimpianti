@@ -26,7 +26,8 @@ import {
   VoiceReview,
   type VoiceReviewData,
 } from '../../../_components/voice-review';
-import { creaCommessa } from '../../../_actions/crea-commessa';
+import { useBozzaDraft } from '../../../_lib/bozze/use-bozza-draft';
+import type { BozzaPayload } from '../../../_lib/bozze/types';
 import {
   MediaAttachSection,
   type MediaFile,
@@ -46,6 +47,64 @@ export interface VoceOption {
 interface FlowProps {
   voci: VoceOption[];
   vociDefault: number[];
+  /** Se valorizzato: riprende una bozza esistente. */
+  resumeBozzaId?: string;
+}
+
+/** VoiceReviewData → payload bozza (= input di creaCommessa). */
+function reviewToPayload(
+  d: VoiceReviewData,
+  transcript: string,
+  vociDefault: number[],
+): BozzaPayload {
+  return {
+    clienteId: undefined, // il flow voce crea sempre un nuovo cliente
+    clienteNew: {
+      ragione_sociale: d.ragione_sociale?.trim() ?? '',
+      tipo: d.tipo ?? 'persona_fisica',
+      indirizzo: d.indirizzo || null,
+      citta: d.citta || null,
+      telefoni: d.telefono ? [d.telefono] : [],
+      email: d.email ? [d.email] : [],
+      note: d.note || null,
+    },
+    voci: (d.voci_ids ?? []).filter((id) => !vociDefault.includes(id)),
+    descrizioneFinale: (d.descrizione ?? '').trim(),
+    noteIniziali: (d.note?.trim() || transcript?.trim()) || null,
+    indirizzoCantiere: d.indirizzo || null,
+    referenti:
+      Array.isArray(d.referenti) && d.referenti.length > 0
+        ? d.referenti
+            .filter((r) => r.nome && r.nome.trim().length > 0)
+            .map((r) => ({
+              nome: r.nome.trim(),
+              ruolo: r.ruolo?.trim() || null,
+              telefono: r.telefono?.trim() || null,
+              email: r.email?.trim() || null,
+            }))
+        : undefined,
+  };
+}
+
+/** payload bozza → VoiceReviewData (resume). */
+function payloadToReview(p: BozzaPayload): VoiceReviewData {
+  return {
+    ragione_sociale: p.clienteNew?.ragione_sociale,
+    tipo: p.clienteNew?.tipo,
+    telefono: p.clienteNew?.telefoni?.[0],
+    email: p.clienteNew?.email?.[0],
+    indirizzo: p.clienteNew?.indirizzo ?? undefined,
+    citta: p.clienteNew?.citta ?? undefined,
+    voci_ids: (p.voci as number[] | undefined) ?? [],
+    descrizione: p.descrizioneFinale,
+    note: p.noteIniziali ?? undefined,
+    referenti: p.referenti?.map((r) => ({
+      nome: r.nome,
+      ruolo: r.ruolo ?? undefined,
+      telefono: r.telefono ?? undefined,
+      email: r.email ?? undefined,
+    })),
+  };
 }
 
 type Phase =
@@ -78,13 +137,38 @@ const SUGGESTION_EXAMPLES = [
   'Sono dalla ditta Edilizia Tre, cantiere a Conegliano via Industria 22, dobbiamo fare pavimento radiante e centrale termica per un duplex nuovo, superbonus.',
 ];
 
-export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
+export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps) {
   const router = useRouter();
   const [state, setState] = React.useState<IntakeState>({
     phase: 'record',
     transcript: '',
     data: {},
   });
+
+  // Bozza offline-first: il dettato e i campi vengono salvati subito.
+  const draft = useBozzaDraft({ bozzaId: resumeBozzaId });
+  const {
+    save: saveDraft,
+    finalize: finalizeDraft,
+    ready: draftReady,
+    loadedPayload: draftLoaded,
+  } = draft;
+  const transcriptRef = React.useRef('');
+  transcriptRef.current = state.transcript;
+
+  // Resume: ripristina la bozza esistente in fase di revisione.
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (draftReady && draftLoaded && !seededRef.current) {
+      seededRef.current = true;
+      setState({
+        phase: 'review',
+        transcript: draftLoaded.noteIniziali ?? '',
+        data: payloadToReview(draftLoaded),
+        error: null,
+      });
+    }
+  }, [draftReady, draftLoaded]);
   const [tipsOpen, setTipsOpen] = React.useState(false);
   const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
   const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
@@ -149,6 +233,12 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         previewReason: data._preview ? data._previewReason : undefined,
         error: null,
       });
+      // CRITICO: salva SUBITO dettato + campi estratti nella bozza. Se la rete
+      // cade o l'utente chiude l'app prima di confermare, nulla va perso e può
+      // riprendere dalla sezione "Da completare".
+      saveDraft(
+        reviewToPayload(data.suggested ?? {}, data.transcript, vociDefault),
+      );
     } catch (e) {
       setState((s) => ({
         ...s,
@@ -176,6 +266,8 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
   // ---------- Schermo 2 → 3: Conferma e procedi al final ----------
   const handleReviewConfirm = (data: VoiceReviewData) => {
     setState((s) => ({ ...s, data, phase: 'confirm' }));
+    // Persisti i campi rivisti/confermati nella bozza.
+    saveDraft(reviewToPayload(data, transcriptRef.current, vociDefault));
   };
 
   // ---------- Schermo 3: Crea commessa ----------
@@ -199,46 +291,16 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
 
     setState((s) => ({ ...s, phase: 'creating', error: null }));
     try {
-      // Voci finali: sempre includi le default (Sezione A) + quelle estratte/confermate
-      const vociFromAi = (d.voci_ids ?? []).filter(
-        (id) => !vociDefault.includes(id),
+      // Finalizza la bozza → commessa ufficiale. La bozza ha già fatto da
+      // rete di sicurezza per dettato e campi rivisti.
+      const res = await finalizeDraft(
+        reviewToPayload(d, transcriptRef.current, vociDefault),
       );
-
-      const res = await creaCommessa({
-        clienteId: undefined, // sempre nuovo cliente nel flow voice (può cercare in seguito)
-        clienteNew: {
-          ragione_sociale: d.ragione_sociale.trim(),
-          tipo: d.tipo ?? 'persona_fisica', // dedotto da AI (azienda se trova S.r.l./Comune di/ecc.)
-          indirizzo: d.indirizzo || null,
-          citta: d.citta || null,
-          telefoni: d.telefono ? [d.telefono] : [],
-          email: d.email ? [d.email] : [],
-          note: d.note || null,
-        },
-        voci: vociFromAi,
-        descrizioneFinale: d.descrizione.trim(),
-        // Note iniziali = versione sistemata dall'AI (d.note), non il
-        // transcript Whisper grezzo. Se manca la versione AI (raro: preview
-        // mode senza API key), fallback sul transcript per non perdere dati.
-        noteIniziali: (d.note?.trim() || state.transcript?.trim()) || null,
-        indirizzoCantiere: d.indirizzo || null,
-        // Ondata 4: referenti del cliente estratti dall'AI (max 5).
-        referenti: Array.isArray(d.referenti) && d.referenti.length > 0
-          ? d.referenti
-              .filter((r) => r.nome && r.nome.trim().length > 0)
-              .map((r) => ({
-                nome: r.nome.trim(),
-                ruolo: r.ruolo?.trim() || null,
-                telefono: r.telefono?.trim() || null,
-                email: r.email?.trim() || null,
-              }))
-          : undefined,
-      });
       if (!res.ok) {
         setState((s) => ({ ...s, phase: 'confirm', error: res.error }));
         return;
       }
-      const commessaId = res.data.commessaId;
+      const commessaId = res.commessaId;
 
       // Upload foto/video se presenti
       if (mediaFiles.length > 0) {
@@ -260,10 +322,10 @@ export function VoiceIntakeFlow({ voci, vociDefault }: FlowProps) {
         ...s,
         phase: 'done',
         result: {
-          commessaId: res.data.commessaId,
-          codiceInterno: res.data.codiceInterno,
-          nomeCartella: res.data.nomeCartella,
-          cloudFolderPath: res.data.cloudFolderPath,
+          commessaId: res.commessaId,
+          codiceInterno: res.codiceInterno,
+          nomeCartella: res.nomeCartella,
+          cloudFolderPath: res.cloudFolderPath,
         },
         error: null,
       }));
