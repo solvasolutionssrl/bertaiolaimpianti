@@ -28,6 +28,7 @@ import {
 } from '../../../_components/voice-review';
 import { useBozzaDraft } from '../../../_lib/bozze/use-bozza-draft';
 import { useBozzaMedia } from '../../../_lib/bozze/use-bozza-media';
+import { useOnline } from '../../../_lib/use-online';
 import type { BozzaPayload } from '../../../_lib/bozze/types';
 import {
   MediaAttachSection,
@@ -158,6 +159,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
     stage: stageMedia,
     finalizeMedia,
   } = useBozzaMedia(bozzaId, flushDraft);
+  const online = useOnline();
   const transcriptRef = React.useRef('');
   transcriptRef.current = state.transcript;
 
@@ -424,11 +426,24 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
       {/* -------- Phase RECORD -------- */}
       {state.phase === 'record' ? (
         <section className="flex flex-1 flex-col items-center justify-center gap-6 py-8">
+          {!online ? (
+            <div
+              role="status"
+              className="w-full max-w-xs rounded-xl border border-amber-300/60 bg-amber-50/80 px-4 py-3 text-center text-sm text-amber-900"
+            >
+              <p className="font-semibold">Sei offline</p>
+              <p className="mt-0.5 text-xs leading-snug text-amber-800/90">
+                La dettatura con AI funziona solo con la connessione. Riprova
+                quando torni online: puoi uscire e rientrare più tardi.
+              </p>
+            </div>
+          ) : null}
           <VoiceRecorder
             onRecorded={handleRecorded}
             maxDurationSec={180}
             size="xl"
             showWaveform
+            disabled={!online}
           />
           <p className="max-w-xs text-center text-sm text-muted-foreground">
             Tap per iniziare. Parla con calma di{' '}

@@ -42,6 +42,7 @@ import { VoiceRecorder } from '../../../../_components/voice-recorder';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
 import { useBozzaDraft } from '../../../../_lib/bozze/use-bozza-draft';
 import { useBozzaMedia } from '../../../../_lib/bozze/use-bozza-media';
+import { useOnline } from '../../../../_lib/use-online';
 import type { BozzaPayload } from '../../../../_lib/bozze/types';
 
 // ---------------------------------------------------------------------
@@ -215,6 +216,7 @@ export function NuovaCommessaForm({
     stage: stageMedia,
     finalizeMedia,
   } = useBozzaMedia(bozzaId, flushDraft);
+  const online = useOnline();
   // Ref allo stato corrente: usata da callback con deps stabili (es. dettato).
   const stateRef = React.useRef(state);
   stateRef.current = state;
@@ -689,9 +691,19 @@ export function NuovaCommessaForm({
 
           {!voiceResult ? (
             <div className="space-y-3">
+              {!online ? (
+                <p
+                  role="status"
+                  className="rounded-md border border-amber-300/60 bg-amber-50/80 px-3 py-2 text-sm text-amber-900"
+                >
+                  <strong>Sei offline.</strong> Il riconoscimento AI della voce
+                  non è disponibile senza connessione: compila i campi a mano,
+                  oppure registra quando torni online.
+                </p>
+              ) : null}
               <VoiceRecorder
                 onRecorded={handleVoiceRecorded}
-                disabled={voicePending !== 'idle'}
+                disabled={voicePending !== 'idle' || !online}
                 maxDurationSec={180}
               />
               {voicePending !== 'idle' ? (
