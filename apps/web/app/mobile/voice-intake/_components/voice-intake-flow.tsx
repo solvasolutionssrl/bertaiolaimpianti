@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ChevronLeft,
+  ArrowLeft,
   Loader2,
   Sparkles,
   Lightbulb,
@@ -348,7 +348,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           aria-label="Torna indietro"
         >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           Indietro
         </button>
         <div>
@@ -635,7 +635,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
                 )}
                 {uploadResults.filter((r) => !r.ok).length > 0 && (
                   <span className="ml-2 text-destructive">
-                    {uploadResults.filter((r) => !r.ok).length} falliti — riprova dalla commessa
+                    {uploadResults.filter((r) => !r.ok).length} falliti, riprova dalla commessa
                   </span>
                 )}
               </p>

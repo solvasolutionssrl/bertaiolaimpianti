@@ -18,6 +18,7 @@ import { elencaTagTenant } from '../../../_actions/commessa-tag';
 import { TagEditor } from '../../../_components/tag-editor';
 import { ClienteEditDialog } from './_components/cliente-edit-dialog';
 import { CommessaEditDialog } from './_components/commessa-edit-dialog';
+import { DettagliEdit } from '../../../_components/dettagli-edit';
 import {
   ContattiEditor,
   type ContattoRow,
@@ -120,6 +121,37 @@ export default async function AnagraficaTab({
               </p>
             ) : null}
           </CardContent>
+        </Card>
+      ) : null}
+
+      {/* DETTAGLI / nota del capo (note_iniziali) — stessa info che il
+          tecnico vede in PWA. Prima mancava lato office: ora è subito
+          visibile appena si entra, editabile dagli admin con DettagliEdit. */}
+      {(c.note_iniziali || ctx.role === 'admin') ? (
+        <Card className="relative border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/10">
+          <CardHeader className="px-4 pb-2 pt-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <HardHat className="h-3.5 w-3.5" aria-hidden="true" />
+              Dettagli
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-3">
+            {c.note_iniziali ? (
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90">
+                {c.note_iniziali}
+              </p>
+            ) : (
+              <p className="text-sm italic text-muted-foreground">
+                Nessuna nota. Usa la matita per aggiungere il contesto del
+                lavoro, visibile ai tecnici in cantiere.
+              </p>
+            )}
+          </CardContent>
+          <DettagliEdit
+            commessaId={params.id}
+            initial={c.note_iniziali ?? null}
+            canEdit={ctx.role === 'admin'}
+          />
         </Card>
       ) : null}
 

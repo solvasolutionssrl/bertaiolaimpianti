@@ -521,7 +521,7 @@ export function NuovaCommessaForm({
 
     if (Object.keys(newFieldErrors).length > 0) {
       setFieldErrors(newFieldErrors);
-      setError('Mancano dei campi obbligatori — controlla i campi evidenziati');
+      setError('Mancano dei campi obbligatori: controlla i campi evidenziati');
       const firstError = newFieldErrors.ragione_sociale ? ragioneRef : descrizioneRef;
       requestAnimationFrame(() => {
         firstError.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -692,14 +692,17 @@ export function NuovaCommessaForm({
           {!voiceResult ? (
             <div className="space-y-3">
               {!online ? (
-                <p
+                <div
                   role="status"
-                  className="rounded-md border border-amber-300/60 bg-amber-50/80 px-3 py-2 text-sm text-amber-900"
+                  className="rounded-md border border-amber-300/60 bg-amber-50/80 px-3 py-2 text-amber-900"
                 >
-                  <strong>Sei offline.</strong> Il riconoscimento AI della voce
-                  non è disponibile senza connessione: compila i campi a mano,
-                  oppure registra quando torni online.
-                </p>
+                  <p className="text-sm font-semibold">Sei offline</p>
+                  <p className="mt-0.5 text-xs leading-snug text-amber-800/90">
+                    La dettatura con AI funziona solo con la connessione. Puoi
+                    compilare i campi a mano, oppure registrare quando torni
+                    online.
+                  </p>
+                </div>
               ) : null}
               <VoiceRecorder
                 onRecorded={handleVoiceRecorded}
