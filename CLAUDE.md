@@ -23,7 +23,7 @@ This is the working repo for the **Bertaiola Impianti × SOLVA (Kommessa)** proj
 1. **Codice di prodotto** (sviluppo attivo):
    - `apps/web/` — Next.js 14 App Router (3 superfici sotto un solo app: `office/`, `mobile/`, `portal/`)
    - `packages/api/`, `packages/ui/`, `packages/integrations/` — pacchetti workspace (`@kommessa/*`)
-   - `supabase/migrations/` — schema versionato (49 migrazioni applicate al cloud al 28/05/2026)
+   - `supabase/migrations/` — schema versionato (55 migrazioni applicate al cloud al 18/06/2026)
    - `supabase/functions/` — Edge Functions (Deno)
    - `scripts/` — script operativi (es. `reset-tenant-data.mjs`, `freshdesk-migration`)
 2. **Documentazione di prodotto** sotto `documentazione_generale/` — kickoff, architettura, brand, roadmap, mockup, preventivo, presentazioni.
@@ -41,6 +41,20 @@ Le gallerie immagini (PWA mobile, office riunioni, foto-tab) servono **thumb 400
 - **Video**: NON gestiti (`sharp` non li supporta). Restano su `<video preload="metadata">`. Futuro: ffmpeg-server o frame extraction client-side.
 
 > **Display titolo commessa**: nelle UI non mostrare mai `nome_cartella` raw (è la directory Nextcloud nel formato `{codice}_{cliente}_{lavoro}`). Usare sempre `risolviTitoloCommessa()` da `apps/web/app/_lib/commessa-display.ts` che pesca da `descrizione_ai_finale → proposta → note_iniziali` con fallback estrattivo da nome_cartella (CamelCase → spazi).
+
+### Modifica commessa, versioning e tipologie (dal 18/06/2026, migration 20260618000000)
+
+La modifica di una commessa finalizzata riapre il flusso di creazione:
+
+- **Desktop**: pagina `/office/commesse/[id]/modifica` (editor globale completo). Il bottone "Modifica" sulla scheda apre questa pagina; il vecchio mini-dialog a 3 campi è stato rimosso.
+- **PWA**: wizard `/mobile/commessa/[id]/modifica` a 3 step (Dati → Tipologie → Conferma), precompilato, con dettatura vocale **opzionale** (merge non distruttivo via `/api/voice/extract`). Solo `admin`/`office`.
+- **Action**: `aggiornaCommessaCompleta` (`apps/web/app/_actions/aggiorna-commessa-completa.ts`). UI condivisa: `apps/web/app/_components/commessa-editor/`.
+
+> **Regola ferrea (editor + versioning + tipologie)**: `codice_interno`, `nome_cartella`, `cloud_folder_path` NON si toccano MAI (rinominare romperebbe i file su Nextcloud — dirlo in UI). Le voci/tipologie sono **append-only**: si aggiungono soltanto, mai si rimuovono (le cartelle sono fisiche). La modifica è **online-only** (serve il server per versioning + provisioning cartelle).
+
+**Versioning** — tabella `commessa_versioni` (snapshot jsonb + diff + `modificato_da`/`modificato_da_nome` + `azione` ∈ creazione|modifica|aggiunta_tipologie|ripristino). La versione 1 è scritta da `creaCommessa` (hook best-effort); le esistenti hanno v1 da backfill (`scripts/backfill-versioni-v1.mjs`). Storico nella tab **Cronologia** office. **Ripristino solo superadmin** (`ripristinaVersione`, content-only — mai voci/cartelle), gating `isSuperadminActor()` da `admin/_lib/guard` che riconosce anche l'impersonation (cookie `shadow_admin`). Helper: `_lib/versioni/snapshot.ts`, `_actions/_lib/scrivi-versione.ts`.
+
+**Tipologie impianto** ("cosa si fa") — sono un **elemento master nella sidebar** office (`commessa-sidebar.tsx` → `tipologie-panel.tsx`), NON nella tab Fasi (che monitora l'avanzamento). Azione rapida `AggiungiTipologieDialog` (append-only, conferma con avviso "creerà le cartelle su Nextcloud") disponibile in sidebar office, scheda mobile ed editor. Action `aggiungiTipologie`; provisioning condiviso `_actions/_lib/provisiona-cartelle.ts` + `_actions/_lib/aggiungi-voci.ts`. NB: anche `aggiungiVoce` della tab Fasi ora provisiona le cartelle (prima inseriva solo la riga DB).
 
 Working language for the app UI is **Italian**. Preserve it.
 
