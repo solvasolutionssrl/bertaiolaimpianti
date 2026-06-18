@@ -76,7 +76,8 @@ export type ModificatoDopoInvioRow = {
 // ---- helpers -----------------------------------------------------------
 
 function toYYYYMMDD(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Giorno calendario in Europe/Rome (il server gira UTC): en-CA → YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
 }
 
 function defaultRange(): { from: string; to: string } {

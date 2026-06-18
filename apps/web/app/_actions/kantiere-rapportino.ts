@@ -409,5 +409,5 @@ export async function inviaMioRapportino(
   return { ok: true };
 }
 
-// F: approvaRapportino / respingiRapportino (stub Fase F — gated office/admin)
-// Lasciati come TODO; la UI di approvazione completa è fuori scope E3.
+// Approvazione/respinta/riapertura rapportini: implementate lato ufficio in
+// `app/office/_actions/kantiere-rapportini.ts` (Fase F), gated office/admin.
