@@ -17,7 +17,8 @@ type RapportinoRow = {
 type RigaRow = {
   id: string;
   rapportino_id: string;
-  commessa_id: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -28,6 +29,7 @@ type TimbratureRow = {
   id: string;
   dipendente_id: string;
   commessa_id: string | null;
+  cantiere_id: string | null;
   tipo: string;
   ts: string;
   origine: string | null;
@@ -48,8 +50,26 @@ type CommessaRow = {
   note_iniziali: string | null;
 };
 
+type CantiereRow = {
+  id: string;
+  nome: string;
+  codice: string | null;
+};
+
+/** Etichetta display: titolo commessa o nome cantiere */
+function targetLabel(
+  row: { commessa_id: string | null; cantiere_id: string | null },
+  commesseTitoloMap: Map<string, string>,
+  cantieriNomeMap: Map<string, string>,
+): string {
+  if (row.commessa_id) return commesseTitoloMap.get(row.commessa_id) ?? row.commessa_id;
+  if (row.cantiere_id) return cantieriNomeMap.get(row.cantiere_id) ?? row.cantiere_id;
+  return '';
+}
+
 function toYYYYMMDD(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Giorno calendario in Europe/Rome (il server gira UTC): en-CA → YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
 }
 
 function defaultRange(): { from: string; to: string } {
@@ -110,12 +130,13 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('id, rapportino_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
+      .select('id, rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     righeData = data ?? [];
   }
 
-  const commessaIdsFromRighe = [...new Set(righeData.map((r) => r.commessa_id))];
+  const commessaIdsFromRighe = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
+  const cantiereIdsFromRighe = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
   // Batch-load dipendenti (per display)
   const dipendentiMap = new Map<string, string>();
@@ -139,7 +160,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const tsTo = to + 'T23:59:59.999Z';
     const { data } = (await supabase
       .from('timbrature' as never)
-      .select('id, dipendente_id, commessa_id, tipo, ts, origine')
+      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine')
       .eq('tenant_id', ctx.tenantId)
       .in('dipendente_id', dipIds)
       .gte('ts', tsFrom)
@@ -151,8 +172,12 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     }
   }
 
-  // All commessa IDs (righe + timbrature)
-  const allCommessaIds = [...new Set([...commessaIdsFromRighe, ...timbratureCommessaIds])];
+  // All commessa IDs (righe + timbrature), nulls already filtered from righe; filter timbrature set too
+  const allCommessaIds = [...new Set([...commessaIdsFromRighe, ...timbratureCommessaIds])].filter((id): id is string => id != null);
+
+  // All cantiere IDs (righe + timbrature)
+  const cantiereIdsFromTimbrature = [...new Set([...timbratureData].map((t) => t.cantiere_id).filter((id): id is string => id != null))];
+  const allCantiereIds = [...new Set([...cantiereIdsFromRighe, ...cantiereIdsFromTimbrature])];
 
   // Batch-load commesse (per titolo)
   const commesseTitoloMap = new Map<string, string>();
@@ -174,6 +199,18 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     }
   }
 
+  // Batch-load cantieri (per nome)
+  const cantieriNomeMap = new Map<string, string>();
+  if (allCantiereIds.length > 0) {
+    const { data } = (await supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .in('id', allCantiereIds)) as { data: CantiereRow[] | null };
+    for (const k of data ?? []) {
+      cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
+    }
+  }
+
   // Bucket timbrature per `dipendente_id:YYYY-MM-DD`
   type TimbraturaItem = { tipo: string; ts: string; origine: string | null; commessaTitolo: string | null };
   const timbratureByKey = new Map<string, TimbraturaItem[]>();
@@ -181,11 +218,12 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const giorno = timbraturaGiorno(t.ts);
     const key = `${t.dipendente_id}:${giorno}`;
     const arr = timbratureByKey.get(key) ?? [];
+    const label = targetLabel(t, commesseTitoloMap, cantieriNomeMap);
     arr.push({
       tipo: t.tipo,
       ts: t.ts,
       origine: t.origine ?? null,
-      commessaTitolo: t.commessa_id ? (commesseTitoloMap.get(t.commessa_id) ?? null) : null,
+      commessaTitolo: label || null,
     });
     timbratureByKey.set(key, arr);
   }
@@ -221,7 +259,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       totale,
       nRighe: rr.length,
       righe: rr.map((x) => ({
-        commessaTitolo: commesseTitoloMap.get(x.commessa_id) ?? x.commessa_id,
+        commessaTitolo: targetLabel(x, commesseTitoloMap, cantieriNomeMap),
         ore_ordinarie: x.ore_ordinarie ?? 0,
         ore_straordinarie: x.ore_straordinarie ?? 0,
         ore_viaggio: x.ore_viaggio ?? 0,

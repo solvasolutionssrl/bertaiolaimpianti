@@ -94,7 +94,8 @@ export default async function CantiereDetailPage({ params }: PageProps) {
   const { count: scansioni } = await supabase
     .from('timbrature' as never)
     .select('*', { count: 'exact', head: true })
-    .eq('cantiere_id', params.id);
+    .eq('cantiere_id', params.id)
+    .eq('tenant_id', ctx.tenantId);
 
   // 7. Commesse disponibili per il link
   const { data: commesseRaw } = await supabase

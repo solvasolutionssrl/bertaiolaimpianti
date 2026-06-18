@@ -441,7 +441,7 @@ export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
                                       <table className="w-full text-xs">
                                         <thead>
                                           <tr className="text-left text-muted-foreground border-b border-border/40">
-                                            <th className="pb-1.5 pr-4 font-medium">Commessa</th>
+                                            <th className="pb-1.5 pr-4 font-medium">Commessa / Cantiere</th>
                                             <th className="pb-1.5 pr-3 font-medium text-right">Ord.</th>
                                             <th className="pb-1.5 pr-3 font-medium text-right">Straord.</th>
                                             <th className="pb-1.5 pr-3 font-medium text-right">Viaggio</th>
