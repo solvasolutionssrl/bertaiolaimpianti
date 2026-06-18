@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { etichettaAccesso, prossimoCodiceDipendente, puoTimbrarePer } from './kantiere';
+import { etichettaAccesso, prossimoCodiceDipendente, puoTimbrarePer, prossimoCodiceCantiere, targetTimbratura } from './kantiere';
 
 describe('etichettaAccesso', () => {
   it('Con accesso se ha user_id', () => {
@@ -33,4 +33,31 @@ describe('puoTimbrarePer', () => {
     expect(puoTimbrarePer({ self: false, capoSquadra: true, bersaglioInSquadra: false })).toBe(false));
   it('estraneo → no', () =>
     expect(puoTimbrarePer({ self: false, capoSquadra: false, bersaglioInSquadra: true })).toBe(false));
+});
+
+describe('prossimoCodiceCantiere', () => {
+  it('primo codice CAN-001 su lista vuota', () => {
+    expect(prossimoCodiceCantiere([])).toBe('CAN-001');
+  });
+  it('incrementa il massimo esistente', () => {
+    expect(prossimoCodiceCantiere(['CAN-001', 'CAN-007', 'CAN-003'])).toBe('CAN-008');
+  });
+  it('ignora i codici non conformi e i null', () => {
+    expect(prossimoCodiceCantiere([null, 'X', 'CAN-002', undefined, 'DIP-009'])).toBe('CAN-003');
+  });
+});
+
+describe('targetTimbratura', () => {
+  it('cantiere quando cantiere_id valorizzato', () => {
+    expect(targetTimbratura({ commessa_id: null, cantiere_id: 'K1' })).toEqual({ tipo: 'cantiere', id: 'K1' });
+  });
+  it('commessa quando solo commessa_id', () => {
+    expect(targetTimbratura({ commessa_id: 'C1', cantiere_id: null })).toEqual({ tipo: 'commessa', id: 'C1' });
+  });
+  it('null quando nessuno', () => {
+    expect(targetTimbratura({ commessa_id: null, cantiere_id: null })).toBeNull();
+  });
+  it('preferisce cantiere se entrambi (difensivo)', () => {
+    expect(targetTimbratura({ commessa_id: 'C1', cantiere_id: 'K1' })).toEqual({ tipo: 'cantiere', id: 'K1' });
+  });
 });
