@@ -123,7 +123,7 @@ Superfici:
 - **Provisioning cartelle è best-effort**: l'add tipologie deve riuscire a livello DB anche se Nextcloud è momentaneamente giù (folder creation non-bloccante, come in creazione). Il messaggio UI deve restare onesto.
 - **Append-only voci**: nessun percorso (editor o quick action o restore) deve poter rimuovere voci.
 - **Migration prima del deploy** del codice che la usa (apply umano via `supabase db push`/`psql`).
-- **Snapshot v1 retroattivo**: le commesse esistenti non hanno versione 1. Opzione: backfill one-shot che scrive una versione `creazione` con lo stato attuale per le commesse esistenti (così lo storico non parte vuoto). Da confermare.
+- **Snapshot v1 retroattivo (CONFERMATO)**: backfill one-shot che scrive per ogni commessa esistente una versione 1 `creazione` con lo stato attuale come snapshot (`modificato_da` NULL / "sistema"). Eseguito sul DB di produzione in modo mirato e idempotente (solo per commesse senza versioni). Lo storico parte popolato.
 - **Test in produzione**: provare un edit reale + un'aggiunta tipologia + un ripristino, su una commessa di test, verificando che codice/nome cartella non cambino mai.
 
 ## Fuori scope (YAGNI)
