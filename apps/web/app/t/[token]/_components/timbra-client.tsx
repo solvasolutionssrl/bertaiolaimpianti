@@ -2,6 +2,7 @@
 
 import { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@kommessa/ui';
 import { timbra } from '@/app/_actions/kantiere-timbra';
 
@@ -207,9 +208,17 @@ export function TimbraClient({
           <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
             <p className="mb-1 text-sm text-muted-foreground">{me.nome}</p>
             {statoSelf?.tipo === 'ok' && (
-              <p className="mb-3 text-sm font-medium text-emerald-600">
-                {tipoSelfLabel} registrato alle {formatOra(statoSelf.ts)}
-              </p>
+              <div className="mb-3 space-y-2">
+                <p className="text-sm font-medium text-emerald-600">
+                  {tipoSelfLabel} registrato alle {formatOra(statoSelf.ts)}
+                </p>
+                <Link
+                  href="/mobile/ore"
+                  className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 active:scale-[0.98] transition-all"
+                >
+                  Le mie ore di oggi
+                </Link>
+              </div>
             )}
             {statoSelf?.tipo === 'errore' && (
               <p className="mb-3 text-sm text-destructive">{statoSelf.msg}</p>
