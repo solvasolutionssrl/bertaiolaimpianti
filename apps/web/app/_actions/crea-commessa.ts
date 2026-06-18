@@ -14,6 +14,8 @@ import {
   type CreaCommessaServerResult,
 } from './crea-commessa.schemas';
 import { provisionaCartelle } from './_lib/provisiona-cartelle';
+import { buildSnapshot } from '../_lib/versioni/snapshot';
+import { scriviVersione, nomeUtente } from './_lib/scrivi-versione';
 import {
   STATUS_FOLDER_RICHIESTE,
   ensureStatusFolders,
@@ -353,6 +355,34 @@ export async function creaCommessa(
       storage: storageResult,
     } as unknown as Json,
   });
+
+  // 9b) Versione 1 (creazione) — base dello storico. Best-effort: non blocca.
+  try {
+    const snapshotV1 = buildSnapshot(
+      {
+        descrizione_ai_finale: data.descrizioneFinale,
+        cliente_indirizzo_cantiere: data.indirizzoCantiere ?? null,
+        note_iniziali: data.noteIniziali?.trim() || null,
+        is_critica: false,
+        stato: 'aperta',
+        responsabile_id: ctx.userId,
+        cliente_id: clienteId,
+      },
+      data.referenti ?? [],
+    );
+    const nomeV1 = await nomeUtente(supabase, ctx.userId);
+    await scriviVersione(supabase, {
+      tenantId: ctx.tenantId,
+      commessaId: commessa.id,
+      snapshot: snapshotV1,
+      diff: [],
+      azione: 'creazione',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: nomeV1,
+    });
+  } catch (e) {
+    console.warn('[crea-commessa] scrittura versione 1 fallita (non-fatal):', e);
+  }
 
   // 10) Revalidate
   revalidatePath('/office/commesse');
