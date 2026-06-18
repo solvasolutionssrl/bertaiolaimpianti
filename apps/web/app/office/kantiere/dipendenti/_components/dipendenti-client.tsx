@@ -292,8 +292,13 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                   name="codice_interno"
                   value={form.codice_interno}
                   onChange={handleChange}
-                  placeholder="DIP-001"
+                  placeholder="Automatico (DIP-001…)"
                 />
+                {!form.id && (
+                  <p className="text-xs text-muted-foreground">
+                    Lascia vuoto per assegnazione automatica
+                  </p>
+                )}
               </div>
             </div>
 

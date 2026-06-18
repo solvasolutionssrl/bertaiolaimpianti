@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { prossimoCodiceDipendente } from '@kommessa/api/kantiere';
 
 const BaseSchema = z.object({
   nome: z.string().min(1).max(80),
@@ -30,6 +31,17 @@ export async function creaDipendente(input: unknown): Promise<Result> {
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
   const ctx = await guard();
   const supabase = createServerSupabase();
+
+  let codice = parsed.data.codice_interno?.trim() || null;
+  if (!codice) {
+    const { data: esistenti } = await supabase
+      .from('dipendenti' as never)
+      .select('codice_interno')
+      .eq('tenant_id', ctx.tenantId);
+    const codici = ((esistenti ?? []) as { codice_interno: string | null }[]).map((r) => r.codice_interno);
+    codice = prossimoCodiceDipendente(codici);
+  }
+
   const { data, error } = await supabase
     .from('dipendenti' as never)
     .insert({
@@ -37,7 +49,7 @@ export async function creaDipendente(input: unknown): Promise<Result> {
       nome: parsed.data.nome,
       cognome: parsed.data.cognome,
       mansione: parsed.data.mansione ?? null,
-      codice_interno: parsed.data.codice_interno ?? null,
+      codice_interno: codice,
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
       note: parsed.data.note ?? null,
