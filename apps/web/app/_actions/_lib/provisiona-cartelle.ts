@@ -38,13 +38,24 @@ export async function provisionaCartelle(opts: {
 }): Promise<StorageProvisionResult> {
   try {
     const service = createServiceSupabase();
-    const { data: tenant, error } = await service
+    const { data: tenant, error } = await (service
       .from('tenants')
-      .select('storage_provider, storage_config')
+      .select('storage_provider, storage_config, crea_cartelle' as never)
       .eq('id', opts.tenantId)
-      .maybeSingle();
+      .maybeSingle() as unknown as Promise<{
+        data: {
+          storage_provider: string | null;
+          storage_config: Record<string, string> | null;
+          crea_cartelle: boolean | null;
+        } | null;
+        error: unknown;
+      }>);
     if (error || !tenant) {
       return { provisioned: false, provider: 'none', reason: 'tenant_config_unreadable' };
+    }
+    // Tenant senza scaffold cartelle (es. solo-R2): provisioning no-op.
+    if (tenant.crea_cartelle === false) {
+      return { provisioned: false, provider: 'none', reason: 'crea_cartelle_off' };
     }
     const providerName = (tenant.storage_provider as StorageProviderName) ?? 'supabase';
     const cfg = (tenant.storage_config as Record<string, string> | null) ?? {};
