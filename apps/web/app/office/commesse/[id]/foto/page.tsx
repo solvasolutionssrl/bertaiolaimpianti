@@ -14,9 +14,16 @@ const MOMENTI = [
   { value: 'finale', label: 'Finali' },
 ] as const;
 
+const TIPI = [
+  { value: '', label: 'Tutti' },
+  { value: 'foto', label: 'Foto' },
+  { value: 'video', label: 'Video' },
+] as const;
+
 interface SearchParams {
   momento?: string;
   voce?: string;
+  tipo?: string;
 }
 
 export default async function FotoTab({
@@ -39,12 +46,19 @@ export default async function FotoTab({
       `,
     )
     .eq('commessa_id', params.id)
-    .or('mime.like.image/%,mime.like.video/%')
     .in('status', ['uploaded', 'syncing', 'synced', 'sync_failed'])
     .is('deleted_at', null)
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
+  // Filtro tipo: foto (image/%) o video (video/%); altrimenti entrambi.
+  if (searchParams.tipo === 'foto') {
+    q = q.like('mime', 'image/%');
+  } else if (searchParams.tipo === 'video') {
+    q = q.like('mime', 'video/%');
+  } else {
+    q = q.or('mime.like.image/%,mime.like.video/%');
+  }
   if (searchParams.momento) {
     q = q.eq('momento', searchParams.momento as any);
   }
@@ -102,6 +116,20 @@ export default async function FotoTab({
         className="flex flex-wrap items-center gap-2 text-sm"
       >
         <label className="text-xs uppercase tracking-wide text-muted-foreground">
+          Tipo
+        </label>
+        <select
+          name="tipo"
+          defaultValue={searchParams.tipo ?? ''}
+          className="h-9 rounded-md border border-input bg-background px-2"
+        >
+          {TIPI.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <label className="text-xs uppercase tracking-wide text-muted-foreground">
           Momento
         </label>
         <select
@@ -154,7 +182,13 @@ export default async function FotoTab({
           description="Foto e video vengono caricati dai tecnici tramite l'app mobile (PWA), tab Scatto, durante sopralluoghi e cantieri."
         />
       ) : (
-        <FotoGrid foto={foto} commessaId={params.id} canDelete={canDelete} />
+        <>
+          <p className="text-xs text-muted-foreground">
+            {foto.length} {foto.length === 1 ? 'elemento' : 'elementi'}
+            {foto.length === 60 ? ' (primi 60)' : ''}
+          </p>
+          <FotoGrid foto={foto} commessaId={params.id} canDelete={canDelete} />
+        </>
       )}
     </div>
   );
