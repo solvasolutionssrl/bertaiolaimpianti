@@ -428,7 +428,7 @@ function OfficeShell({
         {/* ===================== Sidebar (desktop) — cobalt-tinted ===================== */}
         <aside
           className={cn(
-            'sticky top-[4.125rem] hidden h-[calc(100vh-4.125rem)] shrink-0 flex-col justify-between border-r border-primary/15 transition-[width] duration-200 md:flex',
+            'sticky top-[4.125rem] hidden h-[calc(100vh-4.125rem)] shrink-0 flex-col justify-between border-r border-border transition-[width] duration-200 md:flex md:shadow-[3px_0_16px_-8px_hsl(220_40%_30%/0.14)]',
             sidebarOpen ? 'w-64' : 'md:w-[72px]',
           )}
           style={{

@@ -169,10 +169,10 @@
    * main wrapper dell'OfficeShell. */
   .bg-canvas {
     background:
-      radial-gradient(1100px 700px at 0% 0%, hsl(220 55% 96%) 0%, transparent 55%),
-      radial-gradient(900px 600px at 100% 0%, hsl(28 100% 95%) 0%, transparent 55%),
-      radial-gradient(800px 500px at 50% 100%, hsl(220 70% 96%) 0%, transparent 60%),
-      hsl(34 28% 97%);
+      radial-gradient(1100px 700px at 0% 0%, hsl(220 55% 95%) 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 0%, hsl(28 100% 94%) 0%, transparent 55%),
+      radial-gradient(800px 500px at 50% 100%, hsl(220 70% 95%) 0%, transparent 60%),
+      hsl(34 24% 95%);
   }
   .dark .bg-canvas {
     background:
