@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "test": "turbo run test",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
