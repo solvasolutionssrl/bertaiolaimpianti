@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { etichettaAccesso, prossimoCodiceDipendente } from './kantiere';
+import { etichettaAccesso, prossimoCodiceDipendente, puoTimbrarePer } from './kantiere';
 
 describe('etichettaAccesso', () => {
   it('Con accesso se ha user_id', () => {
@@ -22,4 +22,15 @@ describe('prossimoCodiceDipendente', () => {
   it('ignora null/undefined e formati non DIP', () => {
     expect(prossimoCodiceDipendente([null, undefined, 'ABC', 'DIP-x', 'DIP-002'])).toBe('DIP-003');
   });
+});
+
+describe('puoTimbrarePer', () => {
+  it('sé stesso sempre', () =>
+    expect(puoTimbrarePer({ self: true, capoSquadra: false, bersaglioInSquadra: false })).toBe(true));
+  it('capo per membro della sua squadra', () =>
+    expect(puoTimbrarePer({ self: false, capoSquadra: true, bersaglioInSquadra: true })).toBe(true));
+  it('capo per chi è fuori squadra → no', () =>
+    expect(puoTimbrarePer({ self: false, capoSquadra: true, bersaglioInSquadra: false })).toBe(false));
+  it('estraneo → no', () =>
+    expect(puoTimbrarePer({ self: false, capoSquadra: false, bersaglioInSquadra: true })).toBe(false));
 });

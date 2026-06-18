@@ -17,3 +17,14 @@ export function prossimoCodiceDipendente(
   }
   return `DIP-${String(max + 1).padStart(3, '0')}`;
 }
+
+/** Autorizzazione pura: chi può timbrare per chi.
+ *  - sé stesso: sempre;
+ *  - capo squadra su quella commessa: solo per membri della sua squadra. */
+export function puoTimbrarePer(args: {
+  self: boolean;
+  capoSquadra: boolean;
+  bersaglioInSquadra: boolean;
+}): boolean {
+  return args.self || (args.capoSquadra && args.bersaglioInSquadra);
+}
