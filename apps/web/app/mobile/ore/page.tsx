@@ -84,6 +84,23 @@ export default async function MobileOrePage() {
     titolo: risolviTitoloCommessa(c) || c.codice_interno || c.id,
   }));
 
+  // Carica cantieri attivi per il picker "Aggiungi riga"
+  const { data: cantieriRaw } = await supabase
+    .from('cantieri' as never)
+    .select('id, nome, codice')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('stato', 'attivo')
+    .order('nome', { ascending: true });
+
+  const cantieriDisponibili = ((cantieriRaw as Array<{
+    id: string;
+    nome: string | null;
+    codice: string | null;
+  }>) ?? []).map((c) => ({
+    id: c.id,
+    nome: c.nome || c.codice || c.id,
+  }));
+
   return (
     <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-2">
@@ -95,7 +112,11 @@ export default async function MobileOrePage() {
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
 
-      <OreClient rapportino={res.rapportino} commesseDisponibili={commesseDisponibili} />
+      <OreClient
+        rapportino={res.rapportino}
+        commesseDisponibili={commesseDisponibili}
+        cantieriDisponibili={cantieriDisponibili}
+      />
     </div>
   );
 }

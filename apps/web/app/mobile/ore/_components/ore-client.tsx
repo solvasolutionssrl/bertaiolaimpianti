@@ -16,8 +16,9 @@ import {
 
 type RigaRapportino = {
   id: string;
-  commessa_id: string;
-  commessa_titolo: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
+  target_label: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -35,6 +36,7 @@ type RapportinoProps = {
 interface OreClientProps {
   rapportino: RapportinoProps;
   commesseDisponibili: { id: string; titolo: string }[];
+  cantieriDisponibili: { id: string; nome: string }[];
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -42,8 +44,9 @@ interface OreClientProps {
 type RigaEditable = {
   /** undefined = riga nuova non ancora persistita */
   id: string | undefined;
-  commessa_id: string;
-  commessa_titolo: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
+  target_label: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -54,12 +57,26 @@ function rigaFromPayload(r: RigaRapportino): RigaEditable {
   return {
     id: r.id,
     commessa_id: r.commessa_id,
-    commessa_titolo: r.commessa_titolo,
+    cantiere_id: r.cantiere_id,
+    target_label: r.target_label,
     ore_ordinarie: r.ore_ordinarie,
     ore_straordinarie: r.ore_straordinarie,
     ore_viaggio: r.ore_viaggio,
     note: r.note ?? '',
   };
+}
+
+// ── helper: codifica/decodifica valore option del picker ─────────────────────
+// formato: "c:<uuid>" = commessa, "k:<uuid>" = cantiere
+
+function encodePickerValue(tipo: 'commessa' | 'cantiere', id: string): string {
+  return tipo === 'commessa' ? `c:${id}` : `k:${id}`;
+}
+
+function decodePickerValue(val: string): { tipo: 'commessa' | 'cantiere'; id: string } | null {
+  if (val.startsWith('c:')) return { tipo: 'commessa', id: val.slice(2) };
+  if (val.startsWith('k:')) return { tipo: 'cantiere', id: val.slice(2) };
+  return null;
 }
 
 // ── helper ore ───────────────────────────────────────────────────────────────
@@ -129,7 +146,7 @@ function StatoBadge({ stato }: { stato: string }) {
 
 // ── componente principale ────────────────────────────────────────────────────
 
-export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
+export function OreClient({ rapportino, commesseDisponibili, cantieriDisponibili }: OreClientProps) {
   const router = useRouter();
   const askConfirm = useConfirm();
   const [isPending, startTransition] = useTransition();
@@ -141,29 +158,54 @@ export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
   const [errore, setErrore] = useState<string | null>(null);
   const [successo, setSuccesso] = useState<string | null>(null);
 
-  // commessa picker
-  const [pickerCommessa, setPickerCommessa] = useState('');
+  // picker target (valore encodato "c:<uuid>" o "k:<uuid>")
+  const [pickerTarget, setPickerTarget] = useState('');
 
   const isBozza = rapportino.stato === 'bozza';
-  const commesseUsate = new Set(righe.map((r) => r.commessa_id));
-  const commesseLibere = commesseDisponibili.filter((c) => !commesseUsate.has(c.id));
+
+  // Chiavi gia usate nelle righe correnti
+  const targetUsati = new Set<string>(
+    righe.flatMap((r) => {
+      if (r.commessa_id) return [`c:${r.commessa_id}`];
+      if (r.cantiere_id) return [`k:${r.cantiere_id}`];
+      return [];
+    }),
+  );
+
+  const commesseLibere = commesseDisponibili.filter((c) => !targetUsati.has(`c:${c.id}`));
+  const cantieriLiberi = cantieriDisponibili.filter((c) => !targetUsati.has(`k:${c.id}`));
+
+  const haTargetLiberi = commesseLibere.length > 0 || cantieriLiberi.length > 0;
 
   function aggiungiRiga() {
-    const commessa = commesseDisponibili.find((c) => c.id === pickerCommessa);
-    if (!commessa) return;
+    const decoded = decodePickerValue(pickerTarget);
+    if (!decoded) return;
+
+    let label = '';
+    if (decoded.tipo === 'commessa') {
+      const c = commesseDisponibili.find((x) => x.id === decoded.id);
+      if (!c) return;
+      label = c.titolo;
+    } else {
+      const c = cantieriDisponibili.find((x) => x.id === decoded.id);
+      if (!c) return;
+      label = c.nome;
+    }
+
     setRighe((prev) => [
       ...prev,
       {
         id: undefined,
-        commessa_id: commessa.id,
-        commessa_titolo: commessa.titolo,
+        commessa_id: decoded.tipo === 'commessa' ? decoded.id : null,
+        cantiere_id: decoded.tipo === 'cantiere' ? decoded.id : null,
+        target_label: label,
         ore_ordinarie: 0,
         ore_straordinarie: 0,
         ore_viaggio: 0,
         note: '',
       },
     ]);
-    setPickerCommessa('');
+    setPickerTarget('');
     setErrore(null);
     setSuccesso(null);
   }
@@ -186,19 +228,24 @@ export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
     setSuccesso(null);
   }
 
+  function buildRighePayload() {
+    return righe.map((r) => ({
+      commessa_id: r.commessa_id ?? null,
+      cantiere_id: r.cantiere_id ?? null,
+      ore_ordinarie: r.ore_ordinarie,
+      ore_straordinarie: r.ore_straordinarie,
+      ore_viaggio: r.ore_viaggio,
+      note: r.note || undefined,
+    }));
+  }
+
   function handleSalva() {
     startTransition(async () => {
       setErrore(null);
       setSuccesso(null);
       const res = await salvaMioRapportino({
         rapportinoId: rapportino.id,
-        righe: righe.map((r) => ({
-          commessa_id: r.commessa_id,
-          ore_ordinarie: r.ore_ordinarie,
-          ore_straordinarie: r.ore_straordinarie,
-          ore_viaggio: r.ore_viaggio,
-          note: r.note || undefined,
-        })),
+        righe: buildRighePayload(),
         note: note || undefined,
       });
       if (res.ok) {
@@ -226,13 +273,7 @@ export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
       // Prima salva le modifiche correnti, poi invia
       const salvato = await salvaMioRapportino({
         rapportinoId: rapportino.id,
-        righe: righe.map((r) => ({
-          commessa_id: r.commessa_id,
-          ore_ordinarie: r.ore_ordinarie,
-          ore_straordinarie: r.ore_straordinarie,
-          ore_viaggio: r.ore_viaggio,
-          note: r.note || undefined,
-        })),
+        righe: buildRighePayload(),
         note: note || undefined,
       });
       if (!salvato.ok) {
@@ -268,27 +309,34 @@ export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
       {/* Righe */}
       <section className="space-y-2">
         <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Commesse
+          Voci ore
         </h2>
 
         {righe.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-muted/10 p-6 text-center">
             <p className="text-sm text-muted-foreground">
-              Nessuna riga. Aggiungi una commessa qui sotto.
+              Nessuna riga. Aggiungi una commessa o un cantiere qui sotto.
             </p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
             {righe.map((riga, idx) => (
               <div
-                key={`${riga.commessa_id}-${idx}`}
+                key={`${riga.commessa_id ?? riga.cantiere_id}-${idx}`}
                 className="rounded-xl border border-border bg-card p-3 shadow-soft"
               >
-                {/* Titolo commessa */}
+                {/* Etichetta target */}
                 <div className="mb-3 flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold leading-tight text-foreground">
-                    {titoloCase(riga.commessa_titolo)}
-                  </p>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    {riga.cantiere_id && (
+                      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Cantiere
+                      </span>
+                    )}
+                    <p className="text-sm font-semibold leading-tight text-foreground truncate">
+                      {titoloCase(riga.target_label)}
+                    </p>
+                  </div>
                   {isBozza && (
                     <button
                       type="button"
@@ -347,22 +395,35 @@ export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
           </div>
         )}
 
-        {/* Aggiungi riga */}
-        {isBozza && commesseLibere.length > 0 && (
+        {/* Aggiungi riga: picker unificato con optgroup */}
+        {isBozza && haTargetLiberi && (
           <div className="flex gap-2">
             <div className="relative flex-1">
               <select
-                value={pickerCommessa}
-                onChange={(e) => setPickerCommessa(e.target.value)}
+                value={pickerTarget}
+                onChange={(e) => setPickerTarget(e.target.value)}
                 disabled={isPending}
                 className="w-full appearance-none rounded-md border border-border bg-background py-2 pl-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
               >
-                <option value="">Scegli commessa...</option>
-                {commesseLibere.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {titoloCase(c.titolo)}
-                  </option>
-                ))}
+                <option value="">Scegli commessa o cantiere...</option>
+                {commesseLibere.length > 0 && (
+                  <optgroup label="Commesse">
+                    {commesseLibere.map((c) => (
+                      <option key={c.id} value={encodePickerValue('commessa', c.id)}>
+                        {titoloCase(c.titolo)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {cantieriLiberi.length > 0 && (
+                  <optgroup label="Cantieri">
+                    {cantieriLiberi.map((c) => (
+                      <option key={c.id} value={encodePickerValue('cantiere', c.id)}>
+                        {c.nome}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
               <ChevronDown
                 className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
@@ -374,7 +435,7 @@ export function OreClient({ rapportino, commesseDisponibili }: OreClientProps) {
               size="sm"
               variant="outline"
               onClick={aggiungiRiga}
-              disabled={!pickerCommessa || isPending}
+              disabled={!pickerTarget || isPending}
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>

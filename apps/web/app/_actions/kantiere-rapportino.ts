@@ -5,14 +5,16 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { minutiPerCommessa, calcolaOreGiornata } from '@kommessa/api/kantiere-ore';
+import { targetTimbratura } from '@kommessa/api/kantiere';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 // ── tipi di ritorno ──────────────────────────────────────────────────────────
 
 type RigaRapportino = {
   id: string;
-  commessa_id: string;
-  commessa_titolo: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
+  target_label: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -105,6 +107,58 @@ async function titoliCommesse(
   return map;
 }
 
+// ── helper carica nomi cantieri ──────────────────────────────────────────────
+
+async function nomiCantieri(
+  supabase: ReturnType<typeof createServerSupabase>,
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const { data } = await supabase
+    .from('cantieri' as never)
+    .select('id, nome, codice')
+    .in('id', ids);
+  const rows = (data as { id: string; nome: string | null; codice: string | null }[]) ?? [];
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    map.set(row.id, row.nome || row.codice || row.id);
+  }
+  return map;
+}
+
+// ── chiave sintetica target ──────────────────────────────────────────────────
+// Rappresenta il target di una riga/timbratura come stringa univoca per
+// permettere il grouping con minutiPerCommessa/calcolaOreGiornata.
+
+function chiaveTarget(row: { commessa_id: string | null; cantiere_id: string | null }): string {
+  const t = targetTimbratura(row);
+  if (!t) return '';
+  return t.tipo === 'cantiere' ? `cantiere:${t.id}` : `commessa:${t.id}`;
+}
+
+function decodeChiave(key: string): { commessa_id: string | null; cantiere_id: string | null } {
+  if (key.startsWith('cantiere:')) {
+    return { commessa_id: null, cantiere_id: key.slice('cantiere:'.length) };
+  }
+  if (key.startsWith('commessa:')) {
+    return { commessa_id: key.slice('commessa:'.length), cantiere_id: null };
+  }
+  // fallback: trattalo come commessa_id puro (compatibilità eventuale)
+  return { commessa_id: key || null, cantiere_id: null };
+}
+
+// ── helper risolve label di una riga righe (con entrambe le mappe) ───────────
+
+function labelRiga(
+  row: { commessa_id: string | null; cantiere_id: string | null },
+  mappaCommesse: Map<string, string>,
+  mappaCantieri: Map<string, string>,
+): string {
+  if (row.cantiere_id) return mappaCantieri.get(row.cantiere_id) ?? row.cantiere_id;
+  if (row.commessa_id) return mappaCommesse.get(row.commessa_id) ?? row.commessa_id;
+  return '';
+}
+
 // ── data locale Europe/Rome ──────────────────────────────────────────────────
 
 function oggiRome(): string {
@@ -156,25 +210,32 @@ export async function precompilaMioRapportino(
     // Carica righe esistenti senza ricalcolare
     const { data: righeRaw } = await supabase
       .from('rapportino_righe' as never)
-      .select('id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
+      .select('id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
       .eq('rapportino_id', rapp.id);
 
     const righeRows = (righeRaw as {
       id: string;
-      commessa_id: string;
+      commessa_id: string | null;
+      cantiere_id: string | null;
       ore_ordinarie: number;
       ore_straordinarie: number;
       ore_viaggio: number;
       note: string | null;
     }[]) ?? [];
 
-    const commessaIds = righeRows.map((r) => r.commessa_id);
-    const titoli = await titoliCommesse(supabase, commessaIds);
+    const commessaIds = righeRows.flatMap((r) => (r.commessa_id ? [r.commessa_id] : []));
+    const cantiereIds = righeRows.flatMap((r) => (r.cantiere_id ? [r.cantiere_id] : []));
+
+    const [mappaCommesse, mappaCantieri] = await Promise.all([
+      titoliCommesse(supabase, commessaIds),
+      nomiCantieri(supabase, cantiereIds),
+    ]);
 
     const righe: RigaRapportino[] = righeRows.map((rr) => ({
       id: rr.id,
       commessa_id: rr.commessa_id,
-      commessa_titolo: titoli.get(rr.commessa_id) ?? rr.commessa_id,
+      cantiere_id: rr.cantiere_id,
+      target_label: labelRiga(rr, mappaCommesse, mappaCantieri),
       ore_ordinarie: Number(rr.ore_ordinarie),
       ore_straordinarie: Number(rr.ore_straordinarie),
       ore_viaggio: Number(rr.ore_viaggio),
@@ -201,7 +262,7 @@ export async function precompilaMioRapportino(
 
   const nuovo = nuovoRaw as { id: string; data: string; stato: string; note: string | null };
 
-  // Query timbrature del giorno.
+  // Query timbrature del giorno — sia commessa_id che cantiere_id.
   // Usiamo date-string bounds (${data}T00:00:00Z .. T23:59:59Z) — approssimazione nota:
   // per i tenant in Europe/Rome (UTC+1/+2) le timbrature nelle prime/ultime ore locali
   // al confine del giorno UTC potrebbero essere incluse/escluse con un delta di 1-2h.
@@ -212,24 +273,34 @@ export async function precompilaMioRapportino(
 
   const { data: timbratureRaw } = await supabase
     .from('timbrature' as never)
-    .select('commessa_id, tipo, ts')
+    .select('commessa_id, cantiere_id, tipo, ts')
     .eq('dipendente_id', me.id)
     .gte('ts', `${data}T00:00:00Z`)
     .lt('ts', `${dataSuccessivaStr}T00:00:00Z`)
     .order('ts', { ascending: true });
 
-  const timbrature = (timbratureRaw as {
-    commessa_id: string;
+  const timbratureDB = (timbratureRaw as {
+    commessa_id: string | null;
+    cantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
   }[]) ?? [];
 
   const righe: RigaRapportino[] = [];
 
-  if (timbrature.length > 0) {
-    const minutiMap = minutiPerCommessa(timbrature);
-    const minutiLavorati = Array.from(minutiMap.entries()).map(([commessa_id, minuti]) => ({
-      commessa_id,
+  if (timbratureDB.length > 0) {
+    // Mappa a chiave sintetica per il grouping polimorfico
+    const timbratureSintetiche = timbratureDB
+      .map((t) => {
+        const chiave = chiaveTarget(t);
+        if (!chiave) return null;
+        return { commessa_id: chiave, tipo: t.tipo, ts: t.ts };
+      })
+      .filter((t): t is { commessa_id: string; tipo: 'ingresso' | 'uscita'; ts: string } => t !== null);
+
+    const minutiMap = minutiPerCommessa(timbratureSintetiche);
+    const minutiLavorati = Array.from(minutiMap.entries()).map(([chiave, minuti]) => ({
+      commessa_id: chiave,
       minuti,
     }));
 
@@ -240,38 +311,50 @@ export async function precompilaMioRapportino(
     });
 
     if (risultato.righe.length > 0) {
-      const righeInsert = risultato.righe.map((rr) => ({
-        rapportino_id: nuovo.id,
-        commessa_id: rr.commessa_id,
-        ore_ordinarie: rr.ore_ordinarie,
-        ore_straordinarie: rr.ore_straordinarie,
-        ore_viaggio: 0,
-      }));
+      // Decodifica le chiavi sintetiche → FK reali
+      const righeInsert = risultato.righe.map((rr) => {
+        const fk = decodeChiave(rr.commessa_id);
+        return {
+          rapportino_id: nuovo.id,
+          commessa_id: fk.commessa_id,
+          cantiere_id: fk.cantiere_id,
+          ore_ordinarie: rr.ore_ordinarie,
+          ore_straordinarie: rr.ore_straordinarie,
+          ore_viaggio: 0,
+        };
+      });
 
       const { data: righeInserite, error: errRighe } = await supabase
         .from('rapportino_righe' as never)
         .insert(righeInsert as never)
-        .select('id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note');
+        .select('id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note');
 
       if (errRighe) return { ok: false, error: errRighe.message };
 
       const righeRows = (righeInserite as {
         id: string;
-        commessa_id: string;
+        commessa_id: string | null;
+        cantiere_id: string | null;
         ore_ordinarie: number;
         ore_straordinarie: number;
         ore_viaggio: number;
         note: string | null;
       }[]) ?? [];
 
-      const commessaIds = righeRows.map((r) => r.commessa_id);
-      const titoli = await titoliCommesse(supabase, commessaIds);
+      const commessaIds = righeRows.flatMap((r) => (r.commessa_id ? [r.commessa_id] : []));
+      const cantiereIds = righeRows.flatMap((r) => (r.cantiere_id ? [r.cantiere_id] : []));
+
+      const [mappaCommesse, mappaCantieri] = await Promise.all([
+        titoliCommesse(supabase, commessaIds),
+        nomiCantieri(supabase, cantiereIds),
+      ]);
 
       for (const rr of righeRows) {
         righe.push({
           id: rr.id,
           commessa_id: rr.commessa_id,
-          commessa_titolo: titoli.get(rr.commessa_id) ?? rr.commessa_id,
+          cantiere_id: rr.cantiere_id,
+          target_label: labelRiga(rr, mappaCommesse, mappaCantieri),
           ore_ordinarie: Number(rr.ore_ordinarie),
           ore_straordinarie: Number(rr.ore_straordinarie),
           ore_viaggio: Number(rr.ore_viaggio),
@@ -286,13 +369,23 @@ export async function precompilaMioRapportino(
 
 // ── 2) salvaMioRapportino ────────────────────────────────────────────────────
 
-const RigaSalvaSchema = z.object({
-  commessa_id: z.string().uuid(),
-  ore_ordinarie: z.number().min(0).max(24),
-  ore_straordinarie: z.number().min(0).max(24),
-  ore_viaggio: z.number().min(0).max(24),
-  note: z.string().optional(),
-});
+const RigaSalvaSchema = z
+  .object({
+    commessa_id: z.string().uuid().nullable().optional(),
+    cantiere_id: z.string().uuid().nullable().optional(),
+    ore_ordinarie: z.number().min(0).max(24),
+    ore_straordinarie: z.number().min(0).max(24),
+    ore_viaggio: z.number().min(0).max(24),
+    note: z.string().optional(),
+  })
+  .refine(
+    (d) => {
+      const hasCommessa = !!d.commessa_id;
+      const hasCantiere = !!d.cantiere_id;
+      return hasCommessa !== hasCantiere; // XOR: esattamente uno valorizzato
+    },
+    { message: 'Ogni riga deve avere esattamente uno tra commessa_id e cantiere_id' },
+  );
 
 const SalvaSchema = z.object({
   rapportinoId: z.string().uuid(),
@@ -338,7 +431,8 @@ export async function salvaMioRapportino(
   if (parsed.data.righe.length > 0) {
     const nuoveRighe = parsed.data.righe.map((rr) => ({
       rapportino_id: parsed.data.rapportinoId,
-      commessa_id: rr.commessa_id,
+      commessa_id: rr.commessa_id ?? null,
+      cantiere_id: rr.cantiere_id ?? null,
       ore_ordinarie: rr.ore_ordinarie,
       ore_straordinarie: rr.ore_straordinarie,
       ore_viaggio: rr.ore_viaggio,
