@@ -8,16 +8,20 @@ export { SupabaseStorageProvider, NextcloudStorageProvider };
 
 export interface StorageProviderConfig {
   provider: StorageProviderName;
-  bucket?: string; // supabase
+  bucket?: string; // supabase + r2
   baseUrl?: string; // nextcloud
   user?: string; // nextcloud
   appPassword?: string; // nextcloud
   /**
-   * Nextcloud: sotto-cartella radice in cui isolare i file di questo
-   * tenant (es. "/Bertaiola Impianti"). Se omesso, i file vanno nella
-   * root WebDAV dell'utente Nextcloud.
+   * Nextcloud: sotto-cartella radice del tenant. R2: prefisso chiave di
+   * isolamento per-tenant (es. "tenants/FPM"). Se omesso, root.
    */
   basePath?: string;
+  // r2
+  accountId?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  endpoint?: string;
 }
 
 /**
@@ -41,6 +45,9 @@ export function getStorageProvider(config: StorageProviderConfig): StorageProvid
         appPassword: config.appPassword,
         basePath: config.basePath,
       });
+    case 'r2':
+      // Implementazione StorageProvider completa per R2: task B4+.
+      throw new Error('R2 StorageProvider non ancora implementato — usa R2StorageProvider direttamente.');
     default: {
       const exhaustiveCheck: never = config.provider;
       throw new Error(`Unknown storage provider: ${exhaustiveCheck}`);
