@@ -14,7 +14,8 @@
     "./modules": "./src/modules.ts",
     "./kantiere": "./src/kantiere.ts",
     "./kantiere-qr": "./src/kantiere-qr.ts",
-    "./kantiere-ore": "./src/kantiere-ore.ts"
+    "./kantiere-ore": "./src/kantiere-ore.ts",
+    "./kantiere-report": "./src/kantiere-report.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",
