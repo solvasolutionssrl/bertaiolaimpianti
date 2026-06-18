@@ -56,6 +56,10 @@ La modifica di una commessa finalizzata riapre il flusso di creazione:
 
 **Tipologie impianto** ("cosa si fa") — sono un **elemento master nella sidebar** office (`commessa-sidebar.tsx` → `tipologie-panel.tsx`), NON nella tab Fasi (che monitora l'avanzamento). Azione rapida `AggiungiTipologieDialog` (append-only, conferma con avviso "creerà le cartelle su Nextcloud") disponibile in sidebar office, scheda mobile ed editor. Action `aggiungiTipologie`; provisioning condiviso `_actions/_lib/provisiona-cartelle.ts` + `_actions/_lib/aggiungi-voci.ts`. NB: anche `aggiungiVoce` della tab Fasi ora provisiona le cartelle (prima inseriva solo la riga DB).
 
+### Etichette display degli stati commessa (solo forma, non toccare l'enum)
+
+L'enum `stato_commessa` resta `bozza/aperta/in_corso/collaudo/completata/archiviata`. A schermo però si mostrano queste **diciture** (decise dal cliente — le commesse non sono "critiche/a rischio", sono lavori nel loro ciclo): `aperta` → **"Non presa"**, `collaudo` → **"In collaudo"**, gli altri col nome naturale. La label vive in `StatoBadge` (`packages/ui`) + mappe locali allineate (liste/filtri, stato-picker, scheda, editor, PWA, admin). Non reintrodurre "Aperta"/"Collaudo" né framing "a rischio" sulla dashboard (la sezione è "Commesse in lavorazione").
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione
