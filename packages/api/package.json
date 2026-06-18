@@ -10,7 +10,8 @@
     "./service": "./src/service.ts",
     "./types": "./src/types/index.ts",
     "./schemas": "./src/schemas/index.ts",
-    "./tenant": "./src/tenant.ts"
+    "./tenant": "./src/tenant.ts",
+    "./modules": "./src/modules.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",
