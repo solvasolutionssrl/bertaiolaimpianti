@@ -57,7 +57,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6">
+    <div className="w-full space-y-6">
       {/* ===== Hero greeting compatto ===== */}
       <header className="relative flex flex-wrap items-center justify-between gap-2 overflow-hidden rounded-lg border border-border bg-aurora-brand px-4 py-2.5 shadow-soft">
         <div
@@ -323,29 +323,30 @@ async function RiskSection() {
                 (inCollaudo ? 'bg-accent' : 'bg-primary')
               }
             />
-            <CardContent className="flex items-center justify-between gap-4 py-3.5 pl-5 sm:pl-6">
-              <div className="min-w-0 flex-1 space-y-1">
+            <CardContent className="flex items-center justify-between gap-3 py-2.5 pl-4 pr-3 sm:pl-5">
+              <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-sm font-semibold">
+                  <span className="font-mono text-xs font-semibold">
                     {c.codice_interno}
                   </span>
-                  <StatoBadge stato={c.stato as any} />
+                  <StatoBadge stato={c.stato as any} className="h-5 px-2 text-[11px]" />
+                  <span className="truncate text-sm font-medium">
+                    {cliente?.ragione_sociale ?? '—'}
+                  </span>
                 </div>
-                <p className="truncate text-sm font-medium">
-                  {cliente?.ragione_sociale ?? '—'}
-                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {c.cliente_indirizzo_cantiere ?? 'Indirizzo non specificato'}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Resp: {resp?.display_name ?? '—'} · aperta il {fmtData(c.data_apertura)}
+                  {' · '}
+                  {resp?.display_name ?? '—'}
+                  {' · '}
+                  {fmtData(c.data_apertura)}
                 </p>
               </div>
               <Button
                 asChild
                 variant="outline"
                 size="sm"
-                className="shrink-0 group-hover:border-primary/40 group-hover:text-primary"
+                className="h-8 shrink-0 px-2.5 group-hover:border-primary/40 group-hover:text-primary"
               >
                 <Link href={`/office/commesse/${c.id}`}>
                   Apri
@@ -362,9 +363,9 @@ async function RiskSection() {
 
 function RiskSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2.5 2xl:grid-cols-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-[5.5rem] rounded-lg" />
+        <Skeleton key={i} className="h-[3.75rem] rounded-lg" />
       ))}
     </div>
   );
