@@ -13,6 +13,7 @@ import {
   HeartPulse,
   Layers,
   LogOut,
+  QrCode,
   UserCog,
   Users,
   type LucideIcon,
@@ -36,6 +37,7 @@ const NAV: AdminNavItem[] = [
   { id: 'bozze', label: 'Bozze', href: '/admin/bozze', icon: FileEdit },
   { id: 'audit', label: 'Audit', href: '/admin/audit', icon: Activity },
   { id: 'storage-r2', label: 'Storage R2', href: '/admin/storage-r2', icon: HardDrive },
+  { id: 'kantiere-qr', label: 'QR cantiere', href: '/admin/kantiere-qr', icon: QrCode },
   { id: 'salute', label: 'Salute sistema', href: '/admin/salute', icon: HeartPulse },
   { id: 'profilo', label: 'Profilo', href: '/admin/profilo', icon: UserCog },
 ];
