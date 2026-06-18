@@ -99,13 +99,12 @@ export default async function KantiereQrPage() {
     note_iniziali: string | null;
     nome_cartella: string | null;
     codice_interno: string | null;
-    cliente_nome: string | null;
   };
   const commessaMap = new Map<string, CommessaRow>();
   if (commessaIds.length > 0) {
     const { data: commesse } = (await supabase
       .from('commesse' as never)
-      .select('id, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella, codice_interno, cliente_nome')
+      .select('id, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella, codice_interno')
       .in('id', commessaIds)) as { data: CommessaRow[] | null };
     for (const c of commesse ?? []) {
       commessaMap.set(c.id, c);
