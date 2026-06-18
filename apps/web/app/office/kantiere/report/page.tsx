@@ -15,7 +15,8 @@ type RapportinoRow = {
 
 type RigaRow = {
   rapportino_id: string;
-  commessa_id: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -35,6 +36,30 @@ type CommessaRow = {
   descrizione_ai_proposta: string | null;
   note_iniziali: string | null;
 };
+
+type CantiereRow = {
+  id: string;
+  nome: string;
+  codice: string | null;
+};
+
+/** Chiave stabile per raggruppamento: "c:uuid" per commessa, "k:uuid" per cantiere */
+function targetKey(row: { commessa_id: string | null; cantiere_id: string | null }): string {
+  if (row.commessa_id) return `c:${row.commessa_id}`;
+  if (row.cantiere_id) return `k:${row.cantiere_id}`;
+  return 'sconosciuto';
+}
+
+/** Etichetta display: titolo commessa o nome cantiere */
+function targetLabel(
+  row: { commessa_id: string | null; cantiere_id: string | null },
+  commesseTitoloMap: Map<string, string>,
+  cantieriNomeMap: Map<string, string>,
+): string {
+  if (row.commessa_id) return commesseTitoloMap.get(row.commessa_id) ?? row.commessa_id;
+  if (row.cantiere_id) return cantieriNomeMap.get(row.cantiere_id) ?? row.cantiere_id;
+  return 'Sconosciuto';
+}
 
 function toYYYYMMDD(d: Date): string {
   // Giorno calendario in Europe/Rome (il server gira UTC): en-CA → YYYY-MM-DD.
@@ -105,12 +130,13 @@ export default async function ReportPage({ searchParams }: PageProps) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     righeData = data ?? [];
   }
 
-  const commessaIds = [...new Set(righeData.map((r) => r.commessa_id))];
+  const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
+  const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
   // Batch-load dipendenti
   const dipendentiMap = new Map<string, string>();
@@ -144,6 +170,18 @@ export default async function ReportPage({ searchParams }: PageProps) {
     }
   }
 
+  // Batch-load cantieri
+  const cantieriNomeMap = new Map<string, string>();
+  if (cantiereIds.length > 0) {
+    const { data } = (await supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .in('id', cantiereIds)) as { data: CantiereRow[] | null };
+    for (const k of data ?? []) {
+      cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
+    }
+  }
+
   // Mappa rapportino_id -> dipendente_id
   const rapportinoDipMap = new Map<string, string>(rapportini.map((r) => [r.id, r.dipendente_id]));
 
@@ -152,7 +190,7 @@ export default async function ReportPage({ searchParams }: PageProps) {
     const dipId = rapportinoDipMap.get(r.rapportino_id) ?? '';
     return {
       chiaveDipendente: dipendentiMap.get(dipId) ?? dipId,
-      chiaveCommessa: commesseTitoloMap.get(r.commessa_id) ?? r.commessa_id,
+      chiaveCommessa: targetLabel(r, commesseTitoloMap, cantieriNomeMap),
       ore_ordinarie: r.ore_ordinarie ?? 0,
       ore_straordinarie: r.ore_straordinarie ?? 0,
       ore_viaggio: r.ore_viaggio ?? 0,

@@ -102,7 +102,7 @@ export function AnomalieClient({
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-4 font-medium">Dipendente</th>
-                    <th className="pb-2 pr-4 font-medium">Commessa</th>
+                    <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
                     <th className="pb-2 font-medium">Giorno</th>
                   </tr>
                 </thead>
@@ -148,7 +148,7 @@ export function AnomalieClient({
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-4 font-medium">Dipendente</th>
                     <th className="pb-2 pr-4 font-medium">Data</th>
-                    <th className="pb-2 pr-4 font-medium">Commessa</th>
+                    <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
                     <th className="pb-2 font-medium">Ore straord.</th>
                   </tr>
                 </thead>

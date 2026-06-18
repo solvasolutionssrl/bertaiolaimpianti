@@ -96,7 +96,7 @@ export function ReportClient({ aggregati, kpi, filtri }: Props) {
             className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           >
             <option value="dipendente">Dipendente</option>
-            <option value="commessa">Commessa</option>
+            <option value="commessa">Commessa o cantiere</option>
           </select>
         </div>
         <div className="flex flex-col gap-1">
@@ -149,7 +149,7 @@ export function ReportClient({ aggregati, kpi, filtri }: Props) {
             <thead className="bg-muted/50">
               <tr>
                 <th className="px-4 py-2 text-left font-medium">
-                  {filtri.per === 'dipendente' ? 'Dipendente' : 'Commessa'}
+                  {filtri.per === 'dipendente' ? 'Dipendente' : 'Commessa / Cantiere'}
                 </th>
                 <th className="px-4 py-2 text-right font-medium">Ordinarie</th>
                 <th className="px-4 py-2 text-right font-medium">Straordinario</th>

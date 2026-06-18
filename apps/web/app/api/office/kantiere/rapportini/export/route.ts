@@ -20,11 +20,29 @@ type RapportinoRow = {
 
 type RigaRow = {
   rapportino_id: string;
-  commessa_id: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
 };
+
+type CantiereRow = {
+  id: string;
+  nome: string;
+  codice: string | null;
+};
+
+/** Etichetta display: titolo commessa o nome cantiere */
+function targetLabel(
+  row: { commessa_id: string | null; cantiere_id: string | null },
+  commesseTitoloMap: Map<string, string>,
+  cantieriNomeMap: Map<string, string>,
+): string {
+  if (row.commessa_id) return commesseTitoloMap.get(row.commessa_id) ?? row.commessa_id;
+  if (row.cantiere_id) return cantieriNomeMap.get(row.cantiere_id) ?? row.cantiere_id;
+  return '';
+}
 
 type DipendenteRow = {
   id: string;
@@ -125,12 +143,13 @@ export async function GET(req: NextRequest) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     righeData = data ?? [];
   }
 
-  const commessaIds = [...new Set(righeData.map((r) => r.commessa_id))];
+  const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
+  const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
   // Batch-load dipendenti
   const dipendentiMap = new Map<string, string>();
@@ -164,19 +183,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Batch-load cantieri
+  const cantieriNomeMap = new Map<string, string>();
+  if (cantiereIds.length > 0) {
+    const { data } = (await supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .in('id', cantiereIds)) as { data: CantiereRow[] | null };
+    for (const k of data ?? []) {
+      cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
+    }
+  }
+
   // Mappa rapportino_id -> (dipendente_id, data, stato)
   const rapportinoMeta = new Map<string, { dipendente_id: string; data: string; stato: string }>(
     rapportini.map((r) => [r.id, { dipendente_id: r.dipendente_id, data: r.data, stato: r.stato }]),
   );
 
   // Genera CSV
-  const header = ['Data', 'Dipendente', 'Commessa', 'Ore ordinarie', 'Ore straordinario', 'Ore viaggio', 'Stato'];
+  const header = ['Data', 'Dipendente', 'Commessa/Cantiere', 'Ore ordinarie', 'Ore straordinario', 'Ore viaggio', 'Stato'];
 
   const csvRows = righeData.map((r) => {
     const meta = rapportinoMeta.get(r.rapportino_id);
     const data = meta?.data ? fmtDate(meta.data) : '';
     const dipendente = dipendentiMap.get(meta?.dipendente_id ?? '') ?? '';
-    const commessa = commesseTitoloMap.get(r.commessa_id) ?? r.commessa_id;
+    const commessa = targetLabel(r, commesseTitoloMap, cantieriNomeMap);
     return [
       data,
       dipendente,
