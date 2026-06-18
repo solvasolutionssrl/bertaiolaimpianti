@@ -92,8 +92,8 @@ Componente condiviso `AggiungiTipologieDialog` (desktop dialog / mobile sheet) c
 6. Revalidate.
 
 Superfici:
-- **Office desktop**: tab "Fasi" — riuso/arricchisco `AggiungiFaseButton` (verificare se già provisiona cartelle, per non duplicare).
-- **PWA mobile**: azione rapida nuova sulla scheda commessa (le voci oggi sul mobile non sono mostrate).
+- **Office desktop**: elemento **master nella sidebar** (`commessa-sidebar.tsx`) — card "Tipologie impianto" con le voci selezionate + "Aggiungi tipologie". La tab "Fasi" resta dedicata al monitoraggio avanzamento; il suo `AggiungiFaseButton` viene allineato a `aggiungiTipologie` per provisionare anche le cartelle (oggi NON le crea — gap confermato).
+- **PWA mobile**: azione rapida / sezione tipologie sulla scheda commessa (le voci oggi sul mobile non sono mostrate).
 - **Editor completo**: stessa logica condivisa (DRY): l'editor usa `aggiungiTipologie` per la parte voci.
 
 ## File coinvolti (stima)
