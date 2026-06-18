@@ -6,7 +6,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  KpiCard,
   Skeleton,
   StatoBadge,
 } from '@kommessa/ui';
@@ -24,7 +23,6 @@ import {
   Clock,
   FileWarning,
   Flame,
-  ShieldAlert,
   Sparkles,
 } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
@@ -59,18 +57,15 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-8">
+    <div className="mx-auto w-full max-w-7xl space-y-6">
       {/* ===== Hero greeting compatto ===== */}
-      <header className="relative flex flex-wrap items-end justify-between gap-3 overflow-hidden rounded-xl border border-border bg-aurora-brand px-5 py-4 shadow-soft">
+      <header className="relative flex flex-wrap items-center justify-between gap-2 overflow-hidden rounded-lg border border-border bg-aurora-brand px-4 py-2.5 shadow-soft">
         <div
           aria-hidden="true"
           className="absolute inset-x-0 top-0 h-0.5 border-brand-line"
         />
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            {oggi}
-          </p>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h1 className="text-lg font-semibold tracking-tight">
             {salutoOrario(now)}
             {nome ? (
               <>
@@ -81,14 +76,17 @@ export default async function DashboardPage() {
               ''
             )}
           </h1>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            {oggi}
+          </p>
         </div>
-        <p className="max-w-md text-xs text-muted-foreground">
-          Commesse, collaudi e attività del team — in un colpo d&apos;occhio.
+        <p className="hidden text-xs text-muted-foreground sm:block">
+          Commesse, collaudi e attività del team in un colpo d&apos;occhio.
         </p>
       </header>
 
       {/* ===== KPI ===== */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <SectionEyebrow icon={<Activity className="h-3.5 w-3.5" />}>
           Sintesi operativa
         </SectionEyebrow>
@@ -97,14 +95,14 @@ export default async function DashboardPage() {
         </Suspense>
       </section>
 
-      {/* ===== Risk ===== */}
-      <section className="space-y-4 stagger">
+      {/* ===== Commesse in lavorazione ===== */}
+      <section className="space-y-3 stagger">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SectionHeader
             eyebrow="Commesse"
-            title="Commesse a rischio"
-            description="Lavori in corso o in collaudo che richiedono attenzione."
-            icon={<ShieldAlert />}
+            title="Commesse in lavorazione"
+            description="Lavori in corso o in collaudo da seguire."
+            icon={<Briefcase />}
           />
           <Button asChild variant="ghost" size="sm">
             <Link href="/office/commesse">
@@ -119,7 +117,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* ===== Avvisi top ===== */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <SectionHeader
             eyebrow="Avvisi"
@@ -140,7 +138,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* ===== TODO urgenti cross-commesse ===== */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <SectionHeader
           eyebrow="Lavori"
           title="TODO urgenti aperti"
@@ -153,7 +151,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* ===== Timeline ===== */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <SectionHeader
           eyebrow="Attività"
           title="Ultima attività"
@@ -199,44 +197,91 @@ async function KpiSection() {
   const kpi = await getDashboardKpis(ctx);
 
   return (
-    <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <KpiCard
+    <div className="stagger grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+      <KpiMini
         label="Commesse aperte"
         value={kpi.commesseAperte}
         icon={<Briefcase />}
         tone="default"
-        hint="Stati: aperta · in corso · collaudo"
+        hint="In corso · collaudo"
       />
-      <KpiCard
-        label="Fasi in attesa > 3 giorni"
+      <KpiMini
+        label="Fasi ferme > 3 gg"
         value={kpi.fasiInAttesa}
         icon={<Clock />}
         tone={kpi.fasiInAttesa > 0 ? 'warning' : 'default'}
-        hint={kpi.fasiInAttesa > 0 ? 'Da rivedere' : 'Tutto in regola'}
+        hint={kpi.fasiInAttesa > 0 ? 'Da rivedere' : 'In regola'}
       />
-      <KpiCard
-        label="Foto caricate oggi"
+      <KpiMini
+        label="Foto oggi"
         value={kpi.fotoOggi}
         icon={<Camera />}
         tone="success"
-        hint="Dal team in cantiere"
+        hint="Dal cantiere"
       />
-      <KpiCard
-        label="DICO in scadenza ≤ 7 gg"
+      <KpiMini
+        label="DICO ≤ 7 gg"
         value={kpi.dicoScadenza}
         icon={<FileWarning />}
         tone={kpi.dicoScadenza > 0 ? 'critical' : 'default'}
-        hint={kpi.dicoScadenza > 0 ? 'Verificare priorità' : 'Nessuna urgenza'}
+        hint={kpi.dicoScadenza > 0 ? 'Da verificare' : 'Nessuna'}
       />
+    </div>
+  );
+}
+
+const KPI_TONE: Record<
+  'default' | 'warning' | 'success' | 'critical',
+  { bar: string; icon: string; value: string }
+> = {
+  default: { bar: 'bg-primary', icon: 'bg-primary-soft text-primary', value: 'text-foreground' },
+  warning: { bar: 'bg-accent', icon: 'bg-accent-soft text-accent-soft-foreground', value: 'text-foreground' },
+  success: { bar: 'bg-success', icon: 'bg-success/10 text-success', value: 'text-foreground' },
+  critical: { bar: 'bg-destructive', icon: 'bg-destructive/10 text-destructive', value: 'text-destructive' },
+};
+
+/** KPI compatto per la dashboard: una riga, niente blocchi alti. */
+function KpiMini({
+  label,
+  value,
+  icon,
+  hint,
+  tone = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+  hint?: string;
+  tone?: keyof typeof KPI_TONE;
+}) {
+  const t = KPI_TONE[tone];
+  return (
+    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft">
+      <span aria-hidden className={`absolute inset-y-2 left-0 w-[2px] rounded-full ${t.bar}`} />
+      <span
+        aria-hidden
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md [&_svg]:h-4 [&_svg]:w-4 ${t.icon}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className={`font-mono text-2xl font-medium leading-none tabular-nums ${t.value}`}>
+          {value}
+        </p>
+        <p className="mt-1 truncate text-[11px] uppercase tracking-wide text-muted-foreground">
+          {label}
+          {hint ? <span className="normal-case tracking-normal"> · {hint}</span> : null}
+        </p>
+      </div>
     </div>
   );
 }
 
 function KpiSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-36 rounded-xl" />
+        <Skeleton key={i} className="h-[4.25rem] rounded-lg" />
       ))}
     </div>
   );
@@ -253,15 +298,15 @@ async function RiskSection() {
       <EmptyState
         icon={CheckCircle2}
         tone="primary"
-        title="Tutto sotto controllo"
-        description="Nessuna commessa risulta a rischio in questo momento. Continua così."
+        title="Nessuna commessa in lavorazione"
+        description="Non ci sono commesse in corso o in collaudo al momento."
       />
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
       {rows.map((c: any) => {
-        const critica = c.stato === 'collaudo';
+        const inCollaudo = c.stato === 'collaudo';
         const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
         const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
         return (
@@ -273,10 +318,10 @@ async function RiskSection() {
               aria-hidden
               className={
                 'absolute inset-y-3 left-0 w-[3px] rounded-full ' +
-                (critica ? 'bg-stato-critica' : 'bg-accent')
+                (inCollaudo ? 'bg-accent' : 'bg-primary')
               }
             />
-            <CardContent className="flex items-center justify-between gap-4 py-5 pl-5 sm:pl-6">
+            <CardContent className="flex items-center justify-between gap-4 py-3.5 pl-5 sm:pl-6">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-sm font-semibold">
@@ -315,9 +360,9 @@ async function RiskSection() {
 
 function RiskSkeleton() {
   return (
-    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Skeleton key={i} className="h-28 rounded-xl" />
+        <Skeleton key={i} className="h-[5.5rem] rounded-lg" />
       ))}
     </div>
   );

@@ -506,9 +506,9 @@ export default async function CommessaDetailPage({
               <StatoLed stato={stato} />
               <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
                 {{
-                  aperta: 'Aperta',
+                  aperta: 'Non presa',
                   in_corso: 'In corso',
-                  collaudo: 'Collaudo',
+                  collaudo: 'In collaudo',
                   bozza: 'Bozza',
                   completata: 'Completata',
                   archiviata: 'Archiviata',

@@ -17,9 +17,9 @@ const STATI: Array<{ value: string; label: string }> = [
   { value: '', label: 'Tutti gli stati' },
   // 'bozza' non è più qui: le bozze vivono in commessa_bozze (tabella
   // dedicata, private all'autore) e si riprendono da "Da completare".
-  { value: 'aperta', label: 'Aperta' },
+  { value: 'aperta', label: 'Non presa' },
   { value: 'in_corso', label: 'In corso' },
-  { value: 'collaudo', label: 'Collaudo' },
+  { value: 'collaudo', label: 'In collaudo' },
   { value: 'completata', label: 'Completata' },
   { value: 'archiviata', label: 'Archiviata' },
 ];

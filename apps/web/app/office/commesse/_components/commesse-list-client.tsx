@@ -51,9 +51,9 @@ interface Props {
 
 const STATI: Array<{ value: CommessaRow['stato']; label: string }> = [
   { value: 'bozza', label: 'Bozza' },
-  { value: 'aperta', label: 'Aperta' },
+  { value: 'aperta', label: 'Non presa' },
   { value: 'in_corso', label: 'In corso' },
-  { value: 'collaudo', label: 'Collaudo' },
+  { value: 'collaudo', label: 'In collaudo' },
   { value: 'completata', label: 'Completata' },
   { value: 'archiviata', label: 'Archiviata' },
 ];

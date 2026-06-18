@@ -1113,9 +1113,9 @@ function labelStato(stato: string, assegnata: boolean): string {
   return (
     {
       bozza: 'Bozza',
-      aperta: 'Aperta',
+      aperta: 'Non presa',
       in_corso: 'In corso',
-      collaudo: 'Collaudo',
+      collaudo: 'In collaudo',
       completata: 'Completata',
       archiviata: 'Archiviata',
     } as Record<string, string>

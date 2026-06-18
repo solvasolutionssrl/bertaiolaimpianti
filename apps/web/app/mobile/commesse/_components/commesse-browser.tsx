@@ -36,8 +36,8 @@ const STATO_ORDER: StatoCommessa[] = [
 
 const STATO_LABEL: Record<string, string> = {
   in_corso: 'In corso',
-  aperta: 'Aperta',
-  collaudo: 'Collaudo',
+  aperta: 'Non presa',
+  collaudo: 'In collaudo',
   bozza: 'Bozza',
   completata: 'Completata',
   archiviata: 'Archiviata',
