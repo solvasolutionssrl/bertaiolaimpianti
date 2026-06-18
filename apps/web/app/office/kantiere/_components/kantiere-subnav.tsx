@@ -7,6 +7,7 @@ const ITEMS = [
   { label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
   { label: 'QR cantiere', href: '/office/kantiere/qr' },
   { label: 'Rapportini', href: '/office/kantiere/rapportini' },
+  { label: 'Report', href: '/office/kantiere/report' },
 ] as const;
 
 export function KantiereSubnav() {
