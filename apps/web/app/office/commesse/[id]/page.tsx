@@ -1,7 +1,8 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import {
   HardHat,
   Mail,
+  Pencil,
   Phone,
   Star,
   Tag as TagIcon,
@@ -17,7 +18,6 @@ import { loadCommessa } from './_lib/get-commessa';
 import { elencaTagTenant } from '../../../_actions/commessa-tag';
 import { TagEditor } from '../../../_components/tag-editor';
 import { ClienteEditDialog } from './_components/cliente-edit-dialog';
-import { CommessaEditDialog } from './_components/commessa-edit-dialog';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
 import {
   ContattiEditor,
@@ -257,14 +257,12 @@ export default async function AnagraficaTab({
               Commessa
             </CardTitle>
             {canEditCliente ? (
-              <CommessaEditDialog
-                commessaId={params.id}
-                nomeCartella={c.nome_cartella as string | null}
-                descrizione={titoloUmano}
-                indirizzoCantiere={
-                  (c.cliente_indirizzo_cantiere as string | null) ?? null
-                }
-              />
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <Link href={`/office/commesse/${params.id}/modifica`}>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  Modifica
+                </Link>
+              </Button>
             ) : null}
           </CardHeader>
           <CardContent className="space-y-2 px-4 pb-3 text-sm">

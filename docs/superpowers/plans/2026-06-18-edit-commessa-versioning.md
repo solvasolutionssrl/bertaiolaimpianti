@@ -368,7 +368,9 @@ git commit -m "feat(voci): helper condiviso aggiungiVociEProvisiona (append-only
 - Reference: `apps/web/app/_components/voice-review.tsx` (VoiceReview/VociPicker), `media-attach-section.tsx`
 
 - [ ] **Step 1: `types.ts`** — definire `CommessaEditValue` (cliente, indirizzoCantiere, descrizioneFinale, noteIniziali, isCritica, stato, responsabileId, referenti, vociPresenti: number[] (locked), vociAggiunte: number[]) e props del core (`value`, `onChange`, `vociCatalogo`, `nomeCartellaFrozen: string`, `online: boolean`, `onSubmit`).
-- [ ] **Step 2: `commessa-editor-core.tsx`** — `'use client'`. Renderizza i campi riusando dove possibile `VociPicker` (con voci presenti **bloccate**, selezionabili solo le nuove) + sezione cliente + descrizione + note + referenti + `MediaAttachSection` (target = `{commessaId}`). Mostra avviso read-only del `nome_cartella` con testo: "Il nome della cartella resta invariato per sempre (rinominarla romperebbe i file su Nextcloud)." Banner offline se `!online` (riusare pattern esistente) che disabilita voce e submit. Nessuna logica di rete: solo stato + callback `onSubmit(value)`.
+- [ ] **Step 2: `commessa-editor-core.tsx`** — `'use client'`. Renderizza i campi: descrizione, indirizzo cantiere, note, stato, criticità, responsabile, referenti + picker voci **append-only** (voci presenti bloccate, solo aggiunta). Mostra avviso read-only del `nome_cartella`: "Il nome della cartella resta invariato per sempre (rinominarla romperebbe i file su Nextcloud)." Banner offline se `!online` che disabilita voce/submit. Nessuna logica di rete: solo stato + `onSubmit(value)`.
+
+> **Decisione di scope (rischio prod):** i MEDIA NON sono nell'editor. Sono già gestiti dalla tab "Media" esistente (office + mobile) con la pipeline upload collaudata. Re-implementarli nell'editor duplicherebbe il plumbing upload. L'editor copre i DATI + tipologie.
 - [ ] **Step 3: Typecheck** → PASS.
 - [ ] **Step 4: Commit** `feat(ui): core editor commessa condiviso (campi + voci append-only + media)`.
 
