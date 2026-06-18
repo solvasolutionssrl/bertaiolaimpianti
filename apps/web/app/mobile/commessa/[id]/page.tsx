@@ -11,6 +11,7 @@ import {
   CloudUpload,
   HardHat,
   MapPin,
+  Pencil,
   User,
 } from 'lucide-react';
 
@@ -44,7 +45,7 @@ import {
 import { CommessaLavoriMobile } from './_components/commessa-lavori-mobile';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
 import { DettagliEdit } from '../../../_components/dettagli-edit';
-import { CommessaEditMobile } from './_components/commessa-edit-mobile';
+import { AggiungiTipologieDialog } from '../../../_components/aggiungi-tipologie-dialog';
 import { TecniciMobile } from './_components/tecnici-mobile';
 import {
   elencaTecniciAssegnati,
@@ -124,6 +125,40 @@ export default async function CommessaDetailPage({
     .single();
 
   if (error || !rawCommessa) notFound();
+
+  // 1-bis) Tipologie impianto: voci presenti + catalogo + preset, per
+  // l'azione rapida append-only nella scheda (solo admin/office).
+  const [vociPresTipRes, catalogoTipRes, presetTipRes] = canEditCommessa
+    ? await Promise.all([
+        supabase.from('commessa_voci').select('voce_id').eq('commessa_id', params.id),
+        supabase
+          .from('voci_catalogo')
+          .select('id, nome, categoria')
+          .order('ordine_visualizzazione'),
+        supabase
+          .from('preset')
+          .select('id, nome, voci_default')
+          .eq('tenant_id', ctx.tenantId)
+          .order('nome'),
+      ])
+    : [null, null, null];
+  const tipVociPresenti = ((vociPresTipRes?.data ?? []) as Array<{ voce_id: number }>).map(
+    (v) => v.voce_id,
+  );
+  const tipVoci = ((catalogoTipRes?.data ?? []) as Array<{
+    id: number;
+    nome: string;
+    categoria: string | null;
+  }>).map((v) => ({ id: v.id, nome: v.nome, categoria: v.categoria }));
+  const tipPresets = ((presetTipRes?.data ?? []) as Array<{
+    id: string;
+    nome: string;
+    voci_default: unknown;
+  }>).map((p) => ({
+    id: p.id,
+    nome: p.nome,
+    vociIds: Array.isArray(p.voci_default) ? (p.voci_default as number[]) : [],
+  }));
 
   // 2) Foto e video: solo quelle effettivamente caricate (esclude 'uploading'
   //    bloccate da errori CORS/rete che creerebbero duplicati nella gallery).
@@ -521,12 +556,28 @@ export default async function CommessaDetailPage({
           )}
 
           {canEditCommessa ? (
-            <CommessaEditMobile
-              commessaId={commessa.id}
-              nomeCartella={commessa.nome_cartella}
-              descrizione={commessa.descrizione_ai_finale ?? null}
-              indirizzoCantiere={commessa.cliente_indirizzo_cantiere ?? null}
-            />
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
+              >
+                <Link href={`/mobile/commessa/${commessa.id}/modifica`}>
+                  <Pencil className="h-4 w-4" aria-hidden="true" />
+                  Modifica
+                </Link>
+              </Button>
+              <AggiungiTipologieDialog
+                commessaId={commessa.id}
+                vociPresenti={tipVociPresenti}
+                voci={tipVoci}
+                presets={tipPresets}
+                variant="sheet"
+                triggerLabel="Tipologie"
+                triggerClassName="border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
+              />
+            </div>
           ) : null}
 
           {/* Azioni rapide: Chiama (lancia la chiamata) + Mappa (apre Google
