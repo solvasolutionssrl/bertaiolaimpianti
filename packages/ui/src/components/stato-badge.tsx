@@ -37,7 +37,7 @@ interface StatoSpec {
 
 const SPECS: Record<Stato, StatoSpec> = {
   aperta: {
-    label: 'Aperta',
+    label: 'Non presa',
     dot: 'bg-stato-aperta',
     text: 'text-foreground',
   },
@@ -47,7 +47,7 @@ const SPECS: Record<Stato, StatoSpec> = {
     text: 'text-foreground',
   },
   collaudo: {
-    label: 'Collaudo',
+    label: 'In collaudo',
     dot: 'bg-stato-collaudo',
     text: 'text-foreground',
   },

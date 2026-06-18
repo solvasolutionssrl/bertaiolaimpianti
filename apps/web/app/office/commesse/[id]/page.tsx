@@ -14,9 +14,9 @@ export const dynamic = 'force-dynamic';
 
 const STATO_LABEL: Record<string, string> = {
   bozza: 'Bozza',
-  aperta: 'Aperta',
+  aperta: 'Non presa',
   in_corso: 'In corso',
-  collaudo: 'Collaudo',
+  collaudo: 'In collaudo',
   completata: 'Completata',
   archiviata: 'Archiviata',
 };

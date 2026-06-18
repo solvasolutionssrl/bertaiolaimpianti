@@ -57,7 +57,7 @@ interface StatoInfo {
 
 const STATI: StatoInfo[] = [
   { value: 'bozza', label: 'Bozza', Icon: Edit3, scaffold: '01_Richieste', order: 0 },
-  { value: 'aperta', label: 'Aperta', Icon: CircleDot, scaffold: '01_Richieste', order: 1 },
+  { value: 'aperta', label: 'Non presa', Icon: CircleDot, scaffold: '01_Richieste', order: 1 },
   { value: 'in_corso', label: 'In corso', Icon: Hammer, scaffold: '02_In_Lavorazione', order: 2 },
   { value: 'collaudo', label: 'In collaudo', Icon: ClipboardCheck, scaffold: '02_In_Lavorazione', order: 3 },
   { value: 'completata', label: 'Completata', Icon: CheckCircle2, scaffold: '03_Completate', order: 4 },
