@@ -368,7 +368,9 @@ git commit -m "feat(voci): helper condiviso aggiungiVociEProvisiona (append-only
 - Reference: `apps/web/app/_components/voice-review.tsx` (VoiceReview/VociPicker), `media-attach-section.tsx`
 
 - [ ] **Step 1: `types.ts`** — definire `CommessaEditValue` (cliente, indirizzoCantiere, descrizioneFinale, noteIniziali, isCritica, stato, responsabileId, referenti, vociPresenti: number[] (locked), vociAggiunte: number[]) e props del core (`value`, `onChange`, `vociCatalogo`, `nomeCartellaFrozen: string`, `online: boolean`, `onSubmit`).
-- [ ] **Step 2: `commessa-editor-core.tsx`** — `'use client'`. Renderizza i campi riusando dove possibile `VociPicker` (con voci presenti **bloccate**, selezionabili solo le nuove) + sezione cliente + descrizione + note + referenti + `MediaAttachSection` (target = `{commessaId}`). Mostra avviso read-only del `nome_cartella` con testo: "Il nome della cartella resta invariato per sempre (rinominarla romperebbe i file su Nextcloud)." Banner offline se `!online` (riusare pattern esistente) che disabilita voce e submit. Nessuna logica di rete: solo stato + callback `onSubmit(value)`.
+- [ ] **Step 2: `commessa-editor-core.tsx`** — `'use client'`. Renderizza i campi: descrizione, indirizzo cantiere, note, stato, criticità, responsabile, referenti + picker voci **append-only** (voci presenti bloccate, solo aggiunta). Mostra avviso read-only del `nome_cartella`: "Il nome della cartella resta invariato per sempre (rinominarla romperebbe i file su Nextcloud)." Banner offline se `!online` che disabilita voce/submit. Nessuna logica di rete: solo stato + `onSubmit(value)`.
+
+> **Decisione di scope (rischio prod):** i MEDIA NON sono nell'editor. Sono già gestiti dalla tab "Media" esistente (office + mobile) con la pipeline upload collaudata. Re-implementarli nell'editor duplicherebbe il plumbing upload. L'editor copre i DATI + tipologie.
 - [ ] **Step 3: Typecheck** → PASS.
 - [ ] **Step 4: Commit** `feat(ui): core editor commessa condiviso (campi + voci append-only + media)`.
 
@@ -404,15 +406,20 @@ git commit -m "feat(voci): helper condiviso aggiungiVociEProvisiona (append-only
 - [ ] **Step 2:** Typecheck → PASS.
 - [ ] **Step 3:** Commit `feat(office): "Modifica" apre l'editor completo; rimosso mini-dialog`.
 
-### Task 12: Azione rapida tipologie su Fasi (office)
+### Task 12: Tipologie come elemento master nella sidebar (office)
+
+> **Revisione (richiesta utente):** la selezione delle tipologie ("cosa si fa") è un elemento **master generico** della commessa → vive nella **sidebar laterale** (`commessa-sidebar.tsx`, colonna persistente con stato/tecnici/riferimenti). La tab **Fasi resta** dedicata al monitoraggio dell'avanzamento. L'aggiunta da Fasi va allineata alla stessa azione `aggiungiTipologie` (oggi `AggiungiFaseButton`/`aggiungiVoce` inserisce la riga ma NON provisiona la cartella — gap da chiudere).
 
 **Files:**
-- Modify: `apps/web/app/office/commesse/[id]/fasi/page.tsx`
-- Modify/replace: `apps/web/app/office/commesse/[id]/fasi/_components/aggiungi-fase.tsx`
+- Create: `apps/web/app/office/commesse/[id]/_components/tipologie-panel.tsx`
+- Modify: `apps/web/app/office/commesse/[id]/_components/commessa-sidebar.tsx` (render TipologiePanel + nuove props voci)
+- Modify: `apps/web/app/office/commesse/[id]/layout.tsx` (carica voci commessa + catalogo + preset, passa alla sidebar)
+- Modify: `apps/web/app/office/commesse/[id]/fasi/_components/aggiungi-fase.tsx` (usa `AggiungiTipologieDialog` / `aggiungiTipologie` per provisionare anche le cartelle)
 
-- [ ] **Step 1:** Affiancare/sostituire `AggiungiFaseButton` con `AggiungiTipologieDialog variant="dialog"` (selezione multipla + preset + conferma cartelle). Mantenere il comportamento append-only. Se `aggiungiVoce` legacy resta usata altrove, lasciarla; altrimenti deprecare.
-- [ ] **Step 2:** Typecheck → PASS.
-- [ ] **Step 3:** Commit `feat(office): azione rapida tipologie su tab Fasi (bulk + conferma)`.
+- [ ] **Step 1:** `tipologie-panel.tsx` — card "Tipologie impianto" che mostra le voci selezionate (chip, sola lettura, append-only) + bottone "Aggiungi tipologie" → `AggiungiTipologieDialog variant="dialog"`. Caricare voci in `layout.tsx` (join `commessa_voci`+`voci_catalogo`, catalogo disponibile, preset) e passarle a `CommessaSidebar` → `TipologiePanel`.
+- [ ] **Step 2:** Allineare Fasi: `AggiungiFaseButton` usa `aggiungiTipologie` (provisiona cartelle). Mantiene append-only.
+- [ ] **Step 3:** Typecheck → PASS.
+- [ ] **Step 4:** Commit `feat(office): tipologie come elemento master in sidebar + add con provisioning cartelle`.
 
 ---
 

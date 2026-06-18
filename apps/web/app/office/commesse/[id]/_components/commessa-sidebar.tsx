@@ -9,7 +9,12 @@ import type { StatoCommessa } from '@kommessa/api/types';
 
 import { StatoPicker } from './stato-picker';
 import { TecniciPanel, type TecnicoAssegnato } from './tecnici-panel';
+import { TipologiePanel } from './tipologie-panel';
 import { fmtData } from '../../../_lib/format';
+import type {
+  TipologiaVoce,
+  TipologiaPreset,
+} from '../../../../_components/aggiungi-tipologie-dialog';
 
 interface Props {
   commessaId: string;
@@ -23,6 +28,12 @@ interface Props {
   tecniciAssegnati: TecnicoAssegnato[];
   tecniciTenant: Array<{ id: string; display_name: string | null }>;
   canManageTecnici: boolean;
+  tipologie: {
+    vociPresenti: number[];
+    voci: TipologiaVoce[];
+    presets: TipologiaPreset[];
+    canEdit: boolean;
+  };
 }
 
 /**
@@ -45,6 +56,7 @@ export function CommessaSidebar({
   tecniciAssegnati,
   tecniciTenant,
   canManageTecnici,
+  tipologie,
 }: Props) {
   const assegnata = tecniciAssegnati.length > 0;
 
@@ -61,6 +73,15 @@ export function CommessaSidebar({
           />
         </CardContent>
       </Card>
+
+      {/* Card tipologie impianto — "cosa si fa" (elemento master, append-only) */}
+      <TipologiePanel
+        commessaId={commessaId}
+        vociPresenti={tipologie.vociPresenti}
+        voci={tipologie.voci}
+        presets={tipologie.presets}
+        canEdit={tipologie.canEdit}
+      />
 
       {/* Card tecnici */}
       <TecniciPanel

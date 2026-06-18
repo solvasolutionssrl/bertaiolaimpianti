@@ -11,6 +11,11 @@ import {
   elencaTecniciTenant,
 } from '../../../_actions/commessa-tecnici';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import type {
+  TipologiaVoce,
+  TipologiaPreset,
+} from '../../../_components/aggiungi-tipologie-dialog';
 
 export default async function CommessaLayout({
   params,
@@ -26,10 +31,41 @@ export default async function CommessaLayout({
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
 
   // Carica in parallelo tecnici assegnati + rosa disponibile (per il picker)
-  const [tecniciAssegnati, tecniciTenant] = await Promise.all([
-    elencaTecniciAssegnati(params.id),
-    canManageTecnici ? elencaTecniciTenant() : Promise.resolve([]),
-  ]);
+  // + dati tipologie (voci presenti, catalogo, preset) per la card master.
+  const supabase = createServerSupabase();
+  const [tecniciAssegnati, tecniciTenant, vociPresentiRes, catalogoRes, presetRes] =
+    await Promise.all([
+      elencaTecniciAssegnati(params.id),
+      canManageTecnici ? elencaTecniciTenant() : Promise.resolve([]),
+      supabase.from('commessa_voci').select('voce_id').eq('commessa_id', params.id),
+      supabase
+        .from('voci_catalogo')
+        .select('id, nome, categoria')
+        .order('ordine_visualizzazione'),
+      supabase
+        .from('preset')
+        .select('id, nome, voci_default')
+        .eq('tenant_id', ctx.tenantId)
+        .order('nome'),
+    ]);
+
+  const vociPresenti = ((vociPresentiRes.data ?? []) as Array<{ voce_id: number }>).map(
+    (v) => v.voce_id,
+  );
+  const catalogoVoci: TipologiaVoce[] = ((catalogoRes.data ?? []) as Array<{
+    id: number;
+    nome: string;
+    categoria: string | null;
+  }>).map((v) => ({ id: v.id, nome: v.nome, categoria: v.categoria }));
+  const presetTipologie: TipologiaPreset[] = ((presetRes.data ?? []) as Array<{
+    id: string;
+    nome: string;
+    voci_default: unknown;
+  }>).map((p) => ({
+    id: p.id,
+    nome: p.nome,
+    vociIds: Array.isArray(p.voci_default) ? (p.voci_default as number[]) : [],
+  }));
 
   return (
     <div className="w-full space-y-3 px-4 pb-6 pt-1 md:px-6 md:pb-8 md:pt-2">
@@ -84,6 +120,12 @@ export default async function CommessaLayout({
             tecniciAssegnati={tecniciAssegnati}
             tecniciTenant={tecniciTenant}
             canManageTecnici={canManageTecnici}
+            tipologie={{
+              vociPresenti,
+              voci: catalogoVoci,
+              presets: presetTipologie,
+              canEdit: canManageTecnici,
+            }}
           />
         </div>
       </div>
