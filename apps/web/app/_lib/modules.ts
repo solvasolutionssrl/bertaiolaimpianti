@@ -10,8 +10,9 @@ import { requireTenantContextCached } from './tenant-cache';
 
 /**
  * Righe `tenant_modules` del tenant corrente, deduplicate per request
- * (React.cache). Letto via RLS (admin/office) — sufficiente per il gating
- * nei layout/route, che girano per utenti autenticati del tenant.
+ * (React.cache). Letto via RLS: la policy consente a qualunque utente
+ * autenticato dello stesso tenant di leggere i moduli (serve al gating
+ * delle route per tutti i ruoli, inclusi tecnico/cliente su mobile/portal).
  */
 export const getTenantModulesCached = cache(
   async (): Promise<TenantModuleRow[]> => {
