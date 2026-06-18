@@ -12,6 +12,8 @@ export type QrRiga = {
   codice: string | null;
   stato: 'assente' | 'attivo' | 'revocato';
   createdAt: string | null;
+  scansioni: number;
+  ultimaScansione: string | null;
 };
 
 type CommessaRow = {
@@ -31,6 +33,13 @@ type QrRow = {
   created_at: string;
 };
 
+type TimbraturaScan = {
+  commessa_id: string;
+  ts: string;
+};
+
+type ScansMap = Record<string, { scansioni: number; ultima: string | null }>;
+
 export default async function QrPage() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
@@ -49,13 +58,35 @@ export default async function QrPage() {
     .eq('tenant_id', ctx.tenantId)
     .eq('attivo', true)) as { data: QrRow[] | null };
 
+  const { data: timbrature } = (await supabase
+    .from('timbrature' as never)
+    .select('commessa_id, ts')
+    .eq('tenant_id', ctx.tenantId)) as { data: TimbraturaScan[] | null };
+
   const qrMap = new Map<string, QrRow>();
   for (const row of qrRows ?? []) {
     qrMap.set(row.commessa_id, row);
   }
 
+  // Build scans map: { commessa_id -> { scansioni, ultima } }
+  const scansMap: ScansMap = {};
+  for (const t of timbrature ?? []) {
+    const cid = t.commessa_id;
+    if (!cid) continue;
+    const existing = scansMap[cid];
+    if (!existing) {
+      scansMap[cid] = { scansioni: 1, ultima: t.ts };
+    } else {
+      existing.scansioni += 1;
+      if (t.ts > (existing.ultima ?? '')) {
+        existing.ultima = t.ts;
+      }
+    }
+  }
+
   const righe: QrRiga[] = (commesse ?? []).map((c) => {
     const qr = qrMap.get(c.id) ?? null;
+    const scans = scansMap[c.id];
     return {
       id: c.id,
       titolo:
@@ -69,15 +100,17 @@ export default async function QrPage() {
       codice: c.codice_interno,
       stato: statoQr(qr),
       createdAt: qr?.created_at ?? null,
+      scansioni: scans?.scansioni ?? 0,
+      ultimaScansione: scans?.ultima ?? null,
     };
   });
 
   return (
     <div className="w-full space-y-6">
       <header>
-        <h1 className="text-xl font-semibold">QR cantiere</h1>
+        <h1 className="text-xl font-semibold">QR code</h1>
         <p className="text-sm text-muted-foreground">
-          Genera e gestisci i codici QR di accesso per ogni commessa.
+          Genera e stampa i QR di timbratura. Ogni QR è permanente: ristamparlo non lo cambia.
         </p>
       </header>
       <QrClient righe={righe} />
