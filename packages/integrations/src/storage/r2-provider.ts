@@ -59,8 +59,9 @@ export class R2FileStorageProvider implements StorageProvider {
   }
 
   async getDownloadUrl(path: string, expiresInSec?: number): Promise<SignedUrl> {
+    // Default 1h per il contratto StorageProvider (R2 di suo userebbe 5min).
     const signed = await this.r2.createPresignedGetUrl(this.key(path), {
-      ttlSec: expiresInSec,
+      ttlSec: expiresInSec ?? 3600,
     });
     return { url: signed.url, expiresAt: signed.expiresAt };
   }

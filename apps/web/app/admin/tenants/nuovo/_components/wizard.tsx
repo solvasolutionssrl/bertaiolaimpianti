@@ -82,7 +82,7 @@ export function NuovoTenantWizard({ plans }: Props) {
   const [r2Endpoint, setR2Endpoint] = React.useState('');
 
   // Crea struttura cartelle commessa (default true; false per R2)
-  const [creaCatelle, setCreaCatelle] = React.useState(true);
+  const [creaCartelle, setCreaCartelle] = React.useState(true);
 
   // Test connessione storage (Nextcloud / R2)
   const [testing, startTest] = React.useTransition();
@@ -178,7 +178,7 @@ export function NuovoTenantWizard({ plans }: Props) {
       storage_provider: storageProvider,
       storage_config,
       r2_config,
-      crea_cartelle: creaCatelle,
+      crea_cartelle: creaCartelle,
       inbound_email: inboundEmail || null,
       owner_email: ownerEmail,
       owner_name: ownerName,
@@ -357,7 +357,7 @@ export function NuovoTenantWizard({ plans }: Props) {
                       key={p.value}
                       onClick={() => {
                         setStorageProvider(p.value);
-                        setCreaCatelle(p.value !== 'r2');
+                        setCreaCartelle(p.value !== 'r2');
                       }}
                       className={cn(
                         'rounded-md border px-3 py-2.5 text-left transition-colors',
@@ -530,8 +530,8 @@ export function NuovoTenantWizard({ plans }: Props) {
               <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-3 py-2.5 hover:bg-muted/30">
                 <input
                   type="checkbox"
-                  checked={creaCatelle}
-                  onChange={(e) => setCreaCatelle(e.target.checked)}
+                  checked={creaCartelle}
+                  onChange={(e) => setCreaCartelle(e.target.checked)}
                   className="h-4 w-4 accent-primary"
                 />
                 <span className="text-sm">Crea struttura cartelle commessa</span>
