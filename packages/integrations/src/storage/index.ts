@@ -1,9 +1,13 @@
 import type { StorageProvider, StorageProviderName } from './types';
 import { SupabaseStorageProvider } from './supabase';
 import { NextcloudStorageProvider } from './nextcloud';
+import { R2FileStorageProvider } from './r2-provider';
 
 export * from './types';
 export * from './r2';
+export * from './r2-provider';
+export * from './r2-paths';
+export * from './resolve';
 export { SupabaseStorageProvider, NextcloudStorageProvider };
 
 export interface StorageProviderConfig {
@@ -46,8 +50,24 @@ export function getStorageProvider(config: StorageProviderConfig): StorageProvid
         basePath: config.basePath,
       });
     case 'r2':
-      // Implementazione StorageProvider completa per R2: task B4+.
-      throw new Error('R2 StorageProvider non ancora implementato — usa R2StorageProvider direttamente.');
+      if (
+        !config.accountId ||
+        !config.bucket ||
+        !config.accessKeyId ||
+        !config.secretAccessKey
+      ) {
+        throw new Error(
+          'R2 config incomplete: need accountId/bucket/accessKeyId/secretAccessKey',
+        );
+      }
+      return new R2FileStorageProvider({
+        accountId: config.accountId,
+        bucket: config.bucket,
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+        endpoint: config.endpoint,
+        basePath: config.basePath,
+      });
     default: {
       const exhaustiveCheck: never = config.provider;
       throw new Error(`Unknown storage provider: ${exhaustiveCheck}`);

@@ -21,6 +21,7 @@ import {
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
+  ListObjectsV2Command,
   type CompletedPart,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -213,6 +214,33 @@ export class R2StorageProvider {
       if (name === 'NotFound' || name === 'NoSuchKey') return null;
       throw err;
     }
+  }
+
+  /** Lista oggetti per prefisso (raw key). Usato dall'adapter listFolder e dal probe. */
+  async listObjects(
+    prefix: string,
+    opts?: { delimiter?: string; maxKeys?: number },
+  ): Promise<{
+    keys: { key: string; size: number; lastModified: string | null }[];
+    prefixes: string[];
+  }> {
+    const res = await this.client.send(
+      new ListObjectsV2Command({
+        Bucket: this.bucket,
+        Prefix: prefix,
+        Delimiter: opts?.delimiter,
+        MaxKeys: opts?.maxKeys,
+      }),
+    );
+    const keys = (res.Contents ?? []).map((o) => ({
+      key: o.Key ?? '',
+      size: o.Size ?? 0,
+      lastModified: o.LastModified?.toISOString() ?? null,
+    }));
+    const prefixes = (res.CommonPrefixes ?? [])
+      .map((p) => p.Prefix ?? '')
+      .filter(Boolean);
+    return { keys, prefixes };
   }
 
   async delete(key: string): Promise<void> {
