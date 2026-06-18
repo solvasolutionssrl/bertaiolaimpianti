@@ -74,13 +74,6 @@ export function NuovoTenantWizard({ plans }: Props) {
   const [storageUser, setStorageUser] = React.useState('');
   const [storagePass, setStoragePass] = React.useState('');
 
-  // R2 fields
-  const [r2AccountId, setR2AccountId] = React.useState('');
-  const [r2Bucket, setR2Bucket] = React.useState('');
-  const [r2AccessKeyId, setR2AccessKeyId] = React.useState('');
-  const [r2SecretAccessKey, setR2SecretAccessKey] = React.useState('');
-  const [r2Endpoint, setR2Endpoint] = React.useState('');
-
   // Crea struttura cartelle commessa (default true; false per R2)
   const [creaCartelle, setCreaCartelle] = React.useState(true);
 
@@ -95,29 +88,17 @@ export function NuovoTenantWizard({ plans }: Props) {
   // Reset test result quando cambia la config
   React.useEffect(() => {
     setTestResult({ kind: 'idle' });
-  }, [storageProvider, storageBaseUrl, storageUser, storagePass, r2AccountId, r2Bucket, r2AccessKeyId, r2SecretAccessKey, r2Endpoint]);
+  }, [storageProvider, storageBaseUrl, storageUser, storagePass]);
 
   function runStorageTest() {
     setTestResult({ kind: 'idle' });
     startTest(async () => {
-      let res;
-      if (storageProvider === 'r2') {
-        res = await testaConnessioneStorage({
-          provider: 'r2',
-          account_id: r2AccountId,
-          bucket: r2Bucket,
-          access_key_id: r2AccessKeyId,
-          secret_access_key: r2SecretAccessKey,
-          endpoint: r2Endpoint,
-        });
-      } else {
-        res = await testaConnessioneStorage({
-          provider: storageProvider,
-          baseUrl: storageBaseUrl,
-          user: storageUser,
-          appPassword: storagePass,
-        });
-      }
+      const res = await testaConnessioneStorage({
+        provider: storageProvider,
+        baseUrl: storageBaseUrl,
+        user: storageUser,
+        appPassword: storagePass,
+      });
       if (res.ok) {
         setTestResult({ kind: 'ok', latencyMs: res.latencyMs, detail: res.detail });
       } else {
@@ -135,8 +116,7 @@ export function NuovoTenantWizard({ plans }: Props) {
       return nome.length >= 2 && /^[A-Z0-9]{2,12}$/.test(slug) && planId !== '';
     if (step === 2) {
       if (storageProvider === 'supabase') return true;
-      if (storageProvider === 'r2')
-        return r2AccountId !== '' && r2Bucket !== '' && r2AccessKeyId !== '' && r2SecretAccessKey !== '';
+      if (storageProvider === 'r2') return true; // gestito da env, nessun campo richiesto
       return storageBaseUrl !== '' && storageUser !== '' && storagePass !== '';
     }
     if (step === 3)
@@ -158,16 +138,8 @@ export function NuovoTenantWizard({ plans }: Props) {
         : {};
     if (inboundEmail) storage_config.inbound_email = inboundEmail;
 
-    const r2_config: Record<string, unknown> =
-      storageProvider === 'r2'
-        ? {
-            account_id: r2AccountId,
-            bucket: r2Bucket,
-            access_key_id: r2AccessKeyId,
-            secret_access_key: r2SecretAccessKey,
-            ...(r2Endpoint ? { endpoint: r2Endpoint } : {}),
-          }
-        : {};
+    // R2 è gestito da env — nessuna credenziale per-tenant da salvare
+    const r2_config: Record<string, unknown> = {};
 
     const payload: CreaTenantInput = {
       nome,
@@ -440,90 +412,10 @@ export function NuovoTenantWizard({ plans }: Props) {
                 </div>
               ) : null}
               {storageProvider === 'r2' ? (
-                <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
-                  <div>
-                    <Label htmlFor="r2_account_id">Account ID</Label>
-                    <Input
-                      id="r2_account_id"
-                      value={r2AccountId}
-                      onChange={(e) => setR2AccountId(e.target.value)}
-                      className="mt-1.5 h-10 font-mono text-xs"
-                      placeholder="abc123..."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="r2_bucket">Bucket</Label>
-                    <Input
-                      id="r2_bucket"
-                      value={r2Bucket}
-                      onChange={(e) => setR2Bucket(e.target.value)}
-                      className="mt-1.5 h-10 font-mono text-xs"
-                      placeholder="nome-bucket"
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <Label htmlFor="r2_access_key_id">Access Key ID</Label>
-                      <Input
-                        id="r2_access_key_id"
-                        value={r2AccessKeyId}
-                        onChange={(e) => setR2AccessKeyId(e.target.value)}
-                        className="mt-1.5 h-10 font-mono text-xs"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="r2_secret_access_key">Secret Access Key</Label>
-                      <Input
-                        id="r2_secret_access_key"
-                        value={r2SecretAccessKey}
-                        onChange={(e) => setR2SecretAccessKey(e.target.value)}
-                        className="mt-1.5 h-10 font-mono text-xs"
-                        type="password"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="r2_endpoint">Endpoint (opzionale)</Label>
-                    <Input
-                      id="r2_endpoint"
-                      value={r2Endpoint}
-                      onChange={(e) => setR2Endpoint(e.target.value)}
-                      className="mt-1.5 h-10 font-mono text-xs"
-                      placeholder="https://account_id.r2.cloudflarestorage.com"
-                    />
-                  </div>
-
-                  {/* Test connessione live */}
-                  <div className="flex items-center gap-3 pt-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={runStorageTest}
-                      disabled={
-                        testing || !r2AccountId || !r2Bucket || !r2AccessKeyId || !r2SecretAccessKey
-                      }
-                    >
-                      {testing ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Plug className="h-3.5 w-3.5" />
-                      )}
-                      Testa connessione
-                    </Button>
-                    {testResult.kind === 'ok' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs text-success">
-                        <Check className="h-3.5 w-3.5" />
-                        {testResult.detail} · {testResult.latencyMs} ms
-                      </span>
-                    ) : null}
-                    {testResult.kind === 'fail' ? (
-                      <span className="inline-flex items-center gap-1.5 text-xs text-destructive">
-                        <XCircle className="h-3.5 w-3.5" />
-                        {testResult.error}
-                      </span>
-                    ) : null}
-                  </div>
+                <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Storage gestito (Cloudflare R2 di SOLVA). I file dei tenant sono isolati per
+                  prefisso <code className="font-mono text-xs">tenants/{'{slug}'}/ </code>
+                  nel bucket condiviso — nessuna credenziale da inserire.
                 </div>
               ) : null}
               {/* Crea struttura cartelle commessa */}

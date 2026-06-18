@@ -5,7 +5,6 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
-import { R2StorageProvider } from '@kommessa/integrations/storage';
 import { requirePlatformAdmin } from '../_lib/guard';
 
 /**
@@ -378,25 +377,9 @@ export async function testaConnessioneStorage(
     };
   }
 
-  // R2 probe
+  // R2 è gestito (bucket condiviso SOLVA da env) — nessun probe per-tenant
   if (data.provider === 'r2') {
-    if (!data.account_id || !data.bucket || !data.access_key_id || !data.secret_access_key) {
-      return { ok: false, error: 'Compila account_id + bucket + access_key_id + secret_access_key' };
-    }
-    const start = Date.now();
-    try {
-      const r2 = new R2StorageProvider({
-        accountId: data.account_id,
-        bucket: data.bucket,
-        accessKeyId: data.access_key_id,
-        secretAccessKey: data.secret_access_key,
-        endpoint: data.endpoint,
-      });
-      await r2.listObjects('', { maxKeys: 1 });
-      return { ok: true, latencyMs: Date.now() - start, detail: 'Bucket R2 raggiungibile' };
-    } catch (e) {
-      return { ok: false, error: `R2 non raggiungibile: ${(e as Error).message ?? 'errore'}` };
-    }
+    return { ok: true, latencyMs: 0, detail: 'Storage R2 gestito (env)' };
   }
 
   // Nextcloud probe

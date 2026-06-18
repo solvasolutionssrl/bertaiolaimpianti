@@ -49,25 +49,20 @@ export function getStorageProvider(config: StorageProviderConfig): StorageProvid
         appPassword: config.appPassword,
         basePath: config.basePath,
       });
-    case 'r2':
-      if (
-        !config.accountId ||
-        !config.bucket ||
-        !config.accessKeyId ||
-        !config.secretAccessKey
-      ) {
-        throw new Error(
-          'R2 config incomplete: need accountId/bucket/accessKeyId/secretAccessKey',
-        );
+    case 'r2': {
+      const accountId = config.accountId ?? process.env.R2_ACCOUNT_ID;
+      const bucket = config.bucket ?? process.env.R2_BUCKET;
+      const accessKeyId = config.accessKeyId ?? process.env.R2_ACCESS_KEY_ID;
+      const secretAccessKey = config.secretAccessKey ?? process.env.R2_SECRET_ACCESS_KEY;
+      const endpoint = config.endpoint ?? process.env.R2_ENDPOINT;
+      if (!accountId || !bucket || !accessKeyId || !secretAccessKey) {
+        throw new Error('R2 config incomplete: set R2_* env vars (managed) or per-tenant r2_config');
       }
       return new R2FileStorageProvider({
-        accountId: config.accountId,
-        bucket: config.bucket,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-        endpoint: config.endpoint,
+        accountId, bucket, accessKeyId, secretAccessKey, endpoint,
         basePath: config.basePath,
       });
+    }
     default: {
       const exhaustiveCheck: never = config.provider;
       throw new Error(`Unknown storage provider: ${exhaustiveCheck}`);
