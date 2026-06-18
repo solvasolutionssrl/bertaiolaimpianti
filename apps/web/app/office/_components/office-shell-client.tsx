@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
-import { Sparkles, Timer } from 'lucide-react';
+import { HardHat, Sparkles, Timer } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
@@ -14,6 +14,7 @@ interface Props {
   user: { name: string; email?: string; role?: string };
   activeNavId?: string;
   notificationCount?: number;
+  hasKantiere?: boolean;
   children: React.ReactNode;
 }
 
@@ -63,7 +64,8 @@ const BASE_NAV: OfficeNavItem[] = DEFAULT_OFFICE_NAV.map((item) => {
 
 // Inseriamo "Turni & ore" subito dopo "Clienti" e "Co-pilot" prima di
 // "Impostazioni" per coerenza di flusso (operativo → AI → config).
-const NAV: OfficeNavItem[] = (() => {
+// BASE_FULL_NAV: nav statica senza voci per moduli opzionali.
+const BASE_FULL_NAV: OfficeNavItem[] = (() => {
   const out: OfficeNavItem[] = [];
   for (const item of BASE_NAV) {
     out.push(item);
@@ -87,17 +89,31 @@ const NAV: OfficeNavItem[] = (() => {
   return out;
 })();
 
+/** Costruisce la NAV finale aggiungendo le voci dei moduli opzionali attivi. */
+function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
+  const out = [...BASE_FULL_NAV];
+  if (hasKantiere) {
+    out.push({
+      id: 'kantiere',
+      label: 'Kantiere',
+      href: '/office/kantiere/dipendenti',
+      icon: HardHat,
+    });
+  }
+  return out;
+}
+
 /**
  * Deriva l'id della voce nav attiva dal pathname corrente. Logica:
  *  - match esatto su `href` ha priorità
  *  - altrimenti il primo `href` (non `/`) che è prefisso del pathname
  *  - default `home` se siamo su `/office`
  */
-function deriveActiveId(pathname: string | null): string | undefined {
+function deriveActiveId(pathname: string | null, nav: OfficeNavItem[]): string | undefined {
   if (!pathname) return undefined;
   // Flatten alberatura per il match (children inclusi)
   const flat: { id: string; href: string }[] = [];
-  for (const n of NAV) {
+  for (const n of nav) {
     flat.push({ id: n.id, href: n.href });
     for (const c of n.children ?? []) flat.push({ id: c.id, href: c.href });
   }
@@ -118,11 +134,13 @@ export function OfficeShellClient({
   user,
   activeNavId,
   notificationCount,
+  hasKantiere,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const computedActiveId = activeNavId ?? deriveActiveId(pathname);
+  const nav = buildNav(hasKantiere);
+  const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
@@ -152,7 +170,7 @@ export function OfficeShellClient({
       <OfficeShell
         tenant={tenant}
         user={user}
-        navItems={NAV}
+        navItems={nav}
         activeNavId={computedActiveId}
         notificationCount={notificationCount}
         onLogout={handleLogout}
