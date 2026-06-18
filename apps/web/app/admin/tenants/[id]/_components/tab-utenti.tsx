@@ -43,7 +43,7 @@ import {
   invitaUtenteTenant,
   resetPasswordUser,
 } from '../../../_actions/utenti';
-import { impersonateUser } from '../../../_actions/tenants';
+import { creaUtenteTenant, impersonateUser } from '../../../_actions/tenants';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
 interface UtenteRow {
@@ -92,6 +92,24 @@ export function TabUtenti({
   const [pwErr, setPwErr] = React.useState<string | null>(null);
   const [pwResult, setPwResult] = React.useState<string | null>(null);
 
+  // Nuovo utente con email+password reale (no invito)
+  const [openNuovo, setOpenNuovo] = React.useState(false);
+  const [nuovoNome, setNuovoNome] = React.useState('');
+  const [nuovoEmail, setNuovoEmail] = React.useState('');
+  const [nuovoPassword, setNuovoPassword] = React.useState('');
+  const [nuovoRole, setNuovoRole] = React.useState<(typeof ROLES)[number]>('admin');
+  const [nuovoErr, setNuovoErr] = React.useState<string | null>(null);
+  const [nuovoOk, setNuovoOk] = React.useState(false);
+
+  function resetNuovoForm() {
+    setNuovoNome('');
+    setNuovoEmail('');
+    setNuovoPassword('');
+    setNuovoRole('admin');
+    setNuovoErr(null);
+    setNuovoOk(false);
+  }
+
   function resetManualForm() {
     setManualUsername('');
     setManualDisplayName('');
@@ -117,6 +135,15 @@ export function TabUtenti({
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               Crea manuale
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { resetNuovoForm(); setOpenNuovo(true); }}
+              title="Crea utente con email reale + password, nessuna email inviata"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Nuovo utente
             </Button>
             <Button size="sm" onClick={() => setOpen(true)}>
               <UserPlus className="h-3.5 w-3.5" />
@@ -666,6 +693,155 @@ export function TabUtenti({
                   >
                     <ShieldCheck className="h-3.5 w-3.5" />
                     Imposta
+                  </Button>
+                </>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* ─── DIALOG: nuovo utente con email+password reali ──────────── */}
+        <Dialog
+          open={openNuovo}
+          onOpenChange={(o) => {
+            if (!o) {
+              setOpenNuovo(false);
+              resetNuovoForm();
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Nuovo utente</DialogTitle>
+              <DialogDescription>
+                Crea l&apos;account con email e password impostate da te.{' '}
+                <strong>Nessuna email viene inviata</strong> — consegna le
+                credenziali al cliente fuori canale.
+              </DialogDescription>
+            </DialogHeader>
+
+            {nuovoOk ? (
+              <div className="space-y-3">
+                <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">
+                  <p className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
+                    <Check className="h-4 w-4" />
+                    Utente creato. Consegna queste credenziali al cliente:
+                  </p>
+                </div>
+                <CredField label="Email di login" value={nuovoEmail} />
+                <CredField label="Password" value={nuovoPassword} mono />
+                <p className="text-[11px] text-muted-foreground">
+                  L&apos;utente può accedere subito con queste credenziali. Nessuna
+                  conferma email richiesta.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="nu_nome">Nome *</Label>
+                  <Input
+                    id="nu_nome"
+                    value={nuovoNome}
+                    onChange={(e) => setNuovoNome(e.target.value)}
+                    placeholder="Es. Mario Rossi"
+                    className="mt-1.5 h-10"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nu_email">Email *</Label>
+                  <Input
+                    id="nu_email"
+                    value={nuovoEmail}
+                    onChange={(e) => setNuovoEmail(e.target.value)}
+                    type="email"
+                    placeholder="mario@azienda.it"
+                    className="mt-1.5 h-10"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="nu_pw">Password *</Label>
+                  <div className="mt-1.5 flex gap-2">
+                    <Input
+                      id="nu_pw"
+                      value={nuovoPassword}
+                      onChange={(e) => setNuovoPassword(e.target.value)}
+                      type="password"
+                      placeholder="min 8 caratteri"
+                      className="h-10 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setNuovoPassword(generaPassword())}
+                      title="Genera password sicura"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Auto
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="nu_role">Ruolo *</Label>
+                  <select
+                    id="nu_role"
+                    value={nuovoRole}
+                    onChange={(e) => setNuovoRole(e.target.value as (typeof ROLES)[number])}
+                    className="mt-1.5 h-10 w-full rounded-md border border-border bg-card px-2 text-sm"
+                  >
+                    <option value="admin">Amministratore</option>
+                    <option value="office">Ufficio</option>
+                    <option value="tecnico">Tecnico</option>
+                  </select>
+                </div>
+                {nuovoErr ? (
+                  <p className="text-sm text-destructive">{nuovoErr}</p>
+                ) : null}
+              </div>
+            )}
+
+            <DialogFooter className="gap-2 sm:gap-2">
+              {nuovoOk ? (
+                <Button
+                  onClick={() => {
+                    setOpenNuovo(false);
+                    resetNuovoForm();
+                    router.refresh();
+                  }}
+                >
+                  Fatto
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setOpenNuovo(false);
+                      resetNuovoForm();
+                    }}
+                  >
+                    Annulla
+                  </Button>
+                  <Button
+                    disabled={pending || !nuovoNome || !nuovoEmail || nuovoPassword.length < 8}
+                    onClick={() => {
+                      setNuovoErr(null);
+                      start(async () => {
+                        const res = await creaUtenteTenant({
+                          tenantId,
+                          email: nuovoEmail,
+                          password: nuovoPassword,
+                          nome: nuovoNome,
+                          role: nuovoRole,
+                        });
+                        if (!res.ok) {
+                          setNuovoErr(res.error);
+                          return;
+                        }
+                        setNuovoOk(true);
+                      });
+                    }}
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Crea utente
                   </Button>
                 </>
               )}

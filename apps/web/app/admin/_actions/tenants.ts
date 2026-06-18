@@ -713,6 +713,85 @@ export async function aggiornaModelloTrascrizione(input: {
 }
 
 // ---------------------------------------------------------------------
+// CREA UTENTE TENANT con email+password reali (nessun invito email)
+// ---------------------------------------------------------------------
+
+const CREA_UTENTE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  email: z.string().email(),
+  password: z.string().min(8, 'Almeno 8 caratteri'),
+  nome: z.string().min(2).max(120),
+  role: z.enum(['admin', 'office', 'tecnico']),
+});
+
+/**
+ * Crea un utente del tenant con email+password impostate dall'admin (NESSUNA
+ * email di invito). L'account è pronto: l'admin consegna le credenziali.
+ */
+export async function creaUtenteTenant(input: {
+  tenantId: string;
+  email: string;
+  password: string;
+  nome: string;
+  role: 'admin' | 'office' | 'tecnico';
+}): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = CREA_UTENTE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  // 1) crea l'utente auth con password, email già confermata, niente email inviata
+  const { data: created, error: authErr } = await supabase.auth.admin.createUser({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: { display_name: parsed.data.nome },
+    app_metadata: {
+      tenant_id: parsed.data.tenantId,
+      role: parsed.data.role,
+    } as never,
+  });
+  if (authErr || !created?.user) {
+    const msg = authErr?.message ?? 'creazione utente fallita';
+    return {
+      ok: false,
+      error: msg.toLowerCase().includes('already')
+        ? 'Esiste già un utente con questa email.'
+        : msg,
+    };
+  }
+
+  // 2) profilo applicativo nel tenant (il trigger sync_user_claims popola i JWT claims)
+  const { error: profErr } = await supabase.from('users').insert({
+    id: created.user.id,
+    tenant_id: parsed.data.tenantId,
+    role: parsed.data.role,
+    display_name: parsed.data.nome,
+    attivo: true,
+  } as never);
+  if (profErr) {
+    // rollback best-effort dell'utente auth per non lasciare orfani
+    await supabase.auth.admin.deleteUser(created.user.id).catch(() => {});
+    return { ok: false, error: profErr.message };
+  }
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'user',
+    entityId: created.user.id,
+    action: 'tenant.user.create_with_password',
+    after: { email: parsed.data.email, role: parsed.data.role },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true, userId: created.user.id };
+}
+
+// ---------------------------------------------------------------------
 // Moduli opzionali per tenant (kantiere, ecc.)
 // ---------------------------------------------------------------------
 
