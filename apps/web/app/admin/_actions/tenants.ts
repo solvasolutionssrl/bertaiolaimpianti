@@ -697,3 +697,67 @@ export async function aggiornaModelloTrascrizione(input: {
   revalidatePath('/admin/tenants');
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------
+// Moduli opzionali per tenant (kantiere, ecc.)
+// ---------------------------------------------------------------------
+
+const TENANT_MODULE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  moduleCode: z.enum(['kantiere']),
+  attivo: z.boolean(),
+});
+
+/**
+ * Accende/spegne un modulo opzionale per un tenant. Upsert su
+ * (tenant_id, module_code). Solo super-admin. base non passa di qui.
+ */
+export async function aggiornaModuloTenant(input: {
+  tenantId: string;
+  moduleCode: 'kantiere';
+  attivo: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = TENANT_MODULE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Input non valido',
+    };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: prev } = await supabase
+    .from('tenant_modules' as never)
+    .select('attivo')
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', parsed.data.moduleCode)
+    .maybeSingle();
+  const previousAttivo =
+    (prev as { attivo?: boolean } | null)?.attivo ?? false;
+
+  const { error } = await supabase.from('tenant_modules' as never).upsert(
+    {
+      tenant_id: parsed.data.tenantId,
+      module_code: parsed.data.moduleCode,
+      attivo: parsed.data.attivo,
+      configured_at: new Date().toISOString(),
+    } as never,
+    { onConflict: 'tenant_id,module_code' },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.module.update',
+    before: { module_code: parsed.data.moduleCode, attivo: previousAttivo },
+    after: { module_code: parsed.data.moduleCode, attivo: parsed.data.attivo },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}
