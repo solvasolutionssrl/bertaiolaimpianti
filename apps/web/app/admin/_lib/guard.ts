@@ -1,4 +1,5 @@
 import 'server-only';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 
@@ -68,4 +69,36 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminContext> {
   if (check.kind === 'admin') return check.ctx;
   if (check.kind === 'tenant_user') redirect('/office');
   redirect('/login?next=/admin');
+}
+
+/**
+ * Verifica se l'attore corrente è un superadmin SOLVA, sia in modalità
+ * nativa (JWT platform_admin) sia mentre IMPERSONA un tenant.
+ *
+ * Durante l'impersonation il JWT è quello dell'utente tenant (platform_admin
+ * = false), ma il cookie httpOnly `shadow_admin` — settato solo dal flusso di
+ * impersonation, che a sua volta richiede platform admin — conserva l'identità
+ * reale SOLVA. La sua presenza è quindi un segnale affidabile.
+ *
+ * Usato per gating di azioni riservate al superadmin visibili nell'area office
+ * (es. ripristino versione commessa).
+ */
+export async function isSuperadminActor(): Promise<{
+  ok: boolean;
+  email: string | null;
+}> {
+  // 1) Impersonation attiva (shadow_admin httpOnly)
+  const shadow = cookies().get('shadow_admin')?.value;
+  if (shadow) {
+    try {
+      const parsed = JSON.parse(shadow) as { admin_email?: string };
+      return { ok: true, email: parsed.admin_email ?? null };
+    } catch {
+      return { ok: true, email: null };
+    }
+  }
+  // 2) Superadmin nativo (non in impersonation)
+  const check = await checkPlatformAdmin();
+  if (check.kind === 'admin') return { ok: true, email: check.ctx.email };
+  return { ok: false, email: null };
 }

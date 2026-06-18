@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { createServiceSupabase } from '@kommessa/api/service';
 import type { Json } from '@kommessa/api';
 
-import { checkPlatformAdmin } from '../admin/_lib/guard';
+import { isSuperadminActor } from '../admin/_lib/guard';
 import {
   buildSnapshot,
   diffSnapshot,
@@ -43,11 +43,11 @@ export async function ripristinaVersione(
   }
   const { commessaId, versioneId } = parsed.data;
 
-  const check = await checkPlatformAdmin();
-  if (check.kind !== 'admin') {
+  const attore = await isSuperadminActor();
+  if (!attore.ok) {
     return { ok: false, error: 'Solo il superadmin può ripristinare una versione' };
   }
-  const email = check.ctx.email;
+  const email = attore.email ?? 'superadmin';
 
   const service = createServiceSupabase();
 
