@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const ITEMS = [
   { label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
   { label: 'QR cantiere', href: '/office/kantiere/qr' },
+  { label: 'Rapportini', href: '/office/kantiere/rapportini' },
 ] as const;
 
 export function KantiereSubnav() {
