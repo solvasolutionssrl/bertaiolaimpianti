@@ -9,6 +9,7 @@ import {
   Building2,
   CloudUpload,
   FileEdit,
+  HardDrive,
   HeartPulse,
   Layers,
   LogOut,
@@ -34,6 +35,7 @@ const NAV: AdminNavItem[] = [
   { id: 'media', label: 'Media & sync', href: '/admin/media', icon: CloudUpload },
   { id: 'bozze', label: 'Bozze', href: '/admin/bozze', icon: FileEdit },
   { id: 'audit', label: 'Audit', href: '/admin/audit', icon: Activity },
+  { id: 'storage-r2', label: 'Storage R2', href: '/admin/storage-r2', icon: HardDrive },
   { id: 'salute', label: 'Salute sistema', href: '/admin/salute', icon: HeartPulse },
   { id: 'profilo', label: 'Profilo', href: '/admin/profilo', icon: UserCog },
 ];
