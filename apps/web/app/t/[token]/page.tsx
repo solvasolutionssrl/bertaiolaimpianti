@@ -17,6 +17,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext } from '@kommessa/api/tenant';
 import { prossimoTipoTimbratura } from '@kommessa/api/kantiere-ore';
+import { targetTimbratura } from '@kommessa/api/kantiere';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { Button } from '@kommessa/ui';
@@ -27,7 +28,8 @@ export const dynamic = 'force-dynamic';
 // ─── tipi locali ────────────────────────────────────────────────────────────
 
 type QrRow = {
-  commessa_id: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
   tenant_id: string;
   attivo: boolean;
 };
@@ -40,9 +42,20 @@ type CommessaRow = {
   codice_interno: string | null;
 };
 
-type SquadraRow = {
+type CantiereRow = {
+  id: string;
+  nome: string;
+  codice: string | null;
+};
+
+type SquadraCommessaRow = {
   dipendente_id: string;
   ruolo_commessa: 'capo' | 'membro';
+};
+
+type SquadraCantiereRow = {
+  dipendente_id: string;
+  ruolo: 'capo' | 'membro';
 };
 
 type DipRow = {
@@ -89,25 +102,37 @@ function IconaQr() {
   );
 }
 
-// ─── helper: timbrature di oggi per un dipendente su una commessa ────────────
+// ─── helper: timbrature di oggi per un dipendente su un target (commessa o cantiere) ──
 
 async function prossimoTipoFor(
   supabase: ReturnType<typeof createServerSupabase>,
   dipendenteId: string,
-  commessaId: string,
+  target: { tipo: 'commessa' | 'cantiere'; id: string },
 ): Promise<'ingresso' | 'uscita'> {
   const inizioGiorno = new Date();
   inizioGiorno.setHours(0, 0, 0, 0);
-  const { data } = await supabase
-    .from('timbrature' as never)
-    .select('tipo, ts')
-    .eq('dipendente_id', dipendenteId)
-    .eq('commessa_id', commessaId)
-    .gte('ts', inizioGiorno.toISOString())
-    .order('ts', { ascending: true });
-  return prossimoTipoTimbratura(
-    (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [],
-  );
+
+  let rows: { tipo: 'ingresso' | 'uscita' }[] = [];
+  if (target.tipo === 'commessa') {
+    const { data } = await supabase
+      .from('timbrature' as never)
+      .select('tipo, ts')
+      .eq('dipendente_id', dipendenteId)
+      .eq('commessa_id', target.id)
+      .gte('ts', inizioGiorno.toISOString())
+      .order('ts', { ascending: true });
+    rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
+  } else {
+    const { data } = await supabase
+      .from('timbrature' as never)
+      .select('tipo, ts')
+      .eq('dipendente_id', dipendenteId)
+      .eq('cantiere_id', target.id)
+      .gte('ts', inizioGiorno.toISOString())
+      .order('ts', { ascending: true });
+    rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
+  }
+  return prossimoTipoTimbratura(rows);
 }
 
 // ─── page ───────────────────────────────────────────────────────────────────
@@ -123,12 +148,15 @@ export default async function TokenPage({
   // 1. Lookup QR (service client — pubblico, cross-tenant)
   const { data: qr } = await svc
     .from('cantiere_qr' as never)
-    .select('commessa_id, tenant_id, attivo')
+    .select('commessa_id, cantiere_id, tenant_id, attivo')
     .eq('token', token)
     .maybeSingle<QrRow>();
 
-  // 2. Token non trovato o revocato
-  if (!qr || qr.attivo === false) {
+  // Risolvi target polimorfico
+  const target = qr ? targetTimbratura(qr) : null;
+
+  // 2. Token non trovato, revocato o senza target valido
+  if (!qr || qr.attivo === false || !target) {
     return (
       <Schermo>
         <IconaQr />
@@ -142,16 +170,27 @@ export default async function TokenPage({
     );
   }
 
-  // 3. Carica titolo commessa (service client: senza sessione utente)
-  const { data: commessa } = await svc
-    .from('commesse' as never)
-    .select(
-      'descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella, codice_interno',
-    )
-    .eq('id', qr.commessa_id)
-    .maybeSingle<CommessaRow>();
-
-  const titolo = commessa ? risolviTitoloCommessa(commessa) || 'Cantiere' : 'Cantiere';
+  // 3. Carica titolo bersaglio (service client: senza sessione utente)
+  let titolo = 'Cantiere';
+  if (target.tipo === 'commessa') {
+    const { data: commessa } = await svc
+      .from('commesse' as never)
+      .select(
+        'descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella, codice_interno',
+      )
+      .eq('id', target.id)
+      .maybeSingle<CommessaRow>();
+    titolo = commessa ? risolviTitoloCommessa(commessa) || 'Cantiere' : 'Cantiere';
+  } else {
+    const { data: cantiereRow } = await svc
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .eq('id', target.id)
+      .maybeSingle<CantiereRow>();
+    if (cantiereRow) {
+      titolo = titoloCase(cantiereRow.nome);
+    }
+  }
 
   // 4. Contesto sessione utente
   const ctx = await getTenantContext();
@@ -209,31 +248,43 @@ export default async function TokenPage({
 
   const me = meRow ?? null;
 
-  // Squadra della commessa
-  const { data: squadraRows } = await supabase
-    .from('commessa_squadra' as never)
-    .select('dipendente_id, ruolo_commessa')
-    .eq('commessa_id', qr.commessa_id)
-    .eq('tenant_id', ctx.tenantId);
+  // Squadra del bersaglio (commessa o cantiere)
+  let idsDiSquadra: string[] = [];
+  let capo = false;
 
-  const righeSquadra = (squadraRows as SquadraRow[] | null) ?? [];
-
-  // Sono capo su questa commessa?
-  const capo = me !== null && righeSquadra.some(
-    (r) => r.dipendente_id === me.id && r.ruolo_commessa === 'capo',
-  );
+  if (target.tipo === 'commessa') {
+    const { data: squadraRows } = await supabase
+      .from('commessa_squadra' as never)
+      .select('dipendente_id, ruolo_commessa')
+      .eq('commessa_id', target.id)
+      .eq('tenant_id', ctx.tenantId);
+    const righe = (squadraRows as SquadraCommessaRow[] | null) ?? [];
+    idsDiSquadra = righe.map((r) => r.dipendente_id);
+    capo = me !== null && righe.some(
+      (r) => r.dipendente_id === me.id && r.ruolo_commessa === 'capo',
+    );
+  } else {
+    const { data: squadraRows } = await supabase
+      .from('cantiere_squadra' as never)
+      .select('dipendente_id, ruolo')
+      .eq('cantiere_id', target.id)
+      .eq('tenant_id', ctx.tenantId);
+    const righe = (squadraRows as SquadraCantiereRow[] | null) ?? [];
+    idsDiSquadra = righe.map((r) => r.dipendente_id);
+    capo = me !== null && righe.some(
+      (r) => r.dipendente_id === me.id && r.ruolo === 'capo',
+    );
+  }
 
   // Prossimo tipo di timbratura per me
   const prossimoTipoSelf =
-    me !== null ? await prossimoTipoFor(supabase, me.id, qr.commessa_id) : null;
+    me !== null ? await prossimoTipoFor(supabase, me.id, target) : null;
 
   // Membri della squadra (escludo me stesso per non duplicare)
   let membriConTipo: { id: string; nome: string; prossimoTipo: 'ingresso' | 'uscita' }[] = [];
 
   if (capo) {
-    const idsMembri = righeSquadra
-      .map((r) => r.dipendente_id)
-      .filter((id) => id !== (me?.id ?? null));
+    const idsMembri = idsDiSquadra.filter((id) => id !== (me?.id ?? null));
 
     if (idsMembri.length > 0) {
       const { data: dipRows } = await supabase
@@ -247,7 +298,7 @@ export default async function TokenPage({
         dips.map(async (d) => ({
           id: d.id,
           nome: titoloCase(`${d.nome} ${d.cognome}`),
-          prossimoTipo: await prossimoTipoFor(supabase, d.id, qr.commessa_id),
+          prossimoTipo: await prossimoTipoFor(supabase, d.id, target),
         })),
       );
     }
