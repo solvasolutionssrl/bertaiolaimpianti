@@ -42,7 +42,7 @@ export function CommessaTabs({ id }: Props) {
 
   return (
     <nav
-      className="sticky top-0 z-10 -mx-1 flex flex-wrap items-end justify-between gap-y-1 border-b border-border bg-background/95 px-1 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      className="sticky top-0 z-10 -mx-1 flex flex-wrap items-end gap-y-1 border-b border-border bg-background/95 px-1 backdrop-blur supports-[backdrop-filter]:bg-background/80"
       aria-label="Tab commessa"
     >
       {/* Primarie */}
@@ -69,11 +69,11 @@ export function CommessaTabs({ id }: Props) {
         })}
       </div>
 
-      {/* Secondarie — muted, più piccole, dopo un divisore visivo */}
-      <div className="flex items-center gap-0.5 pb-0.5 pl-2">
+      {/* Secondarie — subito accanto alle primarie, ma muted e più piccole */}
+      <div className="flex items-center gap-0.5 pb-1.5 pl-1">
         <span
           aria-hidden="true"
-          className="mr-1.5 hidden h-4 w-px bg-border sm:block"
+          className="mr-1.5 h-4 w-px bg-border"
         />
         {SECONDARY.map((t) => {
           const href = `${base}/${t.sub}`;
