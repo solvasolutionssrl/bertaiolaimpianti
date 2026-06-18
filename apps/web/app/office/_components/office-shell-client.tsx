@@ -96,8 +96,18 @@ function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
     out.push({
       id: 'kantiere',
       label: 'Kantiere',
-      href: '/office/kantiere/dipendenti',
+      href: '/office/kantiere',
       icon: HardHat,
+      children: [
+        { id: 'kant-overview', label: 'Panoramica', href: '/office/kantiere' },
+        { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
+        { id: 'kant-qr', label: 'QR code', href: '/office/kantiere/qr' },
+        { id: 'kant-dip', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+        { id: 'kant-rapp', label: 'Rapportini', href: '/office/kantiere/rapportini' },
+        { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
+        { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
+        { id: 'kant-imp', label: 'Impostazioni', href: '/office/kantiere/impostazioni' },
+      ],
     });
   }
   return out;

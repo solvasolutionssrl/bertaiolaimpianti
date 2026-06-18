@@ -177,7 +177,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   }));
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 p-6">
+    <div className="w-full space-y-6">
       <header>
         <h1 className="text-xl font-semibold">Rapportini</h1>
         <p className="text-sm text-muted-foreground">
