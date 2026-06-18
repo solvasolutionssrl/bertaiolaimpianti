@@ -1,19 +1,7 @@
 import { Button, Card, CardContent } from '@kommessa/ui';
-import {
-  HardHat,
-  MapPin,
-  Pencil,
-  User2,
-  Calendar,
-  FileText,
-  Wrench,
-  Image as ImageIcon,
-  ListTodo,
-  Users,
-} from 'lucide-react';
+import { HardHat, MapPin, Pencil, User2, Calendar, FileText } from 'lucide-react';
 import Link from 'next/link';
 
-import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
 import { loadCommessa } from './_lib/get-commessa';
@@ -51,37 +39,6 @@ export default async function CommessaTab({
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
 
   const canEdit = ctx.role === 'admin' || ctx.role === 'office';
-
-  // Conteggi per la striscia statistiche (query leggere, solo count).
-  const supabase = createServerSupabase();
-  const [tipologieCnt, mediaCnt, todoCnt, riunioniCnt] = await Promise.all([
-    supabase
-      .from('commessa_voci')
-      .select('*', { count: 'exact', head: true })
-      .eq('commessa_id', params.id),
-    supabase
-      .from('file_refs')
-      .select('*', { count: 'exact', head: true })
-      .eq('commessa_id', params.id)
-      .or('mime.like.image/%,mime.like.video/%')
-      .in('status', ['uploaded', 'syncing', 'synced', 'sync_failed'])
-      .is('deleted_at', null),
-    supabase
-      .from('commessa_todo' as never)
-      .select('*', { count: 'exact', head: true })
-      .eq('commessa_id', params.id)
-      .in('stato', ['aperto', 'in_corso']),
-    supabase
-      .from('commessa_riunione' as never)
-      .select('*', { count: 'exact', head: true })
-      .eq('commessa_id', params.id),
-  ]);
-  const stats = {
-    tipologie: tipologieCnt.count ?? 0,
-    media: mediaCnt.count ?? 0,
-    todo: todoCnt.count ?? 0,
-    riunioni: riunioniCnt.count ?? 0,
-  };
   const titolo =
     (c.descrizione_ai_finale ?? c.descrizione_ai_proposta ?? '').trim() || null;
   const stato = (c.stato as string) ?? 'aperta';
@@ -141,24 +98,6 @@ export default async function CommessaTab({
         </CardContent>
       </Card>
 
-      {/* Striscia statistiche — polso della commessa a colpo d'occhio */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <StatCard
-          icon={<Wrench />}
-          label="Tipologie"
-          value={stats.tipologie}
-          href={`/office/commesse/${params.id}/fasi`}
-        />
-        <StatCard
-          icon={<ImageIcon />}
-          label="Media"
-          value={stats.media}
-          href={`/office/commesse/${params.id}/foto`}
-        />
-        <StatCard icon={<ListTodo />} label="Da fare" value={stats.todo} highlight={stats.todo > 0} />
-        <StatCard icon={<Users />} label="Riunioni" value={stats.riunioni} />
-      </div>
-
       {/* 2) Descrizione cantiere */}
       <Card className="relative">
         <CardContent className="px-4 py-3">
@@ -217,54 +156,6 @@ export default async function CommessaTab({
         <LavoriSection id={params.id} />
       </div>
     </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  href,
-  highlight,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  href?: string;
-  highlight?: boolean;
-}) {
-  const inner = (
-    <div
-      className={[
-        'flex items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-colors',
-        href ? 'hover:border-primary/40 hover:bg-primary/[0.03]' : '',
-        highlight
-          ? 'border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/15'
-          : 'border-border bg-card',
-      ].join(' ')}
-    >
-      <span
-        className={[
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md [&_svg]:h-4 [&_svg]:w-4',
-          highlight ? 'bg-amber-500/15 text-amber-600' : 'bg-muted text-muted-foreground',
-        ].join(' ')}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-lg font-semibold leading-none text-foreground">{value}</p>
-        <p className="mt-0.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-          {label}
-        </p>
-      </div>
-    </div>
-  );
-  return href ? (
-    <Link href={href} className="block">
-      {inner}
-    </Link>
-  ) : (
-    inner
   );
 }
 
