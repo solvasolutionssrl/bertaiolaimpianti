@@ -4,9 +4,24 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
-import { fmtData } from '@/app/office/_lib/format';
+import { fmtData, fmtDataOra, fmtOra } from '@/app/office/_lib/format';
 import { approvaRapportino, respingiRapportino, riapriRapportino } from '../../../_actions/kantiere-rapportini';
 import { RapportinoBadge } from './rapportino-badge';
+
+export type TimbraturaItem = {
+  tipo: string;
+  ts: string;
+  origine: string | null;
+  commessaTitolo: string | null;
+};
+
+export type RigaCommessa = {
+  commessaTitolo: string;
+  ore_ordinarie: number;
+  ore_straordinarie: number;
+  ore_viaggio: number;
+  note: string | null;
+};
 
 export type RapportiniRiga = {
   id: string;
@@ -14,8 +29,11 @@ export type RapportiniRiga = {
   data: string;
   stato: string;
   inviatoAt: string | null;
+  note: string | null;
   totale: { ord: number; straord: number; viaggio: number };
-  righe: { commessaTitolo: string; ore_ordinarie: number; ore_straordinarie: number; ore_viaggio: number }[];
+  nRighe: number;
+  righe: RigaCommessa[];
+  timbrature: TimbraturaItem[];
 };
 
 export type FiltriRapportini = {
@@ -45,6 +63,32 @@ const STATI_OPTIONS = [
 
 function fmtOre(n: number): string {
   return n % 1 === 0 ? `${n}h` : `${n.toFixed(1)}h`;
+}
+
+/** Dot + label per tipo timbratura. */
+function TimbraturaIndicator({ tipo }: { tipo: string }) {
+  const isIngresso = tipo === 'ingresso';
+  return (
+    <span
+      className={[
+        'inline-block h-2 w-2 rounded-full flex-shrink-0',
+        isIngresso ? 'bg-emerald-500' : 'bg-slate-400',
+      ].join(' ')}
+      title={isIngresso ? 'Ingresso' : 'Uscita'}
+    />
+  );
+}
+
+/** Label leggibile per origine timbratura. */
+function origineLabel(o: string | null): string {
+  if (!o) return '';
+  const MAP: Record<string, string> = {
+    qr: 'QR',
+    gps: 'GPS',
+    manuale: 'manuale',
+    app: 'app',
+  };
+  return MAP[o] ?? o;
 }
 
 export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
@@ -166,6 +210,11 @@ export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
   if (filtri.dipendente) exportQs.set('dipendente', filtri.dipendente);
   const exportHref = '/api/office/kantiere/rapportini/export?' + exportQs.toString();
 
+  // Summary totals
+  const totalOrd = righe.reduce((s, r) => s + r.totale.ord, 0);
+  const totalStraord = righe.reduce((s, r) => s + r.totale.straord, 0);
+  const totalViaggio = righe.reduce((s, r) => s + r.totale.viaggio, 0);
+
   return (
     <div className="space-y-4">
       {/* Barra filtri */}
@@ -247,148 +296,256 @@ export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
       {righe.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nessun rapportino nel periodo selezionato.</p>
       ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="w-8 px-2 py-3" />
-                    <th className="px-4 py-3 font-medium">Dipendente</th>
-                    <th className="px-4 py-3 font-medium">Data</th>
-                    <th className="px-4 py-3 font-medium">Stato</th>
-                    <th className="px-4 py-3 font-medium">Ord.</th>
-                    <th className="px-4 py-3 font-medium">Straord.</th>
-                    <th className="px-4 py-3 font-medium">Viaggio</th>
-                    <th className="w-56 px-4 py-3" aria-label="Azioni" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {righe.map((riga, i) => {
-                    const isOpen = expanded.has(riga.id);
-                    const isRowPending = isPending && pendingId === riga.id;
-                    const rowErr = errors[riga.id];
-                    return (
-                      <React.Fragment key={riga.id}>
-                        <tr
-                          className={[
-                            'border-b border-border transition-colors hover:bg-primary-soft/50 cursor-pointer',
-                            i % 2 !== 0 ? 'bg-muted/20' : '',
-                          ].join(' ')}
-                          onClick={() => toggleExpand(riga.id)}
-                        >
-                          <td className="px-2 py-3 text-muted-foreground">
-                            {isOpen ? (
-                              <ChevronDown className="h-3.5 w-3.5" />
-                            ) : (
-                              <ChevronRight className="h-3.5 w-3.5" />
-                            )}
-                          </td>
-                          <td className="px-4 py-3 font-medium">{riga.dipendenteNome}</td>
-                          <td className="px-4 py-3 tabular-nums">{fmtData(riga.data)}</td>
-                          <td className="px-4 py-3">
-                            <RapportinoBadge stato={riga.stato} />
-                          </td>
-                          <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                            {fmtOre(riga.totale.ord)}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                            {fmtOre(riga.totale.straord)}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                            {fmtOre(riga.totale.viaggio)}
-                          </td>
-                          <td
-                            className="px-2 py-2 text-right"
-                            onClick={(e) => e.stopPropagation()}
+        <>
+          {/* Summary line */}
+          <div className="flex items-center gap-4 px-1 text-xs text-muted-foreground">
+            <span>
+              <span className="font-medium text-foreground">{righe.length}</span> rapportini
+            </span>
+            <span className="text-border">|</span>
+            <span>
+              Ord. <span className="tabular-nums font-medium text-foreground">{fmtOre(totalOrd)}</span>
+            </span>
+            <span>
+              Straord. <span className="tabular-nums font-medium text-foreground">{fmtOre(totalStraord)}</span>
+            </span>
+            <span>
+              Viaggio <span className="tabular-nums font-medium text-foreground">{fmtOre(totalViaggio)}</span>
+            </span>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="w-8 px-2 py-3" />
+                      <th className="px-4 py-3 font-medium">Dipendente</th>
+                      <th className="px-4 py-3 font-medium">Data</th>
+                      <th className="px-4 py-3 font-medium">Stato</th>
+                      <th className="px-4 py-3 font-medium" title="Ore ordinarie / straordinarie / viaggio">
+                        O / S / V
+                      </th>
+                      <th className="px-4 py-3 font-medium">Righe</th>
+                      <th className="px-4 py-3 font-medium">Inviato</th>
+                      <th className="w-48 px-4 py-3" aria-label="Azioni" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {righe.map((riga, i) => {
+                      const isOpen = expanded.has(riga.id);
+                      const isRowPending = isPending && pendingId === riga.id;
+                      const rowErr = errors[riga.id];
+                      return (
+                        <React.Fragment key={riga.id}>
+                          <tr
+                            className={[
+                              'border-b border-border transition-colors hover:bg-primary-soft/50 cursor-pointer',
+                              i % 2 !== 0 ? 'bg-muted/20' : '',
+                            ].join(' ')}
+                            onClick={() => toggleExpand(riga.id)}
                           >
-                            <div className="flex items-center justify-end gap-1">
-                              {riga.stato === 'inviato' && (
-                                <>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={isRowPending || isPending}
-                                    onClick={() => handleApprova(riga.id)}
-                                  >
-                                    {isRowPending ? (
-                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                                    ) : null}
-                                    Approva
-                                  </Button>
+                            <td className="px-2 py-2.5 text-muted-foreground">
+                              {isOpen ? (
+                                <ChevronDown className="h-3.5 w-3.5" />
+                              ) : (
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              )}
+                            </td>
+                            <td className="px-4 py-2.5 font-medium">{riga.dipendenteNome}</td>
+                            <td className="px-4 py-2.5 tabular-nums">{fmtData(riga.data)}</td>
+                            <td className="px-4 py-2.5">
+                              <RapportinoBadge stato={riga.stato} />
+                            </td>
+                            <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                              <span className="inline-flex items-center gap-1">
+                                <span>{fmtOre(riga.totale.ord)}</span>
+                                <span className="text-border/60">/</span>
+                                <span>{fmtOre(riga.totale.straord)}</span>
+                                <span className="text-border/60">/</span>
+                                <span>{fmtOre(riga.totale.viaggio)}</span>
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
+                              {riga.nRighe}
+                            </td>
+                            <td className="px-4 py-2.5 tabular-nums text-muted-foreground text-xs">
+                              {riga.inviatoAt ? fmtDataOra(riga.inviatoAt) : <span className="select-none">—</span>}
+                            </td>
+                            <td
+                              className="px-2 py-2 text-right"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-end gap-1">
+                                {riga.stato === 'inviato' && (
+                                  <>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={isRowPending || isPending}
+                                      onClick={() => handleApprova(riga.id)}
+                                    >
+                                      {isRowPending ? (
+                                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                                      ) : null}
+                                      Approva
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      disabled={isRowPending || isPending}
+                                      onClick={() => openRespingi(riga.id, riga.dipendenteNome)}
+                                    >
+                                      Respingi
+                                    </Button>
+                                  </>
+                                )}
+                                {(riga.stato === 'approvato' || riga.stato === 'respinto') && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     disabled={isRowPending || isPending}
-                                    onClick={() => openRespingi(riga.id, riga.dipendenteNome)}
+                                    onClick={() => handleRiapri(riga.id)}
                                   >
-                                    Respingi
+                                    {isRowPending ? (
+                                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                                    ) : null}
+                                    Riapri
                                   </Button>
-                                </>
-                              )}
-                              {(riga.stato === 'approvato' || riga.stato === 'respinto') && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={isRowPending || isPending}
-                                  onClick={() => handleRiapri(riga.id)}
-                                >
-                                  {isRowPending ? (
-                                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                                  ) : null}
-                                  Riapri
-                                </Button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                        {rowErr ? (
-                          <tr className="border-b border-border bg-destructive/5">
-                            <td colSpan={8} className="px-4 py-2 text-xs text-destructive">
-                              Errore: {rowErr}
+                                )}
+                              </div>
                             </td>
                           </tr>
-                        ) : null}
-                        {isOpen && (
-                          <tr className="border-b border-border bg-muted/30">
-                            <td colSpan={8} className="px-6 py-3">
-                              {riga.righe.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">Nessuna riga commessa.</p>
-                              ) : (
-                                <table className="w-full text-xs">
-                                  <thead>
-                                    <tr className="text-left text-muted-foreground">
-                                      <th className="pb-1 pr-4 font-medium">Commessa</th>
-                                      <th className="pb-1 pr-4 font-medium">Ord.</th>
-                                      <th className="pb-1 pr-4 font-medium">Straord.</th>
-                                      <th className="pb-1 font-medium">Viaggio</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {riga.righe.map((r, j) => (
-                                      <tr key={j} className="border-t border-border/50">
-                                        <td className="py-1 pr-4 font-medium text-foreground">
-                                          {r.commessaTitolo}
-                                        </td>
-                                        <td className="py-1 pr-4 tabular-nums">{fmtOre(r.ore_ordinarie)}</td>
-                                        <td className="py-1 pr-4 tabular-nums">{fmtOre(r.ore_straordinarie)}</td>
-                                        <td className="py-1 tabular-nums">{fmtOre(r.ore_viaggio)}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+
+                          {rowErr ? (
+                            <tr className="border-b border-border bg-destructive/5">
+                              <td colSpan={8} className="px-4 py-2 text-xs text-destructive">
+                                Errore: {rowErr}
+                              </td>
+                            </tr>
+                          ) : null}
+
+                          {isOpen && (
+                            <tr className="border-b border-border bg-muted/20">
+                              <td colSpan={8} className="px-6 py-4">
+                                <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                                  {/* Colonna sinistra: righe commessa */}
+                                  <div>
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      Righe commessa
+                                    </p>
+                                    {riga.righe.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground">Nessuna riga commessa.</p>
+                                    ) : (
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="text-left text-muted-foreground border-b border-border/40">
+                                            <th className="pb-1.5 pr-4 font-medium">Commessa</th>
+                                            <th className="pb-1.5 pr-3 font-medium text-right">Ord.</th>
+                                            <th className="pb-1.5 pr-3 font-medium text-right">Straord.</th>
+                                            <th className="pb-1.5 pr-3 font-medium text-right">Viaggio</th>
+                                            <th className="pb-1.5 font-medium">Note</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {riga.righe.map((r, j) => (
+                                            <tr key={j} className="border-b border-border/30">
+                                              <td className="py-1.5 pr-4 font-medium text-foreground">
+                                                {r.commessaTitolo}
+                                              </td>
+                                              <td className="py-1.5 pr-3 tabular-nums text-right text-muted-foreground">
+                                                {fmtOre(r.ore_ordinarie)}
+                                              </td>
+                                              <td className="py-1.5 pr-3 tabular-nums text-right text-muted-foreground">
+                                                {fmtOre(r.ore_straordinarie)}
+                                              </td>
+                                              <td className="py-1.5 pr-3 tabular-nums text-right text-muted-foreground">
+                                                {fmtOre(r.ore_viaggio)}
+                                              </td>
+                                              <td className="py-1.5 text-muted-foreground max-w-[200px] truncate">
+                                                {r.note ?? <span className="select-none opacity-40">—</span>}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                    {riga.note ? (
+                                      <p className="mt-3 text-xs text-muted-foreground">
+                                        <span className="font-medium text-foreground">Nota rapportino:</span>{' '}
+                                        {riga.note}
+                                      </p>
+                                    ) : null}
+                                  </div>
+
+                                  {/* Colonna destra: timeline timbrature */}
+                                  <div>
+                                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                      Timbrature del giorno
+                                    </p>
+                                    {riga.timbrature.length === 0 ? (
+                                      <p className="text-xs text-muted-foreground">
+                                        Nessuna timbratura registrata.
+                                      </p>
+                                    ) : (
+                                      <ol className="relative border-l border-border/40 space-y-0">
+                                        {riga.timbrature.map((t, k) => {
+                                          const isIngresso = t.tipo === 'ingresso';
+                                          const oLabel = origineLabel(t.origine);
+                                          return (
+                                            <li key={k} className="ml-4 py-1.5">
+                                              {/* dot sul bordo sinistro */}
+                                              <span
+                                                className={[
+                                                  'absolute -left-[5px] mt-[5px] h-2.5 w-2.5 rounded-full border-2 border-background',
+                                                  isIngresso ? 'bg-emerald-500' : 'bg-slate-400',
+                                                ].join(' ')}
+                                              />
+                                              <div className="flex items-baseline gap-2">
+                                                <span className="tabular-nums text-xs font-semibold text-foreground">
+                                                  {fmtOra(t.ts)}
+                                                </span>
+                                                <span
+                                                  className={[
+                                                    'text-xs font-medium',
+                                                    isIngresso
+                                                      ? 'text-emerald-700 dark:text-emerald-400'
+                                                      : 'text-slate-500',
+                                                  ].join(' ')}
+                                                >
+                                                  {isIngresso ? 'Ingresso' : 'Uscita'}
+                                                </span>
+                                                {t.commessaTitolo ? (
+                                                  <span className="text-xs text-muted-foreground truncate max-w-[160px]">
+                                                    {t.commessaTitolo}
+                                                  </span>
+                                                ) : null}
+                                                {oLabel ? (
+                                                  <span className="ml-auto text-[10px] text-muted-foreground/60 uppercase tracking-wide">
+                                                    {oLabel}
+                                                  </span>
+                                                ) : null}
+                                              </div>
+                                            </li>
+                                          );
+                                        })}
+                                      </ol>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* Dialog Respingi */}
