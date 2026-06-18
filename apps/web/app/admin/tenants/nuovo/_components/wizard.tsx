@@ -67,14 +67,24 @@ export function NuovoTenantWizard({ plans }: Props) {
   }, [nome, slugTouched]);
 
   // -------- Step 2 (storage) --------
-  const [storageProvider, setStorageProvider] = React.useState<'supabase' | 'nextcloud'>(
+  const [storageProvider, setStorageProvider] = React.useState<'supabase' | 'nextcloud' | 'r2'>(
     'supabase',
   );
   const [storageBaseUrl, setStorageBaseUrl] = React.useState('');
   const [storageUser, setStorageUser] = React.useState('');
   const [storagePass, setStoragePass] = React.useState('');
 
-  // Test connessione storage (Nextcloud)
+  // R2 fields
+  const [r2AccountId, setR2AccountId] = React.useState('');
+  const [r2Bucket, setR2Bucket] = React.useState('');
+  const [r2AccessKeyId, setR2AccessKeyId] = React.useState('');
+  const [r2SecretAccessKey, setR2SecretAccessKey] = React.useState('');
+  const [r2Endpoint, setR2Endpoint] = React.useState('');
+
+  // Crea struttura cartelle commessa (default true; false per R2)
+  const [creaCatelle, setCreaCatelle] = React.useState(true);
+
+  // Test connessione storage (Nextcloud / R2)
   const [testing, startTest] = React.useTransition();
   const [testResult, setTestResult] = React.useState<
     | { kind: 'idle' }
@@ -85,17 +95,29 @@ export function NuovoTenantWizard({ plans }: Props) {
   // Reset test result quando cambia la config
   React.useEffect(() => {
     setTestResult({ kind: 'idle' });
-  }, [storageProvider, storageBaseUrl, storageUser, storagePass]);
+  }, [storageProvider, storageBaseUrl, storageUser, storagePass, r2AccountId, r2Bucket, r2AccessKeyId, r2SecretAccessKey, r2Endpoint]);
 
   function runStorageTest() {
     setTestResult({ kind: 'idle' });
     startTest(async () => {
-      const res = await testaConnessioneStorage({
-        provider: storageProvider,
-        baseUrl: storageBaseUrl,
-        user: storageUser,
-        appPassword: storagePass,
-      });
+      let res;
+      if (storageProvider === 'r2') {
+        res = await testaConnessioneStorage({
+          provider: 'r2',
+          account_id: r2AccountId,
+          bucket: r2Bucket,
+          access_key_id: r2AccessKeyId,
+          secret_access_key: r2SecretAccessKey,
+          endpoint: r2Endpoint,
+        });
+      } else {
+        res = await testaConnessioneStorage({
+          provider: storageProvider,
+          baseUrl: storageBaseUrl,
+          user: storageUser,
+          appPassword: storagePass,
+        });
+      }
       if (res.ok) {
         setTestResult({ kind: 'ok', latencyMs: res.latencyMs, detail: res.detail });
       } else {
@@ -113,6 +135,8 @@ export function NuovoTenantWizard({ plans }: Props) {
       return nome.length >= 2 && /^[A-Z0-9]{2,12}$/.test(slug) && planId !== '';
     if (step === 2) {
       if (storageProvider === 'supabase') return true;
+      if (storageProvider === 'r2')
+        return r2AccountId !== '' && r2Bucket !== '' && r2AccessKeyId !== '' && r2SecretAccessKey !== '';
       return storageBaseUrl !== '' && storageUser !== '' && storagePass !== '';
     }
     if (step === 3)
@@ -134,6 +158,17 @@ export function NuovoTenantWizard({ plans }: Props) {
         : {};
     if (inboundEmail) storage_config.inbound_email = inboundEmail;
 
+    const r2_config: Record<string, unknown> =
+      storageProvider === 'r2'
+        ? {
+            account_id: r2AccountId,
+            bucket: r2Bucket,
+            access_key_id: r2AccessKeyId,
+            secret_access_key: r2SecretAccessKey,
+            ...(r2Endpoint ? { endpoint: r2Endpoint } : {}),
+          }
+        : {};
+
     const payload: CreaTenantInput = {
       nome,
       slug,
@@ -142,6 +177,8 @@ export function NuovoTenantWizard({ plans }: Props) {
       plan_id: planId || null,
       storage_provider: storageProvider,
       storage_config,
+      r2_config,
+      crea_cartelle: creaCatelle,
       inbound_email: inboundEmail || null,
       owner_email: ownerEmail,
       owner_name: ownerName,
@@ -307,25 +344,30 @@ export function NuovoTenantWizard({ plans }: Props) {
             <>
               <div>
                 <Label>Provider storage</Label>
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
-                  {(['supabase', 'nextcloud'] as const).map((p) => (
+                <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(
+                    [
+                      { value: 'supabase', label: 'Supabase', desc: 'Bucket S3 gestito (default)' },
+                      { value: 'nextcloud', label: 'Nextcloud', desc: 'WebDAV (Hetzner Storage Share o self-hosted)' },
+                      { value: 'r2', label: 'Cloudflare R2', desc: 'Solo R2 (senza cartelle Nextcloud)' },
+                    ] as const
+                  ).map((p) => (
                     <button
                       type="button"
-                      key={p}
-                      onClick={() => setStorageProvider(p)}
+                      key={p.value}
+                      onClick={() => {
+                        setStorageProvider(p.value);
+                        setCreaCatelle(p.value !== 'r2');
+                      }}
                       className={cn(
                         'rounded-md border px-3 py-2.5 text-left transition-colors',
-                        storageProvider === p
+                        storageProvider === p.value
                           ? 'border-primary bg-primary/5'
                           : 'border-border bg-card hover:bg-muted/40',
                       )}
                     >
-                      <p className="text-sm font-semibold capitalize">{p}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {p === 'supabase'
-                          ? 'Bucket S3 gestito (default)'
-                          : 'WebDAV (Hetzner Storage Share o self-hosted)'}
-                      </p>
+                      <p className="text-sm font-semibold">{p.label}</p>
+                      <p className="text-xs text-muted-foreground">{p.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -397,6 +439,103 @@ export function NuovoTenantWizard({ plans }: Props) {
                   </div>
                 </div>
               ) : null}
+              {storageProvider === 'r2' ? (
+                <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
+                  <div>
+                    <Label htmlFor="r2_account_id">Account ID</Label>
+                    <Input
+                      id="r2_account_id"
+                      value={r2AccountId}
+                      onChange={(e) => setR2AccountId(e.target.value)}
+                      className="mt-1.5 h-10 font-mono text-xs"
+                      placeholder="abc123..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="r2_bucket">Bucket</Label>
+                    <Input
+                      id="r2_bucket"
+                      value={r2Bucket}
+                      onChange={(e) => setR2Bucket(e.target.value)}
+                      className="mt-1.5 h-10 font-mono text-xs"
+                      placeholder="nome-bucket"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="r2_access_key_id">Access Key ID</Label>
+                      <Input
+                        id="r2_access_key_id"
+                        value={r2AccessKeyId}
+                        onChange={(e) => setR2AccessKeyId(e.target.value)}
+                        className="mt-1.5 h-10 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="r2_secret_access_key">Secret Access Key</Label>
+                      <Input
+                        id="r2_secret_access_key"
+                        value={r2SecretAccessKey}
+                        onChange={(e) => setR2SecretAccessKey(e.target.value)}
+                        className="mt-1.5 h-10 font-mono text-xs"
+                        type="password"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="r2_endpoint">Endpoint (opzionale)</Label>
+                    <Input
+                      id="r2_endpoint"
+                      value={r2Endpoint}
+                      onChange={(e) => setR2Endpoint(e.target.value)}
+                      className="mt-1.5 h-10 font-mono text-xs"
+                      placeholder="https://account_id.r2.cloudflarestorage.com"
+                    />
+                  </div>
+
+                  {/* Test connessione live */}
+                  <div className="flex items-center gap-3 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={runStorageTest}
+                      disabled={
+                        testing || !r2AccountId || !r2Bucket || !r2AccessKeyId || !r2SecretAccessKey
+                      }
+                    >
+                      {testing ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plug className="h-3.5 w-3.5" />
+                      )}
+                      Testa connessione
+                    </Button>
+                    {testResult.kind === 'ok' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-success">
+                        <Check className="h-3.5 w-3.5" />
+                        {testResult.detail} · {testResult.latencyMs} ms
+                      </span>
+                    ) : null}
+                    {testResult.kind === 'fail' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-destructive">
+                        <XCircle className="h-3.5 w-3.5" />
+                        {testResult.error}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              {/* Crea struttura cartelle commessa */}
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-3 py-2.5 hover:bg-muted/30">
+                <input
+                  type="checkbox"
+                  checked={creaCatelle}
+                  onChange={(e) => setCreaCatelle(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="text-sm">Crea struttura cartelle commessa</span>
+              </label>
             </>
           ) : null}
 
