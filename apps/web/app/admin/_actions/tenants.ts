@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { R2StorageProvider } from '@kommessa/integrations/storage';
 import { requirePlatformAdmin } from '../_lib/guard';
 
 /**
@@ -71,14 +72,16 @@ const creaTenantSchema = z.object({
   brand_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
   logo_url: z.string().url().optional().nullable(),
   plan_id: z.string().uuid().optional().nullable(),
-  storage_provider: z.enum(['supabase', 'nextcloud']).default('supabase'),
+  storage_provider: z.enum(['supabase', 'nextcloud', 'r2']).default('supabase'),
   storage_config: z.record(z.unknown()).default({}),
+  r2_config: z.record(z.unknown()).default({}),
+  crea_cartelle: z.boolean().default(true),
   inbound_email: z.string().email().optional().nullable(),
   owner_email: z.string().email(),
   owner_name: z.string().min(2).max(120),
 });
 
-export type CreaTenantInput = z.infer<typeof creaTenantSchema>;
+export type CreaTenantInput = z.input<typeof creaTenantSchema>;
 
 export type CreaTenantResult =
   | { ok: true; tenantId: string; slug: string }
@@ -109,6 +112,8 @@ export async function creaTenant(
       plan_id: data.plan_id ?? null,
       storage_provider: data.storage_provider,
       storage_config: data.storage_config as never,
+      r2_config: data.r2_config as never,
+      crea_cartelle: data.crea_cartelle,
       // inbound_email: salvato in storage_config se la colonna non esiste
     } as never)
     .select('id, slug, nome')
@@ -330,10 +335,15 @@ export async function eliminaTenant(tenantId: string) {
 // ---------------------------------------------------------------------
 
 const testStorageSchema = z.object({
-  provider: z.enum(['supabase', 'nextcloud']),
+  provider: z.enum(['supabase', 'nextcloud', 'r2']),
   baseUrl: z.string().optional(),
   user: z.string().optional(),
   appPassword: z.string().optional(),
+  account_id: z.string().optional(),
+  bucket: z.string().optional(),
+  access_key_id: z.string().optional(),
+  secret_access_key: z.string().optional(),
+  endpoint: z.string().optional(),
 });
 
 export type TestStorageInput = z.infer<typeof testStorageSchema>;
@@ -366,6 +376,27 @@ export async function testaConnessioneStorage(
       latencyMs: 0,
       detail: 'Bucket Supabase gestito — niente probe esterno richiesto',
     };
+  }
+
+  // R2 probe
+  if (data.provider === 'r2') {
+    if (!data.account_id || !data.bucket || !data.access_key_id || !data.secret_access_key) {
+      return { ok: false, error: 'Compila account_id + bucket + access_key_id + secret_access_key' };
+    }
+    const start = Date.now();
+    try {
+      const r2 = new R2StorageProvider({
+        accountId: data.account_id,
+        bucket: data.bucket,
+        accessKeyId: data.access_key_id,
+        secretAccessKey: data.secret_access_key,
+        endpoint: data.endpoint,
+      });
+      await r2.listObjects('', { maxKeys: 1 });
+      return { ok: true, latencyMs: Date.now() - start, detail: 'Bucket R2 raggiungibile' };
+    } catch (e) {
+      return { ok: false, error: `R2 non raggiungibile: ${(e as Error).message ?? 'errore'}` };
+    }
   }
 
   // Nextcloud probe
