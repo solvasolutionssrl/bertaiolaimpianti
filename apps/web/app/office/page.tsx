@@ -95,73 +95,75 @@ export default async function DashboardPage() {
         </Suspense>
       </section>
 
-      {/* ===== Commesse in lavorazione ===== */}
-      <section className="space-y-3 stagger">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      {/* ===== Riga principale: Commesse in lavorazione (2/3) + TODO (1/3) ===== */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="space-y-3 stagger lg:col-span-2">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <SectionHeader
+              eyebrow="Commesse"
+              title="Commesse in lavorazione"
+              description="Lavori in corso o in collaudo da seguire."
+              icon={<Briefcase />}
+            />
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/office/commesse">
+                Vedi tutte
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+          <Suspense fallback={<RiskSkeleton />}>
+            <RiskSection />
+          </Suspense>
+        </section>
+
+        <section className="space-y-3">
           <SectionHeader
-            eyebrow="Commesse"
-            title="Commesse in lavorazione"
-            description="Lavori in corso o in collaudo da seguire."
-            icon={<Briefcase />}
+            eyebrow="Lavori"
+            title="TODO urgenti aperti"
+            description="Priorità alta/urgente o scadute, su tutte le commesse attive."
+            icon={<CircleDot />}
           />
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/office/commesse">
-              Vedi tutte
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-        <Suspense fallback={<RiskSkeleton />}>
-          <RiskSection />
-        </Suspense>
-      </section>
+          <Suspense fallback={<TodoUrgentiSkeleton />}>
+            <TodoUrgentiSection />
+          </Suspense>
+        </section>
+      </div>
 
-      {/* ===== Avvisi top ===== */}
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      {/* ===== Riga secondaria: Avvisi + Ultima attività affiancati ===== */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <SectionHeader
+              eyebrow="Avvisi"
+              title="Cose da gestire"
+              description="Commesse ferme, foto sopralluogo mancanti, TODO scaduti."
+              icon={<Bell />}
+            />
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/office/notifiche">
+                Tutti
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+          <Suspense fallback={<TodoUrgentiSkeleton />}>
+            <AvvisiTopSection />
+          </Suspense>
+        </section>
+
+        <section className="space-y-3">
           <SectionHeader
-            eyebrow="Avvisi"
-            title="Cose da gestire"
-            description="Allerte computate dai dati — commesse ferme, foto sopralluogo mancanti, TODO scaduti."
-            icon={<Bell />}
+            eyebrow="Attività"
+            title="Ultima attività"
+            description="Eventi recenti del tenant, dal più recente."
+            icon={<Sparkles />}
           />
-          <Button asChild variant="ghost" size="sm">
-            <Link href="/office/notifiche">
-              Tutti gli avvisi
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
-        <Suspense fallback={<TodoUrgentiSkeleton />}>
-          <AvvisiTopSection />
-        </Suspense>
-      </section>
-
-      {/* ===== TODO urgenti cross-commesse ===== */}
-      <section className="space-y-3">
-        <SectionHeader
-          eyebrow="Lavori"
-          title="TODO urgenti aperti"
-          description="Cose da fare con priorità alta/urgente o scadute, su tutte le commesse attive."
-          icon={<CircleDot />}
-        />
-        <Suspense fallback={<TodoUrgentiSkeleton />}>
-          <TodoUrgentiSection />
-        </Suspense>
-      </section>
-
-      {/* ===== Timeline ===== */}
-      <section className="space-y-3">
-        <SectionHeader
-          eyebrow="Attività"
-          title="Ultima attività"
-          description="Eventi tracciati nel log audit del tenant, dal più recente."
-          icon={<Sparkles />}
-        />
-        <Suspense fallback={<TimelineSkeleton />}>
-          <TimelineSection />
-        </Suspense>
-      </section>
+          <Suspense fallback={<TimelineSkeleton />}>
+            <TimelineSection />
+          </Suspense>
+        </section>
+      </div>
     </div>
   );
 }
@@ -304,7 +306,7 @@ async function RiskSection() {
     );
   }
   return (
-    <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-2.5 2xl:grid-cols-2">
       {rows.map((c: any) => {
         const inCollaudo = c.stato === 'collaudo';
         const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
