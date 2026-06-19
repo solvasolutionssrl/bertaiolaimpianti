@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus } from 'lucide-react';
+import { ChevronRight, Loader2, Plus } from 'lucide-react';
 import {
   Button,
   Card,
@@ -146,47 +146,44 @@ export function CantieriClient({ rows, commesse }: Props) {
               <table className="w-full text-sm">
                 <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Codice</th>
-                    <th className="px-4 py-3 font-medium">Nome</th>
-                    <th className="px-4 py-3 font-medium">Indirizzo</th>
-                    <th className="px-4 py-3 font-medium">Stato</th>
-                    <th className="px-4 py-3 font-medium">Commessa</th>
-                    <th className="px-4 py-3 font-medium">Persone</th>
-                    <th className="px-4 py-3 font-medium">QR</th>
-                    <th className="w-16 px-4 py-3" aria-label="Azioni" />
+                    <th className="w-28 px-4 py-2.5 font-medium">Codice</th>
+                    <th className="px-4 py-2.5 font-medium">Nome</th>
+                    <th className="px-4 py-2.5 font-medium">Indirizzo</th>
+                    <th className="w-28 px-4 py-2.5 font-medium">Stato</th>
+                    <th className="px-4 py-2.5 font-medium">Commessa</th>
+                    <th className="w-20 px-4 py-2.5 font-medium">Persone</th>
+                    <th className="w-16 px-4 py-2.5 font-medium">QR</th>
+                    <th className="w-24 px-3 py-2.5" aria-label="Azioni" />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row, i) => (
+                  {rows.map((row) => (
                     <tr
                       key={row.id}
-                      className={
-                        i % 2 === 0
-                          ? 'border-b border-border transition-colors hover:bg-primary-soft/50'
-                          : 'border-b border-border bg-muted/20 transition-colors hover:bg-primary-soft/50'
-                      }
+                      className="group cursor-pointer border-b border-border transition-colors hover:bg-muted/40"
+                      onClick={() => router.push(`/office/kantiere/cantieri/${row.id}`)}
                     >
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
                         {row.codice}
                       </td>
-                      <td className="px-4 py-3 font-medium">{row.nome}</td>
-                      <td className="max-w-[200px] truncate px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-2.5 font-semibold">{row.nome}</td>
+                      <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
                         {row.indirizzo ?? '—'}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2.5">
                         <StatoBadge stato={row.stato} />
                       </td>
-                      <td className="max-w-[180px] truncate px-4 py-3 text-muted-foreground">
+                      <td className="max-w-[180px] truncate px-4 py-2.5 text-muted-foreground">
                         {row.commessaTitolo ?? '—'}
                       </td>
-                      <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                      <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
                         {row.nPersone > 0 ? (
                           <span className="font-medium text-foreground">{row.nPersone}</span>
                         ) : (
                           '0'
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-2.5">
                         {row.haQr ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -196,9 +193,16 @@ export function CantieriClient({ rows, commesse }: Props) {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-right">
-                        <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/office/kantiere/cantieri/${row.id}`}>Apri</Link>
+                      <td className="px-3 py-2 text-right">
+                        <Button
+                          size="sm"
+                          asChild
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Link href={`/office/kantiere/cantieri/${row.id}`}>
+                            Apri
+                            <ChevronRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+                          </Link>
                         </Button>
                       </td>
                     </tr>
@@ -209,9 +213,11 @@ export function CantieriClient({ rows, commesse }: Props) {
           </CardContent>
         </Card>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          Nessun cantiere. Creane uno con il pulsante &ldquo;Nuovo cantiere&rdquo;.
-        </p>
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            Nessun cantiere registrato. Creane uno con il pulsante &ldquo;Nuovo cantiere&rdquo;.
+          </CardContent>
+        </Card>
       )}
 
       {/* Dialog nuovo cantiere */}
