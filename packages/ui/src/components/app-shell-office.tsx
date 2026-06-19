@@ -37,6 +37,11 @@ export interface OfficeNavItem {
   count?: number;
   separator?: boolean;
   badge?: number;
+  /**
+   * Quando `'module'`, applica un trattamento visivo discreto da "add-on":
+   * icona tinta nel colore accent/brand + micro-chip "modulo" accanto al label.
+   */
+  variant?: 'module';
   /** Sotto-voci (alberatura). Se presenti, l'item diventa collapsible. */
   children?: OfficeNavItem[];
 }
@@ -155,6 +160,7 @@ function OfficeShell({
     const count = item.count ?? item.badge ?? 0;
     const showLabel = opts?.forceLabel || sidebarOpen;
     const isChild = opts?.isChild ?? false;
+    const isModule = !isChild && item.variant === 'module';
 
     const exactActive = item.id === activeNavId;
 
@@ -184,9 +190,11 @@ function OfficeShell({
               'h-4 w-4 shrink-0 transition-colors',
               exactActive
                 ? 'text-primary-foreground'
-                : isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground group-hover:text-foreground',
+                : isModule
+                  ? 'text-accent'
+                  : isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground group-hover:text-foreground',
             )}
           />
         ) : null}
@@ -202,6 +210,14 @@ function OfficeShell({
         <span className={cn('flex-1 truncate', !showLabel && 'md:hidden')}>
           {item.label}
         </span>
+        {isModule && showLabel && !exactActive ? (
+          <span
+            aria-label="modulo add-on"
+            className="ml-1 inline-flex h-4 items-center rounded-sm border border-accent/30 bg-accent/8 px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-accent/70"
+          >
+            mod
+          </span>
+        ) : null}
         {count > 0 && showLabel ? (
           <span
             aria-label={`${count} non letti`}
