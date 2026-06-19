@@ -11,11 +11,11 @@ import { tenantHasModule } from '@/app/_lib/modules';
  * Server actions per le regole di maggiorazione ore (kantiere_regole_ore),
  * i loro ambiti (kantiere_regola_ambito) e il costo orario dei dipendenti.
  *
- * Gated: richiede il modulo `kantiere`. Solo `admin`/`office`/`owner` possono
+ * Gated: richiede il modulo `kantiere`. Solo `admin`/`office` possono
  * mutare. Le tabelle non sono nei tipi generati → `as never` su `.from()`.
  */
 
-const MANAGE_ROLES = new Set<AppRole>(['owner', 'admin', 'office']);
+const MANAGE_ROLES = new Set<AppRole>(['admin', 'office']);
 
 type OkResult = { ok: true } | { ok: false; error: string };
 type CreaResult = { ok: true; id: string } | { ok: false; error: string };
