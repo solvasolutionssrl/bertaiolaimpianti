@@ -176,8 +176,9 @@ function OfficeShell({
 
     const linkClasses = cn(
       'relative group flex items-center gap-2.5 rounded-md text-[13px] tracking-tight transition-all',
-      'min-h-9 px-2.5',
-      isChild && 'pl-9 text-[12.5px]',
+      'px-2.5',
+      // Righe più compatte: top-level ~30px, figli ~26px
+      isChild ? 'pl-9 text-[12.5px] min-h-[1.625rem]' : 'min-h-[1.875rem]',
       exactActive
         ? 'bg-primary text-primary-foreground shadow-soft-md font-semibold'
         : isActive && hasChildren
@@ -188,7 +189,7 @@ function OfficeShell({
 
     // Classi/inner dedicati per gli header di sezione (tag uppercase).
     const sectionClasses = cn(
-      'relative flex w-full items-center gap-2 rounded-md px-2.5 min-h-8 text-left',
+      'relative flex w-full items-center gap-2 rounded-md px-2.5 min-h-[1.625rem] text-left',
       'text-[10.5px] font-semibold uppercase tracking-[0.13em] transition-colors',
       isModule
         ? '!bg-accent/[0.07] text-accent hover:!bg-accent/[0.11]'
