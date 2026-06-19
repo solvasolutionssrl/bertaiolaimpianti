@@ -4,21 +4,46 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Badge, Button, Card, CardContent } from '@kommessa/ui';
-import { aggiornaModuloTenant } from '../../../_actions/tenants';
+import { aggiornaModuloTenant, aggiornaAppModeTenant } from '../../../_actions/tenants';
 import { useAlert } from '@/app/_components/confirm-provider';
+
+type AppMode = 'kommessa' | 'kantiere' | 'full';
+
+const APP_MODE_OPZIONI: { value: AppMode; label: string; descrizione: string }[] = [
+  {
+    value: 'kommessa',
+    label: 'Kommessa',
+    descrizione: 'Esperienza attuale: dashboard, commesse, foto, dettatura.',
+  },
+  {
+    value: 'kantiere',
+    label: 'Solo Kantiere',
+    descrizione: 'PWA dedicata: scansione QR, ore, cantieri. Niente commesse.',
+  },
+  {
+    value: 'full',
+    label: 'Completa',
+    descrizione: 'Kommessa + entry point Kantiere nella stessa PWA.',
+  },
+];
 
 export function TabModuli({
   tenantId,
   kantiereAttivo,
+  appMode: appModeIniziale,
 }: {
   tenantId: string;
   kantiereAttivo: boolean;
+  appMode: AppMode;
 }) {
   const router = useRouter();
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [attivo, setAttivo] = React.useState(kantiereAttivo);
   const dirty = attivo !== kantiereAttivo;
+
+  const [appMode, setAppMode] = React.useState<AppMode>(appModeIniziale);
+  const [pendingMode, startMode] = React.useTransition();
 
   const apply = () => {
     start(async () => {
@@ -28,6 +53,20 @@ export function TabModuli({
         attivo,
       });
       if (!res.ok) {
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const applyMode = (next: AppMode) => {
+    const prev = appMode;
+    setAppMode(next);
+    startMode(async () => {
+      const res = await aggiornaAppModeTenant({ tenantId, appMode: next });
+      if (!res.ok) {
+        setAppMode(prev);
         await showAlert({ title: 'Errore', body: res.error });
         return;
       }
@@ -69,6 +108,57 @@ export function TabModuli({
               {attivo ? 'Attivo' : 'Spento'}
             </span>
           </label>
+        </div>
+
+        {/* Esperienza mobile (app_mode) */}
+        <div className="space-y-3 rounded-lg border border-border px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Esperienza mobile (PWA)</p>
+            <p className="text-[11px] text-muted-foreground">
+              Quale interfaccia vedono gli utenti sul telefono. &laquo;Solo
+              Kantiere&raquo; e &laquo;Completa&raquo; richiedono il modulo
+              Kantiere attivo.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {APP_MODE_OPZIONI.map((opt) => {
+              const selected = appMode === opt.value;
+              const consigliaKantiere = opt.value !== 'kommessa' && !attivo;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => applyMode(opt.value)}
+                  disabled={pendingMode || selected}
+                  className={
+                    'flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors ' +
+                    (selected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                      : 'border-border hover:bg-muted/40') +
+                    (pendingMode ? ' opacity-70' : '')
+                  }
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    {opt.label}
+                    {selected ? (
+                      <CheckCircle2
+                        className="h-3.5 w-3.5 text-primary"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </span>
+                  <span className="text-[11px] leading-snug text-muted-foreground">
+                    {opt.descrizione}
+                  </span>
+                  {consigliaKantiere ? (
+                    <span className="text-[10px] font-medium text-amber-600">
+                      Richiede il modulo Kantiere
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-border pt-4">

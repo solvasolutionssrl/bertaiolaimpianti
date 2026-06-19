@@ -252,7 +252,15 @@ export default async function TenantDetailPage({
 
         {/* ===== Moduli ===== */}
         <TabsContent value="moduli">
-          <TabModuli tenantId={tenant.id} kantiereAttivo={kantiereAttivo} />
+          <TabModuli
+            tenantId={tenant.id}
+            kantiereAttivo={kantiereAttivo}
+            appMode={
+              tenant.app_mode === 'kantiere' || tenant.app_mode === 'full'
+                ? tenant.app_mode
+                : 'kommessa'
+            }
+          />
         </TabsContent>
 
         {/* ===== Branding ===== */}

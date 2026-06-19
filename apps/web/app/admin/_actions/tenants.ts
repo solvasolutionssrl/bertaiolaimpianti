@@ -856,3 +856,64 @@ export async function aggiornaModuloTenant(input: {
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------
+// Esperienza mobile per tenant (tenants.app_mode)
+// ---------------------------------------------------------------------
+
+const APP_MODE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  appMode: z.enum(['kommessa', 'kantiere', 'full']),
+});
+
+/**
+ * Imposta l'esperienza mobile (PWA) del tenant.
+ *
+ *   kommessa = comportamento attuale (shell gestione/campo per ruolo) — DEFAULT
+ *   kantiere = PWA solo Kantiere (timbratura/ore/cantieri)
+ *   full     = layout combinato (kommessa + entry point Kantiere)
+ *
+ * Solo platform admin. Audit before/after come gli altri cambi tenant.
+ */
+export async function aggiornaAppModeTenant(input: {
+  tenantId: string;
+  appMode: 'kommessa' | 'kantiere' | 'full';
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = APP_MODE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Input non valido',
+    };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: prev } = await supabase
+    .from('tenants')
+    .select('app_mode')
+    .eq('id', parsed.data.tenantId)
+    .maybeSingle();
+  const previousMode =
+    (prev as { app_mode?: string | null } | null)?.app_mode ?? 'kommessa';
+
+  const { error } = await supabase
+    .from('tenants')
+    .update({ app_mode: parsed.data.appMode } as never)
+    .eq('id', parsed.data.tenantId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.app_mode.update',
+    before: { app_mode: previousMode },
+    after: { app_mode: parsed.data.appMode },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}

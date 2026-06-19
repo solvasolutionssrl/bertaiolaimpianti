@@ -29,6 +29,7 @@ import {
   Label,
 } from '@kommessa/ui';
 import { useConfirm } from '@/app/_components/confirm-provider';
+import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
 import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
 import {
   aggiornaCantiere,
@@ -45,7 +46,11 @@ interface CantiereProp {
   codice: string;
   nome: string;
   indirizzo: string | null;
+  indirizzoLat: number | null;
+  indirizzoLng: number | null;
   sedePartenza: string | null;
+  sedePartenzaLat: number | null;
+  sedePartenzaLng: number | null;
   commessaId: string | null;
   stato: 'attivo' | 'sospeso' | 'chiuso';
   note: string | null;
@@ -165,7 +170,11 @@ export function CantiereDetailClient({
   const [form, setForm] = React.useState({
     nome: cantiere.nome,
     indirizzo: cantiere.indirizzo ?? '',
+    indirizzoLat: cantiere.indirizzoLat,
+    indirizzoLng: cantiere.indirizzoLng,
     sedePartenza: cantiere.sedePartenza ?? '',
+    sedePartenzaLat: cantiere.sedePartenzaLat,
+    sedePartenzaLng: cantiere.sedePartenzaLng,
     commessaId: cantiere.commessaId ?? '',
     stato: cantiere.stato,
     note: cantiere.note ?? '',
@@ -207,7 +216,11 @@ export function CantiereDetailClient({
         id: cantiere.id,
         nome: form.nome,
         indirizzo: form.indirizzo || null,
+        indirizzoLat: form.indirizzoLat,
+        indirizzoLng: form.indirizzoLng,
         sedePartenza: form.sedePartenza || null,
+        sedePartenzaLat: form.sedePartenzaLat,
+        sedePartenzaLng: form.sedePartenzaLng,
         commessaId: form.commessaId || null,
         stato: form.stato,
         note: form.note || null,
@@ -500,11 +513,22 @@ export function CantiereDetailClient({
 
               <div className="space-y-1.5">
                 <Label htmlFor="indirizzo">Indirizzo cantiere</Label>
-                <Input
+                <AddressAutocomplete
                   id="indirizzo"
-                  name="indirizzo"
                   value={form.indirizzo}
-                  onChange={handleChange}
+                  onChange={(label) => {
+                    setForm((f) => ({ ...f, indirizzo: label }));
+                    setSaveOk(false);
+                  }}
+                  onSelect={(r) => {
+                    setForm((f) => ({
+                      ...f,
+                      indirizzo: r.label,
+                      indirizzoLat: r.lat,
+                      indirizzoLng: r.lng,
+                    }));
+                    setSaveOk(false);
+                  }}
                   placeholder="Via Roma 12, Torino"
                 />
               </div>
@@ -514,11 +538,22 @@ export function CantiereDetailClient({
                   Sede di partenza{' '}
                   <span className="text-xs text-muted-foreground">(default per questo cantiere)</span>
                 </Label>
-                <Input
+                <AddressAutocomplete
                   id="sedePartenza"
-                  name="sedePartenza"
                   value={form.sedePartenza}
-                  onChange={handleChange}
+                  onChange={(label) => {
+                    setForm((f) => ({ ...f, sedePartenza: label }));
+                    setSaveOk(false);
+                  }}
+                  onSelect={(r) => {
+                    setForm((f) => ({
+                      ...f,
+                      sedePartenza: r.label,
+                      sedePartenzaLat: r.lat,
+                      sedePartenzaLng: r.lng,
+                    }));
+                    setSaveOk(false);
+                  }}
                   placeholder="Lascia vuoto per usare il default del modulo"
                 />
               </div>
