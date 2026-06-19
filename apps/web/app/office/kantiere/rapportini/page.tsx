@@ -1,7 +1,7 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
-import { RapportiniClient, type RapportiniRiga, type DipendenteItem } from './_components/rapportini-client';
+import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -269,16 +269,52 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     };
   });
 
-  // Carica tutti i dipendenti attivi per il filtro
+  // Carica tutti i dipendenti attivi per il filtro e per il dialog "Registra ore"
   const { data: tuttiDipendenti } = (await supabase
     .from('dipendenti' as never)
     .select('id, nome, cognome')
+    .eq('tenant_id', ctx.tenantId)
     .eq('stato_attivo', true)
     .order('cognome')) as { data: DipendenteRow[] | null };
 
   const dipendentiFilter: DipendenteItem[] = (tuttiDipendenti ?? []).map((d) => ({
     id: d.id,
     nome: `${d.nome} ${d.cognome}`.trim(),
+  }));
+
+  // Carica commesse attive (non archiviate) per il dialog "Registra ore"
+  const { data: commesseRaw } = (await supabase
+    .from('commesse' as never)
+    .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
+    .eq('tenant_id', ctx.tenantId)
+    .not('stato', 'eq', 'archiviata')
+    .order('codice_interno', { ascending: false })
+    .limit(300)) as { data: CommessaRow[] | null };
+
+  const commessePicker: CommessaPickerItem[] = (commesseRaw ?? []).map((c) => ({
+    id: c.id,
+    titolo:
+      risolviTitoloCommessa({
+        descrizione_ai_finale: c.descrizione_ai_finale,
+        descrizione_ai_proposta: c.descrizione_ai_proposta,
+        note_iniziali: c.note_iniziali,
+        nome_cartella: c.nome_cartella,
+        codice_interno: c.codice_interno,
+      }) ||
+      c.codice_interno ||
+      c.id,
+  }));
+
+  // Carica cantieri attivi per il dialog "Registra ore"
+  const { data: cantieriRaw } = (await supabase
+    .from('cantieri' as never)
+    .select('id, nome, codice')
+    .eq('tenant_id', ctx.tenantId)
+    .order('nome')) as { data: CantiereRow[] | null };
+
+  const cantieriPicker: CantierePickerItem[] = (cantieriRaw ?? []).map((k) => ({
+    id: k.id,
+    nome: k.nome || k.codice || k.id,
   }));
 
   return (
@@ -293,6 +329,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         righe={righe}
         filtri={{ from, to, stato: statoFilter, dipendente: dipendenteFilter }}
         dipendenti={dipendentiFilter}
+        commesse={commessePicker}
+        cantieri={cantieriPicker}
       />
     </div>
   );

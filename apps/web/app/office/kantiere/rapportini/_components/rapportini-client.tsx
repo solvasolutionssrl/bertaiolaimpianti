@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, PlusCircle } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { fmtData, fmtDataOra, fmtOra } from '@/app/office/_lib/format';
-import { approvaRapportino, respingiRapportino, riapriRapportino } from '../../../_actions/kantiere-rapportini';
+import { approvaRapportino, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
 import { RapportinoBadge } from './rapportino-badge';
 
 export type TimbraturaItem = {
@@ -44,11 +44,24 @@ export type FiltriRapportini = {
 };
 
 export type DipendenteItem = { id: string; nome: string };
+export type CommessaPickerItem = { id: string; titolo: string };
+export type CantierePickerItem = { id: string; nome: string };
+
+// Giorno corrente in formato YYYY-MM-DD (client-side, fuso locale)
+function oggiLocale(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
 
 interface Props {
   righe: RapportiniRiga[];
   filtri: FiltriRapportini;
   dipendenti: DipendenteItem[];
+  commesse: CommessaPickerItem[];
+  cantieri: CantierePickerItem[];
 }
 
 const STATI_OPTIONS = [
@@ -91,7 +104,7 @@ function origineLabel(o: string | null): string {
   return MAP[o] ?? o;
 }
 
-export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
+export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
 
@@ -113,6 +126,60 @@ export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
   const [respingiDialog, setRespingiDialog] = React.useState<{ id: string; nome: string } | null>(null);
   const [motivo, setMotivo] = React.useState('');
   const [motivoError, setMotivoError] = React.useState('');
+
+  // Dialog registra ore
+  const [registraOpen, setRegistraOpen] = React.useState(false);
+  const [regDipendenteId, setRegDipendenteId] = React.useState('');
+  const [regTarget, setRegTarget] = React.useState(''); // "c:<id>" cantiere | "k:<id>" commessa
+  const [regData, setRegData] = React.useState(oggiLocale());
+  const [regOrdinarie, setRegOrdinarie] = React.useState(0);
+  const [regViaggio, setRegViaggio] = React.useState(0);
+  const [regStraordinari, setRegStraordinari] = React.useState(0);
+  const [regNote, setRegNote] = React.useState('');
+  const [regError, setRegError] = React.useState('');
+  const [isRegPending, startRegAction] = React.useTransition();
+
+  function openRegistra() {
+    setRegDipendenteId(dipendenti[0]?.id ?? '');
+    setRegTarget('');
+    setRegData(oggiLocale());
+    setRegOrdinarie(0);
+    setRegViaggio(0);
+    setRegStraordinari(0);
+    setRegNote('');
+    setRegError('');
+    setRegistraOpen(true);
+  }
+
+  function handleRegistra() {
+    setRegError('');
+    if (!regDipendenteId) { setRegError('Seleziona un dipendente.'); return; }
+    if (!regTarget) { setRegError('Seleziona una commessa o un cantiere.'); return; }
+    if (!regData) { setRegError('Inserisci la data.'); return; }
+
+    const isCommessa = regTarget.startsWith('k:');
+    const isCantiere = regTarget.startsWith('c:');
+    const targetId = regTarget.slice(2);
+
+    startRegAction(async () => {
+      const res = await registraOrePerDipendente({
+        dipendenteId: regDipendenteId,
+        commessaId: isCommessa ? targetId : undefined,
+        cantiereId: isCantiere ? targetId : undefined,
+        data: regData,
+        ore_ordinarie: regOrdinarie,
+        ore_viaggio: regViaggio,
+        ore_straordinarie: regStraordinari,
+        note: regNote.trim() || undefined,
+      });
+      if (!res.ok) {
+        setRegError(res.error);
+        return;
+      }
+      setRegistraOpen(false);
+      router.refresh();
+    });
+  }
 
   function applyFiltri(overrides: Partial<{ from: string; to: string; stato: string; dipendente: string }>) {
     const f = { from, to, stato, dipendente, ...overrides };
@@ -280,7 +347,11 @@ export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
                 ))}
               </select>
             </div>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <Button variant="default" size="sm" onClick={openRegistra}>
+                <PlusCircle className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Registra ore
+              </Button>
               <a
                 href={exportHref}
                 className="inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
@@ -587,6 +658,134 @@ export function RapportiniClient({ righe, filtri, dipendenti }: Props) {
             <Button variant="destructive" onClick={handleRespingi} disabled={isPending}>
               {isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               Respingi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Registra ore */}
+      <Dialog open={registraOpen} onOpenChange={(open) => { if (!open) setRegistraOpen(false); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registra ore per dipendente</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Dipendente */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Dipendente</label>
+              <select
+                value={regDipendenteId}
+                onChange={(e) => setRegDipendenteId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Seleziona dipendente...</option>
+                {dipendenti.map((d) => (
+                  <option key={d.id} value={d.id}>{d.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Target: commessa o cantiere */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Commessa o cantiere</label>
+              <select
+                value={regTarget}
+                onChange={(e) => setRegTarget(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Seleziona...</option>
+                {commesse.length > 0 && (
+                  <optgroup label="Commesse">
+                    {commesse.map((c) => (
+                      <option key={c.id} value={`k:${c.id}`}>{c.titolo}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {cantieri.length > 0 && (
+                  <optgroup label="Cantieri">
+                    {cantieri.map((k) => (
+                      <option key={k.id} value={`c:${k.id}`}>{k.nome}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            {/* Data */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Data</label>
+              <input
+                type="date"
+                value={regData}
+                onChange={(e) => setRegData(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            {/* Ore */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Ore ordinarie</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.25}
+                  value={regOrdinarie}
+                  onChange={(e) => setRegOrdinarie(parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Ore viaggio</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.25}
+                  value={regViaggio}
+                  onChange={(e) => setRegViaggio(parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Straordinari</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={24}
+                  step={0.25}
+                  value={regStraordinari}
+                  onChange={(e) => setRegStraordinari(parseFloat(e.target.value) || 0)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">Note (opzionale)</label>
+              <textarea
+                value={regNote}
+                onChange={(e) => setRegNote(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                placeholder="Note aggiuntive..."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              />
+            </div>
+
+            {regError ? (
+              <p className="text-xs text-destructive">{regError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRegistraOpen(false)} disabled={isRegPending}>
+              Annulla
+            </Button>
+            <Button onClick={handleRegistra} disabled={isRegPending}>
+              {isRegPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              Registra
             </Button>
           </DialogFooter>
         </DialogContent>
