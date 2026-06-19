@@ -22,6 +22,7 @@ import { TabStorage } from './_components/tab-storage';
 import { TabBranding } from './_components/tab-branding';
 import { TabNoteInterne } from './_components/tab-note-interne';
 import { TabAi } from './_components/tab-ai';
+import { TabModuli } from './_components/tab-moduli';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export default async function TenantDetailPage({
   await requirePlatformAdmin();
   const supabase = createServiceSupabase();
 
-  const [tenantRes, usageRes, quotaRes, plansRes, utentiRes, auditRes] =
+  const [tenantRes, usageRes, quotaRes, plansRes, utentiRes, auditRes, moduliRes] =
     await Promise.all([
       supabase
         .from('tenants')
@@ -65,6 +66,10 @@ export default async function TenantDetailPage({
         .eq('tenant_id', params.id)
         .order('created_at', { ascending: false })
         .limit(50),
+      supabase
+        .from('tenant_modules' as never)
+        .select('module_code, attivo')
+        .eq('tenant_id', params.id),
     ]);
 
   const tenant: any = tenantRes.data;
@@ -75,6 +80,10 @@ export default async function TenantDetailPage({
   const plans = (plansRes.data ?? []) as any[];
   const utenti = (utentiRes.data ?? []) as any[];
   const audit = (auditRes.data ?? []) as any[];
+  const moduli = (moduliRes.data ?? []) as any[];
+  const kantiereAttivo = moduli.some(
+    (m) => m.module_code === 'kantiere' && m.attivo === true,
+  );
 
   const plan = plans.find((p) => p.id === tenant.plan_id);
 
@@ -161,6 +170,7 @@ export default async function TenantDetailPage({
           <TabsTrigger value="quote">Quote</TabsTrigger>
           <TabsTrigger value="storage">Storage</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
+          <TabsTrigger value="moduli">Moduli</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="note">Note interne</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -237,6 +247,11 @@ export default async function TenantDetailPage({
             tenantNome={tenant.nome}
             currentModel={tenant.transcribe_model ?? null}
           />
+        </TabsContent>
+
+        {/* ===== Moduli ===== */}
+        <TabsContent value="moduli">
+          <TabModuli tenantId={tenant.id} kantiereAttivo={kantiereAttivo} />
         </TabsContent>
 
         {/* ===== Branding ===== */}

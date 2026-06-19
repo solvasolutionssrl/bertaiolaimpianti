@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
+import { tenantHasModule } from '../_lib/modules';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { ImpersonationBanner } from './_components/impersonation-banner';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
@@ -99,6 +100,7 @@ export default async function OfficeLayout({
     role: userRes.data?.role ?? ctx.role,
   };
   const notificationCount = notifRes.count ?? 0;
+  const hasKantiere = await tenantHasModule('kantiere');
   const onboardedAt = (userRow?.onboarded_at as string | null | undefined) ?? null;
   const showOnboardingTour = onboardedAt === null;
 
@@ -132,6 +134,7 @@ export default async function OfficeLayout({
         tenant={tenant}
         user={user}
         notificationCount={notificationCount}
+        hasKantiere={hasKantiere}
       >
         {isPlatformAdmin && !isImpersonating ? <PlatformAdminPill /> : null}
         {children}

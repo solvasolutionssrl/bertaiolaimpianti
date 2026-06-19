@@ -10,11 +10,13 @@ import type { StatoCommessa } from '@kommessa/api/types';
 import { StatoPicker } from './stato-picker';
 import { TecniciPanel, type TecnicoAssegnato } from './tecnici-panel';
 import { TipologiePanel } from './tipologie-panel';
+import { SquadraPanel, type DipendenteDisponibile } from './squadra-panel';
 import { fmtData } from '../../../_lib/format';
 import type {
   TipologiaVoce,
   TipologiaPreset,
 } from '../../../../_components/aggiungi-tipologie-dialog';
+import type { MembroSquadra } from '../../../_actions/commessa-squadre';
 
 interface Props {
   commessaId: string;
@@ -34,6 +36,12 @@ interface Props {
     presets: TipologiaPreset[];
     canEdit: boolean;
   };
+  /** Gating modulo kantiere — se false, nessun pannello squadra viene renderizzato. */
+  hasKantiere?: boolean;
+  /** Squadra assegnata alla commessa (solo se hasKantiere). */
+  squadra?: MembroSquadra[];
+  /** Dipendenti attivi del tenant (solo se hasKantiere). */
+  dipendentiDisponibili?: DipendenteDisponibile[];
 }
 
 /**
@@ -57,6 +65,9 @@ export function CommessaSidebar({
   tecniciTenant,
   canManageTecnici,
   tipologie,
+  hasKantiere = false,
+  squadra = [],
+  dipendentiDisponibili = [],
 }: Props) {
   const assegnata = tecniciAssegnati.length > 0;
 
@@ -90,6 +101,17 @@ export function CommessaSidebar({
         available={tecniciTenant}
         canManage={canManageTecnici}
       />
+
+      {/* Card squadra kantiere — visibile SOLO se il modulo è attivo.
+          Per Bertaiola (hasKantiere=false) questo blocco non renderizza nulla. */}
+      {hasKantiere && (
+        <SquadraPanel
+          commessaId={commessaId}
+          squadra={squadra}
+          dipendentiDisponibili={dipendentiDisponibili}
+          canManage={canManageTecnici}
+        />
+      )}
 
       {/* Card meta info — non azionabili, riferimento veloce */}
       <Card>

@@ -4,7 +4,15 @@ import * as React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
-import { Sparkles, Timer } from 'lucide-react';
+import {
+  Boxes,
+  Briefcase,
+  HardHat,
+  LayoutDashboard,
+  Sparkles,
+  Timer,
+  Users,
+} from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
@@ -14,6 +22,7 @@ interface Props {
   user: { name: string; email?: string; role?: string };
   activeNavId?: string;
   notificationCount?: number;
+  hasKantiere?: boolean;
   children: React.ReactNode;
 }
 
@@ -63,7 +72,8 @@ const BASE_NAV: OfficeNavItem[] = DEFAULT_OFFICE_NAV.map((item) => {
 
 // Inseriamo "Turni & ore" subito dopo "Clienti" e "Co-pilot" prima di
 // "Impostazioni" per coerenza di flusso (operativo → AI → config).
-const NAV: OfficeNavItem[] = (() => {
+// BASE_FULL_NAV: nav statica senza voci per moduli opzionali.
+const BASE_FULL_NAV: OfficeNavItem[] = (() => {
   const out: OfficeNavItem[] = [];
   for (const item of BASE_NAV) {
     out.push(item);
@@ -88,16 +98,98 @@ const NAV: OfficeNavItem[] = (() => {
 })();
 
 /**
+ * Costruisce la NAV finale in base ai moduli attivi del tenant.
+ *
+ * - hasKantiere=false (Bertaiola): struttura ATTUALE invariata.
+ * - hasKantiere=true  (FPM e simili): struttura con gruppi "Commessa" e
+ *   "Kantiere" come moduli add-on + Dipendenti come voce globale.
+ */
+function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
+  if (!hasKantiere) {
+    // Ramo Bertaiola: riproduce esattamente BASE_FULL_NAV (nessuna modifica).
+    return [...BASE_FULL_NAV];
+  }
+
+  // Ramo FPM / hasKantiere=true: sidebar a SEZIONI-separatori.
+  // Dashboard in alto · AZIENDA · KOMMESSA (modulo) · KANTIERE (modulo) · ALTRO.
+  // I nomi sezione sono header/separatori; KOMMESSA/KANTIERE hanno sfondino +
+  // simbolo add-on. Tutte aperte di default, richiudibili.
+  return [
+    {
+      id: 'home',
+      label: 'Dashboard',
+      href: '/office',
+      icon: LayoutDashboard,
+    },
+    {
+      id: 'sec-azienda',
+      label: 'Azienda',
+      href: '#',
+      icon: Users,
+      variant: 'section',
+      defaultOpen: true,
+      children: [
+        { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+        { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
+      ],
+    },
+    {
+      id: 'sec-kommessa',
+      label: 'Kommessa',
+      href: '#',
+      icon: Briefcase,
+      variant: 'module',
+      defaultOpen: true,
+      children: [
+        { id: 'commesse', label: 'Commesse', href: '/office/commesse' },
+        { id: 'todo', label: 'Task', href: '/office/todo' },
+        { id: 'turni', label: 'Turni', href: '/office/turni' },
+      ],
+    },
+    {
+      id: 'sec-kantiere',
+      label: 'Kantiere',
+      href: '#',
+      icon: HardHat,
+      variant: 'module',
+      defaultOpen: true,
+      children: [
+        { id: 'kant-overview', label: 'Panoramica', href: '/office/kantiere' },
+        { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
+        { id: 'kant-qr', label: 'QR code', href: '/office/kantiere/qr' },
+        { id: 'kant-rapp', label: 'Rapportini', href: '/office/kantiere/rapportini' },
+        { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
+        { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
+      ],
+    },
+    {
+      id: 'sec-altro',
+      label: 'Altro',
+      href: '#',
+      icon: Boxes,
+      variant: 'section',
+      defaultOpen: true,
+      children: [
+        { id: 'ricerca', label: 'Ricerca', href: '/office/cerca' },
+        { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche' },
+        { id: 'copilot', label: 'Co-pilot', href: '/office/copilot' },
+        { id: 'impostazioni', label: 'Impostazioni', href: '/office/impostazioni' },
+      ],
+    },
+  ];
+}
+
+/**
  * Deriva l'id della voce nav attiva dal pathname corrente. Logica:
  *  - match esatto su `href` ha priorità
  *  - altrimenti il primo `href` (non `/`) che è prefisso del pathname
  *  - default `home` se siamo su `/office`
  */
-function deriveActiveId(pathname: string | null): string | undefined {
+function deriveActiveId(pathname: string | null, nav: OfficeNavItem[]): string | undefined {
   if (!pathname) return undefined;
   // Flatten alberatura per il match (children inclusi)
   const flat: { id: string; href: string }[] = [];
-  for (const n of NAV) {
+  for (const n of nav) {
     flat.push({ id: n.id, href: n.href });
     for (const c of n.children ?? []) flat.push({ id: c.id, href: c.href });
   }
@@ -118,11 +210,13 @@ export function OfficeShellClient({
   user,
   activeNavId,
   notificationCount,
+  hasKantiere,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const computedActiveId = activeNavId ?? deriveActiveId(pathname);
+  const nav = buildNav(hasKantiere);
+  const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
@@ -152,7 +246,7 @@ export function OfficeShellClient({
       <OfficeShell
         tenant={tenant}
         user={user}
-        navItems={NAV}
+        navItems={nav}
         activeNavId={computedActiveId}
         notificationCount={notificationCount}
         onLogout={handleLogout}

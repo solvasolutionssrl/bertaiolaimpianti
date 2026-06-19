@@ -221,12 +221,22 @@ export async function creaCommessa(
   // del tenant. Non blocchiamo se fallisce: non è critico per la creazione DB.
   try {
     const svcForInit = createServiceSupabase();
-    const { data: t } = await svcForInit
+    const { data: t } = await (svcForInit
       .from('tenants')
-      .select('storage_provider, storage_config')
+      .select('storage_provider, storage_config, crea_cartelle' as never)
       .eq('id', ctx.tenantId)
-      .maybeSingle();
-    if (t?.storage_provider === 'nextcloud') {
+      .maybeSingle() as unknown as Promise<{
+        data: {
+          storage_provider: string | null;
+          storage_config: Record<string, string> | null;
+          crea_cartelle: boolean | null;
+        } | null;
+        error: unknown;
+      }>);
+    if (
+      t?.crea_cartelle !== false &&
+      t?.storage_provider === 'nextcloud'
+    ) {
       const cfg = (t.storage_config as Record<string, string> | null) ?? {};
       if (cfg.baseUrl && cfg.user && cfg.appPassword) {
         const storage = getStorageProvider({

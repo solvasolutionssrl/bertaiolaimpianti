@@ -67,14 +67,17 @@ export function NuovoTenantWizard({ plans }: Props) {
   }, [nome, slugTouched]);
 
   // -------- Step 2 (storage) --------
-  const [storageProvider, setStorageProvider] = React.useState<'supabase' | 'nextcloud'>(
+  const [storageProvider, setStorageProvider] = React.useState<'supabase' | 'nextcloud' | 'r2'>(
     'supabase',
   );
   const [storageBaseUrl, setStorageBaseUrl] = React.useState('');
   const [storageUser, setStorageUser] = React.useState('');
   const [storagePass, setStoragePass] = React.useState('');
 
-  // Test connessione storage (Nextcloud)
+  // Crea struttura cartelle commessa (default true; false per R2)
+  const [creaCartelle, setCreaCartelle] = React.useState(true);
+
+  // Test connessione storage (Nextcloud / R2)
   const [testing, startTest] = React.useTransition();
   const [testResult, setTestResult] = React.useState<
     | { kind: 'idle' }
@@ -113,6 +116,7 @@ export function NuovoTenantWizard({ plans }: Props) {
       return nome.length >= 2 && /^[A-Z0-9]{2,12}$/.test(slug) && planId !== '';
     if (step === 2) {
       if (storageProvider === 'supabase') return true;
+      if (storageProvider === 'r2') return true; // gestito da env, nessun campo richiesto
       return storageBaseUrl !== '' && storageUser !== '' && storagePass !== '';
     }
     if (step === 3)
@@ -134,6 +138,9 @@ export function NuovoTenantWizard({ plans }: Props) {
         : {};
     if (inboundEmail) storage_config.inbound_email = inboundEmail;
 
+    // R2 è gestito da env — nessuna credenziale per-tenant da salvare
+    const r2_config: Record<string, unknown> = {};
+
     const payload: CreaTenantInput = {
       nome,
       slug,
@@ -142,6 +149,8 @@ export function NuovoTenantWizard({ plans }: Props) {
       plan_id: planId || null,
       storage_provider: storageProvider,
       storage_config,
+      r2_config,
+      crea_cartelle: creaCartelle,
       inbound_email: inboundEmail || null,
       owner_email: ownerEmail,
       owner_name: ownerName,
@@ -307,25 +316,30 @@ export function NuovoTenantWizard({ plans }: Props) {
             <>
               <div>
                 <Label>Provider storage</Label>
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
-                  {(['supabase', 'nextcloud'] as const).map((p) => (
+                <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(
+                    [
+                      { value: 'supabase', label: 'Supabase', desc: 'Bucket S3 gestito (default)' },
+                      { value: 'nextcloud', label: 'Nextcloud', desc: 'WebDAV (Hetzner Storage Share o self-hosted)' },
+                      { value: 'r2', label: 'Cloudflare R2', desc: 'Solo R2 (senza cartelle Nextcloud)' },
+                    ] as const
+                  ).map((p) => (
                     <button
                       type="button"
-                      key={p}
-                      onClick={() => setStorageProvider(p)}
+                      key={p.value}
+                      onClick={() => {
+                        setStorageProvider(p.value);
+                        setCreaCartelle(p.value !== 'r2');
+                      }}
                       className={cn(
                         'rounded-md border px-3 py-2.5 text-left transition-colors',
-                        storageProvider === p
+                        storageProvider === p.value
                           ? 'border-primary bg-primary/5'
                           : 'border-border bg-card hover:bg-muted/40',
                       )}
                     >
-                      <p className="text-sm font-semibold capitalize">{p}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {p === 'supabase'
-                          ? 'Bucket S3 gestito (default)'
-                          : 'WebDAV (Hetzner Storage Share o self-hosted)'}
-                      </p>
+                      <p className="text-sm font-semibold">{p.label}</p>
+                      <p className="text-xs text-muted-foreground">{p.desc}</p>
                     </button>
                   ))}
                 </div>
@@ -397,6 +411,23 @@ export function NuovoTenantWizard({ plans }: Props) {
                   </div>
                 </div>
               ) : null}
+              {storageProvider === 'r2' ? (
+                <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                  Storage gestito (Cloudflare R2 di SOLVA). I file dei tenant sono isolati per
+                  prefisso <code className="font-mono text-xs">tenants/{'{slug}'}/ </code>
+                  nel bucket condiviso — nessuna credenziale da inserire.
+                </div>
+              ) : null}
+              {/* Crea struttura cartelle commessa */}
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-3 py-2.5 hover:bg-muted/30">
+                <input
+                  type="checkbox"
+                  checked={creaCartelle}
+                  onChange={(e) => setCreaCartelle(e.target.checked)}
+                  className="h-4 w-4 accent-primary"
+                />
+                <span className="text-sm">Crea struttura cartelle commessa</span>
+              </label>
             </>
           ) : null}
 

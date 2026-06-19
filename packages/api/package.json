@@ -10,11 +10,18 @@
     "./service": "./src/service.ts",
     "./types": "./src/types/index.ts",
     "./schemas": "./src/schemas/index.ts",
-    "./tenant": "./src/tenant.ts"
+    "./tenant": "./src/tenant.ts",
+    "./modules": "./src/modules.ts",
+    "./kantiere": "./src/kantiere.ts",
+    "./kantiere-qr": "./src/kantiere-qr.ts",
+    "./kantiere-ore": "./src/kantiere-ore.ts",
+    "./kantiere-report": "./src/kantiere-report.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
@@ -24,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.7.4",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.0"
   }
 }

@@ -71,14 +71,16 @@ const creaTenantSchema = z.object({
   brand_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
   logo_url: z.string().url().optional().nullable(),
   plan_id: z.string().uuid().optional().nullable(),
-  storage_provider: z.enum(['supabase', 'nextcloud']).default('supabase'),
+  storage_provider: z.enum(['supabase', 'nextcloud', 'r2']).default('supabase'),
   storage_config: z.record(z.unknown()).default({}),
+  r2_config: z.record(z.unknown()).default({}),
+  crea_cartelle: z.boolean().default(true),
   inbound_email: z.string().email().optional().nullable(),
   owner_email: z.string().email(),
   owner_name: z.string().min(2).max(120),
 });
 
-export type CreaTenantInput = z.infer<typeof creaTenantSchema>;
+export type CreaTenantInput = z.input<typeof creaTenantSchema>;
 
 export type CreaTenantResult =
   | { ok: true; tenantId: string; slug: string }
@@ -109,6 +111,8 @@ export async function creaTenant(
       plan_id: data.plan_id ?? null,
       storage_provider: data.storage_provider,
       storage_config: data.storage_config as never,
+      r2_config: data.r2_config as never,
+      crea_cartelle: data.crea_cartelle,
       // inbound_email: salvato in storage_config se la colonna non esiste
     } as never)
     .select('id, slug, nome')
@@ -330,10 +334,15 @@ export async function eliminaTenant(tenantId: string) {
 // ---------------------------------------------------------------------
 
 const testStorageSchema = z.object({
-  provider: z.enum(['supabase', 'nextcloud']),
+  provider: z.enum(['supabase', 'nextcloud', 'r2']),
   baseUrl: z.string().optional(),
   user: z.string().optional(),
   appPassword: z.string().optional(),
+  account_id: z.string().optional(),
+  bucket: z.string().optional(),
+  access_key_id: z.string().optional(),
+  secret_access_key: z.string().optional(),
+  endpoint: z.string().optional(),
 });
 
 export type TestStorageInput = z.infer<typeof testStorageSchema>;
@@ -366,6 +375,11 @@ export async function testaConnessioneStorage(
       latencyMs: 0,
       detail: 'Bucket Supabase gestito — niente probe esterno richiesto',
     };
+  }
+
+  // R2 è gestito (bucket condiviso SOLVA da env) — nessun probe per-tenant
+  if (data.provider === 'r2') {
+    return { ok: true, latencyMs: 0, detail: 'Storage R2 gestito (env)' };
   }
 
   // Nextcloud probe
@@ -695,5 +709,148 @@ export async function aggiornaModelloTrascrizione(input: {
 
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
   revalidatePath('/admin/tenants');
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------
+// CREA UTENTE TENANT con email+password reali (nessun invito email)
+// ---------------------------------------------------------------------
+
+const CREA_UTENTE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  email: z.string().email(),
+  password: z.string().min(8, 'Almeno 8 caratteri'),
+  nome: z.string().min(2).max(120),
+  role: z.enum(['admin', 'office', 'tecnico']),
+});
+
+/**
+ * Crea un utente del tenant con email+password impostate dall'admin (NESSUNA
+ * email di invito). L'account è pronto: l'admin consegna le credenziali.
+ */
+export async function creaUtenteTenant(input: {
+  tenantId: string;
+  email: string;
+  password: string;
+  nome: string;
+  role: 'admin' | 'office' | 'tecnico';
+}): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = CREA_UTENTE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  // 1) crea l'utente auth con password, email già confermata, niente email inviata
+  const { data: created, error: authErr } = await supabase.auth.admin.createUser({
+    email: parsed.data.email,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: { display_name: parsed.data.nome },
+    app_metadata: {
+      tenant_id: parsed.data.tenantId,
+      role: parsed.data.role,
+    } as never,
+  });
+  if (authErr || !created?.user) {
+    const msg = authErr?.message ?? 'creazione utente fallita';
+    return {
+      ok: false,
+      error: msg.toLowerCase().includes('already')
+        ? 'Esiste già un utente con questa email.'
+        : msg,
+    };
+  }
+
+  // 2) profilo applicativo nel tenant (il trigger sync_user_claims popola i JWT claims)
+  const { error: profErr } = await supabase.from('users').insert({
+    id: created.user.id,
+    tenant_id: parsed.data.tenantId,
+    role: parsed.data.role,
+    display_name: parsed.data.nome,
+    attivo: true,
+  } as never);
+  if (profErr) {
+    // rollback best-effort dell'utente auth per non lasciare orfani
+    await supabase.auth.admin.deleteUser(created.user.id).catch(() => {});
+    return { ok: false, error: profErr.message };
+  }
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'user',
+    entityId: created.user.id,
+    action: 'tenant.user.create_with_password',
+    after: { email: parsed.data.email, role: parsed.data.role },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true, userId: created.user.id };
+}
+
+// ---------------------------------------------------------------------
+// Moduli opzionali per tenant (kantiere, ecc.)
+// ---------------------------------------------------------------------
+
+const TENANT_MODULE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  moduleCode: z.enum(['kantiere']),
+  attivo: z.boolean(),
+});
+
+/**
+ * Accende/spegne un modulo opzionale per un tenant. Upsert su
+ * (tenant_id, module_code). Solo super-admin. base non passa di qui.
+ */
+export async function aggiornaModuloTenant(input: {
+  tenantId: string;
+  moduleCode: 'kantiere';
+  attivo: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = TENANT_MODULE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? 'Input non valido',
+    };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: prev } = await supabase
+    .from('tenant_modules' as never)
+    .select('attivo')
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', parsed.data.moduleCode)
+    .maybeSingle();
+  const previousAttivo =
+    (prev as { attivo?: boolean } | null)?.attivo ?? false;
+
+  const { error } = await supabase.from('tenant_modules' as never).upsert(
+    {
+      tenant_id: parsed.data.tenantId,
+      module_code: parsed.data.moduleCode,
+      attivo: parsed.data.attivo,
+      configured_at: new Date().toISOString(),
+    } as never,
+    { onConflict: 'tenant_id,module_code' },
+  );
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.module.update',
+    before: { module_code: parsed.data.moduleCode, attivo: previousAttivo },
+    after: { module_code: parsed.data.moduleCode, attivo: parsed.data.attivo },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
   return { ok: true };
 }

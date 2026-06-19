@@ -1,23 +1,31 @@
 import type { StorageProvider, StorageProviderName } from './types';
 import { SupabaseStorageProvider } from './supabase';
 import { NextcloudStorageProvider } from './nextcloud';
+import { R2FileStorageProvider } from './r2-provider';
 
 export * from './types';
 export * from './r2';
+export * from './r2-provider';
+export * from './r2-paths';
+export * from './resolve';
 export { SupabaseStorageProvider, NextcloudStorageProvider };
 
 export interface StorageProviderConfig {
   provider: StorageProviderName;
-  bucket?: string; // supabase
+  bucket?: string; // supabase + r2
   baseUrl?: string; // nextcloud
   user?: string; // nextcloud
   appPassword?: string; // nextcloud
   /**
-   * Nextcloud: sotto-cartella radice in cui isolare i file di questo
-   * tenant (es. "/Bertaiola Impianti"). Se omesso, i file vanno nella
-   * root WebDAV dell'utente Nextcloud.
+   * Nextcloud: sotto-cartella radice del tenant. R2: prefisso chiave di
+   * isolamento per-tenant (es. "tenants/FPM"). Se omesso, root.
    */
   basePath?: string;
+  // r2
+  accountId?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  endpoint?: string;
 }
 
 /**
@@ -41,6 +49,20 @@ export function getStorageProvider(config: StorageProviderConfig): StorageProvid
         appPassword: config.appPassword,
         basePath: config.basePath,
       });
+    case 'r2': {
+      const accountId = config.accountId ?? process.env.R2_ACCOUNT_ID;
+      const bucket = config.bucket ?? process.env.R2_BUCKET;
+      const accessKeyId = config.accessKeyId ?? process.env.R2_ACCESS_KEY_ID;
+      const secretAccessKey = config.secretAccessKey ?? process.env.R2_SECRET_ACCESS_KEY;
+      const endpoint = config.endpoint ?? process.env.R2_ENDPOINT;
+      if (!accountId || !bucket || !accessKeyId || !secretAccessKey) {
+        throw new Error('R2 config incomplete: set R2_* env vars (managed) or per-tenant r2_config');
+      }
+      return new R2FileStorageProvider({
+        accountId, bucket, accessKeyId, secretAccessKey, endpoint,
+        basePath: config.basePath,
+      });
+    }
     default: {
       const exhaustiveCheck: never = config.provider;
       throw new Error(`Unknown storage provider: ${exhaustiveCheck}`);

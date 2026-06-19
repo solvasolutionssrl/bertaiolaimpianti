@@ -4,7 +4,7 @@
  * Tutto il prodotto deve passare da queste interfacce.
  */
 
-export type StorageProviderName = 'supabase' | 'nextcloud';
+export type StorageProviderName = 'supabase' | 'nextcloud' | 'r2';
 
 export interface StorageObject {
   path: string;

@@ -16,6 +16,12 @@ import type {
   TipologiaVoce,
   TipologiaPreset,
 } from '../../../_components/aggiungi-tipologie-dialog';
+import { tenantHasModule } from '@/app/_lib/modules';
+import {
+  elencaSquadraCommessa,
+  type MembroSquadra,
+} from '../../_actions/commessa-squadre';
+import type { DipendenteDisponibile } from './_components/squadra-panel';
 
 export default async function CommessaLayout({
   params,
@@ -30,8 +36,12 @@ export default async function CommessaLayout({
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
 
+  // ── Modulo kantiere: check una volta, zero query se disattivato ──────────
+  const hasKantiere = await tenantHasModule('kantiere');
+
   // Carica in parallelo tecnici assegnati + rosa disponibile (per il picker)
-  // + dati tipologie (voci presenti, catalogo, preset) per la card master.
+  // + dati tipologie (voci presenti, catalogo, preset) per la card master
+  // + squadra kantiere (SOLO se hasKantiere, altrimenti nessuna query aggiuntiva).
   const supabase = createServerSupabase();
   const [tecniciAssegnati, tecniciTenant, vociPresentiRes, catalogoRes, presetRes] =
     await Promise.all([
@@ -48,6 +58,35 @@ export default async function CommessaLayout({
         .eq('tenant_id', ctx.tenantId)
         .order('nome'),
     ]);
+
+  // Squadra kantiere — query eseguita SOLO se il modulo è attivo.
+  // Per Bertaiola (kantiere off) questo blocco non viene mai raggiunto.
+  let squadraCommessa: MembroSquadra[] = [];
+  let dipendentiDisponibili: DipendenteDisponibile[] = [];
+  if (hasKantiere) {
+    const [squadraRes, dipRes] = await Promise.all([
+      elencaSquadraCommessa(params.id),
+      canManageTecnici
+        ? supabase
+            .from('dipendenti' as never)
+            .select('id, nome, cognome, mansione')
+            .eq('stato_attivo', true)
+            .order('cognome')
+        : Promise.resolve({ data: [] }),
+    ]);
+    squadraCommessa = squadraRes;
+    dipendentiDisponibili = ((dipRes.data ?? []) as Array<{
+      id: string;
+      nome: string;
+      cognome: string;
+      mansione: string | null;
+    }>).map((d) => ({
+      id: d.id,
+      nome: d.nome,
+      cognome: d.cognome,
+      mansione: d.mansione,
+    }));
+  }
 
   const vociPresenti = ((vociPresentiRes.data ?? []) as Array<{ voce_id: number }>).map(
     (v) => v.voce_id,
@@ -126,6 +165,9 @@ export default async function CommessaLayout({
               presets: presetTipologie,
               canEdit: canManageTecnici,
             }}
+            hasKantiere={hasKantiere}
+            squadra={squadraCommessa}
+            dipendentiDisponibili={dipendentiDisponibili}
           />
         </div>
       </div>

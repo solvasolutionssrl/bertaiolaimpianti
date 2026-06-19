@@ -11,6 +11,7 @@ import {
   CircleDot,
   LayoutDashboard,
   Menu,
+  Puzzle,
   Search,
   Settings,
   Users,
@@ -37,6 +38,14 @@ export interface OfficeNavItem {
   count?: number;
   separator?: boolean;
   badge?: number;
+  /**
+   * Trattamento header come "sezione/separatore":
+   * - `'section'`: tag uppercase muto (es. AZIENDA, ALTRO).
+   * - `'module'`: tag uppercase con sfondino accent leggero + simbolo add-on (Puzzle).
+   */
+  variant?: 'module' | 'section';
+  /** Apre di default il gruppo (sezione). */
+  defaultOpen?: boolean;
   /** Sotto-voci (alberatura). Se presenti, l'item diventa collapsible. */
   children?: OfficeNavItem[];
 }
@@ -114,8 +123,11 @@ function OfficeShell({
     [user.name],
   );
 
-  // Set di parent attualmente espansi. Auto-espandi quelli con figlio attivo.
-  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  // Set di parent attualmente espansi. Seed dai gruppi `defaultOpen`; poi
+  // auto-espandi quelli con figlio attivo.
+  const [expanded, setExpanded] = React.useState<Set<string>>(
+    () => new Set(navItems.filter((i) => i.defaultOpen).map((i) => i.id)),
+  );
   React.useEffect(() => {
     if (!activeNavId) return;
     const next = new Set(expanded);
@@ -155,6 +167,10 @@ function OfficeShell({
     const count = item.count ?? item.badge ?? 0;
     const showLabel = opts?.forceLabel || sidebarOpen;
     const isChild = opts?.isChild ?? false;
+    const isModule = !isChild && item.variant === 'module';
+    // Header di sezione/separatore (AZIENDA/ALTRO = section, KOMMESSA/KANTIERE = module)
+    const isSectionHeader =
+      !isChild && hasChildren && (item.variant === 'module' || item.variant === 'section');
 
     const exactActive = item.id === activeNavId;
 
@@ -168,6 +184,32 @@ function OfficeShell({
           ? 'font-semibold text-primary hover:bg-card'
           : 'font-medium text-foreground/75 hover:bg-card hover:text-foreground hover:shadow-soft',
       !showLabel && 'md:justify-center md:px-2',
+    );
+
+    // Classi/inner dedicati per gli header di sezione (tag uppercase).
+    const sectionClasses = cn(
+      'relative flex w-full items-center gap-2 rounded-md px-2.5 min-h-8 text-left',
+      'text-[10.5px] font-semibold uppercase tracking-[0.13em] transition-colors',
+      isModule
+        ? '!bg-accent/[0.07] text-accent hover:!bg-accent/[0.11]'
+        : 'mt-1 text-muted-foreground/55 hover:text-muted-foreground/80',
+    );
+    const sectionInner = (
+      <>
+        {isModule ? (
+          <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        ) : null}
+        <span className="flex-1 truncate">{item.label}</span>
+        {showLabel ? (
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 opacity-60 transition-transform',
+              isExpanded ? 'rotate-0' : '-rotate-90',
+            )}
+          />
+        ) : null}
+      </>
     );
 
     const inner = (
@@ -184,9 +226,11 @@ function OfficeShell({
               'h-4 w-4 shrink-0 transition-colors',
               exactActive
                 ? 'text-primary-foreground'
-                : isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground group-hover:text-foreground',
+                : isModule
+                  ? 'text-accent'
+                  : isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground group-hover:text-foreground',
             )}
           />
         ) : null}
@@ -236,11 +280,11 @@ function OfficeShell({
           type="button"
           aria-expanded={isExpanded}
           aria-controls={`nav-children-${item.id}`}
-          className={cn(linkClasses, 'w-full text-left')}
+          className={isSectionHeader ? sectionClasses : cn(linkClasses, 'w-full text-left')}
           onClick={() => toggleExpanded(item.id)}
           title={!showLabel ? item.label : undefined}
         >
-          {inner}
+          {isSectionHeader ? sectionInner : inner}
         </button>
       );
     }

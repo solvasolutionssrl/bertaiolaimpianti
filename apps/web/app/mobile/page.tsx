@@ -23,6 +23,7 @@ import type { StatoCommessa } from '@kommessa/api/types';
 import { getMobileShell } from '@kommessa/api/types';
 
 import { guardMobile } from './_lib/guard';
+import { tenantHasModule } from '../_lib/modules';
 import { titoloCase } from './_lib/display-case';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 import { BozzeDaCompletare } from '../_components/bozze-da-completare';
@@ -290,6 +291,10 @@ async function CampoOggi({
   ]);
   const { data, error } = commesseRes;
 
+  // Modulo Kantiere (FPM): mostra l'accesso al rapportino giornaliero.
+  // Gated → per Bertaiola (modulo off) la card non compare.
+  const hasKantiere = await tenantHasModule('kantiere');
+
   if (error) {
     return <ErrorState title="Impossibile caricare le commesse" detail={error.message} />;
   }
@@ -386,6 +391,15 @@ async function CampoOggi({
             tag="REC"
             dataTour="vocale"
           />
+          {hasKantiere ? (
+            <QuickAction
+              href="/mobile/ore"
+              icon={Clock}
+              label="Le mie ore"
+              hint="rapportino di oggi"
+              tone="primary"
+            />
+          ) : null}
         </div>
         </div>
       </section>
