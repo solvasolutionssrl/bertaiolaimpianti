@@ -160,11 +160,11 @@ export default async function CantiereDetailPage({ params }: PageProps) {
     stato: string;
   };
 
+  // rapportino_righe NON ha tenant_id: è scoped via cantiere_id (già del tenant) + RLS.
   const { data: righeRapRaw } = (await supabase
     .from('rapportino_righe' as never)
     .select('rapportino_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
     .eq('cantiere_id', params.id)
-    .eq('tenant_id', ctx.tenantId)
     .limit(30)) as { data: RigaRapRow[] | null };
 
   const righeRap = righeRapRaw ?? [];

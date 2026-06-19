@@ -446,6 +446,7 @@ export async function rigeneraQrCantiere(input: unknown): Promise<QrResult> {
   await supabase
     .from('cantiere_qr' as never)
     .update({ attivo: false, revoked_at: new Date().toISOString() } as never)
+    .eq('tenant_id', ctx.tenantId)
     .eq('cantiere_id', parsed.data.cantiereId)
     .eq('attivo', true);
 
