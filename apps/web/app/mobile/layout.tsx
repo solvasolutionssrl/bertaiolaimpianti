@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 
-import { getMobileShell } from '@kommessa/api/types';
+import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
@@ -38,24 +38,38 @@ export default async function MobileLayout({
 }) {
   const ctx = await getTenantContext();
 
-  const shell = ctx ? getMobileShell(ctx.role) : 'campo';
-
+  // Esperienza mobile per-tenant. Default 'kommessa' = comportamento storico
+  // (shell gestione/campo per ruolo): per i tenant esistenti — incluso
+  // Bertaiola — la shell risolta è ESATTAMENTE getMobileShell(ctx.role) di prima.
+  let appMode: AppMode = 'kommessa';
   let showOnboardingTour = false;
   let unreadCount = 0;
   if (ctx) {
     const supabase = createServerSupabase();
-    const [userRes, notifRes] = await Promise.all([
+    const [userRes, notifRes, tenantRes] = await Promise.all([
       supabase.from('users').select('onboarded_at').eq('id', ctx.userId).maybeSingle(),
       supabase
         .from('notifiche')
         .select('id', { count: 'exact', head: true })
         .is('read_at', null)
         .eq('user_id', ctx.userId),
+      supabase
+        .from('tenants')
+        .select('app_mode')
+        .eq('id', ctx.tenantId)
+        .maybeSingle(),
     ]);
     showOnboardingTour =
       ((userRes.data as { onboarded_at: string | null } | null)?.onboarded_at ?? null) === null;
     unreadCount = notifRes.count ?? 0;
+    const rawMode = (tenantRes.data as { app_mode?: string | null } | null)?.app_mode ?? null;
+    appMode =
+      rawMode === 'kantiere' || rawMode === 'full' ? rawMode : 'kommessa';
   }
+
+  const shell = ctx
+    ? risolviMobileShell({ appMode, role: ctx.role })
+    : 'campo';
 
   return (
     <div className="min-h-[100dvh] bg-canvas-mobile">
@@ -77,6 +91,7 @@ export default async function MobileLayout({
         <BottomNavShell
           unreadCount={unreadCount}
           shell={shell}
+          appMode={appMode}
           userId={ctx.userId}
           tenantId={ctx.tenantId}
         />

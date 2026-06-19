@@ -10,10 +10,13 @@ import {
   Bell,
   User,
   LayoutDashboard,
+  MapPin,
+  QrCode,
+  Clock,
 } from 'lucide-react';
 
 import { MobileBottomNav, type MobileTab, type MobileTabId } from '@kommessa/ui';
-import type { MobileShell } from '@kommessa/api/types';
+import type { MobileShell, AppMode } from '@kommessa/api/types';
 
 import { useRealtimeUnread } from './use-realtime-unread';
 
@@ -27,11 +30,13 @@ import { useRealtimeUnread } from './use-realtime-unread';
 export function BottomNavShell({
   unreadCount: initialUnreadCount,
   shell,
+  appMode = 'kommessa',
   userId,
   tenantId,
 }: {
   unreadCount: number;
   shell: MobileShell;
+  appMode?: AppMode;
   userId: string;
   tenantId: string;
 }) {
@@ -44,22 +49,45 @@ export function BottomNavShell({
     initialCount: initialUnreadCount,
   });
 
-  const tabs: MobileTab[] =
-    shell === 'gestione'
-      ? [
-          { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, href: '/mobile' },
-          { id: 'commesse', label: 'Commesse', icon: Briefcase, href: '/mobile/commesse' },
-          { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
-          { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
-          { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
-        ]
-      : [
-          { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
-          { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
-          { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
-          { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
-          { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
-        ];
+  let tabs: MobileTab[];
+  if (shell === 'kantiere') {
+    // PWA solo Kantiere — "a prova di cantiere": tap target grandi.
+    tabs = [
+      { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
+      { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
+      { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
+      { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+      { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+    ];
+  } else if (shell === 'gestione') {
+    // INVARIATO per app_mode='kommessa'.
+    tabs = [
+      { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, href: '/mobile' },
+      { id: 'commesse', label: 'Commesse', icon: Briefcase, href: '/mobile/commesse' },
+      { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
+      { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+      { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+    ];
+  } else {
+    // INVARIATO per app_mode='kommessa' (shell 'campo').
+    tabs = [
+      { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
+      { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
+      { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
+      { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+      { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+    ];
+  }
+
+  // app_mode='full': shell kommessa (gestione/campo) + entry point Kantiere.
+  // Inietta lo slot "Scansiona" al posto del Profilo (raggiungibile dall'home),
+  // così resta a 5 slot. Per 'kommessa' NON entra mai qui (zero diff Bertaiola).
+  if (appMode === 'full' && shell !== 'kantiere') {
+    tabs = [
+      ...tabs.slice(0, 4),
+      { id: 'scansiona', label: 'Kantiere', icon: QrCode, href: '/mobile/kantiere' },
+    ];
+  }
 
   const activeTab = matchActive(pathname, tabs, shell);
 

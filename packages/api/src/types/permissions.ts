@@ -68,11 +68,36 @@ export type PermissionLevelMap = {
 export type UserPermissionOverrides = Partial<PermissionLevelMap>;
 export type EffectivePermissions = PermissionLevelMap;
 
-export type MobileShell = 'gestione' | 'campo';
+export type MobileShell = 'gestione' | 'campo' | 'kantiere' | 'full';
 
 export function getMobileShell(role: string): MobileShell {
   // 'gestione' = chi gestisce il tenant (admin/office); il resto va in 'campo'.
   return ['admin', 'office'].includes(role) ? 'gestione' : 'campo';
+}
+
+/** Esperienza mobile per-tenant (`tenants.app_mode`). Default 'kommessa'. */
+export type AppMode = 'kommessa' | 'kantiere' | 'full';
+
+/**
+ * Risolve la shell mobile combinando l'`app_mode` del tenant e il ruolo utente.
+ *
+ *  - `kommessa` → `getMobileShell(role)` (gestione/campo) — percorso INVARIATO,
+ *    identico al comportamento storico (Bertaiola resta intatta).
+ *  - `kantiere` → `'kantiere'` (PWA solo Kantiere).
+ *  - `full`     → `getMobileShell(role)` ma il layout inietta le voci Kantiere
+ *    (la shell base resta gestione/campo, con uno slot Kantiere in più).
+ */
+export function risolviMobileShell({
+  appMode,
+  role,
+}: {
+  appMode: AppMode;
+  role: string;
+}): MobileShell {
+  if (appMode === 'kantiere') return 'kantiere';
+  // 'kommessa' e 'full' partono dalla shell storica per-ruolo.
+  // Per 'full' il bottom-nav aggiunge l'entry Kantiere senza cambiare il resto.
+  return getMobileShell(role);
 }
 
 export function getRoleDefaultPermissions(role: AppRole): EffectivePermissions {
