@@ -183,17 +183,18 @@ function OfficeShell({
         ? 'bg-primary text-primary-foreground shadow-soft-md font-semibold'
         : isActive && hasChildren
           ? 'font-semibold text-primary hover:bg-card'
-          : 'font-medium text-foreground/75 hover:bg-card hover:text-foreground hover:shadow-soft',
+          : 'font-semibold text-foreground/90 hover:bg-card hover:text-foreground hover:shadow-soft',
       !showLabel && 'md:justify-center md:px-2',
     );
 
     // Classi/inner dedicati per gli header di sezione (tag uppercase).
     const sectionClasses = cn(
       'relative flex w-full items-center gap-2 rounded-md px-2.5 min-h-[1.625rem] text-left',
-      'text-[10.5px] font-semibold uppercase tracking-[0.13em] transition-colors',
+      'text-[10.5px] font-bold uppercase tracking-[0.13em] transition-colors',
       isModule
-        ? '!bg-accent/[0.07] text-accent hover:!bg-accent/[0.11]'
-        : 'mt-1 text-muted-foreground/55 hover:text-muted-foreground/80',
+        ? // Sfondo arancione vivo, scritta nera (solo lo sfondo è colorato)
+          '!bg-accent/[0.22] text-foreground hover:!bg-accent/[0.3]'
+        : 'mt-1 text-muted-foreground/60 hover:text-muted-foreground/85',
     );
     const sectionInner = (
       <>
@@ -478,7 +479,7 @@ function OfficeShell({
           )}
           style={{
             background:
-              'linear-gradient(180deg, hsl(220 80% 96%) 0%, hsl(220 70% 97%) 60%, hsl(28 100% 97%) 100%)',
+              'linear-gradient(180deg, hsl(220 60% 91%) 0%, hsl(220 52% 92%) 60%, hsl(28 78% 92%) 100%)',
           }}
         >
           <div className="flex-1 overflow-y-auto">
