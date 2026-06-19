@@ -177,8 +177,9 @@ function OfficeShell({
     const linkClasses = cn(
       'relative group flex items-center gap-2.5 rounded-md text-[13px] tracking-tight transition-all',
       'px-2.5',
-      // Righe più compatte: top-level ~30px, figli ~26px
-      isChild ? 'pl-9 text-[12.5px] min-h-[1.625rem]' : 'min-h-[1.875rem]',
+      // Righe più compatte: top-level ~30px, figli ~26px.
+      // pl ridotto: sotto-voci vicine alla linea verticale.
+      isChild ? 'pl-3 text-[12.5px] min-h-[1.625rem]' : 'min-h-[1.875rem]',
       exactActive
         ? 'bg-primary text-primary-foreground shadow-soft-md font-semibold'
         : isActive && hasChildren
