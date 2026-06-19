@@ -17,6 +17,7 @@ import {
   Label,
 } from '@kommessa/ui';
 import { useAlert } from '@/app/_components/confirm-provider';
+import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
 import { creaCantiere } from '../../../_actions/cantieri';
 import type { CantiereRow, CommessaOption } from '../page';
 
@@ -28,7 +29,11 @@ interface Props {
 interface FormState {
   nome: string;
   indirizzo: string;
+  indirizzoLat: number | null;
+  indirizzoLng: number | null;
   sedePartenza: string;
+  sedePartenzaLat: number | null;
+  sedePartenzaLng: number | null;
   commessaId: string;
   stato: 'attivo' | 'sospeso' | 'chiuso';
   note: string;
@@ -37,7 +42,11 @@ interface FormState {
 const EMPTY_FORM: FormState = {
   nome: '',
   indirizzo: '',
+  indirizzoLat: null,
+  indirizzoLng: null,
   sedePartenza: '',
+  sedePartenzaLat: null,
+  sedePartenzaLng: null,
   commessaId: '',
   stato: 'attivo',
   note: '',
@@ -107,7 +116,11 @@ export function CantieriClient({ rows, commesse }: Props) {
       const res = await creaCantiere({
         nome: form.nome,
         indirizzo: form.indirizzo || null,
+        indirizzoLat: form.indirizzoLat,
+        indirizzoLng: form.indirizzoLng,
         sedePartenza: form.sedePartenza || null,
+        sedePartenzaLat: form.sedePartenzaLat,
+        sedePartenzaLng: form.sedePartenzaLng,
         commessaId: form.commessaId || null,
         stato: form.stato,
         note: form.note || null,
@@ -241,22 +254,36 @@ export function CantieriClient({ rows, commesse }: Props) {
 
             <div className="space-y-1.5">
               <Label htmlFor="indirizzo">Indirizzo</Label>
-              <Input
+              <AddressAutocomplete
                 id="indirizzo"
-                name="indirizzo"
                 value={form.indirizzo}
-                onChange={handleChange}
+                onChange={(label) => setForm((f) => ({ ...f, indirizzo: label }))}
+                onSelect={(r) =>
+                  setForm((f) => ({
+                    ...f,
+                    indirizzo: r.label,
+                    indirizzoLat: r.lat,
+                    indirizzoLng: r.lng,
+                  }))
+                }
                 placeholder="Via Roma 12, Torino"
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="sedePartenza">Sede di partenza</Label>
-              <Input
+              <AddressAutocomplete
                 id="sedePartenza"
-                name="sedePartenza"
                 value={form.sedePartenza}
-                onChange={handleChange}
+                onChange={(label) => setForm((f) => ({ ...f, sedePartenza: label }))}
+                onSelect={(r) =>
+                  setForm((f) => ({
+                    ...f,
+                    sedePartenza: r.label,
+                    sedePartenzaLat: r.lat,
+                    sedePartenzaLng: r.lng,
+                  }))
+                }
                 placeholder="Lascia vuoto per usare il default del modulo"
               />
             </div>
