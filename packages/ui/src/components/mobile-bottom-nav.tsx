@@ -19,6 +19,11 @@ export type MobileTabId =
   | 'voce'
   | 'notifiche'
   | 'profilo'
+  // Shell Kantiere (PWA per-modalità):
+  | 'kantiere'
+  | 'cantieri'
+  | 'scansiona'
+  | 'ore'
   // Mantenuti per retro-compatibilità con eventuali consumer:
   | 'sopralluogo'
   | 'foto';
