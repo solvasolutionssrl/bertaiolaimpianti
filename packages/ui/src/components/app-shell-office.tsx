@@ -11,6 +11,7 @@ import {
   CircleDot,
   LayoutDashboard,
   Menu,
+  Puzzle,
   Search,
   Settings,
   Users,
@@ -173,6 +174,9 @@ function OfficeShell({
         : isActive && hasChildren
           ? 'font-semibold text-primary hover:bg-card'
           : 'font-medium text-foreground/75 hover:bg-card hover:text-foreground hover:shadow-soft',
+      // Modulo/add-on: sfondino colorato + bordino accent (card riconoscibile)
+      isModule && !exactActive &&
+        '!bg-accent/[0.07] ring-1 ring-inset ring-accent/25 hover:!bg-accent/[0.12]',
       !showLabel && 'md:justify-center md:px-2',
     );
 
@@ -213,8 +217,10 @@ function OfficeShell({
         {isModule && showLabel && !exactActive ? (
           <span
             aria-label="modulo add-on"
-            className="ml-1 inline-flex h-4 items-center rounded-sm border border-accent/30 bg-accent/8 px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-accent/70"
+            title="Modulo add-on"
+            className="ml-1 inline-flex h-4 items-center gap-0.5 rounded-sm border border-accent/30 bg-accent/10 px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-accent/80"
           >
+            <Puzzle className="h-2.5 w-2.5" />
             mod
           </span>
         ) : null}

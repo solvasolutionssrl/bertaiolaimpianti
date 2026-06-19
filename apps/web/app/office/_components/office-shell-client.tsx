@@ -125,15 +125,31 @@ function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
         { id: 'set-storage', label: 'Storage', href: '/office/impostazioni/storage' },
       ];
 
+  // Ordine richiesto: Clienti, Dipendenti in alto · poi Dashboard · poi i
+  // moduli (Commessa, Kantiere) · poi tutte le altre voci.
   return [
-    // 1. Dashboard
+    // 1. Clienti
+    {
+      id: 'clienti',
+      label: 'Clienti',
+      href: '/office/clienti',
+      icon: Users,
+    },
+    // 2. Dipendenti — voce GLOBALE (fuori da Kantiere)
+    {
+      id: 'dipendenti',
+      label: 'Dipendenti',
+      href: '/office/kantiere/dipendenti',
+      icon: Users,
+    },
+    // 3. Dashboard
     {
       id: 'home',
       label: 'Dashboard',
       href: '/office',
       icon: LayoutDashboard,
     },
-    // 2. Commessa [gruppo, variant module]
+    // 4. Commessa [gruppo, variant module]
     {
       id: 'commessa',
       label: 'Commessa',
@@ -145,49 +161,7 @@ function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
         { id: 'todo', label: 'Task', href: '/office/todo' },
       ],
     },
-    // 3. Clienti
-    {
-      id: 'clienti',
-      label: 'Clienti',
-      href: '/office/clienti',
-      icon: Users,
-    },
-    // 4. Dipendenti — voce GLOBALE (fuori da Kantiere)
-    {
-      id: 'dipendenti',
-      label: 'Dipendenti',
-      href: '/office/kantiere/dipendenti',
-      icon: Users,
-    },
-    // 5. Turni & ore
-    {
-      id: 'turni',
-      label: 'Turni & ore',
-      href: '/office/turni',
-      icon: Timer,
-    },
-    // 6. Ricerca
-    {
-      id: 'ricerca',
-      label: 'Ricerca',
-      href: '/office/cerca',
-      icon: Search,
-    },
-    // 7. Avvisi
-    {
-      id: 'notifiche',
-      label: 'Avvisi',
-      href: '/office/notifiche',
-      icon: Bell,
-    },
-    // 8. Co-pilot
-    {
-      id: 'copilot',
-      label: 'Co-pilot',
-      href: '/office/copilot',
-      icon: Sparkles,
-    },
-    // 9. Kantiere [gruppo, variant module] — SOPRA Impostazioni
+    // 5. Kantiere [gruppo, variant module]
     {
       id: 'kantiere',
       label: 'Kantiere',
@@ -202,6 +176,34 @@ function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
         { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
         { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
       ],
+    },
+    // 6. Turni & ore
+    {
+      id: 'turni',
+      label: 'Turni & ore',
+      href: '/office/turni',
+      icon: Timer,
+    },
+    // 7. Ricerca
+    {
+      id: 'ricerca',
+      label: 'Ricerca',
+      href: '/office/cerca',
+      icon: Search,
+    },
+    // 8. Avvisi
+    {
+      id: 'notifiche',
+      label: 'Avvisi',
+      href: '/office/notifiche',
+      icon: Bell,
+    },
+    // 9. Co-pilot
+    {
+      id: 'copilot',
+      label: 'Co-pilot',
+      href: '/office/copilot',
+      icon: Sparkles,
     },
     // 10. Impostazioni — children esistenti + voce Kantiere (gated hasKantiere)
     {
