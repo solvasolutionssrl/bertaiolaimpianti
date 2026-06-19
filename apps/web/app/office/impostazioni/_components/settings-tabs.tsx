@@ -9,6 +9,7 @@ interface NavItem {
   label: string;
   href: string;
   superadminOnly?: boolean;
+  kantiereOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -20,16 +21,21 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding' },
   { id: 'storage',  label: 'Storage',           href: '/office/impostazioni/storage', superadminOnly: true },
   { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle' },
+  { id: 'kantiere', label: 'Kantiere',          href: '/office/impostazioni/kantiere', kantiereOnly: true },
 ];
 
 export function SettingsTopNav({
   isPlatformAdmin = false,
+  hasKantiere = false,
 }: {
   isPlatformAdmin?: boolean;
+  hasKantiere?: boolean;
 }) {
   const pathname = usePathname() ?? '';
   const visible = NAV_ITEMS.filter(
-    (item) => !item.superadminOnly || isPlatformAdmin,
+    (item) =>
+      (!item.superadminOnly || isPlatformAdmin) &&
+      (!item.kantiereOnly || hasKantiere),
   );
 
   return (
