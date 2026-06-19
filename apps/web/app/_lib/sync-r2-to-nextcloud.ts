@@ -200,6 +200,23 @@ export async function syncOneFile(fileRefId: string): Promise<SyncResult> {
     );
   }
 
+  // Guard r2-only tenant: nessun Nextcloud configurato, il file resta su R2.
+  // Lo marchiamo synced così non viene ripreso dal cron/batch.
+  // Cast a string: il DB enum non include ancora 'r2' nei generated types.
+  if ((tenantRow.storage_provider as string) === 'r2') {
+    await service
+      .from('file_refs')
+      .update({ status: 'synced', last_sync_error: null })
+      .eq('id', fileRefId);
+    return {
+      fileRefId,
+      ok: true,
+      reason: 'skipped',
+      detail: 'tenant r2-only — nessun sync Nextcloud necessario',
+      durationMs: Date.now() - t0,
+    };
+  }
+
   const r2 =
     getR2ProviderFromTenantConfig(
       (tenantRow.r2_config as Record<string, unknown> | null) ?? null,
@@ -415,9 +432,21 @@ export async function syncBatch(maxFiles = 10): Promise<{
   const staleThreshold = new Date(
     Date.now() - STALE_SYNCING_MINUTES * 60 * 1000,
   ).toISOString();
-  const { data: candidates } = await service
-    .from('file_refs')
+
+  // Recupera gli id dei tenant r2-only (nessun Nextcloud) per escluderli.
+  // Overselect di maxFiles poi slice: evita join PostgREST su tabelle diverse
+  // che è inaffidabile con .neq() su colonne di tabelle joined.
+  // Cast a string: il DB enum non include ancora 'r2' nei generated types.
+  const { data: r2OnlyTenants } = await service
+    .from('tenants')
     .select('id')
+    .eq('storage_provider', 'r2' as string);
+  const r2OnlyIds = new Set((r2OnlyTenants ?? []).map((t) => t.id));
+
+  const overselect = r2OnlyIds.size > 0 ? maxFiles + r2OnlyIds.size * 5 : maxFiles;
+  const { data: candidatesRaw } = await service
+    .from('file_refs')
+    .select('id, tenant_id')
     .is('deleted_at', null)
     .is('bozza_id', null) // esclude i file in staging delle bozze (sync al finalize)
     .not('r2_key', 'is', null)
@@ -425,7 +454,11 @@ export async function syncBatch(maxFiles = 10): Promise<{
       `status.in.(uploaded,sync_failed),and(status.eq.syncing,updated_at.lt.${staleThreshold})`,
     )
     .order('uploaded_at', { ascending: true })
-    .limit(maxFiles);
+    .limit(overselect);
+
+  const candidates = (candidatesRaw ?? [])
+    .filter((c) => !r2OnlyIds.has(c.tenant_id))
+    .slice(0, maxFiles);
 
   const results: SyncResult[] = [];
   for (const c of candidates ?? []) {

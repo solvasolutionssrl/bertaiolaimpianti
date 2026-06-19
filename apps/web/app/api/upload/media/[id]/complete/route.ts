@@ -111,11 +111,11 @@ export async function POST(
     return Response.json({ error: 'r2_key mancante (riga legacy?)' }, { status: 409 });
   }
 
-  // 5. R2 provider
+  // 5. R2 provider + storage_provider per guard sync
   const service = createServiceSupabase();
   const { data: tenantRow } = await service
     .from('tenants')
-    .select('r2_config')
+    .select('r2_config, storage_provider')
     .eq('id', ctx.tenantId)
     .maybeSingle();
 
@@ -264,7 +264,10 @@ export async function POST(
   // ufficializzata. La cartella vera non esiste ancora; il sync avverrà
   // alla finalizzazione (finalizzaBozza ri-aggancia il file e lo rimette in
   // stato 'uploaded' con il path Nextcloud reale).
-  if (!ref.bozza_id) {
+  //
+  // ECCEZIONE tenant r2-only: nessun Nextcloud configurato, il file resta su R2.
+  // Cast a string: il DB enum non include ancora 'r2' nei generated types.
+  if (!ref.bozza_id && (tenantRow?.storage_provider as string | undefined) !== 'r2') {
     waitUntil(syncOneFile(ref.id).catch(() => {}));
   }
 
