@@ -39,10 +39,13 @@ export interface OfficeNavItem {
   separator?: boolean;
   badge?: number;
   /**
-   * Quando `'module'`, applica un trattamento visivo discreto da "add-on":
-   * icona tinta nel colore accent/brand + micro-chip "modulo" accanto al label.
+   * Trattamento header come "sezione/separatore":
+   * - `'section'`: tag uppercase muto (es. AZIENDA, ALTRO).
+   * - `'module'`: tag uppercase con sfondino accent leggero + simbolo add-on (Puzzle).
    */
-  variant?: 'module';
+  variant?: 'module' | 'section';
+  /** Apre di default il gruppo (sezione). */
+  defaultOpen?: boolean;
   /** Sotto-voci (alberatura). Se presenti, l'item diventa collapsible. */
   children?: OfficeNavItem[];
 }
@@ -120,8 +123,11 @@ function OfficeShell({
     [user.name],
   );
 
-  // Set di parent attualmente espansi. Auto-espandi quelli con figlio attivo.
-  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  // Set di parent attualmente espansi. Seed dai gruppi `defaultOpen`; poi
+  // auto-espandi quelli con figlio attivo.
+  const [expanded, setExpanded] = React.useState<Set<string>>(
+    () => new Set(navItems.filter((i) => i.defaultOpen).map((i) => i.id)),
+  );
   React.useEffect(() => {
     if (!activeNavId) return;
     const next = new Set(expanded);
@@ -162,6 +168,9 @@ function OfficeShell({
     const showLabel = opts?.forceLabel || sidebarOpen;
     const isChild = opts?.isChild ?? false;
     const isModule = !isChild && item.variant === 'module';
+    // Header di sezione/separatore (AZIENDA/ALTRO = section, KOMMESSA/KANTIERE = module)
+    const isSectionHeader =
+      !isChild && hasChildren && (item.variant === 'module' || item.variant === 'section');
 
     const exactActive = item.id === activeNavId;
 
@@ -174,10 +183,33 @@ function OfficeShell({
         : isActive && hasChildren
           ? 'font-semibold text-primary hover:bg-card'
           : 'font-medium text-foreground/75 hover:bg-card hover:text-foreground hover:shadow-soft',
-      // Modulo/add-on: sfondino colorato + bordino accent (card riconoscibile)
-      isModule && !exactActive &&
-        '!bg-accent/[0.07] ring-1 ring-inset ring-accent/25 hover:!bg-accent/[0.12]',
       !showLabel && 'md:justify-center md:px-2',
+    );
+
+    // Classi/inner dedicati per gli header di sezione (tag uppercase).
+    const sectionClasses = cn(
+      'relative flex w-full items-center gap-2 rounded-md px-2.5 min-h-8 text-left',
+      'text-[10.5px] font-semibold uppercase tracking-[0.13em] transition-colors',
+      isModule
+        ? '!bg-accent/[0.07] text-accent hover:!bg-accent/[0.11]'
+        : 'mt-1 text-muted-foreground/55 hover:text-muted-foreground/80',
+    );
+    const sectionInner = (
+      <>
+        {isModule ? (
+          <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        ) : null}
+        <span className="flex-1 truncate">{item.label}</span>
+        {showLabel ? (
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 opacity-60 transition-transform',
+              isExpanded ? 'rotate-0' : '-rotate-90',
+            )}
+          />
+        ) : null}
+      </>
     );
 
     const inner = (
@@ -214,16 +246,6 @@ function OfficeShell({
         <span className={cn('flex-1 truncate', !showLabel && 'md:hidden')}>
           {item.label}
         </span>
-        {isModule && showLabel && !exactActive ? (
-          <span
-            aria-label="modulo add-on"
-            title="Modulo add-on"
-            className="ml-1 inline-flex h-4 items-center gap-0.5 rounded-sm border border-accent/30 bg-accent/10 px-1 font-mono text-[9px] font-semibold uppercase tracking-wider text-accent/80"
-          >
-            <Puzzle className="h-2.5 w-2.5" />
-            mod
-          </span>
-        ) : null}
         {count > 0 && showLabel ? (
           <span
             aria-label={`${count} non letti`}
@@ -258,11 +280,11 @@ function OfficeShell({
           type="button"
           aria-expanded={isExpanded}
           aria-controls={`nav-children-${item.id}`}
-          className={cn(linkClasses, 'w-full text-left')}
+          className={isSectionHeader ? sectionClasses : cn(linkClasses, 'w-full text-left')}
           onClick={() => toggleExpanded(item.id)}
           title={!showLabel ? item.label : undefined}
         >
-          {inner}
+          {isSectionHeader ? sectionInner : inner}
         </button>
       );
     }

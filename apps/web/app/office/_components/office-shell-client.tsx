@@ -5,12 +5,10 @@ import { useRouter, usePathname } from 'next/navigation';
 import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
 import {
-  Bell,
+  Boxes,
   Briefcase,
   HardHat,
   LayoutDashboard,
-  Search,
-  Settings,
   Sparkles,
   Timer,
   Users,
@@ -112,62 +110,49 @@ function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
     return [...BASE_FULL_NAV];
   }
 
-  // Ramo FPM / hasKantiere=true: struttura riorganizzata con moduli.
-  const impostazioniBase = BASE_FULL_NAV.find((i) => i.id === 'impostazioni');
-  const impostazioniChildren: OfficeNavItem[] = impostazioniBase?.children
-    ? [...impostazioniBase.children]
-    : [
-        { id: 'set-profilo', label: 'Profilo', href: '/office/impostazioni/profilo' },
-        { id: 'set-voci', label: 'Voci catalogo', href: '/office/impostazioni/voci' },
-        { id: 'set-preset', label: 'Preset di lavoro', href: '/office/impostazioni/preset' },
-        { id: 'set-utenti', label: 'Utenti', href: '/office/impostazioni/utenti' },
-        { id: 'set-branding', label: 'Branding', href: '/office/impostazioni/branding' },
-        { id: 'set-storage', label: 'Storage', href: '/office/impostazioni/storage' },
-      ];
-
-  // Ordine richiesto: Clienti, Dipendenti in alto · poi Dashboard · poi i
-  // moduli (Commessa, Kantiere) · poi tutte le altre voci.
+  // Ramo FPM / hasKantiere=true: sidebar a SEZIONI-separatori.
+  // Dashboard in alto · AZIENDA · KOMMESSA (modulo) · KANTIERE (modulo) · ALTRO.
+  // I nomi sezione sono header/separatori; KOMMESSA/KANTIERE hanno sfondino +
+  // simbolo add-on. Tutte aperte di default, richiudibili.
   return [
-    // 1. Clienti
-    {
-      id: 'clienti',
-      label: 'Clienti',
-      href: '/office/clienti',
-      icon: Users,
-    },
-    // 2. Dipendenti — voce GLOBALE (fuori da Kantiere)
-    {
-      id: 'dipendenti',
-      label: 'Dipendenti',
-      href: '/office/kantiere/dipendenti',
-      icon: Users,
-    },
-    // 3. Dashboard
     {
       id: 'home',
       label: 'Dashboard',
       href: '/office',
       icon: LayoutDashboard,
     },
-    // 4. Commessa [gruppo, variant module]
     {
-      id: 'commessa',
-      label: 'Commessa',
-      href: '/office/commesse',
+      id: 'sec-azienda',
+      label: 'Azienda',
+      href: '#',
+      icon: Users,
+      variant: 'section',
+      defaultOpen: true,
+      children: [
+        { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+        { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
+      ],
+    },
+    {
+      id: 'sec-kommessa',
+      label: 'Kommessa',
+      href: '#',
       icon: Briefcase,
       variant: 'module',
+      defaultOpen: true,
       children: [
         { id: 'commesse', label: 'Commesse', href: '/office/commesse' },
         { id: 'todo', label: 'Task', href: '/office/todo' },
+        { id: 'turni', label: 'Turni', href: '/office/turni' },
       ],
     },
-    // 5. Kantiere [gruppo, variant module]
     {
-      id: 'kantiere',
+      id: 'sec-kantiere',
       label: 'Kantiere',
-      href: '/office/kantiere',
+      href: '#',
       icon: HardHat,
       variant: 'module',
+      defaultOpen: true,
       children: [
         { id: 'kant-overview', label: 'Panoramica', href: '/office/kantiere' },
         { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
@@ -177,43 +162,18 @@ function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
         { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
       ],
     },
-    // 6. Turni & ore
     {
-      id: 'turni',
-      label: 'Turni & ore',
-      href: '/office/turni',
-      icon: Timer,
-    },
-    // 7. Ricerca
-    {
-      id: 'ricerca',
-      label: 'Ricerca',
-      href: '/office/cerca',
-      icon: Search,
-    },
-    // 8. Avvisi
-    {
-      id: 'notifiche',
-      label: 'Avvisi',
-      href: '/office/notifiche',
-      icon: Bell,
-    },
-    // 9. Co-pilot
-    {
-      id: 'copilot',
-      label: 'Co-pilot',
-      href: '/office/copilot',
-      icon: Sparkles,
-    },
-    // 10. Impostazioni — children esistenti + voce Kantiere (gated hasKantiere)
-    {
-      id: 'impostazioni',
-      label: 'Impostazioni',
-      href: '/office/impostazioni',
-      icon: Settings,
+      id: 'sec-altro',
+      label: 'Altro',
+      href: '#',
+      icon: Boxes,
+      variant: 'section',
+      defaultOpen: true,
       children: [
-        ...impostazioniChildren,
-        { id: 'set-kantiere', label: 'Kantiere', href: '/office/impostazioni/kantiere' },
+        { id: 'ricerca', label: 'Ricerca', href: '/office/cerca' },
+        { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche' },
+        { id: 'copilot', label: 'Co-pilot', href: '/office/copilot' },
+        { id: 'impostazioni', label: 'Impostazioni', href: '/office/impostazioni' },
       ],
     },
   ];
