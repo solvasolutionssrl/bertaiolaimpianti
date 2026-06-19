@@ -237,6 +237,7 @@ export default async function TenantDetailPage({
             tenantNome={tenant.nome}
             storageProvider={tenant.storage_provider}
             storageConfig={tenant.storage_config ?? {}}
+            creaCartelle={tenant.crea_cartelle ?? true}
           />
         </TabsContent>
 

@@ -52,8 +52,9 @@ import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 interface Props {
   tenantId: string;
   tenantNome: string;
-  storageProvider: 'supabase' | 'nextcloud' | null;
+  storageProvider: 'supabase' | 'nextcloud' | 'r2' | null;
   storageConfig: Record<string, unknown>;
+  creaCartelle?: boolean;
 }
 
 /**
@@ -72,14 +73,19 @@ export function TabStorage({
   tenantNome,
   storageProvider,
   storageConfig,
+  creaCartelle: creaCartelleProp,
 }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
   const askConfirm = useConfirm();
   const [pending, start] = React.useTransition();
 
-  const [provider, setProvider] = React.useState<'supabase' | 'nextcloud'>(
+  const [provider, setProvider] = React.useState<'supabase' | 'nextcloud' | 'r2'>(
     storageProvider ?? 'supabase',
+  );
+
+  const [creaCartelle, setCreaCartelle] = React.useState<boolean>(
+    creaCartelleProp ?? (storageProvider !== 'r2'),
   );
   const [baseUrl, setBaseUrl] = React.useState(
     String(
@@ -109,7 +115,8 @@ export function TabStorage({
     baseUrl !== String(storageConfig?.baseUrl ?? storageConfig?.base_url ?? '') ||
     user !== String(storageConfig?.user ?? '') ||
     basePath !== String(storageConfig?.basePath ?? '') ||
-    pwdTouched;
+    pwdTouched ||
+    creaCartelle !== (creaCartelleProp ?? (storageProvider !== 'r2'));
 
   // Health check state
   const [testing, setTesting] = React.useState(false);
@@ -154,6 +161,8 @@ export function TabStorage({
         tenantId,
         storage_provider: provider,
         storage_config: cfg,
+        r2_config: provider === 'r2' ? {} : undefined,
+        crea_cartelle: creaCartelle,
       });
       if (!res.ok) {
         await showAlert({ title: 'Errore salvataggio', body: res.error });
@@ -185,28 +194,42 @@ export function TabStorage({
             hint="Scegli il backend di storage e (per Nextcloud) la cartella condivisa entro cui scrivere."
           />
 
-          <div className="grid grid-cols-2 gap-2">
-            {(['supabase', 'nextcloud'] as const).map((p) => (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {(
+              [
+                { value: 'supabase', label: 'Supabase', desc: 'Bucket S3 gestito (default, no setup)' },
+                { value: 'nextcloud', label: 'Nextcloud', desc: 'WebDAV — Nextcloud / Hetzner Storage Share' },
+                { value: 'r2', label: 'Cloudflare R2', desc: 'Solo R2 (senza cartelle Nextcloud)' },
+              ] as const
+            ).map((p) => (
               <button
                 type="button"
-                key={p}
-                onClick={() => setProvider(p)}
+                key={p.value}
+                onClick={() => {
+                  setProvider(p.value);
+                  setCreaCartelle(p.value !== 'r2');
+                }}
                 className={cn(
                   'rounded-md border px-3 py-2.5 text-left transition-colors',
-                  provider === p
+                  provider === p.value
                     ? 'border-primary bg-primary/5'
                     : 'border-border bg-card hover:bg-muted/40',
                 )}
               >
-                <p className="text-sm font-semibold capitalize">{p}</p>
-                <p className="text-xs text-muted-foreground">
-                  {p === 'supabase'
-                    ? 'Bucket S3 gestito (default, no setup)'
-                    : 'WebDAV — Nextcloud / Hetzner Storage Share'}
-                </p>
+                <p className="text-sm font-semibold">{p.label}</p>
+                <p className="text-xs text-muted-foreground">{p.desc}</p>
               </button>
             ))}
           </div>
+
+          {provider === 'r2' ? (
+            <div className="rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+              Storage gestito (Cloudflare R2 di SOLVA). I file dei tenant sono isolati per
+              prefisso{' '}
+              <code className="font-mono text-xs">tenants/{'{slug}'}/ </code>
+              nel bucket condiviso — nessuna credenziale da inserire.
+            </div>
+          ) : null}
 
           {provider === 'nextcloud' ? (
             <div className="space-y-4 rounded-md border border-border bg-muted/30 p-4">
@@ -289,6 +312,17 @@ export function TabStorage({
               </div>
             </div>
           ) : null}
+
+          {/* Crea struttura cartelle commessa */}
+          <label className="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-3 py-2.5 hover:bg-muted/30">
+            <input
+              type="checkbox"
+              checked={creaCartelle}
+              onChange={(e) => setCreaCartelle(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            <span className="text-sm">Crea struttura cartelle commessa</span>
+          </label>
 
           <div className="flex justify-end gap-2">
             <Button
@@ -382,7 +416,7 @@ function HealthCard({
   result,
   onRetest,
 }: {
-  provider: 'supabase' | 'nextcloud';
+  provider: 'supabase' | 'nextcloud' | 'r2';
   testing: boolean;
   result: StorageTestResult | null;
   onRetest: () => void;
@@ -397,6 +431,23 @@ function HealthCard({
             <p className="text-xs text-muted-foreground">
               Nessuna configurazione manuale richiesta. Il bucket è gestito
               dalla piattaforma.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (provider === 'r2') {
+    return (
+      <Card className="border-emerald-500/30 bg-emerald-500/5">
+        <CardContent className="flex items-center gap-3 py-4">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Provider gestito (Cloudflare R2)</p>
+            <p className="text-xs text-muted-foreground">
+              Bucket condiviso SOLVA, prefisso per tenant — nessuna
+              configurazione manuale richiesta.
             </p>
           </div>
         </CardContent>

@@ -199,8 +199,10 @@ const aggiornaTenantSchema = z.object({
   brand_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   logo_url: z.string().url().nullable().optional(),
   plan_id: z.string().uuid().nullable().optional(),
-  storage_provider: z.enum(['supabase', 'nextcloud']).optional(),
+  storage_provider: z.enum(['supabase', 'nextcloud', 'r2']).optional(),
   storage_config: z.record(z.unknown()).optional(),
+  r2_config: z.record(z.unknown()).optional(),
+  crea_cartelle: z.boolean().optional(),
   note_interne: z.string().max(5000).nullable().optional(),
 });
 
