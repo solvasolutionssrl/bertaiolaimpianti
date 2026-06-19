@@ -354,6 +354,79 @@ export async function generaQrCantiere(input: unknown): Promise<QrResult> {
   return { ok: true, token };
 }
 
+// ── 9. impostaSquadraCantiere ─────────────────────────────────────────────
+
+const ImpostaSquadraSchema = z.object({
+  cantiereId: z.string().uuid(),
+  capoId: z.string().uuid().nullable(),
+  membriIds: z.array(z.string().uuid()),
+});
+
+export async function impostaSquadraCantiere(input: unknown): Promise<OkResult> {
+  const parsed = ImpostaSquadraSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+
+  let ctx;
+  try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
+
+  const supabase = createServerSupabase();
+
+  if (!(await cantiereDelTenant(supabase, ctx.tenantId, parsed.data.cantiereId))) {
+    return { ok: false, error: 'Cantiere non trovato per questo tenant' };
+  }
+
+  // Cancella tutta la squadra corrente
+  const { error: delError } = await supabase
+    .from('cantiere_squadra' as never)
+    .delete()
+    .eq('cantiere_id', parsed.data.cantiereId)
+    .eq('tenant_id', ctx.tenantId);
+
+  if (delError) return { ok: false, error: `Reset squadra fallito: ${delError.message}` };
+
+  // Costruisci le nuove righe
+  const { capoId, membriIds } = parsed.data;
+  const nuoveRighe: {
+    cantiere_id: string;
+    dipendente_id: string;
+    ruolo: string;
+    tenant_id: string;
+    assegnato_da: string;
+  }[] = [];
+
+  if (capoId) {
+    nuoveRighe.push({
+      cantiere_id: parsed.data.cantiereId,
+      dipendente_id: capoId,
+      ruolo: 'capo',
+      tenant_id: ctx.tenantId,
+      assegnato_da: ctx.userId,
+    });
+  }
+
+  const capoIdStr = capoId ?? '';
+  for (const id of membriIds) {
+    if (id === capoIdStr) continue; // il capo non è anche membro
+    nuoveRighe.push({
+      cantiere_id: parsed.data.cantiereId,
+      dipendente_id: id,
+      ruolo: 'membro',
+      tenant_id: ctx.tenantId,
+      assegnato_da: ctx.userId,
+    });
+  }
+
+  if (nuoveRighe.length > 0) {
+    const { error: insError } = await supabase
+      .from('cantiere_squadra' as never)
+      .insert(nuoveRighe as never);
+    if (insError) return { ok: false, error: `Inserimento squadra fallito: ${insError.message}` };
+  }
+
+  revalidatePath(`/office/kantiere/cantieri/${parsed.data.cantiereId}`);
+  return { ok: true };
+}
+
 // ── 8. rigeneraQrCantiere ─────────────────────────────────────────────────
 
 export async function rigeneraQrCantiere(input: unknown): Promise<QrResult> {
