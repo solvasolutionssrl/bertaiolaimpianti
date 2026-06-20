@@ -95,11 +95,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, minuti: arrotonda15(hit.durata_min), minutiRaw: hit.durata_min });
   }
 
-  // 2) provider
+  // 2) provider (ORS se chiave, altrimenti OSRM demo: sempre disponibile)
   const provider = getRoutingProvider();
-  if (!provider) {
-    return NextResponse.json({ ok: true, minuti: null, motivo: 'provider_assente' });
-  }
   const min = await provider.durataMin(origin, dest);
   if (min == null) {
     return NextResponse.json({ ok: true, minuti: null, motivo: 'stima_non_disponibile' });

@@ -101,6 +101,27 @@ export default async function MobileOrePage() {
     nome: c.nome || c.codice || c.id,
   }));
 
+  // Sedi + mezzi per il flusso viaggio dell'inserimento manuale
+  const { data: sediRaw } = await supabase
+    .from('sedi' as never)
+    .select('id, nome, tipo')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('attivo', true)
+    .order('nome', { ascending: true });
+  const sediDisponibili = ((sediRaw as Array<{ id: string; nome: string; tipo: string }>) ?? []).map(
+    (s) => ({ id: s.id, nome: s.nome, tipo: s.tipo }),
+  );
+
+  const { data: mezziRaw } = await supabase
+    .from('mezzi' as never)
+    .select('id, targa, modello')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('attivo', true)
+    .order('targa', { ascending: true });
+  const mezziDisponibili = ((mezziRaw as Array<{ id: string; targa: string; modello: string | null }>) ?? []).map(
+    (m) => ({ id: m.id, targa: m.targa, modello: m.modello }),
+  );
+
   return (
     <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-2">
@@ -116,6 +137,8 @@ export default async function MobileOrePage() {
         rapportino={res.rapportino}
         commesseDisponibili={commesseDisponibili}
         cantieriDisponibili={cantieriDisponibili}
+        sediDisponibili={sediDisponibili}
+        mezziDisponibili={mezziDisponibili}
       />
     </div>
   );

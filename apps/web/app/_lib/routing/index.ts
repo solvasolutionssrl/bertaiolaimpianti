@@ -50,9 +50,35 @@ function createOrsProvider(apiKey: string): RoutingProvider {
   };
 }
 
-/** Provider attivo o null se non configurato (env `ORS_API_KEY` mancante). */
-export function getRoutingProvider(): RoutingProvider | null {
+// OSRM demo pubblico: nessuna chiave. Fallback "free zero-setup". È un server
+// demo senza SLA → ok come ripiego (la stima è non vincolante), non ideale come
+// unica dipendenza. Quando c'è ORS_API_KEY si usa ORS (più affidabile).
+const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
+
+function createOsrmProvider(): RoutingProvider {
+  return {
+    async durataMin(origin, dest) {
+      try {
+        const url = `${OSRM_URL}/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=false`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) return null;
+        const json = (await res.json()) as { routes?: { duration?: number }[] };
+        const sec = json.routes?.[0]?.duration;
+        if (typeof sec !== 'number' || !Number.isFinite(sec)) return null;
+        return sec / 60;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+/**
+ * Provider attivo: ORS se `ORS_API_KEY` è configurata (primario, affidabile),
+ * altrimenti OSRM demo pubblico (free, senza chiave). Mai null → la stima
+ * gratuita è sempre disponibile.
+ */
+export function getRoutingProvider(): RoutingProvider {
   const key = process.env.ORS_API_KEY?.trim();
-  if (!key) return null;
-  return createOrsProvider(key);
+  return key ? createOrsProvider(key) : createOsrmProvider();
 }

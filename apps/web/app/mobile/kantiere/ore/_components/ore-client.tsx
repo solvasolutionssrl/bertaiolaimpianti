@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Send, Save, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Plus, Send, Save, CheckCircle2, ChevronDown, PenLine } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
 import { useConfirm } from '@/app/_components/confirm-provider';
@@ -11,6 +11,7 @@ import {
   salvaMioRapportino,
   inviaMioRapportino,
 } from '@/app/_actions/kantiere-rapportino';
+import { ManualeDialog } from './manuale-dialog';
 
 // ── tipi ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,8 @@ interface OreClientProps {
   rapportino: RapportinoProps;
   commesseDisponibili: { id: string; titolo: string }[];
   cantieriDisponibili: { id: string; nome: string }[];
+  sediDisponibili: { id: string; nome: string; tipo: string }[];
+  mezziDisponibili: { id: string; targa: string; modello: string | null }[];
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -146,7 +149,13 @@ function StatoBadge({ stato }: { stato: string }) {
 
 // ── componente principale ────────────────────────────────────────────────────
 
-export function OreClient({ rapportino, commesseDisponibili, cantieriDisponibili }: OreClientProps) {
+export function OreClient({
+  rapportino,
+  commesseDisponibili,
+  cantieriDisponibili,
+  sediDisponibili,
+  mezziDisponibili,
+}: OreClientProps) {
   const router = useRouter();
   const askConfirm = useConfirm();
   const [isPending, startTransition] = useTransition();
@@ -161,7 +170,11 @@ export function OreClient({ rapportino, commesseDisponibili, cantieriDisponibili
   // picker target (valore encodato "c:<uuid>" o "k:<uuid>")
   const [pickerTarget, setPickerTarget] = useState('');
 
+  // dialog inserimento manuale
+  const [manualeOpen, setManualeOpen] = useState(false);
+
   const isBozza = rapportino.stato === 'bozza';
+  const isEditabile = ['bozza', 'inviato', 'respinto'].includes(rapportino.stato);
 
   // Chiavi gia usate nelle righe correnti
   const targetUsati = new Set<string>(
@@ -296,13 +309,27 @@ export function OreClient({ rapportino, commesseDisponibili, cantieriDisponibili
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Stato badge */}
-      <div className="flex items-center gap-2">
-        <StatoBadge stato={rapportino.stato} />
-        {!isBozza && (
-          <span className="text-xs text-muted-foreground">
-            Il rapportino e' in sola lettura.
-          </span>
+      {/* Stato badge + bottone inserimento manuale */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <StatoBadge stato={rapportino.stato} />
+          {!isBozza && (
+            <span className="text-xs text-muted-foreground">
+              Il rapportino e' in sola lettura.
+            </span>
+          )}
+        </div>
+
+        {isEditabile && cantieriDisponibili.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setManualeOpen(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors active:scale-[0.97]"
+            aria-label="Aggiungi ore a mano"
+          >
+            <PenLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Aggiungi a mano
+          </button>
         )}
       </div>
 
@@ -524,6 +551,16 @@ export function OreClient({ rapportino, commesseDisponibili, cantieriDisponibili
           </Button>
         </div>
       )}
+
+      {/* Dialog inserimento manuale */}
+      <ManualeDialog
+        open={manualeOpen}
+        onClose={() => setManualeOpen(false)}
+        data={rapportino.data}
+        cantieri={cantieriDisponibili}
+        sedi={sediDisponibili}
+        mezzi={mezziDisponibili}
+      />
     </div>
   );
 }

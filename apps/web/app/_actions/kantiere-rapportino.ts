@@ -615,5 +615,165 @@ export async function inviaMioRapportino(
   return { ok: true };
 }
 
+// ── 4) registraOreManuali ────────────────────────────────────────────────────
+// Il dipendente registra a mano la giornata (es. se non ha timbrato il QR):
+// ore di lavoro + tratte di viaggio (stesso flusso sede/autista/mezzo, ma
+// tempo inserito a mano). Editabile finché l'ufficio non approva.
+
+const ViaggioManualeSchema = z.object({
+  direzione: z.enum(['andata', 'ritorno']),
+  sedeId: z.string().uuid(),
+  minuti: z.number().int().min(0).max(24 * 60),
+  autista: z.boolean(),
+  mezzoId: z.string().uuid().nullable().optional(),
+});
+
+const RegistraManualeSchema = z.object({
+  data: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  cantiereId: z.string().uuid(),
+  ore_ordinarie: z.number().min(0).max(24),
+  ore_straordinarie: z.number().min(0).max(24),
+  viaggi: z.array(ViaggioManualeSchema).max(2),
+});
+
+export async function registraOreManuali(
+  input: unknown,
+): Promise<ResultSimple | ResultErr> {
+  const parsed = RegistraManualeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const data = parsed.data.data ?? oggiRome();
+  const { cantiereId, ore_ordinarie, ore_straordinarie, viaggi } = parsed.data;
+
+  // Valida che cantiere/sedi/mezzi appartengano al tenant (letture RLS-scoped)
+  const { data: cantOk } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .eq('id', cantiereId)
+    .maybeSingle();
+  if (!cantOk) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+
+  for (const v of viaggi) {
+    const { data: sedeOk } = await supabase
+      .from('sedi' as never)
+      .select('id')
+      .eq('id', v.sedeId)
+      .maybeSingle();
+    if (!sedeOk) return { ok: false, error: 'SEDE_NON_VALIDA' };
+    if (v.autista && v.mezzoId) {
+      const { data: mezzoOk } = await supabase
+        .from('mezzi' as never)
+        .select('id')
+        .eq('id', v.mezzoId)
+        .maybeSingle();
+      if (!mezzoOk) return { ok: false, error: 'MEZZO_NON_VALIDO' };
+    }
+  }
+
+  // Recupera o crea il rapportino del giorno
+  const { data: esistente } = await supabase
+    .from('rapportini' as never)
+    .select('id, stato')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .eq('data', data)
+    .maybeSingle();
+
+  const rapp = esistente as { id: string; stato: string } | null;
+  let rapportinoId: string;
+
+  if (rapp) {
+    if (!STATI_MODIFICABILI_TECNICO.has(rapp.stato)) {
+      return { ok: false, error: 'NON_MODIFICABILE' };
+    }
+    if (rapp.stato !== 'bozza') {
+      await scriviVersioneRapportino({
+        supabase,
+        rapportinoId: rapp.id,
+        tenantId: ctx.tenantId,
+        azione: 'modifica_tecnico',
+        modificatoDa: ctx.userId,
+        modificatoDaNome: await nomeDipendente(supabase, me.id),
+      });
+    }
+    rapportinoId = rapp.id;
+  } else {
+    const { data: nuovoRaw, error: insErr } = await supabase
+      .from('rapportini' as never)
+      .insert({
+        tenant_id: ctx.tenantId,
+        dipendente_id: me.id,
+        data,
+        stato: 'bozza',
+      } as never)
+      .select('id')
+      .single();
+    if (insErr || !nuovoRaw) return { ok: false, error: insErr?.message ?? 'ERRORE_CREAZIONE' };
+    rapportinoId = (nuovoRaw as { id: string }).id;
+  }
+
+  const oreViaggio =
+    Math.round((viaggi.reduce((s, v) => s + v.minuti, 0) / 60) * 100) / 100;
+
+  // Upsert riga per il cantiere
+  const { data: rigaRaw } = await supabase
+    .from('rapportino_righe' as never)
+    .select('id')
+    .eq('rapportino_id', rapportinoId)
+    .eq('cantiere_id', cantiereId)
+    .maybeSingle();
+  const riga = rigaRaw as { id: string } | null;
+
+  if (riga) {
+    const { error: updErr } = await supabase
+      .from('rapportino_righe' as never)
+      .update({ ore_ordinarie, ore_straordinarie, ore_viaggio: oreViaggio } as never)
+      .eq('id', riga.id);
+    if (updErr) return { ok: false, error: updErr.message };
+  } else {
+    const { error: insRigaErr } = await supabase.from('rapportino_righe' as never).insert({
+      rapportino_id: rapportinoId,
+      commessa_id: null,
+      cantiere_id: cantiereId,
+      ore_ordinarie,
+      ore_straordinarie,
+      ore_viaggio: oreViaggio,
+    } as never);
+    if (insRigaErr) return { ok: false, error: insRigaErr.message };
+  }
+
+  // Tratte di viaggio manuali (senza timbratura, con cantiere+data)
+  for (const v of viaggi) {
+    if (v.minuti <= 0) continue;
+    await supabase.from('timbratura_viaggio' as never).insert({
+      tenant_id: ctx.tenantId,
+      timbratura_id: null,
+      cantiere_id: cantiereId,
+      data,
+      dipendente_id: me.id,
+      direzione: v.direzione,
+      sede_id: v.sedeId,
+      durata_stimata_min: null,
+      durata_confermata_min: v.minuti,
+      giustificazione: null,
+      autista: v.autista,
+      mezzo_id: v.autista ? v.mezzoId ?? null : null,
+    } as never);
+  }
+
+  return { ok: true };
+}
+
 // Approvazione/respinta/riapertura rapportini: implementate lato ufficio in
 // `app/office/_actions/kantiere-rapportini.ts` (Fase F), gated office/admin.
