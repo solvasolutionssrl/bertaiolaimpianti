@@ -4,6 +4,20 @@ import { aggregaOre, type RigaAgg } from '@kommessa/api/kantiere-report';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { ReportClient } from './_components/report-client';
 
+export type ViaggioRigaDip = {
+  dipendente: string;
+  kmTotali: number;
+  nViaggi: number;
+  oreGuida: number;
+};
+
+export type ViaggioRigaMezzo = {
+  targa: string;
+  modello: string | null;
+  kmTotali: number;
+  nViaggi: number;
+};
+
 export const dynamic = 'force-dynamic';
 
 type RapportinoRow = {
@@ -91,6 +105,19 @@ export type KpiTotali = {
   totale: number;
 };
 
+type ViaggioRow = {
+  dipendente_id: string;
+  mezzo_id: string | null;
+  distanza_km: number | null;
+  durata_confermata_min: number | null;
+};
+
+type MezzoLightRow = {
+  id: string;
+  targa: string;
+  modello: string | null;
+};
+
 export default async function ReportPage({ searchParams }: PageProps) {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
@@ -119,7 +146,18 @@ export default async function ReportPage({ searchParams }: PageProps) {
     rapQuery = rapQuery.in('stato', ['inviato', 'approvato']);
   }
 
-  const { data: rapportiniData } = (await rapQuery) as { data: RapportinoRow[] | null };
+  // Carica viaggi nel range (in parallelo)
+  const viaggiPromise = (supabase
+    .from('timbratura_viaggio' as never)
+    .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min')
+    .eq('tenant_id', ctx.tenantId)
+    .gte('data', from)
+    .lte('data', to)
+    .limit(5000) as unknown) as Promise<{ data: ViaggioRow[] | null }>;
+
+  const [rapportiniRes, viaggiRes] = await Promise.all([rapQuery, viaggiPromise]);
+
+  const { data: rapportiniData } = rapportiniRes as { data: RapportinoRow[] | null };
   const rapportini = rapportiniData ?? [];
 
   const rapportinoIds = rapportini.map((r) => r.id);
@@ -138,13 +176,18 @@ export default async function ReportPage({ searchParams }: PageProps) {
   const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
   const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
+  // Calcola dipendenti ids dai viaggi per il batch-load (unione con quelli dei rapportini)
+  const viaggi: ViaggioRow[] = viaggiRes.data ?? [];
+  const viaggiDipIds = [...new Set(viaggi.map((v) => v.dipendente_id))];
+  const tuttiDipIds = [...new Set([...dipIds, ...viaggiDipIds])];
+
   // Batch-load dipendenti
   const dipendentiMap = new Map<string, string>();
-  if (dipIds.length > 0) {
+  if (tuttiDipIds.length > 0) {
     const { data } = (await supabase
       .from('dipendenti' as never)
       .select('id, nome, cognome')
-      .in('id', dipIds)) as { data: DipendenteRow[] | null };
+      .in('id', tuttiDipIds)) as { data: DipendenteRow[] | null };
     for (const d of data ?? []) {
       dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
     }
@@ -182,6 +225,19 @@ export default async function ReportPage({ searchParams }: PageProps) {
     }
   }
 
+  // Batch-load mezzi (per i viaggi)
+  const mezziIds = [...new Set(viaggi.map((v) => v.mezzo_id).filter((id): id is string => id != null))];
+  const mezziMap = new Map<string, { targa: string; modello: string | null }>();
+  if (mezziIds.length > 0) {
+    const { data } = (await supabase
+      .from('mezzi' as never)
+      .select('id, targa, modello')
+      .in('id', mezziIds)) as { data: MezzoLightRow[] | null };
+    for (const m of data ?? []) {
+      mezziMap.set(m.id, { targa: m.targa, modello: m.modello });
+    }
+  }
+
   // Mappa rapportino_id -> dipendente_id
   const rapportinoDipMap = new Map<string, string>(rapportini.map((r) => [r.id, r.dipendente_id]));
 
@@ -214,6 +270,40 @@ export default async function ReportPage({ searchParams }: PageProps) {
     { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0 },
   );
 
+  // ── Aggregati viaggi per dipendente ───────────────────────────────────────
+  const dipViaggioMap = new Map<string, { km: number; n: number; min: number }>();
+  for (const v of viaggi) {
+    const nome = dipendentiMap.get(v.dipendente_id) ?? v.dipendente_id;
+    const cur = dipViaggioMap.get(nome) ?? { km: 0, n: 0, min: 0 };
+    cur.km += v.distanza_km ?? 0;
+    cur.n += 1;
+    cur.min += v.durata_confermata_min ?? 0;
+    dipViaggioMap.set(nome, cur);
+  }
+  const viaggiPerDipendente: ViaggioRigaDip[] = [...dipViaggioMap.entries()]
+    .map(([dipendente, s]) => ({
+      dipendente,
+      kmTotali: s.km,
+      nViaggi: s.n,
+      oreGuida: s.min / 60,
+    }))
+    .sort((a, b) => b.kmTotali - a.kmTotali);
+
+  // ── Aggregati viaggi per mezzo ─────────────────────────────────────────────
+  const mezzoViaggioMap = new Map<string, { targa: string; modello: string | null; km: number; n: number }>();
+  for (const v of viaggi) {
+    if (!v.mezzo_id) continue;
+    const info = mezziMap.get(v.mezzo_id);
+    const key = v.mezzo_id;
+    const cur = mezzoViaggioMap.get(key) ?? { targa: info?.targa ?? v.mezzo_id, modello: info?.modello ?? null, km: 0, n: 0 };
+    cur.km += v.distanza_km ?? 0;
+    cur.n += 1;
+    mezzoViaggioMap.set(key, cur);
+  }
+  const viaggiPerMezzo: ViaggioRigaMezzo[] = [...mezzoViaggioMap.values()]
+    .map((s) => ({ targa: s.targa, modello: s.modello, kmTotali: s.km, nViaggi: s.n }))
+    .sort((a, b) => b.kmTotali - a.kmTotali);
+
   return (
     <div className="w-full space-y-6">
       <header>
@@ -226,6 +316,8 @@ export default async function ReportPage({ searchParams }: PageProps) {
         aggregati={aggregati}
         kpi={kpi}
         filtri={{ from, to, per, stato: statoParam }}
+        viaggiPerDipendente={viaggiPerDipendente}
+        viaggiPerMezzo={viaggiPerMezzo}
       />
     </div>
   );

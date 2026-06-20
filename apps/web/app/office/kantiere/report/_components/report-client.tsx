@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import type { AggregataRiga, KpiTotali } from '../page';
+import type { AggregataRiga, KpiTotali, ViaggioRigaDip, ViaggioRigaMezzo } from '../page';
 
 interface Filtri {
   from: string;
@@ -14,10 +14,26 @@ interface Props {
   aggregati: AggregataRiga[];
   kpi: KpiTotali;
   filtri: Filtri;
+  viaggiPerDipendente: ViaggioRigaDip[];
+  viaggiPerMezzo: ViaggioRigaMezzo[];
 }
 
 function fmt(n: number): string {
   return String(Math.round(n * 100) / 100).replace('.', ',');
+}
+
+function fmtKm(km: number): string {
+  return new Intl.NumberFormat('it-IT', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(km);
+}
+
+function fmtOre(ore: number): string {
+  return new Intl.NumberFormat('it-IT', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(ore);
 }
 
 function buildQs(f: Filtri): string {
@@ -29,7 +45,7 @@ function buildQs(f: Filtri): string {
   return p.toString();
 }
 
-export function ReportClient({ aggregati, kpi, filtri }: Props) {
+export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viaggiPerMezzo }: Props) {
   const router = useRouter();
 
   const totaleColonna = {
@@ -204,6 +220,112 @@ export function ReportClient({ aggregati, kpi, filtri }: Props) {
           Stampa / PDF
         </button>
       </div>
+
+      {/* ── Sezione Viaggi e km ────────────────────────────────────────────── */}
+      <section className="space-y-5 pt-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-base font-semibold">Viaggi e km</h2>
+          <span className="text-xs text-muted-foreground">
+            Tratte registrate nel periodo selezionato.
+          </span>
+        </div>
+
+        {viaggiPerDipendente.length === 0 && viaggiPerMezzo.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Nessun viaggio registrato nel periodo selezionato.</p>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Per dipendente */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Per dipendente</h3>
+              {viaggiPerDipendente.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nessun dato.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Dipendente</th>
+                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot.</th>
+                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Viaggi</th>
+                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Ore guida</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {viaggiPerDipendente.map((r) => (
+                        <tr key={r.dipendente} className="hover:bg-muted/30">
+                          <td className="px-4 py-2 font-medium">{r.dipendente}</td>
+                          <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
+                          <td className="px-4 py-2 text-right tabular-nums">{r.nViaggi}</td>
+                          <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{fmtOre(r.oreGuida)} h</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-border bg-muted/50">
+                      <tr>
+                        <td className="px-4 py-2 font-semibold">Totale</td>
+                        <td className="px-4 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                          {fmtKm(viaggiPerDipendente.reduce((s, r) => s + r.kmTotali, 0))} km
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                          {viaggiPerDipendente.reduce((s, r) => s + r.nViaggi, 0)}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                          {fmtOre(viaggiPerDipendente.reduce((s, r) => s + r.oreGuida, 0))} h
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Per mezzo */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Per mezzo</h3>
+              {viaggiPerMezzo.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nessun viaggio con mezzo assegnato.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="px-4 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Mezzo</th>
+                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot.</th>
+                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Viaggi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {viaggiPerMezzo.map((r) => (
+                        <tr key={r.targa} className="hover:bg-muted/30">
+                          <td className="px-4 py-2 font-medium font-mono">
+                            {r.targa}
+                            {r.modello && (
+                              <span className="ml-1.5 font-sans font-normal text-muted-foreground text-xs">{r.modello}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
+                          <td className="px-4 py-2 text-right tabular-nums">{r.nViaggi}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-border bg-muted/50">
+                      <tr>
+                        <td className="px-4 py-2 font-semibold">Totale</td>
+                        <td className="px-4 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                          {fmtKm(viaggiPerMezzo.reduce((s, r) => s + r.kmTotali, 0))} km
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                          {viaggiPerMezzo.reduce((s, r) => s + r.nViaggi, 0)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
     </>
   );
 }

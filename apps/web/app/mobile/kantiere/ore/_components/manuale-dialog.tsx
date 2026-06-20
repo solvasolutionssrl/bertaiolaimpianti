@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Car, ChevronDown, MapPin } from 'lucide-react';
+import { Car, ChevronDown, Loader2, MapPin } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 import {
   Dialog,
@@ -48,6 +48,8 @@ interface TrattaState {
   minuti: number;
   autista: boolean;
   mezzoId: string;
+  /** Km definitivi dalla stima API: non modificabili dall'utente. */
+  distanzaKm: number | null;
 }
 
 function trattaIniziale(sedi: Sede[]): TrattaState {
@@ -57,10 +59,17 @@ function trattaIniziale(sedi: Sede[]): TrattaState {
     minuti: 0,
     autista: false,
     mezzoId: '',
+    distanzaKm: null,
   };
 }
 
 // ── helper ───────────────────────────────────────────────────────────────────
+
+/** Km -> "12,3 km" / "km n.d." se null. */
+function formatKm(km: number | null): string {
+  if (km === null) return 'km n.d.';
+  return `${km.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+}
 
 /** Minuti -> "2h 30min" / "45min" / "0min". */
 function formatDurata(min: number): string {
@@ -113,6 +122,7 @@ function TrattaSection({
   sedi,
   mezzi,
   disabled,
+  stimaLoading,
   onChange,
 }: {
   label: string;
@@ -120,6 +130,7 @@ function TrattaSection({
   sedi: Sede[];
   mezzi: Mezzo[];
   disabled: boolean;
+  stimaLoading: boolean;
   onChange: (patch: Partial<TrattaState>) => void;
 }) {
   function step(delta: number) {
@@ -177,14 +188,25 @@ function TrattaSection({
 
           {/* Durata stepper */}
           <div className="space-y-1.5">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-              Durata viaggio
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Durata viaggio
+              </p>
+              {stimaLoading ? (
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> stima...
+                </span>
+              ) : (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground">
+                  {formatKm(tratta.distanzaKm)}
+                </span>
+              )}
+            </div>
             <div className="flex items-center justify-between gap-3 rounded-lg bg-background border border-border px-2 py-1.5">
               <button
                 type="button"
                 onClick={() => step(-15)}
-                disabled={disabled || tratta.minuti <= 0}
+                disabled={disabled || stimaLoading || tratta.minuti <= 0}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-muted text-lg font-semibold text-foreground hover:bg-muted/80 disabled:opacity-40 transition-colors"
                 aria-label="Meno 15 minuti"
               >
@@ -196,7 +218,7 @@ function TrattaSection({
               <button
                 type="button"
                 onClick={() => step(15)}
-                disabled={disabled}
+                disabled={disabled || stimaLoading}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-muted text-lg font-semibold text-foreground hover:bg-muted/80 disabled:opacity-40 transition-colors"
                 aria-label="Piu 15 minuti"
               >
@@ -278,6 +300,46 @@ export function ManualeDialog({
   const [ritorno, setRitorno] = useState<TrattaState>(() => trattaIniziale(sedi));
   const [errore, setErrore] = useState<string | null>(null);
 
+  // stima loading separati per non inquinare TrattaState con stato UI transiente
+  const [stimaLoadingAndata, setStimaLoadingAndata] = useState(false);
+  const [stimaLoadingRitorno, setStimaLoadingRitorno] = useState(false);
+
+  /** Chiama l'API di stima per una tratta e aggiorna minuti + km. */
+  const calcolaStima = useCallback(
+    async (
+      sedeId: string,
+      cId: string,
+      direzione: 'andata' | 'ritorno',
+      setTratta: (fn: (prev: TrattaState) => TrattaState) => void,
+      setStimaLoading: (v: boolean) => void,
+    ) => {
+      if (!sedeId || !cId) return;
+      setStimaLoading(true);
+      try {
+        const res = await fetch('/api/routing/stima', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sedeId, cantiereId: cId, direzione }),
+        });
+        const j = (await res.json()) as { ok: boolean; minuti: number | null; km?: number | null };
+        if (j.ok && typeof j.minuti === 'number') {
+          setTratta((prev) => ({
+            ...prev,
+            minuti: j.minuti as number,
+            distanzaKm: typeof j.km === 'number' ? j.km : null,
+          }));
+        } else {
+          setTratta((prev) => ({ ...prev, distanzaKm: null }));
+        }
+      } catch {
+        setTratta((prev) => ({ ...prev, distanzaKm: null }));
+      } finally {
+        setStimaLoading(false);
+      }
+    },
+    [],
+  );
+
   function resetForm() {
     setCantiereId(cantieri[0]?.id ?? '');
     setOreOrdinarie(0);
@@ -285,6 +347,8 @@ export function ManualeDialog({
     setAndata(trattaIniziale(sedi));
     setRitorno(trattaIniziale(sedi));
     setErrore(null);
+    setStimaLoadingAndata(false);
+    setStimaLoadingRitorno(false);
   }
 
   function handleClose() {
@@ -295,6 +359,41 @@ export function ManualeDialog({
   function clampOre(v: number): number {
     const n = parseFloat(v.toString());
     return isNaN(n) ? 0 : Math.max(0, Math.min(24, n));
+  }
+
+  /** Gestisce cambio cantiere: ricalcola stima per le tratte con sede impostata. */
+  function handleCantiereChange(cId: string) {
+    setCantiereId(cId);
+    setErrore(null);
+    if (!cId) return;
+    if (andata.attiva && andata.sedeId) {
+      void calcolaStima(andata.sedeId, cId, 'andata', setAndata, setStimaLoadingAndata);
+    }
+    if (ritorno.attiva && ritorno.sedeId) {
+      void calcolaStima(ritorno.sedeId, cId, 'ritorno', setRitorno, setStimaLoadingRitorno);
+    }
+  }
+
+  /** Gestisce patch andata: se cambia sedeId e cantiere e` gia` selezionato, ricalcola stima. */
+  function handleAndataChange(patch: Partial<TrattaState>) {
+    setAndata((prev) => {
+      const next = { ...prev, ...patch };
+      return next;
+    });
+    if ('sedeId' in patch && patch.sedeId && cantiereId) {
+      void calcolaStima(patch.sedeId, cantiereId, 'andata', setAndata, setStimaLoadingAndata);
+    }
+  }
+
+  /** Gestisce patch ritorno: se cambia sedeId e cantiere e` gia` selezionato, ricalcola stima. */
+  function handleRitornoChange(patch: Partial<TrattaState>) {
+    setRitorno((prev) => {
+      const next = { ...prev, ...patch };
+      return next;
+    });
+    if ('sedeId' in patch && patch.sedeId && cantiereId) {
+      void calcolaStima(patch.sedeId, cantiereId, 'ritorno', setRitorno, setStimaLoadingRitorno);
+    }
   }
 
   function handleRegistra() {
@@ -312,6 +411,7 @@ export function ManualeDialog({
       minuti: number;
       autista: boolean;
       mezzoId: string | null;
+      distanzaKm: number | null;
     }> = [];
 
     if (andata.attiva && andata.minuti > 0) {
@@ -325,6 +425,7 @@ export function ManualeDialog({
         minuti: andata.minuti,
         autista: andata.autista,
         mezzoId: andata.autista && andata.mezzoId ? andata.mezzoId : null,
+        distanzaKm: andata.distanzaKm,
       });
     }
 
@@ -339,6 +440,7 @@ export function ManualeDialog({
         minuti: ritorno.minuti,
         autista: ritorno.autista,
         mezzoId: ritorno.autista && ritorno.mezzoId ? ritorno.mezzoId : null,
+        distanzaKm: ritorno.distanzaKm,
       });
     }
 
@@ -376,7 +478,7 @@ export function ManualeDialog({
             <div className="relative">
               <select
                 value={cantiereId}
-                onChange={(e) => { setCantiereId(e.target.value); setErrore(null); }}
+                onChange={(e) => handleCantiereChange(e.target.value)}
                 disabled={isPending}
                 className="w-full appearance-none rounded-md border border-border bg-background py-2.5 pl-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
               >
@@ -445,7 +547,8 @@ export function ManualeDialog({
                 sedi={sedi}
                 mezzi={mezzi}
                 disabled={isPending}
-                onChange={(patch) => setAndata((prev) => ({ ...prev, ...patch }))}
+                stimaLoading={stimaLoadingAndata}
+                onChange={handleAndataChange}
               />
               <TrattaSection
                 label="Viaggio di ritorno"
@@ -453,7 +556,8 @@ export function ManualeDialog({
                 sedi={sedi}
                 mezzi={mezzi}
                 disabled={isPending}
-                onChange={(patch) => setRitorno((prev) => ({ ...prev, ...patch }))}
+                stimaLoading={stimaLoadingRitorno}
+                onChange={handleRitornoChange}
               />
             </div>
           )}

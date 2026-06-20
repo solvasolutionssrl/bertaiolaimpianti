@@ -225,6 +225,43 @@ function oggiRome(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 }
 
+// Carica le righe di un rapportino esistente come payload per il client.
+async function caricaPayloadRapportino(
+  supabase: ReturnType<typeof createServerSupabase>,
+  rapp: { id: string; data: string; stato: string; note: string | null },
+): Promise<RapportinoPayload> {
+  const { data: righeRaw } = await supabase
+    .from('rapportino_righe' as never)
+    .select('id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
+    .eq('rapportino_id', rapp.id);
+  const righeRows = (righeRaw as {
+    id: string;
+    commessa_id: string | null;
+    cantiere_id: string | null;
+    ore_ordinarie: number;
+    ore_straordinarie: number;
+    ore_viaggio: number;
+    note: string | null;
+  }[]) ?? [];
+  const commessaIds = righeRows.flatMap((r) => (r.commessa_id ? [r.commessa_id] : []));
+  const cantiereIds = righeRows.flatMap((r) => (r.cantiere_id ? [r.cantiere_id] : []));
+  const [mappaCommesse, mappaCantieri] = await Promise.all([
+    titoliCommesse(supabase, commessaIds),
+    nomiCantieri(supabase, cantiereIds),
+  ]);
+  const righe: RigaRapportino[] = righeRows.map((rr) => ({
+    id: rr.id,
+    commessa_id: rr.commessa_id,
+    cantiere_id: rr.cantiere_id,
+    target_label: labelRiga(rr, mappaCommesse, mappaCantieri),
+    ore_ordinarie: Number(rr.ore_ordinarie),
+    ore_straordinarie: Number(rr.ore_straordinarie),
+    ore_viaggio: Number(rr.ore_viaggio),
+    note: rr.note,
+  }));
+  return { ...rapp, righe };
+}
+
 // ── 1) precompilaMioRapportino ───────────────────────────────────────────────
 
 const PrecompilaSchema = z.object({
@@ -267,41 +304,7 @@ export async function precompilaMioRapportino(
 
   if (rapp) {
     // Carica righe esistenti senza ricalcolare
-    const { data: righeRaw } = await supabase
-      .from('rapportino_righe' as never)
-      .select('id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
-      .eq('rapportino_id', rapp.id);
-
-    const righeRows = (righeRaw as {
-      id: string;
-      commessa_id: string | null;
-      cantiere_id: string | null;
-      ore_ordinarie: number;
-      ore_straordinarie: number;
-      ore_viaggio: number;
-      note: string | null;
-    }[]) ?? [];
-
-    const commessaIds = righeRows.flatMap((r) => (r.commessa_id ? [r.commessa_id] : []));
-    const cantiereIds = righeRows.flatMap((r) => (r.cantiere_id ? [r.cantiere_id] : []));
-
-    const [mappaCommesse, mappaCantieri] = await Promise.all([
-      titoliCommesse(supabase, commessaIds),
-      nomiCantieri(supabase, cantiereIds),
-    ]);
-
-    const righe: RigaRapportino[] = righeRows.map((rr) => ({
-      id: rr.id,
-      commessa_id: rr.commessa_id,
-      cantiere_id: rr.cantiere_id,
-      target_label: labelRiga(rr, mappaCommesse, mappaCantieri),
-      ore_ordinarie: Number(rr.ore_ordinarie),
-      ore_straordinarie: Number(rr.ore_straordinarie),
-      ore_viaggio: Number(rr.ore_viaggio),
-      note: rr.note,
-    }));
-
-    return { ok: true, rapportino: { ...rapp, righe } };
+    return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp) };
   }
 
   // Crea nuovo rapportino in bozza
@@ -316,8 +319,19 @@ export async function precompilaMioRapportino(
     .select('id, data, stato, note')
     .single();
 
-  if (errInserisci || !nuovoRaw)
+  if (errInserisci || !nuovoRaw) {
+    // Race: un'altra apertura simultanea ha gia creato il rapportino del giorno
+    // (vincolo unique dipendente+data) → recuperalo invece di un errore grezzo.
+    const { data: raceRaw } = await supabase
+      .from('rapportini' as never)
+      .select('id, data, stato, note')
+      .eq('dipendente_id', me.id)
+      .eq('data', data)
+      .maybeSingle();
+    const race = raceRaw as { id: string; data: string; stato: string; note: string | null } | null;
+    if (race) return { ok: true, rapportino: await caricaPayloadRapportino(supabase, race) };
     return { ok: false, error: errInserisci?.message ?? 'ERRORE_CREAZIONE' };
+  }
 
   const nuovo = nuovoRaw as { id: string; data: string; stato: string; note: string | null };
 
@@ -626,6 +640,8 @@ const ViaggioManualeSchema = z.object({
   minuti: z.number().int().min(0).max(24 * 60),
   autista: z.boolean(),
   mezzoId: z.string().uuid().nullable().optional(),
+  /** km dalla stima API (definitivi). */
+  distanzaKm: z.number().nonnegative().max(100000).nullable().optional(),
 });
 
 const RegistraManualeSchema = z.object({
@@ -777,6 +793,7 @@ export async function registraOreManuali(
       sede_id: v.sedeId,
       durata_stimata_min: null,
       durata_confermata_min: v.minuti,
+      distanza_km: v.distanzaKm ?? null,
       giustificazione: null,
       autista: v.autista,
       mezzo_id: v.autista ? v.mezzoId ?? null : null,

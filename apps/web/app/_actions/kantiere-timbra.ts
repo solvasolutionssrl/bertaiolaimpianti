@@ -94,6 +94,8 @@ const ViaggioSchema = z.object({
   giustificazione: z.string().max(500).optional(),
   autista: z.boolean(),
   mezzoId: z.string().uuid().nullable().optional(),
+  /** Distanza in km dalla stima API: DEFINITIVA (non corretta dal tecnico). */
+  distanzaKm: z.number().nonnegative().max(100000).nullable().optional(),
 });
 
 const TimbraSchema = z.object({
@@ -147,6 +149,27 @@ export async function timbra(input: unknown): Promise<Result> {
   }
   if (!puoTimbrarePer({ self, capoSquadra, bersaglioInSquadra }))
     return { ok: false, error: 'NON_AUTORIZZATO' };
+
+  // Anti doppio-tap / retry su rete lenta: se esiste una timbratura
+  // recentissima (< 25s) per lo stesso dipendente+target, è una
+  // ri-sottomissione → ritorna quella invece di crearne un'altra (che
+  // sfalserebbe il toggle ingresso/uscita).
+  {
+    const q = supabase
+      .from('timbrature' as never)
+      .select('tipo, ts')
+      .eq('dipendente_id', bersaglioId)
+      .order('ts', { ascending: false })
+      .limit(1);
+    const { data: ultimaRaw } =
+      target.tipo === 'commessa'
+        ? await q.eq('commessa_id', target.id).maybeSingle()
+        : await q.eq('cantiere_id', target.id).maybeSingle();
+    const ultima = ultimaRaw as { tipo: 'ingresso' | 'uscita'; ts: string } | null;
+    if (ultima && Date.now() - Date.parse(ultima.ts) < 25000) {
+      return { ok: true, tipo: ultima.tipo, ts: ultima.ts };
+    }
+  }
 
   const tipo = await prossimoTipo(supabase, bersaglioId, target);
   const ts = new Date().toISOString();
@@ -209,6 +232,7 @@ export async function timbra(input: unknown): Promise<Result> {
       sede_id: viaggio.sedeId,
       durata_stimata_min: viaggio.durataStimataMin,
       durata_confermata_min: viaggio.durataConfermataMin,
+      distanza_km: viaggio.distanzaKm ?? null,
       giustificazione: viaggio.giustificazione?.trim() || null,
       autista: viaggio.autista,
       mezzo_id: viaggio.autista ? viaggio.mezzoId ?? null : null,

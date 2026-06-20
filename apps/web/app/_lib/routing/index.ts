@@ -13,16 +13,23 @@
 
 export type Coord = { lat: number; lng: number };
 
+/** Esito di una stima: minuti grezzi (non arrotondati) + km. */
+export type StimaPercorso = { minuti: number; km: number };
+
 export interface RoutingProvider {
-  /** Durata di guida in MINUTI grezzi (non arrotondati), o null se non stimabile. */
-  durataMin(origin: Coord, dest: Coord): Promise<number | null>;
+  /** Durata (min grezzi) + distanza (km) di guida, o null se non stimabile. */
+  stima(origin: Coord, dest: Coord): Promise<StimaPercorso | null>;
 }
 
 const ORS_URL = 'https://api.openrouteservice.org/v2/directions/driving-car';
 
+function km(metri: number): number {
+  return Math.round((metri / 1000) * 100) / 100;
+}
+
 function createOrsProvider(apiKey: string): RoutingProvider {
   return {
-    async durataMin(origin, dest) {
+    async stima(origin, dest) {
       try {
         const res = await fetch(ORS_URL, {
           method: 'POST',
@@ -38,11 +45,13 @@ function createOrsProvider(apiKey: string): RoutingProvider {
         });
         if (!res.ok) return null;
         const json = (await res.json()) as {
-          routes?: { summary?: { duration?: number } }[];
+          routes?: { summary?: { duration?: number; distance?: number } }[];
         };
-        const sec = json.routes?.[0]?.summary?.duration;
+        const s = json.routes?.[0]?.summary;
+        const sec = s?.duration;
+        const metri = s?.distance;
         if (typeof sec !== 'number' || !Number.isFinite(sec)) return null;
-        return sec / 60;
+        return { minuti: sec / 60, km: typeof metri === 'number' ? km(metri) : 0 };
       } catch {
         return null;
       }
@@ -57,15 +66,17 @@ const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';
 
 function createOsrmProvider(): RoutingProvider {
   return {
-    async durataMin(origin, dest) {
+    async stima(origin, dest) {
       try {
         const url = `${OSRM_URL}/${origin.lng},${origin.lat};${dest.lng},${dest.lat}?overview=false`;
         const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
         if (!res.ok) return null;
-        const json = (await res.json()) as { routes?: { duration?: number }[] };
-        const sec = json.routes?.[0]?.duration;
+        const json = (await res.json()) as { routes?: { duration?: number; distance?: number }[] };
+        const r = json.routes?.[0];
+        const sec = r?.duration;
+        const metri = r?.distance;
         if (typeof sec !== 'number' || !Number.isFinite(sec)) return null;
-        return sec / 60;
+        return { minuti: sec / 60, km: typeof metri === 'number' ? km(metri) : 0 };
       } catch {
         return null;
       }

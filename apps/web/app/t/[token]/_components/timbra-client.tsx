@@ -66,6 +66,12 @@ function geo(): Promise<{ lat: number; lng: number } | undefined> {
 
 // ─── format ──────────────────────────────────────────────────────────────────
 
+/** Km → "12,3 km" / "km n.d." se null. */
+function formatKm(km: number | null): string {
+  if (km === null) return 'km n.d.';
+  return `${km.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+}
+
 function formatOra(ts: string): string {
   return new Intl.DateTimeFormat('it-IT', {
     timeZone: 'Europe/Rome',
@@ -197,6 +203,7 @@ function TimbraSelf({
     viaggio?.sedeDefaultId ?? viaggio?.sedi[0]?.id ?? '',
   );
   const [stimaMin, setStimaMin] = useState<number | null>(null);
+  const [stimaKm, setStimaKm] = useState<number | null>(null);
   const [stimaLoading, setStimaLoading] = useState(false);
   const [confermMin, setConfermMin] = useState<number>(0);
   const [giustificazione, setGiustificazione] = useState('');
@@ -211,21 +218,25 @@ function TimbraSelf({
     if (!viaggio) return;
     setStimaLoading(true);
     setStimaMin(null);
+    setStimaKm(null);
     try {
       const res = await fetch('/api/routing/stima', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sedeId: targetSedeId, cantiereId: viaggio.cantiereId, direzione }),
       });
-      const j = (await res.json()) as { ok: boolean; minuti: number | null };
+      const j = (await res.json()) as { ok: boolean; minuti: number | null; km?: number | null };
       if (j.ok && typeof j.minuti === 'number') {
         setStimaMin(j.minuti);
         setConfermMin(j.minuti);
+        setStimaKm(typeof j.km === 'number' ? j.km : null);
       } else {
-        setStimaMin(null); // stima non disponibile → inserimento manuale
+        setStimaMin(null);
+        setStimaKm(null);
       }
     } catch {
       setStimaMin(null);
+      setStimaKm(null);
     } finally {
       setStimaLoading(false);
     }
@@ -271,6 +282,7 @@ function TimbraSelf({
               giustificazione: giustificazione.trim() || undefined,
               autista,
               mezzoId: autista ? mezzoId || null : null,
+              distanzaKm: stimaKm,
             }
           : undefined,
       });
@@ -346,7 +358,12 @@ function TimbraSelf({
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> stima...
                 </span>
               ) : stimaMin != null ? (
-                <span className="text-xs text-muted-foreground">stimato {formatDurata(stimaMin)}</span>
+                <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>stimato {formatDurata(stimaMin)}</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-medium text-foreground">
+                    {formatKm(stimaKm)}
+                  </span>
+                </span>
               ) : (
                 <span className="text-xs text-muted-foreground">stima non disponibile</span>
               )}

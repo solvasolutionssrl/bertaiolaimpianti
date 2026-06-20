@@ -82,7 +82,7 @@ export async function POST(req: Request) {
   // 1) cache
   const { data: cached } = await svc
     .from('routing_cache' as never)
-    .select('durata_min')
+    .select('durata_min, distanza_km')
     .eq('origin_lat', oLat)
     .eq('origin_lng', oLng)
     .eq('dest_lat', dLat)
@@ -90,19 +90,25 @@ export async function POST(req: Request) {
     .eq('profile', 'driving-car')
     .maybeSingle();
 
-  const hit = cached as { durata_min: number } | null;
+  const hit = cached as { durata_min: number; distanza_km: number | null } | null;
   if (hit && typeof hit.durata_min === 'number') {
-    return NextResponse.json({ ok: true, minuti: arrotonda15(hit.durata_min), minutiRaw: hit.durata_min });
+    return NextResponse.json({
+      ok: true,
+      minuti: arrotonda15(hit.durata_min),
+      minutiRaw: hit.durata_min,
+      km: hit.distanza_km ?? null,
+    });
   }
 
   // 2) provider (ORS se chiave, altrimenti OSRM demo: sempre disponibile)
   const provider = getRoutingProvider();
-  const min = await provider.durataMin(origin, dest);
-  if (min == null) {
-    return NextResponse.json({ ok: true, minuti: null, motivo: 'stima_non_disponibile' });
+  const res = await provider.stima(origin, dest);
+  if (res == null) {
+    return NextResponse.json({ ok: true, minuti: null, km: null, motivo: 'stima_non_disponibile' });
   }
 
-  const durata = Math.round(min);
+  const durata = Math.round(res.minuti);
+  const distanza = Math.round(res.km * 100) / 100;
   // 3) salva in cache (best-effort)
   await svc
     .from('routing_cache' as never)
@@ -114,9 +120,10 @@ export async function POST(req: Request) {
         dest_lng: dLng,
         profile: 'driving-car',
         durata_min: durata,
+        distanza_km: distanza,
       } as never,
       { onConflict: 'origin_lat,origin_lng,dest_lat,dest_lng,profile' } as never,
     );
 
-  return NextResponse.json({ ok: true, minuti: arrotonda15(durata), minutiRaw: durata });
+  return NextResponse.json({ ok: true, minuti: arrotonda15(durata), minutiRaw: durata, km: distanza });
 }

@@ -1,13 +1,28 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Truck, Car, Package2, CheckCircle2, CircleOff, Search, X } from 'lucide-react';
-import type { MezzoView, TipoMezzo } from '../page';
+import type { MezzoView, MezzoStats, TipoMezzo } from '../page';
 import { creaMezzo, aggiornaMezzo, eliminaMezzo } from '@/app/office/_actions/kantiere-mezzi';
+
+type ViaggioAggRow = {
+  mezzo_id: string;
+  km_totali: number;
+  n_viaggi: number;
+};
 
 interface Props {
   mezzi: MezzoView[];
+  viaggioAgg: ViaggioAggRow[];
+}
+
+function fmtKm(km: number): string {
+  return new Intl.NumberFormat('it-IT', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(km);
 }
 
 // ── Costanti tipo ─────────────────────────────────────────────────────────
@@ -156,7 +171,7 @@ function AggiiungiMezzoForm() {
 
 // ── Riga mezzo ────────────────────────────────────────────────────────────
 
-function MezzoRow({ mezzo }: { mezzo: MezzoView }) {
+function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | undefined }) {
   const router = useRouter();
   const [tipo, setTipo] = React.useState<TipoMezzo>(mezzo.tipo);
   const [targa, setTarga] = React.useState(mezzo.targa);
@@ -274,9 +289,26 @@ function MezzoRow({ mezzo }: { mezzo: MezzoView }) {
         />
         {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
       </td>
+      {/* Km totali */}
+      <td className="px-4 py-2.5 text-right tabular-nums text-sm text-muted-foreground whitespace-nowrap">
+        {stats ? (
+          <span title={`${stats.nViaggi} viaggio/i`}>
+            {fmtKm(stats.kmTotali)} km
+            <span className="ml-1.5 text-xs text-muted-foreground/70">({stats.nViaggi})</span>
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground/50">n.d.</span>
+        )}
+      </td>
       {/* Azioni */}
       <td className="px-4 py-2.5 text-right">
         <div className="flex items-center justify-end gap-2">
+          <Link
+            href={`/office/kantiere/mezzi/${mezzo.id}`}
+            className="rounded-md border border-border px-3 py-1 text-xs font-medium hover:bg-muted"
+          >
+            Storico
+          </Link>
           {dirty && (
             <button
               disabled={busy}
@@ -320,10 +352,19 @@ function MezzoRow({ mezzo }: { mezzo: MezzoView }) {
 
 // ── MezziClient (root) ────────────────────────────────────────────────────
 
-export function MezziClient({ mezzi }: Props) {
+export function MezziClient({ mezzi, viaggioAgg }: Props) {
   const [cerca, setCerca] = React.useState('');
   const [filtroTipo, setFiltroTipo] = React.useState<TipoMezzo | ''>('');
   const [filtroStato, setFiltroStato] = React.useState<'tutti' | 'attivi'>('tutti');
+
+  // Mappa mezzo_id -> stats
+  const statsMap = React.useMemo(() => {
+    const m = new Map<string, MezzoStats>();
+    for (const v of viaggioAgg) {
+      m.set(v.mezzo_id, { kmTotali: v.km_totali, nViaggi: v.n_viaggi });
+    }
+    return m;
+  }, [viaggioAgg]);
 
   // Statistiche
   const totale = mezzi.length;
@@ -458,12 +499,13 @@ export function MezziClient({ mezzi }: Props) {
                 <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Modello</th>
                 <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Stato</th>
                 <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Note</th>
+                <th className="px-4 py-2.5 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot. (viaggi)</th>
                 <th className="px-4 py-2.5 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {visibili.map((m) => (
-                <MezzoRow key={m.id} mezzo={m} />
+                <MezzoRow key={m.id} mezzo={m} stats={statsMap.get(m.id)} />
               ))}
             </tbody>
           </table>
