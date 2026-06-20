@@ -15,9 +15,21 @@ async function guard() {
   return ctx;
 }
 
+const anomalieSchema = z.object({
+  incomplete: z.boolean(),
+  straordinari: z.boolean(),
+  senza_rapportino: z.boolean(),
+  modificato: z.boolean(),
+  festivo: z.boolean(),
+  weekend: z.boolean(),
+  ore_eccessive: z.boolean(),
+});
+
 const schema = z.object({
   sogliaOreOrdinarie: z.number().min(1).max(24),
   sedePartenzaDefault: z.string().max(300).optional(),
+  anomalie: anomalieSchema.optional(),
+  anomalie_ore_max: z.number().min(1).max(24).optional(),
 });
 
 export async function salvaImpostazioniKantiere(input: unknown): Promise<Result> {
@@ -41,11 +53,17 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   if (!row) return { ok: false, error: 'MODULO_NON_TROVATO' };
 
   const existingConfig = ((row as { config: Record<string, unknown> | null }).config) ?? {};
-  const newConfig = {
+  const newConfig: Record<string, unknown> = {
     ...existingConfig,
     soglia_ore_ordinarie: parsed.data.sogliaOreOrdinarie,
     sede_partenza_default: parsed.data.sedePartenzaDefault?.trim() || null,
   };
+  if (parsed.data.anomalie !== undefined) {
+    newConfig['anomalie'] = parsed.data.anomalie;
+  }
+  if (parsed.data.anomalie_ore_max !== undefined) {
+    newConfig['anomalie_ore_max'] = parsed.data.anomalie_ore_max;
+  }
 
   const { error: updateError } = await supabase
     .from('tenant_modules' as never)

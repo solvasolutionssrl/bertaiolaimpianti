@@ -28,6 +28,18 @@ export default async function KantiereSettingsPage() {
   const soglia = typeof config.soglia_ore_ordinarie === 'number' ? config.soglia_ore_ordinarie : 8;
   const sede = typeof config.sede_partenza_default === 'string' ? config.sede_partenza_default : '';
 
+  const rawAnomalie = config.anomalie && typeof config.anomalie === 'object' ? (config.anomalie as Record<string, boolean>) : {};
+  const anomalie = {
+    incomplete: rawAnomalie['incomplete'] !== false,
+    straordinari: rawAnomalie['straordinari'] !== false,
+    senza_rapportino: rawAnomalie['senza_rapportino'] !== false,
+    modificato: rawAnomalie['modificato'] !== false,
+    festivo: rawAnomalie['festivo'] !== false,
+    weekend: rawAnomalie['weekend'] !== false,
+    ore_eccessive: rawAnomalie['ore_eccessive'] !== false,
+  };
+  const anomalie_ore_max = typeof config.anomalie_ore_max === 'number' ? config.anomalie_ore_max : 13;
+
   const { data: tRow } = await supabase
     .from('tenants' as never)
     .select('codice_azienda')
@@ -62,7 +74,7 @@ export default async function KantiereSettingsPage() {
         )}
       </div>
 
-      <ImpostazioniClient soglia={soglia} sede={sede} />
+      <ImpostazioniClient soglia={soglia} sede={sede} anomalie={anomalie} anomalie_ore_max={anomalie_ore_max} />
     </div>
   );
 }

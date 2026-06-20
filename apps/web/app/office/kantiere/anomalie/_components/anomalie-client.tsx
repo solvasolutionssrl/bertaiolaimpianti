@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
 import type {
@@ -8,6 +9,10 @@ import type {
   StraordinarioRow,
   SenzaRapportinoRow,
   ModificatoDopoInvioRow,
+  FestivoRow,
+  WeekendRow,
+  OreEccessiveRow,
+  AnomalieAttivi,
 } from '../page';
 
 interface Props {
@@ -15,6 +20,11 @@ interface Props {
   straordinario: StraordinarioRow[];
   senzaRapportino: SenzaRapportinoRow[];
   modificati: ModificatoDopoInvioRow[];
+  festivo: FestivoRow[];
+  weekend: WeekendRow[];
+  oreEccessive: OreEccessiveRow[];
+  anomalie_ore_max: number;
+  attivi: AnomalieAttivi;
   filtri: { from: string; to: string };
 }
 
@@ -32,6 +42,11 @@ export function AnomalieClient({
   straordinario,
   senzaRapportino,
   modificati,
+  festivo,
+  weekend,
+  oreEccessive,
+  anomalie_ore_max,
+  attivi,
   filtri,
 }: Props) {
   const router = useRouter();
@@ -47,6 +62,14 @@ export function AnomalieClient({
 
   return (
     <div className="space-y-6">
+      {/* Avviso configurazione */}
+      <div className="rounded-md border border-border bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground">
+        Vuoi scegliere quali anomalie segnalare?{' '}
+        <Link href="/office/impostazioni/kantiere" className="text-primary hover:underline">
+          Vai alle impostazioni Kantiere
+        </Link>
+      </div>
+
       {/* Filtri */}
       <form onSubmit={handleFiltri} className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
@@ -84,154 +107,289 @@ export function AnomalieClient({
       </form>
 
       {/* A) Timbrature incomplete */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Giornate incomplete{' '}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">
-              ({incomplete.length})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {incomplete.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Dipendente</th>
-                    <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
-                    <th className="pb-2 font-medium">Giorno</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {incomplete.map((row, i) => (
-                    <tr key={i} className="border-b border-border/50 last:border-0">
-                      <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                      <td className="py-2 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
-                      <td className="py-2">
-                        <a
-                          href={`/office/kantiere/rapportini?from=${row.giorno}&to=${row.giorno}&dipendente=${row.dipendente_id}`}
-                          className="text-primary hover:underline"
-                        >
-                          {fmtData(row.giorno)}
-                        </a>
-                      </td>
+      {attivi.incomplete && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Giornate incomplete{' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({incomplete.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {incomplete.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Dipendente</th>
+                      <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
+                      <th className="pb-2 font-medium">Giorno</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody>
+                    {incomplete.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
+                        <td className="py-2">
+                          <a
+                            href={`/office/kantiere/rapportini?from=${row.giorno}&to=${row.giorno}&dipendente=${row.dipendente_id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {fmtData(row.giorno)}
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* B) Straordinario */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Ore straordinarie{' '}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">
-              ({straordinario.length})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {straordinario.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Dipendente</th>
-                    <th className="pb-2 pr-4 font-medium">Data</th>
-                    <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
-                    <th className="pb-2 font-medium">Ore straord.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {straordinario.map((row, i) => (
-                    <tr key={i} className="border-b border-border/50 last:border-0">
-                      <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                      <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                      <td className="py-2 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
-                      <td className="py-2 font-medium">{row.ore_straordinarie}</td>
+      {attivi.straordinari && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Ore straordinarie{' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({straordinario.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {straordinario.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Dipendente</th>
+                      <th className="pb-2 pr-4 font-medium">Data</th>
+                      <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
+                      <th className="pb-2 font-medium">Ore straord.</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody>
+                    {straordinario.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
+                        <td className="py-2 font-medium">{row.ore_straordinarie}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* C) Senza rapportino */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Dipendenti senza rapportino nel periodo{' '}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">
-              ({senzaRapportino.length})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {senzaRapportino.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
-          ) : (
-            <ul className="space-y-1 text-sm">
-              {senzaRapportino.map((row, i) => (
-                <li key={i} className="border-b border-border/50 py-2 last:border-0">
-                  {row.nome}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {attivi.senza_rapportino && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Dipendenti senza rapportino nel periodo{' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({senzaRapportino.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {senzaRapportino.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {senzaRapportino.map((row, i) => (
+                  <li key={i} className="border-b border-border/50 py-2 last:border-0">
+                    {row.nome}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* D) Modificato dopo invio */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Modificati dopo invio{' '}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">
-              ({modificati.length})
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {modificati.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Dipendente</th>
-                    <th className="pb-2 pr-4 font-medium">Data</th>
-                    <th className="pb-2 font-medium">Stato attuale</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {modificati.map((row, i) => (
-                    <tr key={i} className="border-b border-border/50 last:border-0">
-                      <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                      <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                      <td className="py-2 text-muted-foreground">
-                        {STATO_LABEL[row.stato] ?? row.stato}
-                      </td>
+      {attivi.modificato && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Modificati dopo invio{' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({modificati.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {modificati.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Dipendente</th>
+                      <th className="pb-2 pr-4 font-medium">Data</th>
+                      <th className="pb-2 font-medium">Stato attuale</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </thead>
+                  <tbody>
+                    {modificati.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-2 text-muted-foreground">
+                          {STATO_LABEL[row.stato] ?? row.stato}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* E) Ore in giorno festivo */}
+      {attivi.festivo && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Ore in giorno festivo{' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({festivo.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {festivo.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Dipendente</th>
+                      <th className="pb-2 pr-4 font-medium">Data</th>
+                      <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
+                      <th className="pb-2 font-medium">Ore totali</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {festivo.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{row.targetTitolo}</td>
+                        <td className="py-2 font-medium">{row.ore_totali}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* F) Ore nel weekend */}
+      {attivi.weekend && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Ore nel weekend{' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({weekend.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {weekend.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Dipendente</th>
+                      <th className="pb-2 pr-4 font-medium">Data</th>
+                      <th className="pb-2 pr-4 font-medium">Commessa / Cantiere</th>
+                      <th className="pb-2 font-medium">Ore totali</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weekend.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-2 pr-4 text-muted-foreground">{row.targetTitolo}</td>
+                        <td className="py-2 font-medium">{row.ore_totali}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* G) Ore eccessive (possibile doppio inserimento) */}
+      {attivi.ore_eccessive && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Ore giornaliere oltre soglia (possibile doppio inserimento){' '}
+              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                ({oreEccessive.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Somma di ore ordinarie e straordinarie superiore a {anomalie_ore_max} ore in un giorno.
+            </p>
+            {oreEccessive.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Dipendente</th>
+                      <th className="pb-2 pr-4 font-medium">Data</th>
+                      <th className="pb-2 font-medium">Ore totali</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {oreEccessive.map((row, i) => (
+                      <tr key={i} className="border-b border-border/50 last:border-0">
+                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-2 font-medium text-destructive">{row.ore_totali}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
