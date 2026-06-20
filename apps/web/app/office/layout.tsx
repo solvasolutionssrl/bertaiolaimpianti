@@ -60,7 +60,7 @@ export default async function OfficeLayout({
     supabase
       .from('users')
       .select(
-        'display_name, role, avatar_url, onboarded_at, tenant:tenants!inner ( nome, logo_url, brand_color )',
+        'display_name, role, avatar_url, onboarded_at, tenant:tenants!inner ( nome, logo_url, brand_color, app_mode )',
       )
       .eq('id', ctx.userId)
       .maybeSingle(),
@@ -101,6 +101,11 @@ export default async function OfficeLayout({
   };
   const notificationCount = notifRes.count ?? 0;
   const hasKantiere = await tenantHasModule('kantiere');
+  // Esperienza app del tenant. Default 'kommessa' = comportamento attuale
+  // (Bertaiola invariata). 'kantiere' → office puro-Kantiere (nulla di commessa).
+  const rawAppMode = (tenantRow?.app_mode as string | null | undefined) ?? null;
+  const appMode: 'kommessa' | 'kantiere' | 'full' =
+    rawAppMode === 'kantiere' || rawAppMode === 'full' ? rawAppMode : 'kommessa';
   const onboardedAt = (userRow?.onboarded_at as string | null | undefined) ?? null;
   const showOnboardingTour = onboardedAt === null;
 
@@ -135,6 +140,7 @@ export default async function OfficeLayout({
         user={user}
         notificationCount={notificationCount}
         hasKantiere={hasKantiere}
+        appMode={appMode}
       >
         {isPlatformAdmin && !isImpersonating ? <PlatformAdminPill /> : null}
         {children}

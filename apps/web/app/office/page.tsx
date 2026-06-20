@@ -25,6 +25,7 @@ import {
   Flame,
   Sparkles,
 } from 'lucide-react';
+import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
 import { SectionHeader } from '../_components/section-header';
@@ -46,6 +47,17 @@ function salutoOrario(d: Date): string {
 
 export default async function DashboardPage() {
   const ctx = await requireTenantContext();
+  // Tenant puro-Kantiere (app_mode='kantiere'): la dashboard commessa non ha
+  // senso → atterra sulla Panoramica Kantiere. Bertaiola ('kommessa') invariata.
+  const supabaseMode = createServerSupabase();
+  const { data: tmode } = await supabaseMode
+    .from('tenants')
+    .select('app_mode')
+    .eq('id', ctx.tenantId)
+    .maybeSingle();
+  if ((tmode as { app_mode?: string | null } | null)?.app_mode === 'kantiere') {
+    redirect('/office/kantiere');
+  }
   const now = new Date();
   const nome = ctx.email ? ctx.email.split('@')[0] : '';
   const oggi = now.toLocaleDateString('it-IT', {

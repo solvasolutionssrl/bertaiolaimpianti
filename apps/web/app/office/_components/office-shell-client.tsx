@@ -24,6 +24,8 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
+  /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
+  appMode?: 'kommessa' | 'kantiere' | 'full';
   children: React.ReactNode;
 }
 
@@ -102,13 +104,62 @@ const BASE_FULL_NAV: OfficeNavItem[] = (() => {
  * Costruisce la NAV finale in base ai moduli attivi del tenant.
  *
  * - hasKantiere=false (Bertaiola): struttura ATTUALE invariata.
- * - hasKantiere=true  (FPM e simili): struttura con gruppi "Commessa" e
+ * - hasKantiere=true + appMode='kantiere' (FPM): tenant PURO-Kantiere → NIENTE
+ *   commessa (no gruppo Kommessa, no Clienti). Dashboard = Panoramica Kantiere.
+ * - hasKantiere=true + appMode kommessa/full: struttura con gruppi "Kommessa" e
  *   "Kantiere" come moduli add-on + Dipendenti come voce globale.
  */
-function buildNav(hasKantiere?: boolean): OfficeNavItem[] {
+function buildNav(
+  hasKantiere?: boolean,
+  appMode?: 'kommessa' | 'kantiere' | 'full',
+): OfficeNavItem[] {
   if (!hasKantiere) {
     // Ramo Bertaiola: riproduce esattamente BASE_FULL_NAV (nessuna modifica).
     return [...BASE_FULL_NAV];
+  }
+
+  if (appMode === 'kantiere') {
+    // Tenant puro-Kantiere (es. FPM): solo Kantiere, nulla di commessa.
+    return [
+      { id: 'home', label: 'Dashboard', href: '/office/kantiere', icon: LayoutDashboard },
+      {
+        id: 'sec-azienda',
+        label: 'Azienda',
+        href: '#',
+        icon: Users,
+        variant: 'section',
+        defaultOpen: true,
+        children: [{ id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' }],
+      },
+      {
+        id: 'sec-kantiere',
+        label: 'Kantiere',
+        href: '#',
+        icon: HardHat,
+        variant: 'module',
+        defaultOpen: true,
+        children: [
+          { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
+          { id: 'kant-qr', label: 'QR code', href: '/office/kantiere/qr' },
+          { id: 'kant-rapp', label: 'Rapportini', href: '/office/kantiere/rapportini' },
+          { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
+          { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
+          { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
+        ],
+      },
+      {
+        id: 'sec-altro',
+        label: 'Altro',
+        href: '#',
+        icon: Boxes,
+        variant: 'section',
+        defaultOpen: true,
+        children: [
+          { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche' },
+          { id: 'impostazioni', label: 'Impostazioni', href: '/office/impostazioni' },
+        ],
+      },
+    ];
   }
 
   // Ramo FPM / hasKantiere=true: sidebar a SEZIONI-separatori.
@@ -213,11 +264,12 @@ export function OfficeShellClient({
   activeNavId,
   notificationCount,
   hasKantiere,
+  appMode,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const nav = buildNav(hasKantiere);
+  const nav = buildNav(hasKantiere, appMode);
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);
