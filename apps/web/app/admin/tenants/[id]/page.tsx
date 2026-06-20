@@ -260,6 +260,7 @@ export default async function TenantDetailPage({
                 ? tenant.app_mode
                 : 'kommessa'
             }
+            codiceAzienda={tenant.codice_azienda ?? ''}
           />
         </TabsContent>
 

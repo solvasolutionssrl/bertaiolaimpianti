@@ -917,3 +917,62 @@ export async function aggiornaAppModeTenant(input: {
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
   return { ok: true };
 }
+
+const CODICE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  // 2-20 char alfanumerici/trattino, oppure vuoto per azzerare.
+  codice: z
+    .string()
+    .trim()
+    .max(20)
+    .regex(/^[A-Za-z0-9-]*$/, 'Solo lettere, numeri e trattino')
+    .transform((s) => s.toUpperCase()),
+});
+
+/** Codice azienda usato come 1° campo del login per disambiguare il tenant. */
+export async function aggiornaCodiceAzienda(input: {
+  tenantId: string;
+  codice: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = CODICE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  if (parsed.data.codice.length > 0 && parsed.data.codice.length < 2) {
+    return { ok: false, error: 'Il codice deve avere almeno 2 caratteri' };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: prev } = await supabase
+    .from('tenants')
+    .select('codice_azienda')
+    .eq('id', parsed.data.tenantId)
+    .maybeSingle();
+  const previous = (prev as { codice_azienda?: string | null } | null)?.codice_azienda ?? null;
+
+  const nuovo = parsed.data.codice.length > 0 ? parsed.data.codice : null;
+
+  const { error } = await supabase
+    .from('tenants')
+    .update({ codice_azienda: nuovo } as never)
+    .eq('id', parsed.data.tenantId);
+  if (error) {
+    const dup = /duplicate key|unique/i.test(error.message);
+    return { ok: false, error: dup ? 'Codice già usato da un altro tenant' : error.message };
+  }
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.codice_azienda.update',
+    before: { codice_azienda: previous },
+    after: { codice_azienda: nuovo },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}

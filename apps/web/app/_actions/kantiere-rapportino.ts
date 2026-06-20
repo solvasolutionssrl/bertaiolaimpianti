@@ -4,7 +4,11 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { minutiPerCommessa, calcolaOreGiornata } from '@kommessa/api/kantiere-ore';
+import {
+  minutiPerCommessa,
+  calcolaOreGiornata,
+  minutiViaggioPerTarget,
+} from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
@@ -147,6 +151,43 @@ function decodeChiave(key: string): { commessa_id: string | null; cantiere_id: s
   return { commessa_id: key || null, cantiere_id: null };
 }
 
+// ── minuti → ore (2 decimali) ────────────────────────────────────────────────
+
+function oreDaMin(min: number): number {
+  return Math.round((min / 60) * 100) / 100;
+}
+
+// ── viaggio per target dalle timbrature del giorno ───────────────────────────
+// Somma durata_confermata_min di timbratura_viaggio, attribuita al target
+// (commessa/cantiere) della timbratura collegata.
+
+async function calcolaViaggioPerTarget(
+  supabase: ReturnType<typeof createServerSupabase>,
+  timbrature: { id: string; commessa_id: string | null; cantiere_id: string | null }[],
+): Promise<Map<string, number>> {
+  if (timbrature.length === 0) return new Map();
+  const idToKey = new Map<string, string>();
+  for (const t of timbrature) {
+    const key = chiaveTarget(t);
+    if (key) idToKey.set(t.id, key);
+  }
+  const ids = Array.from(idToKey.keys());
+  if (ids.length === 0) return new Map();
+
+  const { data } = await supabase
+    .from('timbratura_viaggio' as never)
+    .select('timbratura_id, durata_confermata_min')
+    .in('timbratura_id', ids);
+
+  const rows =
+    (data as { timbratura_id: string; durata_confermata_min: number }[] | null) ?? [];
+  const viaggi = rows.map((r) => ({
+    targetKey: idToKey.get(r.timbratura_id) ?? '',
+    minuti: Number(r.durata_confermata_min) || 0,
+  }));
+  return minutiViaggioPerTarget(viaggi);
+}
+
 // ── helper risolve label di una riga righe (con entrambe le mappe) ───────────
 
 function labelRiga(
@@ -273,18 +314,24 @@ export async function precompilaMioRapportino(
 
   const { data: timbratureRaw } = await supabase
     .from('timbrature' as never)
-    .select('commessa_id, cantiere_id, tipo, ts')
+    .select('id, commessa_id, cantiere_id, tipo, ts')
     .eq('dipendente_id', me.id)
     .gte('ts', `${data}T00:00:00Z`)
     .lt('ts', `${dataSuccessivaStr}T00:00:00Z`)
     .order('ts', { ascending: true });
 
   const timbratureDB = (timbratureRaw as {
+    id: string;
     commessa_id: string | null;
     cantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
   }[]) ?? [];
+
+  // Minuti di viaggio (andata + ritorno) per target, dal collegamento
+  // timbratura_viaggio. Il viaggio è EXTRA: alimenta ore_viaggio della riga
+  // senza concorrere alla soglia degli straordinari (gestita su lavoro).
+  const viaggioPerTarget = await calcolaViaggioPerTarget(supabase, timbratureDB);
 
   const righe: RigaRapportino[] = [];
 
@@ -310,17 +357,34 @@ export async function precompilaMioRapportino(
       sogliaOreOrdinarie: soglia,
     });
 
-    if (risultato.righe.length > 0) {
+    // Fonde righe di lavoro (ord/straord) + viaggio per target. I target con
+    // solo viaggio (nessuna coppia ingresso/uscita completa) ottengono comunque
+    // una riga con le sole ore_viaggio.
+    const righeMap = new Map<string, { ord: number; straord: number; viaggioMin: number }>();
+    for (const rr of risultato.righe) {
+      righeMap.set(rr.commessa_id, {
+        ord: rr.ore_ordinarie,
+        straord: rr.ore_straordinarie,
+        viaggioMin: 0,
+      });
+    }
+    for (const [key, min] of viaggioPerTarget) {
+      const e = righeMap.get(key) ?? { ord: 0, straord: 0, viaggioMin: 0 };
+      e.viaggioMin = min;
+      righeMap.set(key, e);
+    }
+
+    if (righeMap.size > 0) {
       // Decodifica le chiavi sintetiche → FK reali
-      const righeInsert = risultato.righe.map((rr) => {
-        const fk = decodeChiave(rr.commessa_id);
+      const righeInsert = Array.from(righeMap.entries()).map(([key, v]) => {
+        const fk = decodeChiave(key);
         return {
           rapportino_id: nuovo.id,
           commessa_id: fk.commessa_id,
           cantiere_id: fk.cantiere_id,
-          ore_ordinarie: rr.ore_ordinarie,
-          ore_straordinarie: rr.ore_straordinarie,
-          ore_viaggio: 0,
+          ore_ordinarie: v.ord,
+          ore_straordinarie: v.straord,
+          ore_viaggio: oreDaMin(v.viaggioMin),
         };
       });
 

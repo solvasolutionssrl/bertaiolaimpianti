@@ -87,10 +87,20 @@ async function prossimoTipo(
 }
 
 // ── 1) timbra da QR (sé o, per il capo, un membro) ──────────────────────
+const ViaggioSchema = z.object({
+  sedeId: z.string().uuid(),
+  durataStimataMin: z.number().int().nonnegative().nullable(),
+  durataConfermataMin: z.number().int().nonnegative(),
+  giustificazione: z.string().max(500).optional(),
+  autista: z.boolean(),
+  mezzoId: z.string().uuid().nullable().optional(),
+});
+
 const TimbraSchema = z.object({
   token: z.string().min(1),
   dipendenteId: z.string().uuid().optional(),
   geo: GeoSchema,
+  viaggio: ViaggioSchema.optional(),
 });
 
 export async function timbra(input: unknown): Promise<Result> {
@@ -140,19 +150,61 @@ export async function timbra(input: unknown): Promise<Result> {
 
   const tipo = await prossimoTipo(supabase, bersaglioId, target);
   const ts = new Date().toISOString();
-  const { error } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: bersaglioId,
-    commessa_id: target.tipo === 'commessa' ? target.id : null,
-    cantiere_id: target.tipo === 'cantiere' ? target.id : null,
-    tipo,
-    origine: self ? 'qr' : 'capo',
-    ts,
-    geo_lat: parsed.data.geo?.lat ?? null,
-    geo_lng: parsed.data.geo?.lng ?? null,
-    creato_da: ctx.userId,
-  } as never);
+
+  // Il viaggio si registra solo per la timbratura PERSONALE su un cantiere.
+  const viaggio =
+    self && target.tipo === 'cantiere' && parsed.data.viaggio ? parsed.data.viaggio : null;
+
+  // Validazione giustificazione: se ha corretto la stima, serve il motivo.
+  if (viaggio) {
+    const modificato =
+      viaggio.durataStimataMin != null &&
+      viaggio.durataConfermataMin !== viaggio.durataStimataMin;
+    if (modificato && (viaggio.giustificazione ?? '').trim().length < 3) {
+      return { ok: false, error: 'GIUSTIFICAZIONE_RICHIESTA' };
+    }
+  }
+
+  const { data: inserita, error } = await supabase
+    .from('timbrature' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: bersaglioId,
+      commessa_id: target.tipo === 'commessa' ? target.id : null,
+      cantiere_id: target.tipo === 'cantiere' ? target.id : null,
+      tipo,
+      origine: self ? 'qr' : 'capo',
+      ts,
+      geo_lat: parsed.data.geo?.lat ?? null,
+      geo_lng: parsed.data.geo?.lng ?? null,
+      creato_da: ctx.userId,
+    } as never)
+    .select('id')
+    .single();
   if (error) return { ok: false, error: error.message };
+
+  // Tratta di viaggio collegata (andata = ingresso, ritorno = uscita).
+  if (viaggio) {
+    const timbraturaId = (inserita as { id: string }).id;
+    const { error: errViaggio } = await supabase.from('timbratura_viaggio' as never).insert({
+      tenant_id: ctx.tenantId,
+      timbratura_id: timbraturaId,
+      dipendente_id: bersaglioId,
+      direzione: tipo === 'ingresso' ? 'andata' : 'ritorno',
+      sede_id: viaggio.sedeId,
+      durata_stimata_min: viaggio.durataStimataMin,
+      durata_confermata_min: viaggio.durataConfermataMin,
+      giustificazione: viaggio.giustificazione?.trim() || null,
+      autista: viaggio.autista,
+      mezzo_id: viaggio.autista ? viaggio.mezzoId ?? null : null,
+    } as never);
+    if (errViaggio) {
+      // Compensazione: senza il viaggio la timbratura resta incoerente col flusso.
+      await supabase.from('timbrature' as never).delete().eq('id', timbraturaId);
+      return { ok: false, error: errViaggio.message };
+    }
+  }
+
   return { ok: true, tipo, ts };
 }
 
