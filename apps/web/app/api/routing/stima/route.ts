@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { requireTenantContext } from '@kommessa/api/tenant';
+import { getTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { arrotonda15 } from '@kommessa/api/kantiere-ore';
@@ -37,7 +37,7 @@ function round6(n: number): number {
 }
 
 export async function POST(req: Request) {
-  const ctx = await requireTenantContext();
+  const ctx = await getTenantContext();
   if (!ctx) return NextResponse.json({ ok: false, error: 'UNAUTHENTICATED' }, { status: 401 });
 
   const body = await req.json().catch(() => null);

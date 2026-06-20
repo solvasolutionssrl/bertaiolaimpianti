@@ -104,7 +104,7 @@ export function LoginForm() {
             className="h-12 w-full rounded-xl border border-[hsl(30,12%,89%)] bg-[hsl(32,28%,99%)] px-4 text-[15px] uppercase text-[hsl(220,30%,9%)] placeholder:text-[hsl(220,10%,70%)] placeholder:normal-case transition-colors focus:border-[hsl(220,80%,32%)] focus:outline-none focus:ring-2 focus:ring-[hsl(220,80%,32%)]/20 disabled:opacity-60"
           />
           <p className="text-[11px] text-[hsl(220,10%,55%)]">
-            Il codice fornito dalla tua azienda. Lascialo vuoto se accedi con un&apos;email completa.
+            Lascialo vuoto se la tua azienda non te ne ha fornito uno.
           </p>
         </div>
 
