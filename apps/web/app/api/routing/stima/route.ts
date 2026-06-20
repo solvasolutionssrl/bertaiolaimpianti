@@ -5,6 +5,7 @@ import { getTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { arrotonda15 } from '@kommessa/api/kantiere-ore';
+import { tenantHasModule } from '@/app/_lib/modules';
 import { getRoutingProvider, type Coord } from '@/app/_lib/routing';
 
 /**
@@ -39,6 +40,8 @@ function round6(n: number): number {
 export async function POST(req: Request) {
   const ctx = await getTenantContext();
   if (!ctx) return NextResponse.json({ ok: false, error: 'UNAUTHENTICATED' }, { status: 401 });
+  if (!(await tenantHasModule('kantiere')))
+    return NextResponse.json({ ok: false, error: 'MODULO_OFF' }, { status: 403 });
 
   const body = await req.json().catch(() => null);
   const parsed = inputSchema.safeParse(body);

@@ -155,13 +155,28 @@ export async function timbra(input: unknown): Promise<Result> {
   const viaggio =
     self && target.tipo === 'cantiere' && parsed.data.viaggio ? parsed.data.viaggio : null;
 
-  // Validazione giustificazione: se ha corretto la stima, serve il motivo.
+  // Validazione viaggio: giustificazione se ha corretto la stima + sede/mezzo
+  // devono appartenere al tenant (la lettura RLS-scoped torna null altrimenti).
   if (viaggio) {
     const modificato =
       viaggio.durataStimataMin != null &&
       viaggio.durataConfermataMin !== viaggio.durataStimataMin;
     if (modificato && (viaggio.giustificazione ?? '').trim().length < 3) {
       return { ok: false, error: 'GIUSTIFICAZIONE_RICHIESTA' };
+    }
+    const { data: sedeOk } = await supabase
+      .from('sedi' as never)
+      .select('id')
+      .eq('id', viaggio.sedeId)
+      .maybeSingle();
+    if (!sedeOk) return { ok: false, error: 'SEDE_NON_VALIDA' };
+    if (viaggio.autista && viaggio.mezzoId) {
+      const { data: mezzoOk } = await supabase
+        .from('mezzi' as never)
+        .select('id')
+        .eq('id', viaggio.mezzoId)
+        .maybeSingle();
+      if (!mezzoOk) return { ok: false, error: 'MEZZO_NON_VALIDO' };
     }
   }
 

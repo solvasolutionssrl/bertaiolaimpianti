@@ -28,6 +28,16 @@ create unique index if not exists tenants_login_senza_codice_uq
   on public.tenants ((login_senza_codice))
   where login_senza_codice = true;
 
+-- Set deterministico e idempotente (retrocompat garantita dallo schema, non da
+-- una data-op manuale): Bertaiola è il tenant di default per il login senza
+-- codice; FPM ha il proprio codice azienda. Necessario perché su qualsiasi DB
+-- ricostruito da migration (staging/DR) gli utenti Bertaiola con username "nudo"
+-- devono continuare ad accedere.
+update public.tenants set codice_azienda = 'BERTAIOLA', login_senza_codice = true
+  where slug = 'BER';
+update public.tenants set codice_azienda = 'FPM'
+  where slug = 'FPMIMP' and codice_azienda is null;
+
 -- ---------- A2: parco mezzi ------------------------------------------
 create table if not exists public.mezzi (
   id          uuid primary key default gen_random_uuid(),
