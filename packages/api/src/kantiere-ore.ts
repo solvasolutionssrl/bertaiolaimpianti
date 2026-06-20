@@ -74,3 +74,25 @@ export function prossimoTipoTimbratura(
   const ultima = odierne[odierne.length - 1];
   return ultima?.tipo === 'ingresso' ? 'uscita' : 'ingresso';
 }
+
+/** Arrotonda i minuti di percorrenza al quarto d'ora più vicino.
+ *  Una tratta con durata > 0 non scende mai sotto i 15 minuti. */
+export function arrotonda15(minuti: number): number {
+  if (!Number.isFinite(minuti) || minuti <= 0) return 0;
+  const r = Math.round(minuti / 15) * 15;
+  return r === 0 ? 15 : r;
+}
+
+/** Somma i minuti di viaggio (andata + ritorno) per ciascun target
+ *  (chiave sintetica commessa:/cantiere:). Usato dal precompila rapportino
+ *  per riempire ore_viaggio della riga corrispondente. */
+export function minutiViaggioPerTarget(
+  viaggi: { targetKey: string; minuti: number }[],
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const v of viaggi) {
+    if (!v.targetKey) continue;
+    out.set(v.targetKey, (out.get(v.targetKey) ?? 0) + (v.minuti || 0));
+  }
+  return out;
+}
