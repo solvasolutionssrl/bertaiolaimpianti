@@ -3,6 +3,8 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
+import { TurniAttivi } from './_components/turni-attivi';
+import { turniAttivi } from '@/app/office/_actions/kantiere-turni-attivi';
 import {
   Users,
   QrCode,
@@ -280,6 +282,11 @@ export default async function KantierePanoramica() {
 
   const maxPresenzaCantiere = Math.max(...topCantieri.map((c) => c.count), 1);
 
+  // ===== Turni attivi (live) =====
+  const turniRes = await turniAttivi();
+  const turniGruppi = turniRes.ok ? turniRes.gruppi : [];
+  const turniTotale = turniRes.ok ? turniRes.totale : 0;
+
   return (
     <div className="w-full space-y-6">
       {/* ===== Header ===== */}
@@ -342,6 +349,9 @@ export default async function KantierePanoramica() {
           hint="Ultimi 7 giorni"
         />
       </div>
+
+      {/* ===== Turni attivi (live) ===== */}
+      <TurniAttivi iniziale={turniGruppi} totaleIniziale={turniTotale} />
 
       {/* ===== Riga principale: Grafici ===== */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
