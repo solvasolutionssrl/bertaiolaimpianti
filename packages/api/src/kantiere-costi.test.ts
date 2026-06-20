@@ -7,10 +7,30 @@ import {
   calcolaPasqua,
   eFestivo,
   eWeekend,
+  giornoSettimanaISO,
+  risolviMaggiorazione,
+  calcolaCostoGiornataCond,
   type RegolaOre,
   type RegolaAmbito,
   type RigaCosto,
+  type RegolaCond,
 } from './kantiere-costi';
+
+function rc(p: Partial<RegolaCond> & Pick<RegolaCond, 'id' | 'maggiorazione_pct'>): RegolaCond {
+  return {
+    nome: p.nome ?? p.id,
+    attiva: p.attiva ?? true,
+    priorita: p.priorita ?? 100,
+    giorni_settimana: p.giorni_settimana ?? null,
+    ora_da: p.ora_da ?? null,
+    ora_a: p.ora_a ?? null,
+    festivo_match: p.festivo_match ?? 'qualsiasi',
+    applica_a: p.applica_a ?? 'tutte',
+    a_turni: p.a_turni ?? 'qualsiasi',
+    params: p.params ?? {},
+    ...p,
+  };
+}
 
 function regola(p: Partial<RegolaOre> & Pick<RegolaOre, 'id' | 'tipo'>): RegolaOre {
   return {
@@ -271,5 +291,64 @@ describe('eWeekend', () => {
   it('giorni feriali → false', () => {
     expect(eWeekend('2026-06-19')).toBe(false); // venerdì
     expect(eWeekend('2026-06-22')).toBe(false); // lunedì
+  });
+});
+
+describe('giornoSettimanaISO', () => {
+  it('lun=1 .. dom=7', () => {
+    expect(giornoSettimanaISO('2026-06-22')).toBe(1); // lunedì
+    expect(giornoSettimanaISO('2026-06-27')).toBe(6); // sabato
+    expect(giornoSettimanaISO('2026-06-28')).toBe(7); // domenica
+  });
+});
+
+describe('risolviMaggiorazione — regola più specifica vince (no somma)', () => {
+  const REGOLE: RegolaCond[] = [
+    rc({ id: 'str', applica_a: 'straordinario', maggiorazione_pct: 30, nome: 'Straordinario' }),
+    rc({ id: 'fest', festivo_match: 'solo_festivo', maggiorazione_pct: 50, nome: 'Festivo' }),
+    rc({ id: 'strfest', applica_a: 'straordinario', festivo_match: 'solo_festivo', maggiorazione_pct: 55, nome: 'Straord. festivo' }),
+    rc({ id: 'sab', giorni_settimana: [6], maggiorazione_pct: 50, nome: 'Sabato' }),
+  ];
+  it('straord in giorno festivo → straordinario festivo (55), non somma', () => {
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 3, festivo: true, aTurni: false, tier: 'straordinario' })?.pct).toBe(55);
+  });
+  it('straord in giorno feriale → straordinario (30)', () => {
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 3, festivo: false, aTurni: false, tier: 'straordinario' })?.pct).toBe(30);
+  });
+  it('ordinario di sabato → regola sabato (50)', () => {
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 6, festivo: false, aTurni: false, tier: 'ordinario' })?.pct).toBe(50);
+  });
+  it('ordinario feriale senza regole applicabili → null', () => {
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 2, festivo: false, aTurni: false, tier: 'ordinario' })).toBeNull();
+  });
+});
+
+describe('a turni: la regola seleziona la tariffa', () => {
+  const REGOLE: RegolaCond[] = [
+    rc({ id: 'n_no', ora_da: '22:00', ora_a: '06:00', a_turni: 'no', applica_a: 'straordinario', maggiorazione_pct: 50 }),
+    rc({ id: 'n_si', ora_da: '22:00', ora_a: '06:00', a_turni: 'si', applica_a: 'straordinario', maggiorazione_pct: 40 }),
+  ];
+  it('notturno solo se ctx.notturno=true; a turni sceglie 40 vs 50', () => {
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 1, festivo: false, aTurni: false, tier: 'straordinario', notturno: true })?.pct).toBe(50);
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 1, festivo: false, aTurni: true, tier: 'straordinario', notturno: true })?.pct).toBe(40);
+    expect(risolviMaggiorazione(REGOLE, { giornoSettimana: 1, festivo: false, aTurni: false, tier: 'straordinario', notturno: false })).toBeNull();
+  });
+});
+
+describe('calcolaCostoGiornataCond — split prime2/successive', () => {
+  const REGOLE: RegolaCond[] = [
+    rc({ id: 'p2', applica_a: 'straordinario', params: { tier: 'prime2' }, maggiorazione_pct: 25 }),
+    rc({ id: 'succ', applica_a: 'straordinario', params: { tier: 'successive' }, maggiorazione_pct: 30 }),
+  ];
+  it('8 ord + 3 straord → prime2 al 25%, 1 successiva al 30%', () => {
+    const r = calcolaCostoGiornataCond({
+      chiaveDipendente: 'd', chiaveCommessa: 'c',
+      ore_ordinarie: 8, ore_straordinarie: 3, ore_viaggio: 0,
+      giornoSettimana: 2, festivo: false, aTurni: false,
+      pctViaggio: 15, costoOrario: 10, regole: REGOLE,
+    });
+    // 8 + 2*1.25 + 1*1.30 = 11.8 ; costo = 118
+    expect(r.ore_pesate).toBe(11.8);
+    expect(r.costo_totale).toBe(118);
   });
 });

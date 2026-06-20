@@ -50,7 +50,8 @@ export function CostiTab({ aggregati, filtri }: Props) {
   const tot = aggregati.reduce(
     (acc, r) => ({
       ore_pesate: acc.ore_pesate + r.ore_pesate,
-      costo_totale: r.costo_totale == null ? acc.costo_totale : (acc.costo_totale ?? 0) + r.costo_totale,
+      costo_totale:
+        r.costo_totale == null ? acc.costo_totale : (acc.costo_totale ?? 0) + r.costo_totale,
     }),
     { ore_pesate: 0, costo_totale: null as number | null },
   );
@@ -61,8 +62,6 @@ export function CostiTab({ aggregati, filtri }: Props) {
       'Ore ordinarie',
       'Ore straordinario',
       'Ore viaggio',
-      'Ore weekend',
-      'Ore festivo',
       'Ore pesate',
       'Costo (€)',
     ];
@@ -72,8 +71,6 @@ export function CostiTab({ aggregati, filtri }: Props) {
         fmt(r.ore_ordinarie),
         fmt(r.ore_straordinarie),
         fmt(r.ore_viaggio),
-        fmt(r.ore_weekend),
-        fmt(r.ore_festivo),
         fmt(r.ore_pesate),
         r.costo_totale == null ? '' : fmt(r.costo_totale),
       ]
@@ -170,8 +167,6 @@ export function CostiTab({ aggregati, filtri }: Props) {
                 <th className="px-4 py-2 text-right font-medium">Ordinarie</th>
                 <th className="px-4 py-2 text-right font-medium">Straord.</th>
                 <th className="px-4 py-2 text-right font-medium">Viaggio</th>
-                <th className="px-4 py-2 text-right font-medium">Weekend</th>
-                <th className="px-4 py-2 text-right font-medium">Festivo</th>
                 <th className="px-4 py-2 text-right font-medium">Ore pesate</th>
                 <th className="px-4 py-2 text-right font-medium">Costo</th>
               </tr>
@@ -183,8 +178,6 @@ export function CostiTab({ aggregati, filtri }: Props) {
                   <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_ordinarie)}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_straordinarie)}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_viaggio)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_weekend)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_festivo)}</td>
                   <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(r.ore_pesate)}</td>
                   <td className="px-4 py-2 text-right tabular-nums font-medium">{fmtEuro(r.costo_totale)}</td>
                 </tr>
@@ -192,7 +185,7 @@ export function CostiTab({ aggregati, filtri }: Props) {
             </tbody>
             <tfoot className="border-t-2 border-border bg-muted/50">
               <tr>
-                <td className="px-4 py-2 font-semibold" colSpan={6}>
+                <td className="px-4 py-2 font-semibold" colSpan={4}>
                   Totale
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums font-semibold">{fmt(tot.ore_pesate)}</td>

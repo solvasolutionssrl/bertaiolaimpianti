@@ -1,11 +1,28 @@
 import Link from 'next/link';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { KpiCard, Button } from '@kommessa/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
-import { Users, QrCode, ClipboardList, Timer, Clock, HardHat } from 'lucide-react';
+import {
+  Users,
+  QrCode,
+  ClipboardList,
+  Timer,
+  Clock,
+  HardHat,
+  AlertTriangle,
+  ArrowUpRight,
+  Activity,
+  UserCheck,
+  CalendarDays,
+  MapPin,
+} from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
+
+/* ------------------------------------------------------------------ */
+/* Local types                                                          */
+/* ------------------------------------------------------------------ */
 
 type RapportinoInviatoRow = {
   id: string;
@@ -26,11 +43,32 @@ type RigaOreRow = {
   ore_viaggio: number;
 };
 
+type TimbraturaRow = {
+  dipendente_id: string;
+  cantiere_id: string | null;
+  tipo: string;
+  ts: string;
+};
+
+type CantiereRow = {
+  id: string;
+  nome: string;
+  codice: string | null;
+};
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                              */
+/* ------------------------------------------------------------------ */
+
 /** Inizio giornata odierna in Europe/Rome espresso come ISO UTC. */
 function inizioOggiRome(): string {
   const oggi = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
-  // Usa mezzanotte UTC del giorno Rome; approssimazione conservativa (±1h) accettabile per KPI.
   return `${oggi}T00:00:00.000Z`;
+}
+
+/** Data odierna YYYY-MM-DD in Europe/Rome. */
+function oggiRome(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 }
 
 /** Inizio di 7 giorni fa in formato YYYY-MM-DD (per rapportini). */
@@ -40,39 +78,44 @@ function settimanaDa(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
 }
 
+/* ------------------------------------------------------------------ */
+/* Page                                                                 */
+/* ------------------------------------------------------------------ */
+
 export default async function KantierePanoramica() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
 
-  // KPI 1: dipendenti attivi
+  // ===== KPI 1: dipendenti attivi =====
   const { count: dipendentiAttivi } = await supabase
     .from('dipendenti' as never)
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', ctx.tenantId)
     .eq('stato_attivo', true);
 
-  // KPI 2: QR attivi
+  // ===== KPI 2: QR attivi =====
   const { count: qrAttivi } = await supabase
     .from('cantiere_qr' as never)
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', ctx.tenantId)
     .eq('attivo', true);
 
-  // KPI 3: rapportini da approvare (stato = 'inviato')
+  // ===== KPI 3: rapportini da approvare =====
   const { count: daApprovare } = await supabase
     .from('rapportini' as never)
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', ctx.tenantId)
     .eq('stato', 'inviato');
 
-  // KPI 4: timbrature oggi
+  // ===== KPI 4: timbrature oggi =====
+  const inizioOggi = inizioOggiRome();
   const { count: timbratureOggi } = await supabase
     .from('timbrature' as never)
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', ctx.tenantId)
-    .gte('ts', inizioOggiRome());
+    .gte('ts', inizioOggi);
 
-  // KPI 5: ore settimana (somma in JS su righe degli ultimi 7 giorni)
+  // ===== KPI 5: ore settimana =====
   const da7gg = settimanaDa();
   const { data: rapportiniSettimana } = (await supabase
     .from('rapportini' as never)
@@ -93,6 +136,125 @@ export default async function KantierePanoramica() {
       oreSettimana += (r.ore_ordinarie ?? 0) + (r.ore_straordinarie ?? 0) + (r.ore_viaggio ?? 0);
     }
   }
+
+  const oreSettimanaDisplay = Number.isFinite(oreSettimana)
+    ? oreSettimana % 1 === 0
+      ? String(oreSettimana)
+      : oreSettimana.toFixed(1)
+    : '0';
+
+  // ===== Anomalie aperte (conteggio sintetico) =====
+  const { count: anomalieAperte } = await supabase
+    .from('timbrature' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', ctx.tenantId)
+    .eq('tipo', 'ingresso')
+    // timbrature senza uscita nella stessa giornata di ieri o precedente
+    // (come proxy anomalie: ingresso senza corrispondente uscita prima di oggi)
+    .lt('ts', inizioOggi)
+    .gte('ts', `${da7gg}T00:00:00.000Z`);
+
+  // ===== Timbrature di oggi per analisi presenze =====
+  const { data: timbOggiRaw } = (await supabase
+    .from('timbrature' as never)
+    .select('dipendente_id, cantiere_id, tipo, ts')
+    .eq('tenant_id', ctx.tenantId)
+    .gte('ts', inizioOggi)
+    .order('ts', { ascending: true })
+    .limit(1000)) as { data: TimbraturaRow[] | null };
+
+  const timbOggi = timbOggiRaw ?? [];
+
+  // Calcola persone attualmente "in cantiere" (ingresso senza uscita oggi)
+  const ingressiOggi = new Set(
+    timbOggi.filter((t) => t.tipo === 'ingresso').map((t) => t.dipendente_id),
+  );
+  const usciteOggi = new Set(
+    timbOggi.filter((t) => t.tipo === 'uscita').map((t) => t.dipendente_id),
+  );
+  const inCantiereOra: string[] = [];
+  for (const dipId of ingressiOggi) {
+    if (!usciteOggi.has(dipId)) inCantiereOra.push(dipId);
+  }
+  const inCantiereOraCount = inCantiereOra.length;
+
+  // Presenze per cantiere oggi (dipendenti unici per cantiere)
+  const presenzaPerCantiere = new Map<string, Set<string>>();
+  for (const t of timbOggi) {
+    if (t.tipo !== 'ingresso') continue;
+    const cId = t.cantiere_id ?? '__nessuno__';
+    const existing = presenzaPerCantiere.get(cId);
+    if (existing) {
+      existing.add(t.dipendente_id);
+    } else {
+      presenzaPerCantiere.set(cId, new Set([t.dipendente_id]));
+    }
+  }
+
+  // Carica nomi cantieri coinvolti oggi
+  const cantiereIdsOggi = [...presenzaPerCantiere.keys()].filter((k) => k !== '__nessuno__');
+  const cantiereNomiMap = new Map<string, string>();
+  if (cantiereIdsOggi.length > 0) {
+    const { data: cRows } = (await supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .in('id', cantiereIdsOggi)) as { data: CantiereRow[] | null };
+    for (const c of cRows ?? []) {
+      cantiereNomiMap.set(c.id, c.nome || c.codice || c.id);
+    }
+  }
+
+  // Distribuzione presenze per cantiere oggi (top 6)
+  const presenzaCantiereList: { nome: string; count: number }[] = [];
+  for (const [cId, dipSet] of presenzaPerCantiere) {
+    const nome =
+      cId === '__nessuno__' ? 'Non specificato' : (cantiereNomiMap.get(cId) ?? cId);
+    presenzaCantiereList.push({ nome, count: dipSet.size });
+  }
+  presenzaCantiereList.sort((a, b) => b.count - a.count);
+  const topCantieri = presenzaCantiereList.slice(0, 6);
+
+  // Presenze per giorno ultimi 7 giorni (per grafico trend)
+  const { data: rapportiniUltimi7 } = (await supabase
+    .from('rapportini' as never)
+    .select('dipendente_id, data')
+    .eq('tenant_id', ctx.tenantId)
+    .gte('data', da7gg)
+    .lte('data', oggiRome())
+    .in('stato', ['inviato', 'approvato'])
+    .limit(2000)) as { data: { dipendente_id: string; data: string }[] | null };
+
+  // Dipendenti unici per giorno (presenti = hanno rapportino)
+  const presenzePerGiorno = new Map<string, Set<string>>();
+  for (const r of rapportiniUltimi7 ?? []) {
+    const existing = presenzePerGiorno.get(r.data);
+    if (existing) {
+      existing.add(r.dipendente_id);
+    } else {
+      presenzePerGiorno.set(r.data, new Set([r.dipendente_id]));
+    }
+  }
+
+  // Genera array 7 giorni
+  const trend7gg: { giorno: string; etichetta: string; count: number }[] = [];
+  const oggi = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(oggi);
+    d.setDate(d.getDate() - i);
+    const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(d);
+    const label = new Intl.DateTimeFormat('it-IT', {
+      timeZone: 'Europe/Rome',
+      weekday: 'short',
+      day: 'numeric',
+    }).format(d);
+    trend7gg.push({
+      giorno: iso,
+      etichetta: label,
+      count: presenzePerGiorno.get(iso)?.size ?? 0,
+    });
+  }
+
+  const maxTrend = Math.max(...trend7gg.map((g) => g.count), 1);
 
   // Ultimi 5 rapportini inviati con nome dipendente
   const { data: ultimiRaw } = (await supabase
@@ -116,115 +278,366 @@ export default async function KantierePanoramica() {
     }
   }
 
-  const oreSettimanaDisplay = Number.isFinite(oreSettimana)
-    ? oreSettimana % 1 === 0
-      ? String(oreSettimana)
-      : oreSettimana.toFixed(1)
-    : '0';
+  const maxPresenzaCantiere = Math.max(...topCantieri.map((c) => c.count), 1);
 
   return (
     <div className="w-full space-y-6">
-      {/* Header */}
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Kantiere — Panoramica</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Riepilogo operativo del modulo presenze e cantieri.
-        </p>
+      {/* ===== Header ===== */}
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Kantiere</h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Riepilogo operativo presenze, cantieri e rapportini.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/office/kantiere/qr">
+              <QrCode className="h-3.5 w-3.5" />
+              QR code
+            </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/office/kantiere/rapportini">
+              <ClipboardList className="h-3.5 w-3.5" />
+              Rapportini
+            </Link>
+          </Button>
+        </div>
       </header>
 
-      {/* KPI grid */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <KpiCard
+      {/* ===== KPI grid — stile compatto ===== */}
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
+        <KpiMini
           label="Dipendenti attivi"
           value={dipendentiAttivi ?? 0}
           icon={<Users />}
+          tone="default"
         />
-        <KpiCard
-          label="QR attivi"
-          value={qrAttivi ?? 0}
-          icon={<QrCode />}
+        <KpiMini
+          label="Attualmente in cantiere"
+          value={inCantiereOraCount}
+          icon={<UserCheck />}
+          tone={inCantiereOraCount > 0 ? 'success' : 'default'}
+          hint="Ingresso senza uscita oggi"
         />
-        <KpiCard
-          label="Da approvare"
-          value={daApprovare ?? 0}
-          tone={(daApprovare ?? 0) > 0 ? 'warning' : 'default'}
-          hint="Rapportini in stato 'inviato'"
-          icon={<ClipboardList />}
-        />
-        <KpiCard
+        <KpiMini
           label="Timbrature oggi"
           value={timbratureOggi ?? 0}
           icon={<Timer />}
+          tone="default"
         />
-        <KpiCard
+        <KpiMini
+          label="Da approvare"
+          value={daApprovare ?? 0}
+          icon={<ClipboardList />}
+          tone={(daApprovare ?? 0) > 0 ? 'warning' : 'default'}
+          hint="Rapportini in attesa"
+        />
+        <KpiMini
           label="Ore settimana"
           value={oreSettimanaDisplay}
-          hint="Ultimi 7 giorni (inviato + approvato)"
           icon={<Clock />}
+          tone="default"
+          hint="Ultimi 7 giorni"
         />
       </div>
 
-      {/* Accessi rapidi */}
+      {/* ===== Riga principale: Grafici ===== */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Grafico 1: Presenze per cantiere oggi */}
+        <Card className="border border-border bg-card shadow-soft">
+          <CardHeader className="pb-1 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  Oggi
+                </p>
+                <CardTitle className="mt-0.5 text-base font-semibold">
+                  Presenze per cantiere
+                </CardTitle>
+              </div>
+              <span
+                aria-hidden
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary [&_svg]:h-4 [&_svg]:w-4"
+              >
+                <MapPin />
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4 pt-3">
+            {topCantieri.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Nessuna timbratura registrata oggi.
+              </p>
+            ) : (
+              <div className="space-y-2.5">
+                {topCantieri.map((c) => {
+                  const pct = Math.max(4, Math.round((c.count / maxPresenzaCantiere) * 100));
+                  return (
+                    <div key={c.nome} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium">{c.nome}</span>
+                        <span className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
+                          {c.count} pers.
+                        </span>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-primary transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Grafico 2: Trend presenze ultimi 7 giorni */}
+        <Card className="border border-border bg-card shadow-soft">
+          <CardHeader className="pb-1 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  Ultimi 7 giorni
+                </p>
+                <CardTitle className="mt-0.5 text-base font-semibold">
+                  Dipendenti con rapportino
+                </CardTitle>
+              </div>
+              <span
+                aria-hidden
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary [&_svg]:h-4 [&_svg]:w-4"
+              >
+                <CalendarDays />
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4 pt-3">
+            <div className="flex h-28 items-end gap-1.5">
+              {trend7gg.map((g) => {
+                const pct = Math.max(4, Math.round((g.count / maxTrend) * 100));
+                const isOggi = g.giorno === oggiRome();
+                return (
+                  <div
+                    key={g.giorno}
+                    className="group flex flex-1 flex-col items-center gap-1"
+                    title={`${g.etichetta}: ${g.count} dip.`}
+                  >
+                    <span className="text-[10px] font-mono tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+                      {g.count}
+                    </span>
+                    <div className="w-full overflow-hidden rounded-t-sm bg-muted" style={{ height: '88px' }}>
+                      <div
+                        className={`w-full rounded-t-sm transition-all ${isOggi ? 'bg-primary' : 'bg-primary/40'}`}
+                        style={{
+                          height: `${pct}%`,
+                          marginTop: `${100 - pct}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-1.5 flex gap-1.5">
+              {trend7gg.map((g) => {
+                const isOggi = g.giorno === oggiRome();
+                return (
+                  <div key={g.giorno} className="flex flex-1 justify-center">
+                    <span
+                      className={`truncate text-center text-[9px] uppercase tracking-wide ${isOggi ? 'font-semibold text-primary' : 'text-muted-foreground'}`}
+                    >
+                      {g.etichetta.split(' ')[0]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ===== Riga secondaria: Anomalie + Rapportini da approvare ===== */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Pannello Anomalie — tinta amber */}
+        <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-5 shadow-soft dark:border-amber-900/40 dark:bg-amber-950/20">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 [&_svg]:h-4 [&_svg]:w-4"
+              >
+                <AlertTriangle />
+              </span>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700 dark:text-amber-400">
+                  Attenzione
+                </p>
+                <h2 className="mt-0.5 text-base font-semibold text-foreground">Anomalie</h2>
+              </div>
+            </div>
+            {(anomalieAperte ?? 0) > 0 && (
+              <span className="rounded-full bg-amber-500 px-2.5 py-0.5 font-mono text-xs font-semibold text-white">
+                {anomalieAperte}
+              </span>
+            )}
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Timbrature incomplete, straordinari e presenze anomale negli ultimi 14 giorni.
+          </p>
+          <div className="mt-4">
+            <Button asChild variant="outline" size="sm" className="border-amber-300 bg-white hover:border-amber-400 hover:bg-amber-50 dark:bg-transparent">
+              <Link href="/office/kantiere/anomalie">
+                Vedi tutte le anomalie
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Ultimi rapportini da approvare */}
+        <div className="lg:col-span-2">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="inline-flex h-5 w-5 items-center justify-center rounded text-primary [&_svg]:h-3.5 [&_svg]:w-3.5"
+              >
+                <Activity />
+              </span>
+              <h2 className="text-sm font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                Rapportini da approvare
+              </h2>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/office/kantiere/rapportini">
+                Vedi tutti
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          </div>
+
+          {ultimi.length === 0 ? (
+            <div className="rounded-lg border border-border bg-card px-4 py-8 text-center shadow-soft">
+              <p className="text-sm text-muted-foreground">Nessun rapportino in attesa di approvazione.</p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card shadow-soft">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <th className="px-4 py-2.5">Dipendente</th>
+                    <th className="px-4 py-2.5">Data</th>
+                    <th className="px-4 py-2.5 text-right">Azione</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ultimi.map((r, i) => (
+                    <tr
+                      key={r.id}
+                      className={`transition-colors hover:bg-muted/30 ${i < ultimi.length - 1 ? 'border-b border-border' : ''}`}
+                    >
+                      <td className="px-4 py-2.5 font-medium">
+                        {dipNomiMap.get(r.dipendente_id) ?? r.dipendente_id}
+                      </td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{fmtData(r.data)}</td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button asChild variant="ghost" size="sm">
+                          <Link href="/office/kantiere/rapportini">Vedi</Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ===== Accessi rapidi ===== */}
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-widest text-muted-foreground">
-          Accessi rapidi
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/office/kantiere/qr">QR code</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/office/kantiere/cantieri">Cantieri</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/office/kantiere/rapportini">Rapportini</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/office/kantiere/dipendenti">Dipendenti</Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/office/kantiere/report">Report ore</Link>
-          </Button>
+        <div className="mb-3 flex items-center gap-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Sezioni
+          </p>
+          <div aria-hidden className="h-px flex-1 bg-gradient-to-r from-border via-border to-transparent" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            { href: '/office/kantiere/cantieri', label: 'Cantieri', Icon: HardHat },
+            { href: '/office/kantiere/qr', label: 'QR code', Icon: QrCode },
+            { href: '/office/kantiere/rapportini', label: 'Rapportini', Icon: ClipboardList },
+            { href: '/office/kantiere/dipendenti', label: 'Dipendenti', Icon: Users },
+            { href: '/office/kantiere/report', label: 'Report ore', Icon: Clock },
+            { href: '/office/kantiere/anomalie', label: 'Anomalie', Icon: AlertTriangle },
+          ].map(({ href, label, Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card px-3 py-4 text-center shadow-soft transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-soft-md"
+            >
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground [&_svg]:h-4 [&_svg]:w-4">
+                <Icon />
+              </span>
+              <span className="text-xs font-medium text-foreground">{label}</span>
+            </Link>
+          ))}
         </div>
       </section>
+    </div>
+  );
+}
 
-      {/* Ultimi rapportini inviati */}
-      {ultimi.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-widest text-muted-foreground">
-            Ultimi rapportini da approvare
-          </h2>
-          <div className="rounded-lg border border-border bg-card">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-2">Dipendente</th>
-                  <th className="px-4 py-2">Data</th>
-                  <th className="px-4 py-2 text-right">Azione</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ultimi.map((r, i) => (
-                  <tr
-                    key={r.id}
-                    className={i < ultimi.length - 1 ? 'border-b border-border' : undefined}
-                  >
-                    <td className="px-4 py-2 font-medium">
-                      {dipNomiMap.get(r.dipendente_id) ?? r.dipendente_id}
-                    </td>
-                    <td className="px-4 py-2 text-muted-foreground">{fmtData(r.data)}</td>
-                    <td className="px-4 py-2 text-right">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href="/office/kantiere/rapportini">Vedi</Link>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+/* ------------------------------------------------------------------ */
+/* KpiMini — identico alla dashboard commessa                          */
+/* ------------------------------------------------------------------ */
+
+const KPI_TONE = {
+  default: { bar: 'bg-primary', icon: 'bg-primary-soft text-primary', value: 'text-foreground' },
+  warning: { bar: 'bg-accent', icon: 'bg-accent-soft text-accent-soft-foreground', value: 'text-foreground' },
+  success: { bar: 'bg-success', icon: 'bg-success/10 text-success', value: 'text-foreground' },
+  critical: { bar: 'bg-destructive', icon: 'bg-destructive/10 text-destructive', value: 'text-destructive' },
+} as const;
+
+type KpiTone = keyof typeof KPI_TONE;
+
+function KpiMini({
+  label,
+  value,
+  icon,
+  hint,
+  tone = 'default',
+}: {
+  label: string;
+  value: React.ReactNode;
+  icon: React.ReactNode;
+  hint?: string;
+  tone?: KpiTone;
+}) {
+  const t = KPI_TONE[tone];
+  return (
+    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft">
+      <span aria-hidden className={`absolute inset-y-2 left-0 w-[2px] rounded-full ${t.bar}`} />
+      <span
+        aria-hidden
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md [&_svg]:h-4 [&_svg]:w-4 ${t.icon}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className={`font-mono text-2xl font-medium leading-none tabular-nums ${t.value}`}>
+          {value}
+        </p>
+        <p className="mt-1 truncate text-[11px] uppercase tracking-wide text-muted-foreground">
+          {label}
+          {hint ? <span className="normal-case tracking-normal"> · {hint}</span> : null}
+        </p>
+      </div>
     </div>
   );
 }

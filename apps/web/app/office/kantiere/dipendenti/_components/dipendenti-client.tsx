@@ -2,7 +2,19 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Plus, Pencil, Trash2, Search, X, Users, UserCheck, Monitor, HardHat } from 'lucide-react';
+import {
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  Search,
+  X,
+  Users,
+  UserCheck,
+  Monitor,
+  HardHat,
+  Clock,
+} from 'lucide-react';
 import {
   Badge,
   Button,
@@ -39,7 +51,10 @@ interface FormState {
   codice_interno: string;
   user_id: string;
   stato_attivo: boolean;
+  a_turni: boolean;
   note: string;
+  /** user_id originale al momento dell'apertura del dialog (per rilevare cambio) */
+  _originalUserId?: string | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -49,7 +64,9 @@ const EMPTY_FORM: FormState = {
   codice_interno: '',
   user_id: '',
   stato_attivo: true,
+  a_turni: false,
   note: '',
+  _originalUserId: null,
 };
 
 function formFromRow(d: DipendenteRow): FormState {
@@ -61,8 +78,27 @@ function formFromRow(d: DipendenteRow): FormState {
     codice_interno: d.codice_interno ?? '',
     user_id: d.user_id ?? '',
     stato_attivo: d.stato_attivo,
+    a_turni: d.a_turni,
     note: d.note ?? '',
+    _originalUserId: d.user_id,
   };
+}
+
+/**
+ * Calcola il defaultUserId da pre-selezionare: trova l'utente il cui
+ * display_name corrisponde esattamente (case-insensitive, trim) a "Nome Cognome"
+ * del dipendente. Se non c'e corrispondenza, ritorna null.
+ */
+function autoMatchUserId(
+  nome: string,
+  cognome: string,
+  utenti: UtenteRow[],
+): string | null {
+  const target = `${nome.trim()} ${cognome.trim()}`.toLowerCase();
+  const match = utenti.find(
+    (u) => (u.display_name ?? '').trim().toLowerCase() === target,
+  );
+  return match?.id ?? null;
 }
 
 /** Ruolo utente normalizzato per i filtri */
@@ -103,7 +139,6 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
   const totale = dipendenti.length;
   const conLogin = dipendenti.filter((d) => !!d.user_id).length;
   const conRuoloOffice = dipendenti.filter((d) => categoriaRuolo(d.user_id, utenti) === 'office').length;
-  const tecnici = dipendenti.filter((d) => categoriaRuolo(d.user_id, utenti) === 'tecnico').length;
   const attivi = dipendenti.filter((d) => d.stato_attivo).length;
 
   // Applicazione filtri
@@ -126,7 +161,17 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
   }
 
   function openEdit(d: DipendenteRow) {
-    setForm(formFromRow(d));
+    const base = formFromRow(d);
+    // Auto-match: se il dipendente non ha ancora un account collegato,
+    // pre-seleziona quello il cui nome corrisponde.
+    if (!d.user_id) {
+      const matched = autoMatchUserId(d.nome, d.cognome, utenti);
+      if (matched) {
+        base.user_id = matched;
+        // _originalUserId resta null: nessun account precedente, nessuna conferma
+      }
+    }
+    setForm(base);
     setOpen(true);
   }
 
@@ -143,8 +188,29 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Conferma cambio account: richiesta solo se il dipendente aveva GIA un account
+    // e l'ufficio lo sta cambiando (o rimuovendo).
+    const newUserId = form.user_id || null;
+    const origUserId = form._originalUserId ?? null;
+    if (
+      form.id && // modifica, non creazione
+      origUserId && // aveva gia un account
+      newUserId !== origUserId // lo sta cambiando
+    ) {
+      const nomeDip = `${form.nome} ${form.cognome}`;
+      const ok = await confirm({
+        title: `Cambiare account per ${nomeDip}?`,
+        description: newUserId
+          ? "L'account attualmente collegato verra sostituito con quello selezionato."
+          : "Il dipendente perdera l'accesso all'app.",
+        confirmLabel: 'Conferma',
+      });
+      if (!ok) return;
+    }
+
     start(async () => {
       const payload = {
         ...(form.id ? { id: form.id } : {}),
@@ -154,6 +220,7 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
         codice_interno: form.codice_interno || null,
         user_id: form.user_id || null,
         stato_attivo: form.stato_attivo,
+        a_turni: form.a_turni,
         note: form.note || null,
       };
       const res = form.id
@@ -305,6 +372,7 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                     <th className="px-4 py-3 font-medium">Codice</th>
                     <th className="px-4 py-3 font-medium">Accesso</th>
                     <th className="px-4 py-3 font-medium">Ruolo</th>
+                    <th className="px-4 py-3 font-medium">Turni</th>
                     <th className="px-4 py-3 font-medium">Stato</th>
                     <th className="w-20 px-4 py-3" aria-label="Azioni" />
                   </tr>
@@ -332,9 +400,24 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                           <Badge variant={d.user_id ? 'default' : 'outline'}>
                             {etichettaAccesso({ user_id: d.user_id })}
                           </Badge>
+                          {utente && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {utente.display_name ?? ''}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
                           {utente ? etichettaRuolo(utente.role) : 'n.d.'}
+                        </td>
+                        <td className="px-4 py-3">
+                          {d.a_turni ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                              <Clock className="h-3 w-3" aria-hidden="true" />
+                              Turni
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">No</span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span
@@ -461,6 +544,16 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                   </option>
                 ))}
               </select>
+              {form._originalUserId && form.user_id && form.user_id !== form._originalUserId && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Stai sostituendo l&apos;account collegato. Verra chiesta conferma.
+                </p>
+              )}
+              {form._originalUserId && !form.user_id && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Stai rimuovendo l&apos;account collegato. Verra chiesta conferma.
+                </p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -476,18 +569,34 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                id="stato_attivo"
-                name="stato_attivo"
-                type="checkbox"
-                checked={form.stato_attivo}
-                onChange={handleChange}
-                className="h-4 w-4 rounded border-border accent-primary"
-              />
-              <Label htmlFor="stato_attivo" className="cursor-pointer select-none">
-                Dipendente attivo
-              </Label>
+            <div className="flex flex-col gap-2.5 rounded-md border border-border bg-muted/30 p-3">
+              <div className="flex items-center gap-2">
+                <input
+                  id="stato_attivo"
+                  name="stato_attivo"
+                  type="checkbox"
+                  checked={form.stato_attivo}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <Label htmlFor="stato_attivo" className="cursor-pointer select-none">
+                  Dipendente attivo
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="a_turni"
+                  name="a_turni"
+                  type="checkbox"
+                  checked={form.a_turni}
+                  onChange={handleChange}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                <Label htmlFor="a_turni" className="cursor-pointer select-none">
+                  Lavoro a turni
+                </Label>
+                <span className="text-xs text-muted-foreground">(influisce sul calcolo delle maggiorazioni)</span>
+              </div>
             </div>
 
             <DialogFooter className="gap-2 pt-2">

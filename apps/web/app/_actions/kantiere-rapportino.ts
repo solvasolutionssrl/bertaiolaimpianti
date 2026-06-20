@@ -753,7 +753,18 @@ export async function registraOreManuali(
     if (insRigaErr) return { ok: false, error: insRigaErr.message };
   }
 
-  // Tratte di viaggio manuali (senza timbratura, con cantiere+data)
+  // Tratte di viaggio manuali (senza timbratura, con cantiere+data).
+  // Ripulisci prima le manuali precedenti per (dipendente, cantiere, data) così
+  // un risalvataggio non accumula duplicati.
+  await supabase
+    .from('timbratura_viaggio' as never)
+    .delete()
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .eq('cantiere_id', cantiereId)
+    .eq('data', data)
+    .is('timbratura_id', null);
+
   for (const v of viaggi) {
     if (v.minuti <= 0) continue;
     await supabase.from('timbratura_viaggio' as never).insert({

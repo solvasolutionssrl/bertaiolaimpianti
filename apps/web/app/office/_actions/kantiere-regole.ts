@@ -54,6 +54,16 @@ async function regolaDelTenant(
 
 // ── creaRegola ─────────────────────────────────────────────────────────────
 
+const ORARIO_RE = /^\d{2}:\d{2}(:\d{2})?$/;
+const CondFields = {
+  giorni_settimana: z.array(z.number().int().min(1).max(7)).nullable().optional(),
+  ora_da: z.string().regex(ORARIO_RE).nullable().optional(),
+  ora_a: z.string().regex(ORARIO_RE).nullable().optional(),
+  festivo_match: z.enum(['qualsiasi', 'solo_festivo', 'solo_feriale']).optional(),
+  applica_a: z.enum(['tutte', 'ordinario', 'straordinario']).optional(),
+  a_turni: z.enum(['qualsiasi', 'si', 'no']).optional(),
+};
+
 const CreaSchema = z.object({
   nome: z.string().trim().min(1).max(120),
   tipo: z.enum(TIPI_REGOLA),
@@ -61,6 +71,7 @@ const CreaSchema = z.object({
   params: z.record(z.unknown()).optional(),
   maggiorazione_pct: z.number().min(-100).max(1000),
   priorita: z.number().int().min(0).max(10000).optional(),
+  ...CondFields,
 });
 
 export async function creaRegola(input: unknown): Promise<CreaResult> {
@@ -81,6 +92,12 @@ export async function creaRegola(input: unknown): Promise<CreaResult> {
       params: parsed.data.params ?? {},
       maggiorazione_pct: parsed.data.maggiorazione_pct,
       priorita: parsed.data.priorita ?? 100,
+      giorni_settimana: parsed.data.giorni_settimana ?? null,
+      ora_da: parsed.data.ora_da ?? null,
+      ora_a: parsed.data.ora_a ?? null,
+      festivo_match: parsed.data.festivo_match ?? 'qualsiasi',
+      applica_a: parsed.data.applica_a ?? 'tutte',
+      a_turni: parsed.data.a_turni ?? 'qualsiasi',
     } as never)
     .select('id')
     .single();
@@ -99,6 +116,7 @@ const AggiornaSchema = z.object({
   params: z.record(z.unknown()).optional(),
   maggiorazione_pct: z.number().min(-100).max(1000).optional(),
   priorita: z.number().int().min(0).max(10000).optional(),
+  ...CondFields,
 });
 
 export async function aggiornaRegola(input: unknown): Promise<OkResult> {
@@ -119,6 +137,12 @@ export async function aggiornaRegola(input: unknown): Promise<OkResult> {
   if (parsed.data.params !== undefined) patch.params = parsed.data.params;
   if (parsed.data.maggiorazione_pct !== undefined) patch.maggiorazione_pct = parsed.data.maggiorazione_pct;
   if (parsed.data.priorita !== undefined) patch.priorita = parsed.data.priorita;
+  if (parsed.data.giorni_settimana !== undefined) patch.giorni_settimana = parsed.data.giorni_settimana;
+  if (parsed.data.ora_da !== undefined) patch.ora_da = parsed.data.ora_da;
+  if (parsed.data.ora_a !== undefined) patch.ora_a = parsed.data.ora_a;
+  if (parsed.data.festivo_match !== undefined) patch.festivo_match = parsed.data.festivo_match;
+  if (parsed.data.applica_a !== undefined) patch.applica_a = parsed.data.applica_a;
+  if (parsed.data.a_turni !== undefined) patch.a_turni = parsed.data.a_turni;
 
   if (Object.keys(patch).length === 0) return { ok: true };
 
@@ -217,19 +241,42 @@ export async function impostaAmbiti(input: unknown): Promise<OkResult> {
 
 // ── assicuraRegoleDefault (idempotente) ───────────────────────────────────────
 
-const REGOLE_DEFAULT: {
+type RegolaDefault = {
   nome: string;
   tipo: (typeof TIPI_REGOLA)[number];
   maggiorazione_pct: number;
   priorita: number;
   params: Record<string, unknown>;
-}[] = [
-  { nome: 'Soglia ordinario giornaliero', tipo: 'soglia_giornaliera', maggiorazione_pct: 0, priorita: 100, params: { soglia_ore: 8 } },
-  { nome: 'Maggiorazione straordinario', tipo: 'maggiorazione_straordinario', maggiorazione_pct: 25, priorita: 100, params: {} },
-  { nome: 'Maggiorazione viaggio', tipo: 'maggiorazione_viaggio', maggiorazione_pct: 15, priorita: 100, params: {} },
-  { nome: 'Notturno', tipo: 'notturno', maggiorazione_pct: 30, priorita: 100, params: { inizio: '22:00', fine: '06:00' } },
-  { nome: 'Festivo', tipo: 'festivo', maggiorazione_pct: 50, priorita: 100, params: {} },
-  { nome: 'Weekend', tipo: 'weekend', maggiorazione_pct: 50, priorita: 100, params: {} },
+  giorni_settimana: number[] | null;
+  ora_da: string | null;
+  ora_a: string | null;
+  festivo_match: 'qualsiasi' | 'solo_festivo' | 'solo_feriale';
+  applica_a: 'tutte' | 'ordinario' | 'straordinario';
+  a_turni: 'qualsiasi' | 'si' | 'no';
+};
+
+function rdef(p: Partial<RegolaDefault> & Pick<RegolaDefault, 'nome' | 'tipo' | 'maggiorazione_pct'>): RegolaDefault {
+  return {
+    priorita: 100,
+    params: {},
+    giorni_settimana: null,
+    ora_da: null,
+    ora_a: null,
+    festivo_match: 'qualsiasi',
+    applica_a: 'tutte',
+    a_turni: 'qualsiasi',
+    ...p,
+  };
+}
+
+// Default per i NUOVI tenant (set coerente col motore a condizioni). FPM è già
+// popolato con la tabella CCNL completa via seed dedicato.
+const REGOLE_DEFAULT: RegolaDefault[] = [
+  rdef({ nome: 'Straordinario prime 2 ore', tipo: 'maggiorazione_straordinario', maggiorazione_pct: 25, applica_a: 'straordinario', params: { tier: 'prime2' } }),
+  rdef({ nome: 'Straordinario ore successive', tipo: 'maggiorazione_straordinario', maggiorazione_pct: 30, applica_a: 'straordinario', params: { tier: 'successive' } }),
+  rdef({ nome: 'Festivo', tipo: 'festivo', maggiorazione_pct: 50, festivo_match: 'solo_festivo' }),
+  rdef({ nome: 'Sabato', tipo: 'festivo', maggiorazione_pct: 50, giorni_settimana: [6] }),
+  rdef({ nome: 'Maggiorazione viaggio', tipo: 'maggiorazione_viaggio', maggiorazione_pct: 15 }),
 ];
 
 /**
@@ -258,6 +305,12 @@ export async function assicuraRegoleDefault(): Promise<OkResult> {
     params: r.params,
     maggiorazione_pct: r.maggiorazione_pct,
     priorita: r.priorita,
+    giorni_settimana: r.giorni_settimana,
+    ora_da: r.ora_da,
+    ora_a: r.ora_a,
+    festivo_match: r.festivo_match,
+    applica_a: r.applica_a,
+    a_turni: r.a_turni,
   }));
 
   const { error } = await supabase

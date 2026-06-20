@@ -413,21 +413,32 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
 
   // ----------------------------------------------------------------
   // Risolvi D) modificato dopo invio
+  // Si basa sulle versioni con azione 'modifica_tecnico' (modifica del
+  // tecnico dopo l'invio), NON su updated_at (che viene bumpato anche dalle
+  // azioni d'ufficio approva/respingi → falsi positivi).
   // ----------------------------------------------------------------
-  const modificati: ModificatoDopoInvioRow[] = attivi.modificato
-    ? rapportini
-        .filter(
-          (r) =>
-            r.inviato_at !== null &&
-            r.updated_at !== null &&
-            new Date(r.updated_at) > new Date(r.inviato_at),
-        )
-        .map((r) => ({
-          dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
-          data: r.data,
-          stato: r.stato,
-        }))
-    : [];
+  let modificati: ModificatoDopoInvioRow[] = [];
+  if (attivi.modificato && rapportini.length > 0) {
+    const { data: vmodRaw } = await supabase
+      .from('rapportino_versioni' as never)
+      .select('rapportino_id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('azione', 'modifica_tecnico')
+      .in(
+        'rapportino_id',
+        rapportini.map((r) => r.id),
+      );
+    const modIds = new Set(
+      ((vmodRaw as { rapportino_id: string }[] | null) ?? []).map((v) => v.rapportino_id),
+    );
+    modificati = rapportini
+      .filter((r) => modIds.has(r.id))
+      .map((r) => ({
+        dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
+        data: r.data,
+        stato: r.stato,
+      }));
+  }
 
   // ----------------------------------------------------------------
   // Risolvi E) festivo

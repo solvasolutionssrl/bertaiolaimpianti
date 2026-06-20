@@ -14,6 +14,7 @@ export interface DipendenteRow {
   codice_interno: string | null;
   user_id: string | null;
   stato_attivo: boolean;
+  a_turni: boolean;
   note: string | null;
 }
 
@@ -29,7 +30,7 @@ export default async function DipendentiPage() {
   const supabase = createServerSupabase();
   const { data: dipendenti } = await supabase
     .from('dipendenti' as never)
-    .select('id, nome, cognome, mansione, codice_interno, user_id, stato_attivo, note')
+    .select('id, nome, cognome, mansione, codice_interno, user_id, stato_attivo, a_turni, note')
     .order('cognome');
   const { data: utenti } = await supabase
     .from('users')
