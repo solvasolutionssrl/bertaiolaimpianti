@@ -18,6 +18,11 @@ const MANAGE_ROLES = new Set<AppRole>(['admin', 'office']);
 
 type OkResult = { ok: true } | { ok: false; error: string };
 
+export type TipoMezzo = 'autocarro' | 'autovettura' | 'altro';
+export const TIPI_MEZZO: TipoMezzo[] = ['autocarro', 'autovettura', 'altro'];
+
+const TipoMezzoEnum = z.enum(['autocarro', 'autovettura', 'altro']);
+
 async function guard() {
   const ctx = await requireTenantContext();
   if (!MANAGE_ROLES.has(ctx.role)) throw new Error('Solo admin/office possono gestire i mezzi');
@@ -28,6 +33,7 @@ async function guard() {
 // ── creaMezzo ──────────────────────────────────────────────────────────────
 
 const CreaMezzoSchema = z.object({
+  tipo: TipoMezzoEnum.default('autocarro'),
   targa: z.string().trim().min(1, 'La targa e\' obbligatoria').max(20),
   modello: z.string().trim().max(120).optional(),
   note: z.string().trim().max(500).optional(),
@@ -45,6 +51,7 @@ export async function creaMezzo(input: unknown): Promise<OkResult> {
     .from('mezzi' as never)
     .insert({
       tenant_id: ctx.tenantId,
+      tipo: parsed.data.tipo,
       targa: parsed.data.targa.toUpperCase(),
       modello: parsed.data.modello ?? null,
       attivo: true,
@@ -60,6 +67,7 @@ export async function creaMezzo(input: unknown): Promise<OkResult> {
 
 const AggiornaMezzoSchema = z.object({
   id: z.string().uuid(),
+  tipo: TipoMezzoEnum.default('autocarro'),
   targa: z.string().trim().min(1, 'La targa e\' obbligatoria').max(20),
   modello: z.string().trim().max(120).optional(),
   attivo: z.boolean(),
@@ -77,6 +85,7 @@ export async function aggiornaMezzo(input: unknown): Promise<OkResult> {
   const { error } = await supabase
     .from('mezzi' as never)
     .update({
+      tipo: parsed.data.tipo,
       targa: parsed.data.targa.toUpperCase(),
       modello: parsed.data.modello ?? null,
       attivo: parsed.data.attivo,

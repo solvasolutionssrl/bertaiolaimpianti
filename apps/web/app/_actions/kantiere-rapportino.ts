@@ -11,6 +11,11 @@ import {
 } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
+import { scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
+
+// Stati in cui il tecnico può ancora modificare il proprio rapportino
+// (fino all'approvazione dell'ufficio; dopo, lo tocca solo l'ufficio).
+const STATI_MODIFICABILI_TECNICO = new Set(['bozza', 'inviato', 'respinto']);
 
 // ── tipi di ritorno ──────────────────────────────────────────────────────────
 
@@ -63,6 +68,19 @@ async function dipendenteDi(
     .eq('user_id', userId)
     .maybeSingle();
   return (data as { id: string } | null) ?? null;
+}
+
+async function nomeDipendente(
+  supabase: ReturnType<typeof createServerSupabase>,
+  id: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('dipendenti' as never)
+    .select('nome, cognome')
+    .eq('id', id)
+    .maybeSingle();
+  const d = data as { nome: string; cognome: string } | null;
+  return d ? `${d.nome} ${d.cognome}`.trim() : null;
 }
 
 // ── soglia ore ordinarie del tenant ─────────────────────────────────────────
@@ -482,7 +500,24 @@ export async function salvaMioRapportino(
   const rappRow = rapp as { id: string; dipendente_id: string; stato: string } | null;
   if (!rappRow) return { ok: false, error: 'NON_TROVATO' };
   if (rappRow.dipendente_id !== me.id) return { ok: false, error: 'FORBIDDEN' };
-  if (rappRow.stato !== 'bozza') return { ok: false, error: 'NON_MODIFICABILE' };
+  // Editabile finché l'ufficio non ha approvato (bozza/inviato/respinto).
+  if (!STATI_MODIFICABILI_TECNICO.has(rappRow.stato)) {
+    return { ok: false, error: 'NON_MODIFICABILE' };
+  }
+
+  // Se si modifica un rapportino già inviato/respinto, conserva uno snapshot
+  // della versione corrente PRIMA di sovrascrivere (storico per l'ufficio).
+  const eraGiaInviato = rappRow.stato !== 'bozza';
+  if (eraGiaInviato) {
+    await scriviVersioneRapportino({
+      supabase,
+      rapportinoId: rappRow.id,
+      tenantId: ctx.tenantId,
+      azione: 'modifica_tecnico',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: await nomeDipendente(supabase, me.id),
+    });
+  }
 
   // Replace righe: elimina e reinserisci
   const { error: errDel } = await supabase
@@ -551,7 +586,10 @@ export async function inviaMioRapportino(
   const rappRow = rapp as { id: string; dipendente_id: string; stato: string } | null;
   if (!rappRow) return { ok: false, error: 'NON_TROVATO' };
   if (rappRow.dipendente_id !== me.id) return { ok: false, error: 'FORBIDDEN' };
-  if (rappRow.stato !== 'bozza') return { ok: false, error: 'NON_MODIFICABILE' };
+  // Inviabile da bozza o (ri-inviabile) da respinto.
+  if (rappRow.stato !== 'bozza' && rappRow.stato !== 'respinto') {
+    return { ok: false, error: 'NON_MODIFICABILE' };
+  }
 
   const { error: errUpd } = await supabase
     .from('rapportini' as never)
@@ -563,6 +601,16 @@ export async function inviaMioRapportino(
     .eq('id', parsed.data.rapportinoId);
 
   if (errUpd) return { ok: false, error: errUpd.message };
+
+  // Snapshot dell'invio (la "prima versione" che l'ufficio consulta).
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId: rappRow.id,
+    tenantId: ctx.tenantId,
+    azione: 'invio',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeDipendente(supabase, me.id),
+  });
 
   return { ok: true };
 }

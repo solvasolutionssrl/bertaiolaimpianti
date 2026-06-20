@@ -7,8 +7,11 @@ import { MezziClient } from './_components/mezzi-client';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Kantiere · Parco mezzi' };
 
+export type TipoMezzo = 'autocarro' | 'autovettura' | 'altro';
+
 export type MezzoView = {
   id: string;
+  tipo: TipoMezzo;
   targa: string;
   modello: string | null;
   attivo: boolean;
@@ -17,6 +20,7 @@ export type MezzoView = {
 
 type MezzoRow = {
   id: string;
+  tipo: TipoMezzo;
   targa: string;
   modello: string | null;
   attivo: boolean;
@@ -31,8 +35,9 @@ export default async function MezziPage() {
 
   const { data } = (await supabase
     .from('mezzi' as never)
-    .select('id, targa, modello, attivo, note')
+    .select('id, tipo, targa, modello, attivo, note')
     .eq('tenant_id', ctx.tenantId)
+    .order('tipo')
     .order('targa')) as { data: MezzoRow[] | null };
 
   const mezzi: MezzoView[] = data ?? [];

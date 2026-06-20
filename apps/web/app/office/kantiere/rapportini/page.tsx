@@ -236,6 +236,21 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     righeByRapportino.set(r.rapportino_id, arr);
   }
 
+  // Rapportini modificati dal tecnico dopo l'invio → badge "Modificato"
+  const rappIds = rapportini.map((r) => r.id);
+  const modificatiSet = new Set<string>();
+  if (rappIds.length > 0) {
+    const { data: vModRaw } = await supabase
+      .from('rapportino_versioni' as never)
+      .select('rapportino_id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('azione', 'modifica_tecnico')
+      .in('rapportino_id', rappIds);
+    for (const v of (vModRaw as { rapportino_id: string }[] | null) ?? []) {
+      modificatiSet.add(v.rapportino_id);
+    }
+  }
+
   // Costruisci righe per il client
   const righe: RapportiniRiga[] = rapportini.map((r) => {
     const rr = righeByRapportino.get(r.id) ?? [];
@@ -254,6 +269,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
       data: r.data,
       stato: r.stato,
+      modificato: modificatiSet.has(r.id),
       inviatoAt: r.inviato_at,
       note: r.note ?? null,
       totale,
