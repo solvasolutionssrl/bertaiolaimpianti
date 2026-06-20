@@ -8,7 +8,14 @@ import { requireTenantContextCached } from '@/app/_lib/tenant-cache';
 
 /**
  * `tenants.app_mode` del tenant corrente, deduplicato per request.
- * Default 'kommessa' se la colonna è null o assente (Bertaiola = identica).
+ *
+ * Default 'kommessa' se la colonna è null/assente → Bertaiola e ogni tenant
+ * esistente restano identici. Sorgente unica di verità per l'esperienza app
+ * (mobile shell, office nav, deattivazione aree commessa).
+ *
+ *   kommessa = app completa attuale (commessa + eventuale kantiere)
+ *   kantiere = solo Kantiere (niente area commessa) — desktop e mobile
+ *   full     = combinata
  */
 export const getAppModeCached = cache(async (): Promise<AppMode> => {
   const ctx = await requireTenantContextCached();

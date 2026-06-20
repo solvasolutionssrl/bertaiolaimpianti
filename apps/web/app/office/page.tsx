@@ -28,6 +28,7 @@ import {
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
+import { getAppModeCached } from '../_lib/app-mode';
 import { SectionHeader } from '../_components/section-header';
 import { EmptyState } from '../_components/empty-state';
 import { getCommesseARischio, getDashboardKpis, getUltimaAttivita } from './_lib/queries';
@@ -49,13 +50,7 @@ export default async function DashboardPage() {
   const ctx = await requireTenantContext();
   // Tenant puro-Kantiere (app_mode='kantiere'): la dashboard commessa non ha
   // senso → atterra sulla Panoramica Kantiere. Bertaiola ('kommessa') invariata.
-  const supabaseMode = createServerSupabase();
-  const { data: tmode } = await supabaseMode
-    .from('tenants')
-    .select('app_mode')
-    .eq('id', ctx.tenantId)
-    .maybeSingle();
-  if ((tmode as { app_mode?: string | null } | null)?.app_mode === 'kantiere') {
+  if ((await getAppModeCached()) === 'kantiere') {
     redirect('/office/kantiere');
   }
   const now = new Date();

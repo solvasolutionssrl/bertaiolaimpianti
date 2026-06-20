@@ -81,7 +81,7 @@ function TariffaRow({ dipendente }: { dipendente: DipendenteView }) {
           min="0"
           value={val}
           onChange={(e) => setVal(e.target.value)}
-          placeholder="—"
+          placeholder="0,00"
           className="w-28 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
         />
         {err && <p className="mt-1 text-xs text-destructive">{err}</p>}

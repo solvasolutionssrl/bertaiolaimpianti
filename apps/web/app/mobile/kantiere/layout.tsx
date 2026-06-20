@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { guardMobile } from '../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { getAppModeCached } from './_lib/app-mode';
+import { getAppModeCached } from '@/app/_lib/app-mode';
 
 /**
  * Layout della shell Kantiere mobile.

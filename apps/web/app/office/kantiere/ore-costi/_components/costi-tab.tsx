@@ -19,7 +19,7 @@ function fmt(n: number): string {
   return String(Math.round(n * 100) / 100).replace('.', ',');
 }
 function fmtEuro(n: number | null): string {
-  if (n == null) return '—';
+  if (n == null) return 'n.d.';
   return (
     new Intl.NumberFormat('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) +
     ' €'
