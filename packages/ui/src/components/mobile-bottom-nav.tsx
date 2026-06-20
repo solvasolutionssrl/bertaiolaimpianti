@@ -24,6 +24,7 @@ export type MobileTabId =
   | 'cantieri'
   | 'scansiona'
   | 'ore'
+  | 'cruscotto'
   // Mantenuti per retro-compatibilità con eventuali consumer:
   | 'sopralluogo'
   | 'foto';

@@ -92,6 +92,7 @@ export default async function MobileLayout({
           unreadCount={unreadCount}
           shell={shell}
           appMode={appMode}
+          role={ctx.role}
           userId={ctx.userId}
           tenantId={ctx.tenantId}
         />

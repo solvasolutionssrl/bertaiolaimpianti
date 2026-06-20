@@ -119,7 +119,9 @@ function buildNav(
   }
 
   if (appMode === 'kantiere') {
-    // Tenant puro-Kantiere (es. FPM): solo Kantiere, nulla di commessa.
+    // Tenant puro-Kantiere (es. FPM): si toglie SOLO il mondo commessa
+    // (Commesse, Task, e Turni — che è il foglio-ore aggregato per commessa).
+    // Clienti resta (fa parte anche di Kantiere). Tutto il resto invariato.
     return [
       { id: 'home', label: 'Dashboard', href: '/office/kantiere', icon: LayoutDashboard },
       {
@@ -129,7 +131,10 @@ function buildNav(
         icon: Users,
         variant: 'section',
         defaultOpen: true,
-        children: [{ id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' }],
+        children: [
+          { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+          { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
+        ],
       },
       {
         id: 'sec-kantiere',
@@ -155,7 +160,9 @@ function buildNav(
         variant: 'section',
         defaultOpen: true,
         children: [
+          { id: 'ricerca', label: 'Ricerca', href: '/office/cerca' },
           { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche' },
+          { id: 'copilot', label: 'Co-pilot', href: '/office/copilot' },
           { id: 'impostazioni', label: 'Impostazioni', href: '/office/impostazioni' },
         ],
       },

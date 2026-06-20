@@ -31,12 +31,14 @@ export function BottomNavShell({
   unreadCount: initialUnreadCount,
   shell,
   appMode = 'kommessa',
+  role,
   userId,
   tenantId,
 }: {
   unreadCount: number;
   shell: MobileShell;
   appMode?: AppMode;
+  role?: string;
   userId: string;
   tenantId: string;
 }) {
@@ -49,16 +51,29 @@ export function BottomNavShell({
     initialCount: initialUnreadCount,
   });
 
+  const isManager = role === 'admin' || role === 'office';
   let tabs: MobileTab[];
   if (shell === 'kantiere') {
-    // PWA solo Kantiere — "a prova di cantiere": tap target grandi.
-    tabs = [
-      { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
-      { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
-      { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
-      { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
-      { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
-    ];
+    if (isManager) {
+      // Admin/office: vista gestionale — "Cruscotto" per guardare/analizzare
+      // (rapportini da approvare, anomalie, ore) al posto di "Attività".
+      tabs = [
+        { id: 'cruscotto', label: 'Cruscotto', icon: LayoutDashboard, href: '/mobile/kantiere/cruscotto' },
+        { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
+        { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
+        { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
+        { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+      ];
+    } else {
+      // Tecnico in cantiere — "a prova di cantiere": tap target grandi.
+      tabs = [
+        { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
+        { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
+        { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
+        { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+        { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+      ];
+    }
   } else if (shell === 'gestione') {
     // INVARIATO per app_mode='kommessa'.
     tabs = [
