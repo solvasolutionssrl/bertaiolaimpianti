@@ -290,8 +290,8 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
     <div className="space-y-4">
       {/* Barra filtri */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-end gap-3">
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-end gap-2">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">Dal</label>
               <input
@@ -395,16 +395,16 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                 <table className="w-full text-sm">
                   <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="w-8 px-2 py-3" />
-                      <th className="px-4 py-3 font-medium">Dipendente</th>
-                      <th className="px-4 py-3 font-medium">Data</th>
-                      <th className="px-4 py-3 font-medium">Stato</th>
-                      <th className="px-4 py-3 font-medium" title="Ore ordinarie / straordinarie / viaggio">
+                      <th className="w-8 px-2 py-2" />
+                      <th className="px-3 py-2 font-medium">Dipendente</th>
+                      <th className="px-3 py-2 font-medium">Data</th>
+                      <th className="px-3 py-2 font-medium">Stato</th>
+                      <th className="px-3 py-2 font-medium" title="Ore ordinarie / straordinarie / viaggio">
                         O / S / V
                       </th>
-                      <th className="px-4 py-3 font-medium">Righe</th>
-                      <th className="px-4 py-3 font-medium">Inviato</th>
-                      <th className="w-48 px-4 py-3" aria-label="Azioni" />
+                      <th className="px-3 py-2 font-medium">Righe</th>
+                      <th className="px-3 py-2 font-medium">Inviato</th>
+                      <th className="w-48 px-3 py-2" aria-label="Azioni" />
                     </tr>
                   </thead>
                   <tbody>
@@ -421,16 +421,16 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                             ].join(' ')}
                             onClick={() => toggleExpand(riga.id)}
                           >
-                            <td className="px-2 py-2.5 text-muted-foreground">
+                            <td className="px-2 py-2 text-muted-foreground">
                               {isOpen ? (
                                 <ChevronDown className="h-3.5 w-3.5" />
                               ) : (
                                 <ChevronRight className="h-3.5 w-3.5" />
                               )}
                             </td>
-                            <td className="px-4 py-2.5 font-medium">{riga.dipendenteNome}</td>
-                            <td className="px-4 py-2.5 tabular-nums">{fmtData(riga.data)}</td>
-                            <td className="px-4 py-2.5">
+                            <td className="px-3 py-2 font-medium">{riga.dipendenteNome}</td>
+                            <td className="px-3 py-2 tabular-nums">{fmtData(riga.data)}</td>
+                            <td className="px-3 py-2">
                               <div className="flex items-center gap-1.5">
                                 <RapportinoBadge stato={riga.stato} />
                                 {riga.modificato ? (
@@ -443,7 +443,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                 ) : null}
                               </div>
                             </td>
-                            <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                            <td className="px-3 py-2 tabular-nums text-muted-foreground">
                               <span className="inline-flex items-center gap-1">
                                 <span>{fmtOre(riga.totale.ord)}</span>
                                 <span className="text-border/60">/</span>
@@ -452,11 +452,11 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                 <span>{fmtOre(riga.totale.viaggio)}</span>
                               </span>
                             </td>
-                            <td className="px-4 py-2.5 text-center tabular-nums text-muted-foreground">
+                            <td className="px-3 py-2 text-center tabular-nums text-muted-foreground">
                               {riga.nRighe}
                             </td>
-                            <td className="px-4 py-2.5 tabular-nums text-muted-foreground text-xs">
-                              {riga.inviatoAt ? fmtDataOra(riga.inviatoAt) : <span className="select-none">—</span>}
+                            <td className="px-3 py-2 tabular-nums text-muted-foreground text-xs">
+                              {riga.inviatoAt ? fmtDataOra(riga.inviatoAt) : <span className="select-none text-muted-foreground/50">·</span>}
                             </td>
                             <td
                               className="px-2 py-2 text-right"
@@ -558,7 +558,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                                 {fmtOre(r.ore_viaggio)}
                                               </td>
                                               <td className="py-1.5 text-muted-foreground max-w-[200px] truncate">
-                                                {r.note ?? <span className="select-none opacity-40">—</span>}
+                                                {r.note ?? <span className="select-none opacity-40">·</span>}
                                               </td>
                                             </tr>
                                           ))}

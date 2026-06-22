@@ -257,31 +257,31 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
     <>
       {/* Barra statistiche */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Totale</p>
           <div className="mt-1 flex items-end gap-1.5">
-            <p className="text-2xl font-semibold">{totale}</p>
+            <p className="text-xl font-semibold tabular-nums">{totale}</p>
             <Users className="mb-0.5 h-4 w-4 text-muted-foreground" aria-hidden="true" />
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Con accesso app</p>
           <div className="mt-1 flex items-end gap-1.5">
-            <p className="text-2xl font-semibold">{conLogin}</p>
+            <p className="text-xl font-semibold tabular-nums">{conLogin}</p>
             <UserCheck className="mb-0.5 h-4 w-4 text-primary" aria-hidden="true" />
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Ufficio</p>
           <div className="mt-1 flex items-end gap-1.5">
-            <p className="text-2xl font-semibold">{conRuoloOffice}</p>
+            <p className="text-xl font-semibold tabular-nums">{conRuoloOffice}</p>
             <Monitor className="mb-0.5 h-4 w-4 text-blue-500" aria-hidden="true" />
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Tecnici attivi</p>
           <div className="mt-1 flex items-end gap-1.5">
-            <p className="text-2xl font-semibold text-emerald-700 dark:text-emerald-400">{attivi}</p>
+            <p className="text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">{attivi}</p>
             <HardHat className="mb-0.5 h-4 w-4 text-emerald-600" aria-hidden="true" />
           </div>
         </div>
@@ -367,14 +367,14 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
               <table className="w-full text-sm">
                 <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Nominativo</th>
-                    <th className="px-4 py-3 font-medium">Mansione</th>
-                    <th className="px-4 py-3 font-medium">Codice</th>
-                    <th className="px-4 py-3 font-medium">Accesso</th>
-                    <th className="px-4 py-3 font-medium">Ruolo</th>
-                    <th className="px-4 py-3 font-medium">Turni</th>
-                    <th className="px-4 py-3 font-medium">Stato</th>
-                    <th className="w-20 px-4 py-3" aria-label="Azioni" />
+                    <th className="px-3 py-2 font-medium">Nominativo</th>
+                    <th className="px-3 py-2 font-medium">Mansione</th>
+                    <th className="px-3 py-2 font-medium">Codice</th>
+                    <th className="px-3 py-2 font-medium">Accesso</th>
+                    <th className="px-3 py-2 font-medium">Ruolo</th>
+                    <th className="px-3 py-2 font-medium">Turni</th>
+                    <th className="px-3 py-2 font-medium">Stato</th>
+                    <th className="w-20 px-3 py-2" aria-label="Azioni" />
                   </tr>
                 </thead>
                 <tbody>
@@ -389,14 +389,14 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                             : 'border-b border-border bg-muted/20 transition-colors hover:bg-primary-soft/50'
                         }
                       >
-                        <td className="px-4 py-3 font-medium">
+                        <td className="px-3 py-2 font-medium">
                           {d.cognome} {d.nome}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{d.mansione ?? 'n.d.'}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        <td className="px-3 py-2 text-muted-foreground">{d.mansione ?? 'n.d.'}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                           {d.codice_interno ?? 'n.d.'}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2">
                           <Badge variant={d.user_id ? 'default' : 'outline'}>
                             {etichettaAccesso({ user_id: d.user_id })}
                           </Badge>
@@ -406,10 +406,10 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                             </p>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
                           {utente ? etichettaRuolo(utente.role) : 'n.d.'}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2">
                           {d.a_turni ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                               <Clock className="h-3 w-3" aria-hidden="true" />
@@ -419,7 +419,7 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                             <span className="text-xs text-muted-foreground">No</span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-2">
                           <span
                             className={
                               d.stato_attivo

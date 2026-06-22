@@ -535,8 +535,8 @@ export function CantiereDetailClient({
 
               <div className="space-y-1.5">
                 <Label htmlFor="sedePartenza">
-                  Sede di partenza{' '}
-                  <span className="text-xs text-muted-foreground">(default per questo cantiere)</span>
+                  Sede di partenza principale{' '}
+                  <span className="text-xs font-normal text-muted-foreground">(facoltativa)</span>
                 </Label>
                 <AddressAutocomplete
                   id="sedePartenza"
@@ -554,8 +554,16 @@ export function CantiereDetailClient({
                     }));
                     setSaveOk(false);
                   }}
-                  placeholder="Lascia vuoto per usare il default del modulo"
+                  placeholder="Cerca un indirizzo (es. sede aziendale)"
                 />
+                <p className="rounded-md border border-border bg-muted/40 px-2.5 py-2 text-xs leading-relaxed text-muted-foreground">
+                  Scegli un indirizzo dai suggerimenti (così viene geolocalizzato):
+                  al salvataggio viene aggiunto all&apos;<strong className="font-medium text-foreground">anagrafica Sedi</strong>{' '}
+                  e impostato come <strong className="font-medium text-foreground">sede predefinita</strong> dell&apos;azienda
+                  (la partenza proposta ai tecnici alla timbratura). Puoi lasciarlo vuoto e
+                  gestire tutto dall&apos;anagrafica, oppure aggiungere qui sotto le sedi
+                  specifiche di questo cantiere (es. hotel della zona).
+                </p>
               </div>
 
               <div className="space-y-1.5">

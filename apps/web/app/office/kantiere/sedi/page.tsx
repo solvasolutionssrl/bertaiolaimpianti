@@ -17,29 +17,58 @@ export interface SedeRow {
   note: string | null;
 }
 
+export interface CantiereLite {
+  id: string;
+  nome: string;
+  codice: string | null;
+}
+
 export default async function SediPage() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
 
-  const { data: raw } = await supabase
-    .from('sedi' as never)
-    .select('id, nome, tipo, indirizzo, lat, lng, is_default, attivo, note')
-    .eq('tenant_id', ctx.tenantId)
-    .order('is_default', { ascending: false })
-    .order('tipo')
-    .order('nome');
+  const [sediRes, cantieriRes, assocRes] = await Promise.all([
+    supabase
+      .from('sedi' as never)
+      .select('id, nome, tipo, indirizzo, lat, lng, is_default, attivo, note')
+      .eq('tenant_id', ctx.tenantId)
+      .order('is_default', { ascending: false })
+      .order('tipo')
+      .order('nome'),
+    supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice, stato')
+      .eq('tenant_id', ctx.tenantId)
+      .order('nome'),
+    supabase
+      .from('cantiere_sede' as never)
+      .select('sede_id, cantiere_id')
+      .eq('tenant_id', ctx.tenantId),
+  ]);
 
-  const sedi: SedeRow[] = (raw ?? []) as SedeRow[];
+  const sedi: SedeRow[] = (sediRes.data ?? []) as SedeRow[];
+
+  const cantieri: CantiereLite[] = (
+    (cantieriRes.data as { id: string; nome: string; codice: string | null; stato: string }[] | null) ?? []
+  )
+    .filter((c) => c.stato !== 'chiuso')
+    .map((c) => ({ id: c.id, nome: c.nome, codice: c.codice }));
+
+  // Mappa sede_id → array di cantiere_id collegati.
+  const legamiPerSede: Record<string, string[]> = {};
+  for (const a of (assocRes.data as { sede_id: string; cantiere_id: string }[] | null) ?? []) {
+    (legamiPerSede[a.sede_id] ??= []).push(a.cantiere_id);
+  }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Sedi</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Sedi</h1>
         <p className="text-sm text-muted-foreground">
-          Luoghi di partenza e arrivo per i cantieri (sede aziendale, hotel, depositi, ecc.).
+          Luoghi di partenza e arrivo dei viaggi: sede aziendale, depositi e hotel della zona.
         </p>
       </header>
-      <SediClient sedi={sedi} />
+      <SediClient sedi={sedi} cantieri={cantieri} legamiPerSede={legamiPerSede} />
     </div>
   );
 }

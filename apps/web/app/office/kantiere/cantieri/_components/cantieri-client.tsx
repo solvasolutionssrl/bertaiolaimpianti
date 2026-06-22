@@ -159,14 +159,14 @@ export function CantieriClient({ rows, commesse }: Props) {
               <table className="w-full text-sm">
                 <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="w-28 px-4 py-2.5 font-medium">Codice</th>
-                    <th className="px-4 py-2.5 font-medium">Nome</th>
-                    <th className="px-4 py-2.5 font-medium">Indirizzo</th>
-                    <th className="w-28 px-4 py-2.5 font-medium">Stato</th>
-                    <th className="px-4 py-2.5 font-medium">Commessa</th>
-                    <th className="w-20 px-4 py-2.5 font-medium">Persone</th>
-                    <th className="w-16 px-4 py-2.5 font-medium">QR</th>
-                    <th className="w-24 px-3 py-2.5" aria-label="Azioni" />
+                    <th className="w-28 px-3 py-2 font-medium">Codice</th>
+                    <th className="px-3 py-2 font-medium">Nome</th>
+                    <th className="px-3 py-2 font-medium">Indirizzo</th>
+                    <th className="w-28 px-3 py-2 font-medium">Stato</th>
+                    <th className="px-3 py-2 font-medium">Commessa</th>
+                    <th className="w-20 px-3 py-2 font-medium">Persone</th>
+                    <th className="w-16 px-3 py-2 font-medium">QR</th>
+                    <th className="w-24 px-3 py-2" aria-label="Azioni" />
                   </tr>
                 </thead>
                 <tbody>
@@ -176,34 +176,34 @@ export function CantieriClient({ rows, commesse }: Props) {
                       className="group cursor-pointer border-b border-border transition-colors hover:bg-muted/40"
                       onClick={() => router.push(`/office/kantiere/cantieri/${row.id}`)}
                     >
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                         {row.codice}
                       </td>
-                      <td className="px-4 py-2.5 font-semibold">{row.nome}</td>
-                      <td className="max-w-[200px] truncate px-4 py-2.5 text-muted-foreground">
-                        {row.indirizzo ?? '—'}
+                      <td className="px-3 py-2 font-semibold">{row.nome}</td>
+                      <td className="max-w-[200px] truncate px-3 py-2 text-muted-foreground">
+                        {row.indirizzo ?? <span className="text-muted-foreground/50">·</span>}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2">
                         <StatoBadge stato={row.stato} />
                       </td>
-                      <td className="max-w-[180px] truncate px-4 py-2.5 text-muted-foreground">
-                        {row.commessaTitolo ?? '—'}
+                      <td className="max-w-[180px] truncate px-3 py-2 text-muted-foreground">
+                        {row.commessaTitolo ?? <span className="text-muted-foreground/50">·</span>}
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
+                      <td className="px-3 py-2 tabular-nums text-muted-foreground">
                         {row.nPersone > 0 ? (
                           <span className="font-medium text-foreground">{row.nPersone}</span>
                         ) : (
                           '0'
                         )}
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2">
                         {row.haQr ? (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             Sì
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-muted-foreground/50">·</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -248,7 +248,7 @@ export function CantieriClient({ rows, commesse }: Props) {
                 value={form.nome}
                 onChange={handleChange}
                 required
-                placeholder="Es. Villa Rossi — via Roma 12"
+                placeholder="Es. Villa Rossi, via Roma 12"
               />
             </div>
 

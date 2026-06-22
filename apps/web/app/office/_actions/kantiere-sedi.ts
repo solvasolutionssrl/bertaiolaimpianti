@@ -44,6 +44,21 @@ async function sedeDelTenant(
   return Boolean(data);
 }
 
+/** Verifica che il cantiere appartenga al tenant. */
+async function cantiereDelTenant(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  cantiereId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .eq('id', cantiereId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
 // ── creaSede ──────────────────────────────────────────────────────────────────
 
 const CreaSchema = z.object({
@@ -210,9 +225,12 @@ export async function associaSedeCantiere(input: unknown): Promise<OkResult> {
 
   const supabase = createServerSupabase();
 
-  // Verifica che la sede appartenga al tenant
+  // Verifica che sia la sede sia il cantiere appartengano al tenant
   if (!(await sedeDelTenant(supabase, ctx.tenantId, parsed.data.sedeId))) {
     return { ok: false, error: 'Sede non trovata per questo tenant' };
+  }
+  if (!(await cantiereDelTenant(supabase, ctx.tenantId, parsed.data.cantiereId))) {
+    return { ok: false, error: 'Cantiere non trovato per questo tenant' };
   }
 
   const { error } = await supabase

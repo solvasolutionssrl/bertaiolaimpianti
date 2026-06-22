@@ -116,22 +116,39 @@ export function CantiereSediPanel({ cantiereId, sediTenant, sediAssociate }: Can
 
   if (sediTenant.length === 0) {
     return (
-      <div className="rounded-lg border border-border p-4">
-        <h3 className="mb-2 text-sm font-semibold">Sedi di partenza/arrivo disponibili per questo cantiere</h3>
-        <p className="text-sm text-muted-foreground">
-          Nessuna sede configurata. Aggiungile in{' '}
-          <a href="/office/kantiere/sedi" className="underline hover:text-foreground">
-            Kantiere / Sedi
+      <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+        <h3 className="text-sm font-semibold">Sedi specifiche di questo cantiere</h3>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Nessuna sede in anagrafica. Aggiungi le sedi di partenza (sede aziendale,
+          hotel della zona, depositi) in{' '}
+          <a href="/office/kantiere/sedi" className="font-medium text-primary underline-offset-2 hover:underline">
+            Kantiere · Sedi
           </a>
-          .
+          , poi torna qui per collegarle al cantiere.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border p-4">
-      <h3 className="mb-3 text-sm font-semibold">Sedi di partenza/arrivo disponibili per questo cantiere</h3>
+    <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold">Sedi specifiche di questo cantiere</h3>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+            Spunta le sedi (es. hotel della zona, depositi) da cui i tecnici possono
+            partire per <strong className="font-medium text-foreground">questo</strong> cantiere.
+            Compaiono nella scelta &ldquo;Da dove sei partito?&rdquo; alla timbratura,
+            insieme alla sede predefinita.
+          </p>
+        </div>
+        <a
+          href="/office/kantiere/sedi"
+          className="shrink-0 rounded-md border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Gestisci sedi
+        </a>
+      </div>
       <ul className="space-y-2">
         {sediTenant.map((sede) => {
           const associata = associateSet.has(sede.id);

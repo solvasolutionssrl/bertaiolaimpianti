@@ -136,9 +136,9 @@ export default async function CantieriPage() {
   }));
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Cantieri</h1>
+        <h1 className="text-lg font-semibold">Cantieri</h1>
         <p className="text-sm text-muted-foreground">
           Siti di lavoro. Un cantiere può essere indipendente o collegato a una commessa.
         </p>

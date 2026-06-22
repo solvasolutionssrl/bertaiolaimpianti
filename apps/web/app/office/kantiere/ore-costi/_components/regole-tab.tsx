@@ -343,16 +343,16 @@ export function RegoleTab({ regole, dipendenti, cantieri }: Props) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Nome</th>
-                <th className="px-4 py-2 text-left font-medium">Tipo</th>
-                <th className="px-4 py-2 text-left font-medium">Condizioni</th>
-                <th className="px-4 py-2 text-right font-medium">Magg. %</th>
-                <th className="px-4 py-2 text-right font-medium">Priorita</th>
-                <th className="px-4 py-2 text-left font-medium">Ambito</th>
-                <th className="px-4 py-2 text-center font-medium">Attiva</th>
-                <th className="px-4 py-2 text-right font-medium">Azioni</th>
+                <th className="px-3 py-2 text-left font-medium">Nome</th>
+                <th className="px-3 py-2 text-left font-medium">Tipo</th>
+                <th className="px-3 py-2 text-left font-medium">Condizioni</th>
+                <th className="px-3 py-2 text-right font-medium">Magg. %</th>
+                <th className="px-3 py-2 text-right font-medium">Priorita</th>
+                <th className="px-3 py-2 text-left font-medium">Ambito</th>
+                <th className="px-3 py-2 text-center font-medium">Attiva</th>
+                <th className="px-3 py-2 text-right font-medium">Azioni</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -482,9 +482,9 @@ function RegolaRow({
   return (
     <>
       <tr className="hover:bg-muted/30">
-        <td className="px-4 py-2 font-medium">{regola.nome}</td>
-        <td className="px-4 py-2 text-muted-foreground">{tipoLabel(regola.tipo)}</td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-1.5 font-medium">{regola.nome}</td>
+        <td className="px-3 py-1.5 text-muted-foreground">{tipoLabel(regola.tipo)}</td>
+        <td className="px-3 py-1.5">
           <div className="flex flex-wrap gap-1">
             {condChips.map((c, i) => (
               <span
@@ -496,7 +496,7 @@ function RegolaRow({
             ))}
           </div>
         </td>
-        <td className="px-4 py-2 text-right">
+        <td className="px-3 py-1.5 text-right">
           <input
             type="number"
             step="0.5"
@@ -505,7 +505,7 @@ function RegolaRow({
             className="w-20 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
           />
         </td>
-        <td className="px-4 py-2 text-right">
+        <td className="px-3 py-1.5 text-right">
           <input
             type="number"
             value={priorita}
@@ -513,7 +513,7 @@ function RegolaRow({
             className="w-16 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
           />
         </td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-1.5">
           <div className="flex flex-wrap gap-1">
             {ambitoChips.map((c) => (
               <span
@@ -525,7 +525,7 @@ function RegolaRow({
             ))}
           </div>
         </td>
-        <td className="px-4 py-2 text-center">
+        <td className="px-3 py-1.5 text-center">
           <input
             type="checkbox"
             checked={regola.attiva}
@@ -534,7 +534,7 @@ function RegolaRow({
             className="h-4 w-4 accent-[hsl(var(--primary))]"
           />
         </td>
-        <td className="px-4 py-2">
+        <td className="px-3 py-1.5">
           <div className="flex items-center justify-end gap-2">
             {dirty && (
               <button
@@ -577,7 +577,7 @@ function RegolaRow({
         <tr>
           <td colSpan={8} className="bg-muted/20 px-4 pb-3 pt-2">
             <div className="space-y-3">
-              <p className="text-xs font-medium text-muted-foreground">Modifica condizioni — {regola.nome}</p>
+              <p className="text-xs font-medium text-muted-foreground">Modifica condizioni: {regola.nome}</p>
 
               <div className="flex flex-wrap items-end gap-3">
                 {/* Giorni */}

@@ -305,9 +305,9 @@ export default async function ReportPage({ searchParams }: PageProps) {
     .sort((a, b) => b.kmTotali - a.kmTotali);
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Report ore</h1>
+        <h1 className="text-lg font-semibold">Report ore</h1>
         <p className="text-sm text-muted-foreground">
           Ore aggregate per dipendente o commessa nel periodo selezionato.
         </p>

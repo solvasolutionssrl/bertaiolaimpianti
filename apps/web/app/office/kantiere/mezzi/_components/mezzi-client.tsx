@@ -102,7 +102,7 @@ function AggiiungiMezzoForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-card p-5 space-y-4">
+    <form onSubmit={handleSubmit} className="rounded-lg border border-border bg-card p-4 shadow-soft space-y-3">
       <h2 className="text-sm font-semibold">Aggiungi mezzo</h2>
       <div className="flex flex-wrap gap-3">
         {/* Tipo */}
@@ -229,7 +229,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
   return (
     <tr className="hover:bg-muted/30">
       {/* Tipo */}
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value as TipoMezzo)}
@@ -242,7 +242,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
         </select>
       </td>
       {/* Targa */}
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <input
           type="text"
           value={targa}
@@ -252,7 +252,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
         />
       </td>
       {/* Modello */}
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <input
           type="text"
           value={modello}
@@ -263,7 +263,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
         />
       </td>
       {/* Stato (toggle) */}
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <button
           type="button"
           onClick={() => setAttivo((v) => !v)}
@@ -278,7 +278,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
         </button>
       </td>
       {/* Note */}
-      <td className="px-4 py-2.5">
+      <td className="px-3 py-2">
         <input
           type="text"
           value={note}
@@ -290,7 +290,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
         {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
       </td>
       {/* Km totali */}
-      <td className="px-4 py-2.5 text-right tabular-nums text-sm text-muted-foreground whitespace-nowrap">
+      <td className="px-3 py-2 text-right tabular-nums text-sm text-muted-foreground whitespace-nowrap">
         {stats ? (
           <span title={`${stats.nViaggi} viaggio/i`}>
             {fmtKm(stats.kmTotali)} km
@@ -301,7 +301,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
         )}
       </td>
       {/* Azioni */}
-      <td className="px-4 py-2.5 text-right">
+      <td className="px-3 py-2 text-right">
         <div className="flex items-center justify-end gap-2">
           <Link
             href={`/office/kantiere/mezzi/${mezzo.id}`}
@@ -383,28 +383,28 @@ export function MezziClient({ mezzi, viaggioAgg }: Props) {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Barra statistiche */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Totale mezzi</p>
-          <p className="mt-1 text-2xl font-semibold">{totale}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{totale}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Autocarri</p>
           <div className="mt-1 flex items-end gap-1.5">
-            <p className="text-2xl font-semibold">{autocarri}</p>
+            <p className="text-xl font-semibold tabular-nums">{autocarri}</p>
             <Truck className="mb-0.5 h-4 w-4 text-slate-500" aria-hidden="true" />
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Autovetture</p>
           <div className="mt-1 flex items-end gap-1.5">
-            <p className="text-2xl font-semibold">{autovetture}</p>
+            <p className="text-xl font-semibold tabular-nums">{autovetture}</p>
             <Car className="mb-0.5 h-4 w-4 text-emerald-600" aria-hidden="true" />
           </div>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Attivi / disattivi</p>
           <div className="mt-1 flex items-end gap-2">
             <div className="flex items-center gap-1">
@@ -492,15 +492,15 @@ export function MezziClient({ mezzi, viaggioAgg }: Props) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/40">
               <tr>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Tipo</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Targa</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Modello</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Stato</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Note</th>
-                <th className="px-4 py-2.5 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot. (viaggi)</th>
-                <th className="px-4 py-2.5 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground"></th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Tipo</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Targa</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Modello</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Stato</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Note</th>
+                <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot. (viaggi)</th>
+                <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">

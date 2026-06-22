@@ -3,9 +3,9 @@ import { ImageResponse } from 'next/og';
 export const runtime = 'edge';
 
 /**
- * PWA icon 512×512 — versione "high-res" per splash screen Android
- * e app drawer. Stessa estetica di icon-192 ma con grid più fine,
- * glow più ampio e logogramma più grande.
+ * PWA icon 512×512 — versione "high-res" per splash screen Android e app
+ * drawer. Stessa estetica della favicon Kommessa (`icon.tsx`/`apple-icon.tsx`):
+ * gradient cobalt→arancio pieno (maskable-safe), grid blueprint, "K" bianca.
  */
 export async function GET() {
   return new ImageResponse(
@@ -14,10 +14,12 @@ export async function GET() {
         style={{
           width: '100%',
           height: '100%',
-          background: '#1340A6',
+          background:
+            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%)',
           backgroundImage:
-            'linear-gradient(to right, rgba(255,255,255,0.10) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.10) 1px, transparent 1px)',
-          backgroundSize: '48px 48px',
+            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%), linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)',
+          backgroundSize: '100%, 48px 48px, 48px 48px',
+          backgroundBlendMode: 'normal, overlay, overlay',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -26,27 +28,16 @@ export async function GET() {
       >
         <div
           style={{
-            position: 'absolute',
-            inset: 0,
-            background:
-              'radial-gradient(circle at 70% 80%, rgba(242,107,35,0.4) 0%, transparent 55%)',
-            display: 'flex',
-          }}
-        />
-        <div
-          style={{
-            fontSize: 300,
+            fontSize: 350,
             fontWeight: 900,
-            color: '#F26B23',
+            color: '#FFFFFF',
             letterSpacing: '-0.06em',
             display: 'flex',
-            alignItems: 'baseline',
+            fontFamily: 'system-ui, -apple-system, sans-serif',
             position: 'relative',
-            fontFamily: 'monospace',
           }}
         >
-          <span>X</span>
-          <span style={{ color: '#FFFFFF', fontSize: 240, marginLeft: 12 }}>+</span>
+          K
         </div>
       </div>
     ),

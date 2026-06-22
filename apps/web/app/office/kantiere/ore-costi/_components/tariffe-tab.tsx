@@ -21,12 +21,12 @@ export function TariffeTab({ dipendenti }: Props) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Dipendente</th>
-                <th className="px-4 py-2 text-left font-medium">Stato</th>
-                <th className="px-4 py-2 text-right font-medium">Costo orario (€)</th>
-                <th className="px-4 py-2 text-right font-medium"></th>
+                <th className="px-3 py-2 text-left font-medium">Dipendente</th>
+                <th className="px-3 py-2 text-left font-medium">Stato</th>
+                <th className="px-3 py-2 text-right font-medium">Costo orario (€)</th>
+                <th className="px-3 py-2 text-right font-medium"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -72,9 +72,9 @@ function TariffaRow({ dipendente }: { dipendente: DipendenteView }) {
 
   return (
     <tr className="hover:bg-muted/30">
-      <td className="px-4 py-2 font-medium">{`${dipendente.nome} ${dipendente.cognome}`.trim()}</td>
-      <td className="px-4 py-2 text-muted-foreground">{dipendente.stato_attivo ? 'Attivo' : 'Disattivo'}</td>
-      <td className="px-4 py-2 text-right">
+      <td className="px-3 py-1.5 font-medium">{`${dipendente.nome} ${dipendente.cognome}`.trim()}</td>
+      <td className="px-3 py-1.5 text-muted-foreground">{dipendente.stato_attivo ? 'Attivo' : 'Disattivo'}</td>
+      <td className="px-3 py-1.5 text-right">
         <input
           type="number"
           step="0.01"
@@ -86,7 +86,7 @@ function TariffaRow({ dipendente }: { dipendente: DipendenteView }) {
         />
         {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
       </td>
-      <td className="px-4 py-2 text-right">
+      <td className="px-3 py-1.5 text-right">
         {dirty && (
           <button
             disabled={busy}

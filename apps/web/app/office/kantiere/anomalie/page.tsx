@@ -517,9 +517,9 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Anomalie</h1>
+        <h1 className="text-lg font-semibold">Anomalie</h1>
         <p className="text-sm text-muted-foreground">
           Segnalazioni automatiche nel periodo selezionato.
         </p>

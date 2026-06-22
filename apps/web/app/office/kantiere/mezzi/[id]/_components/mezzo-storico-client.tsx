@@ -62,7 +62,7 @@ function fmtDurata(minuti: number | null): string {
 
 export function MezzoStoricoClient({ mezzo, tratte, totali }: Props) {
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       {/* Intestazione */}
       <header className="flex items-start gap-3">
         <Link
@@ -75,7 +75,7 @@ export function MezzoStoricoClient({ mezzo, tratte, totali }: Props) {
       </header>
 
       <div>
-        <h1 className="text-xl font-semibold">
+        <h1 className="text-lg font-semibold">
           {mezzo.targa}
           {mezzo.modello && (
             <span className="ml-2 text-base font-normal text-muted-foreground">{mezzo.modello}</span>
@@ -86,17 +86,17 @@ export function MezzoStoricoClient({ mezzo, tratte, totali }: Props) {
 
       {/* KPI totali */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Km totali</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{fmtKm(totali.kmTotali)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmtKm(totali.kmTotali)}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Viaggi</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{totali.nViaggi}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{totali.nViaggi}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Durata totale</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">
+          <p className="mt-1 text-xl font-semibold tabular-nums">
             {fmtDurata(totali.minutiTotali)}
           </p>
         </div>
@@ -111,25 +111,25 @@ export function MezzoStoricoClient({ mezzo, tratte, totali }: Props) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/40">
               <tr>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Data</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Dipendente</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Direzione</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Tratta</th>
-                <th className="px-4 py-2.5 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km</th>
-                <th className="px-4 py-2.5 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Durata</th>
-                <th className="px-4 py-2.5 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Origine</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Data</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Dipendente</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Direzione</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Tratta</th>
+                <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km</th>
+                <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Durata</th>
+                <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Origine</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {tratte.map((t) => (
                 <tr key={t.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-2.5 tabular-nums whitespace-nowrap text-muted-foreground">
+                  <td className="px-3 py-2 tabular-nums whitespace-nowrap text-muted-foreground">
                     {fmtData(t.data)}
                   </td>
-                  <td className="px-4 py-2.5 font-medium">{t.dipendente}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-2 font-medium">{t.dipendente}</td>
+                  <td className="px-3 py-2">
                     <span
                       className={[
                         'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
@@ -141,18 +141,18 @@ export function MezzoStoricoClient({ mezzo, tratte, totali }: Props) {
                       {t.direzione === 'andata' ? 'Andata' : 'Ritorno'}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-muted-foreground text-xs">
+                  <td className="px-3 py-2 text-muted-foreground text-xs">
                     {t.sede ?? 'n.d.'}
                     <span className="mx-1 text-muted-foreground/50">&#x2192;</span>
                     {t.cantiere ?? 'n.d.'}
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap">
+                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                     {fmtKm(t.distanza_km)} km
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums whitespace-nowrap text-muted-foreground">
+                  <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-muted-foreground">
                     {fmtDurata(t.durata_min)}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-2">
                     {t.manuale ? (
                       <span className="text-xs text-muted-foreground">Manuale</span>
                     ) : (

@@ -137,17 +137,17 @@ export function CostiTab({ aggregati, filtri }: Props) {
 
       {/* KPI */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Righe</p>
-          <p className="mt-1 text-2xl font-semibold">{aggregati.length}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{aggregati.length}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Ore pesate totali</p>
-          <p className="mt-1 text-2xl font-semibold">{fmt(tot.ore_pesate)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(tot.ore_pesate)}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Costo totale</p>
-          <p className="mt-1 text-2xl font-semibold text-primary">{fmtEuro(tot.costo_totale)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-primary">{fmtEuro(tot.costo_totale)}</p>
         </div>
       </div>
 
@@ -159,37 +159,37 @@ export function CostiTab({ aggregati, filtri }: Props) {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">
+                <th className="px-3 py-2 text-left font-medium">
                   {filtri.per === 'dipendente' ? 'Dipendente' : 'Commessa / Cantiere'}
                 </th>
-                <th className="px-4 py-2 text-right font-medium">Ordinarie</th>
-                <th className="px-4 py-2 text-right font-medium">Straord.</th>
-                <th className="px-4 py-2 text-right font-medium">Viaggio</th>
-                <th className="px-4 py-2 text-right font-medium">Ore pesate</th>
-                <th className="px-4 py-2 text-right font-medium">Costo</th>
+                <th className="px-3 py-2 text-right font-medium">Ordinarie</th>
+                <th className="px-3 py-2 text-right font-medium">Straord.</th>
+                <th className="px-3 py-2 text-right font-medium">Viaggio</th>
+                <th className="px-3 py-2 text-right font-medium">Ore pesate</th>
+                <th className="px-3 py-2 text-right font-medium">Costo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {aggregati.map((r) => (
                 <tr key={r.chiave} className="hover:bg-muted/30">
-                  <td className="px-4 py-2 font-medium">{r.chiave}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_ordinarie)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_straordinarie)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(r.ore_viaggio)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(r.ore_pesate)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-medium">{fmtEuro(r.costo_totale)}</td>
+                  <td className="px-3 py-1.5 font-medium">{r.chiave}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(r.ore_ordinarie)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(r.ore_straordinarie)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(r.ore_viaggio)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(r.ore_pesate)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtEuro(r.costo_totale)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t-2 border-border bg-muted/50">
+            <tfoot className="border-t-2 border-border bg-muted/40">
               <tr>
-                <td className="px-4 py-2 font-semibold" colSpan={4}>
+                <td className="px-3 py-2 font-semibold" colSpan={4}>
                   Totale
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold">{fmt(tot.ore_pesate)}</td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold text-primary">
+                <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmt(tot.ore_pesate)}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
                   {fmtEuro(tot.costo_totale)}
                 </td>
               </tr>

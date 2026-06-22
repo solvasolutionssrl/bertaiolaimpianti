@@ -37,9 +37,9 @@ export default async function DipendentiPage() {
     .select('id, display_name, role')
     .order('display_name');
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Dipendenti</h1>
+        <h1 className="text-lg font-semibold">Dipendenti</h1>
         <p className="text-sm text-muted-foreground">Anagrafica del personale di cantiere.</p>
       </header>
       <DipendentiClient

@@ -16,7 +16,7 @@
  * Versioning: bump `CACHE_VERSION` ad ogni release per forzare clean-up.
  */
 
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const SHELL_CACHE = `kommessa-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `kommessa-runtime-${CACHE_VERSION}`;
 const VALID_CACHES = new Set([SHELL_CACHE, RUNTIME_CACHE]);

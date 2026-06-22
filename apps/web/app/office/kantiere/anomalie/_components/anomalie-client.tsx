@@ -61,55 +61,55 @@ export function AnomalieClient({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Avviso configurazione */}
-      <div className="rounded-md border border-border bg-muted/30 px-4 py-2.5 text-sm text-muted-foreground">
-        Vuoi scegliere quali anomalie segnalare?{' '}
-        <Link href="/office/impostazioni/kantiere" className="text-primary hover:underline">
-          Vai alle impostazioni Kantiere
+    <div className="space-y-4">
+      {/* Toolbar: avviso configurazione + filtri periodo */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <form onSubmit={handleFiltri} className="flex flex-wrap items-end gap-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="from" className="text-xs text-muted-foreground">
+              Dal
+            </label>
+            <input
+              id="from"
+              name="from"
+              type="date"
+              defaultValue={filtri.from}
+              required
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="to" className="text-xs text-muted-foreground">
+              Al
+            </label>
+            <input
+              id="to"
+              name="to"
+              type="date"
+              defaultValue={filtri.to}
+              required
+              className="rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Filtra
+          </button>
+        </form>
+        <Link
+          href="/office/impostazioni/kantiere"
+          className="text-sm text-primary hover:underline"
+        >
+          Scegli quali anomalie segnalare
         </Link>
       </div>
-
-      {/* Filtri */}
-      <form onSubmit={handleFiltri} className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="from" className="text-xs text-muted-foreground">
-            Dal
-          </label>
-          <input
-            id="from"
-            name="from"
-            type="date"
-            defaultValue={filtri.from}
-            required
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="to" className="text-xs text-muted-foreground">
-            Al
-          </label>
-          <input
-            id="to"
-            name="to"
-            type="date"
-            defaultValue={filtri.to}
-            required
-            className="rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <button
-          type="submit"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Filtra
-        </button>
-      </form>
 
       {/* A) Timbrature incomplete */}
       {attivi.incomplete && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Giornate incomplete{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -117,7 +117,7 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             {incomplete.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
             ) : (
@@ -133,9 +133,9 @@ export function AnomalieClient({
                   <tbody>
                     {incomplete.map((row, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                        <td className="py-2 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
-                        <td className="py-2">
+                        <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-1.5 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
+                        <td className="py-1.5">
                           <a
                             href={`/office/kantiere/rapportini?from=${row.giorno}&to=${row.giorno}&dipendente=${row.dipendente_id}`}
                             className="text-primary hover:underline"
@@ -156,7 +156,7 @@ export function AnomalieClient({
       {/* B) Straordinario */}
       {attivi.straordinari && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Ore straordinarie{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -164,7 +164,7 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             {straordinario.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
             ) : (
@@ -181,10 +181,10 @@ export function AnomalieClient({
                   <tbody>
                     {straordinario.map((row, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                        <td className="py-2 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
-                        <td className="py-2 font-medium">{row.ore_straordinarie}</td>
+                        <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-1.5 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-1.5 pr-4 text-muted-foreground">{row.commessaTitolo}</td>
+                        <td className="py-1.5 font-medium">{row.ore_straordinarie}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -198,7 +198,7 @@ export function AnomalieClient({
       {/* C) Senza rapportino */}
       {attivi.senza_rapportino && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Dipendenti senza rapportino nel periodo{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -206,13 +206,13 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             {senzaRapportino.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
             ) : (
               <ul className="space-y-1 text-sm">
                 {senzaRapportino.map((row, i) => (
-                  <li key={i} className="border-b border-border/50 py-2 last:border-0">
+                  <li key={i} className="border-b border-border/50 py-1.5 last:border-0">
                     {row.nome}
                   </li>
                 ))}
@@ -225,7 +225,7 @@ export function AnomalieClient({
       {/* D) Modificato dopo invio */}
       {attivi.modificato && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Modificati dopo invio{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -233,7 +233,7 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             {modificati.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
             ) : (
@@ -249,9 +249,9 @@ export function AnomalieClient({
                   <tbody>
                     {modificati.map((row, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                        <td className="py-2 text-muted-foreground">
+                        <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-1.5 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-1.5 text-muted-foreground">
                           {STATO_LABEL[row.stato] ?? row.stato}
                         </td>
                       </tr>
@@ -267,7 +267,7 @@ export function AnomalieClient({
       {/* E) Ore in giorno festivo */}
       {attivi.festivo && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Ore in giorno festivo{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -275,7 +275,7 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             {festivo.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
             ) : (
@@ -292,10 +292,10 @@ export function AnomalieClient({
                   <tbody>
                     {festivo.map((row, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                        <td className="py-2 pr-4 text-muted-foreground">{row.targetTitolo}</td>
-                        <td className="py-2 font-medium">{row.ore_totali}</td>
+                        <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-1.5 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-1.5 pr-4 text-muted-foreground">{row.targetTitolo}</td>
+                        <td className="py-1.5 font-medium">{row.ore_totali}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -309,7 +309,7 @@ export function AnomalieClient({
       {/* F) Ore nel weekend */}
       {attivi.weekend && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Ore nel weekend{' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -317,7 +317,7 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             {weekend.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>
             ) : (
@@ -334,10 +334,10 @@ export function AnomalieClient({
                   <tbody>
                     {weekend.map((row, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                        <td className="py-2 pr-4 text-muted-foreground">{row.targetTitolo}</td>
-                        <td className="py-2 font-medium">{row.ore_totali}</td>
+                        <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-1.5 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-1.5 pr-4 text-muted-foreground">{row.targetTitolo}</td>
+                        <td className="py-1.5 font-medium">{row.ore_totali}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -351,7 +351,7 @@ export function AnomalieClient({
       {/* G) Ore eccessive (possibile doppio inserimento) */}
       {attivi.ore_eccessive && (
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
               Ore giornaliere oltre soglia (possibile doppio inserimento){' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
@@ -359,7 +359,7 @@ export function AnomalieClient({
               </span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             <p className="mb-3 text-xs text-muted-foreground">
               Somma di ore ordinarie e straordinarie superiore a {anomalie_ore_max} ore in un giorno.
             </p>
@@ -378,9 +378,9 @@ export function AnomalieClient({
                   <tbody>
                     {oreEccessive.map((row, i) => (
                       <tr key={i} className="border-b border-border/50 last:border-0">
-                        <td className="py-2 pr-4">{row.dipendenteNome}</td>
-                        <td className="py-2 pr-4">{fmtData(row.data)}</td>
-                        <td className="py-2 font-medium text-destructive">{row.ore_totali}</td>
+                        <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
+                        <td className="py-1.5 pr-4">{fmtData(row.data)}</td>
+                        <td className="py-1.5 font-medium text-destructive">{row.ore_totali}</td>
                       </tr>
                     ))}
                   </tbody>

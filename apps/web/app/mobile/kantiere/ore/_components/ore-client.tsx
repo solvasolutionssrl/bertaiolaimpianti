@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Send, Save, CheckCircle2, ChevronDown, PenLine } from 'lucide-react';
+import { Plus, Send, Save, CheckCircle2, ChevronDown, PenLine, Clock } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
 import { useConfirm } from '@/app/_components/confirm-provider';
@@ -176,6 +176,60 @@ export function OreClient({
   const isBozza = rapportino.stato === 'bozza';
   const isEditabile = ['bozza', 'inviato', 'respinto'].includes(rapportino.stato);
 
+  // ── Bozza locale anti-perdita-dati ──────────────────────────────────────────
+  // Le modifiche non salvate vengono memorizzate sul dispositivo: se la rete è
+  // lenta o l'utente naviga avanti/indietro, al rientro vengono ripristinate.
+  const draftKey = `kantiere-ore-draft-${rapportino.id}`;
+  const dirtyRef = useRef(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  // Ripristino bozza locale al montaggio (solo se rapportino in bozza).
+  useEffect(() => {
+    if (!isBozza || typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw) as { righe?: RigaEditable[]; note?: string };
+      if (d && Array.isArray(d.righe)) {
+        setRighe(d.righe);
+        setNote(typeof d.note === 'string' ? d.note : '');
+        dirtyRef.current = true;
+        setDraftRestored(true);
+      }
+    } catch {
+      /* bozza locale corrotta: ignora */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persistenza bozza locale a ogni modifica (solo dopo una modifica reale).
+  useEffect(() => {
+    if (!isBozza || typeof window === 'undefined' || !dirtyRef.current) return;
+    try {
+      window.localStorage.setItem(draftKey, JSON.stringify({ righe, note, ts: Date.now() }));
+    } catch {
+      /* quota piena / storage non disponibile: ignora */
+    }
+  }, [righe, note, isBozza, draftKey]);
+
+  function clearDraft() {
+    dirtyRef.current = false;
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(draftKey);
+      } catch {
+        /* ignora */
+      }
+    }
+    setDraftRestored(false);
+  }
+
+  function scartaDraft() {
+    setRighe(rapportino.righe.map(rigaFromPayload));
+    setNote(rapportino.note ?? '');
+    clearDraft();
+  }
+
   // Chiavi gia usate nelle righe correnti
   const targetUsati = new Set<string>(
     righe.flatMap((r) => {
@@ -193,6 +247,7 @@ export function OreClient({
   function aggiungiRiga() {
     const decoded = decodePickerValue(pickerTarget);
     if (!decoded) return;
+    dirtyRef.current = true;
 
     let label = '';
     if (decoded.tipo === 'commessa') {
@@ -224,12 +279,14 @@ export function OreClient({
   }
 
   function rimuoviRiga(idx: number) {
+    dirtyRef.current = true;
     setRighe((prev) => prev.filter((_, i) => i !== idx));
     setErrore(null);
     setSuccesso(null);
   }
 
   function aggiornaRiga<K extends keyof RigaEditable>(idx: number, field: K, value: RigaEditable[K]) {
+    dirtyRef.current = true;
     setRighe((prev) => {
       const next = [...prev];
       const riga = next[idx];
@@ -262,6 +319,7 @@ export function OreClient({
         note: note || undefined,
       });
       if (res.ok) {
+        clearDraft();
         setSuccesso('Bozza salvata.');
         router.refresh();
       } else {
@@ -296,6 +354,7 @@ export function OreClient({
 
       const res = await inviaMioRapportino({ rapportinoId: rapportino.id });
       if (res.ok) {
+        clearDraft();
         router.refresh();
       } else {
         setErrore(messaggioErrore(res.error));
@@ -307,42 +366,82 @@ export function OreClient({
   const totStraordinarie = sumOre(righe, 'ore_straordinarie');
   const totViaggio = sumOre(righe, 'ore_viaggio');
 
+  const puoiManuale = isEditabile && cantieriDisponibili.length > 0;
+  const mostraPicker = isBozza && haTargetLiberi;
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Stato badge + bottone inserimento manuale */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+      {/* ── Riepilogo di oggi ── */}
+      <section className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/[0.06] to-transparent p-4 shadow-soft">
+        <div className="flex items-center justify-between">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+            Totale di oggi
+          </p>
           <StatoBadge stato={rapportino.stato} />
-          {!isBozza && (
-            <span className="text-xs text-muted-foreground">
-              Il rapportino e' in sola lettura.
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {(
+            [
+              { label: 'Ordinarie', val: totOrdinarie, tone: 'text-foreground' },
+              { label: 'Straord.', val: totStraordinarie, tone: 'text-amber-600' },
+              { label: 'Viaggio', val: totViaggio, tone: 'text-sky-600' },
+            ] as const
+          ).map(({ label, val, tone }) => (
+            <div
+              key={label}
+              className="rounded-xl border border-border/60 bg-background/70 px-2.5 py-2 text-center"
+            >
+              <span className={`block font-mono text-2xl font-bold leading-none tabular-nums ${tone}`}>
+                {fmtOre(val)}
+              </span>
+              <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          {isBozza
+            ? "Le timbrature dal QR compilano gia il viaggio. Controlla le ore di lavoro di ogni cantiere, poi invia all'ufficio."
+            : "Rapportino inviato: e in sola lettura. Per correzioni contatta l'ufficio."}
+        </p>
+      </section>
+
+      {/* Bozza locale ripristinata */}
+      {draftRestored && isBozza && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span>Ripristinate modifiche non salvate da questo dispositivo.</span>
+          <button
+            type="button"
+            onClick={scartaDraft}
+            className="shrink-0 font-medium underline-offset-2 hover:underline"
+          >
+            Scarta
+          </button>
+        </div>
+      )}
+
+      {/* ── Voci ore ── */}
+      <section className="space-y-2.5">
+        <div className="flex items-center justify-between px-0.5">
+          <h2 className="text-sm font-semibold tracking-tight text-foreground">
+            Cantieri e commesse
+          </h2>
+          {righe.length > 0 && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              {righe.length} {righe.length === 1 ? 'voce' : 'voci'}
             </span>
           )}
         </div>
 
-        {isEditabile && cantieriDisponibili.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setManualeOpen(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors active:scale-[0.97]"
-            aria-label="Aggiungi ore a mano"
-          >
-            <PenLine className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Aggiungi a mano
-          </button>
-        )}
-      </div>
-
-      {/* Righe */}
-      <section className="space-y-2">
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Voci ore
-        </h2>
-
         {righe.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-muted/10 p-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Nessuna riga. Aggiungi una commessa o un cantiere qui sotto.
+          <div className="rounded-2xl border border-dashed border-border bg-card/60 px-4 py-8 text-center shadow-soft">
+            <span className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Clock className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <p className="text-sm font-medium text-foreground">Nessuna voce per oggi</p>
+            <p className="mx-auto mt-1 max-w-[16rem] text-xs leading-relaxed text-muted-foreground">
+              Aggiungi un cantiere o una commessa qui sotto e inserisci le ore.
             </p>
           </div>
         ) : (
@@ -422,95 +521,119 @@ export function OreClient({
           </div>
         )}
 
-        {/* Aggiungi riga: picker unificato con optgroup */}
-        {isBozza && haTargetLiberi && (
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <select
-                value={pickerTarget}
-                onChange={(e) => setPickerTarget(e.target.value)}
-                disabled={isPending}
-                className="w-full appearance-none rounded-md border border-border bg-background py-2 pl-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-              >
-                <option value="">Scegli commessa o cantiere...</option>
-                {commesseLibere.length > 0 && (
-                  <optgroup label="Commesse">
-                    {commesseLibere.map((c) => (
-                      <option key={c.id} value={encodePickerValue('commessa', c.id)}>
-                        {titoloCase(c.titolo)}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {cantieriLiberi.length > 0 && (
-                  <optgroup label="Cantieri">
-                    {cantieriLiberi.map((c) => (
-                      <option key={c.id} value={encodePickerValue('cantiere', c.id)}>
-                        {c.nome}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-              <ChevronDown
-                className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={aggiungiRiga}
-              disabled={!pickerTarget || isPending}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
       </section>
 
-      {/* Totali */}
-      <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
-        <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-          Totali
-        </p>
-        <div className="grid grid-cols-3 gap-3">
-          {(
-            [
-              { label: 'Ordinarie', val: totOrdinarie },
-              { label: 'Straord.', val: totStraordinarie },
-              { label: 'Viaggio', val: totViaggio },
-            ] as const
-          ).map(({ label, val }) => (
-            <div key={label} className="flex flex-col gap-0.5">
-              <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                {label}
-              </span>
-              <span className="font-mono text-xl font-bold tabular-nums leading-none text-foreground">
-                {fmtOre(val)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* ── Aggiungi una voce ── */}
+      {(mostraPicker || puoiManuale) && (
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Aggiungi una voce
+          </p>
 
-      {/* Note testata */}
-      <section className="space-y-1.5">
-        <label
-          htmlFor="note-testata"
-          className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground"
-        >
-          Note generali
+          {mostraPicker && (
+            <div className="space-y-1.5">
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Scegli un cantiere o una commessa, poi compila le ore nella voce.
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <select
+                    value={pickerTarget}
+                    onChange={(e) => setPickerTarget(e.target.value)}
+                    disabled={isPending}
+                    className="w-full appearance-none rounded-md border border-border bg-background py-2.5 pl-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                  >
+                    <option value="">Scegli commessa o cantiere...</option>
+                    {commesseLibere.length > 0 && (
+                      <optgroup label="Commesse">
+                        {commesseLibere.map((c) => (
+                          <option key={c.id} value={encodePickerValue('commessa', c.id)}>
+                            {titoloCase(c.titolo)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {cantieriLiberi.length > 0 && (
+                      <optgroup label="Cantieri">
+                        {cantieriLiberi.map((c) => (
+                          <option key={c.id} value={encodePickerValue('cantiere', c.id)}>
+                            {c.nome}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  <ChevronDown
+                    className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={aggiungiRiga}
+                  disabled={!pickerTarget || isPending}
+                  aria-label="Aggiungi voce"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {puoiManuale && (
+            <>
+              {mostraPicker && (
+                <div className="flex items-center gap-2">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground/70">
+                    oppure
+                  </span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setManualeOpen(true)}
+                className="flex w-full items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] px-3 py-3 text-left transition-colors hover:bg-primary/10 active:scale-[0.99]"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <PenLine className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-foreground">
+                    Inserimento completo
+                  </span>
+                  <span className="block text-xs leading-snug text-muted-foreground">
+                    Ore di lavoro e viaggio andata/ritorno, con sede e mezzo.
+                  </span>
+                </span>
+              </button>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* ── Note per l'ufficio ── */}
+      <section className="space-y-1.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+        <label htmlFor="note-testata" className="block text-sm font-semibold text-foreground">
+          Note per l&apos;ufficio
         </label>
+        <p className="text-xs text-muted-foreground">
+          Facoltative. Segnala imprevisti o spiegazioni sulle ore (es. fermo cantiere).
+        </p>
         <textarea
           id="note-testata"
           rows={3}
           value={note}
-          onChange={(e) => setNote(e.target.value)}
+          onChange={(e) => {
+            dirtyRef.current = true;
+            setNote(e.target.value);
+          }}
           disabled={!isBozza || isPending}
-          placeholder="Note aggiuntive per l'ufficio..."
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+          placeholder="Es. fermo per pioggia, materiale mancante..."
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
         />
       </section>
 

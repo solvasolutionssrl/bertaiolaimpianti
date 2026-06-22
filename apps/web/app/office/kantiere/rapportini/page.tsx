@@ -334,9 +334,9 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   }));
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Rapportini</h1>
+        <h1 className="text-lg font-semibold">Rapportini</h1>
         <p className="text-sm text-muted-foreground">
           Coda approvazioni e registro dei rapportini giornalieri del personale.
         </p>

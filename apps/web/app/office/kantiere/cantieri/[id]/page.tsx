@@ -332,13 +332,11 @@ export default async function CantiereDetailPage({ params }: PageProps) {
         anomalie={anomalie}
       />
 
-      <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
-        <CantiereSediPanel
-          cantiereId={cantiere.id}
-          sediTenant={sediTenant}
-          sediAssociate={sediAssociate}
-        />
-      </div>
+      <CantiereSediPanel
+        cantiereId={cantiere.id}
+        sediTenant={sediTenant}
+        sediAssociate={sediAssociate}
+      />
     </div>
   );
 }

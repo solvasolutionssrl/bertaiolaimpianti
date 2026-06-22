@@ -51,6 +51,90 @@ async function cantiereDelTenant(
   return Boolean(data);
 }
 
+/**
+ * Sincronizza l'anagrafica Sedi a partire dalla "Sede di partenza" digitata
+ * sulla scheda cantiere.
+ *
+ * Quando l'utente compila la sede di partenza con un indirizzo geolocalizzato
+ * (lat/lng presenti), la sede viene:
+ *   1. creata/aggiornata nell'anagrafica `sedi` (match idempotente per nome),
+ *   2. impostata come sede PREDEFINITA del tenant (mostrata come partenza per
+ *      tutti i cantieri alla timbratura),
+ *   3. associata a questo cantiere.
+ *
+ * Senza coordinate non si fa nulla (la sede non servirebbe al calcolo viaggio).
+ * Best-effort: un errore qui NON fa fallire il salvataggio del cantiere.
+ */
+async function sincronizzaSedeDefaultDaCantiere(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  cantiereId: string,
+  sedePartenza: string | null,
+  lat: number | null,
+  lng: number | null,
+): Promise<void> {
+  const nome = (sedePartenza ?? '').trim();
+  if (!nome || lat == null || lng == null) return;
+
+  try {
+    // Idempotenza: riusa una sede esistente con lo stesso nome.
+    const { data: esistente } = await supabase
+      .from('sedi' as never)
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('nome', nome)
+      .maybeSingle();
+
+    let sedeId = (esistente as { id: string } | null)?.id ?? null;
+
+    if (sedeId) {
+      await supabase
+        .from('sedi' as never)
+        .update({ indirizzo: nome, lat, lng, attivo: true } as never)
+        .eq('id', sedeId)
+        .eq('tenant_id', tenantId);
+    } else {
+      const { data: creata } = await supabase
+        .from('sedi' as never)
+        .insert({
+          tenant_id: tenantId,
+          nome,
+          tipo: 'sede_principale',
+          indirizzo: nome,
+          lat,
+          lng,
+          is_default: false,
+          attivo: true,
+        } as never)
+        .select('id')
+        .single();
+      sedeId = (creata as { id: string } | null)?.id ?? null;
+    }
+    if (!sedeId) return;
+
+    // Imposta come predefinita (reset altri, set questa).
+    await supabase
+      .from('sedi' as never)
+      .update({ is_default: false } as never)
+      .eq('tenant_id', tenantId);
+    await supabase
+      .from('sedi' as never)
+      .update({ is_default: true } as never)
+      .eq('id', sedeId)
+      .eq('tenant_id', tenantId);
+
+    // Associa al cantiere (idempotente).
+    await supabase
+      .from('cantiere_sede' as never)
+      .upsert(
+        { cantiere_id: cantiereId, sede_id: sedeId, tenant_id: tenantId } as never,
+        { onConflict: 'cantiere_id,sede_id' },
+      );
+  } catch {
+    // Best-effort: ignora gli errori di sync sede.
+  }
+}
+
 // ── Tipi ritorno ──────────────────────────────────────────────────────────
 
 type OkResult = { ok: true } | { ok: false; error: string };
@@ -124,7 +208,18 @@ export async function creaCantiere(input: unknown): Promise<CreaCantResult> {
   if (error) return { ok: false, error: error.message };
   const row = data as { id: string; codice: string };
 
+  // Se la sede di partenza è geolocalizzata, popolala nell'anagrafica Sedi.
+  await sincronizzaSedeDefaultDaCantiere(
+    supabase,
+    ctx.tenantId,
+    row.id,
+    sedePartenza,
+    parsed.data.sedePartenzaLat ?? null,
+    parsed.data.sedePartenzaLng ?? null,
+  );
+
   revalidatePath('/office/kantiere/cantieri');
+  revalidatePath('/office/kantiere/sedi');
   return { ok: true, id: row.id, codice: row.codice };
 }
 
@@ -176,8 +271,22 @@ export async function aggiornaCantiere(input: unknown): Promise<OkResult> {
 
   if (error) return { ok: false, error: error.message };
 
+  // Se è stata aggiornata la sede di partenza con coordinate, sincronizza
+  // l'anagrafica Sedi (crea/aggiorna + default + associazione al cantiere).
+  if ('sedePartenza' in parsed.data) {
+    await sincronizzaSedeDefaultDaCantiere(
+      supabase,
+      ctx.tenantId,
+      parsed.data.id,
+      parsed.data.sedePartenza ?? null,
+      parsed.data.sedePartenzaLat ?? null,
+      parsed.data.sedePartenzaLng ?? null,
+    );
+  }
+
   revalidatePath('/office/kantiere/cantieri');
   revalidatePath(`/office/kantiere/cantieri/${parsed.data.id}`);
+  revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }
 

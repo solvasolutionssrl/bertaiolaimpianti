@@ -138,21 +138,21 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
 
       {/* KPI */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Ore ordinarie</p>
-          <p className="mt-1 text-2xl font-semibold">{fmt(kpi.ordinarie)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(kpi.ordinarie)}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Ore straordinario</p>
-          <p className="mt-1 text-2xl font-semibold">{fmt(kpi.straordinarie)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(kpi.straordinarie)}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Ore viaggio</p>
-          <p className="mt-1 text-2xl font-semibold">{fmt(kpi.viaggio)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(kpi.viaggio)}</p>
         </div>
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Totale ore</p>
-          <p className="mt-1 text-2xl font-semibold text-primary">{fmt(kpi.totale)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums text-primary">{fmt(kpi.totale)}</p>
         </div>
       </div>
 
@@ -162,41 +162,41 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted/50">
+            <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">
+                <th className="px-3 py-2 text-left font-medium">
                   {filtri.per === 'dipendente' ? 'Dipendente' : 'Commessa / Cantiere'}
                 </th>
-                <th className="px-4 py-2 text-right font-medium">Ordinarie</th>
-                <th className="px-4 py-2 text-right font-medium">Straordinario</th>
-                <th className="px-4 py-2 text-right font-medium">Viaggio</th>
-                <th className="px-4 py-2 text-right font-medium">Totale</th>
+                <th className="px-3 py-2 text-right font-medium">Ordinarie</th>
+                <th className="px-3 py-2 text-right font-medium">Straordinario</th>
+                <th className="px-3 py-2 text-right font-medium">Viaggio</th>
+                <th className="px-3 py-2 text-right font-medium">Totale</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {aggregati.map((row) => (
                 <tr key={row.chiave} className="hover:bg-muted/30">
-                  <td className="px-4 py-2 font-medium">{row.chiave}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(row.ordinarie)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(row.straordinarie)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{fmt(row.viaggio)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(row.totale)}</td>
+                  <td className="px-3 py-1.5 font-medium">{row.chiave}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.ordinarie)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.straordinarie)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.viaggio)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(row.totale)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot className="border-t-2 border-border bg-muted/50">
+            <tfoot className="border-t-2 border-border bg-muted/40">
               <tr>
-                <td className="px-4 py-2 font-semibold">Totale</td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                <td className="px-3 py-2 font-semibold">Totale</td>
+                <td className="px-3 py-2 text-right tabular-nums font-semibold">
                   {fmt(totaleColonna.ordinarie)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                <td className="px-3 py-2 text-right tabular-nums font-semibold">
                   {fmt(totaleColonna.straordinarie)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                <td className="px-3 py-2 text-right tabular-nums font-semibold">
                   {fmt(totaleColonna.viaggio)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold text-primary">
+                <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
                   {fmt(totaleColonna.totale)}
                 </td>
               </tr>
@@ -222,9 +222,9 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
       </div>
 
       {/* ── Sezione Viaggi e km ────────────────────────────────────────────── */}
-      <section className="space-y-5 pt-2">
+      <section className="space-y-4 pt-2">
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold">Viaggi e km</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wide">Viaggi e km</h2>
           <span className="text-xs text-muted-foreground">
             Tratte registrate nel periodo selezionato.
           </span>
@@ -233,43 +233,43 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
         {viaggiPerDipendente.length === 0 && viaggiPerMezzo.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nessun viaggio registrato nel periodo selezionato.</p>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {/* Per dipendente */}
             <div className="space-y-2">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Per dipendente</h3>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Per dipendente</h3>
               {viaggiPerDipendente.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nessun dato.</p>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
+                    <thead className="bg-muted/40">
                       <tr>
-                        <th className="px-4 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Dipendente</th>
-                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot.</th>
-                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Viaggi</th>
-                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Ore guida</th>
+                        <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Dipendente</th>
+                        <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot.</th>
+                        <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Viaggi</th>
+                        <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Ore guida</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {viaggiPerDipendente.map((r) => (
                         <tr key={r.dipendente} className="hover:bg-muted/30">
-                          <td className="px-4 py-2 font-medium">{r.dipendente}</td>
-                          <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
-                          <td className="px-4 py-2 text-right tabular-nums">{r.nViaggi}</td>
-                          <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{fmtOre(r.oreGuida)} h</td>
+                          <td className="px-3 py-1.5 font-medium">{r.dipendente}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{r.nViaggi}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtOre(r.oreGuida)} h</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="border-t-2 border-border bg-muted/50">
+                    <tfoot className="border-t-2 border-border bg-muted/40">
                       <tr>
-                        <td className="px-4 py-2 font-semibold">Totale</td>
-                        <td className="px-4 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                        <td className="px-3 py-2 font-semibold">Totale</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
                           {fmtKm(viaggiPerDipendente.reduce((s, r) => s + r.kmTotali, 0))} km
                         </td>
-                        <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">
                           {viaggiPerDipendente.reduce((s, r) => s + r.nViaggi, 0)}
                         </td>
-                        <td className="px-4 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
                           {fmtOre(viaggiPerDipendente.reduce((s, r) => s + r.oreGuida, 0))} h
                         </td>
                       </tr>
@@ -281,40 +281,40 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
 
             {/* Per mezzo */}
             <div className="space-y-2">
-              <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Per mezzo</h3>
+              <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Per mezzo</h3>
               {viaggiPerMezzo.length === 0 ? (
                 <p className="text-xs text-muted-foreground">Nessun viaggio con mezzo assegnato.</p>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
+                    <thead className="bg-muted/40">
                       <tr>
-                        <th className="px-4 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Mezzo</th>
-                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot.</th>
-                        <th className="px-4 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Viaggi</th>
+                        <th className="px-3 py-2 text-left font-medium text-xs uppercase tracking-wide text-muted-foreground">Mezzo</th>
+                        <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Km tot.</th>
+                        <th className="px-3 py-2 text-right font-medium text-xs uppercase tracking-wide text-muted-foreground">Viaggi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {viaggiPerMezzo.map((r) => (
                         <tr key={r.targa} className="hover:bg-muted/30">
-                          <td className="px-4 py-2 font-medium font-mono">
+                          <td className="px-3 py-1.5 font-medium font-mono">
                             {r.targa}
                             {r.modello && (
                               <span className="ml-1.5 font-sans font-normal text-muted-foreground text-xs">{r.modello}</span>
                             )}
                           </td>
-                          <td className="px-4 py-2 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
-                          <td className="px-4 py-2 text-right tabular-nums">{r.nViaggi}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{r.nViaggi}</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="border-t-2 border-border bg-muted/50">
+                    <tfoot className="border-t-2 border-border bg-muted/40">
                       <tr>
-                        <td className="px-4 py-2 font-semibold">Totale</td>
-                        <td className="px-4 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
+                        <td className="px-3 py-2 font-semibold">Totale</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
                           {fmtKm(viaggiPerMezzo.reduce((s, r) => s + r.kmTotali, 0))} km
                         </td>
-                        <td className="px-4 py-2 text-right tabular-nums font-semibold">
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold">
                           {viaggiPerMezzo.reduce((s, r) => s + r.nViaggi, 0)}
                         </td>
                       </tr>

@@ -289,9 +289,9 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
   }));
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       <header>
-        <h1 className="text-xl font-semibold">Ore e costi</h1>
+        <h1 className="text-lg font-semibold">Ore e costi</h1>
         <p className="text-sm text-muted-foreground">
           Regole di maggiorazione, tariffe orarie dei dipendenti e costo del lavoro per periodo.
         </p>
