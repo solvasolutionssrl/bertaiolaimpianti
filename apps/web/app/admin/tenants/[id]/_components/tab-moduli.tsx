@@ -4,7 +4,11 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { Badge, Button, Card, CardContent } from '@kommessa/ui';
-import { aggiornaModuloTenant, aggiornaAppModeTenant } from '../../../_actions/tenants';
+import {
+  aggiornaModuloTenant,
+  aggiornaAppModeTenant,
+  aggiornaCodiceAzienda,
+} from '../../../_actions/tenants';
 import { useAlert } from '@/app/_components/confirm-provider';
 
 type AppMode = 'kommessa' | 'kantiere' | 'full';
@@ -31,10 +35,12 @@ export function TabModuli({
   tenantId,
   kantiereAttivo,
   appMode: appModeIniziale,
+  codiceAzienda: codiceIniziale,
 }: {
   tenantId: string;
   kantiereAttivo: boolean;
   appMode: AppMode;
+  codiceAzienda: string;
 }) {
   const router = useRouter();
   const showAlert = useAlert();
@@ -44,6 +50,21 @@ export function TabModuli({
 
   const [appMode, setAppMode] = React.useState<AppMode>(appModeIniziale);
   const [pendingMode, startMode] = React.useTransition();
+
+  const [codice, setCodice] = React.useState(codiceIniziale);
+  const [pendingCodice, startCodice] = React.useTransition();
+  const codiceDirty = codice.trim().toUpperCase() !== codiceIniziale.toUpperCase();
+
+  const salvaCodice = () => {
+    startCodice(async () => {
+      const res = await aggiornaCodiceAzienda({ tenantId, codice: codice.trim() });
+      if (!res.ok) {
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   const apply = () => {
     start(async () => {
@@ -108,6 +129,39 @@ export function TabModuli({
               {attivo ? 'Attivo' : 'Spento'}
             </span>
           </label>
+        </div>
+
+        {/* Codice azienda (login a 3 campi) */}
+        <div className="space-y-2 rounded-lg border border-border px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Codice azienda</p>
+            <p className="text-[11px] text-muted-foreground">
+              1° campo del login per disambiguare gli utenti tra tenant. Il
+              tenant di default (Bertaiola) accede anche senza codice.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={codice}
+              onChange={(e) => setCodice(e.target.value.toUpperCase())}
+              placeholder="es. FPM"
+              maxLength={20}
+              className="h-9 w-40 rounded-md border border-input bg-background px-3 text-sm uppercase tracking-wide focus:border-primary focus:outline-none"
+            />
+            <Button
+              type="button"
+              size="sm"
+              onClick={salvaCodice}
+              disabled={pendingCodice || !codiceDirty}
+            >
+              {pendingCodice ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                'Salva'
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Esperienza mobile (app_mode) */}

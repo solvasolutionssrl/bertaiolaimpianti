@@ -4,13 +4,14 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import {
   risolviRegoleEffettive,
-  calcolaCostoGiornata,
+  calcolaCostoGiornataCond,
   aggregaCosti,
   eFestivo,
-  eWeekend,
+  giornoSettimanaISO,
   type RegolaOre,
   type RegolaAmbito,
   type RigaCosto,
+  type RegolaCond,
 } from '@kommessa/api/kantiere-costi';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { assicuraRegoleDefault } from '@/app/office/_actions/kantiere-regole';
@@ -28,6 +29,12 @@ type RegolaRow = {
   params: Record<string, unknown> | null;
   maggiorazione_pct: number;
   priorita: number;
+  giorni_settimana: number[] | null;
+  ora_da: string | null;
+  ora_a: string | null;
+  festivo_match: 'qualsiasi' | 'solo_festivo' | 'solo_feriale';
+  applica_a: 'tutte' | 'ordinario' | 'straordinario';
+  a_turni: 'qualsiasi' | 'si' | 'no';
 };
 type AmbitoRow = {
   id: string;
@@ -41,6 +48,7 @@ type DipendenteRow = {
   cognome: string;
   stato_attivo: boolean;
   costo_orario: number | null;
+  a_turni: boolean;
 };
 type CantiereRow = { id: string; nome: string; codice: string | null };
 type RapportinoRow = { id: string; dipendente_id: string; data: string; stato: string };
@@ -78,8 +86,6 @@ export type AggregataCostoRiga = {
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
-  ore_weekend: number;
-  ore_festivo: number;
   ore_pesate: number;
   costo_totale: number | null;
 };
@@ -100,7 +106,7 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
   // ── Regole + ambiti ──────────────────────────────────────────────────────
   const { data: regoleData } = (await supabase
     .from('kantiere_regole_ore' as never)
-    .select('id, nome, tipo, attiva, params, maggiorazione_pct, priorita')
+    .select('id, nome, tipo, attiva, params, maggiorazione_pct, priorita, giorni_settimana, ora_da, ora_a, festivo_match, applica_a, a_turni')
     .eq('tenant_id', ctx.tenantId)
     .order('priorita', { ascending: false })
     .order('nome')) as { data: RegolaRow[] | null };
@@ -120,10 +126,10 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
   }
   const regoleView: RegolaView[] = regole.map((r) => ({ ...r, ambiti: ambitiPerRegola.get(r.id) ?? [] }));
 
-  // ── Dipendenti (con costo orario) ────────────────────────────────────────
+  // ── Dipendenti (con costo orario + a_turni) ──────────────────────────────
   const { data: dipData } = (await supabase
     .from('dipendenti' as never)
-    .select('id, nome, cognome, stato_attivo, costo_orario')
+    .select('id, nome, cognome, stato_attivo, costo_orario, a_turni')
     .eq('tenant_id', ctx.tenantId)
     .order('cognome')) as { data: DipendenteRow[] | null };
   const dipendenti = dipData ?? [];
@@ -147,9 +153,10 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
     dipendenti.map((d) => [d.id, `${d.nome} ${d.cognome}`.trim()]),
   );
   const dipCostoMap = new Map<string, number | null>(dipendenti.map((d) => [d.id, d.costo_orario]));
+  const dipATurniMap = new Map<string, boolean>(dipendenti.map((d) => [d.id, d.a_turni]));
   const cantNomeMap = new Map<string, string>(cantieri.map((k) => [k.id, k.nome || k.codice || k.id]));
 
-  // Regole pure (input al solver)
+  // Regole pure (input al vecchio solver, usato solo per risolviRegoleEffettive viaggio)
   const regolePure: RegolaOre[] = regole.map((r) => ({
     id: r.id,
     nome: r.nome,
@@ -164,6 +171,24 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
     tipo_target: a.tipo_target,
     target_id: a.target_id,
   }));
+
+  // Regole condizionali per il nuovo motore (esclude viaggio e soglia)
+  const regoleCond: RegolaCond[] = regole
+    .filter((r) => r.tipo !== 'maggiorazione_viaggio' && r.tipo !== 'soglia_giornaliera')
+    .map((r) => ({
+      id: r.id,
+      nome: r.nome,
+      attiva: r.attiva,
+      maggiorazione_pct: Number(r.maggiorazione_pct),
+      priorita: r.priorita,
+      giorni_settimana: r.giorni_settimana,
+      ora_da: r.ora_da,
+      ora_a: r.ora_a,
+      festivo_match: r.festivo_match,
+      applica_a: r.applica_a,
+      a_turni: r.a_turni,
+      params: r.params ?? {},
+    }));
 
   // Carica rapportini inviati/approvati nel range
   const { data: rapData } = (await supabase
@@ -212,14 +237,15 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
     }
   }
 
-  // Cache delle regole effettive per (dipendente|cantiere)
-  const regoleEffCache = new Map<string, ReturnType<typeof risolviRegoleEffettive>>();
-  function regoleEff(dipendenteId: string | null, cantiereId: string | null) {
+  // Cache % viaggio per (dipendente|cantiere) — via vecchio solver per rispettare ambiti
+  const pctViaggioCache = new Map<string, number>();
+  function getPctViaggio(dipendenteId: string | null, cantiereId: string | null): number {
     const key = `${dipendenteId ?? ''}|${cantiereId ?? ''}`;
-    let v = regoleEffCache.get(key);
-    if (!v) {
-      v = risolviRegoleEffettive(regolePure, ambitiPure, { dipendenteId, cantiereId });
-      regoleEffCache.set(key, v);
+    let v = pctViaggioCache.get(key);
+    if (v === undefined) {
+      const regEff = risolviRegoleEffettive(regolePure, ambitiPure, { dipendenteId, cantiereId });
+      v = regEff.get('maggiorazione_viaggio')?.maggiorazione_pct ?? 0;
+      pctViaggioCache.set(key, v);
     }
     return v;
   }
@@ -229,39 +255,38 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
     const dipId = meta?.dipendente_id ?? '';
     const giorno = meta?.data ?? '';
     const festivo = giorno ? eFestivo(giorno) : false;
-    const weekend = giorno ? eWeekend(giorno) : false;
+    const giornoSettimana = giorno ? giornoSettimanaISO(giorno) : 1;
+    const aTurni = dipATurniMap.get(dipId) ?? false;
     const targetLabel = r.commessa_id
       ? commesseTitoloMap.get(r.commessa_id) ?? r.commessa_id
       : r.cantiere_id
         ? cantNomeMap.get(r.cantiere_id) ?? r.cantiere_id
         : 'Sconosciuto';
 
-    const ordin = Number(r.ore_ordinarie ?? 0);
-    const straord = Number(r.ore_straordinarie ?? 0);
-    const viaggio = Number(r.ore_viaggio ?? 0);
-    // In giorno festivo/weekend le ore ordinarie+straordinarie vengono
-    // classificate come festivo/weekend per applicare quella maggiorazione.
-    const baseLavoro = ordin + straord;
-    const oreFestivo = festivo ? baseLavoro : 0;
-    const oreWeekend = !festivo && weekend ? baseLavoro : 0;
-    const oreOrdin = festivo || weekend ? 0 : ordin;
-    const oreStraord = festivo || weekend ? 0 : straord;
-
-    return calcolaCostoGiornata({
+    return calcolaCostoGiornataCond({
       chiaveDipendente: dipNomeMap.get(dipId) ?? dipId,
       chiaveCommessa: targetLabel,
-      ore_ordinarie: oreOrdin,
-      ore_straordinarie: oreStraord,
-      ore_viaggio: viaggio,
-      ore_weekend: oreWeekend,
-      ore_festivo: oreFestivo,
+      ore_ordinarie: Number(r.ore_ordinarie ?? 0),
+      ore_straordinarie: Number(r.ore_straordinarie ?? 0),
+      ore_viaggio: Number(r.ore_viaggio ?? 0),
+      giornoSettimana,
+      festivo,
+      aTurni,
+      pctViaggio: getPctViaggio(dipId, r.cantiere_id),
       costoOrario: dipCostoMap.get(dipId) ?? null,
-      regole: regoleEff(dipId, r.cantiere_id),
+      regole: regoleCond,
     });
   });
 
   const aggMap = aggregaCosti(righeCosto, per);
-  const aggregati: AggregataCostoRiga[] = [...aggMap.entries()].map(([chiave, a]) => ({ chiave, ...a }));
+  const aggregati: AggregataCostoRiga[] = [...aggMap.entries()].map(([chiave, a]) => ({
+    chiave,
+    ore_ordinarie: a.ore_ordinarie,
+    ore_straordinarie: a.ore_straordinarie,
+    ore_viaggio: a.ore_viaggio,
+    ore_pesate: a.ore_pesate,
+    costo_totale: a.costo_totale,
+  }));
 
   return (
     <div className="w-full space-y-6">

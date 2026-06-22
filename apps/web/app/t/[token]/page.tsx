@@ -304,6 +304,66 @@ export default async function TokenPage({
     }
   }
 
+  // Contesto viaggio: solo per la timbratura PERSONALE su un cantiere con
+  // sedi configurate. Sedi disponibili = sede default + sedi associate al
+  // cantiere (solo attive). Mezzi = parco mezzi attivo del tenant.
+  let viaggioCtx: {
+    cantiereId: string;
+    sedi: { id: string; nome: string; tipo: string; hasCoord: boolean }[];
+    sedeDefaultId: string | null;
+    mezzi: { id: string; targa: string; modello: string | null }[];
+  } | null = null;
+
+  if (me && target.tipo === 'cantiere') {
+    const [sediRes, assocRes, mezziRes] = await Promise.all([
+      supabase
+        .from('sedi' as never)
+        .select('id, nome, tipo, lat, lng, is_default')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('attivo', true),
+      supabase
+        .from('cantiere_sede' as never)
+        .select('sede_id')
+        .eq('cantiere_id', target.id)
+        .eq('tenant_id', ctx.tenantId),
+      supabase
+        .from('mezzi' as never)
+        .select('id, targa, modello')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('attivo', true)
+        .order('targa'),
+    ]);
+
+    const allSedi =
+      (sediRes.data as {
+        id: string;
+        nome: string;
+        tipo: string;
+        lat: number | null;
+        lng: number | null;
+        is_default: boolean;
+      }[] | null) ?? [];
+    const assocIds = new Set(
+      ((assocRes.data as { sede_id: string }[] | null) ?? []).map((r) => r.sede_id),
+    );
+    const sediDisponibili = allSedi
+      .filter((s) => s.is_default || assocIds.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        nome: titoloCase(s.nome),
+        tipo: s.tipo,
+        hasCoord: s.lat != null && s.lng != null,
+      }));
+    const sedeDefaultId = allSedi.find((s) => s.is_default)?.id ?? null;
+    const mezzi = ((mezziRes.data as { id: string; targa: string; modello: string | null }[] | null) ?? []).map(
+      (m) => ({ id: m.id, targa: m.targa, modello: m.modello }),
+    );
+
+    if (sediDisponibili.length > 0) {
+      viaggioCtx = { cantiereId: target.id, sedi: sediDisponibili, sedeDefaultId, mezzi };
+    }
+  }
+
   // 5a. Nessun profilo dipendente (office/admin senza scheda)
   if (!me && !capo) {
     return (
@@ -337,6 +397,7 @@ export default async function TokenPage({
         prossimoTipoSelf={prossimoTipoSelf}
         capo={capo}
         membri={membriConTipo}
+        viaggio={viaggioCtx}
       />
     </Schermo>
   );

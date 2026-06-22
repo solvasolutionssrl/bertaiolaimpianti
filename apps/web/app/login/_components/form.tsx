@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { createBrowserSupabase } from '@kommessa/api/client';
-import { risolviUsernameLogin } from '../_actions/risolvi-username';
+import { risolviLogin } from '../_actions/risolvi-login';
 
 function pickHomeForDevice(): string {
   if (typeof window === 'undefined') return '/office';
@@ -36,31 +36,27 @@ export function LoginForm() {
       <form
         action={(fd) => {
           setErr(null);
+          const codice = String(fd.get('codice') ?? '').trim();
           const raw = String(fd.get('email') ?? '').trim();
           const password = String(fd.get('password') ?? '');
           if (!raw || !password) {
-            setErr('Inserisci email/username e password.');
+            setErr('Inserisci username e password.');
             return;
           }
           start(async () => {
-            // Se l'utente ha digitato uno username "nudo" (senza @), risolvi
-            // server-side cercando l'email sintetica completa nei record
-            // creati manualmente dal SA (creaUtenteManuale).
-            let email = raw;
-            if (!raw.includes('@')) {
-              const res = await risolviUsernameLogin(raw);
-              if (!res.ok) {
-                setErr(
-                  res.error === 'not_found'
-                    ? `Username "${raw}" non trovato. Verifica con l'amministratore.`
-                    : res.error === 'ambiguous'
-                      ? 'Username ambiguo — inserisci l\'email completa.'
-                      : 'Username non valido.',
-                );
-                return;
-              }
-              email = res.email;
+            // Risoluzione deterministica: codice azienda + username → email
+            // sintetica. Email completa (con @) passa invariata; codice vuoto →
+            // tenant di default (Bertaiola, retrocompatibile).
+            const res = await risolviLogin({ codice, identita: raw });
+            if (!res.ok) {
+              setErr(
+                res.error === 'codice_non_valido'
+                  ? 'Codice azienda non valido. Controlla il codice fornito dall\'azienda.'
+                  : 'Username o email non validi.',
+              );
+              return;
             }
+            const email = res.email;
             const supabase = createBrowserSupabase();
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) {
@@ -87,6 +83,31 @@ export function LoginForm() {
         }}
         className="flex flex-col gap-4"
       >
+        {/* Codice azienda (opzionale) */}
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="codice"
+            className="font-mono text-[10px] uppercase tracking-[0.18em] text-[hsl(220,10%,45%)]"
+          >
+            Codice azienda
+          </label>
+          <input
+            id="codice"
+            name="codice"
+            type="text"
+            autoComplete="organization"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            placeholder="es. FPM"
+            disabled={pending}
+            className="h-12 w-full rounded-xl border border-[hsl(30,12%,89%)] bg-[hsl(32,28%,99%)] px-4 text-[15px] uppercase text-[hsl(220,30%,9%)] placeholder:text-[hsl(220,10%,70%)] placeholder:normal-case transition-colors focus:border-[hsl(220,80%,32%)] focus:outline-none focus:ring-2 focus:ring-[hsl(220,80%,32%)]/20 disabled:opacity-60"
+          />
+          <p className="text-[11px] text-[hsl(220,10%,55%)]">
+            Lascialo vuoto se la tua azienda non te ne ha fornito uno.
+          </p>
+        </div>
+
         {/* Email o username */}
         <div className="flex flex-col gap-1.5">
           <label

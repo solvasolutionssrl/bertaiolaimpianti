@@ -7,6 +7,7 @@ import { giornateIncomplete, type TimbraturaGiorno } from '@kommessa/api/kantier
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
+import { CantiereSediPanel } from '@/app/office/kantiere/sedi/_components/cantiere-sedi-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -272,6 +273,29 @@ export default async function CantiereDetailPage({ params }: PageProps) {
     giorno: r.giorno,
   }));
 
+  // Sedi del tenant + sedi già associate a questo cantiere (per il pannello).
+  const [sediTenantRes, sediAssocRes] = await Promise.all([
+    supabase
+      .from('sedi' as never)
+      .select('id, nome, tipo')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('attivo', true)
+      .order('nome'),
+    supabase
+      .from('cantiere_sede' as never)
+      .select('sede_id')
+      .eq('cantiere_id', params.id)
+      .eq('tenant_id', ctx.tenantId),
+  ]);
+  const sediTenant = ((sediTenantRes.data as {
+    id: string;
+    nome: string;
+    tipo: 'sede_principale' | 'sede_secondaria' | 'hotel' | 'altro';
+  }[] | null) ?? []);
+  const sediAssociate = ((sediAssocRes.data as { sede_id: string }[] | null) ?? []).map(
+    (r) => r.sede_id,
+  );
+
   return (
     <div className="w-full space-y-6">
       <CantiereDetailClient
@@ -307,6 +331,14 @@ export default async function CantiereDetailPage({ params }: PageProps) {
         rapportiniCantiere={rapportiniCantiere}
         anomalie={anomalie}
       />
+
+      <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
+        <CantiereSediPanel
+          cantiereId={cantiere.id}
+          sediTenant={sediTenant}
+          sediAssociate={sediAssociate}
+        />
+      </div>
     </div>
   );
 }

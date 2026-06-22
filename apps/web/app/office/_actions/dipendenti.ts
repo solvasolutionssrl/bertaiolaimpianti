@@ -14,6 +14,7 @@ const BaseSchema = z.object({
   codice_interno: z.string().max(60).optional().nullable(),
   user_id: z.string().uuid().optional().nullable(),
   stato_attivo: z.boolean().optional(),
+  a_turni: z.boolean().optional(),
   note: z.string().max(2000).optional().nullable(),
 });
 
@@ -52,6 +53,7 @@ export async function creaDipendente(input: unknown): Promise<Result> {
       codice_interno: codice,
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
+      a_turni: parsed.data.a_turni ?? false,
       note: parsed.data.note ?? null,
     } as never)
     .select('id')
@@ -76,6 +78,7 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
       codice_interno: parsed.data.codice_interno ?? null,
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
+      a_turni: parsed.data.a_turni ?? false,
       note: parsed.data.note ?? null,
     } as never)
     .eq('id', parsed.data.id);

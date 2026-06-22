@@ -10,8 +10,10 @@ import {
   Coins,
   HardHat,
   LayoutDashboard,
+  MapPin,
   Sparkles,
   Timer,
+  Truck,
   Users,
 } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
@@ -133,6 +135,8 @@ function buildNav(
         defaultOpen: true,
         children: [
           { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+          { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
+          { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
           { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
         ],
       },
@@ -189,6 +193,8 @@ function buildNav(
       defaultOpen: true,
       children: [
         { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+        { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
+        { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
         { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
       ],
     },

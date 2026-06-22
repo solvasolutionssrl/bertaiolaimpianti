@@ -357,3 +357,168 @@ export function eWeekend(giornoISO: string): boolean {
   const dow = d.getUTCDay(); // 0=domenica, 6=sabato
   return dow === 0 || dow === 6;
 }
+
+/** Giorno della settimana 1=lun..7=dom da `YYYY-MM-DD`. */
+export function giornoSettimanaISO(giornoISO: string): number {
+  const dow = new Date(`${giornoISO}T00:00:00Z`).getUTCDay(); // 0=dom..6=sab
+  return dow === 0 ? 7 : dow;
+}
+
+// =====================================================================
+// MOTORE MAGGIORAZIONI A CONDIZIONI (CCNL)
+// Ogni regola lega giorno + fascia oraria + festivo + tier (ord/straord,
+// prime2/successive) + lavoro a turni → una percentuale. Si applica la
+// regola PIÙ SPECIFICA che combacia (NON si sommano le percentuali).
+// =====================================================================
+
+export type RegolaCond = {
+  id: string;
+  nome: string;
+  attiva: boolean;
+  maggiorazione_pct: number;
+  priorita: number;
+  giorni_settimana: number[] | null; // 1=lun..7=dom; null/[] = tutti
+  ora_da: string | null; // 'HH:MM[:SS]' = la regola vale solo per ore notturne (fascia)
+  ora_a: string | null;
+  festivo_match: 'qualsiasi' | 'solo_festivo' | 'solo_feriale';
+  applica_a: 'tutte' | 'ordinario' | 'straordinario';
+  a_turni: 'qualsiasi' | 'si' | 'no';
+  params: Record<string, unknown>; // params.tier = 'prime2'|'successive'
+};
+
+export type ContestoMaggiorazione = {
+  giornoSettimana: number; // 1=lun..7=dom
+  festivo: boolean;
+  aTurni: boolean;
+  tier: 'ordinario' | 'straordinario';
+  tierStraord?: 'prime2' | 'successive' | null;
+  /** true se l'ora è notturna (derivata dagli intervalli, quando disponibili). */
+  notturno?: boolean;
+};
+
+function haFascia(r: RegolaCond): boolean {
+  return !!(r.ora_da || r.ora_a);
+}
+function tierRegola(r: RegolaCond): 'prime2' | 'successive' | null {
+  const t = (r.params as { tier?: unknown })?.tier;
+  return t === 'prime2' || t === 'successive' ? t : null;
+}
+
+/** True se la regola combacia col contesto orario. */
+export function regolaCombacia(r: RegolaCond, ctx: ContestoMaggiorazione): boolean {
+  if (!r.attiva) return false;
+  if (r.applica_a !== 'tutte' && r.applica_a !== ctx.tier) return false;
+  if (r.giorni_settimana && r.giorni_settimana.length > 0 && !r.giorni_settimana.includes(ctx.giornoSettimana))
+    return false;
+  if (r.festivo_match === 'solo_festivo' && !ctx.festivo) return false;
+  if (r.festivo_match === 'solo_feriale' && ctx.festivo) return false;
+  if (r.a_turni === 'si' && !ctx.aTurni) return false;
+  if (r.a_turni === 'no' && ctx.aTurni) return false;
+  // fascia oraria → vale solo per ore notturne (richiede dati intervallo)
+  if (haFascia(r) && !ctx.notturno) return false;
+  const tr = tierRegola(r);
+  if (tr && (ctx.tier !== 'straordinario' || ctx.tierStraord !== tr)) return false;
+  return true;
+}
+
+/** Numero di vincoli impostati: più alto = regola più specifica. */
+export function specificitaRegola(r: RegolaCond): number {
+  let s = 0;
+  if (r.giorni_settimana && r.giorni_settimana.length > 0) s++;
+  if (haFascia(r)) s++;
+  if (r.festivo_match !== 'qualsiasi') s++;
+  if (r.applica_a !== 'tutte') s++;
+  if (r.a_turni !== 'qualsiasi') s++;
+  if (tierRegola(r)) s++;
+  return s;
+}
+
+/** Regola di maggiorazione effettiva per il contesto (più specifica → priorità → pct → id). */
+export function risolviMaggiorazione(
+  regole: RegolaCond[],
+  ctx: ContestoMaggiorazione,
+): { pct: number; regolaId: string; nome: string } | null {
+  let best: RegolaCond | null = null;
+  let bestSpec = -1;
+  for (const r of regole) {
+    if (!regolaCombacia(r, ctx)) continue;
+    const spec = specificitaRegola(r);
+    const vince =
+      !best ||
+      spec > bestSpec ||
+      (spec === bestSpec &&
+        (r.priorita > best.priorita ||
+          (r.priorita === best.priorita &&
+            (r.maggiorazione_pct > best.maggiorazione_pct ||
+              (r.maggiorazione_pct === best.maggiorazione_pct && r.id > best.id)))));
+    if (vince) {
+      best = r;
+      bestSpec = spec;
+    }
+  }
+  return best ? { pct: best.maggiorazione_pct, regolaId: best.id, nome: best.nome } : null;
+}
+
+export type InputCostoCond = {
+  chiaveDipendente: string;
+  chiaveCommessa: string;
+  ore_ordinarie: number;
+  ore_straordinarie: number;
+  ore_viaggio: number;
+  giornoSettimana: number;
+  festivo: boolean;
+  aTurni: boolean;
+  /** % viaggio (categoria a sé, non nella tabella CCNL). */
+  pctViaggio: number;
+  costoOrario: number | null;
+  regole: RegolaCond[];
+};
+
+/**
+ * Costo giornata col motore a condizioni. Le ore ordinarie e straordinarie
+ * (split prime 2 ore / successive) prendono la % della regola più specifica
+ * che combacia col giorno/festivo/turni; il viaggio ha la sua % dedicata.
+ * Il notturno per fascia oraria è applicato solo se a monte si passano ore
+ * notturne (qui ctx.notturno=false: predisposto, vedi TODO).
+ */
+export function calcolaCostoGiornataCond(input: InputCostoCond): RigaCosto {
+  const ord = input.ore_ordinarie ?? 0;
+  const str = input.ore_straordinarie ?? 0;
+  const via = input.ore_viaggio ?? 0;
+  const base = {
+    giornoSettimana: input.giornoSettimana,
+    festivo: input.festivo,
+    aTurni: input.aTurni,
+    notturno: false,
+  };
+
+  const pctOrd = risolviMaggiorazione(input.regole, { ...base, tier: 'ordinario' })?.pct ?? 0;
+  const prime2 = Math.min(2, str);
+  const successive = Math.max(0, str - 2);
+  const pctPrime2 =
+    risolviMaggiorazione(input.regole, { ...base, tier: 'straordinario', tierStraord: 'prime2' })?.pct ?? 0;
+  const pctSucc =
+    risolviMaggiorazione(input.regole, { ...base, tier: 'straordinario', tierStraord: 'successive' })?.pct ?? 0;
+
+  const ore_pesate = round2(
+    ord * (1 + pctOrd / 100) +
+      prime2 * (1 + pctPrime2 / 100) +
+      successive * (1 + pctSucc / 100) +
+      via * (1 + (input.pctViaggio ?? 0) / 100),
+  );
+
+  let costo_totale: number | null = null;
+  if (input.costoOrario != null) costo_totale = round2(ore_pesate * input.costoOrario);
+
+  return {
+    chiaveDipendente: input.chiaveDipendente,
+    chiaveCommessa: input.chiaveCommessa,
+    ore_ordinarie: round2(ord),
+    ore_straordinarie: round2(str),
+    ore_viaggio: round2(via),
+    ore_weekend: 0,
+    ore_festivo: 0,
+    ore_pesate,
+    costo_totale,
+  };
+}

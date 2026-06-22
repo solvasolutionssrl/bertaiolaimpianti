@@ -7,6 +7,7 @@ import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogH
 import { fmtData, fmtDataOra, fmtOra } from '@/app/office/_lib/format';
 import { approvaRapportino, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
 import { RapportinoBadge } from './rapportino-badge';
+import { VersioniDialog } from './versioni-dialog';
 
 export type TimbraturaItem = {
   tipo: string;
@@ -28,6 +29,7 @@ export type RapportiniRiga = {
   dipendenteNome: string;
   data: string;
   stato: string;
+  modificato?: boolean;
   inviatoAt: string | null;
   note: string | null;
   totale: { ord: number; straord: number; viaggio: number };
@@ -126,6 +128,8 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   const [respingiDialog, setRespingiDialog] = React.useState<{ id: string; nome: string } | null>(null);
   const [motivo, setMotivo] = React.useState('');
   const [motivoError, setMotivoError] = React.useState('');
+
+  const [versioniFor, setVersioniFor] = React.useState<{ id: string; nome: string; data: string } | null>(null);
 
   // Dialog registra ore
   const [registraOpen, setRegistraOpen] = React.useState(false);
@@ -427,7 +431,17 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                             <td className="px-4 py-2.5 font-medium">{riga.dipendenteNome}</td>
                             <td className="px-4 py-2.5 tabular-nums">{fmtData(riga.data)}</td>
                             <td className="px-4 py-2.5">
-                              <RapportinoBadge stato={riga.stato} />
+                              <div className="flex items-center gap-1.5">
+                                <RapportinoBadge stato={riga.stato} />
+                                {riga.modificato ? (
+                                  <span
+                                    title="Il tecnico ha modificato il rapportino dopo l'invio"
+                                    className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                                  >
+                                    Modificato
+                                  </span>
+                                ) : null}
+                              </div>
                             </td>
                             <td className="px-4 py-2.5 tabular-nums text-muted-foreground">
                               <span className="inline-flex items-center gap-1">
@@ -449,6 +463,15 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                               onClick={(e) => e.stopPropagation()}
                             >
                               <div className="flex items-center justify-end gap-1">
+                                {riga.stato !== 'bozza' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })}
+                                  >
+                                    Cronologia
+                                  </Button>
+                                )}
                                 {riga.stato === 'inviato' && (
                                   <>
                                     <Button
@@ -790,6 +813,9 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog Cronologia versioni */}
+      <VersioniDialog rapportino={versioniFor} onClose={() => setVersioniFor(null)} />
     </div>
   );
 }

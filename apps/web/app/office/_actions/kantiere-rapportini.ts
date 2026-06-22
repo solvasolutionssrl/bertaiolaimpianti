@@ -5,8 +5,24 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
+import {
+  scriviVersioneRapportino,
+  type AzioneVersione,
+} from '@/app/_actions/_lib/scrivi-versione-rapportino';
 
 type Result = { ok: true } | { ok: false; error: string };
+
+async function nomeUtente(
+  supabase: ReturnType<typeof createServerSupabase>,
+  userId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('users' as never)
+    .select('display_name')
+    .eq('id', userId)
+    .maybeSingle();
+  return (data as { display_name: string | null } | null)?.display_name ?? null;
+}
 
 // ── schema per registraOrePerDipendente ─────────────────────────────────────
 
@@ -62,6 +78,14 @@ export async function approvaRapportino(input: unknown): Promise<Result> {
     .eq('id', parsed.data.rapportinoId)
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId: parsed.data.rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'approvazione',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+  });
   revalidatePath('/office/kantiere/rapportini');
   return { ok: true };
 }
@@ -94,6 +118,14 @@ export async function respingiRapportino(input: unknown): Promise<Result> {
     .eq('id', parsed.data.rapportinoId)
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId: parsed.data.rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'respinta',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+  });
   revalidatePath('/office/kantiere/rapportini');
   return { ok: true };
 }
@@ -127,6 +159,14 @@ export async function riapriRapportino(input: unknown): Promise<Result> {
     .eq('id', parsed.data.rapportinoId)
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId: parsed.data.rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'riapertura',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+  });
   revalidatePath('/office/kantiere/rapportini');
   return { ok: true };
 }
@@ -253,6 +293,48 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
     if (insRigaErr) return { ok: false, error: insRigaErr.message };
   }
 
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'modifica_ufficio',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+  });
+
   revalidatePath('/office/kantiere/rapportini');
   return { ok: true };
+}
+
+// ── storico versioni di un rapportino (per l'ufficio) ────────────────────────
+
+export type VersioneRapportino = {
+  versione: number;
+  azione: AzioneVersione;
+  modificato_da_nome: string | null;
+  created_at: string;
+  snapshot: {
+    stato?: string;
+    note?: string | null;
+    totali?: { ore_ordinarie: number; ore_straordinarie: number; ore_viaggio: number };
+  };
+};
+
+export async function versioniRapportino(
+  input: unknown,
+): Promise<{ ok: true; versioni: VersioneRapportino[] } | { ok: false; error: string }> {
+  const parsed = z.object({ rapportinoId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const ctx = await guard();
+  const supabase = createServerSupabase();
+
+  const { data } = await supabase
+    .from('rapportino_versioni' as never)
+    .select('versione, azione, modificato_da_nome, created_at, snapshot')
+    .eq('rapportino_id', parsed.data.rapportinoId)
+    .eq('tenant_id', ctx.tenantId)
+    .order('versione', { ascending: true });
+
+  const versioni = (data as VersioneRapportino[] | null) ?? [];
+  return { ok: true, versioni };
 }

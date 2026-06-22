@@ -1,6 +1,7 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { giornateIncomplete, type TimbraturaGiorno } from '@kommessa/api/kantiere-report';
+import { eFestivo, eWeekend } from '@kommessa/api/kantiere-costi';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { AnomalieClient } from './_components/anomalie-client';
 
@@ -30,6 +31,15 @@ type RigaStraordRow = {
   commessa_id: string | null;
   cantiere_id: string | null;
   ore_straordinarie: number;
+};
+
+type RigaOreRow = {
+  rapportino_id: string;
+  commessa_id: string | null;
+  cantiere_id: string | null;
+  ore_ordinarie: number;
+  ore_straordinarie: number;
+  ore_viaggio: number;
 };
 
 type DipendenteRow = {
@@ -99,6 +109,36 @@ export type ModificatoDopoInvioRow = {
   stato: string;
 };
 
+export type FestivoRow = {
+  dipendenteNome: string;
+  data: string;
+  targetTitolo: string;
+  ore_totali: number;
+};
+
+export type WeekendRow = {
+  dipendenteNome: string;
+  data: string;
+  targetTitolo: string;
+  ore_totali: number;
+};
+
+export type OreEccessiveRow = {
+  dipendenteNome: string;
+  data: string;
+  ore_totali: number;
+};
+
+export type AnomalieAttivi = {
+  incomplete: boolean;
+  straordinari: boolean;
+  senza_rapportino: boolean;
+  modificato: boolean;
+  festivo: boolean;
+  weekend: boolean;
+  ore_eccessive: boolean;
+};
+
 // ---- helpers -----------------------------------------------------------
 
 function toYYYYMMDD(d: Date): string {
@@ -127,6 +167,30 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
 
+  // Leggi config anomalie dal modulo kantiere
+  const { data: modRow } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+
+  const modConfig = ((modRow as { config: Record<string, unknown> | null } | null)?.config) ?? {};
+  const rawAnomalie = modConfig.anomalie && typeof modConfig.anomalie === 'object'
+    ? (modConfig.anomalie as Record<string, boolean>)
+    : {};
+
+  const attivi: AnomalieAttivi = {
+    incomplete: rawAnomalie['incomplete'] !== false,
+    straordinari: rawAnomalie['straordinari'] !== false,
+    senza_rapportino: rawAnomalie['senza_rapportino'] !== false,
+    modificato: rawAnomalie['modificato'] !== false,
+    festivo: rawAnomalie['festivo'] !== false,
+    weekend: rawAnomalie['weekend'] !== false,
+    ore_eccessive: rawAnomalie['ore_eccessive'] !== false,
+  };
+  const anomalie_ore_max = typeof modConfig.anomalie_ore_max === 'number' ? modConfig.anomalie_ore_max : 13;
+
   const def = defaultRange();
   const from = searchParams.from ?? def.from;
   const to = searchParams.to ?? def.to;
@@ -138,17 +202,19 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   const dayAfterTo = toYYYYMMDD(new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000));
 
   // ----------------------------------------------------------------
-  // A) Timbrature incomplete
+  // A) Timbrature incomplete (solo se attivo)
   // ----------------------------------------------------------------
-  const { data: timbRaw } = (await supabase
-    .from('timbrature' as never)
-    .select('dipendente_id, commessa_id, cantiere_id, tipo, ts')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', `${from}T00:00:00.000Z`)
-    .lt('ts', `${dayAfterTo}T00:00:00.000Z`)
-    .limit(5000)) as { data: TimbraturaRow[] | null };
-
-  const timbraturaRows = timbRaw ?? [];
+  let timbraturaRows: TimbraturaRow[] = [];
+  if (attivi.incomplete) {
+    const { data: timbRaw } = (await supabase
+      .from('timbrature' as never)
+      .select('dipendente_id, commessa_id, cantiere_id, tipo, ts')
+      .eq('tenant_id', ctx.tenantId)
+      .gte('ts', `${from}T00:00:00.000Z`)
+      .lt('ts', `${dayAfterTo}T00:00:00.000Z`)
+      .limit(5000)) as { data: TimbraturaRow[] | null };
+    timbraturaRows = timbRaw ?? [];
+  }
 
   // Usa targetKey come commessa_id sintetico per giornateIncomplete (per-target grouping)
   const timbraturePerFn: TimbraturaGiorno[] = timbraturaRows
@@ -160,25 +226,40 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
       tipo: t.tipo as 'ingresso' | 'uscita',
     }));
 
-  const incompleteRaw = giornateIncomplete(timbraturePerFn);
+  const incompleteRaw = attivi.incomplete ? giornateIncomplete(timbraturePerFn) : [];
 
   // ----------------------------------------------------------------
-  // B) Straordinario
+  // B) Rapportini e righe (per straordinario, modificato, festivo, weekend, ore_eccessive)
   // ----------------------------------------------------------------
-  const { data: rapRaw } = (await supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato, inviato_at, updated_at')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .limit(2000)) as { data: RapportinoRow[] | null };
+  const needRapportini =
+    attivi.straordinari ||
+    attivi.senza_rapportino ||
+    attivi.modificato ||
+    attivi.festivo ||
+    attivi.weekend ||
+    attivi.ore_eccessive;
 
-  const rapportini = rapRaw ?? [];
-  const rapportinoIds = rapportini.map((r) => r.id);
-  const dipIdsInPeriod = [...new Set(rapportini.map((r) => r.dipendente_id))];
+  let rapportini: RapportinoRow[] = [];
+  let rapportinoIds: string[] = [];
+  let dipIdsInPeriod: string[] = [];
 
+  if (needRapportini) {
+    const { data: rapRaw } = (await supabase
+      .from('rapportini' as never)
+      .select('id, dipendente_id, data, stato, inviato_at, updated_at')
+      .eq('tenant_id', ctx.tenantId)
+      .gte('data', from)
+      .lte('data', to)
+      .limit(2000)) as { data: RapportinoRow[] | null };
+
+    rapportini = rapRaw ?? [];
+    rapportinoIds = rapportini.map((r) => r.id);
+    dipIdsInPeriod = [...new Set(rapportini.map((r) => r.dipendente_id))];
+  }
+
+  // Righe per straordinario
   let righeConStraord: RigaStraordRow[] = [];
-  if (rapportinoIds.length > 0) {
+  if (attivi.straordinari && rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
       .select('rapportino_id, commessa_id, cantiere_id, ore_straordinarie')
@@ -187,8 +268,21 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
     righeConStraord = data ?? [];
   }
 
+  // Righe per festivo/weekend/ore_eccessive
+  let righeOre: RigaOreRow[] = [];
+  if ((attivi.festivo || attivi.weekend || attivi.ore_eccessive) && rapportinoIds.length > 0) {
+    const { data } = (await supabase
+      .from('rapportino_righe' as never)
+      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .in('rapportino_id', rapportinoIds)) as { data: RigaOreRow[] | null };
+    righeOre = data ?? [];
+  }
+
   const straordCommessaIds = [...new Set(righeConStraord.map((r) => r.commessa_id).filter((id): id is string => id != null))];
   const straordCantiereIds = [...new Set(righeConStraord.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
+
+  const oreCommessaIds = [...new Set(righeOre.map((r) => r.commessa_id).filter((id): id is string => id != null))];
+  const oreCantiereIds = [...new Set(righeOre.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
   // ----------------------------------------------------------------
   // C) Dipendenti attivi del tenant
@@ -200,12 +294,10 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
     .eq('stato_attivo', true)) as { data: DipendenteRow[] | null };
 
   const dipendentiAttivi = dipendentiRaw ?? [];
-
-  // Tutti gli ids che compaiono nei rapportini del periodo
   const dipIdsSet = new Set(dipIdsInPeriod);
 
   // ----------------------------------------------------------------
-  // Batch-load: nomi dipendenti (attivi + quelli in rapportini)
+  // Batch-load: nomi dipendenti (attivi + quelli in rapportini/timbrature)
   // ----------------------------------------------------------------
   const allDipIds = [
     ...new Set([
@@ -230,7 +322,7 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // Batch-load: titoli commesse
   // ----------------------------------------------------------------
   const timbCommessaIds = [...new Set(timbraturaRows.map((t) => t.commessa_id).filter((id): id is string => id != null))];
-  const allCommessaIds = [...new Set([...timbCommessaIds, ...straordCommessaIds])];
+  const allCommessaIds = [...new Set([...timbCommessaIds, ...straordCommessaIds, ...oreCommessaIds])];
 
   const commesseTitoloMap = new Map<string, string>();
   if (allCommessaIds.length > 0) {
@@ -257,7 +349,7 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // Batch-load: nomi cantieri
   // ----------------------------------------------------------------
   const timbCantiereIds = [...new Set(timbraturaRows.map((t) => t.cantiere_id).filter((id): id is string => id != null))];
-  const allCantiereIds = [...new Set([...timbCantiereIds, ...straordCantiereIds])];
+  const allCantiereIds = [...new Set([...timbCantiereIds, ...straordCantiereIds, ...oreCantiereIds])];
 
   const cantieriNomeMap = new Map<string, string>();
   if (allCantiereIds.length > 0) {
@@ -297,39 +389,132 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // ----------------------------------------------------------------
   const rapportinoMap = new Map<string, RapportinoRow>(rapportini.map((r) => [r.id, r]));
 
-  const straordinario: StraordinarioRow[] = righeConStraord.map((riga) => {
-    const rap = rapportinoMap.get(riga.rapportino_id);
-    const dipId = rap?.dipendente_id ?? '';
-    return {
-      dipendenteNome: dipendentiMap.get(dipId) ?? dipId,
-      data: rap?.data ?? '',
-      commessaTitolo: targetLabel(riga, commesseTitoloMap, cantieriNomeMap),
-      ore_straordinarie: riga.ore_straordinarie,
-    };
-  });
+  const straordinario: StraordinarioRow[] = attivi.straordinari
+    ? righeConStraord.map((riga) => {
+        const rap = rapportinoMap.get(riga.rapportino_id);
+        const dipId = rap?.dipendente_id ?? '';
+        return {
+          dipendenteNome: dipendentiMap.get(dipId) ?? dipId,
+          data: rap?.data ?? '',
+          commessaTitolo: targetLabel(riga, commesseTitoloMap, cantieriNomeMap),
+          ore_straordinarie: riga.ore_straordinarie,
+        };
+      })
+    : [];
 
   // ----------------------------------------------------------------
   // Risolvi C) senza rapportino
   // ----------------------------------------------------------------
-  const senzaRapportino: SenzaRapportinoRow[] = dipendentiAttivi
-    .filter((d) => !dipIdsSet.has(d.id))
-    .map((d) => ({ nome: `${d.nome} ${d.cognome}`.trim() }));
+  const senzaRapportino: SenzaRapportinoRow[] = attivi.senza_rapportino
+    ? dipendentiAttivi
+        .filter((d) => !dipIdsSet.has(d.id))
+        .map((d) => ({ nome: `${d.nome} ${d.cognome}`.trim() }))
+    : [];
 
   // ----------------------------------------------------------------
   // Risolvi D) modificato dopo invio
+  // Si basa sulle versioni con azione 'modifica_tecnico' (modifica del
+  // tecnico dopo l'invio), NON su updated_at (che viene bumpato anche dalle
+  // azioni d'ufficio approva/respingi → falsi positivi).
   // ----------------------------------------------------------------
-  const modificati: ModificatoDopoInvioRow[] = rapportini
-    .filter(
-      (r) =>
-        r.inviato_at !== null &&
-        r.updated_at !== null &&
-        new Date(r.updated_at) > new Date(r.inviato_at),
-    )
-    .map((r) => ({
-      dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
-      data: r.data,
-      stato: r.stato,
-    }));
+  let modificati: ModificatoDopoInvioRow[] = [];
+  if (attivi.modificato && rapportini.length > 0) {
+    const { data: vmodRaw } = await supabase
+      .from('rapportino_versioni' as never)
+      .select('rapportino_id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('azione', 'modifica_tecnico')
+      .in(
+        'rapportino_id',
+        rapportini.map((r) => r.id),
+      );
+    const modIds = new Set(
+      ((vmodRaw as { rapportino_id: string }[] | null) ?? []).map((v) => v.rapportino_id),
+    );
+    modificati = rapportini
+      .filter((r) => modIds.has(r.id))
+      .map((r) => ({
+        dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
+        data: r.data,
+        stato: r.stato,
+      }));
+  }
+
+  // ----------------------------------------------------------------
+  // Risolvi E) festivo
+  // ----------------------------------------------------------------
+  // Mappa rapportino_id → data (per join rapido)
+  const rapportinoDataMap = new Map<string, { data: string; dipendente_id: string }>(
+    rapportini.map((r) => [r.id, { data: r.data, dipendente_id: r.dipendente_id }]),
+  );
+
+  const festivo: FestivoRow[] = [];
+  if (attivi.festivo) {
+    // Aggrega ore per (rapportino_id) dove la data del rapportino è festiva
+    for (const riga of righeOre) {
+      const info = rapportinoDataMap.get(riga.rapportino_id);
+      if (!info) continue;
+      if (!eFestivo(info.data)) continue;
+      const oreTotali = (riga.ore_ordinarie ?? 0) + (riga.ore_straordinarie ?? 0) + (riga.ore_viaggio ?? 0);
+      if (oreTotali <= 0) continue;
+      festivo.push({
+        dipendenteNome: dipendentiMap.get(info.dipendente_id) ?? info.dipendente_id,
+        data: info.data,
+        targetTitolo: targetLabel(riga, commesseTitoloMap, cantieriNomeMap),
+        ore_totali: oreTotali,
+      });
+    }
+    // Ordina per data desc
+    festivo.sort((a, b) => b.data.localeCompare(a.data));
+  }
+
+  // ----------------------------------------------------------------
+  // Risolvi F) weekend
+  // ----------------------------------------------------------------
+  const weekend: WeekendRow[] = [];
+  if (attivi.weekend) {
+    for (const riga of righeOre) {
+      const info = rapportinoDataMap.get(riga.rapportino_id);
+      if (!info) continue;
+      if (!eWeekend(info.data)) continue;
+      const oreTotali = (riga.ore_ordinarie ?? 0) + (riga.ore_straordinarie ?? 0) + (riga.ore_viaggio ?? 0);
+      if (oreTotali <= 0) continue;
+      weekend.push({
+        dipendenteNome: dipendentiMap.get(info.dipendente_id) ?? info.dipendente_id,
+        data: info.data,
+        targetTitolo: targetLabel(riga, commesseTitoloMap, cantieriNomeMap),
+        ore_totali: oreTotali,
+      });
+    }
+    weekend.sort((a, b) => b.data.localeCompare(a.data));
+  }
+
+  // ----------------------------------------------------------------
+  // Risolvi G) ore eccessive (somma per dipendente+data)
+  // ----------------------------------------------------------------
+  const oreEccessive: OreEccessiveRow[] = [];
+  if (attivi.ore_eccessive) {
+    // Aggrega (dipendente_id, data) → ore_ordinarie + ore_straordinarie
+    const aggregato = new Map<string, { dipendente_id: string; data: string; ore: number }>();
+    for (const riga of righeOre) {
+      const info = rapportinoDataMap.get(riga.rapportino_id);
+      if (!info) continue;
+      const chiave = `${info.dipendente_id}|${info.data}`;
+      const cur = aggregato.get(chiave) ?? { dipendente_id: info.dipendente_id, data: info.data, ore: 0 };
+      cur.ore += (riga.ore_ordinarie ?? 0) + (riga.ore_straordinarie ?? 0);
+      aggregato.set(chiave, cur);
+    }
+    for (const agg of aggregato.values()) {
+      if (agg.ore > anomalie_ore_max) {
+        oreEccessive.push({
+          dipendenteNome: dipendentiMap.get(agg.dipendente_id) ?? agg.dipendente_id,
+          data: agg.data,
+          ore_totali: agg.ore,
+        });
+      }
+    }
+    oreEccessive.sort((a, b) => b.data.localeCompare(a.data));
+  }
 
   return (
     <div className="w-full space-y-6">
@@ -344,6 +529,11 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
         straordinario={straordinario}
         senzaRapportino={senzaRapportino}
         modificati={modificati}
+        festivo={festivo}
+        weekend={weekend}
+        oreEccessive={oreEccessive}
+        anomalie_ore_max={anomalie_ore_max}
+        attivi={attivi}
         filtri={{ from, to }}
       />
     </div>
