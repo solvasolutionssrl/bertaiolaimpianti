@@ -67,6 +67,55 @@ export function calcolaOreGiornata(input: {
   return { righe, ore_viaggio: oreDaMinuti(input.minutiViaggio ?? 0) };
 }
 
+// ── Riepilogo timbrature giornata (per UI ufficio) ──────────────────────────
+
+export interface CoppiaTimbratura {
+  /** ISO timestamp dell'ingresso. */
+  ingresso: string;
+  /** ISO timestamp dell'uscita, o null se la giornata è ancora aperta. */
+  uscita: string | null;
+  /** Minuti lavorati nella coppia, o null se ancora aperta. */
+  minuti: number | null;
+}
+
+export interface RiepilogoTimbrature {
+  /** Coppie ingresso→uscita in ordine cronologico (l'ultima può essere aperta). */
+  coppie: CoppiaTimbratura[];
+  /** Somma minuti delle coppie chiuse. */
+  minutiTotali: number;
+  /** True se c'è un ingresso senza uscita (giornata in corso). */
+  aperto: boolean;
+  /** ISO dell'ingresso ancora aperto (per il contatore live), o null. */
+  ingressoAperto: string | null;
+}
+
+/**
+ * Accoppia ingresso→uscita di una giornata (ordine cronologico) e calcola i
+ * minuti di ogni segmento + il totale. L'ultima coppia resta "aperta" se manca
+ * l'uscita (giornata in corso). Doppio ingresso e uscita orfana sono ignorati,
+ * coerentemente con `minutiPerCommessa`.
+ */
+export function appaiaTimbrature(
+  timbrature: { tipo: 'ingresso' | 'uscita'; ts: string }[],
+): RiepilogoTimbrature {
+  const sorted = [...timbrature].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const coppie: CoppiaTimbratura[] = [];
+  let aperto: string | null = null;
+  for (const t of sorted) {
+    if (t.tipo === 'ingresso') {
+      if (aperto === null) aperto = t.ts; // doppio ingresso: tiene il primo
+    } else if (aperto !== null) {
+      const minuti = Math.max(0, Math.round((Date.parse(t.ts) - Date.parse(aperto)) / 60000));
+      coppie.push({ ingresso: aperto, uscita: t.ts, minuti });
+      aperto = null;
+    }
+    // uscita orfana: ignorata
+  }
+  if (aperto !== null) coppie.push({ ingresso: aperto, uscita: null, minuti: null });
+  const minutiTotali = coppie.reduce((acc, c) => acc + (c.minuti ?? 0), 0);
+  return { coppie, minutiTotali, aperto: aperto !== null, ingressoAperto: aperto };
+}
+
 /** Toggle del bottone Timbra dalle timbrature odierne (ordinate asc). */
 export function prossimoTipoTimbratura(
   odierne: { tipo: 'ingresso' | 'uscita' }[],

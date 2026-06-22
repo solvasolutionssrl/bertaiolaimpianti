@@ -5,8 +5,53 @@ import {
   prossimoTipoTimbratura,
   arrotonda15,
   minutiViaggioPerTarget,
+  appaiaTimbrature,
   type Timbratura,
 } from './kantiere-ore';
+
+describe('appaiaTimbrature', () => {
+  it('accoppia ingresso/uscita con minuti e totale', () => {
+    const r = appaiaTimbrature([
+      { tipo: 'ingresso', ts: '2026-06-22T08:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-22T12:00:00Z' },
+      { tipo: 'ingresso', ts: '2026-06-22T13:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-22T17:00:00Z' },
+    ]);
+    expect(r.coppie).toHaveLength(2);
+    expect(r.coppie[0]).toMatchObject({ minuti: 240 });
+    expect(r.coppie[1]).toMatchObject({ minuti: 240 });
+    expect(r.minutiTotali).toBe(480);
+    expect(r.aperto).toBe(false);
+    expect(r.ingressoAperto).toBeNull();
+  });
+  it('giornata aperta: ultima coppia senza uscita', () => {
+    const r = appaiaTimbrature([
+      { tipo: 'ingresso', ts: '2026-06-22T08:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-22T12:00:00Z' },
+      { tipo: 'ingresso', ts: '2026-06-22T13:00:00Z' },
+    ]);
+    expect(r.coppie).toHaveLength(2);
+    expect(r.coppie[1]).toMatchObject({ uscita: null, minuti: null });
+    expect(r.minutiTotali).toBe(240);
+    expect(r.aperto).toBe(true);
+    expect(r.ingressoAperto).toBe('2026-06-22T13:00:00Z');
+  });
+  it('ordina cronologicamente input disordinato', () => {
+    const r = appaiaTimbrature([
+      { tipo: 'uscita', ts: '2026-06-22T12:00:00Z' },
+      { tipo: 'ingresso', ts: '2026-06-22T08:00:00Z' },
+    ]);
+    expect(r.coppie).toHaveLength(1);
+    expect(r.minutiTotali).toBe(240);
+    expect(r.aperto).toBe(false);
+  });
+  it('nessuna timbratura → vuoto e chiuso', () => {
+    const r = appaiaTimbrature([]);
+    expect(r.coppie).toHaveLength(0);
+    expect(r.minutiTotali).toBe(0);
+    expect(r.aperto).toBe(false);
+  });
+});
 
 describe('minutiPerCommessa', () => {
   it('accoppia ingresso/uscita e somma i minuti', () => {

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
   AlertCircle,
@@ -24,6 +25,7 @@ import { getMobileShell } from '@kommessa/api/types';
 
 import { guardMobile } from './_lib/guard';
 import { tenantHasModule } from '../_lib/modules';
+import { getAppModeCached } from '../_lib/app-mode';
 import { titoloCase } from './_lib/display-case';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 import { BozzeDaCompletare } from '../_components/bozze-da-completare';
@@ -47,6 +49,13 @@ interface CommessaRow {
 
 export default async function MobileHomePage() {
   const ctx = await guardMobile();
+
+  // Tenant puro-Kantiere (es. FPM): non esiste una "home commessa". Subito dopo
+  // il login si atterra sulla lista Cantieri (con ricerca + eventuale turno
+  // attivo in alto). Bertaiola (app_mode kommessa) resta invariata.
+  const appMode = await getAppModeCached();
+  if (appMode === 'kantiere') redirect('/mobile/kantiere/cantieri');
+
   const shell = getMobileShell(ctx.role);
 
   return shell === 'gestione' ? <GestioneDashboard ctx={ctx} /> : <CampoOggi ctx={ctx} />;

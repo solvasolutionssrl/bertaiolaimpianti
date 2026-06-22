@@ -4,10 +4,11 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, ChevronDown, ChevronRight, PlusCircle } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
-import { fmtData, fmtDataOra, fmtOra } from '@/app/office/_lib/format';
+import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
 import { approvaRapportino, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
 import { RapportinoBadge } from './rapportino-badge';
 import { VersioniDialog } from './versioni-dialog';
+import { TimbratureRiepilogo, TimbratureSommario } from '../../_components/timbrature-riepilogo';
 
 export type TimbraturaItem = {
   tipo: string;
@@ -92,18 +93,6 @@ function TimbraturaIndicator({ tipo }: { tipo: string }) {
       title={isIngresso ? 'Ingresso' : 'Uscita'}
     />
   );
-}
-
-/** Label leggibile per origine timbratura. */
-function origineLabel(o: string | null): string {
-  if (!o) return '';
-  const MAP: Record<string, string> = {
-    qr: 'QR',
-    gps: 'GPS',
-    manuale: 'manuale',
-    app: 'app',
-  };
-  return MAP[o] ?? o;
 }
 
 export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri }: Props) {
@@ -429,7 +418,12 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                               )}
                             </td>
                             <td className="px-3 py-2 font-medium">{riga.dipendenteNome}</td>
-                            <td className="px-3 py-2 tabular-nums">{fmtData(riga.data)}</td>
+                            <td className="px-3 py-2">
+                              <div className="tabular-nums">{fmtData(riga.data)}</div>
+                              <div className="mt-0.5">
+                                <TimbratureSommario timbrature={riga.timbrature} />
+                              </div>
+                            </td>
                             <td className="px-3 py-2">
                               <div className="flex items-center gap-1.5">
                                 <RapportinoBadge stato={riga.stato} />
@@ -578,54 +572,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                     <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                       Timbrature del giorno
                                     </p>
-                                    {riga.timbrature.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground">
-                                        Nessuna timbratura registrata.
-                                      </p>
-                                    ) : (
-                                      <ol className="relative border-l border-border/40 space-y-0">
-                                        {riga.timbrature.map((t, k) => {
-                                          const isIngresso = t.tipo === 'ingresso';
-                                          const oLabel = origineLabel(t.origine);
-                                          return (
-                                            <li key={k} className="ml-4 py-1.5">
-                                              {/* dot sul bordo sinistro */}
-                                              <span
-                                                className={[
-                                                  'absolute -left-[5px] mt-[5px] h-2.5 w-2.5 rounded-full border-2 border-background',
-                                                  isIngresso ? 'bg-emerald-500' : 'bg-slate-400',
-                                                ].join(' ')}
-                                              />
-                                              <div className="flex items-baseline gap-2">
-                                                <span className="tabular-nums text-xs font-semibold text-foreground">
-                                                  {fmtOra(t.ts)}
-                                                </span>
-                                                <span
-                                                  className={[
-                                                    'text-xs font-medium',
-                                                    isIngresso
-                                                      ? 'text-emerald-700 dark:text-emerald-400'
-                                                      : 'text-slate-500',
-                                                  ].join(' ')}
-                                                >
-                                                  {isIngresso ? 'Ingresso' : 'Uscita'}
-                                                </span>
-                                                {t.commessaTitolo ? (
-                                                  <span className="text-xs text-muted-foreground truncate max-w-[160px]">
-                                                    {t.commessaTitolo}
-                                                  </span>
-                                                ) : null}
-                                                {oLabel ? (
-                                                  <span className="ml-auto text-[10px] text-muted-foreground/60 uppercase tracking-wide">
-                                                    {oLabel}
-                                                  </span>
-                                                ) : null}
-                                              </div>
-                                            </li>
-                                          );
-                                        })}
-                                      </ol>
-                                    )}
+                                    <TimbratureRiepilogo timbrature={riga.timbrature} />
                                   </div>
                                 </div>
                               </td>

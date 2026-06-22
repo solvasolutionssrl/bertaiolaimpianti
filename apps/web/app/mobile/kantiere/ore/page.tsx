@@ -9,6 +9,8 @@ import { guardMobile } from '../../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { precompilaMioRapportino } from '@/app/_actions/kantiere-rapportino';
 import { OreClient } from './_components/ore-client';
+import { mioTurnoAttivo } from '../_lib/turno-attivo';
+import { TurnoAttivoCard } from '../_components/turno-attivo-card';
 
 export const metadata: Metadata = {
   title: 'Le mie ore di oggi',
@@ -122,8 +124,10 @@ export default async function MobileOrePage() {
     (m) => ({ id: m.id, targa: m.targa, modello: m.modello }),
   );
 
+  const turno = await mioTurnoAttivo();
+
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="flex min-h-[100dvh] flex-col gap-4 p-4">
       <header className="pt-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
           <Clock className="h-3.5 w-3.5" aria-hidden="true" />
@@ -132,6 +136,14 @@ export default async function MobileOrePage() {
         <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
+
+      {turno && (
+        <TurnoAttivoCard
+          cantiereId={turno.cantiereId}
+          cantiereNome={turno.cantiereNome}
+          inizioTs={turno.inizioTs}
+        />
+      )}
 
       <OreClient
         rapportino={res.rapportino}
