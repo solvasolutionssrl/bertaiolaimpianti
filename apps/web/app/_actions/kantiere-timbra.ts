@@ -232,6 +232,11 @@ export async function timbra(input: unknown): Promise<Result> {
       tenant_id: ctx.tenantId,
       timbratura_id: timbraturaId,
       dipendente_id: bersaglioId,
+      // Destinazione/origine: il cantiere del viaggio (andata = sede→cantiere,
+      // ritorno = cantiere→sede). Senza questo lo storico mostrava "n.d.".
+      cantiere_id: target.tipo === 'cantiere' ? target.id : null,
+      // Giorno calendario italiano: senza questo lo storico mostrava 01/01/1970.
+      data: romeDay(new Date(ts)),
       direzione: tipo === 'ingresso' ? 'andata' : 'ritorno',
       sede_id: viaggio.sedeId,
       durata_stimata_min: viaggio.durataStimataMin,

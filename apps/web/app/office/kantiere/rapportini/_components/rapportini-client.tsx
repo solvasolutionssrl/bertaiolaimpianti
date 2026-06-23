@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, ChevronDown, ChevronRight, PlusCircle } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, PlusCircle, CheckCheck } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
-import { approvaRapportino, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
+import { approvaRapportino, approvaRapportiniBulk, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
 import { RapportinoBadge } from './rapportino-badge';
 import { VersioniDialog } from './versioni-dialog';
 import { TimbratureRiepilogo, TimbratureSommario } from '../../_components/timbrature-riepilogo';
@@ -116,6 +116,11 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   const [pendingId, setPendingId] = React.useState<string | null>(null);
   const [isPending, startAction] = React.useTransition();
 
+  // Selezione multipla per approvazione in blocco
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+  const [bulkErr, setBulkErr] = React.useState<string | null>(null);
+  const [isBulkPending, startBulk] = React.useTransition();
+
   // Dialog respingi
   const [respingiDialog, setRespingiDialog] = React.useState<{ id: string; nome: string } | null>(null);
   const [motivo, setMotivo] = React.useState('');
@@ -216,6 +221,39 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
         setErrors((prev) => ({ ...prev, [id]: res.error }));
         return;
       }
+      router.refresh();
+    });
+  }
+
+  // ── Selezione multipla / approvazione in blocco ──────────────────────────
+  const approvabile = (s: string) => s === 'bozza' || s === 'inviato';
+  const idApprovabili = righe.filter((r) => approvabile(r.stato)).map((r) => r.id);
+  const allSelected = idApprovabili.length > 0 && idApprovabili.every((id) => selected.has(id));
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelected((prev) => (idApprovabili.every((id) => prev.has(id)) ? new Set() : new Set(idApprovabili)));
+  }
+
+  function handleApprovaBulk() {
+    const ids = [...selected].filter((id) => idApprovabili.includes(id));
+    if (ids.length === 0) return;
+    setBulkErr(null);
+    startBulk(async () => {
+      const res = await approvaRapportiniBulk({ rapportinoIds: ids });
+      if (!res.ok) {
+        setBulkErr(res.error);
+        return;
+      }
+      setSelected(new Set());
       router.refresh();
     });
   }
@@ -384,12 +422,47 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
             </span>
           </div>
 
+          {/* Barra azioni in blocco — visibile quando c'è una selezione */}
+          {selected.size > 0 ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary-soft/60 px-4 py-2.5 shadow-soft">
+              <span className="text-sm font-medium text-foreground">
+                {selected.size} selezionat{selected.size === 1 ? 'o' : 'i'}
+              </span>
+              <Button size="sm" onClick={handleApprovaBulk} disabled={isBulkPending}>
+                {isBulkPending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <CheckCheck className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                )}
+                Approva selezionati
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Deseleziona
+              </button>
+              {bulkErr ? <span className="text-xs text-destructive">Errore: {bulkErr}</span> : null}
+            </div>
+          ) : null}
+
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
+                      <th className="w-9 px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={toggleSelectAll}
+                          disabled={idApprovabili.length === 0}
+                          aria-label="Seleziona tutti i rapportini approvabili"
+                          className="h-4 w-4 cursor-pointer rounded border-input accent-primary disabled:opacity-40"
+                        />
+                      </th>
                       <th className="w-8 px-2 py-2" />
                       <th className="px-3 py-2 font-medium">Dipendente</th>
                       <th className="px-3 py-2 font-medium">Data</th>
@@ -416,6 +489,17 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                             ].join(' ')}
                             onClick={() => toggleExpand(riga.id)}
                           >
+                            <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                              {approvabile(riga.stato) ? (
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(riga.id)}
+                                  onChange={() => toggleSelect(riga.id)}
+                                  aria-label={`Seleziona rapportino di ${riga.dipendenteNome}`}
+                                  className="h-4 w-4 cursor-pointer rounded border-input accent-primary"
+                                />
+                              ) : null}
+                            </td>
                             <td className="px-2 py-2 text-muted-foreground">
                               {isOpen ? (
                                 <ChevronDown className="h-3.5 w-3.5" />
@@ -472,7 +556,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                     Cronologia
                                   </Button>
                                 )}
-                                {riga.stato === 'inviato' && (
+                                {approvabile(riga.stato) && (
                                   <>
                                     <Button
                                       variant="outline"
@@ -514,7 +598,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
 
                           {rowErr ? (
                             <tr className="border-b border-border bg-destructive/5">
-                              <td colSpan={8} className="px-4 py-2 text-xs text-destructive">
+                              <td colSpan={9} className="px-4 py-2 text-xs text-destructive">
                                 Errore: {rowErr}
                               </td>
                             </tr>
@@ -522,7 +606,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
 
                           {isOpen && (
                             <tr className="border-b border-border bg-muted/20">
-                              <td colSpan={8} className="px-6 py-4">
+                              <td colSpan={9} className="px-6 py-4">
                                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                                   {/* Colonna sinistra: righe commessa */}
                                   <div>

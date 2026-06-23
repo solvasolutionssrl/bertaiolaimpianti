@@ -142,9 +142,10 @@ export function MezzoStoricoClient({ mezzo, tratte, totali }: Props) {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-muted-foreground text-xs">
-                    {t.sede ?? 'n.d.'}
+                    {/* Andata = sede→cantiere, ritorno = cantiere→sede */}
+                    {(t.direzione === 'andata' ? t.sede : t.cantiere) ?? 'n.d.'}
                     <span className="mx-1 text-muted-foreground/50">&#x2192;</span>
-                    {t.cantiere ?? 'n.d.'}
+                    {(t.direzione === 'andata' ? t.cantiere : t.sede) ?? 'n.d.'}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
                     {fmtKm(t.distanza_km)} km

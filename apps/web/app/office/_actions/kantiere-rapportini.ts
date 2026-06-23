@@ -68,7 +68,11 @@ export async function approvaRapportino(input: unknown): Promise<Result> {
     .eq('tenant_id', ctx.tenantId)
     .single();
   if (fetchError || !row) return { ok: false, error: 'NON_TROVATO' };
-  if ((row as { stato: string }).stato !== 'inviato') return { ok: false, error: 'STATO_NON_VALIDO' };
+  // I rapportini Kantiere sono auto-derivati dalle timbrature e restano in
+  // bozza: l'ufficio è la fonte autoritativa e può approvarli direttamente
+  // (oltre a quelli inviati dal tecnico).
+  if (!['bozza', 'inviato'].includes((row as { stato: string }).stato))
+    return { ok: false, error: 'STATO_NON_VALIDO' };
 
   const { error } = await supabase
     .from('rapportini' as never)
@@ -107,7 +111,8 @@ export async function respingiRapportino(input: unknown): Promise<Result> {
     .eq('tenant_id', ctx.tenantId)
     .single();
   if (fetchError || !row) return { ok: false, error: 'NON_TROVATO' };
-  if ((row as { stato: string }).stato !== 'inviato') return { ok: false, error: 'STATO_NON_VALIDO' };
+  if (!['bozza', 'inviato'].includes((row as { stato: string }).stato))
+    return { ok: false, error: 'STATO_NON_VALIDO' };
 
   const { error } = await supabase
     .from('rapportini' as never)
@@ -171,6 +176,55 @@ export async function riapriRapportino(input: unknown): Promise<Result> {
   });
   revalidatePath('/office/kantiere/rapportini');
   return { ok: true };
+}
+
+// ── approvaRapportiniBulk: approva in blocco i selezionati ──────────────────
+// Approva tutti i rapportini idonei (bozza/inviato) tra gli ID passati.
+// Ignora silenziosamente quelli già approvati/respinti. Ritorna il conteggio.
+
+export async function approvaRapportiniBulk(
+  input: unknown,
+): Promise<{ ok: true; approvati: number } | { ok: false; error: string }> {
+  const parsed = z
+    .object({ rapportinoIds: z.array(z.string().uuid()).min(1).max(500) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  const ctx = await guard();
+  const supabase = createServerSupabase();
+
+  const { data: rows } = await supabase
+    .from('rapportini' as never)
+    .select('id, stato')
+    .eq('tenant_id', ctx.tenantId)
+    .in('id', parsed.data.rapportinoIds);
+
+  const idonei = ((rows as { id: string; stato: string }[] | null) ?? [])
+    .filter((r) => r.stato === 'bozza' || r.stato === 'inviato')
+    .map((r) => r.id);
+  if (idonei.length === 0) return { ok: true, approvati: 0 };
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('rapportini' as never)
+    .update({ stato: 'approvato', approvato_da: ctx.userId, approvato_at: now } as never)
+    .eq('tenant_id', ctx.tenantId)
+    .in('id', idonei);
+  if (error) return { ok: false, error: error.message };
+
+  const nome = await nomeUtente(supabase, ctx.userId);
+  for (const id of idonei) {
+    await scriviVersioneRapportino({
+      supabase,
+      rapportinoId: id,
+      tenantId: ctx.tenantId,
+      azione: 'approvazione',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: nome,
+    });
+  }
+
+  revalidatePath('/office/kantiere/rapportini');
+  return { ok: true, approvati: idonei.length };
 }
 
 // ── registraOrePerDipendente ─────────────────────────────────────────────────
