@@ -34,6 +34,8 @@ export type RapportiniRiga = {
   data: string;
   stato: string;
   modificato?: boolean;
+  /** Giornata congelata con ore (timbrature) non riportate nel rapportino. */
+  oreNonConteggiate?: boolean;
   inviatoAt: string | null;
   note: string | null;
   totale: { ord: number; straord: number; viaggio: number };
@@ -120,6 +122,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   // Selezione multipla per approvazione in blocco
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [bulkErr, setBulkErr] = React.useState<string | null>(null);
+  const [bulkInfo, setBulkInfo] = React.useState<string | null>(null);
   const [isBulkPending, startBulk] = React.useTransition();
 
   // Dialog respingi
@@ -248,11 +251,17 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
     const ids = [...selected].filter((id) => idApprovabili.includes(id));
     if (ids.length === 0) return;
     setBulkErr(null);
+    setBulkInfo(null);
     startBulk(async () => {
       const res = await approvaRapportiniBulk({ rapportinoIds: ids });
       if (!res.ok) {
         setBulkErr(res.error);
         return;
+      }
+      if (res.saltati > 0) {
+        setBulkInfo(
+          `${res.approvati} approvat${res.approvati === 1 ? 'o' : 'i'}, ${res.saltati} saltat${res.saltati === 1 ? 'o' : 'i'} (giorno stesso, turno aperto o senza turni chiusi).`,
+        );
       }
       setSelected(new Set());
       router.refresh();
@@ -448,6 +457,19 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
             </div>
           ) : null}
 
+          {bulkInfo ? (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+              {bulkInfo}
+              <button
+                type="button"
+                onClick={() => setBulkInfo(null)}
+                className="ml-auto text-xs font-medium text-amber-700/80 hover:text-amber-900"
+              >
+                Chiudi
+              </button>
+            </div>
+          ) : null}
+
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
@@ -524,6 +546,14 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                     className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
                                   >
                                     Modificato
+                                  </span>
+                                ) : null}
+                                {riga.oreNonConteggiate ? (
+                                  <span
+                                    title="Sono arrivate timbrature dopo l'approvazione: ore non conteggiate. Riapri per ricalcolare."
+                                    className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700"
+                                  >
+                                    Ore non conteggiate
                                   </span>
                                 ) : null}
                               </div>

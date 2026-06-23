@@ -9,7 +9,10 @@ import {
   scriviVersioneRapportino,
   type AzioneVersione,
 } from '@/app/_actions/_lib/scrivi-versione-rapportino';
-import { ricomputaRapportinoAuto } from '@/app/_actions/_lib/ricomputa-rapportino';
+import {
+  ricomputaRapportinoAuto,
+  marcaRapportinoManuale,
+} from '@/app/_actions/_lib/ricomputa-rapportino';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -55,6 +58,73 @@ async function guard() {
   return ctx;
 }
 
+// ── regole di approvazione di una giornata ──────────────────────────────────
+// Una giornata si approva solo se: NON è il giorno stesso (dalla mezzanotte in
+// poi), NON ha un turno ancora aperto, e ha almeno un turno chiuso. L'uscita di
+// pausa pranzo non chiude il turno.
+
+async function statoGiornata(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  dipendenteId: string,
+  data: string,
+): Promise<{ haTurnoAperto: boolean; turniChiusi: number }> {
+  const { fromIso, toIso } = romeDayBoundsUtc(data);
+  const { data: timbRaw } = await supabase
+    .from('timbrature' as never)
+    .select('commessa_id, cantiere_id, tipo, ts, pausa')
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const timb =
+    (timbRaw as {
+      commessa_id: string | null;
+      cantiere_id: string | null;
+      tipo: 'ingresso' | 'uscita';
+      ts: string;
+      pausa: boolean | null;
+    }[] | null) ?? [];
+
+  const aperti = new Map<string, boolean>();
+  let turniChiusi = 0;
+  for (const t of timb) {
+    const key = t.cantiere_id ? `k:${t.cantiere_id}` : t.commessa_id ? `c:${t.commessa_id}` : '';
+    if (!key) continue;
+    if (t.tipo === 'ingresso') {
+      if (!aperti.get(key)) aperti.set(key, true);
+    } else if (!t.pausa) {
+      // fine turno: chiude il turno aperto su quel target.
+      if (aperti.get(key)) {
+        aperti.set(key, false);
+        turniChiusi += 1;
+      }
+    }
+  }
+  return { haTurnoAperto: Array.from(aperti.values()).some((v) => v), turniChiusi };
+}
+
+/** Ritorna un messaggio se il giorno NON è approvabile, altrimenti null. */
+async function motivoNonApprovabile(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  dipendenteId: string,
+  data: string,
+): Promise<string | null> {
+  if (data >= romeDay(new Date())) {
+    return 'Non si può approvare il giorno stesso: attendi la fine della giornata.';
+  }
+  const { haTurnoAperto, turniChiusi } = await statoGiornata(supabase, tenantId, dipendenteId, data);
+  if (haTurnoAperto) {
+    return 'C’è ancora un turno aperto in questa giornata: va chiuso prima di approvare.';
+  }
+  if (turniChiusi === 0) {
+    return 'Nessun turno chiuso da approvare in questa giornata.';
+  }
+  return null;
+}
+
 export async function approvaRapportino(input: unknown): Promise<Result> {
   const parsed = z.object({ rapportinoId: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
@@ -63,16 +133,20 @@ export async function approvaRapportino(input: unknown): Promise<Result> {
 
   const { data: row, error: fetchError } = await supabase
     .from('rapportini' as never)
-    .select('id, stato')
+    .select('id, stato, data, dipendente_id')
     .eq('id', parsed.data.rapportinoId)
     .eq('tenant_id', ctx.tenantId)
     .single();
   if (fetchError || !row) return { ok: false, error: 'NON_TROVATO' };
+  const rr = row as { id: string; stato: string; data: string; dipendente_id: string };
   // I rapportini Kantiere sono auto-derivati dalle timbrature e restano in
   // bozza: l'ufficio è la fonte autoritativa e può approvarli direttamente
   // (oltre a quelli inviati dal tecnico).
-  if (!['bozza', 'inviato'].includes((row as { stato: string }).stato))
-    return { ok: false, error: 'STATO_NON_VALIDO' };
+  if (!['bozza', 'inviato'].includes(rr.stato)) return { ok: false, error: 'STATO_NON_VALIDO' };
+
+  // Regole: niente giorno stesso, niente turno aperto, almeno un turno chiuso.
+  const motivo = await motivoNonApprovabile(supabase, ctx.tenantId, rr.dipendente_id, rr.data);
+  if (motivo) return { ok: false, error: motivo };
 
   const { error } = await supabase
     .from('rapportini' as never)
@@ -145,13 +219,13 @@ export async function riapriRapportino(input: unknown): Promise<Result> {
 
   const { data: row, error: fetchError } = await supabase
     .from('rapportini' as never)
-    .select('id, stato')
+    .select('id, stato, data, dipendente_id')
     .eq('id', parsed.data.rapportinoId)
     .eq('tenant_id', ctx.tenantId)
     .single();
   if (fetchError || !row) return { ok: false, error: 'NON_TROVATO' };
-  if (!['approvato', 'respinto'].includes((row as { stato: string }).stato))
-    return { ok: false, error: 'STATO_NON_VALIDO' };
+  const rr = row as { id: string; stato: string; data: string; dipendente_id: string };
+  if (!['approvato', 'respinto'].includes(rr.stato)) return { ok: false, error: 'STATO_NON_VALIDO' };
 
   const { error } = await supabase
     .from('rapportini' as never)
@@ -166,6 +240,9 @@ export async function riapriRapportino(input: unknown): Promise<Result> {
     .eq('id', parsed.data.rapportinoId)
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+  // Riaprendo, ricalcola dalle timbrature correnti: così recupera le ore
+  // arrivate dopo l'approvazione (resta invariato se è stato editato a mano).
+  await ricomputaRapportinoAuto(supabase, ctx.tenantId, rr.dipendente_id, rr.data);
   await scriviVersioneRapportino({
     supabase,
     rapportinoId: parsed.data.rapportinoId,
@@ -184,7 +261,7 @@ export async function riapriRapportino(input: unknown): Promise<Result> {
 
 export async function approvaRapportiniBulk(
   input: unknown,
-): Promise<{ ok: true; approvati: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; approvati: number; saltati: number } | { ok: false; error: string }> {
   const parsed = z
     .object({ rapportinoIds: z.array(z.string().uuid()).min(1).max(500) })
     .safeParse(input);
@@ -194,14 +271,22 @@ export async function approvaRapportiniBulk(
 
   const { data: rows } = await supabase
     .from('rapportini' as never)
-    .select('id, stato')
+    .select('id, stato, data, dipendente_id')
     .eq('tenant_id', ctx.tenantId)
     .in('id', parsed.data.rapportinoIds);
 
-  const idonei = ((rows as { id: string; stato: string }[] | null) ?? [])
-    .filter((r) => r.stato === 'bozza' || r.stato === 'inviato')
-    .map((r) => r.id);
-  if (idonei.length === 0) return { ok: true, approvati: 0 };
+  const candidati = ((rows as { id: string; stato: string; data: string; dipendente_id: string }[] | null) ?? [])
+    .filter((r) => r.stato === 'bozza' || r.stato === 'inviato');
+
+  // Applica le stesse regole del singolo: salta giorno stesso / turno aperto / no turni chiusi.
+  const idonei: string[] = [];
+  let saltati = 0;
+  for (const r of candidati) {
+    const motivo = await motivoNonApprovabile(supabase, ctx.tenantId, r.dipendente_id, r.data);
+    if (motivo) saltati += 1;
+    else idonei.push(r.id);
+  }
+  if (idonei.length === 0) return { ok: true, approvati: 0, saltati };
 
   const now = new Date().toISOString();
   const { error } = await supabase
@@ -224,7 +309,7 @@ export async function approvaRapportiniBulk(
   }
 
   revalidatePath('/office/kantiere/rapportini');
-  return { ok: true, approvati: idonei.length };
+  return { ok: true, approvati: idonei.length, saltati };
 }
 
 // ── registraOrePerDipendente ─────────────────────────────────────────────────
@@ -348,6 +433,10 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
       } as never);
     if (insRigaErr) return { ok: false, error: insRigaErr.message };
   }
+
+  // L'ufficio ha scritto a mano: marca il rapportino come manuale così l'auto
+  // ricalcolo dalle timbrature non sovrascrive/cancella più queste righe.
+  await marcaRapportinoManuale(supabase, rapportinoId);
 
   await scriviVersioneRapportino({
     supabase,

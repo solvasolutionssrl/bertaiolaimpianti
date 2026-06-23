@@ -1,6 +1,8 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
+import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
@@ -245,6 +247,25 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     righeByRapportino.set(r.rapportino_id, arr);
   }
 
+  // Ore lavorate DERIVATE dalle timbrature per (dipendente:giorno). Servono a
+  // segnalare le giornate "congelate" (non più in bozza) dove sono arrivate
+  // timbrature non conteggiate nel rapportino: ore-da-timbrature > ore-righe.
+  const rawTimbByKey = new Map<string, { commessa_id: string; tipo: 'ingresso' | 'uscita'; ts: string }[]>();
+  for (const t of timbratureData) {
+    const k = chiaveTarget(t);
+    if (!k) continue;
+    const key = `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`;
+    const arr = rawTimbByKey.get(key) ?? [];
+    arr.push({ commessa_id: k, tipo: t.tipo as 'ingresso' | 'uscita', ts: t.ts });
+    rawTimbByKey.set(key, arr);
+  }
+  const oreLavorateTimbByKey = new Map<string, number>();
+  for (const [key, arr] of rawTimbByKey) {
+    let min = 0;
+    for (const v of minutiPerCommessa(arr).values()) min += v;
+    oreLavorateTimbByKey.set(key, oreDaMin(min));
+  }
+
   // Rapportini modificati dal tecnico dopo l'invio → badge "Modificato"
   const rappIds = rapportini.map((r) => r.id);
   const modificatiSet = new Set<string>();
@@ -273,12 +294,19 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     );
     const timbratureKey = `${r.dipendente_id}:${r.data}`;
     const timbrature = timbratureByKey.get(timbratureKey) ?? [];
+    // Segnale: giornata non più in bozza (congelata) ma con ore lavorate dalle
+    // timbrature maggiori di quelle nel rapportino → ci sono ore non conteggiate
+    // (es. turni aggiunti dopo l'approvazione). Tolleranza 0,05h (3 min).
+    const oreTimb = oreLavorateTimbByKey.get(timbratureKey) ?? 0;
+    const oreRiportate = totale.ord + totale.straord;
+    const oreNonConteggiate = r.stato !== 'bozza' && oreTimb - oreRiportate > 0.05;
     return {
       id: r.id,
       dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
       data: r.data,
       stato: r.stato,
       modificato: modificatiSet.has(r.id),
+      oreNonConteggiate,
       inviatoAt: r.inviato_at,
       note: r.note ?? null,
       totale,
