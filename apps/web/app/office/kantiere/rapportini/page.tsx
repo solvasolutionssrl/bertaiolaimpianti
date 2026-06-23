@@ -34,6 +34,7 @@ type TimbratureRow = {
   tipo: string;
   ts: string;
   origine: string | null;
+  pausa: boolean | null;
 };
 
 type DipendenteRow = {
@@ -161,7 +162,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const tsTo = to + 'T23:59:59.999Z';
     const { data } = (await supabase
       .from('timbrature' as never)
-      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine')
+      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa')
       .eq('tenant_id', ctx.tenantId)
       .in('dipendente_id', dipIds)
       .gte('ts', tsFrom)
@@ -213,7 +214,13 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   }
 
   // Bucket timbrature per `dipendente_id:YYYY-MM-DD`
-  type TimbraturaItem = { tipo: string; ts: string; origine: string | null; commessaTitolo: string | null };
+  type TimbraturaItem = {
+    tipo: string;
+    ts: string;
+    origine: string | null;
+    commessaTitolo: string | null;
+    pausa: boolean | null;
+  };
   const timbratureByKey = new Map<string, TimbraturaItem[]>();
   for (const t of timbratureData) {
     const giorno = timbraturaGiorno(t.ts);
@@ -225,6 +232,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       ts: t.ts,
       origine: t.origine ?? null,
       commessaTitolo: label || null,
+      pausa: t.pausa ?? false,
     });
     timbratureByKey.set(key, arr);
   }

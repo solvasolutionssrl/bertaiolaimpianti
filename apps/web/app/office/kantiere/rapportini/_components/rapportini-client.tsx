@@ -17,6 +17,7 @@ export type TimbraturaItem = {
   ts: string;
   origine: string | null;
   commessaTitolo: string | null;
+  pausa?: boolean | null;
 };
 
 export type RigaCommessa = {

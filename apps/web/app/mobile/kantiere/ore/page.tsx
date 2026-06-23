@@ -147,6 +147,8 @@ export default async function MobileOrePage() {
           cantiereId={turno.cantiereId}
           cantiereNome={turno.cantiereNome}
           inizioTs={turno.inizioTs}
+          inPausa={turno.inPausa}
+          inizioPausaTs={turno.inizioPausaTs}
         />
       )}
 

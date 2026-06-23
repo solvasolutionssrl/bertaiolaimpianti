@@ -47,7 +47,7 @@ interface DipendenteProp {
 
 interface GiornoView {
   giorno: string; // YYYY-MM-DD
-  timbrature: { tipo: string; ts: string }[];
+  timbrature: { tipo: string; ts: string; pausa?: boolean | null }[];
   rapportino: {
     stato: string;
     ord: number;
@@ -510,6 +510,7 @@ export function DipendenteDetailClient({
                     const timbInput: TimbraturaInput[] = g.timbrature.map((t) => ({
                       tipo: t.tipo,
                       ts: t.ts,
+                      pausa: t.pausa ?? false,
                     }));
                     return (
                       <React.Fragment key={g.giorno}>

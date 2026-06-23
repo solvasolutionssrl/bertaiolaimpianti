@@ -83,10 +83,46 @@ export interface RiepilogoTimbrature {
   coppie: CoppiaTimbratura[];
   /** Somma minuti delle coppie chiuse. */
   minutiTotali: number;
-  /** True se c'è un ingresso senza uscita (giornata in corso). */
+  /** True se c'è un ingresso senza uscita (sta lavorando in questo momento). */
   aperto: boolean;
   /** ISO dell'ingresso ancora aperto (per il contatore live), o null. */
   ingressoAperto: string | null;
+  /** True se l'ultimo evento è un'uscita di pausa (turno aperto ma in pausa). */
+  inPausa: boolean;
+  /** ISO dell'inizio pausa in corso, o null. */
+  inizioPausa: string | null;
+}
+
+/** Stato corrente del turno di un dipendente su un target, in un giorno.
+ *  - idle  = nessun turno aperto (mai iniziato, o già terminato)
+ *  - lavoro = turno aperto e sta lavorando (orologio in marcia)
+ *  - pausa = turno aperto ma in pausa pranzo (orologio fermo) */
+export type StatoTurno = 'idle' | 'lavoro' | 'pausa';
+
+export interface InfoTurno {
+  stato: StatoTurno;
+  /** ISO dell'ingresso aperto se sta lavorando (per contatore), o null. */
+  ingressoAperto: string | null;
+  /** ISO dell'inizio pausa se in pausa, o null. */
+  inizioPausa: string | null;
+}
+
+/**
+ * Determina lo stato del turno dall'ultimo evento cronologico.
+ * `pausa` distingue l'uscita/ingresso di pausa pranzo da inizio/fine turno.
+ */
+export function statoTurno(
+  eventi: { tipo: 'ingresso' | 'uscita'; ts: string; pausa?: boolean | null }[],
+): InfoTurno {
+  const sorted = [...eventi].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const ultimo = sorted[sorted.length - 1];
+  if (!ultimo) return { stato: 'idle', ingressoAperto: null, inizioPausa: null };
+  if (ultimo.tipo === 'ingresso') {
+    return { stato: 'lavoro', ingressoAperto: ultimo.ts, inizioPausa: null };
+  }
+  // ultimo è un'uscita: pausa → turno in pausa; altrimenti → turno chiuso
+  if (ultimo.pausa) return { stato: 'pausa', ingressoAperto: null, inizioPausa: ultimo.ts };
+  return { stato: 'idle', ingressoAperto: null, inizioPausa: null };
 }
 
 /**
@@ -96,7 +132,7 @@ export interface RiepilogoTimbrature {
  * coerentemente con `minutiPerCommessa`.
  */
 export function appaiaTimbrature(
-  timbrature: { tipo: 'ingresso' | 'uscita'; ts: string }[],
+  timbrature: { tipo: 'ingresso' | 'uscita'; ts: string; pausa?: boolean | null }[],
 ): RiepilogoTimbrature {
   const sorted = [...timbrature].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   const coppie: CoppiaTimbratura[] = [];
@@ -113,7 +149,17 @@ export function appaiaTimbrature(
   }
   if (aperto !== null) coppie.push({ ingresso: aperto, uscita: null, minuti: null });
   const minutiTotali = coppie.reduce((acc, c) => acc + (c.minuti ?? 0), 0);
-  return { coppie, minutiTotali, aperto: aperto !== null, ingressoAperto: aperto };
+  // "In pausa" = l'ultimo evento è un'uscita di pausa (turno aperto ma fermo).
+  const ultimo = sorted[sorted.length - 1];
+  const inPausa = !!ultimo && ultimo.tipo === 'uscita' && !!ultimo.pausa;
+  return {
+    coppie,
+    minutiTotali,
+    aperto: aperto !== null,
+    ingressoAperto: aperto,
+    inPausa,
+    inizioPausa: inPausa ? ultimo.ts : null,
+  };
 }
 
 /** Toggle del bottone Timbra dalle timbrature odierne (ordinate asc). */

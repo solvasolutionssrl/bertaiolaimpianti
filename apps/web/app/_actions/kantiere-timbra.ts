@@ -5,12 +5,15 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { prossimoTipoTimbratura } from '@kommessa/api/kantiere-ore';
+import { prossimoTipoTimbratura, statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 
-type Ok = { ok: true; tipo: 'ingresso' | 'uscita'; ts: string };
+/** Azione esplicita scelta dal tecnico quando il turno è già attivo. */
+export type AzioneTimbra = 'inizio' | 'fine' | 'pausa' | 'ripresa';
+
+type Ok = { ok: true; tipo: 'ingresso' | 'uscita'; pausa: boolean; ts: string };
 type Result = Ok | { ok: false; error: string };
 
 const GeoSchema = z.object({ lat: z.number(), lng: z.number() }).partial().optional();
@@ -56,38 +59,49 @@ async function dipendenteDi(
   return (data as { id: string; nome: string; cognome: string } | null) ?? null;
 }
 
-async function prossimoTipo(
+type EventoOggi = { tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null };
+
+/** Timbrature del giorno calendario italiano (Europe/Rome) per dipendente+target. */
+async function eventiOggi(
   supabase: ReturnType<typeof createServerSupabase>,
   dipendenteId: string,
   target: { tipo: 'commessa' | 'cantiere'; id: string },
-): Promise<'ingresso' | 'uscita'> {
-  // Timbrature del giorno calendario italiano (Europe/Rome), così il toggle
-  // ingresso/uscita non sbaglia giorno per le timbrature a cavallo di mezzanotte.
+): Promise<EventoOggi[]> {
   const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const q = supabase
+    .from('timbrature' as never)
+    .select('tipo, ts, pausa')
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const { data } =
+    target.tipo === 'commessa'
+      ? await q.eq('commessa_id', target.id)
+      : await q.eq('cantiere_id', target.id);
+  return (data as EventoOggi[] | null) ?? [];
+}
 
-  let rows: { tipo: 'ingresso' | 'uscita' }[] = [];
-  if (target.tipo === 'commessa') {
-    const { data } = await supabase
-      .from('timbrature' as never)
-      .select('tipo, ts')
-      .eq('dipendente_id', dipendenteId)
-      .eq('commessa_id', target.id)
-      .gte('ts', fromIso)
-      .lt('ts', toIso)
-      .order('ts', { ascending: true });
-    rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
-  } else {
-    const { data } = await supabase
-      .from('timbrature' as never)
-      .select('tipo, ts')
-      .eq('dipendente_id', dipendenteId)
-      .eq('cantiere_id', target.id)
-      .gte('ts', fromIso)
-      .lt('ts', toIso)
-      .order('ts', { ascending: true });
-    rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
+/** Azioni ammesse per stato turno (validazione server contro stato stantio). */
+const AZIONI_AMMESSE: Record<AzioneTimbra, StatoTurno[]> = {
+  inizio: ['idle'],
+  fine: ['lavoro', 'pausa'],
+  pausa: ['lavoro'],
+  ripresa: ['pausa'],
+};
+
+/** Mappa azione → (tipo, pausa) della riga timbratura. */
+function azioneATimbra(a: AzioneTimbra): { tipo: 'ingresso' | 'uscita'; pausa: boolean } {
+  switch (a) {
+    case 'inizio':
+      return { tipo: 'ingresso', pausa: false };
+    case 'fine':
+      return { tipo: 'uscita', pausa: false };
+    case 'pausa':
+      return { tipo: 'uscita', pausa: true };
+    case 'ripresa':
+      return { tipo: 'ingresso', pausa: true };
   }
-  return prossimoTipoTimbratura(rows);
 }
 
 // ── 1) timbra da QR (sé o, per il capo, un membro) ──────────────────────
@@ -107,6 +121,9 @@ const TimbraSchema = z.object({
   dipendenteId: z.string().uuid().optional(),
   geo: GeoSchema,
   viaggio: ViaggioSchema.optional(),
+  /** Azione esplicita (flusso self con turno attivo). Assente = toggle classico
+   *  (inizio/fine), usato dal capo per i membri e per retrocompatibilità. */
+  azione: z.enum(['inizio', 'fine', 'pausa', 'ripresa']).optional(),
 });
 
 export async function timbra(input: unknown): Promise<Result> {
@@ -154,33 +171,57 @@ export async function timbra(input: unknown): Promise<Result> {
   if (!puoTimbrarePer({ self, capoSquadra, bersaglioInSquadra }))
     return { ok: false, error: 'NON_AUTORIZZATO' };
 
-  // Anti doppio-tap / retry su rete lenta: se esiste una timbratura
-  // recentissima (< 25s) per lo stesso dipendente+target, è una
-  // ri-sottomissione → ritorna quella invece di crearne un'altra (che
-  // sfalserebbe il toggle ingresso/uscita).
-  {
-    const q = supabase
-      .from('timbrature' as never)
-      .select('tipo, ts')
-      .eq('dipendente_id', bersaglioId)
-      .order('ts', { ascending: false })
-      .limit(1);
-    const { data: ultimaRaw } =
-      target.tipo === 'commessa'
-        ? await q.eq('commessa_id', target.id).maybeSingle()
-        : await q.eq('cantiere_id', target.id).maybeSingle();
-    const ultima = ultimaRaw as { tipo: 'ingresso' | 'uscita'; ts: string } | null;
-    if (ultima && Date.now() - Date.parse(ultima.ts) < 25000) {
-      return { ok: true, tipo: ultima.tipo, ts: ultima.ts };
+  // Eventi di oggi (per stato turno + anti doppio-tap).
+  const eventi = await eventiOggi(supabase, bersaglioId, target);
+  const ultima = eventi[eventi.length - 1];
+  const azione = parsed.data.azione;
+
+  // Helper: una ri-sottomissione (< 25s) della STESSA azione è idempotente.
+  const recente = (tipo: 'ingresso' | 'uscita', pausa: boolean) =>
+    !!ultima &&
+    ultima.tipo === tipo &&
+    !!ultima.pausa === pausa &&
+    Date.now() - Date.parse(ultima.ts) < 25000;
+
+  // Determina tipo + pausa.
+  let tipo: 'ingresso' | 'uscita';
+  let pausa: boolean;
+  if (azione) {
+    // Flusso self esplicito: valida l'azione contro lo stato reale del turno
+    // (difende da uno stato client stantio / timbratura su un altro device).
+    const info = statoTurno(eventi);
+    const target2 = azioneATimbra(azione);
+    if (!AZIONI_AMMESSE[azione].includes(info.stato)) {
+      // Doppio-tap della stessa azione su rete lenta: idempotente, non un errore.
+      if (recente(target2.tipo, target2.pausa)) {
+        return { ok: true, tipo: target2.tipo, pausa: target2.pausa, ts: ultima!.ts };
+      }
+      return { ok: false, error: 'AZIONE_NON_VALIDA' };
     }
+    ({ tipo, pausa } = target2);
+  } else {
+    // Capo per i membri / retrocompat: semplice toggle, mai pausa.
+    tipo = prossimoTipoTimbratura(eventi);
+    pausa = false;
   }
 
-  const tipo = await prossimoTipo(supabase, bersaglioId, target);
+  // Anti doppio-tap / retry su rete lenta (stessa azione, < 25s).
+  if (recente(tipo, pausa)) {
+    return { ok: true, tipo, pausa, ts: ultima!.ts };
+  }
+
   const ts = new Date().toISOString();
 
-  // Il viaggio si registra solo per la timbratura PERSONALE su un cantiere.
+  // Il viaggio si registra solo per la timbratura PERSONALE su un cantiere, e
+  // solo all'inizio/fine turno (mai in pausa/ripresa).
   const viaggio =
-    self && target.tipo === 'cantiere' && parsed.data.viaggio ? parsed.data.viaggio : null;
+    self &&
+    target.tipo === 'cantiere' &&
+    !pausa &&
+    azione !== 'ripresa' &&
+    parsed.data.viaggio
+      ? parsed.data.viaggio
+      : null;
 
   // Validazione viaggio: giustificazione se ha corretto la stima + sede/mezzo
   // devono appartenere al tenant (la lettura RLS-scoped torna null altrimenti).
@@ -215,6 +256,7 @@ export async function timbra(input: unknown): Promise<Result> {
       commessa_id: target.tipo === 'commessa' ? target.id : null,
       cantiere_id: target.tipo === 'cantiere' ? target.id : null,
       tipo,
+      pausa,
       origine: self ? 'qr' : 'capo',
       ts,
       geo_lat: parsed.data.geo?.lat ?? null,
@@ -262,7 +304,65 @@ export async function timbra(input: unknown): Promise<Result> {
     // ignora: il rapportino verrà comunque ricalcolato all'apertura della tab Ore
   }
 
-  return { ok: true, tipo, ts };
+  return { ok: true, tipo, pausa, ts };
+}
+
+// ── 1b) terminaTurnoMio: chiusura turno dal banner "turno in corso" ──────
+// Self-service: il tecnico termina il turno aperto su un cantiere, all'ora
+// attuale o a un'ora indicata (es. è uscito dimenticando di scansionare).
+// Inserisce un'uscita di fine turno (pausa=false). Nessun viaggio.
+
+const TerminaTurnoSchema = z.object({
+  cantiereId: z.string().uuid(),
+  // ISO opzionale: se assente, ora attuale. Deve essere oggi (Europe/Rome) e
+  // dopo l'apertura del turno.
+  ts: z.string().datetime().optional(),
+});
+
+export async function terminaTurnoMio(input: unknown): Promise<Result> {
+  const parsed = TerminaTurnoSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const target = { tipo: 'cantiere' as const, id: parsed.data.cantiereId };
+  const eventi = await eventiOggi(supabase, me.id, target);
+  const info = statoTurno(eventi);
+  if (info.stato === 'idle') return { ok: false, error: 'NESSUN_TURNO_APERTO' };
+
+  const ts = parsed.data.ts ?? new Date().toISOString();
+  // L'ora di fine deve cadere oggi (Europe/Rome) e dopo l'ultima timbratura.
+  const oggi = romeDay(new Date());
+  if (romeDay(new Date(ts)) !== oggi) return { ok: false, error: 'ORA_NON_VALIDA' };
+  const ultima = eventi[eventi.length - 1];
+  if (ultima && Date.parse(ts) <= Date.parse(ultima.ts)) {
+    return { ok: false, error: 'ORA_NON_VALIDA' };
+  }
+
+  const { error } = await supabase.from('timbrature' as never).insert({
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    cantiere_id: parsed.data.cantiereId,
+    commessa_id: null,
+    tipo: 'uscita',
+    pausa: false,
+    origine: 'qr',
+    ts,
+    creato_da: ctx.userId,
+  } as never);
+  if (error) return { ok: false, error: error.message };
+
+  try {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ts)));
+  } catch {
+    // best-effort
+  }
+  return { ok: true, tipo: 'uscita', pausa: false, ts };
 }
 
 // ── 2) cronometro (solo sé, senza QR) ───────────────────────────────────
@@ -295,7 +395,7 @@ export async function timbraCronometro(input: unknown): Promise<Result> {
     creato_da: ctx.userId,
   } as never);
   if (error) return { ok: false, error: error.message };
-  return { ok: true, tipo, ts };
+  return { ok: true, tipo, pausa: false, ts };
 }
 
 // ── 3) manuale (office/admin o capo) ────────────────────────────────────
@@ -324,5 +424,5 @@ export async function timbraManuale(input: unknown): Promise<Result> {
     creato_da: ctx.userId,
   } as never);
   if (error) return { ok: false, error: error.message };
-  return { ok: true, tipo: parsed.data.tipo, ts: parsed.data.ts };
+  return { ok: true, tipo: parsed.data.tipo, pausa: false, ts: parsed.data.ts };
 }

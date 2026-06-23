@@ -16,6 +16,8 @@ export type TurnoAttivo = {
   dipendenteId: string;
   dipendenteNome: string;
   inizioTs: string;
+  /** true se il turno è aperto ma il dipendente è in pausa pranzo. */
+  inPausa: boolean;
   viaggio: {
     sedeNome: string | null;
     km: number | null;
@@ -39,6 +41,7 @@ type TimbRow = {
   cantiere_id: string | null;
   tipo: 'ingresso' | 'uscita';
   ts: string;
+  pausa: boolean | null;
 };
 
 export async function turniAttivi(): Promise<Result> {
@@ -53,7 +56,7 @@ export async function turniAttivi(): Promise<Result> {
   const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('id, dipendente_id, cantiere_id, tipo, ts')
+    .select('id, dipendente_id, cantiere_id, tipo, ts, pausa')
     .eq('tenant_id', ctx.tenantId)
     .not('cantiere_id', 'is', null)
     .gte('ts', since)
@@ -61,21 +64,33 @@ export async function turniAttivi(): Promise<Result> {
 
   const righe = (timbRaw as TimbRow[] | null) ?? [];
 
-  // Per ogni (dipendente, cantiere): l'ingresso resta "aperto" finché non
-  // arriva un'uscita. Gli aperti a fine scansione = turni attivi.
-  const aperti = new Map<string, { dipId: string; cantId: string; inizioTs: string; ingressoId: string }>();
+  // Per ogni (dipendente, cantiere): il turno resta "aperto" finché non arriva
+  // un'uscita di FINE turno. L'uscita di pausa lo mantiene aperto ("in pausa").
+  // `ingressoId` resta quello dell'inizio turno (a cui è legato il viaggio andata).
+  const aperti = new Map<
+    string,
+    { dipId: string; cantId: string; inizioTs: string; ingressoId: string; inPausa: boolean }
+  >();
   for (const t of righe) {
     if (!t.cantiere_id) continue;
     const key = `${t.dipendente_id}:${t.cantiere_id}`;
+    const cur = aperti.get(key);
     if (t.tipo === 'ingresso') {
-      aperti.set(key, {
-        dipId: t.dipendente_id,
-        cantId: t.cantiere_id,
-        inizioTs: t.ts,
-        ingressoId: t.id,
-      });
+      if (!cur) {
+        aperti.set(key, {
+          dipId: t.dipendente_id,
+          cantId: t.cantiere_id,
+          inizioTs: t.ts,
+          ingressoId: t.id,
+          inPausa: false,
+        });
+      } else {
+        cur.inPausa = false; // ripresa dopo pausa
+      }
+    } else if (t.pausa) {
+      if (cur) cur.inPausa = true;
     } else {
-      aperti.delete(key);
+      aperti.delete(key); // fine turno
     }
   }
 
@@ -139,6 +154,7 @@ export async function turniAttivi(): Promise<Result> {
       dipendenteId: a.dipId,
       dipendenteNome: dipMap.get(a.dipId) ?? a.dipId,
       inizioTs: a.inizioTs,
+      inPausa: a.inPausa,
       viaggio: via
         ? {
             sedeNome: via.sede_id ? sedeMap.get(via.sede_id) ?? null : null,

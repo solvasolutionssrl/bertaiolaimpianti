@@ -84,14 +84,20 @@ export default async function DipendenteDetailPage({ params }: PageProps) {
   // ── 3. Timbrature ultimi ~45 giorni ───────────────────────────────────────
   const { data: timbRaw } = (await supabase
     .from('timbrature' as never)
-    .select('tipo, ts, cantiere_id, commessa_id')
+    .select('tipo, ts, cantiere_id, commessa_id, pausa')
     .eq('dipendente_id', params.id)
     .eq('tenant_id', ctx.tenantId)
     .gte('ts', from45)
     .order('ts', { ascending: true })
     .limit(3000)) as {
     data:
-      | { tipo: string; ts: string; cantiere_id: string | null; commessa_id: string | null }[]
+      | {
+          tipo: string;
+          ts: string;
+          cantiere_id: string | null;
+          commessa_id: string | null;
+          pausa: boolean | null;
+        }[]
       | null;
   };
   const timbRows = (timbRaw ?? []).filter(
@@ -101,14 +107,14 @@ export default async function DipendenteDetailPage({ params }: PageProps) {
   // Bucket per giorno (Europe/Rome)
   const giorniMap = new Map<
     string,
-    { tipo: string; ts: string }[]
+    { tipo: string; ts: string; pausa: boolean | null }[]
   >();
   const cantiereIdsSet = new Set<string>();
   const commessaIdsSet = new Set<string>();
   for (const t of timbRows) {
     const g = tsToGiornoRome(t.ts);
     const arr = giorniMap.get(g) ?? [];
-    arr.push({ tipo: t.tipo, ts: t.ts });
+    arr.push({ tipo: t.tipo, ts: t.ts, pausa: t.pausa ?? false });
     giorniMap.set(g, arr);
     if (t.cantiere_id) cantiereIdsSet.add(t.cantiere_id);
     if (t.commessa_id) commessaIdsSet.add(t.commessa_id);
@@ -254,7 +260,11 @@ export default async function DipendenteDetailPage({ params }: PageProps) {
       const rap = rapByGiorno.get(giorno) ?? null;
       return {
         giorno,
-        timbrature: (giorniMap.get(giorno) ?? []).map((t) => ({ tipo: t.tipo, ts: t.ts })),
+        timbrature: (giorniMap.get(giorno) ?? []).map((t) => ({
+          tipo: t.tipo,
+          ts: t.ts,
+          pausa: t.pausa ?? false,
+        })),
         rapportino: rap
           ? {
               stato: rap.stato,

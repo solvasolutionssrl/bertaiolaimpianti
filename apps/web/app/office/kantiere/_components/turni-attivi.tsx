@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Truck, MapPin, Radio } from 'lucide-react';
+import { Truck, MapPin, Radio, Utensils } from 'lucide-react';
 import { turniAttivi, type GruppoTurni } from '@/app/office/_actions/kantiere-turni-attivi';
 
 function oraInizio(ts: string): string {
@@ -25,8 +25,15 @@ function fmtKm(km: number | null): string | null {
   return `${km.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
 
-/** Pallino verde pulsante (turno in corso). */
-function Pallino() {
+/** Pallino di stato: verde pulsante (in corso) o giallo fisso (in pausa). */
+function Pallino({ inPausa = false }: { inPausa?: boolean }) {
+  if (inPausa) {
+    return (
+      <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500" />
+      </span>
+    );
+  }
   return (
     <span className="relative flex h-2.5 w-2.5 shrink-0" aria-hidden="true">
       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -112,13 +119,19 @@ export function TurniAttivi({
                       key={t.dipendenteId}
                       className="flex items-center gap-2.5 rounded-md bg-muted/40 px-2.5 py-2"
                     >
-                      <Pallino />
+                      <Pallino inPausa={t.inPausa} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
                           {t.dipendenteNome}
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          dalle {oraInizio(t.inizioTs)} · {trascorso(t.inizioTs, now)}
+                          {t.inPausa ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-amber-700">
+                              <Utensils className="h-3 w-3" strokeWidth={2} /> in pausa pranzo
+                            </span>
+                          ) : (
+                            <>dalle {oraInizio(t.inizioTs)} · {trascorso(t.inizioTs, now)}</>
+                          )}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">

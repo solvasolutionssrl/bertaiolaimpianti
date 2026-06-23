@@ -4,12 +4,19 @@ import { useTransition, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@kommessa/ui';
-import { Loader2, Car, MapPin } from 'lucide-react';
-import { timbra } from '@/app/_actions/kantiere-timbra';
+import { Loader2, Car, MapPin, Utensils, Play, LogOut } from 'lucide-react';
+import { timbra, type AzioneTimbra } from '@/app/_actions/kantiere-timbra';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
 
 type TipoTimbratura = 'ingresso' | 'uscita';
+
+/** Stato turno self (idle = nessun turno, lavoro = in corso, pausa = in pausa). */
+export interface StatoSelf {
+  stato: 'idle' | 'lavoro' | 'pausa';
+  ingressoAperto: string | null;
+  inizioPausa: string | null;
+}
 
 interface MembroProp {
   id: string;
@@ -35,7 +42,7 @@ export interface TimbraClientProps {
   token: string;
   commessaTitolo: string;
   me: { id: string; nome: string } | null;
-  prossimoTipoSelf: TipoTimbratura | null;
+  statoSelf: StatoSelf | null;
   capo: boolean;
   membri: MembroProp[];
   viaggio?: ViaggioCtx | null;
@@ -66,7 +73,6 @@ function geo(): Promise<{ lat: number; lng: number } | undefined> {
 
 // ─── format ──────────────────────────────────────────────────────────────────
 
-/** Km → "12,3 km" / "km n.d." se null. */
 function formatKm(km: number | null): string {
   if (km === null) return 'km n.d.';
   return `${km.toLocaleString('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
@@ -80,7 +86,6 @@ function formatOra(ts: string): string {
   }).format(new Date(ts));
 }
 
-/** Minuti → "2h 30min" / "45min". */
 function formatDurata(min: number): string {
   if (min <= 0) return '0min';
   const h = Math.floor(min / 60);
@@ -110,12 +115,22 @@ function messaggioErrore(code: string): string {
       return 'Non sei autorizzato a timbrare per questo dipendente.';
     case 'GIUSTIFICAZIONE_RICHIESTA':
       return 'Hai modificato la stima: inserisci una giustificazione.';
+    case 'AZIONE_NON_VALIDA':
+      return 'Il turno è cambiato nel frattempo. Ricarica la pagina e riprova.';
     default:
       return 'Timbratura non riuscita. Riprova.';
   }
 }
 
-// ─── row membro (capo → squadra), invariato ──────────────────────────────────
+/** Etichetta di conferma dopo una timbratura andata a buon fine. */
+function labelConferma(tipo: TipoTimbratura, pausa: boolean): string {
+  if (tipo === 'uscita' && pausa) return 'Pausa pranzo registrata';
+  if (tipo === 'ingresso' && pausa) return 'Turno ripreso';
+  if (tipo === 'ingresso') return 'Ingresso registrato';
+  return 'Uscita registrata';
+}
+
+// ─── row membro (capo → squadra), invariato (nessuna pausa per i membri) ──────
 
 function RigaMembro({ token, membro }: { token: string; membro: MembroProp }) {
   const router = useRouter();
@@ -175,30 +190,44 @@ function RigaMembro({ token, membro }: { token: string; membro: MembroProp }) {
   );
 }
 
-// ─── timbratura personale con flusso viaggio ─────────────────────────────────
+// ─── conferma post-timbratura (riusata da tutti i flussi self) ───────────────
 
-function TimbraSelf({
+function ContenutoOk({ testo, ts }: { testo: string; ts: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
+      <p className="text-sm font-medium text-emerald-600">
+        {testo} alle {formatOra(ts)}
+      </p>
+      <Link
+        href="/mobile/kantiere/ore"
+        className="mt-3 inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 active:scale-[0.98] transition-all"
+      >
+        Le mie ore di oggi
+      </Link>
+    </div>
+  );
+}
+
+// ─── timbratura con flusso viaggio (inizio = andata, fine = ritorno) ─────────
+
+function TimbraConViaggio({
   token,
-  nome,
-  prossimoTipo,
+  azione,
   viaggio,
+  onOk,
 }: {
   token: string;
-  nome: string;
-  prossimoTipo: TipoTimbratura;
+  azione: 'inizio' | 'fine';
   viaggio: ViaggioCtx | null;
+  onOk: (r: { ts: string; tipo: TipoTimbratura; pausa: boolean }) => void;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [stato, setStato] = useState<
-    { tipo: 'ok'; ts: string; tipo_timbra: TipoTimbratura } | { tipo: 'errore'; msg: string } | null
-  >(null);
+  const [erroreMsg, setErroreMsg] = useState<string | null>(null);
 
-  const tipoLabel = prossimoTipo === 'ingresso' ? 'Ingresso' : 'Uscita';
-  const direzione = prossimoTipo === 'ingresso' ? 'andata' : 'ritorno';
+  const prossimoTipo: TipoTimbratura = azione === 'inizio' ? 'ingresso' : 'uscita';
+  const direzione = azione === 'inizio' ? 'andata' : 'ritorno';
   const usaViaggio = !!viaggio && viaggio.sedi.length > 0;
 
-  // ── stato del viaggio ──
   const [sedeId, setSedeId] = useState<string>(
     viaggio?.sedeDefaultId ?? viaggio?.sedi[0]?.id ?? '',
   );
@@ -269,10 +298,11 @@ function TimbraSelf({
       }
     }
     startTransition(async () => {
-      setStato(null);
+      setErroreMsg(null);
       const g = await geo();
       const res = await timbra({
         token,
+        azione,
         geo: g,
         viaggio: usaViaggio
           ? {
@@ -286,44 +316,19 @@ function TimbraSelf({
             }
           : undefined,
       });
-      if (res.ok) {
-        setStato({ tipo: 'ok', ts: res.ts, tipo_timbra: res.tipo });
-        router.refresh();
-      } else {
-        setStato({ tipo: 'errore', msg: messaggioErrore(res.error) });
-      }
+      if (res.ok) onOk({ ts: res.ts, tipo: res.tipo, pausa: res.pausa });
+      else setErroreMsg(messaggioErrore(res.error));
     });
-  }
-
-  if (stato?.tipo === 'ok') {
-    return (
-      <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
-        <p className="mb-1 text-sm text-muted-foreground">{nome}</p>
-        <p className="text-sm font-medium text-emerald-600">
-          {stato.tipo_timbra === 'ingresso' ? 'Ingresso' : 'Uscita'} registrato alle{' '}
-          {formatOra(stato.ts)}
-        </p>
-        <Link
-          href="/mobile/kantiere/ore"
-          className="mt-3 inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 active:scale-[0.98] transition-all"
-        >
-          Le mie ore di oggi
-        </Link>
-      </div>
-    );
   }
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-soft">
-      <p className="text-sm text-muted-foreground">{nome}</p>
-
       {usaViaggio && viaggio && (
         <>
-          {/* Sede */}
           <div className="space-y-2">
             <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
               <MapPin className="h-4 w-4 text-primary" strokeWidth={1.75} />
-              {prossimoTipo === 'ingresso' ? 'Da dove sei partito?' : 'Dove vai adesso?'}
+              {azione === 'inizio' ? 'Da dove sei partito?' : 'Dove vai adesso?'}
             </p>
             <div className="grid gap-2">
               {viaggio.sedi.map((s) => (
@@ -347,7 +352,6 @@ function TimbraSelf({
             </div>
           </div>
 
-          {/* Stima / conferma tempo viaggio */}
           <div className="space-y-2 rounded-lg bg-muted/40 p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -407,7 +411,6 @@ function TimbraSelf({
             )}
           </div>
 
-          {/* Autista + mezzo */}
           <div className="space-y-2">
             <label className="flex cursor-pointer items-center gap-2.5 select-none">
               <input
@@ -446,7 +449,7 @@ function TimbraSelf({
       )}
 
       {errLocale && <p className="text-sm text-destructive">{errLocale}</p>}
-      {stato?.tipo === 'errore' && <p className="text-sm text-destructive">{stato.msg}</p>}
+      {erroreMsg && <p className="text-sm text-destructive">{erroreMsg}</p>}
 
       <Button
         className="w-full py-3 text-base"
@@ -455,8 +458,160 @@ function TimbraSelf({
         onClick={handleTimbra}
         disabled={isPending || stimaLoading}
       >
-        {isPending ? 'Attendere...' : `Timbra ${tipoLabel}`}
+        {isPending ? 'Attendere...' : azione === 'inizio' ? 'Timbra ingresso' : 'Timbra uscita'}
       </Button>
+    </div>
+  );
+}
+
+// ─── azione rapida one-tap (pausa / ripresa) ─────────────────────────────────
+
+function AzioneRapida({
+  token,
+  azione,
+  label,
+  icon,
+  classi,
+  onOk,
+}: {
+  token: string;
+  azione: AzioneTimbra;
+  label: string;
+  icon: React.ReactNode;
+  classi: string;
+  onOk: (r: { ts: string; tipo: TipoTimbratura; pausa: boolean }) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  function go() {
+    startTransition(async () => {
+      setErr(null);
+      const g = await geo();
+      const res = await timbra({ token, azione, geo: g });
+      if (res.ok) onOk({ ts: res.ts, tipo: res.tipo, pausa: res.pausa });
+      else setErr(messaggioErrore(res.error));
+    });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={go}
+        disabled={isPending}
+        className={[
+          'flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-base font-semibold shadow-soft transition-all active:scale-[0.99] disabled:opacity-60',
+          classi,
+        ].join(' ')}
+      >
+        {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : icon}
+        {isPending ? 'Attendere...' : label}
+      </button>
+      {err && <p className="text-sm text-destructive">{err}</p>}
+    </div>
+  );
+}
+
+// ─── flusso self a stati (idle / lavoro / pausa) ─────────────────────────────
+
+function SelfFlow({
+  token,
+  nome,
+  stato,
+  viaggio,
+}: {
+  token: string;
+  nome: string;
+  stato: StatoSelf;
+  viaggio: ViaggioCtx | null;
+}) {
+  const router = useRouter();
+  // Conferma dopo una timbratura andata a buon fine.
+  const [ok, setOk] = useState<{ testo: string; ts: string } | null>(null);
+  // In lavoro/pausa: l'utente ha scelto "Termina turno" → mostra il flusso uscita.
+  const [terminando, setTerminando] = useState(false);
+
+  function handleOk(r: { ts: string; tipo: TipoTimbratura; pausa: boolean }) {
+    setOk({ testo: labelConferma(r.tipo, r.pausa), ts: r.ts });
+    router.refresh();
+  }
+
+  if (ok) return <ContenutoOk testo={ok.testo} ts={ok.ts} />;
+
+  // IDLE → inizio turno (con eventuale viaggio andata)
+  if (stato.stato === 'idle') {
+    return <TimbraConViaggio token={token} azione="inizio" viaggio={viaggio} onOk={handleOk} />;
+  }
+
+  // Se ha scelto "Termina turno" (da lavoro o pausa): flusso uscita con viaggio ritorno
+  if (terminando) {
+    return (
+      <div className="space-y-3">
+        <TimbraConViaggio token={token} azione="fine" viaggio={viaggio} onOk={handleOk} />
+        <button
+          type="button"
+          onClick={() => setTerminando(false)}
+          className="w-full text-center text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          Annulla
+        </button>
+      </div>
+    );
+  }
+
+  // LAVORO → scelta: Pausa pranzo (giallo) oppure Termina turno
+  if (stato.stato === 'lavoro') {
+    return (
+      <div className="space-y-3 rounded-xl border border-border bg-card p-5 shadow-soft">
+        <p className="text-sm text-muted-foreground">
+          Turno in corso
+          {stato.ingressoAperto ? <> · dalle {formatOra(stato.ingressoAperto)}</> : null}
+        </p>
+        <AzioneRapida
+          token={token}
+          azione="pausa"
+          label="Pausa pranzo"
+          icon={<Utensils className="h-5 w-5" strokeWidth={2} />}
+          classi="border border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200"
+          onOk={handleOk}
+        />
+        <button
+          type="button"
+          onClick={() => setTerminando(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-base font-semibold text-foreground hover:bg-muted active:scale-[0.99] transition-all"
+        >
+          <LogOut className="h-5 w-5" strokeWidth={2} />
+          Termina turno
+        </button>
+      </div>
+    );
+  }
+
+  // PAUSA → Riprendi turno (verde) oppure Termina turno
+  return (
+    <div className="space-y-3 rounded-xl border border-amber-300/70 bg-amber-50 p-5 shadow-soft">
+      <p className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
+        <Utensils className="h-4 w-4" strokeWidth={2} />
+        In pausa pranzo
+        {stato.inizioPausa ? <> · dalle {formatOra(stato.inizioPausa)}</> : null}
+      </p>
+      <AzioneRapida
+        token={token}
+        azione="ripresa"
+        label="Riprendi turno"
+        icon={<Play className="h-5 w-5" strokeWidth={2} />}
+        classi="bg-emerald-600 text-white hover:bg-emerald-700"
+        onOk={handleOk}
+      />
+      <button
+        type="button"
+        onClick={() => setTerminando(true)}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-sm font-medium text-foreground hover:bg-muted active:scale-[0.99] transition-all"
+      >
+        <LogOut className="h-4 w-4" strokeWidth={2} />
+        Termina turno
+      </button>
     </div>
   );
 }
@@ -480,35 +635,27 @@ export function TimbraClient({
   token,
   commessaTitolo,
   me,
-  prossimoTipoSelf,
+  statoSelf,
   capo,
   membri,
   viaggio,
 }: TimbraClientProps) {
   return (
     <div className="space-y-6">
-      {/* Titolo */}
       <div className="text-center">
         <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Kantiere</p>
         <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground">{commessaTitolo}</h1>
       </div>
 
-      {/* Timbratura personale */}
-      {me && prossimoTipoSelf !== null && (
+      {me && statoSelf && (
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            La mia timbratura
+            {me.nome}
           </p>
-          <TimbraSelf
-            token={token}
-            nome={me.nome}
-            prossimoTipo={prossimoTipoSelf}
-            viaggio={viaggio ?? null}
-          />
+          <SelfFlow token={token} nome={me.nome} stato={statoSelf} viaggio={viaggio ?? null} />
         </div>
       )}
 
-      {/* Squadra (solo capo) */}
       {capo && membri.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

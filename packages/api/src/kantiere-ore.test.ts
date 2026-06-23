@@ -6,8 +6,67 @@ import {
   arrotonda15,
   minutiViaggioPerTarget,
   appaiaTimbrature,
+  statoTurno,
   type Timbratura,
 } from './kantiere-ore';
+
+describe('statoTurno (pausa pranzo)', () => {
+  it('nessun evento → idle', () => {
+    expect(statoTurno([]).stato).toBe('idle');
+  });
+  it('ultimo ingresso → lavoro', () => {
+    const r = statoTurno([{ tipo: 'ingresso', ts: '2026-06-23T06:00:00Z' }]);
+    expect(r.stato).toBe('lavoro');
+    expect(r.ingressoAperto).toBe('2026-06-23T06:00:00Z');
+  });
+  it('uscita di pausa → pausa (turno aperto ma fermo)', () => {
+    const r = statoTurno([
+      { tipo: 'ingresso', ts: '2026-06-23T06:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-23T10:00:00Z', pausa: true },
+    ]);
+    expect(r.stato).toBe('pausa');
+    expect(r.inizioPausa).toBe('2026-06-23T10:00:00Z');
+  });
+  it('ripresa dopo pausa → lavoro', () => {
+    const r = statoTurno([
+      { tipo: 'ingresso', ts: '2026-06-23T06:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-23T10:00:00Z', pausa: true },
+      { tipo: 'ingresso', ts: '2026-06-23T11:00:00Z', pausa: true },
+    ]);
+    expect(r.stato).toBe('lavoro');
+  });
+  it('uscita di fine turno → idle', () => {
+    const r = statoTurno([
+      { tipo: 'ingresso', ts: '2026-06-23T06:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-23T16:00:00Z', pausa: false },
+    ]);
+    expect(r.stato).toBe('idle');
+  });
+});
+
+describe('appaiaTimbrature con pausa pranzo', () => {
+  it('esclude la pausa dalle ore lavorate e segnala inPausa', () => {
+    // 08-12 lavoro, pausa, in pausa adesso
+    const r = appaiaTimbrature([
+      { tipo: 'ingresso', ts: '2026-06-23T06:00:00Z' },
+      { tipo: 'uscita', ts: '2026-06-23T10:00:00Z', pausa: true },
+    ]);
+    expect(r.minutiTotali).toBe(240); // 4h
+    expect(r.aperto).toBe(false);
+    expect(r.inPausa).toBe(true);
+  });
+  it('giornata completa con pausa: somma solo il lavoro effettivo', () => {
+    const r = appaiaTimbrature([
+      { tipo: 'ingresso', ts: '2026-06-23T06:00:00Z' }, // 08:00
+      { tipo: 'uscita', ts: '2026-06-23T10:00:00Z', pausa: true }, // 12:00
+      { tipo: 'ingresso', ts: '2026-06-23T11:00:00Z', pausa: true }, // 13:00
+      { tipo: 'uscita', ts: '2026-06-23T16:00:00Z', pausa: false }, // 18:00
+    ]);
+    expect(r.minutiTotali).toBe(540); // 9h (no pausa)
+    expect(r.aperto).toBe(false);
+    expect(r.inPausa).toBe(false);
+  });
+});
 
 describe('appaiaTimbrature', () => {
   it('accoppia ingresso/uscita con minuti e totale', () => {

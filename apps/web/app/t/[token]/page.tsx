@@ -15,7 +15,7 @@
 import { createServiceSupabase } from '@kommessa/api/service';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext } from '@kommessa/api/tenant';
-import { prossimoTipoTimbratura } from '@kommessa/api/kantiere-ore';
+import { prossimoTipoTimbratura, statoTurno } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
@@ -104,37 +104,35 @@ function IconaQr() {
 
 // ─── helper: timbrature di oggi per un dipendente su un target (commessa o cantiere) ──
 
+type EventoOggi = { tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null };
+
+/** Eventi timbratura di oggi (Europe/Rome) per dipendente+target. */
+async function eventiOggiFor(
+  supabase: ReturnType<typeof createServerSupabase>,
+  dipendenteId: string,
+  target: { tipo: 'commessa' | 'cantiere'; id: string },
+): Promise<EventoOggi[]> {
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const q = supabase
+    .from('timbrature' as never)
+    .select('tipo, ts, pausa')
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const { data } =
+    target.tipo === 'commessa'
+      ? await q.eq('commessa_id', target.id)
+      : await q.eq('cantiere_id', target.id);
+  return (data as EventoOggi[] | null) ?? [];
+}
+
 async function prossimoTipoFor(
   supabase: ReturnType<typeof createServerSupabase>,
   dipendenteId: string,
   target: { tipo: 'commessa' | 'cantiere'; id: string },
 ): Promise<'ingresso' | 'uscita'> {
-  // "Oggi" = giorno calendario italiano (Europe/Rome), non UTC.
-  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
-
-  let rows: { tipo: 'ingresso' | 'uscita' }[] = [];
-  if (target.tipo === 'commessa') {
-    const { data } = await supabase
-      .from('timbrature' as never)
-      .select('tipo, ts')
-      .eq('dipendente_id', dipendenteId)
-      .eq('commessa_id', target.id)
-      .gte('ts', fromIso)
-      .lt('ts', toIso)
-      .order('ts', { ascending: true });
-    rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
-  } else {
-    const { data } = await supabase
-      .from('timbrature' as never)
-      .select('tipo, ts')
-      .eq('dipendente_id', dipendenteId)
-      .eq('cantiere_id', target.id)
-      .gte('ts', fromIso)
-      .lt('ts', toIso)
-      .order('ts', { ascending: true });
-    rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
-  }
-  return prossimoTipoTimbratura(rows);
+  return prossimoTipoTimbratura(await eventiOggiFor(supabase, dipendenteId, target));
 }
 
 // ─── page ───────────────────────────────────────────────────────────────────
@@ -281,9 +279,9 @@ export default async function TokenPage({
     );
   }
 
-  // Prossimo tipo di timbratura per me
-  const prossimoTipoSelf =
-    me !== null ? await prossimoTipoFor(supabase, me.id, target) : null;
+  // Stato turno per me (idle/lavoro/pausa): guida le opzioni del flusso self.
+  const statoTurnoSelf =
+    me !== null ? statoTurno(await eventiOggiFor(supabase, me.id, target)) : null;
 
   // Membri della squadra (escludo me stesso per non duplicare)
   let membriConTipo: { id: string; nome: string; prossimoTipo: 'ingresso' | 'uscita' }[] = [];
@@ -399,7 +397,7 @@ export default async function TokenPage({
             ? { id: me.id, nome: titoloCase(`${me.nome} ${me.cognome}`) }
             : null
         }
-        prossimoTipoSelf={prossimoTipoSelf}
+        statoSelf={statoTurnoSelf}
         capo={capo}
         membri={membriConTipo}
         viaggio={viaggioCtx}

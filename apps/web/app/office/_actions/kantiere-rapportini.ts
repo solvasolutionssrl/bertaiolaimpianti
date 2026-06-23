@@ -425,7 +425,7 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
   const { fromIso, toIso } = romeDayBoundsUtc(giorno);
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('id, commessa_id, cantiere_id, tipo, ts')
+    .select('id, commessa_id, cantiere_id, tipo, ts, pausa')
     .eq('tenant_id', ctx.tenantId)
     .eq('dipendente_id', dipendenteId)
     .gte('ts', fromIso)
@@ -437,16 +437,20 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
     cantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
+    pausa: boolean | null;
   }[] | null) ?? [];
 
-  // Target con ingresso ancora aperto (nessuna uscita successiva).
+  // Target con turno ancora aperto. L'uscita di PAUSA non chiude il turno
+  // (il dipendente è solo a pranzo): solo la fine turno (uscita pausa=false).
   const aperti = new Map<string, { commessa_id: string | null; cantiere_id: string | null; ingressoTs: string }>();
   for (const t of timb) {
     const key = t.cantiere_id ? `k:${t.cantiere_id}` : t.commessa_id ? `c:${t.commessa_id}` : '';
     if (!key) continue;
     if (t.tipo === 'ingresso') {
-      aperti.set(key, { commessa_id: t.commessa_id, cantiere_id: t.cantiere_id, ingressoTs: t.ts });
-    } else {
+      if (!aperti.has(key)) {
+        aperti.set(key, { commessa_id: t.commessa_id, cantiere_id: t.cantiere_id, ingressoTs: t.ts });
+      }
+    } else if (!t.pausa) {
       aperti.delete(key);
     }
   }
@@ -511,7 +515,7 @@ export async function giornateAperte(
 
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('dipendente_id, commessa_id, cantiere_id, tipo, ts')
+    .select('dipendente_id, commessa_id, cantiere_id, tipo, ts, pausa')
     .eq('tenant_id', ctx.tenantId)
     .gte('ts', fromIso)
     .order('ts', { ascending: true });
@@ -521,9 +525,11 @@ export async function giornateAperte(
     cantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
+    pausa: boolean | null;
   }[] | null) ?? [];
 
-  // Pairing per (dipendente, giorno italiano, target).
+  // Pairing per (dipendente, giorno italiano, target). L'uscita di pausa non
+  // chiude il turno: resta "aperto" finché non arriva la fine turno.
   const aperti = new Map<
     string,
     { dipId: string; giorno: string; commessaId: string | null; cantiereId: string | null; ingressoTs: string }
@@ -534,14 +540,16 @@ export async function giornateAperte(
     if (!targetKey) continue;
     const key = `${t.dipendente_id}|${giorno}|${targetKey}`;
     if (t.tipo === 'ingresso') {
-      aperti.set(key, {
-        dipId: t.dipendente_id,
-        giorno,
-        commessaId: t.commessa_id,
-        cantiereId: t.cantiere_id,
-        ingressoTs: t.ts,
-      });
-    } else {
+      if (!aperti.has(key)) {
+        aperti.set(key, {
+          dipId: t.dipendente_id,
+          giorno,
+          commessaId: t.commessa_id,
+          cantiereId: t.cantiere_id,
+          ingressoTs: t.ts,
+        });
+      }
+    } else if (!t.pausa) {
       aperti.delete(key);
     }
   }

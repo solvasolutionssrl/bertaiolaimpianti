@@ -16,14 +16,19 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 export interface TurnoAttivoMio {
   cantiereId: string;
   cantiereNome: string;
-  /** ISO timestamp dell'ingresso ancora aperto. */
+  /** ISO timestamp dell'inizio turno (primo ingresso ancora aperto). */
   inizioTs: string;
+  /** true se il turno è aperto ma il dipendente è in pausa pranzo. */
+  inPausa: boolean;
+  /** ISO dell'inizio pausa in corso, o null. */
+  inizioPausaTs: string | null;
 }
 
 type TimbRow = {
   cantiere_id: string | null;
   tipo: 'ingresso' | 'uscita';
   ts: string;
+  pausa: boolean | null;
 };
 
 export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
@@ -44,7 +49,7 @@ export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
   const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('cantiere_id, tipo, ts')
+    .select('cantiere_id, tipo, ts, pausa')
     .eq('tenant_id', ctx.tenantId)
     .eq('dipendente_id', dipId)
     .not('cantiere_id', 'is', null)
@@ -53,19 +58,34 @@ export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
 
   const righe = (timbRaw as TimbRow[] | null) ?? [];
 
-  // Per ogni cantiere, l'ingresso resta aperto finché non arriva un'uscita.
-  const aperti = new Map<string, string>(); // cantiereId → inizioTs
+  // Per ogni cantiere il turno resta aperto finché non arriva un'uscita di
+  // FINE turno. L'uscita di pausa lo mantiene aperto (ma "in pausa").
+  type StatoCant = { inizioTs: string; inPausa: boolean; inizioPausaTs: string | null };
+  const aperti = new Map<string, StatoCant>();
   for (const t of righe) {
     if (!t.cantiere_id) continue;
-    if (t.tipo === 'ingresso') aperti.set(t.cantiere_id, t.ts);
-    else aperti.delete(t.cantiere_id);
+    const cur = aperti.get(t.cantiere_id);
+    if (t.tipo === 'ingresso') {
+      if (!cur) aperti.set(t.cantiere_id, { inizioTs: t.ts, inPausa: false, inizioPausaTs: null });
+      else {
+        cur.inPausa = false; // ripresa dopo pausa
+        cur.inizioPausaTs = null;
+      }
+    } else if (t.pausa) {
+      if (cur) {
+        cur.inPausa = true;
+        cur.inizioPausaTs = t.ts;
+      }
+    } else {
+      aperti.delete(t.cantiere_id); // fine turno
+    }
   }
   if (aperti.size === 0) return null;
 
-  // Turno aperto più recente.
-  let best: { cantId: string; ts: string } | null = null;
-  for (const [cantId, ts] of aperti) {
-    if (!best || Date.parse(ts) > Date.parse(best.ts)) best = { cantId, ts };
+  // Turno aperto più recente (per inizioTs).
+  let best: { cantId: string; s: StatoCant } | null = null;
+  for (const [cantId, s] of aperti) {
+    if (!best || Date.parse(s.inizioTs) > Date.parse(best.s.inizioTs)) best = { cantId, s };
   }
   if (!best) return null;
 
@@ -79,6 +99,8 @@ export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
   return {
     cantiereId: best.cantId,
     cantiereNome: titoloCase(c?.nome || c?.codice || 'Cantiere'),
-    inizioTs: best.ts,
+    inizioTs: best.s.inizioTs,
+    inPausa: best.s.inPausa,
+    inizioPausaTs: best.s.inizioPausaTs,
   };
 }

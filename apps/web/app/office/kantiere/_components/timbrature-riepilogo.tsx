@@ -7,6 +7,26 @@ export interface TimbraturaInput {
   tipo: string;
   ts: string;
   commessaTitolo?: string | null;
+  /** true se è un evento di pausa pranzo (uscita = inizio pausa, ingresso = ripresa). */
+  pausa?: boolean | null;
+}
+
+/** Intervalli di pausa pranzo (da un'uscita-pausa alla ripresa successiva). */
+function calcolaPause(timbrature: TimbraturaInput[]): { inizio: string; fine: string | null }[] {
+  const sorted = [...timbrature]
+    .filter((t) => t.tipo === 'ingresso' || t.tipo === 'uscita')
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const pause: { inizio: string; fine: string | null }[] = [];
+  let inizio: string | null = null;
+  for (const t of sorted) {
+    if (t.tipo === 'uscita' && t.pausa) inizio = t.ts;
+    else if (t.tipo === 'ingresso' && inizio) {
+      pause.push({ inizio, fine: t.ts });
+      inizio = null;
+    }
+  }
+  if (inizio) pause.push({ inizio, fine: null });
+  return pause;
 }
 
 function fmtOra(ts: string): string {
@@ -29,7 +49,7 @@ function fmtMinuti(min: number): string {
 function soloTimbrature(timbrature: TimbraturaInput[]) {
   return timbrature
     .filter((t) => t.tipo === 'ingresso' || t.tipo === 'uscita')
-    .map((t) => ({ tipo: t.tipo as 'ingresso' | 'uscita', ts: t.ts }));
+    .map((t) => ({ tipo: t.tipo as 'ingresso' | 'uscita', ts: t.ts, pausa: t.pausa ?? false }));
 }
 
 /** Hook: ticka ogni 30s solo se serve un contatore live (giornata aperta). */
@@ -82,6 +102,12 @@ export function TimbratureSommario({ timbrature }: { timbrature: TimbraturaInput
           Aperta
         </span>
       )}
+      {r.inPausa && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+          In pausa
+        </span>
+      )}
     </span>
   );
 }
@@ -94,6 +120,7 @@ export function TimbratureSommario({ timbrature }: { timbrature: TimbraturaInput
 export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInput[] }) {
   const r = appaiaTimbrature(soloTimbrature(timbrature));
   const now = useLiveNow(r.aperto);
+  const pause = calcolaPause(timbrature);
 
   if (r.coppie.length === 0) {
     return <p className="text-xs text-muted-foreground">Nessuna timbratura registrata.</p>;
@@ -104,9 +131,9 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
 
   return (
     <div className="space-y-2">
-      {/* Totale */}
+      {/* Totale (ORE EFFETTIVE: la pausa pranzo è già esclusa) */}
       <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
-        <span className="text-xs text-muted-foreground">Ore timbrate</span>
+        <span className="text-xs text-muted-foreground">Ore lavorate</span>
         <span className="flex items-center gap-2">
           <span className="tabular-nums text-sm font-semibold text-foreground">
             {fmtMinuti(totaleConLive)}
@@ -120,10 +147,16 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
               In corso
             </span>
           )}
+          {r.inPausa && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+              <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+              In pausa
+            </span>
+          )}
         </span>
       </div>
 
-      {/* Coppie ingresso → uscita */}
+      {/* Coppie ingresso → uscita (segmenti di lavoro) */}
       <ul className="space-y-1">
         {r.coppie.map((c, i) => (
           <li
@@ -149,6 +182,30 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
           </li>
         ))}
       </ul>
+
+      {/* Pause pranzo (informative: NON contano nelle ore lavorate) */}
+      {pause.length > 0 && (
+        <ul className="space-y-1">
+          {pause.map((p, i) => {
+            const min = p.fine ? Math.round((Date.parse(p.fine) - Date.parse(p.inizio)) / 60000) : null;
+            return (
+              <li
+                key={`p-${i}`}
+                className="flex items-center justify-between gap-2 rounded-md border border-dashed border-amber-300/70 bg-amber-50/50 px-2.5 py-1.5 text-xs"
+              >
+                <span className="inline-flex items-center gap-1.5 tabular-nums text-amber-800">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
+                  Pausa pranzo {fmtOra(p.inizio)}
+                  {p.fine ? <> → {fmtOra(p.fine)}</> : <> · in corso</>}
+                </span>
+                <span className="tabular-nums font-medium text-amber-700">
+                  {min != null ? fmtMinuti(min) : ''}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
