@@ -9,6 +9,7 @@ import {
   Mic,
   Bell,
   User,
+  Users,
   LayoutDashboard,
   MapPin,
   QrCode,
@@ -34,6 +35,7 @@ export function BottomNavShell({
   role,
   userId,
   tenantId,
+  isCapo = false,
 }: {
   unreadCount: number;
   shell: MobileShell;
@@ -41,6 +43,8 @@ export function BottomNavShell({
   role?: string;
   userId: string;
   tenantId: string;
+  /** Solo shell kantiere/tecnico: se capo, "Attività" diventa "Squadra". */
+  isCapo?: boolean;
 }) {
   const pathname = usePathname() ?? '';
 
@@ -66,11 +70,14 @@ export function BottomNavShell({
       ];
     } else {
       // Tecnico in cantiere — "a prova di cantiere": tap target grandi.
+      // Se è caposquadra, lo slot "Attività" diventa "Squadra" (gestione del team).
       tabs = [
         { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
         { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
         { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
-        { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+        isCapo
+          ? { id: 'squadra', label: 'Squadra', icon: Users, href: '/mobile/kantiere/gestione-squadra' }
+          : { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
         { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
       ];
     }

@@ -24,6 +24,7 @@ import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 import { TimbraClient } from './_components/timbra-client';
 import { LandingPubblica } from './_components/landing-pubblica';
 import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
+import { sonoCapoSquadra } from '@/app/mobile/kantiere/_lib/capo';
 
 export const dynamic = 'force-dynamic';
 
@@ -400,6 +401,10 @@ export default async function TokenPage({
   const rawMode = (tenantModeRes.data as { app_mode?: string | null } | null)?.app_mode ?? null;
   const navAppMode: AppMode = rawMode === 'kantiere' || rawMode === 'full' ? rawMode : 'kommessa';
   const navShell = risolviMobileShell({ appMode: navAppMode, role: ctx.role });
+  const navIsCapo =
+    navShell === 'kantiere' && !(ctx.role === 'admin' || ctx.role === 'office')
+      ? await sonoCapoSquadra(ctx.tenantId, ctx.userId)
+      : false;
 
   // 6. Render schermata timbratura (top-aligned + bottom-nav dell'app)
   return (
@@ -432,6 +437,7 @@ export default async function TokenPage({
         role={ctx.role}
         userId={ctx.userId}
         tenantId={ctx.tenantId}
+        isCapo={navIsCapo}
       />
     </>
   );

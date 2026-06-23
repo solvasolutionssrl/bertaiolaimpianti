@@ -9,6 +9,7 @@ import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 import SwRegistrar from './_components/sw-registrar';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
+import { sonoCapoSquadra } from './kantiere/_lib/capo';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
 import {
   MOBILE_TOUR_STEPS,
@@ -74,6 +75,13 @@ export default async function MobileLayout({
     ? risolviMobileShell({ appMode, role: ctx.role })
     : 'campo';
 
+  // Caposquadra: solo nella shell kantiere per i tecnici (non admin/office).
+  // Per Bertaiola (shell != 'kantiere') resta sempre false → zero differenze.
+  let isCapo = false;
+  if (ctx && shell === 'kantiere' && !(ctx.role === 'admin' || ctx.role === 'office')) {
+    isCapo = await sonoCapoSquadra(ctx.tenantId, ctx.userId);
+  }
+
   return (
     <div className="min-h-[100dvh] bg-canvas-mobile">
       <SwRegistrar />
@@ -98,6 +106,7 @@ export default async function MobileLayout({
           role={ctx.role}
           userId={ctx.userId}
           tenantId={ctx.tenantId}
+          isCapo={isCapo}
         />
       ) : null}
 
