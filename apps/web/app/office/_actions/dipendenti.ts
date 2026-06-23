@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { prossimoCodiceDipendente } from '@kommessa/api/kantiere';
@@ -89,6 +90,83 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
   revalidatePath('/office/kantiere/dipendenti');
   revalidatePath(`/office/kantiere/dipendenti/${parsed.data.id}`);
   return { ok: true };
+}
+
+// ── crea utente/accesso app per un dipendente (no email, username+password) ──
+// Stesso modello FPM del super-admin (`creaUtenteManuale`), ma ristretto al
+// tenant di chi chiama: l'ufficio crea l'accesso solo per il PROPRIO spazio.
+// Email sintetica `<username>@<slug>.kommessa.local` (mai consegnata via SMTP),
+// `email_confirm:true` → login immediato con username + password.
+
+const CreaUtenteSchema = z.object({
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(2)
+    .max(40)
+    .regex(/^[a-z0-9._-]+$/, 'Solo lettere minuscole, numeri, ".", "-", "_"'),
+  displayName: z.string().trim().min(2).max(120),
+  role: z.enum(['tecnico', 'office']),
+  password: z.string().min(8, 'Almeno 8 caratteri').max(72),
+});
+
+export async function creaUtenteDipendente(
+  input: unknown,
+): Promise<{ ok: true; userId: string; loginEmail: string } | { ok: false; error: string }> {
+  const parsed = CreaUtenteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  const ctx = await guard();
+
+  let admin;
+  try {
+    admin = createServiceSupabase();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Configurazione service-role mancante.' };
+  }
+
+  const loginEmail = `${parsed.data.username}@${ctx.tenantSlug}.kommessa.local`;
+
+  const created = await admin.auth.admin.createUser({
+    email: loginEmail,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: { display_name: parsed.data.displayName },
+    app_metadata: {
+      tenant_id: ctx.tenantId,
+      tenant_slug: ctx.tenantSlug,
+      role: parsed.data.role,
+      manual_account: true,
+    } as never,
+  });
+  if (created.error) {
+    const msg = created.error.message;
+    if (msg.toLowerCase().includes('already')) {
+      return { ok: false, error: `Username "${parsed.data.username}" già in uso.` };
+    }
+    return { ok: false, error: msg };
+  }
+  const uid = created.data.user?.id;
+  if (!uid) return { ok: false, error: 'auth id mancante' };
+
+  const { error: insErr } = await admin.from('users').insert({
+    id: uid,
+    tenant_id: ctx.tenantId,
+    role: parsed.data.role,
+    display_name: parsed.data.displayName,
+    attivo: true,
+  } as never);
+  if (insErr) {
+    try {
+      await admin.auth.admin.deleteUser(uid);
+    } catch {
+      /* best-effort */
+    }
+    return { ok: false, error: `Creazione utente fallita: ${insErr.message}` };
+  }
+
+  revalidatePath('/office/kantiere/dipendenti');
+  return { ok: true, userId: uid, loginEmail };
 }
 
 export async function eliminaDipendente(input: unknown): Promise<Result> {

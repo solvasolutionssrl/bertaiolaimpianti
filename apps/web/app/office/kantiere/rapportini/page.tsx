@@ -1,6 +1,7 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
+import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
@@ -159,16 +160,17 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   let timbratureData: TimbratureRow[] = [];
   const timbratureCommessaIds = new Set<string>();
   if (dipIds.length > 0 && rapportini.length > 0) {
-    // Expand TS range: from giorno start, to giorno end (server gira UTC, ±2h sufficiente a coprire Rome)
-    const tsFrom = from + 'T00:00:00.000Z';
-    const tsTo = to + 'T23:59:59.999Z';
+    // Confini-giorno esatti in Europe/Rome (la mezzanotte italiana è 22:00/23:00
+    // UTC: un T00:00:00Z taglierebbe via le timbrature notturne del primo giorno).
+    const { fromIso: tsFrom } = romeDayBoundsUtc(from);
+    const { toIso: tsTo } = romeDayBoundsUtc(to);
     const { data } = (await supabase
       .from('timbrature' as never)
       .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa')
       .eq('tenant_id', ctx.tenantId)
       .in('dipendente_id', dipIds)
       .gte('ts', tsFrom)
-      .lte('ts', tsTo)
+      .lt('ts', tsTo)
       .order('ts', { ascending: true })) as { data: TimbratureRow[] | null };
     timbratureData = data ?? [];
     for (const t of timbratureData) {

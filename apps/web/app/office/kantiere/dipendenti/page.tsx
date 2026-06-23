@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { DipendentiClient } from './_components/dipendenti-client';
 
@@ -27,6 +28,7 @@ export interface UtenteRow {
 export default async function DipendentiPage() {
   if (!(await tenantHasModule('kantiere'))) redirect('/office');
 
+  const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
   const { data: dipendenti } = await supabase
     .from('dipendenti' as never)
@@ -45,6 +47,7 @@ export default async function DipendentiPage() {
       <DipendentiClient
         dipendenti={(dipendenti ?? []) as DipendenteRow[]}
         utenti={(utenti ?? []) as UtenteRow[]}
+        tenantSlug={ctx.tenantSlug}
       />
     </div>
   );

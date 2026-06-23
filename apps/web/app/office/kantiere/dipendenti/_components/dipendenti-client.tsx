@@ -15,6 +15,10 @@ import {
   Monitor,
   HardHat,
   Clock,
+  Copy,
+  RefreshCw,
+  Check,
+  KeyRound,
 } from 'lucide-react';
 import {
   Badge,
@@ -36,13 +40,18 @@ import {
   creaDipendente,
   aggiornaDipendente,
   eliminaDipendente,
+  creaUtenteDipendente,
 } from '../../../_actions/dipendenti';
 import type { DipendenteRow, UtenteRow } from '../page';
 
 interface Props {
   dipendenti: DipendenteRow[];
   utenti: UtenteRow[];
+  tenantSlug: string;
 }
+
+/** Modalità di gestione dell'accesso app per il dipendente. */
+type AccountMode = 'none' | 'existing' | 'new';
 
 interface FormState {
   id?: string;
@@ -56,6 +65,11 @@ interface FormState {
   note: string;
   /** user_id originale al momento dell'apertura del dialog (per rilevare cambio) */
   _originalUserId?: string | null;
+  // ── creazione accesso ─────────────────────────────────────────────
+  accountMode: AccountMode;
+  newUsername: string;
+  newPassword: string;
+  newRole: 'tecnico' | 'office';
 }
 
 const EMPTY_FORM: FormState = {
@@ -68,10 +82,15 @@ const EMPTY_FORM: FormState = {
   a_turni: false,
   note: '',
   _originalUserId: null,
+  accountMode: 'none',
+  newUsername: '',
+  newPassword: '',
+  newRole: 'tecnico',
 };
 
 function formFromRow(d: DipendenteRow): FormState {
   return {
+    ...EMPTY_FORM,
     id: d.id,
     nome: d.nome,
     cognome: d.cognome,
@@ -82,7 +101,51 @@ function formFromRow(d: DipendenteRow): FormState {
     a_turni: d.a_turni,
     note: d.note ?? '',
     _originalUserId: d.user_id,
+    accountMode: d.user_id ? 'existing' : 'none',
   };
+}
+
+/** username suggerito: "nome.cognome" senza accenti/spazi/simboli. */
+function slugUsername(nome: string, cognome: string): string {
+  const norm = (s: string) =>
+    s
+      .normalize('NFD')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '');
+  const n = norm(nome);
+  const c = norm(cognome);
+  return n && c ? `${n}.${c}` : n || c;
+}
+
+/** Password robusta e leggibile (12 char, niente caratteri ambigui). */
+function generaPassword(): string {
+  const minus = 'abcdefghijkmnpqrstuvwxyz';
+  const maius = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const cifre = '23456789';
+  const simb = '!@#$%';
+  const tutti = minus + maius + cifre + simb;
+  const rnd = (n: number) => {
+    const a = new Uint32Array(n);
+    crypto.getRandomValues(a);
+    return a;
+  };
+  const pick = (set: string, n: number): string[] => {
+    const a = rnd(n);
+    return Array.from({ length: n }, (_, i) => set[a[i]! % set.length] ?? set[0]!);
+  };
+  const chars = [
+    ...pick(minus, 1),
+    ...pick(maius, 1),
+    ...pick(cifre, 2),
+    ...pick(simb, 1),
+    ...pick(tutti, 7),
+  ];
+  const a = rnd(chars.length);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = a[i]! % (i + 1);
+    [chars[i], chars[j]] = [chars[j]!, chars[i]!];
+  }
+  return chars.join('');
 }
 
 /**
@@ -122,7 +185,7 @@ function categoriaRuolo(user_id: string | null, utenti: UtenteRow[]): FiltroRuol
   return 'altro';
 }
 
-export function DipendentiClient({ dipendenti, utenti }: Props) {
+export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
   const confirm = useConfirm();
@@ -130,6 +193,32 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
 
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
+  // Credenziali create da mostrare una volta sola (la password non si rivede).
+  const [credenziali, setCredenziali] = React.useState<{ loginEmail: string; password: string } | null>(null);
+  const [copiato, setCopiato] = React.useState<string | null>(null);
+
+  function copia(testo: string, key: string) {
+    if (!testo) return;
+    void navigator.clipboard?.writeText(testo).then(
+      () => {
+        setCopiato(key);
+        setTimeout(() => setCopiato((c) => (c === key ? null : c)), 1500);
+      },
+      () => undefined,
+    );
+  }
+
+  function switchMode(mode: AccountMode) {
+    setForm((f) => {
+      const next = { ...f, accountMode: mode };
+      // Passando a "Crea nuovo", precompila username + password se vuoti.
+      if (mode === 'new') {
+        if (!next.newUsername) next.newUsername = slugUsername(f.nome, f.cognome);
+        if (!next.newPassword) next.newPassword = generaPassword();
+      }
+      return next;
+    });
+  }
 
   // Filtri
   const [cerca, setCerca] = React.useState('');
@@ -177,7 +266,10 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
   }
 
   function closeDialog() {
-    if (!pending) setOpen(false);
+    if (!pending) {
+      setOpen(false);
+      setCredenziali(null);
+    }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
@@ -192,44 +284,88 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // Conferma cambio account: richiesta solo se il dipendente aveva GIA un account
-    // e l'ufficio lo sta cambiando (o rimuovendo).
-    const newUserId = form.user_id || null;
-    const origUserId = form._originalUserId ?? null;
-    if (
-      form.id && // modifica, non creazione
-      origUserId && // aveva gia un account
-      newUserId !== origUserId // lo sta cambiando
-    ) {
-      const nomeDip = `${form.nome} ${form.cognome}`;
-      const ok = await confirm({
-        title: `Cambiare account per ${nomeDip}?`,
-        description: newUserId
-          ? "L'account attualmente collegato verra sostituito con quello selezionato."
-          : "Il dipendente perdera l'accesso all'app.",
-        confirmLabel: 'Conferma',
-      });
-      if (!ok) return;
+    // Conferma cambio accesso solo se si MODIFICA un dipendente che aveva già un account.
+    if (form.id && (form._originalUserId ?? null)) {
+      const willBe =
+        form.accountMode === 'existing'
+          ? form.user_id || null
+          : form.accountMode === 'none'
+            ? null
+            : '__nuovo__';
+      if (willBe !== (form._originalUserId ?? null)) {
+        const ok = await confirm({
+          title: `Cambiare accesso per ${form.nome} ${form.cognome}?`,
+          description:
+            willBe === null
+              ? "Il dipendente perderà l'accesso all'app."
+              : "L'account collegato verrà sostituito.",
+          confirmLabel: 'Conferma',
+        });
+        if (!ok) return;
+      }
     }
 
     start(async () => {
+      // 1) Risolvi lo user_id da collegare (eventualmente creando l'accesso).
+      let userId: string | null = null;
+      let nuoveCredenziali: { loginEmail: string; password: string } | null = null;
+
+      if (form.accountMode === 'existing') {
+        userId = form.user_id || null;
+      } else if (form.accountMode === 'new') {
+        const username = form.newUsername.trim().toLowerCase();
+        if (username.length < 2) {
+          await showAlert({ title: 'Username mancante', body: 'Inserisci uno username valido.' });
+          return;
+        }
+        if (form.newPassword.length < 8) {
+          await showAlert({ title: 'Password troppo corta', body: 'Almeno 8 caratteri.' });
+          return;
+        }
+        const ures = await creaUtenteDipendente({
+          username,
+          displayName: `${form.nome} ${form.cognome}`.trim(),
+          role: form.newRole,
+          password: form.newPassword,
+        });
+        if (!ures.ok) {
+          await showAlert({ title: 'Errore creazione accesso', body: ures.error });
+          return;
+        }
+        userId = ures.userId;
+        nuoveCredenziali = { loginEmail: ures.loginEmail, password: form.newPassword };
+      }
+
+      // 2) Crea/aggiorna il dipendente con lo user_id risolto.
       const payload = {
         ...(form.id ? { id: form.id } : {}),
         nome: form.nome,
         cognome: form.cognome,
         mansione: form.mansione || null,
         codice_interno: form.codice_interno || null,
-        user_id: form.user_id || null,
+        user_id: userId,
         stato_attivo: form.stato_attivo,
         a_turni: form.a_turni,
         note: form.note || null,
       };
-      const res = form.id
-        ? await aggiornaDipendente(payload)
-        : await creaDipendente(payload);
+      const res = form.id ? await aggiornaDipendente(payload) : await creaDipendente(payload);
       if (!res.ok) {
-        await showAlert({ title: 'Errore', body: res.error });
+        await showAlert({
+          title: nuoveCredenziali ? 'Accesso creato, dipendente NON salvato' : 'Errore',
+          body:
+            res.error +
+            (nuoveCredenziali
+              ? ` — l'accesso ${nuoveCredenziali.loginEmail} è stato creato: collegalo a mano.`
+              : ''),
+        });
         return;
+      }
+
+      // 3) Se ho creato un accesso, mostra le credenziali (una sola volta).
+      if (nuoveCredenziali) {
+        setCredenziali(nuoveCredenziali);
+        router.refresh();
+        return; // dialog resta aperto sul pannello credenziali
       }
       setOpen(false);
       router.refresh();
@@ -477,8 +613,36 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
       <Dialog open={open} onOpenChange={(o) => { if (!o) closeDialog(); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{form.id ? 'Modifica dipendente' : 'Nuovo dipendente'}</DialogTitle>
+            <DialogTitle>
+              {credenziali ? 'Accesso creato' : form.id ? 'Modifica dipendente' : 'Nuovo dipendente'}
+            </DialogTitle>
           </DialogHeader>
+          {credenziali ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                  Accesso creato e collegato al dipendente
+                </p>
+                <p className="mt-1 text-xs text-emerald-700/90 dark:text-emerald-400/80">
+                  Annota subito queste credenziali: la password non sarà più mostrata.
+                </p>
+              </div>
+              <CredRow label="Login" value={credenziali.loginEmail} copyKey="cred-login" copiato={copiato} onCopy={copia} mono />
+              <CredRow label="Password" value={credenziali.password} copyKey="cred-pw" copiato={copiato} onCopy={copia} mono />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setCredenziali(null);
+                    setOpen(false);
+                    router.refresh();
+                  }}
+                >
+                  Ho salvato, chiudi
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -533,32 +697,140 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="user_id">Collega ad account (opzionale)</Label>
-              <select
-                id="user_id"
-                name="user_id"
-                value={form.user_id}
-                onChange={handleChange}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">Nessun account</option>
-                {utenti.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.display_name ?? u.id}
-                    {u.role ? ` (${etichettaRuolo(u.role)})` : ''}
-                  </option>
+            <div className="space-y-2">
+              <Label>Accesso all&apos;app</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { v: 'none', l: 'Nessuno' },
+                  { v: 'existing', l: 'Collega esistente' },
+                  { v: 'new', l: 'Crea nuovo' },
+                ] as { v: AccountMode; l: string }[]).map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => switchMode(opt.v)}
+                    className={[
+                      'rounded-md border px-2 py-2 text-xs font-medium transition-colors',
+                      form.accountMode === opt.v
+                        ? 'border-primary bg-primary/5 text-foreground'
+                        : 'border-input bg-background text-muted-foreground hover:bg-muted/40',
+                    ].join(' ')}
+                  >
+                    {opt.l}
+                  </button>
                 ))}
-              </select>
-              {form._originalUserId && form.user_id && form.user_id !== form._originalUserId && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Stai sostituendo l&apos;account collegato. Verra chiesta conferma.
-                </p>
+              </div>
+
+              {form.accountMode === 'existing' && (
+                <div className="space-y-1.5">
+                  <select
+                    id="user_id"
+                    name="user_id"
+                    value={form.user_id}
+                    onChange={handleChange}
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">Seleziona un account…</option>
+                    {utenti.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.display_name ?? u.id}
+                        {u.role ? ` (${etichettaRuolo(u.role)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {form._originalUserId && form.user_id && form.user_id !== form._originalUserId && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Stai sostituendo l&apos;account collegato. Verrà chiesta conferma.
+                    </p>
+                  )}
+                </div>
               )}
-              {form._originalUserId && !form.user_id && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Stai rimuovendo l&apos;account collegato. Verra chiesta conferma.
-                </p>
+
+              {form.accountMode === 'new' && (
+                <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="newUsername" className="text-xs">
+                      Username
+                    </Label>
+                    <Input
+                      id="newUsername"
+                      name="newUsername"
+                      value={form.newUsername}
+                      onChange={handleChange}
+                      placeholder="nome.cognome"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      className="font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Login:{' '}
+                      <span className="font-mono text-foreground">
+                        {(form.newUsername.trim().toLowerCase() || 'nome.cognome')}@{tenantSlug}.kommessa.local
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="newPassword" className="text-xs">
+                      Password
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id="newPassword"
+                        name="newPassword"
+                        value={form.newPassword}
+                        onChange={handleChange}
+                        placeholder="min 8 caratteri"
+                        className="flex-1 font-mono"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setForm((f) => ({ ...f, newPassword: generaPassword() }))}
+                        title="Genera password"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!form.newPassword}
+                        onClick={() => copia(form.newPassword, 'pw-form')}
+                        title="Copia password"
+                      >
+                        {copiato === 'pw-form' ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="newRole" className="text-xs">
+                      Ruolo
+                    </Label>
+                    <select
+                      id="newRole"
+                      name="newRole"
+                      value={form.newRole}
+                      onChange={handleChange}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    >
+                      <option value="tecnico">Tecnico (timbra in cantiere)</option>
+                      <option value="office">Ufficio (gestionale)</option>
+                    </select>
+                  </div>
+
+                  <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    L&apos;accesso viene creato e collegato a questo dipendente. Annota le credenziali: la
+                    password non sarà più visibile dopo.
+                  </p>
+                </div>
               )}
             </div>
 
@@ -613,12 +885,57 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                 {pending ? (
                   <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
                 ) : null}
-                {pending ? 'Salvo...' : form.id ? 'Salva modifiche' : 'Crea dipendente'}
+                {pending
+                  ? 'Salvo...'
+                  : form.accountMode === 'new'
+                    ? form.id
+                      ? 'Salva e crea accesso'
+                      : 'Crea dipendente e accesso'
+                    : form.id
+                      ? 'Salva modifiche'
+                      : 'Crea dipendente'}
               </Button>
             </DialogFooter>
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function CredRow({
+  label,
+  value,
+  copyKey,
+  copiato,
+  onCopy,
+  mono,
+}: {
+  label: string;
+  value: string;
+  copyKey: string;
+  copiato: string | null;
+  onCopy: (value: string, key: string) => void;
+  mono?: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <code
+          className={`flex-1 truncate rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm ${mono ? 'font-mono' : ''}`}
+        >
+          {value}
+        </code>
+        <Button type="button" variant="outline" size="sm" onClick={() => onCopy(value, copyKey)}>
+          {copiato === copyKey ? (
+            <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+        </Button>
+      </div>
+    </div>
   );
 }
