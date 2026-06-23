@@ -128,8 +128,14 @@ export function ScansionaClient() {
     }
   }, [vaiAToken]);
 
-  // cleanup all'unmount
-  React.useEffect(() => () => stopCamera(), []);
+  // Avvio automatico della fotocamera all'apertura: l'utente non deve premere
+  // "Attiva fotocamera" ogni volta. Se i permessi sono negati si passa allo
+  // stato errore (col fallback manuale). Cleanup dello stream all'unmount.
+  React.useEffect(() => {
+    if (supportata) void avvia();
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function inviaManuale(e: React.FormEvent) {
     e.preventDefault();
@@ -157,7 +163,7 @@ export function ScansionaClient() {
             <QrCode className="h-10 w-10 opacity-80" aria-hidden="true" />
             <p className="text-sm opacity-90">
               {supportata
-                ? 'Tocca per attivare la fotocamera e inquadrare il QR.'
+                ? 'Avvio fotocamera… inquadra il QR del cantiere.'
                 : 'Lo scanner automatico non è disponibile qui. Usa il codice manuale qui sotto.'}
             </p>
           </div>

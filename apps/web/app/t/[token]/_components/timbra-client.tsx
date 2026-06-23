@@ -455,7 +455,9 @@ function TimbraConViaggio({
               />
               <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                 <Car className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
-                Ero io l&apos;autista del mezzo
+                {azione === 'inizio'
+                  ? "Ero io l'autista del mezzo"
+                  : "Sarò io l'autista del mezzo"}
               </span>
             </label>
             {autista && (
