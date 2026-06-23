@@ -100,3 +100,11 @@ ON CONFLICT (id) DO UPDATE
       cartella_template     = EXCLUDED.cartella_template,
       ordine_visualizzazione = EXCLUDED.ordine_visualizzazione,
       note                  = EXCLUDED.note;
+
+-- Cartella Foto: nessuna sottocartella automatica per tipologia (solo le 3
+-- cartelle per fase create dallo scaffold: Foto/Sopralluogo, Foto/In corso,
+-- Foto/Finali). Coerente con la migration 20260623160000. Per mappare in
+-- futuro una tipologia a una cartella, reimpostare il suo cartella_template.
+update public.voci_catalogo
+set cartella_template = null
+where cartella_template ilike 'Foto%';

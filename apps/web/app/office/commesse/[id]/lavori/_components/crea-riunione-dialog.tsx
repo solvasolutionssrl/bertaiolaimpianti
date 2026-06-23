@@ -10,6 +10,7 @@ import {
   Loader2,
   Mic,
   Save,
+  ScanLine,
   Sparkles,
   Square,
   X,
@@ -500,10 +501,11 @@ export function CreaRiunioneDialog({
                 <button
                   type="button"
                   onClick={() => setPdfCaptureOpen(true)}
+                  title="Scansiona uno o più fogli in un unico PDF"
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
-                  <FileText className="h-4 w-4" />
-                  + File
+                  <ScanLine className="h-4 w-4" />
+                  Scansione
                 </button>
               </div>
               {attachments.length > 0 ? (

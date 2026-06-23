@@ -4,47 +4,57 @@ import * as React from 'react';
 import {
   Camera,
   Check,
+  FileText,
   Loader2,
+  Plus,
   RotateCcw,
+  Trash2,
   X,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
 /**
- * Acquisizione PDF "tipo scanner foglio" da fotocamera.
+ * Acquisizione PDF "tipo scanner foglio" da fotocamera, MULTIPAGINA.
  *
  * Flow:
- *  1. Apre la fotocamera (back camera in mobile) in un overlay fullscreen.
+ *  1. Apre la fotocamera (back camera in mobile) ad alta risoluzione.
  *  2. L'utente scatta una foto del foglio.
- *  3. Sulla foto compaiono 4 maniglie agli angoli (default = bordi inset
- *     del 5%). L'utente li sposta sopra gli angoli reali del foglio.
- *  4. Conferma → ritaglio rettangolo dei 4 punti + warp prospettico
- *     (axis-aligned crop in questa v1, perspective transform in v2) →
- *     output PDF single-page A4 con JPEG embedded.
+ *  3. Sposta i 4 angoli sul foglio reale → ritaglio (axis-aligned crop).
+ *  4. Conferma la pagina: viene aggiunta all'elenco pagine. Da lì può
+ *     "Aggiungi pagina" (rifà 1→3) oppure "Genera PDF" (N pagine).
+ *  5. Output: un unico PDF A4 con una pagina per foglio, JPEG ad alta qualità.
  *
- * Limitazione nota (v1): non c'è auto-detect dei bordi e non c'è
- * perspective warp reale (la v1 fa un crop al bounding rect dei 4
- * angoli). Aggiungere jscanify/opencv.js per v2.
- *
- * Props:
- *  - onCancel: chiude senza output
- *  - onReady(blob, filename): chiamato quando il PDF è pronto
+ * Qualità: la camera è richiesta ad alta risoluzione (ideal 3840×2160, il
+ * browser scala al massimo del device) e i JPEG sono salvati a qualità 0.95
+ * per evitare PDF sgranati / troppo compressi.
  */
 interface Props {
   onCancel: () => void;
   onReady: (pdfBlob: Blob, filename: string) => void;
 }
 
-type Stage = 'camera' | 'crop' | 'rendering';
+type Stage = 'camera' | 'crop' | 'pagine' | 'rendering';
 
 interface Corner {
-  x: number; // 0..1 in coord normalizzate sull'immagine
+  x: number; // 0..1 normalizzato sull'immagine
   y: number;
 }
 
+interface Pagina {
+  jpeg: string; // dataURL JPEG ritagliato (alta qualità)
+  w: number;
+  h: number;
+}
+
+const CORNER_DEFAULT: [Corner, Corner, Corner, Corner] = [
+  { x: 0.05, y: 0.05 },
+  { x: 0.95, y: 0.05 },
+  { x: 0.95, y: 0.95 },
+  { x: 0.05, y: 0.95 },
+];
+
 export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const captureRef = React.useRef<HTMLCanvasElement | null>(null);
   const overlayRef = React.useRef<HTMLDivElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
@@ -52,14 +62,8 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const [error, setError] = React.useState<string | null>(null);
   const [capturedDataUrl, setCapturedDataUrl] = React.useState<string | null>(null);
   const [capturedDims, setCapturedDims] = React.useState<{ w: number; h: number } | null>(null);
-
-  // Maniglie agli angoli (coord normalizzate 0..1)
-  const [corners, setCorners] = React.useState<[Corner, Corner, Corner, Corner]>([
-    { x: 0.05, y: 0.05 },
-    { x: 0.95, y: 0.05 },
-    { x: 0.95, y: 0.95 },
-    { x: 0.05, y: 0.95 },
-  ]);
+  const [pagine, setPagine] = React.useState<Pagina[]>([]);
+  const [corners, setCorners] = React.useState<[Corner, Corner, Corner, Corner]>(CORNER_DEFAULT);
   const draggingIdx = React.useRef<number | null>(null);
 
   // ─── Camera lifecycle ─────────────────────────────────────────────
@@ -68,7 +72,13 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     const start = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+          // Alta risoluzione: il browser fornisce il massimo supportato dal
+          // device fino a questi ideali. Fondamentale per documenti leggibili.
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 3840 },
+            height: { ideal: 2160 },
+          },
           audio: false,
         });
         if (cancelled) {
@@ -83,9 +93,7 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
         }
       } catch (e) {
         setError(
-          e instanceof Error
-            ? `Camera non disponibile: ${e.message}`
-            : 'Camera non disponibile',
+          e instanceof Error ? `Camera non disponibile: ${e.message}` : 'Camera non disponibile',
         );
       }
     };
@@ -95,7 +103,6 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     };
   }, [stage]);
 
-  // ferma stream all'unmount
   React.useEffect(() => {
     return () => {
       const s = streamRef.current;
@@ -119,23 +126,17 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(v, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
     setCapturedDataUrl(dataUrl);
     setCapturedDims({ w: v.videoWidth, h: v.videoHeight });
     stopCamera();
     setStage('crop');
   };
 
-  // ─── Re-shoot ──────────────────────────────────────────────────────
   const reshoot = () => {
     setCapturedDataUrl(null);
     setCapturedDims(null);
-    setCorners([
-      { x: 0.05, y: 0.05 },
-      { x: 0.95, y: 0.05 },
-      { x: 0.95, y: 0.95 },
-      { x: 0.05, y: 0.95 },
-    ]);
+    setCorners(CORNER_DEFAULT);
     setStage('camera');
   };
 
@@ -153,10 +154,7 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     const rect = overlay.getBoundingClientRect();
     const xRel = (e.clientX - rect.left) / rect.width;
     const yRel = (e.clientY - rect.top) / rect.height;
-    const clamped = {
-      x: Math.max(0, Math.min(1, xRel)),
-      y: Math.max(0, Math.min(1, yRel)),
-    };
+    const clamped = { x: Math.max(0, Math.min(1, xRel)), y: Math.max(0, Math.min(1, yRel)) };
     setCorners((prev) => {
       const next = [...prev] as [Corner, Corner, Corner, Corner];
       next[idx] = clamped;
@@ -167,12 +165,10 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     draggingIdx.current = null;
   };
 
-  // ─── Confirm → genera PDF ──────────────────────────────────────────
-  const confirm = async () => {
+  // ─── Conferma pagina → ritaglia e aggiunge all'elenco ──────────────
+  const confermaPagina = async () => {
     if (!capturedDataUrl || !capturedDims) return;
-    setStage('rendering');
     try {
-      // 1. Calcola bbox dei 4 angoli (axis-aligned crop in v1)
       const xs = corners.map((c) => c.x * capturedDims.w);
       const ys = corners.map((c) => c.y * capturedDims.h);
       const sx = Math.max(0, Math.floor(Math.min(...xs)));
@@ -180,49 +176,81 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
       const sw = Math.max(50, Math.floor(Math.max(...xs) - sx));
       const sh = Math.max(50, Math.floor(Math.max(...ys) - sy));
 
-      // 2. Carica l'immagine catturata in un canvas + crop
       const img = await loadImage(capturedDataUrl);
       const cropCanvas = document.createElement('canvas');
       cropCanvas.width = sw;
       cropCanvas.height = sh;
       const cctx = cropCanvas.getContext('2d');
       if (!cctx) throw new Error('Canvas 2D context non disponibile');
-      // miglioria leggera: normalizza contrasto via filter (browser-side)
       cctx.filter = 'contrast(1.08) brightness(1.04)';
       cctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
-      const jpegDataUrl = cropCanvas.toDataURL('image/jpeg', 0.88);
-
-      // 3. Crea PDF A4 con jspdf
-      // jspdf è import dinamico per ridurre il bundle iniziale
-      const { jsPDF } = await import('jspdf');
-      const pdf = new jsPDF({
-        unit: 'pt',
-        format: 'a4',
-        orientation: sw >= sh ? 'landscape' : 'portrait',
-      });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      // Fit con padding 24pt
-      const margin = 24;
-      const maxW = pageW - margin * 2;
-      const maxH = pageH - margin * 2;
-      const ratio = Math.min(maxW / sw, maxH / sh);
-      const renderW = sw * ratio;
-      const renderH = sh * ratio;
-      const offX = (pageW - renderW) / 2;
-      const offY = (pageH - renderH) / 2;
-      pdf.addImage(jpegDataUrl, 'JPEG', offX, offY, renderW, renderH);
-      const blob = pdf.output('blob');
-      const filename = `riunione-foglio-${new Date().toISOString().slice(0, 10)}.pdf`;
-      onReady(blob, filename);
+      // Qualità alta (0.95) per non sgranare il documento.
+      const jpeg = cropCanvas.toDataURL('image/jpeg', 0.95);
+      setPagine((prev) => [...prev, { jpeg, w: sw, h: sh }]);
+      setCapturedDataUrl(null);
+      setCapturedDims(null);
+      setCorners(CORNER_DEFAULT);
+      setStage('pagine');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Errore generazione PDF');
-      setStage('crop');
+      setError(e instanceof Error ? e.message : 'Errore ritaglio pagina');
     }
   };
 
-  // ─── render ────────────────────────────────────────────────────────
+  const aggiungiPagina = () => {
+    setError(null);
+    setCapturedDataUrl(null);
+    setCapturedDims(null);
+    setCorners(CORNER_DEFAULT);
+    setStage('camera');
+  };
+
+  const rimuoviPagina = (idx: number) => {
+    setPagine((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // ─── Genera PDF multipagina ────────────────────────────────────────
+  const generaPdf = async () => {
+    if (pagine.length === 0) return;
+    setStage('rendering');
+    try {
+      const { jsPDF } = await import('jspdf');
+      let pdf: InstanceType<typeof jsPDF> | null = null;
+      const margin = 24;
+      for (let i = 0; i < pagine.length; i++) {
+        const p = pagine[i]!;
+        const orient: 'portrait' | 'landscape' = p.w >= p.h ? 'landscape' : 'portrait';
+        if (i === 0) pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: orient });
+        else pdf!.addPage('a4', orient);
+        const pageW = pdf!.internal.pageSize.getWidth();
+        const pageH = pdf!.internal.pageSize.getHeight();
+        const ratio = Math.min((pageW - margin * 2) / p.w, (pageH - margin * 2) / p.h);
+        const renderW = p.w * ratio;
+        const renderH = p.h * ratio;
+        const offX = (pageW - renderW) / 2;
+        const offY = (pageH - renderH) / 2;
+        // JPEG embeddato così com'è (qualità 0.95 dalla cattura): niente
+        // ri-compressione che sgranerebbe il documento.
+        pdf!.addImage(p.jpeg, 'JPEG', offX, offY, renderW, renderH);
+      }
+      const blob = pdf!.output('blob');
+      const filename = `scansione-${new Date().toISOString().slice(0, 10)}.pdf`;
+      onReady(blob, filename);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Errore generazione PDF');
+      setStage('pagine');
+    }
+  };
+
+  const titolo =
+    stage === 'camera'
+      ? `Inquadra il foglio${pagine.length > 0 ? ` · pagina ${pagine.length + 1}` : ''}`
+      : stage === 'crop'
+        ? 'Sposta gli angoli'
+        : stage === 'pagine'
+          ? `${pagine.length} ${pagine.length === 1 ? 'pagina' : 'pagine'}`
+          : 'Generazione PDF…';
+
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-black/95 text-white">
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
@@ -234,14 +262,10 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
           <X className="h-4 w-4" />
           Chiudi
         </button>
-        <h2 className="text-sm font-semibold uppercase tracking-wider">
-          {stage === 'camera'
-            ? 'Inquadra il foglio'
-            : stage === 'crop'
-              ? 'Sposta gli angoli'
-              : 'Generazione PDF…'}
-        </h2>
-        <div className="w-12" />
+        <h2 className="text-sm font-semibold uppercase tracking-wider">{titolo}</h2>
+        <div className="w-12 text-right text-xs text-white/60">
+          {pagine.length > 0 && stage !== 'pagine' ? `${pagine.length} pag.` : null}
+        </div>
       </header>
 
       {error ? (
@@ -259,8 +283,10 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
             muted
             className="h-full max-h-full w-full max-w-full object-contain"
           />
-          {/* Overlay di guida */}
           <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-dashed border-white/50" />
+          <p className="pointer-events-none absolute bottom-3 left-0 right-0 text-center text-[11px] text-white/70">
+            Più fogli? Scattali uno alla volta: finiranno in un unico PDF.
+          </p>
         </div>
       ) : null}
 
@@ -280,16 +306,13 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
               className="max-h-[75vh] max-w-full"
               draggable={false}
             />
-            {/* Linee di crop */}
             <svg
               className="pointer-events-none absolute inset-0 h-full w-full"
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
             >
               <polygon
-                points={corners
-                  .map((c) => `${c.x * 100},${c.y * 100}`)
-                  .join(' ')}
+                points={corners.map((c) => `${c.x * 100},${c.y * 100}`).join(' ')}
                 fill="rgba(59,130,246,0.15)"
                 stroke="rgb(96,165,250)"
                 strokeWidth={0.5}
@@ -306,6 +329,42 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
                 aria-label={`Angolo ${idx + 1}`}
               />
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* ─── stage PAGINE (review multipagina) ──────────────────── */}
+      {stage === 'pagine' ? (
+        <div className="flex-1 overflow-auto p-4">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {pagine.map((p, idx) => (
+              <div
+                key={idx}
+                className="relative overflow-hidden rounded-md border border-white/15 bg-white/5"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.jpeg} alt={`Pagina ${idx + 1}`} className="aspect-[3/4] w-full object-cover" />
+                <span className="absolute left-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-bold">
+                  {idx + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => rimuoviPagina(idx)}
+                  className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white/90 hover:bg-red-600"
+                  aria-label={`Rimuovi pagina ${idx + 1}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={aggiungiPagina}
+              className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-white/25 text-white/70 hover:border-white/50 hover:text-white"
+            >
+              <Plus className="h-6 w-6" />
+              <span className="text-xs font-medium">Aggiungi pagina</span>
+            </button>
           </div>
         </div>
       ) : null}
@@ -341,9 +400,21 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
             <p className="hidden flex-1 text-center text-[11px] text-white/60 sm:block">
               Trascina i 4 cerchi sugli angoli del foglio
             </p>
-            <Button onClick={confirm}>
+            <Button onClick={confermaPagina}>
               <Check className="h-3.5 w-3.5" />
-              Conferma PDF
+              Aggiungi pagina
+            </Button>
+          </div>
+        ) : null}
+        {stage === 'pagine' ? (
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="outline" onClick={aggiungiPagina} className="border-white/20 text-white hover:bg-white/10">
+              <Plus className="h-3.5 w-3.5" />
+              Aggiungi pagina
+            </Button>
+            <Button onClick={generaPdf} disabled={pagine.length === 0}>
+              <FileText className="h-3.5 w-3.5" />
+              Genera PDF ({pagine.length})
             </Button>
           </div>
         ) : null}
