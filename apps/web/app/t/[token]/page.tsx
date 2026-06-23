@@ -18,6 +18,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext } from '@kommessa/api/tenant';
 import { prossimoTipoTimbratura } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { Button } from '@kommessa/ui';
@@ -109,8 +110,8 @@ async function prossimoTipoFor(
   dipendenteId: string,
   target: { tipo: 'commessa' | 'cantiere'; id: string },
 ): Promise<'ingresso' | 'uscita'> {
-  const inizioGiorno = new Date();
-  inizioGiorno.setHours(0, 0, 0, 0);
+  // "Oggi" = giorno calendario italiano (Europe/Rome), non UTC.
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
 
   let rows: { tipo: 'ingresso' | 'uscita' }[] = [];
   if (target.tipo === 'commessa') {
@@ -119,7 +120,8 @@ async function prossimoTipoFor(
       .select('tipo, ts')
       .eq('dipendente_id', dipendenteId)
       .eq('commessa_id', target.id)
-      .gte('ts', inizioGiorno.toISOString())
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
       .order('ts', { ascending: true });
     rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
   } else {
@@ -128,7 +130,8 @@ async function prossimoTipoFor(
       .select('tipo, ts')
       .eq('dipendente_id', dipendenteId)
       .eq('cantiere_id', target.id)
-      .gte('ts', inizioGiorno.toISOString())
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
       .order('ts', { ascending: true });
     rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
   }

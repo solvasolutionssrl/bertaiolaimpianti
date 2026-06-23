@@ -5,6 +5,7 @@ import {
   minutiViaggioPerTarget,
 } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
+import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 
 /**
  * Auto-derivazione del rapportino giornaliero dalle timbrature.
@@ -187,17 +188,15 @@ export async function ricomputaRapportinoAuto(
   if (auto === false) return rapp;
   if (auto === null && (await contaRighe(supabase, rapp.id)) > 0) return rapp;
 
-  // 3. Timbrature del giorno (commessa o cantiere).
-  const dataSucc = new Date(`${data}T00:00:00Z`);
-  dataSucc.setUTCDate(dataSucc.getUTCDate() + 1);
-  const dataSuccStr = dataSucc.toISOString().slice(0, 10);
-
+  // 3. Timbrature del giorno italiano esatto (confini in Europe/Rome).
+  const { fromIso, toIso } = romeDayBoundsUtc(data);
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
     .select('id, commessa_id, cantiere_id, tipo, ts')
+    .eq('tenant_id', tenantId)
     .eq('dipendente_id', dipendenteId)
-    .gte('ts', `${data}T00:00:00Z`)
-    .lt('ts', `${dataSuccStr}T00:00:00Z`)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
     .order('ts', { ascending: true });
   const timbrature = (timbRaw as {
     id: string;

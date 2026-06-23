@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { QrCode, Clock, MapPin, HardHat } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../_lib/guard';
@@ -46,13 +47,13 @@ export default async function KantiereHomePage() {
   // Ultima timbratura di oggi → stato corrente (dentro/fuori)
   let ultima: { tipo: 'ingresso' | 'uscita'; ts: string } | null = null;
   if (me) {
-    const inizioGiorno = new Date();
-    inizioGiorno.setHours(0, 0, 0, 0);
+    const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
     const { data: timbRows } = await supabase
       .from('timbrature' as never)
       .select('tipo, ts')
       .eq('dipendente_id', me.id)
-      .gte('ts', inizioGiorno.toISOString())
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
       .order('ts', { ascending: false })
       .limit(1);
     ultima =

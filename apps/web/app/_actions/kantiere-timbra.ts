@@ -7,6 +7,7 @@ import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { prossimoTipoTimbratura } from '@kommessa/api/kantiere-ore';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 
 type Ok = { ok: true; tipo: 'ingresso' | 'uscita'; ts: string };
@@ -60,9 +61,9 @@ async function prossimoTipo(
   dipendenteId: string,
   target: { tipo: 'commessa' | 'cantiere'; id: string },
 ): Promise<'ingresso' | 'uscita'> {
-  // timbrature di oggi (UTC day boundary va bene: confronto solo per ordinamento toggle)
-  const inizioGiorno = new Date();
-  inizioGiorno.setHours(0, 0, 0, 0);
+  // Timbrature del giorno calendario italiano (Europe/Rome), così il toggle
+  // ingresso/uscita non sbaglia giorno per le timbrature a cavallo di mezzanotte.
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
 
   let rows: { tipo: 'ingresso' | 'uscita' }[] = [];
   if (target.tipo === 'commessa') {
@@ -71,7 +72,8 @@ async function prossimoTipo(
       .select('tipo, ts')
       .eq('dipendente_id', dipendenteId)
       .eq('commessa_id', target.id)
-      .gte('ts', inizioGiorno.toISOString())
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
       .order('ts', { ascending: true });
     rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
   } else {
@@ -80,7 +82,8 @@ async function prossimoTipo(
       .select('tipo, ts')
       .eq('dipendente_id', dipendenteId)
       .eq('cantiere_id', target.id)
-      .gte('ts', inizioGiorno.toISOString())
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
       .order('ts', { ascending: true });
     rows = (data as { tipo: 'ingresso' | 'uscita' }[] | null) ?? [];
   }

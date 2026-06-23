@@ -9,6 +9,8 @@ import { approvaRapportino, respingiRapportino, riapriRapportino, registraOrePer
 import { RapportinoBadge } from './rapportino-badge';
 import { VersioniDialog } from './versioni-dialog';
 import { TimbratureRiepilogo, TimbratureSommario } from '../../_components/timbrature-riepilogo';
+import { GiornateApertePanel } from './giornate-aperte-panel';
+import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
 
 export type TimbraturaItem = {
   tipo: string;
@@ -65,6 +67,7 @@ interface Props {
   dipendenti: DipendenteItem[];
   commesse: CommessaPickerItem[];
   cantieri: CantierePickerItem[];
+  giorniAperti: GiornataAperta[];
 }
 
 const STATI_OPTIONS = [
@@ -95,7 +98,7 @@ function TimbraturaIndicator({ tipo }: { tipo: string }) {
   );
 }
 
-export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri }: Props) {
+export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri, giorniAperti }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
 
@@ -277,6 +280,9 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
 
   return (
     <div className="space-y-4">
+      {/* Promemoria: giornate rimaste aperte da chiudere */}
+      <GiornateApertePanel giorni={giorniAperti} />
+
       {/* Barra filtri */}
       <Card>
         <CardContent className="p-3">

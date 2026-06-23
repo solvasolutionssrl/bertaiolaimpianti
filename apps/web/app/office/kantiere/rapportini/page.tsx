@@ -2,6 +2,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
+import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
 export const dynamic = 'force-dynamic';
 
@@ -333,6 +334,10 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     nome: k.nome || k.codice || k.id,
   }));
 
+  // Giornate passate rimaste aperte (uscita mancante) → promemoria ufficio.
+  const giorniApertiRes = await giornateAperte({});
+  const giorniAperti = giorniApertiRes.ok ? giorniApertiRes.giorni : [];
+
   return (
     <div className="w-full space-y-5">
       <header>
@@ -348,6 +353,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         dipendenti={dipendentiFilter}
         commesse={commessePicker}
         cantieri={cantieriPicker}
+        giorniAperti={giorniAperti}
       />
     </div>
   );

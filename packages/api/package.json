@@ -16,7 +16,8 @@
     "./kantiere-qr": "./src/kantiere-qr.ts",
     "./kantiere-ore": "./src/kantiere-ore.ts",
     "./kantiere-report": "./src/kantiere-report.ts",
-    "./kantiere-costi": "./src/kantiere-costi.ts"
+    "./kantiere-costi": "./src/kantiere-costi.ts",
+    "./rome-time": "./src/rome-time.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",

@@ -9,6 +9,8 @@ import {
   scriviVersioneRapportino,
   type AzioneVersione,
 } from '@/app/_actions/_lib/scrivi-versione-rapportino';
+import { ricomputaRapportinoAuto } from '@/app/_actions/_lib/ricomputa-rapportino';
+import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -337,4 +339,200 @@ export async function versioniRapportino(
 
   const versioni = (data as VersioneRapportino[] | null) ?? [];
   return { ok: true, versioni };
+}
+
+// ── chiudiGiornata: l'ufficio chiude una giornata rimasta aperta ────────────
+// Inserisce l'uscita mancante (origine 'manuale') all'orario indicato per i
+// target con un ingresso ancora aperto in quel giorno, poi ricalcola il
+// rapportino. L'orario è "da muro" italiano (Europe/Rome).
+
+const ChiudiGiornataSchema = z.object({
+  dipendenteId: z.string().uuid(),
+  giorno: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  oraUscita: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
+export async function chiudiGiornata(input: unknown): Promise<Result> {
+  const parsed = ChiudiGiornataSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  const ctx = await guard();
+  const supabase = createServerSupabase();
+  const { dipendenteId, giorno, oraUscita } = parsed.data;
+
+  const { data: dip } = await supabase
+    .from('dipendenti' as never)
+    .select('id')
+    .eq('id', dipendenteId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  if (!dip) return { ok: false, error: 'DIPENDENTE_NON_TROVATO' };
+
+  // Timbrature del giorno italiano esatto.
+  const { fromIso, toIso } = romeDayBoundsUtc(giorno);
+  const { data: timbRaw } = await supabase
+    .from('timbrature' as never)
+    .select('id, commessa_id, cantiere_id, tipo, ts')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const timb = (timbRaw as {
+    id: string;
+    commessa_id: string | null;
+    cantiere_id: string | null;
+    tipo: 'ingresso' | 'uscita';
+    ts: string;
+  }[] | null) ?? [];
+
+  // Target con ingresso ancora aperto (nessuna uscita successiva).
+  const aperti = new Map<string, { commessa_id: string | null; cantiere_id: string | null; ingressoTs: string }>();
+  for (const t of timb) {
+    const key = t.cantiere_id ? `k:${t.cantiere_id}` : t.commessa_id ? `c:${t.commessa_id}` : '';
+    if (!key) continue;
+    if (t.tipo === 'ingresso') {
+      aperti.set(key, { commessa_id: t.commessa_id, cantiere_id: t.cantiere_id, ingressoTs: t.ts });
+    } else {
+      aperti.delete(key);
+    }
+  }
+  if (aperti.size === 0) return { ok: false, error: 'NESSUNA_GIORNATA_APERTA' };
+
+  const uscitaTs = romeWallToUtcIso(giorno, oraUscita);
+  for (const a of aperti.values()) {
+    if (Date.parse(uscitaTs) <= Date.parse(a.ingressoTs)) {
+      return { ok: false, error: 'ORA_USCITA_NON_VALIDA' };
+    }
+  }
+
+  const inserts = Array.from(aperti.values()).map((a) => ({
+    tenant_id: ctx.tenantId,
+    dipendente_id: dipendenteId,
+    commessa_id: a.commessa_id,
+    cantiere_id: a.cantiere_id,
+    tipo: 'uscita',
+    origine: 'manuale',
+    ts: uscitaTs,
+    creato_da: ctx.userId,
+  }));
+  const { error: insErr } = await supabase.from('timbrature' as never).insert(inserts as never);
+  if (insErr) return { ok: false, error: insErr.message };
+
+  // Ricalcola il rapportino (resta automatico se il tecnico non l'ha toccato).
+  await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, giorno);
+
+  revalidatePath('/office/kantiere/rapportini');
+  revalidatePath(`/office/kantiere/dipendenti/${dipendenteId}`);
+  return { ok: true };
+}
+
+// ── giornateAperte: giornate PASSATE con ingresso senza uscita ──────────────
+// Promemoria per l'ufficio: chi ha dimenticato di timbrare l'uscita. Esclude
+// la giornata odierna (in corso è normale).
+
+export type GiornataAperta = {
+  dipendenteId: string;
+  dipendenteNome: string;
+  giorno: string;
+  ingressoTs: string;
+  targetLabel: string;
+};
+
+export async function giornateAperte(
+  input?: unknown,
+): Promise<{ ok: true; giorni: GiornataAperta[] } | { ok: false; error: string }> {
+  const parsed = z.object({ giorni: z.number().int().min(1).max(60).optional() }).safeParse(input ?? {});
+  const n = parsed.success ? parsed.data.giorni ?? 21 : 21;
+  let ctx;
+  try {
+    ctx = await guard();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const supabase = createServerSupabase();
+
+  const oggi = romeDay(new Date());
+  const past = new Date(Date.now() - n * 24 * 3600 * 1000);
+  const { fromIso } = romeDayBoundsUtc(romeDay(past));
+
+  const { data: timbRaw } = await supabase
+    .from('timbrature' as never)
+    .select('dipendente_id, commessa_id, cantiere_id, tipo, ts')
+    .eq('tenant_id', ctx.tenantId)
+    .gte('ts', fromIso)
+    .order('ts', { ascending: true });
+  const timb = (timbRaw as {
+    dipendente_id: string;
+    commessa_id: string | null;
+    cantiere_id: string | null;
+    tipo: 'ingresso' | 'uscita';
+    ts: string;
+  }[] | null) ?? [];
+
+  // Pairing per (dipendente, giorno italiano, target).
+  const aperti = new Map<
+    string,
+    { dipId: string; giorno: string; commessaId: string | null; cantiereId: string | null; ingressoTs: string }
+  >();
+  for (const t of timb) {
+    const giorno = romeDay(new Date(t.ts));
+    const targetKey = t.cantiere_id ? `k:${t.cantiere_id}` : t.commessa_id ? `c:${t.commessa_id}` : '';
+    if (!targetKey) continue;
+    const key = `${t.dipendente_id}|${giorno}|${targetKey}`;
+    if (t.tipo === 'ingresso') {
+      aperti.set(key, {
+        dipId: t.dipendente_id,
+        giorno,
+        commessaId: t.commessa_id,
+        cantiereId: t.cantiere_id,
+        ingressoTs: t.ts,
+      });
+    } else {
+      aperti.delete(key);
+    }
+  }
+
+  // Solo giornate PASSATE (oggi in corso è normale).
+  const aperte = Array.from(aperti.values()).filter((a) => a.giorno < oggi);
+  if (aperte.length === 0) return { ok: true, giorni: [] };
+
+  // Risolvi nomi dipendenti + label target.
+  const dipIds = [...new Set(aperte.map((a) => a.dipId))];
+  const cantIds = [...new Set(aperte.flatMap((a) => (a.cantiereId ? [a.cantiereId] : [])))];
+  const commIds = [...new Set(aperte.flatMap((a) => (a.commessaId ? [a.commessaId] : [])))];
+
+  const [dipRes, cantRes, commRes] = await Promise.all([
+    supabase.from('dipendenti' as never).select('id, nome, cognome').in('id', dipIds),
+    cantIds.length
+      ? supabase.from('cantieri' as never).select('id, nome, codice').in('id', cantIds)
+      : Promise.resolve({ data: [] as { id: string; nome: string | null; codice: string | null }[] }),
+    commIds.length
+      ? supabase.from('commesse' as never).select('id, codice_interno').in('id', commIds)
+      : Promise.resolve({ data: [] as { id: string; codice_interno: string | null }[] }),
+  ]);
+  const dipMap = new Map<string, string>();
+  for (const d of (dipRes.data as { id: string; nome: string; cognome: string }[] | null) ?? [])
+    dipMap.set(d.id, `${d.cognome} ${d.nome}`.trim());
+  const cantMap = new Map<string, string>();
+  for (const c of (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [])
+    cantMap.set(c.id, c.nome || c.codice || 'Cantiere');
+  const commMap = new Map<string, string>();
+  for (const c of (commRes.data as { id: string; codice_interno: string | null }[] | null) ?? [])
+    commMap.set(c.id, c.codice_interno || 'Commessa');
+
+  const giorni: GiornataAperta[] = aperte
+    .map((a) => ({
+      dipendenteId: a.dipId,
+      dipendenteNome: dipMap.get(a.dipId) ?? a.dipId,
+      giorno: a.giorno,
+      ingressoTs: a.ingressoTs,
+      targetLabel: a.cantiereId
+        ? cantMap.get(a.cantiereId) ?? 'Cantiere'
+        : a.commessaId
+          ? commMap.get(a.commessaId) ?? 'Commessa'
+          : '',
+    }))
+    .sort((x, y) => (x.giorno < y.giorno ? 1 : x.giorno > y.giorno ? -1 : 0));
+
+  return { ok: true, giorni };
 }

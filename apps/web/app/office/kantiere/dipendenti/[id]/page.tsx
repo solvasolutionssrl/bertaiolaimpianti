@@ -3,6 +3,8 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
+import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
+import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -264,8 +266,15 @@ export default async function DipendenteDetailPage({ params }: PageProps) {
       };
     });
 
+  // Giornate passate rimaste aperte di QUESTO dipendente (uscita mancante).
+  const giorniApertiRes = await giornateAperte({});
+  const giorniApertiDip = giorniApertiRes.ok
+    ? giorniApertiRes.giorni.filter((g) => g.dipendenteId === dip.id)
+    : [];
+
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+      <GiornateApertePanel giorni={giorniApertiDip} />
       <DipendenteDetailClient
         dipendente={{
           id: dip.id,

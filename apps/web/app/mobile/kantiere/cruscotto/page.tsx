@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { ClipboardCheck, Users, MapPin, Timer, LogIn, LogOut } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../../_lib/guard';
@@ -42,8 +43,7 @@ export default async function CruscottoKantierePage() {
   if (ctx.role !== 'admin' && ctx.role !== 'office') redirect('/mobile/kantiere');
 
   const supabase = createServerSupabase();
-  const inizioGiorno = new Date();
-  inizioGiorno.setHours(0, 0, 0, 0);
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
 
   const [rappRes, dipRes, cantRes, timbOggiRes, ultimeRes] = await Promise.all([
     // rapportini da approvare (stato 'inviato')
@@ -68,7 +68,8 @@ export default async function CruscottoKantierePage() {
       .from('timbrature' as never)
       .select('id', { count: 'exact', head: true })
       .eq('tenant_id', ctx.tenantId)
-      .gte('ts', inizioGiorno.toISOString()),
+      .gte('ts', fromIso)
+      .lt('ts', toIso),
     supabase
       .from('timbrature' as never)
       .select('id, tipo, ts, dipendente_id, cantiere_id')
