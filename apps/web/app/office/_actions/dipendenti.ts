@@ -125,7 +125,9 @@ export async function creaUtenteDipendente(
     return { ok: false, error: e instanceof Error ? e.message : 'Configurazione service-role mancante.' };
   }
 
-  const loginEmail = `${parsed.data.username}@${ctx.tenantSlug}.kommessa.local`;
+  // Slug minuscolo: Supabase normalizza comunque l'email a lowercase, così il
+  // login mostrato coincide esattamente con quello memorizzato.
+  const loginEmail = `${parsed.data.username}@${ctx.tenantSlug.toLowerCase()}.kommessa.local`;
 
   const created = await admin.auth.admin.createUser({
     email: loginEmail,
