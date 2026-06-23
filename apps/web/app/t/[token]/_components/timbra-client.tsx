@@ -1,10 +1,10 @@
 'use client';
 
-import { useTransition, useState } from 'react';
+import { useTransition, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@kommessa/ui';
-import { Loader2, Car, MapPin, Utensils, Play, LogOut } from 'lucide-react';
+import { Loader2, Car, MapPin, Utensils, Play, LogOut, CheckCircle2, Home } from 'lucide-react';
 import { timbra, type AzioneTimbra } from '@/app/_actions/kantiere-timbra';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
@@ -193,14 +193,41 @@ function RigaMembro({ token, membro }: { token: string; membro: MembroProp }) {
 // ─── conferma post-timbratura (riusata da tutti i flussi self) ───────────────
 
 function ContenutoOk({ testo, ts }: { testo: string; ts: string }) {
+  const router = useRouter();
+  const [sec, setSec] = useState(3);
+
+  // Niente schermata bianca senza vie d'uscita: countdown + rientro automatico
+  // nell'app (tab Cantieri, dove il turno appena avviato è già visibile).
+  useEffect(() => {
+    const tick = setInterval(() => setSec((s) => Math.max(0, s - 1)), 1000);
+    const go = setTimeout(() => router.push('/mobile/kantiere/cantieri'), 3000);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(go);
+    };
+  }, [router]);
+
   return (
-    <div className="rounded-xl border border-border bg-card p-5 shadow-soft">
-      <p className="text-sm font-medium text-emerald-600">
-        {testo} alle {formatOra(ts)}
-      </p>
+    <div className="space-y-4 rounded-xl border border-emerald-300/60 bg-emerald-50 p-5 text-center shadow-soft">
+      <div className="flex justify-center">
+        <CheckCircle2 className="h-12 w-12 text-emerald-600" strokeWidth={1.75} />
+      </div>
+      <div>
+        <p className="text-base font-semibold text-emerald-700">{testo}</p>
+        <p className="mt-0.5 text-sm text-emerald-700/70">alle {formatOra(ts)}</p>
+      </div>
+      <button
+        type="button"
+        onClick={() => router.push('/mobile/kantiere/cantieri')}
+        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow-soft transition-all hover:bg-emerald-700 active:scale-[0.99]"
+      >
+        <Home className="h-5 w-5" strokeWidth={2} />
+        Vai alla home
+      </button>
+      <p className="text-xs text-muted-foreground">Torni alla home tra {sec}s…</p>
       <Link
         href="/mobile/kantiere/ore"
-        className="mt-3 inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 active:scale-[0.98] transition-all"
+        className="inline-flex items-center justify-center gap-1 text-xs font-medium text-emerald-700 underline-offset-2 hover:underline"
       >
         Le mie ore di oggi
       </Link>
@@ -276,6 +303,13 @@ function TimbraConViaggio({
     setGiustificazione('');
     void calcolaStima(id);
   }
+
+  // All'apertura calcola subito km + tempo per la sede preselezionata: il
+  // tecnico vede la stima già pronta (con spinner) senza dover toccare nulla.
+  useEffect(() => {
+    if (usaViaggio && sedeId) void calcolaStima(sedeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function step(delta: number) {
     setConfermMin((m) => Math.max(0, m + delta));

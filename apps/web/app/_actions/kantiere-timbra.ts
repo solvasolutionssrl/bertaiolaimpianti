@@ -365,6 +365,65 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   return { ok: true, tipo: 'uscita', pausa: false, ts };
 }
 
+// ── 1c) pausa/ripresa dal banner o dalla scheda cantiere (self, senza QR) ──
+// Gemelle di terminaTurnoMio: l'utente avvia la pausa pranzo o riprende il
+// turno con un tap, senza riscansionare il QR. Validano l'azione contro lo
+// stato reale del turno (idle/lavoro/pausa) e ricalcolano il rapportino.
+
+const TurnoCantiereSchema = z.object({ cantiereId: z.string().uuid() });
+
+async function cambiaStatoTurnoMio(
+  input: unknown,
+  azione: 'pausa' | 'ripresa',
+): Promise<Result> {
+  const parsed = TurnoCantiereSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const target = { tipo: 'cantiere' as const, id: parsed.data.cantiereId };
+  const eventi = await eventiOggi(supabase, me.id, target);
+  const info = statoTurno(eventi);
+  if (!AZIONI_AMMESSE[azione].includes(info.stato)) {
+    return { ok: false, error: 'AZIONE_NON_VALIDA' };
+  }
+
+  const { tipo, pausa } = azioneATimbra(azione);
+  const ts = new Date().toISOString();
+  const { error } = await supabase.from('timbrature' as never).insert({
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    cantiere_id: parsed.data.cantiereId,
+    commessa_id: null,
+    tipo,
+    pausa,
+    origine: 'qr',
+    ts,
+    creato_da: ctx.userId,
+  } as never);
+  if (error) return { ok: false, error: error.message };
+
+  try {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ts)));
+  } catch {
+    // best-effort
+  }
+  return { ok: true, tipo, pausa, ts };
+}
+
+export async function pausaPranzoMia(input: unknown): Promise<Result> {
+  return cambiaStatoTurnoMio(input, 'pausa');
+}
+
+export async function riprendiTurnoMio(input: unknown): Promise<Result> {
+  return cambiaStatoTurnoMio(input, 'ripresa');
+}
+
 // ── 2) cronometro (solo sé, senza QR) ───────────────────────────────────
 const CronoSchema = z.object({
   commessaId: z.string().uuid(),

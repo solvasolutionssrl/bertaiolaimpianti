@@ -7,6 +7,8 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../../../_lib/guard';
+import { mioTurnoAttivo } from '../../_lib/turno-attivo';
+import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
 
 export const metadata: Metadata = {
   title: 'Cantiere',
@@ -81,6 +83,11 @@ export default async function CantiereMobileDetailPage({
       .sort((a, b) => (a.ruolo === b.ruolo ? 0 : a.ruolo === 'capo' ? -1 : 1));
   }
 
+  // Turno attivo dell'utente: se è aperto su QUESTO cantiere, mostro le azioni
+  // (pausa pranzo / termina turno) in cima alla scheda.
+  const turno = await mioTurnoAttivo();
+  const turnoQui = turno && turno.cantiereId === c.id ? turno : null;
+
   const indirizzoMaps = c.indirizzo
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.indirizzo)}`
     : null;
@@ -106,6 +113,15 @@ export default async function CantiereMobileDetailPage({
           <span>{STATO_LABEL[c.stato] ?? c.stato}</span>
         </p>
       </header>
+
+      {turnoQui ? (
+        <TurnoAzioniCantiere
+          cantiereId={c.id}
+          inizioTs={turnoQui.inizioTs}
+          inPausa={turnoQui.inPausa}
+          inizioPausaTs={turnoQui.inizioPausaTs}
+        />
+      ) : null}
 
       {/* Indirizzo + apri mappa */}
       {c.indirizzo ? (

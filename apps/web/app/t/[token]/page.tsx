@@ -20,8 +20,10 @@ import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 import { TimbraClient } from './_components/timbra-client';
 import { LandingPubblica } from './_components/landing-pubblica';
+import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
 
 export const dynamic = 'force-dynamic';
 
@@ -385,23 +387,52 @@ export default async function TokenPage({
     );
   }
 
-  // 6. Render schermata timbratura
+  // Contesto bottom-nav: la schermata di timbratura resta dentro l'ecosistema
+  // visivo dell'app (tab in basso) pur essendo fuori dal layout /mobile.
+  const [notifRes, tenantModeRes] = await Promise.all([
+    supabase
+      .from('notifiche')
+      .select('id', { count: 'exact', head: true })
+      .is('read_at', null)
+      .eq('user_id', ctx.userId),
+    supabase.from('tenants').select('app_mode').eq('id', ctx.tenantId).maybeSingle(),
+  ]);
+  const rawMode = (tenantModeRes.data as { app_mode?: string | null } | null)?.app_mode ?? null;
+  const navAppMode: AppMode = rawMode === 'kantiere' || rawMode === 'full' ? rawMode : 'kommessa';
+  const navShell = risolviMobileShell({ appMode: navAppMode, role: ctx.role });
+
+  // 6. Render schermata timbratura (top-aligned + bottom-nav dell'app)
   return (
-    <Schermo>
-      <IconaQr />
-      <TimbraClient
-        token={token}
-        commessaTitolo={titolo}
-        me={
-          me
-            ? { id: me.id, nome: titoloCase(`${me.nome} ${me.cognome}`) }
-            : null
-        }
-        statoSelf={statoTurnoSelf}
-        capo={capo}
-        membri={membriConTipo}
-        viaggio={viaggioCtx}
+    <>
+      <div
+        className="flex min-h-dvh items-start justify-center bg-muted/40 px-4 pt-8"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)' }}
+      >
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-8 shadow-md">
+          <IconaQr />
+          <TimbraClient
+            token={token}
+            commessaTitolo={titolo}
+            me={
+              me
+                ? { id: me.id, nome: titoloCase(`${me.nome} ${me.cognome}`) }
+                : null
+            }
+            statoSelf={statoTurnoSelf}
+            capo={capo}
+            membri={membriConTipo}
+            viaggio={viaggioCtx}
+          />
+        </div>
+      </div>
+      <BottomNavShell
+        unreadCount={notifRes.count ?? 0}
+        shell={navShell}
+        appMode={navAppMode}
+        role={ctx.role}
+        userId={ctx.userId}
+        tenantId={ctx.tenantId}
       />
-    </Schermo>
+    </>
   );
 }
