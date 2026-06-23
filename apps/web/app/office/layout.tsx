@@ -8,7 +8,10 @@ import { OfficeShellClient } from './_components/office-shell-client';
 import { ImpersonationBanner } from './_components/impersonation-banner';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
-import { OFFICE_TOUR_STEPS } from '../_components/onboarding-tour-steps';
+import {
+  OFFICE_TOUR_STEPS,
+  KANTIERE_OFFICE_TOUR_STEPS,
+} from '../_components/onboarding-tour-steps';
 
 /**
  * Layout del gruppo "Web Office": protegge tutte le pagine sottostanti
@@ -147,7 +150,13 @@ export default async function OfficeLayout({
       </OfficeShellClient>
       {showOnboardingTour ? (
         <Suspense fallback={null}>
-          <OnboardingTourMount steps={OFFICE_TOUR_STEPS} />
+          <OnboardingTourMount
+            steps={
+              appMode === 'kantiere'
+                ? KANTIERE_OFFICE_TOUR_STEPS
+                : OFFICE_TOUR_STEPS
+            }
+          />
         </Suspense>
       ) : null}
     </>

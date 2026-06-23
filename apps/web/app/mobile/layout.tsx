@@ -10,7 +10,10 @@ import SwRegistrar from './_components/sw-registrar';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
-import { MOBILE_TOUR_STEPS } from '../_components/onboarding-tour-steps';
+import {
+  MOBILE_TOUR_STEPS,
+  KANTIERE_MOBILE_TOUR_STEPS,
+} from '../_components/onboarding-tour-steps';
 
 /**
  * Layout PWA tecnici.
@@ -103,7 +106,11 @@ export default async function MobileLayout({
 
       {showOnboardingTour ? (
         <Suspense fallback={null}>
-          <OnboardingTourMount steps={MOBILE_TOUR_STEPS} />
+          <OnboardingTourMount
+            steps={
+              shell === 'kantiere' ? KANTIERE_MOBILE_TOUR_STEPS : MOBILE_TOUR_STEPS
+            }
+          />
         </Suspense>
       ) : null}
     </div>

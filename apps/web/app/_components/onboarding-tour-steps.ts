@@ -119,3 +119,67 @@ export const MOBILE_TOUR_STEPS: TourStep[] = [
     placement: 'top',
   },
 ];
+
+/**
+ * Tour Web Office per i tenant in modalità **Kantiere** (es. FPM): niente
+ * commesse/tickets/co-pilot — l'esperienza è presenze e cantieri. Selettori
+ * sempre presenti nella shell (menu utente, sidebar) + la voce chiave
+ * "Presenze e ore" (se la sezione è collassata il passo si auto-salta).
+ */
+export const KANTIERE_OFFICE_TOUR_STEPS: TourStep[] = [
+  {
+    id: 'office-k-menu',
+    target: 'header [aria-label="Menu utente"]',
+    title: 'Benvenuto in Kantiere',
+    description:
+      'Sei nel pannello d\'ufficio. Da qui esci, cambi profilo e gestisci il tuo account.',
+    placement: 'bottom',
+  },
+  {
+    id: 'office-k-sidebar',
+    target: 'nav[aria-label="Navigazione laterale"]',
+    title: 'Tutto parte da qui',
+    description:
+      'In "Azienda" gestisci dipendenti, parco mezzi e sedi. In "Kantiere" trovi cantieri, QR, presenze e report.',
+    placement: 'right',
+  },
+  {
+    id: 'office-k-presenze',
+    target: 'a[href="/office/kantiere/rapportini"]',
+    title: 'Presenze e ore',
+    description:
+      'Le timbrature dei tecnici diventano rapportini in automatico: qui controlli le ore, chiudi le giornate rimaste aperte ed esporti per le buste paga.',
+    placement: 'right',
+  },
+];
+
+/**
+ * Tour PWA per i tecnici in modalità **Kantiere**: cantieri, timbratura da QR
+ * e ore. Selettori sulla home cantieri (`main`) e sulla bottom-nav kantiere.
+ */
+export const KANTIERE_MOBILE_TOUR_STEPS: TourStep[] = [
+  {
+    id: 'mobile-k-cantieri',
+    target: 'main',
+    title: 'I tuoi cantieri',
+    description:
+      'Qui trovi i cantieri: cerca, apri quello dove lavori oggi e tieni d\'occhio il turno in corso.',
+    placement: 'bottom',
+  },
+  {
+    id: 'mobile-k-scansiona',
+    target: 'a[href="/mobile/kantiere/scansiona"]',
+    title: 'Timbra con il QR',
+    description:
+      'Inquadra il QR del cantiere per registrare ingresso e uscita. Se arrivi in viaggio, l\'app calcola km e tempo.',
+    placement: 'top',
+  },
+  {
+    id: 'mobile-k-ore',
+    target: 'a[href="/mobile/kantiere/ore"]',
+    title: 'Le tue ore',
+    description:
+      'A fine giornata il rapportino è già compilato dalle timbrature: ore lavorate, straordinari e viaggio. Controlla qui.',
+    placement: 'top',
+  },
+];
