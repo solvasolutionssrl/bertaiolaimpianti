@@ -12,7 +12,6 @@
  *  - token valido, utente loggato, stesso tenant: TimbraClient
  */
 
-import Link from 'next/link';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext } from '@kommessa/api/tenant';
@@ -21,8 +20,8 @@ import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { Button } from '@kommessa/ui';
 import { TimbraClient } from './_components/timbra-client';
+import { LandingPubblica } from './_components/landing-pubblica';
 
 export const dynamic = 'force-dynamic';
 
@@ -198,28 +197,31 @@ export default async function TokenPage({
   // 4. Contesto sessione utente
   const ctx = await getTenantContext();
 
-  // 4a. Non autenticato: invito al login
+  // 4a. Non autenticato: landing pubblica informativa (azienda + cantiere +
+  //     pubblicità servizio). Il tecnico usa "Accedi per timbrare".
   if (!ctx) {
+    // Nome azienda: query indipendente (colonna sempre presente).
+    const { data: tenantNome } = await svc
+      .from('tenants' as never)
+      .select('nome')
+      .eq('id', qr.tenant_id)
+      .maybeSingle<{ nome: string }>();
+
+    // Sottotitolo gestibile: query separata e tollerante (se la colonna
+    // landing_tagline non è ancora migrata, data resta null → default).
+    const { data: tenantTagline } = await svc
+      .from('tenants' as never)
+      .select('landing_tagline')
+      .eq('id', qr.tenant_id)
+      .maybeSingle<{ landing_tagline: string | null }>();
+
     return (
-      <Schermo>
-        <IconaQr />
-        <p className="mb-1 text-center text-xs font-medium uppercase tracking-widest text-muted-foreground">
-          Kantiere
-        </p>
-        <h1 className="text-center text-xl font-bold tracking-tight text-foreground">
-          {titolo}
-        </h1>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          Accedi con il tuo account per timbrare.
-        </p>
-        <div className="mt-6">
-          <Link href={`/login?next=/t/${token}`} className="block w-full">
-            <Button className="w-full" size="lg">
-              Accedi per timbrare
-            </Button>
-          </Link>
-        </div>
-      </Schermo>
+      <LandingPubblica
+        azienda={tenantNome?.nome || 'Cantiere'}
+        tagline={tenantTagline?.landing_tagline ?? null}
+        cantiere={titolo}
+        token={token}
+      />
     );
   }
 

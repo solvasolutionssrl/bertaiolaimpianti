@@ -56,8 +56,8 @@ export function EssenzialeTemplate({
           ) : (
             <span
               style={{
-                fontSize: '11pt',
-                fontWeight: 600,
+                fontSize: '15pt',
+                fontWeight: 700,
                 color: '#475569',
                 letterSpacing: '0.02em',
                 fontFamily: 'sans-serif',
@@ -81,12 +81,13 @@ export function EssenzialeTemplate({
         <div style={{ textAlign: 'center', marginTop: '8mm' }}>
           <p
             style={{
-              fontSize: '18pt',
-              fontWeight: 700,
+              fontSize: '30pt',
+              fontWeight: 800,
               color: '#0f172a',
               fontFamily: 'sans-serif',
               margin: 0,
-              lineHeight: 1.2,
+              lineHeight: 1.15,
+              letterSpacing: '-0.01em',
             }}
           >
             {titolo}
@@ -94,10 +95,11 @@ export function EssenzialeTemplate({
           {codice && (
             <p
               style={{
-                fontSize: '10pt',
+                fontSize: '14pt',
                 color: '#64748b',
                 fontFamily: 'monospace',
-                margin: '3mm 0 0',
+                margin: '4mm 0 0',
+                letterSpacing: '0.04em',
               }}
             >
               {codice}
@@ -109,8 +111,9 @@ export function EssenzialeTemplate({
         <p
           style={{
             marginTop: '8mm',
-            fontSize: '9pt',
-            color: '#94a3b8',
+            fontSize: '13pt',
+            fontWeight: 600,
+            color: '#64748b',
             fontFamily: 'sans-serif',
             textAlign: 'center',
             letterSpacing: '0.01em',
@@ -157,8 +160,8 @@ export function CartelloTemplate({
         ) : (
           <span
             style={{
-              fontSize: '13pt',
-              fontWeight: 700,
+              fontSize: '15pt',
+              fontWeight: 800,
               color: '#ffffff',
               fontFamily: 'sans-serif',
               letterSpacing: '0.02em',
@@ -170,7 +173,7 @@ export function CartelloTemplate({
         <div style={{ flex: 1 }} />
         <span
           style={{
-            fontSize: '11pt',
+            fontSize: '13pt',
             fontWeight: 800,
             color: '#ffffff',
             fontFamily: 'sans-serif',
@@ -196,13 +199,14 @@ export function CartelloTemplate({
         {/* Titolo commessa */}
         <p
           style={{
-            fontSize: '16pt',
-            fontWeight: 700,
+            fontSize: '26pt',
+            fontWeight: 800,
             color: '#0f172a',
             fontFamily: 'sans-serif',
             textAlign: 'center',
             margin: '0 0 2mm',
-            lineHeight: 1.2,
+            lineHeight: 1.15,
+            letterSpacing: '-0.01em',
           }}
         >
           {titolo}
@@ -210,10 +214,11 @@ export function CartelloTemplate({
         {codice && (
           <p
             style={{
-              fontSize: '9pt',
+              fontSize: '12pt',
               color: '#64748b',
               fontFamily: 'monospace',
               margin: '0 0 6mm',
+              letterSpacing: '0.04em',
             }}
           >
             {codice}
@@ -247,12 +252,12 @@ export function CartelloTemplate({
             }}
           >
             {cliente && (
-              <p style={{ fontSize: '10pt', fontWeight: 600, color: '#334155', margin: '0 0 1mm' }}>
+              <p style={{ fontSize: '13pt', fontWeight: 600, color: '#334155', margin: '0 0 1mm' }}>
                 {cliente}
               </p>
             )}
             {indirizzo && (
-              <p style={{ fontSize: '9pt', color: '#64748b', margin: 0 }}>
+              <p style={{ fontSize: '11pt', color: '#64748b', margin: 0 }}>
                 {indirizzo}
               </p>
             )}
@@ -273,7 +278,7 @@ export function CartelloTemplate({
           justifyContent: 'center',
         }}
       >
-        <p style={{ fontSize: '7pt', color: '#94a3b8', fontFamily: 'sans-serif', margin: 0 }}>
+        <p style={{ fontSize: '11pt', fontWeight: 600, color: '#64748b', fontFamily: 'sans-serif', margin: 0 }}>
           Inquadra il QR per timbrare ingresso e uscita
         </p>
       </div>
@@ -327,8 +332,8 @@ export function IndustrialeTemplate({
         ) : (
           <span
             style={{
-              fontSize: '11pt',
-              fontWeight: 700,
+              fontSize: '13pt',
+              fontWeight: 800,
               color: '#ffffff',
               fontFamily: 'sans-serif',
             }}
@@ -338,7 +343,7 @@ export function IndustrialeTemplate({
         )}
         <span
           style={{
-            fontSize: '9pt',
+            fontSize: '12pt',
             fontWeight: 800,
             color: '#ffffff',
             fontFamily: 'monospace',
@@ -381,14 +386,14 @@ export function IndustrialeTemplate({
         {/* Titolo molto grande */}
         <p
           style={{
-            fontSize: '22pt',
+            fontSize: '34pt',
             fontWeight: 900,
             color: '#f8fafc',
             fontFamily: 'sans-serif',
             textAlign: 'center',
             margin: '8mm 0 0',
-            lineHeight: 1.1,
-            letterSpacing: '-0.01em',
+            lineHeight: 1.08,
+            letterSpacing: '-0.015em',
           }}
         >
           {titolo}
@@ -397,10 +402,10 @@ export function IndustrialeTemplate({
         {codice && (
           <p
             style={{
-              fontSize: '11pt',
+              fontSize: '14pt',
               color: '#94a3b8',
               fontFamily: 'monospace',
-              margin: '3mm 0 0',
+              margin: '4mm 0 0',
               letterSpacing: '0.08em',
             }}
           >
@@ -413,7 +418,7 @@ export function IndustrialeTemplate({
             {cliente && (
               <p
                 style={{
-                  fontSize: '11pt',
+                  fontSize: '13pt',
                   fontWeight: 600,
                   color: '#cbd5e1',
                   fontFamily: 'sans-serif',
@@ -424,7 +429,7 @@ export function IndustrialeTemplate({
               </p>
             )}
             {indirizzo && (
-              <p style={{ fontSize: '10pt', color: '#64748b', fontFamily: 'sans-serif', margin: 0 }}>
+              <p style={{ fontSize: '12pt', color: '#64748b', fontFamily: 'sans-serif', margin: 0 }}>
                 {indirizzo}
               </p>
             )}
@@ -442,8 +447,9 @@ export function IndustrialeTemplate({
       >
         <p
           style={{
-            fontSize: '8pt',
-            color: '#475569',
+            fontSize: '11pt',
+            fontWeight: 600,
+            color: '#64748b',
             fontFamily: 'sans-serif',
             margin: 0,
             letterSpacing: '0.04em',

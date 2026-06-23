@@ -204,6 +204,8 @@ const aggiornaTenantSchema = z.object({
   r2_config: z.record(z.unknown()).optional(),
   crea_cartelle: z.boolean().optional(),
   note_interne: z.string().max(5000).nullable().optional(),
+  // Sottotitolo della landing pubblica del QR cantiere (gestito dal super admin).
+  landing_tagline: z.string().max(280).nullable().optional(),
 });
 
 export async function aggiornaTenant(input: z.infer<typeof aggiornaTenantSchema>) {
@@ -219,10 +221,23 @@ export async function aggiornaTenant(input: z.infer<typeof aggiornaTenantSchema>
     .eq('id', tenantId)
     .maybeSingle();
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from('tenants')
     .update(patch as never)
     .eq('id', tenantId);
+  // Tolleranza pre-migrazione: se la colonna landing_tagline non è ancora
+  // applicata, non bloccare gli altri campi del branding — riprova senza.
+  if (
+    error &&
+    'landing_tagline' in patch &&
+    /landing_tagline|column .* does not exist|schema cache/i.test(error.message)
+  ) {
+    const { landing_tagline: _omit, ...rest } = patch;
+    ({ error } = await supabase
+      .from('tenants')
+      .update(rest as never)
+      .eq('id', tenantId));
+  }
   if (error) return { ok: false as const, error: error.message };
 
   await auditPlatform({

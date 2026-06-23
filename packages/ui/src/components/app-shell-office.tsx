@@ -184,7 +184,10 @@ function OfficeShell({
         ? 'bg-primary text-primary-foreground shadow-soft-md font-semibold'
         : isActive && hasChildren
           ? 'font-semibold text-primary hover:bg-card'
-          : 'font-semibold text-foreground/90 hover:bg-card hover:text-foreground hover:shadow-soft',
+          : isChild
+            ? // Sotto-voci: peso più leggero per distinguerle dai capi-menu
+              'font-normal text-foreground/75 hover:bg-card hover:text-foreground'
+            : 'font-semibold text-foreground/90 hover:bg-card hover:text-foreground hover:shadow-soft',
       !showLabel && 'md:justify-center md:px-2',
     );
 

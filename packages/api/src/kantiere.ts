@@ -29,7 +29,7 @@ export function puoTimbrarePer(args: {
   return args.self || (args.capoSquadra && args.bersaglioInSquadra);
 }
 
-/** Prossimo codice cantiere progressivo per-tenant: CAN-001, CAN-002, … */
+/** Prossimo codice cantiere progressivo per-tenant: CAN-00001, CAN-00002, … */
 export function prossimoCodiceCantiere(
   codiciEsistenti: (string | null | undefined)[],
 ): string {
@@ -41,7 +41,7 @@ export function prossimoCodiceCantiere(
       if (n > max) max = n;
     }
   }
-  return `CAN-${String(max + 1).padStart(3, '0')}`;
+  return `CAN-${String(max + 1).padStart(5, '0')}`;
 }
 
 /** Risolve il target di una timbratura: cantiere ha priorità su commessa (difensivo).

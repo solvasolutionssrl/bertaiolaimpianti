@@ -12,6 +12,7 @@ import {
 } from '@kommessa/ui';
 import { aggiornaTenant } from '../../../_actions/tenants';
 import { useAlert } from '@/app/_components/confirm-provider';
+import { LANDING_TAGLINE_DEFAULT } from '@/app/_lib/kantiere-landing';
 
 interface Props {
   tenantId: string;
@@ -19,6 +20,7 @@ interface Props {
   brandColor: string | null;
   logoUrl: string | null;
   inboundEmail: string | null;
+  landingTagline: string | null;
 }
 
 export function TabBranding({
@@ -27,6 +29,7 @@ export function TabBranding({
   brandColor,
   logoUrl,
   inboundEmail: inboundInit,
+  landingTagline: landingInit,
 }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
@@ -35,6 +38,7 @@ export function TabBranding({
   const [colore, setColore] = React.useState(brandColor ?? '#0c2d57');
   const [logo, setLogo] = React.useState(logoUrl ?? '');
   const [inbound, setInbound] = React.useState(inboundInit ?? '');
+  const [tagline, setTagline] = React.useState(landingInit ?? '');
 
   return (
     <Card>
@@ -88,6 +92,34 @@ export function TabBranding({
             type="email"
           />
         </div>
+
+        {/* ── Landing pubblica QR ──────────────────────────────────────── */}
+        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Landing pubblica QR
+          </h3>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Pagina mostrata a chi inquadra il QR di un cantiere senza essere un
+            tecnico. È identica per ogni cantiere: il nome azienda e il nome
+            cantiere si compilano da soli. Qui personalizzi solo il sottotitolo.
+          </p>
+          <div>
+            <Label htmlFor="b_tagline">Sottotitolo</Label>
+            <textarea
+              id="b_tagline"
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              rows={2}
+              maxLength={280}
+              placeholder={LANDING_TAGLINE_DEFAULT}
+              className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Lascia vuoto per usare il testo predefinito.
+            </p>
+          </div>
+        </div>
+
         <div className="flex justify-end">
           <Button
             disabled={pending}
@@ -100,6 +132,7 @@ export function TabBranding({
                   nome,
                   brand_color: colore || null,
                   logo_url: logo || null,
+                  landing_tagline: tagline.trim() || null,
                 });
                 if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
                 router.refresh();

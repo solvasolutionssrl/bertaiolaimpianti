@@ -36,14 +36,17 @@ describe('puoTimbrarePer', () => {
 });
 
 describe('prossimoCodiceCantiere', () => {
-  it('primo codice CAN-001 su lista vuota', () => {
-    expect(prossimoCodiceCantiere([])).toBe('CAN-001');
+  it('primo codice CAN-00001 su lista vuota', () => {
+    expect(prossimoCodiceCantiere([])).toBe('CAN-00001');
   });
   it('incrementa il massimo esistente', () => {
-    expect(prossimoCodiceCantiere(['CAN-001', 'CAN-007', 'CAN-003'])).toBe('CAN-008');
+    expect(prossimoCodiceCantiere(['CAN-00001', 'CAN-00007', 'CAN-00003'])).toBe('CAN-00008');
   });
   it('ignora i codici non conformi e i null', () => {
-    expect(prossimoCodiceCantiere([null, 'X', 'CAN-002', undefined, 'DIP-009'])).toBe('CAN-003');
+    expect(prossimoCodiceCantiere([null, 'X', 'CAN-00002', undefined, 'DIP-009'])).toBe('CAN-00003');
+  });
+  it('conta sia il vecchio formato a 3 cifre sia il nuovo a 5', () => {
+    expect(prossimoCodiceCantiere(['CAN-002'])).toBe('CAN-00003');
   });
 });
 

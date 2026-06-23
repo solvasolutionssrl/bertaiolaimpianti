@@ -272,6 +272,7 @@ export default async function TenantDetailPage({
             brandColor={tenant.brand_color}
             logoUrl={tenant.logo_url}
             inboundEmail={(tenant.storage_config ?? {})?.inbound_email ?? null}
+            landingTagline={tenant.landing_tagline ?? null}
           />
         </TabsContent>
 
