@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { LoginForm } from './_components/form';
+import { PwaInstallPrompt } from '@/app/mobile/_components/pwa-install-prompt';
 
 export const metadata: Metadata = { title: 'Accedi — Kommessa' };
 export const dynamic = 'force-dynamic';
@@ -64,6 +65,11 @@ export default function LoginPage() {
           Accesso riservato al personale autorizzato
         </p>
       </div>
+
+      {/* Pop-up "installa app" sulla pagina di login (mobile, non installata):
+          Android → prompt nativo, iOS → istruzioni Safari. Su login compare
+          presto e a ogni nuova visita (niente finestra di silenzio di 30gg). */}
+      <PwaInstallPrompt delayMs={1500} respectRepromptWindow={false} />
     </main>
   );
 }

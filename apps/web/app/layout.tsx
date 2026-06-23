@@ -15,6 +15,13 @@ export const metadata: Metadata = {
     'Kommessa è la piattaforma di gestione commesse cantiere per impiantisti: voice intake, foto/video dal mobile, sync cloud, annotazioni e report. Suite SOLVA.',
   applicationName: 'Kommessa',
   manifest: '/manifest.webmanifest',
+  // Icone con cache-buster `?v=2`: sui dispositivi che hanno ancora la "K" nera
+  // vecchia, l'URL nuovo bypassa la cache e ricarica la K gradient. Bumpare la
+  // versione (qui e in manifest.ts) a ogni cambio logo.
+  icons: {
+    icon: [{ url: '/icons/icon-192.png?v=2', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/icons/icon-192.png?v=2', sizes: '192x192', type: 'image/png' }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

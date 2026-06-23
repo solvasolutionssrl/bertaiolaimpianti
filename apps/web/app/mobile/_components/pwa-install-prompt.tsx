@@ -35,7 +35,17 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-export function PwaInstallPrompt() {
+export function PwaInstallPrompt({
+  delayMs = FIRST_DELAY_MS,
+  respectRepromptWindow = true,
+}: {
+  /** Attesa prima di mostrare il prompt (default 8s; sul login più breve). */
+  delayMs?: number;
+  /** Se false, ignora la finestra di silenzio di 30gg (usato sul login: il
+   *  pop-up ricompare a ogni nuova visita finché non si installa). Restano
+   *  comunque rispettati "già installata" e "chiuso in questa sessione". */
+  respectRepromptWindow?: boolean;
+} = {}) {
   const [deferred, setDeferred] = React.useState<BeforeInstallPromptEvent | null>(null);
   const [isIos, setIsIos] = React.useState(false);
   const [show, setShow] = React.useState(false);
@@ -63,13 +73,16 @@ export function PwaInstallPrompt() {
       // sessionStorage disabilitato (privacy mode) → ignora, fallback su 30g
     }
 
-    // Controlla se è troppo presto per riproporre cross-sessione
-    const lastPrompt = localStorage.getItem(STORAGE_PROMPTED_AT);
-    if (lastPrompt) {
-      const last = Date.parse(lastPrompt);
-      if (!Number.isNaN(last)) {
-        const diffDays = (Date.now() - last) / (1000 * 60 * 60 * 24);
-        if (diffDays < REPROMPT_DAYS) return; // ancora dentro la finestra di silenzio
+    // Controlla se è troppo presto per riproporre cross-sessione (sul login
+    // questa finestra è disattivata: il pop-up dev'essere sempre disponibile lì).
+    if (respectRepromptWindow) {
+      const lastPrompt = localStorage.getItem(STORAGE_PROMPTED_AT);
+      if (lastPrompt) {
+        const last = Date.parse(lastPrompt);
+        if (!Number.isNaN(last)) {
+          const diffDays = (Date.now() - last) / (1000 * 60 * 60 * 24);
+          if (diffDays < REPROMPT_DAYS) return; // ancora dentro la finestra di silenzio
+        }
       }
     }
 
@@ -81,7 +94,7 @@ export function PwaInstallPrompt() {
       !/CriOS|FxiOS|EdgiOS/.test(ua);
     if (iosSafari) {
       setIsIos(true);
-      const t = setTimeout(() => setShow(true), FIRST_DELAY_MS);
+      const t = setTimeout(() => setShow(true), delayMs);
       return () => clearTimeout(t);
     }
 
@@ -90,7 +103,7 @@ export function PwaInstallPrompt() {
       e.preventDefault();
       setDeferred(e as BeforeInstallPromptEvent);
       // Aspetta un po' prima di mostrare per non infastidire (utente sta esplorando)
-      setTimeout(() => setShow(true), FIRST_DELAY_MS);
+      setTimeout(() => setShow(true), delayMs);
     };
     const onAppInstalled = () => {
       localStorage.setItem(STORAGE_INSTALLED, '1');
@@ -104,7 +117,7 @@ export function PwaInstallPrompt() {
       window.removeEventListener('beforeinstallprompt', onBeforeInstall);
       window.removeEventListener('appinstalled', onAppInstalled);
     };
-  }, []);
+  }, [delayMs, respectRepromptWindow]);
 
   const handleInstall = async () => {
     if (!deferred) return;
