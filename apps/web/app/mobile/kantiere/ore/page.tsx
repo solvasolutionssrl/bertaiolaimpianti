@@ -7,8 +7,9 @@ import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 import { guardMobile } from '../../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { precompilaMioRapportino } from '@/app/_actions/kantiere-rapportino';
+import { precompilaMioRapportino, mioStoricoRapportini } from '@/app/_actions/kantiere-rapportino';
 import { OreClient } from './_components/ore-client';
+import { StoricoOre } from './_components/storico-ore';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { TurnoAttivoCard } from '../_components/turno-attivo-card';
 
@@ -124,7 +125,11 @@ export default async function MobileOrePage() {
     (m) => ({ id: m.id, targa: m.targa, modello: m.modello }),
   );
 
-  const turno = await mioTurnoAttivo();
+  const [turno, storicoRes] = await Promise.all([
+    mioTurnoAttivo(),
+    mioStoricoRapportini({}),
+  ]);
+  const storico = storicoRes.ok ? storicoRes.giorni : [];
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 p-4">
@@ -152,6 +157,8 @@ export default async function MobileOrePage() {
         sediDisponibili={sediDisponibili}
         mezziDisponibili={mezziDisponibili}
       />
+
+      <StoricoOre giorni={storico} />
     </div>
   );
 }

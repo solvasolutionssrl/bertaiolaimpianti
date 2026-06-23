@@ -150,7 +150,7 @@ function buildNav(
         children: [
           { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
           { id: 'kant-qr', label: 'QR code', href: '/office/kantiere/qr' },
-          { id: 'kant-rapp', label: 'Rapportini', href: '/office/kantiere/rapportini' },
+          { id: 'kant-rapp', label: 'Presenze e ore', href: '/office/kantiere/rapportini' },
           { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
           { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
           { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
@@ -222,7 +222,7 @@ function buildNav(
         { id: 'kant-overview', label: 'Panoramica', href: '/office/kantiere' },
         { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
         { id: 'kant-qr', label: 'QR code', href: '/office/kantiere/qr' },
-        { id: 'kant-rapp', label: 'Rapportini', href: '/office/kantiere/rapportini' },
+        { id: 'kant-rapp', label: 'Presenze e ore', href: '/office/kantiere/rapportini' },
         { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
         { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
         { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },

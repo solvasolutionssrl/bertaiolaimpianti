@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Loader2,
@@ -390,7 +391,12 @@ export function DipendentiClient({ dipendenti, utenti }: Props) {
                         }
                       >
                         <td className="px-3 py-2 font-medium">
-                          {d.cognome} {d.nome}
+                          <Link
+                            href={`/office/kantiere/dipendenti/${d.id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {d.cognome} {d.nome}
+                          </Link>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{d.mansione ?? 'n.d.'}</td>
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">

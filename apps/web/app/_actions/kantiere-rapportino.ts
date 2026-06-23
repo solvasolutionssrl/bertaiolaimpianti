@@ -4,14 +4,9 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
-import {
-  minutiPerCommessa,
-  calcolaOreGiornata,
-  minutiViaggioPerTarget,
-} from '@kommessa/api/kantiere-ore';
-import { targetTimbratura } from '@kommessa/api/kantiere';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
+import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
 
 // Stati in cui il tecnico può ancora modificare il proprio rapportino
 // (fino all'approvazione dell'ufficio; dopo, lo tocca solo l'ufficio).
@@ -83,26 +78,6 @@ async function nomeDipendente(
   return d ? `${d.nome} ${d.cognome}`.trim() : null;
 }
 
-// ── soglia ore ordinarie del tenant ─────────────────────────────────────────
-
-async function sogliaOreTenant(tenantId: string): Promise<number> {
-  const supabase = createServerSupabase();
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const row = data as { config: Record<string, unknown> | null } | null;
-  const val = row?.config?.['soglia_ore_ordinarie'];
-  if (typeof val === 'number' && val > 0) return val;
-  if (typeof val === 'string') {
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  return 8;
-}
-
 // ── helper carica titoli commesse ────────────────────────────────────────────
 
 async function titoliCommesse(
@@ -146,64 +121,6 @@ async function nomiCantieri(
     map.set(row.id, row.nome || row.codice || row.id);
   }
   return map;
-}
-
-// ── chiave sintetica target ──────────────────────────────────────────────────
-// Rappresenta il target di una riga/timbratura come stringa univoca per
-// permettere il grouping con minutiPerCommessa/calcolaOreGiornata.
-
-function chiaveTarget(row: { commessa_id: string | null; cantiere_id: string | null }): string {
-  const t = targetTimbratura(row);
-  if (!t) return '';
-  return t.tipo === 'cantiere' ? `cantiere:${t.id}` : `commessa:${t.id}`;
-}
-
-function decodeChiave(key: string): { commessa_id: string | null; cantiere_id: string | null } {
-  if (key.startsWith('cantiere:')) {
-    return { commessa_id: null, cantiere_id: key.slice('cantiere:'.length) };
-  }
-  if (key.startsWith('commessa:')) {
-    return { commessa_id: key.slice('commessa:'.length), cantiere_id: null };
-  }
-  // fallback: trattalo come commessa_id puro (compatibilità eventuale)
-  return { commessa_id: key || null, cantiere_id: null };
-}
-
-// ── minuti → ore (2 decimali) ────────────────────────────────────────────────
-
-function oreDaMin(min: number): number {
-  return Math.round((min / 60) * 100) / 100;
-}
-
-// ── viaggio per target dalle timbrature del giorno ───────────────────────────
-// Somma durata_confermata_min di timbratura_viaggio, attribuita al target
-// (commessa/cantiere) della timbratura collegata.
-
-async function calcolaViaggioPerTarget(
-  supabase: ReturnType<typeof createServerSupabase>,
-  timbrature: { id: string; commessa_id: string | null; cantiere_id: string | null }[],
-): Promise<Map<string, number>> {
-  if (timbrature.length === 0) return new Map();
-  const idToKey = new Map<string, string>();
-  for (const t of timbrature) {
-    const key = chiaveTarget(t);
-    if (key) idToKey.set(t.id, key);
-  }
-  const ids = Array.from(idToKey.keys());
-  if (ids.length === 0) return new Map();
-
-  const { data } = await supabase
-    .from('timbratura_viaggio' as never)
-    .select('timbratura_id, durata_confermata_min')
-    .in('timbratura_id', ids);
-
-  const rows =
-    (data as { timbratura_id: string; durata_confermata_min: number }[] | null) ?? [];
-  const viaggi = rows.map((r) => ({
-    targetKey: idToKey.get(r.timbratura_id) ?? '',
-    minuti: Number(r.durata_confermata_min) || 0,
-  }));
-  return minutiViaggioPerTarget(viaggi);
 }
 
 // ── helper risolve label di una riga righe (con entrambe le mappe) ───────────
@@ -287,180 +204,12 @@ export async function precompilaMioRapportino(
 
   const data = parsed.data.data ?? oggiRome();
 
-  // Cerca rapportino esistente
-  const { data: esistente } = await supabase
-    .from('rapportini' as never)
-    .select('id, data, stato, note')
-    .eq('dipendente_id', me.id)
-    .eq('data', data)
-    .maybeSingle();
+  // Auto-deriva (o ricalcola, se ancora automatico) il rapportino del giorno
+  // dalle timbrature, poi carica il payload per il client.
+  const rapp = await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data);
+  if (!rapp) return { ok: false, error: 'ERRORE_CREAZIONE' };
 
-  const rapp = esistente as {
-    id: string;
-    data: string;
-    stato: string;
-    note: string | null;
-  } | null;
-
-  if (rapp) {
-    // Carica righe esistenti senza ricalcolare
-    return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp) };
-  }
-
-  // Crea nuovo rapportino in bozza
-  const { data: nuovoRaw, error: errInserisci } = await supabase
-    .from('rapportini' as never)
-    .insert({
-      tenant_id: ctx.tenantId,
-      dipendente_id: me.id,
-      data,
-      stato: 'bozza',
-    } as never)
-    .select('id, data, stato, note')
-    .single();
-
-  if (errInserisci || !nuovoRaw) {
-    // Race: un'altra apertura simultanea ha gia creato il rapportino del giorno
-    // (vincolo unique dipendente+data) → recuperalo invece di un errore grezzo.
-    const { data: raceRaw } = await supabase
-      .from('rapportini' as never)
-      .select('id, data, stato, note')
-      .eq('dipendente_id', me.id)
-      .eq('data', data)
-      .maybeSingle();
-    const race = raceRaw as { id: string; data: string; stato: string; note: string | null } | null;
-    if (race) return { ok: true, rapportino: await caricaPayloadRapportino(supabase, race) };
-    return { ok: false, error: errInserisci?.message ?? 'ERRORE_CREAZIONE' };
-  }
-
-  const nuovo = nuovoRaw as { id: string; data: string; stato: string; note: string | null };
-
-  // Query timbrature del giorno — sia commessa_id che cantiere_id.
-  // Usiamo date-string bounds (${data}T00:00:00Z .. T23:59:59Z) — approssimazione nota:
-  // per i tenant in Europe/Rome (UTC+1/+2) le timbrature nelle prime/ultime ore locali
-  // al confine del giorno UTC potrebbero essere incluse/escluse con un delta di 1-2h.
-  // Accettabile per il suggerimento precompilato (l'utente può correggere manualmente).
-  const dataSuccessiva = new Date(`${data}T00:00:00Z`);
-  dataSuccessiva.setUTCDate(dataSuccessiva.getUTCDate() + 1);
-  const dataSuccessivaStr = dataSuccessiva.toISOString().slice(0, 10);
-
-  const { data: timbratureRaw } = await supabase
-    .from('timbrature' as never)
-    .select('id, commessa_id, cantiere_id, tipo, ts')
-    .eq('dipendente_id', me.id)
-    .gte('ts', `${data}T00:00:00Z`)
-    .lt('ts', `${dataSuccessivaStr}T00:00:00Z`)
-    .order('ts', { ascending: true });
-
-  const timbratureDB = (timbratureRaw as {
-    id: string;
-    commessa_id: string | null;
-    cantiere_id: string | null;
-    tipo: 'ingresso' | 'uscita';
-    ts: string;
-  }[]) ?? [];
-
-  // Minuti di viaggio (andata + ritorno) per target, dal collegamento
-  // timbratura_viaggio. Il viaggio è EXTRA: alimenta ore_viaggio della riga
-  // senza concorrere alla soglia degli straordinari (gestita su lavoro).
-  const viaggioPerTarget = await calcolaViaggioPerTarget(supabase, timbratureDB);
-
-  const righe: RigaRapportino[] = [];
-
-  if (timbratureDB.length > 0) {
-    // Mappa a chiave sintetica per il grouping polimorfico
-    const timbratureSintetiche = timbratureDB
-      .map((t) => {
-        const chiave = chiaveTarget(t);
-        if (!chiave) return null;
-        return { commessa_id: chiave, tipo: t.tipo, ts: t.ts };
-      })
-      .filter((t): t is { commessa_id: string; tipo: 'ingresso' | 'uscita'; ts: string } => t !== null);
-
-    const minutiMap = minutiPerCommessa(timbratureSintetiche);
-    const minutiLavorati = Array.from(minutiMap.entries()).map(([chiave, minuti]) => ({
-      commessa_id: chiave,
-      minuti,
-    }));
-
-    const soglia = await sogliaOreTenant(ctx.tenantId);
-    const risultato = calcolaOreGiornata({
-      minutiLavoratiPerCommessa: minutiLavorati,
-      sogliaOreOrdinarie: soglia,
-    });
-
-    // Fonde righe di lavoro (ord/straord) + viaggio per target. I target con
-    // solo viaggio (nessuna coppia ingresso/uscita completa) ottengono comunque
-    // una riga con le sole ore_viaggio.
-    const righeMap = new Map<string, { ord: number; straord: number; viaggioMin: number }>();
-    for (const rr of risultato.righe) {
-      righeMap.set(rr.commessa_id, {
-        ord: rr.ore_ordinarie,
-        straord: rr.ore_straordinarie,
-        viaggioMin: 0,
-      });
-    }
-    for (const [key, min] of viaggioPerTarget) {
-      const e = righeMap.get(key) ?? { ord: 0, straord: 0, viaggioMin: 0 };
-      e.viaggioMin = min;
-      righeMap.set(key, e);
-    }
-
-    if (righeMap.size > 0) {
-      // Decodifica le chiavi sintetiche → FK reali
-      const righeInsert = Array.from(righeMap.entries()).map(([key, v]) => {
-        const fk = decodeChiave(key);
-        return {
-          rapportino_id: nuovo.id,
-          commessa_id: fk.commessa_id,
-          cantiere_id: fk.cantiere_id,
-          ore_ordinarie: v.ord,
-          ore_straordinarie: v.straord,
-          ore_viaggio: oreDaMin(v.viaggioMin),
-        };
-      });
-
-      const { data: righeInserite, error: errRighe } = await supabase
-        .from('rapportino_righe' as never)
-        .insert(righeInsert as never)
-        .select('id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note');
-
-      if (errRighe) return { ok: false, error: errRighe.message };
-
-      const righeRows = (righeInserite as {
-        id: string;
-        commessa_id: string | null;
-        cantiere_id: string | null;
-        ore_ordinarie: number;
-        ore_straordinarie: number;
-        ore_viaggio: number;
-        note: string | null;
-      }[]) ?? [];
-
-      const commessaIds = righeRows.flatMap((r) => (r.commessa_id ? [r.commessa_id] : []));
-      const cantiereIds = righeRows.flatMap((r) => (r.cantiere_id ? [r.cantiere_id] : []));
-
-      const [mappaCommesse, mappaCantieri] = await Promise.all([
-        titoliCommesse(supabase, commessaIds),
-        nomiCantieri(supabase, cantiereIds),
-      ]);
-
-      for (const rr of righeRows) {
-        righe.push({
-          id: rr.id,
-          commessa_id: rr.commessa_id,
-          cantiere_id: rr.cantiere_id,
-          target_label: labelRiga(rr, mappaCommesse, mappaCantieri),
-          ore_ordinarie: Number(rr.ore_ordinarie),
-          ore_straordinarie: Number(rr.ore_straordinarie),
-          ore_viaggio: Number(rr.ore_viaggio),
-          note: rr.note,
-        });
-      }
-    }
-  }
-
-  return { ok: true, rapportino: { ...nuovo, righe } };
+  return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp) };
 }
 
 // ── 2) salvaMioRapportino ────────────────────────────────────────────────────
@@ -566,6 +315,9 @@ export async function salvaMioRapportino(
     .eq('id', parsed.data.rapportinoId);
 
   if (errUpd) return { ok: false, error: errUpd.message };
+
+  // Il tecnico ha salvato a mano: stop all'auto-ricalcolo dalle timbrature.
+  await marcaRapportinoManuale(supabase, parsed.data.rapportinoId);
 
   return { ok: true };
 }
@@ -800,7 +552,83 @@ export async function registraOreManuali(
     } as never);
   }
 
+  // Inserimento a mano: stop all'auto-ricalcolo dalle timbrature.
+  await marcaRapportinoManuale(supabase, rapportinoId);
+
   return { ok: true };
+}
+
+// ── 5) mioStoricoRapportini ──────────────────────────────────────────────────
+// Storico degli ultimi N giorni del dipendente corrente (default 30): per ogni
+// rapportino, totale ore ord/straord/viaggio + stato. Per la PWA "Le mie ore".
+
+const StoricoSchema = z.object({ giorni: z.number().int().min(1).max(90).optional() });
+
+export type GiornoStorico = {
+  id: string;
+  data: string;
+  stato: string;
+  ord: number;
+  straord: number;
+  viaggio: number;
+};
+
+export async function mioStoricoRapportini(
+  input: unknown,
+): Promise<{ ok: true; giorni: GiornoStorico[] } | ResultErr> {
+  const parsed = StoricoSchema.safeParse(input ?? {});
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const n = parsed.data.giorni ?? 30;
+  const from = new Date();
+  from.setDate(from.getDate() - (n - 1));
+  const fromStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(from);
+
+  const { data: rappsRaw } = await supabase
+    .from('rapportini' as never)
+    .select('id, data, stato')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .gte('data', fromStr)
+    .order('data', { ascending: false });
+  const rows = (rappsRaw as { id: string; data: string; stato: string }[] | null) ?? [];
+  if (rows.length === 0) return { ok: true, giorni: [] };
+
+  const ids = rows.map((x) => x.id);
+  const { data: righeRaw } = await supabase
+    .from('rapportino_righe' as never)
+    .select('rapportino_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+    .in('rapportino_id', ids);
+
+  const tot = new Map<string, { ord: number; straord: number; viaggio: number }>();
+  for (const rr of (righeRaw as {
+    rapportino_id: string;
+    ore_ordinarie: number;
+    ore_straordinarie: number;
+    ore_viaggio: number;
+  }[] | null) ?? []) {
+    const e = tot.get(rr.rapportino_id) ?? { ord: 0, straord: 0, viaggio: 0 };
+    e.ord += Number(rr.ore_ordinarie) || 0;
+    e.straord += Number(rr.ore_straordinarie) || 0;
+    e.viaggio += Number(rr.ore_viaggio) || 0;
+    tot.set(rr.rapportino_id, e);
+  }
+
+  return {
+    ok: true,
+    giorni: rows.map((x) => {
+      const t = tot.get(x.id) ?? { ord: 0, straord: 0, viaggio: 0 };
+      return { id: x.id, data: x.data, stato: x.stato, ord: t.ord, straord: t.straord, viaggio: t.viaggio };
+    }),
+  };
 }
 
 // Approvazione/respinta/riapertura rapportini: implementate lato ufficio in

@@ -402,7 +402,7 @@ export function OreClient({
         </div>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           {isBozza
-            ? "Le timbrature dal QR compilano gia il viaggio. Controlla le ore di lavoro di ogni cantiere, poi invia all'ufficio."
+            ? "Compilato in automatico dalle tue timbrature (ingresso/uscita e viaggio). Controlla, correggi se serve e invia all'ufficio."
             : "Rapportino inviato: e in sola lettura. Per correzioni contatta l'ufficio."}
         </p>
       </section>

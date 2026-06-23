@@ -7,6 +7,7 @@ import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { prossimoTipoTimbratura } from '@kommessa/api/kantiere-ore';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
+import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 
 type Ok = { ok: true; tipo: 'ingresso' | 'uscita'; ts: string };
 type Result = Ok | { ok: false; error: string };
@@ -242,6 +243,15 @@ export async function timbra(input: unknown): Promise<Result> {
       await supabase.from('timbrature' as never).delete().eq('id', timbraturaId);
       return { ok: false, error: errViaggio.message };
     }
+  }
+
+  // Auto-compila/ricalcola il rapportino del giorno dalle timbrature (best-effort:
+  // non deve mai far fallire la timbratura). Giorno calendario in Europe/Rome.
+  try {
+    const giorno = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(ts));
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, bersaglioId, giorno);
+  } catch {
+    // ignora: il rapportino verrà comunque ricalcolato all'apertura della tab Ore
   }
 
   return { ok: true, tipo, ts };

@@ -15,6 +15,7 @@ const BaseSchema = z.object({
   user_id: z.string().uuid().optional().nullable(),
   stato_attivo: z.boolean().optional(),
   a_turni: z.boolean().optional(),
+  costo_orario: z.number().min(0).max(10000).optional().nullable(),
   note: z.string().max(2000).optional().nullable(),
 });
 
@@ -54,6 +55,7 @@ export async function creaDipendente(input: unknown): Promise<Result> {
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
       a_turni: parsed.data.a_turni ?? false,
+      costo_orario: parsed.data.costo_orario ?? null,
       note: parsed.data.note ?? null,
     } as never)
     .select('id')
@@ -79,11 +81,13 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
       a_turni: parsed.data.a_turni ?? false,
+      costo_orario: parsed.data.costo_orario ?? null,
       note: parsed.data.note ?? null,
     } as never)
     .eq('id', parsed.data.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath(`/office/kantiere/dipendenti/${parsed.data.id}`);
   return { ok: true };
 }
 
