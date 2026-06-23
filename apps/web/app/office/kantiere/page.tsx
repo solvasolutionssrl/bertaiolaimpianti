@@ -4,6 +4,7 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
 import { TurniAttivi } from './_components/turni-attivi';
+import { BarsOrizzontali, AreaTrend, DonutOre } from './_components/charts';
 import { turniAttivi } from '@/app/office/_actions/kantiere-turni-attivi';
 import {
   Users,
@@ -127,7 +128,9 @@ export default async function KantierePanoramica() {
     .in('stato', ['inviato', 'approvato'])
     .limit(500)) as { data: { id: string }[] | null };
 
-  let oreSettimana = 0;
+  let oreOrd = 0;
+  let oreStraord = 0;
+  let oreViaggio = 0;
   const idsSettimana = (rapportiniSettimana ?? []).map((r) => r.id);
   if (idsSettimana.length > 0) {
     const { data: righe } = (await supabase
@@ -135,9 +138,12 @@ export default async function KantierePanoramica() {
       .select('ore_ordinarie, ore_straordinarie, ore_viaggio')
       .in('rapportino_id', idsSettimana)) as { data: RigaOreRow[] | null };
     for (const r of righe ?? []) {
-      oreSettimana += (r.ore_ordinarie ?? 0) + (r.ore_straordinarie ?? 0) + (r.ore_viaggio ?? 0);
+      oreOrd += r.ore_ordinarie ?? 0;
+      oreStraord += r.ore_straordinarie ?? 0;
+      oreViaggio += r.ore_viaggio ?? 0;
     }
   }
+  const oreSettimana = oreOrd + oreStraord + oreViaggio;
 
   const oreSettimanaDisplay = Number.isFinite(oreSettimana)
     ? oreSettimana % 1 === 0
@@ -256,8 +262,6 @@ export default async function KantierePanoramica() {
     });
   }
 
-  const maxTrend = Math.max(...trend7gg.map((g) => g.count), 1);
-
   // Ultimi 5 rapportini inviati con nome dipendente
   const { data: ultimiRaw } = (await supabase
     .from('rapportini' as never)
@@ -279,8 +283,6 @@ export default async function KantierePanoramica() {
       dipNomiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
     }
   }
-
-  const maxPresenzaCantiere = Math.max(...topCantieri.map((c) => c.count), 1);
 
   // ===== Turni attivi (live) =====
   const turniRes = await turniAttivi();
@@ -354,121 +356,24 @@ export default async function KantierePanoramica() {
       <TurniAttivi iniziale={turniGruppi} totaleIniziale={turniTotale} />
 
       {/* ===== Riga principale: Grafici ===== */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Grafico 1: Presenze per cantiere oggi */}
-        <Card className="border border-border bg-card shadow-soft">
-          <CardHeader className="pb-1 pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-                  Oggi
-                </p>
-                <CardTitle className="mt-0.5 text-base font-semibold">
-                  Presenze per cantiere
-                </CardTitle>
-              </div>
-              <span
-                aria-hidden
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary [&_svg]:h-4 [&_svg]:w-4"
-              >
-                <MapPin />
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent className="pb-4 pt-3">
-            {topCantieri.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Nessuna timbratura registrata oggi.
-              </p>
-            ) : (
-              <div className="space-y-2.5">
-                {topCantieri.map((c) => {
-                  const pct = Math.max(4, Math.round((c.count / maxPresenzaCantiere) * 100));
-                  return (
-                    <div key={c.nome} className="space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{c.nome}</span>
-                        <span className="shrink-0 font-mono text-sm tabular-nums text-muted-foreground">
-                          {c.count} pers.
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <ChartCard etichetta="Oggi" titolo="Presenze per cantiere" icon={<MapPin />}>
+          <BarsOrizzontali
+            data={topCantieri.map((c) => ({ nome: c.nome, valore: c.count }))}
+            unita="pers."
+          />
+        </ChartCard>
 
-        {/* Grafico 2: Trend presenze ultimi 7 giorni */}
-        <Card className="border border-border bg-card shadow-soft">
-          <CardHeader className="pb-1 pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-                  Ultimi 7 giorni
-                </p>
-                <CardTitle className="mt-0.5 text-base font-semibold">
-                  Dipendenti con rapportino
-                </CardTitle>
-              </div>
-              <span
-                aria-hidden
-                className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary [&_svg]:h-4 [&_svg]:w-4"
-              >
-                <CalendarDays />
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent className="pb-4 pt-3">
-            <div className="flex h-28 items-end gap-1.5">
-              {trend7gg.map((g) => {
-                const pct = Math.max(4, Math.round((g.count / maxTrend) * 100));
-                const isOggi = g.giorno === oggiRome();
-                return (
-                  <div
-                    key={g.giorno}
-                    className="group flex flex-1 flex-col items-center gap-1"
-                    title={`${g.etichetta}: ${g.count} dip.`}
-                  >
-                    <span className="text-[10px] font-mono tabular-nums text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-                      {g.count}
-                    </span>
-                    <div className="w-full overflow-hidden rounded-t-sm bg-muted" style={{ height: '88px' }}>
-                      <div
-                        className={`w-full rounded-t-sm transition-all ${isOggi ? 'bg-primary' : 'bg-primary/40'}`}
-                        style={{
-                          height: `${pct}%`,
-                          marginTop: `${100 - pct}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-1.5 flex gap-1.5">
-              {trend7gg.map((g) => {
-                const isOggi = g.giorno === oggiRome();
-                return (
-                  <div key={g.giorno} className="flex flex-1 justify-center">
-                    <span
-                      className={`truncate text-center text-[9px] uppercase tracking-wide ${isOggi ? 'font-semibold text-primary' : 'text-muted-foreground'}`}
-                    >
-                      {g.etichetta.split(' ')[0]}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+        <ChartCard etichetta="Ultimi 7 giorni" titolo="Dipendenti con rapportino" icon={<CalendarDays />}>
+          <AreaTrend
+            data={trend7gg.map((g) => ({ etichetta: g.etichetta, valore: g.count }))}
+            unita="dip."
+          />
+        </ChartCard>
+
+        <ChartCard etichetta="Ultimi 7 giorni" titolo="Ripartizione ore" icon={<Clock />}>
+          <DonutOre ordinarie={oreOrd} straordinarie={oreStraord} viaggio={oreViaggio} />
+        </ChartCard>
       </div>
 
       {/* ===== Riga secondaria: Anomalie + Rapportini da approvare ===== */}
@@ -600,6 +505,44 @@ export default async function KantierePanoramica() {
         </div>
       </section>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* ChartCard — chrome riusabile per i grafici                           */
+/* ------------------------------------------------------------------ */
+
+function ChartCard({
+  etichetta,
+  titolo,
+  icon,
+  children,
+}: {
+  etichetta: string;
+  titolo: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="border border-border bg-card shadow-soft">
+      <CardHeader className="pb-1 pt-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+              {etichetta}
+            </p>
+            <CardTitle className="mt-0.5 text-base font-semibold">{titolo}</CardTitle>
+          </div>
+          <span
+            aria-hidden
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary [&_svg]:h-4 [&_svg]:w-4"
+          >
+            {icon}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="pb-4 pt-3">{children}</CardContent>
+    </Card>
   );
 }
 

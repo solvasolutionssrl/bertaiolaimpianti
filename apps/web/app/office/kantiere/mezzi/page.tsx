@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
+import { Truck } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { BarsOrizzontali } from '../_components/charts';
 import { MezziClient } from './_components/mezzi-client';
 
 export const dynamic = 'force-dynamic';
@@ -76,6 +79,14 @@ export default async function MezziPage() {
     n_viaggi: s.nViaggi,
   }));
 
+  // Km per mezzo (top 8) per il grafico.
+  const targaById = new Map(mezzi.map((m) => [m.id, m.targa]));
+  const kmPerMezzo = viaggioAgg
+    .map((v) => ({ nome: targaById.get(v.mezzo_id) ?? '—', valore: Math.round(v.km_totali) }))
+    .filter((x) => x.valore > 0)
+    .sort((a, b) => b.valore - a.valore)
+    .slice(0, 8);
+
   return (
     <div className="w-full space-y-5">
       <header>
@@ -84,6 +95,31 @@ export default async function MezziPage() {
           Veicoli e attrezzature aziendali disponibili per i cantieri.
         </p>
       </header>
+
+      {kmPerMezzo.length > 0 ? (
+        <Card className="border border-border bg-card shadow-soft">
+          <CardHeader className="pb-1 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  Percorrenze
+                </p>
+                <CardTitle className="mt-0.5 text-base font-semibold">Km per mezzo</CardTitle>
+              </div>
+              <span
+                aria-hidden
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary [&_svg]:h-4 [&_svg]:w-4"
+              >
+                <Truck />
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pb-4 pt-3">
+            <BarsOrizzontali data={kmPerMezzo} unita="km" colore="#D97706" />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <MezziClient mezzi={mezzi} viaggioAgg={viaggioAgg} />
     </div>
   );
