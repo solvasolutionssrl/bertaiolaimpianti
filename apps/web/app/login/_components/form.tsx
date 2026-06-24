@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { createBrowserSupabase } from '@kommessa/api/client';
 import { risolviLogin } from '../_actions/risolvi-login';
+import { registraEventoAccesso } from '@/app/_actions/auth-events';
 
 function pickHomeForDevice(): string {
   if (typeof window === 'undefined') return '/office';
@@ -67,6 +68,8 @@ export function LoginForm() {
               );
               return;
             }
+            // Tracking accessi (best-effort, non blocca il redirect).
+            void registraEventoAccesso('login');
             let dest = explicitNext || '';
             if (!dest) {
               const { data: ures } = await supabase.auth.getUser();

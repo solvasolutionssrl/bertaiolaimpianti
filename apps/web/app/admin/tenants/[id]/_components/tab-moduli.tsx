@@ -171,7 +171,8 @@ export function TabModuli({
             <p className="text-[11px] text-muted-foreground">
               Quale interfaccia vedono gli utenti sul telefono. &laquo;Solo
               Kantiere&raquo; e &laquo;Completa&raquo; richiedono il modulo
-              Kantiere attivo.
+              Kantiere attivo; spegnendo il modulo l&apos;esperienza torna
+              automaticamente a &laquo;Kommessa&raquo;.
             </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -183,13 +184,14 @@ export function TabModuli({
                   key={opt.value}
                   type="button"
                   onClick={() => applyMode(opt.value)}
-                  disabled={pendingMode || selected}
+                  disabled={pendingMode || selected || consigliaKantiere}
                   className={
                     'flex flex-col gap-1 rounded-lg border px-3 py-2.5 text-left transition-colors ' +
                     (selected
                       ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
                       : 'border-border hover:bg-muted/40') +
-                    (pendingMode ? ' opacity-70' : '')
+                    (pendingMode ? ' opacity-70' : '') +
+                    (consigliaKantiere ? ' cursor-not-allowed opacity-50' : '')
                   }
                 >
                   <span className="flex items-center gap-1.5 text-sm font-medium">
@@ -206,7 +208,7 @@ export function TabModuli({
                   </span>
                   {consigliaKantiere ? (
                     <span className="text-[10px] font-medium text-amber-600">
-                      Richiede il modulo Kantiere
+                      Attiva prima il modulo Kantiere
                     </span>
                   ) : null}
                 </button>

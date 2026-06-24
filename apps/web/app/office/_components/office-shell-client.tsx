@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
+import { registraEventoAccesso } from '@/app/_actions/auth-events';
 import {
   Boxes,
   Briefcase,
@@ -288,6 +289,7 @@ export function OfficeShellClient({
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
   const handleLogout = React.useCallback(async () => {
+    await registraEventoAccesso('logout');
     const supabase = createBrowserSupabase();
     await supabase.auth.signOut();
     router.replace('/login');

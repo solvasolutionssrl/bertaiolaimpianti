@@ -857,6 +857,35 @@ export async function aggiornaModuloTenant(input: {
   );
   if (error) return { ok: false, error: error.message };
 
+  // Cascata anti-stato-rotto: se spengo Kantiere mentre l'esperienza mobile è
+  // 'kantiere' o 'full', riporto app_mode a 'kommessa' (altrimenti la PWA punta
+  // a una shell senza modulo → utenti bloccati).
+  if (!parsed.data.attivo) {
+    const { data: t } = await supabase
+      .from('tenants')
+      .select('app_mode')
+      .eq('id', parsed.data.tenantId)
+      .maybeSingle();
+    const mode = (t as { app_mode?: string | null } | null)?.app_mode ?? 'kommessa';
+    if (mode === 'kantiere' || mode === 'full') {
+      await supabase
+        .from('tenants')
+        .update({ app_mode: 'kommessa' } as never)
+        .eq('id', parsed.data.tenantId);
+      await auditPlatform({
+        actorUserId: admin.userId,
+        actorEmail: admin.email,
+        tenantId: parsed.data.tenantId,
+        entityType: 'tenant',
+        entityId: parsed.data.tenantId,
+        action: 'tenant.app_mode.update',
+        metadata: { cascade: 'module_kantiere_off' },
+        before: { app_mode: mode },
+        after: { app_mode: 'kommessa' },
+      });
+    }
+  }
+
   await auditPlatform({
     actorUserId: admin.userId,
     actorEmail: admin.email,
@@ -903,6 +932,23 @@ export async function aggiornaAppModeTenant(input: {
     };
   }
   const supabase = createServiceSupabase();
+
+  // Guard anti-stato-rotto: 'kantiere'/'full' richiedono il modulo Kantiere
+  // attivo. Lato server (non solo UI) per evitare configurazioni inconsistenti.
+  if (parsed.data.appMode !== 'kommessa') {
+    const { data: mod } = await supabase
+      .from('tenant_modules' as never)
+      .select('attivo')
+      .eq('tenant_id', parsed.data.tenantId)
+      .eq('module_code', 'kantiere')
+      .maybeSingle();
+    if ((mod as { attivo?: boolean } | null)?.attivo !== true) {
+      return {
+        ok: false,
+        error: 'Attiva prima il modulo Kantiere per questo tenant.',
+      };
+    }
+  }
 
   const { data: prev } = await supabase
     .from('tenants')

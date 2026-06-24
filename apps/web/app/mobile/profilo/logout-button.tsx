@@ -8,6 +8,7 @@ import { createBrowserSupabase } from '@kommessa/api/client';
 import { Button, cn } from '@kommessa/ui';
 
 import { useConfirm } from '../../_components/confirm-provider';
+import { registraEventoAccesso } from '@/app/_actions/auth-events';
 
 /**
  * Sezione "Sessione" collassata in fondo al profilo.
@@ -39,6 +40,7 @@ export function LogoutButton() {
     if (!ok) return;
 
     startTransition(async () => {
+      await registraEventoAccesso('logout');
       const supabase = createBrowserSupabase();
       await supabase.auth.signOut();
       router.push('/mobile/login');
