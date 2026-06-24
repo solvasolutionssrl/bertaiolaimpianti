@@ -8,7 +8,14 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../../../_lib/guard';
 import { mioTurnoAttivo } from '../../_lib/turno-attivo';
+import {
+  eventiOggiCantiere,
+  dettaglioPresenza,
+  statoDaEventi,
+  type EventoOggi,
+} from '../../_lib/presenze';
 import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
+import { ChiInCantiere, type PersonaDentro } from './_components/chi-in-cantiere';
 
 export const metadata: Metadata = {
   title: 'Cantiere',
@@ -88,6 +95,48 @@ export default async function CantiereMobileDetailPage({
   const turno = await mioTurnoAttivo();
   const turnoQui = turno && turno.cantiereId === c.id ? turno : null;
 
+  // Office/admin: chi è in cantiere ORA (live), con dettaglio per persona.
+  // Per i tecnici questa sezione non compare (resta la vista squadra).
+  const isManager = ctx.role === 'admin' || ctx.role === 'office';
+  let personeDentro: PersonaDentro[] = [];
+  if (isManager) {
+    const eventiCant = await eventiOggiCantiere(supabase, ctx.tenantId, c.id);
+    const dentro: { dipId: string; stato: 'lavoro' | 'pausa'; eventi: EventoOggi[] }[] = [];
+    for (const [dipId, eventi] of eventiCant) {
+      const stato = statoDaEventi(eventi);
+      if (stato === 'lavoro' || stato === 'pausa') dentro.push({ dipId, stato, eventi });
+    }
+    if (dentro.length > 0) {
+      const { data: dipRows } = await supabase
+        .from('dipendenti' as never)
+        .select('id, nome, cognome')
+        .in(
+          'id',
+          dentro.map((x) => x.dipId),
+        );
+      const nomeMap = new Map(
+        ((dipRows as { id: string; nome: string; cognome: string }[] | null) ?? []).map((d) => [
+          d.id,
+          titoloCase(`${d.nome} ${d.cognome}`),
+        ]),
+      );
+      personeDentro = dentro
+        .map((x) => {
+          const d = dettaglioPresenza(x.eventi);
+          return {
+            dipId: x.dipId,
+            nome: nomeMap.get(x.dipId) ?? 'Dipendente',
+            stato: x.stato,
+            sub: d.dalleLabel,
+            dettaglio: d,
+          };
+        })
+        .sort((a, b) =>
+          a.stato === b.stato ? a.nome.localeCompare(b.nome) : a.stato === 'lavoro' ? -1 : 1,
+        );
+    }
+  }
+
   const indirizzoMaps = c.indirizzo
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.indirizzo)}`
     : null;
@@ -122,6 +171,9 @@ export default async function CantiereMobileDetailPage({
           inizioPausaTs={turnoQui.inizioPausaTs}
         />
       ) : null}
+
+      {/* Office/admin: chi sta lavorando qui ora (tap → timbrature di oggi) */}
+      {isManager ? <ChiInCantiere persone={personeDentro} /> : null}
 
       {/* Indirizzo + apri mappa */}
       {c.indirizzo ? (
