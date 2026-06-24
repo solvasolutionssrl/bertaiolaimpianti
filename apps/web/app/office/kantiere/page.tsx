@@ -339,7 +339,7 @@ export default async function KantierePanoramica() {
           label="In pausa pranzo"
           value={inPausaOraCount}
           icon={<Utensils />}
-          tone={inPausaOraCount > 0 ? 'warning' : 'default'}
+          tone="pausa"
           hint="Turno aperto, fermi"
         />
         <KpiMini
@@ -563,10 +563,18 @@ function ChartCard({
 /* ------------------------------------------------------------------ */
 
 const KPI_TONE = {
-  default: { bar: 'bg-primary', icon: 'bg-primary-soft text-primary', value: 'text-foreground' },
-  warning: { bar: 'bg-accent', icon: 'bg-accent-soft text-accent-soft-foreground', value: 'text-foreground' },
-  success: { bar: 'bg-success', icon: 'bg-success/10 text-success', value: 'text-foreground' },
-  critical: { bar: 'bg-destructive', icon: 'bg-destructive/10 text-destructive', value: 'text-destructive' },
+  default: { bar: 'bg-primary', icon: 'bg-primary-soft text-primary', value: 'text-foreground', card: 'border-border bg-card' },
+  warning: { bar: 'bg-accent', icon: 'bg-accent-soft text-accent-soft-foreground', value: 'text-foreground', card: 'border-border bg-card' },
+  success: { bar: 'bg-success', icon: 'bg-success/10 text-success', value: 'text-foreground', card: 'border-border bg-card' },
+  critical: { bar: 'bg-destructive', icon: 'bg-destructive/10 text-destructive', value: 'text-destructive', card: 'border-border bg-card' },
+  // Ambra "pausa pranzo": richiama l'estetica gialla del resto della UI pausa
+  // (pallino/icona Utensils ambra in TurniAttivi). Tinta leggera sempre attiva.
+  pausa: {
+    bar: 'bg-amber-500',
+    icon: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    value: 'text-foreground',
+    card: 'border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/20',
+  },
 } as const;
 
 type KpiTone = keyof typeof KPI_TONE;
@@ -586,7 +594,7 @@ function KpiMini({
 }) {
   const t = KPI_TONE[tone];
   return (
-    <div className="relative flex items-center gap-3 overflow-hidden rounded-lg border border-border bg-card px-3 py-2.5 shadow-soft">
+    <div className={`relative flex items-center gap-3 overflow-hidden rounded-lg border px-3 py-2.5 shadow-soft ${t.card}`}>
       <span aria-hidden className={`absolute inset-y-2 left-0 w-[2px] rounded-full ${t.bar}`} />
       <span
         aria-hidden
