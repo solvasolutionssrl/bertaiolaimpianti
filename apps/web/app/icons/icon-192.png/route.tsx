@@ -9,8 +9,12 @@ export const runtime = 'edge';
  * Design Kommessa (allineato a favicon `icon.tsx` e `apple-icon.tsx`):
  *  - Gradient cobalt→arancio della suite SOLVA (niente trasparenza: iOS/Android
  *    smussano gli angoli, l'icona resta piena e maskable-safe).
- *  - Grid "blueprint" bianca leggera in overlay.
  *  - Logogramma "K" bianco bold centrato nella safe-zone.
+ *
+ * NB: niente `backgroundImage` multi-layer + `backgroundBlendMode` — Satori
+ * (motore di next/og) non li supporta e il riempimento collassa a BIANCO,
+ * rendendo il favicon una "K" invisibile su sfondo bianco. Usare solo il
+ * `background` gradient singolo, come `icon.tsx` (che si renderizza correttamente).
  */
 export async function GET() {
   return new ImageResponse(
@@ -21,10 +25,6 @@ export async function GET() {
           height: '100%',
           background:
             'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%)',
-          backgroundImage:
-            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%), linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: '100%, 24px 24px, 24px 24px',
-          backgroundBlendMode: 'normal, overlay, overlay',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

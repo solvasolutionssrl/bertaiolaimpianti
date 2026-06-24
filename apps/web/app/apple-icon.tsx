@@ -7,6 +7,9 @@ export const runtime = 'edge';
  *
  * 180×180 secondo HIG Apple. Niente trasparenza (iOS smussa gli angoli).
  * "K" in evidenza su gradient blu→arancio della suite SOLVA.
+ *
+ * NB: solo `background` gradient singolo — `backgroundImage` multi-layer +
+ * `backgroundBlendMode` non sono supportati da Satori e renderizzano bianco.
  */
 export const size = { width: 180, height: 180 };
 export const contentType = 'image/png';
@@ -20,10 +23,6 @@ export default function AppleIcon() {
           height: '100%',
           background:
             'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%)',
-          backgroundImage:
-            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%), linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: '100%, 22px 22px, 22px 22px',
-          backgroundBlendMode: 'normal, overlay, overlay',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

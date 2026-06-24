@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
   // Cache-buster delle icone: bumpalo (v3, v4…) quando cambia il logo, così
   // i telefoni con l'icona vecchia (la "K" nera) la riscaricano. `id` resta
   // uguale allo start_url per NON creare una nuova app installata (solo update).
-  const IV = 'v=2';
+  const IV = 'v=3';
   return {
     id: '/mobile',
     name: 'Kommessa',

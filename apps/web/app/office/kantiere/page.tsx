@@ -19,6 +19,7 @@ import {
   UserCheck,
   CalendarDays,
   MapPin,
+  Utensils,
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -173,18 +174,27 @@ export default async function KantierePanoramica() {
 
   const timbOggi = timbOggiRaw ?? [];
 
-  // Calcola persone attualmente "in cantiere" (ingresso senza uscita oggi)
-  const ingressiOggi = new Set(
-    timbOggi.filter((t) => t.tipo === 'ingresso').map((t) => t.dipendente_id),
-  );
-  const usciteOggi = new Set(
-    timbOggi.filter((t) => t.tipo === 'uscita').map((t) => t.dipendente_id),
-  );
-  const inCantiereOra: string[] = [];
-  for (const dipId of ingressiOggi) {
-    if (!usciteOggi.has(dipId)) inCantiereOra.push(dipId);
+  // ===== Turni attivi (live) — fonte unica per "in cantiere" e "in pausa" =====
+  // Derivare i conteggi dai turni APERTI (logica pausa-aware di `turniAttivi`)
+  // invece che da una semplice differenza ingressi/uscite: così chi è rientrato
+  // dalla pausa torna "in cantiere" e chi è in pausa NON viene contato tra i
+  // presenti, e i due numeri restano allineati con la card "Turni attivi".
+  const turniRes = await turniAttivi();
+  const turniGruppi = turniRes.ok ? turniRes.gruppi : [];
+  const turniTotale = turniRes.ok ? turniRes.totale : 0;
+  const dipInLavoro = new Set<string>();
+  const dipInPausa = new Set<string>();
+  for (const g of turniGruppi) {
+    for (const t of g.turni) {
+      if (t.inPausa) dipInPausa.add(t.dipendenteId);
+      else dipInLavoro.add(t.dipendenteId);
+    }
   }
-  const inCantiereOraCount = inCantiereOra.length;
+  // Chi sta effettivamente lavorando ha priorità su un eventuale turno in pausa
+  // (caso limite: turni aperti su più cantieri).
+  for (const id of dipInLavoro) dipInPausa.delete(id);
+  const inCantiereOraCount = dipInLavoro.size;
+  const inPausaOraCount = dipInPausa.size;
 
   // Presenze per cantiere oggi (dipendenti unici per cantiere)
   const presenzaPerCantiere = new Map<string, Set<string>>();
@@ -284,11 +294,6 @@ export default async function KantierePanoramica() {
     }
   }
 
-  // ===== Turni attivi (live) =====
-  const turniRes = await turniAttivi();
-  const turniGruppi = turniRes.ok ? turniRes.gruppi : [];
-  const turniTotale = turniRes.ok ? turniRes.totale : 0;
-
   return (
     <div className="w-full space-y-5">
       {/* ===== Header ===== */}
@@ -316,7 +321,7 @@ export default async function KantierePanoramica() {
       </header>
 
       {/* ===== KPI grid — stile compatto ===== */}
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-6">
         <KpiMini
           label="Dipendenti attivi"
           value={dipendentiAttivi ?? 0}
@@ -328,7 +333,14 @@ export default async function KantierePanoramica() {
           value={inCantiereOraCount}
           icon={<UserCheck />}
           tone={inCantiereOraCount > 0 ? 'success' : 'default'}
-          hint="Ingresso senza uscita oggi"
+          hint="Turno aperto, al lavoro"
+        />
+        <KpiMini
+          label="In pausa pranzo"
+          value={inPausaOraCount}
+          icon={<Utensils />}
+          tone={inPausaOraCount > 0 ? 'warning' : 'default'}
+          hint="Turno aperto, fermi"
         />
         <KpiMini
           label="Timbrature oggi"

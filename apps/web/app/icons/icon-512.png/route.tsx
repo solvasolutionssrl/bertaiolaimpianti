@@ -5,7 +5,10 @@ export const runtime = 'edge';
 /**
  * PWA icon 512×512 — versione "high-res" per splash screen Android e app
  * drawer. Stessa estetica della favicon Kommessa (`icon.tsx`/`apple-icon.tsx`):
- * gradient cobalt→arancio pieno (maskable-safe), grid blueprint, "K" bianca.
+ * gradient cobalt→arancio pieno (maskable-safe), "K" bianca.
+ *
+ * NB: solo `background` gradient singolo — `backgroundImage` multi-layer +
+ * `backgroundBlendMode` non sono supportati da Satori e renderizzano bianco.
  */
 export async function GET() {
   return new ImageResponse(
@@ -16,10 +19,6 @@ export async function GET() {
           height: '100%',
           background:
             'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%)',
-          backgroundImage:
-            'linear-gradient(135deg, #1340A6 0%, #1340A6 55%, #D97706 100%), linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)',
-          backgroundSize: '100%, 48px 48px, 48px 48px',
-          backgroundBlendMode: 'normal, overlay, overlay',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

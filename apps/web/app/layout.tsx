@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   // vecchia, l'URL nuovo bypassa la cache e ricarica la K gradient. Bumpare la
   // versione (qui e in manifest.ts) a ogni cambio logo.
   icons: {
-    icon: [{ url: '/icons/icon-192.png?v=2', sizes: '192x192', type: 'image/png' }],
-    apple: [{ url: '/icons/icon-192.png?v=2', sizes: '192x192', type: 'image/png' }],
+    icon: [{ url: '/icons/icon-192.png?v=3', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/icons/icon-192.png?v=3', sizes: '192x192', type: 'image/png' }],
   },
   appleWebApp: {
     capable: true,
