@@ -2,20 +2,24 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import jsQR from 'jsqr';
 import { Camera, Loader2, QrCode, ArrowRight } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
 /**
  * Scanner QR "a prova di cantiere".
  *
- * Riusa interamente il flusso esistente di timbratura per-token: il QR
- * affisso codifica l'URL `{origin}/t/{token}` (vedi `qrUrl`). Qui decodifichiamo
- * il QR via `BarcodeDetector` nativo, estraiamo il token e navighiamo a
- * `/t/[token]` — la pagina di timbratura reale (self + capo squadra) NON viene
- * reinventata.
+ * Il QR affisso codifica l'URL `{origin}/t/{token}`; qui estraiamo il token e
+ * navighiamo a `/t/[token]` (la pagina di timbratura reale NON viene reinventata).
  *
- * Fallback: se `BarcodeDetector` non è disponibile (es. iOS Safari) mostriamo
- * un campo per incollare/digitare il link o il codice del QR.
+ * Motore di decodifica per piattaforma:
+ *  - Android/Chromium: `BarcodeDetector` nativo (veloce). Avvio fotocamera
+ *    automatico all'apertura.
+ *  - iOS Safari (niente `BarcodeDetector`): fallback in JS con `jsQR` sui frame
+ *    del video. La fotocamera parte su TAP esplicito ("Attiva fotocamera"), così
+ *    iOS concede il permesso in modo affidabile (l'autostart senza gesto è
+ *    inaffidabile su iOS).
+ *  - Nessuna fotocamera disponibile: campo manuale per incollare link/codice.
  */
 
 // ─── BarcodeDetector typing minimale (non in lib.dom standard) ──────────────
@@ -30,6 +34,8 @@ function getBarcodeDetectorCtor(): BarcodeDetectorCtor | null {
   const w = window as unknown as { BarcodeDetector?: BarcodeDetectorCtor };
   return w.BarcodeDetector ?? null;
 }
+
+type Engine = 'native' | 'jsqr' | null;
 
 // ─── estrazione token da un valore scansionato ──────────────────────────────
 // Accetta sia l'URL completo `https://.../t/<token>` sia il solo token.
@@ -49,8 +55,10 @@ export function ScansionaClient() {
   const streamRef = React.useRef<MediaStream | null>(null);
   const rafRef = React.useRef<number | null>(null);
   const lockedRef = React.useRef(false);
+  // Canvas off-screen riusato per il fallback jsQR (snapshot dei frame video).
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
-  const [supportata] = React.useState<boolean>(() => getBarcodeDetectorCtor() !== null);
+  const [engine, setEngine] = React.useState<Engine>(null);
   const [stato, setStato] = React.useState<'idle' | 'attiva' | 'errore' | 'trovato'>('idle');
   const [errore, setErrore] = React.useState<string | null>(null);
   const [manuale, setManuale] = React.useState('');
@@ -76,63 +84,102 @@ export function ScansionaClient() {
     streamRef.current = null;
   }
 
-  const avvia = React.useCallback(async () => {
-    setErrore(null);
-    const Ctor = getBarcodeDetectorCtor();
-    if (!Ctor) {
-      setErrore('Scanner non disponibile su questo dispositivo. Inserisci il codice manualmente.');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      const v = videoRef.current;
-      if (v) {
-        v.srcObject = stream;
-        await v.play().catch(() => undefined);
-      }
-      setStato('attiva');
-      lockedRef.current = false;
+  // Decodifica un frame col fallback jsQR (downscale per performance su iPhone).
+  function decodeJsQr(video: HTMLVideoElement): string | null {
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) return null;
+    const scale = Math.min(1, 720 / Math.max(vw, vh));
+    const w = Math.round(vw * scale);
+    const h = Math.round(vh * scale);
+    const canvas = canvasRef.current ?? (canvasRef.current = document.createElement('canvas'));
+    canvas.width = w;
+    canvas.height = h;
+    const c = canvas.getContext('2d', { willReadFrequently: true });
+    if (!c) return null;
+    c.drawImage(video, 0, 0, w, h);
+    const img = c.getImageData(0, 0, w, h);
+    const res = jsQR(img.data, w, h, { inversionAttempts: 'dontInvert' });
+    return res?.data ?? null;
+  }
 
-      const detector = new Ctor({ formats: ['qr_code'] });
-      const tick = async () => {
-        if (lockedRef.current) return;
-        const vid = videoRef.current;
-        if (vid && vid.readyState >= 2) {
-          try {
-            const codes = await detector.detect(vid);
-            for (const c of codes) {
-              const token = estraiToken(c.rawValue);
-              if (token) {
-                vaiAToken(token);
-                return;
-              }
-            }
-          } catch {
-            // ignora frame non decodificabili
-          }
+  const avvia = React.useCallback(
+    async (eng: Exclude<Engine, null>) => {
+      setErrore(null);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+        streamRef.current = stream;
+        const v = videoRef.current;
+        if (v) {
+          v.srcObject = stream;
+          // iOS richiede playsInline + muted (già sul tag) e play() dopo gesto.
+          await v.play().catch(() => undefined);
         }
-        rafRef.current = requestAnimationFrame(() => void tick());
-      };
-      rafRef.current = requestAnimationFrame(() => void tick());
-    } catch (e) {
-      setStato('errore');
-      setErrore(
-        e instanceof Error
-          ? `Fotocamera non disponibile: ${e.message}`
-          : 'Fotocamera non disponibile',
-      );
-    }
-  }, [vaiAToken]);
+        setStato('attiva');
+        lockedRef.current = false;
 
-  // Avvio automatico della fotocamera all'apertura: l'utente non deve premere
-  // "Attiva fotocamera" ogni volta. Se i permessi sono negati si passa allo
-  // stato errore (col fallback manuale). Cleanup dello stream all'unmount.
+        const detector = eng === 'native' ? new (getBarcodeDetectorCtor()!)({ formats: ['qr_code'] }) : null;
+        let lastJsqr = 0;
+
+        const tick = async () => {
+          if (lockedRef.current) return;
+          const vid = videoRef.current;
+          if (vid && vid.readyState >= 2) {
+            try {
+              if (detector) {
+                const codes = await detector.detect(vid);
+                for (const c of codes) {
+                  const token = estraiToken(c.rawValue);
+                  if (token) {
+                    vaiAToken(token);
+                    return;
+                  }
+                }
+              } else {
+                // jsQR: throttle ~10fps per non sovraccaricare la CPU su iPhone.
+                const now = performance.now();
+                if (now - lastJsqr >= 100) {
+                  lastJsqr = now;
+                  const raw = decodeJsQr(vid);
+                  if (raw) {
+                    const token = estraiToken(raw);
+                    if (token) {
+                      vaiAToken(token);
+                      return;
+                    }
+                  }
+                }
+              }
+            } catch {
+              // frame non decodificabile → continua
+            }
+          }
+          rafRef.current = requestAnimationFrame(() => void tick());
+        };
+        rafRef.current = requestAnimationFrame(() => void tick());
+      } catch (e) {
+        setStato('errore');
+        setErrore(
+          e instanceof Error
+            ? `Fotocamera non disponibile: ${e.message}`
+            : 'Fotocamera non disponibile',
+        );
+      }
+    },
+    [vaiAToken],
+  );
+
+  // Rilevamento motore + avvio. Su Android (BarcodeDetector) parte da sola; su
+  // iOS (jsQR) serve il tap dell'utente per il permesso fotocamera.
   React.useEffect(() => {
-    if (supportata) void avvia();
+    const hasCamera =
+      typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+    const eng: Engine = getBarcodeDetectorCtor() ? 'native' : hasCamera ? 'jsqr' : null;
+    setEngine(eng);
+    if (eng === 'native') void avvia(eng);
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -148,23 +195,23 @@ export function ScansionaClient() {
     vaiAToken(token);
   }
 
+  const cameraAvailable = engine !== null;
+  const isIos = engine === 'jsqr'; // su WebKit usiamo sempre jsQR
+
   return (
     <div className="space-y-5">
       {/* Area camera */}
       <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-black">
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          className="h-full w-full object-cover"
-        />
+        <video ref={videoRef} playsInline muted className="h-full w-full object-cover" />
         {stato !== 'attiva' && stato !== 'trovato' ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60 p-6 text-center text-white">
             <QrCode className="h-10 w-10 opacity-80" aria-hidden="true" />
             <p className="text-sm opacity-90">
-              {supportata
-                ? 'Avvio fotocamera… inquadra il QR del cantiere.'
-                : 'Lo scanner automatico non è disponibile qui. Usa il codice manuale qui sotto.'}
+              {!cameraAvailable
+                ? 'Fotocamera non disponibile qui. Usa il codice manuale qui sotto.'
+                : isIos
+                  ? 'Tocca «Attiva fotocamera» e inquadra il QR del cantiere.'
+                  : 'Avvio fotocamera… inquadra il QR del cantiere.'}
             </p>
           </div>
         ) : null}
@@ -182,10 +229,10 @@ export function ScansionaClient() {
         ) : null}
       </div>
 
-      {supportata && stato !== 'attiva' ? (
-        <Button className="w-full py-3 text-base" size="lg" onClick={() => void avvia()}>
+      {cameraAvailable && stato !== 'attiva' && stato !== 'trovato' ? (
+        <Button className="w-full py-3 text-base" size="lg" onClick={() => engine && void avvia(engine)}>
           <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
-          Attiva fotocamera
+          {stato === 'errore' ? 'Riprova fotocamera' : 'Attiva fotocamera'}
         </Button>
       ) : null}
 

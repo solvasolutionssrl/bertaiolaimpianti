@@ -98,6 +98,9 @@ importers:
       jspdf:
         specifier: ^2.5.2
         version: 2.5.2
+      jsqr:
+        specifier: ^1.4.0
+        version: 1.4.0
       konva:
         specifier: ^9.3.22
         version: 9.3.22
@@ -3782,6 +3785,9 @@ packages:
 
   jspdf@2.5.2:
     resolution: {integrity: sha512-myeX9c+p7znDWPk0eTrujCzNjT+CXdXyk7YmJq5nD5V7uLLKmSXnlQ/Jn/kuo3X09Op70Apm0rQSnFWyGK8uEQ==}
+
+  jsqr@1.4.0:
+    resolution: {integrity: sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==}
 
   jsx-ast-utils@3.3.5:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
@@ -8956,6 +8962,8 @@ snapshots:
       core-js: 3.49.0
       dompurify: 2.5.9
       html2canvas: 1.4.1
+
+  jsqr@1.4.0: {}
 
   jsx-ast-utils@3.3.5:
     dependencies:
