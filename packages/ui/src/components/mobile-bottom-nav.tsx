@@ -96,8 +96,11 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
         ref={ref}
         aria-label="Navigazione principale"
         className={cn(
-          'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 backdrop-blur-md',
-          'supports-[backdrop-filter]:bg-background/80',
+          // Sfondo PIENO, niente backdrop-filter: su iOS WebKit un elemento
+          // `position: fixed` con `backdrop-filter` si stacca durante lo scroll
+          // inerziale e viene disegnato a metà pagina (la "barra che si alza"
+          // con liste lunghe). Lo sfondo opaco elimina il bug su tutti i tenant.
+          'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background',
           'pb-[env(safe-area-inset-bottom)]',
           // safety-shadow leggera per separare dal contenuto su sfondo bianco
           'shadow-[0_-1px_0_0_rgba(0,0,0,0.02),0_-8px_24px_-12px_rgba(0,0,0,0.08)]',
