@@ -59,6 +59,9 @@ export function ScansionaClient() {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
   const [engine, setEngine] = React.useState<Engine>(null);
+  // App aggiunta alla Home (display-mode standalone): su iOS la fotocamera del
+  // browser è limitata da WebKit → serve un avviso dedicato.
+  const [isStandalone, setIsStandalone] = React.useState(false);
   const [stato, setStato] = React.useState<'idle' | 'attiva' | 'errore' | 'trovato'>('idle');
   const [errore, setErrore] = React.useState<string | null>(null);
   const [manuale, setManuale] = React.useState('');
@@ -162,11 +165,22 @@ export function ScansionaClient() {
         rafRef.current = requestAnimationFrame(() => void tick());
       } catch (e) {
         setStato('errore');
-        setErrore(
-          e instanceof Error
-            ? `Fotocamera non disponibile: ${e.message}`
-            : 'Fotocamera non disponibile',
-        );
+        // Permesso negato/bloccato: su iOS (engine jsqr) dai la guida giusta,
+        // distinta tra app-in-Home (limite WebKit) e diniego in Safari.
+        const permErr =
+          e instanceof DOMException &&
+          (e.name === 'NotAllowedError' || e.name === 'SecurityError' || e.name === 'NotFoundError');
+        if (eng === 'jsqr' && permErr) {
+          setErrore(
+            isStandalone
+              ? "Con l'app aggiunta alla Home, iOS blocca la fotocamera nel browser. Inquadra il QR del cantiere con l'app Fotocamera del telefono (si apre da sola), oppure inserisci il codice qui sotto."
+              : "Permesso fotocamera negato. Vai in Impostazioni → Safari → Fotocamera (oppure tocca «aA» nella barra → Fotocamera → Consenti) e riprova. In alternativa inquadra il QR con la Fotocamera del telefono o usa il codice.",
+          );
+        } else {
+          setErrore(
+            e instanceof Error ? `Fotocamera non disponibile: ${e.message}` : 'Fotocamera non disponibile',
+          );
+        }
       }
     },
     [vaiAToken],
@@ -179,6 +193,10 @@ export function ScansionaClient() {
       typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
     const eng: Engine = getBarcodeDetectorCtor() ? 'native' : hasCamera ? 'jsqr' : null;
     setEngine(eng);
+    const standalone =
+      window.matchMedia?.('(display-mode: standalone)').matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setIsStandalone(!!standalone);
     if (eng === 'native') void avvia(eng);
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -213,6 +231,12 @@ export function ScansionaClient() {
                   ? 'Tocca «Attiva fotocamera» e inquadra il QR del cantiere.'
                   : 'Avvio fotocamera… inquadra il QR del cantiere.'}
             </p>
+            {isIos && isStandalone ? (
+              <p className="text-xs opacity-70">
+                Se non parte: inquadra il poster con la Fotocamera del telefono (apre da sola), o
+                usa il codice qui sotto.
+              </p>
+            ) : null}
           </div>
         ) : null}
         {stato === 'trovato' ? (
