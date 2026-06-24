@@ -178,6 +178,25 @@ export function arrotonda15(minuti: number): number {
   return r === 0 ? 15 : r;
 }
 
+/** Arrotonda i minuti al multiplo di `stepMin` più vicino.
+ *  - `stepMin < 1` DISATTIVA l'arrotondamento (dettaglio pieno: ritorna i minuti).
+ *  - con uno step valido, una durata > 0 non scende mai sotto un singolo step
+ *    (coerente con `arrotonda15`: es. 4 min con step 5 → 5).
+ *  Usato per l'arrotondamento configurabile di viaggio (default 5) e ore-lavoro
+ *  (default 0 = nessun arrotondamento, si raccoglie tutto a dettaglio massimo). */
+export function arrotondaA(minuti: number, stepMin: number): number {
+  if (!Number.isFinite(minuti) || minuti <= 0) return 0;
+  if (!Number.isFinite(stepMin) || stepMin < 1) return Math.round(minuti);
+  const step = Math.round(stepMin);
+  const r = Math.round(minuti / step) * step;
+  return r === 0 ? step : r;
+}
+
+/** Soglia (ore) oltre la quale, in uscita, se NON risulta alcuna pausa pranzo
+ *  registrata si chiede al dipendente di dichiararla (ripiego: l'ideale è
+ *  timbrarla). Condivisa client+server per coerenza del prompt. */
+export const SOGLIA_PAUSA_PRANZO_ORE = 6;
+
 /** Somma i minuti di viaggio (andata + ritorno) per ciascun target
  *  (chiave sintetica commessa:/cantiere:). Usato dal precompila rapportino
  *  per riempire ore_viaggio della riga corrispondente. */

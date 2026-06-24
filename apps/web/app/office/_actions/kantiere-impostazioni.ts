@@ -30,6 +30,9 @@ const schema = z.object({
   sedePartenzaDefault: z.string().max(300).optional(),
   anomalie: anomalieSchema.optional(),
   anomalie_ore_max: z.number().min(1).max(24).optional(),
+  // Arrotondamenti (min). Viaggio: default 5. Ore: default 0 = nessuno.
+  arrotondamentoViaggioMin: z.number().int().min(1).max(60).optional(),
+  arrotondamentoOreMin: z.number().int().min(0).max(60).optional(),
 });
 
 export async function salvaImpostazioniKantiere(input: unknown): Promise<Result> {
@@ -63,6 +66,12 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   }
   if (parsed.data.anomalie_ore_max !== undefined) {
     newConfig['anomalie_ore_max'] = parsed.data.anomalie_ore_max;
+  }
+  if (parsed.data.arrotondamentoViaggioMin !== undefined) {
+    newConfig['arrotondamento_viaggio_min'] = parsed.data.arrotondamentoViaggioMin;
+  }
+  if (parsed.data.arrotondamentoOreMin !== undefined) {
+    newConfig['arrotondamento_ore_min'] = parsed.data.arrotondamentoOreMin;
   }
 
   const { error: updateError } = await supabase

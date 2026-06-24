@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button } from '@kommessa/ui';
 import { Loader2, Car, MapPin, Utensils, Play, LogOut, CheckCircle2, Home } from 'lucide-react';
 import { timbra, type AzioneTimbra } from '@/app/_actions/kantiere-timbra';
+import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,8 @@ export interface TimbraClientProps {
   capo: boolean;
   membri: MembroProp[];
   viaggio?: ViaggioCtx | null;
+  /** true se oggi risulta già una pausa pranzo timbrata per questo target. */
+  pausaOggiFatta?: boolean;
 }
 
 // ─── geo best-effort ─────────────────────────────────────────────────────────
@@ -242,14 +245,20 @@ function TimbraConViaggio({
   azione,
   viaggio,
   onOk,
+  pausaPrompt,
 }: {
   token: string;
   azione: 'inizio' | 'fine';
   viaggio: ViaggioCtx | null;
   onOk: (r: { ts: string; tipo: TipoTimbratura; pausa: boolean }) => void;
+  /** Se presente (solo in uscita), mostra il box "pausa pranzo non rilevata". */
+  pausaPrompt?: { durataMin: number } | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [erroreMsg, setErroreMsg] = useState<string | null>(null);
+  // Pausa pranzo dichiarata (ripiego se il dipendente non l'ha timbrata).
+  const [pausaFatta, setPausaFatta] = useState(false);
+  const [pausaMin, setPausaMin] = useState<30 | 45 | 60>(30);
 
   const prossimoTipo: TipoTimbratura = azione === 'inizio' ? 'ingresso' : 'uscita';
   const direzione = azione === 'inizio' ? 'andata' : 'ritorno';
@@ -349,6 +358,7 @@ function TimbraConViaggio({
               distanzaKm: stimaKm,
             }
           : undefined,
+        pausaPranzoMin: pausaPrompt && pausaFatta ? pausaMin : undefined,
       });
       if (res.ok) onOk({ ts: res.ts, tipo: res.tipo, pausa: res.pausa });
       else setErroreMsg(messaggioErrore(res.error));
@@ -409,10 +419,10 @@ function TimbraConViaggio({
             <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => step(-15)}
+                onClick={() => step(-5)}
                 disabled={stimaLoading || confermMin <= 0}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-lg font-semibold text-foreground hover:bg-muted disabled:opacity-40"
-                aria-label="Meno 15 minuti"
+                aria-label="Meno 5 minuti"
               >
                 −
               </button>
@@ -421,10 +431,10 @@ function TimbraConViaggio({
               </span>
               <button
                 type="button"
-                onClick={() => step(15)}
+                onClick={() => step(5)}
                 disabled={stimaLoading}
                 className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background text-lg font-semibold text-foreground hover:bg-muted disabled:opacity-40"
-                aria-label="Più 15 minuti"
+                aria-label="Più 5 minuti"
               >
                 +
               </button>
@@ -483,6 +493,56 @@ function TimbraConViaggio({
           </div>
         </>
       )}
+
+      {/* Pausa pranzo non rilevata (solo turni lunghi senza pausa timbrata) */}
+      {pausaPrompt ? (
+        <div className="space-y-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3.5">
+          <p className="flex items-start gap-1.5 text-sm font-semibold text-amber-900">
+            <Utensils className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+            Pausa pranzo non rilevata
+          </p>
+          <p className="text-[13px] leading-snug text-amber-800">
+            Hai lavorato {formatDurata(pausaPrompt.durataMin)} senza timbrare una
+            pausa. Ricorda: <strong>timbrare la pausa è il modo corretto</strong> —
+            questa è solo una correzione.
+          </p>
+          <label className="flex cursor-pointer items-center gap-2 select-none">
+            <input
+              type="checkbox"
+              checked={pausaFatta}
+              onChange={(e) => setPausaFatta(e.target.checked)}
+              className="h-4 w-4 rounded border-amber-400 accent-amber-600"
+            />
+            <span className="text-sm font-medium text-amber-900">
+              Ho fatto la pausa pranzo
+            </span>
+          </label>
+          {pausaFatta ? (
+            <div className="flex gap-2">
+              {([30, 45, 60] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPausaMin(m)}
+                  className={[
+                    'flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors',
+                    pausaMin === m
+                      ? 'border-amber-500 bg-amber-500 text-white'
+                      : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
+                  ].join(' ')}
+                >
+                  {m === 60 ? '1h' : `${m} min`}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {pausaFatta ? (
+            <p className="text-[11px] text-amber-700">
+              Verranno tolti {pausaMin === 60 ? '1h' : `${pausaMin} min`} dal turno.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {errLocale && <p className="text-sm text-destructive">{errLocale}</p>}
       {erroreMsg && <p className="text-sm text-destructive">{erroreMsg}</p>}
@@ -556,17 +616,30 @@ function SelfFlow({
   nome,
   stato,
   viaggio,
+  pausaOggiFatta,
 }: {
   token: string;
   nome: string;
   stato: StatoSelf;
   viaggio: ViaggioCtx | null;
+  pausaOggiFatta: boolean;
 }) {
   const router = useRouter();
   // Conferma dopo una timbratura andata a buon fine.
   const [ok, setOk] = useState<{ testo: string; ts: string } | null>(null);
   // In lavoro/pausa: l'utente ha scelto "Termina turno" → mostra il flusso uscita.
   const [terminando, setTerminando] = useState(false);
+
+  // Prompt pausa pranzo: turno al lavoro, senza pausa oggi, più lungo della soglia.
+  const durataTurnoMin = stato.ingressoAperto
+    ? Math.max(0, Math.floor((Date.now() - Date.parse(stato.ingressoAperto)) / 60000))
+    : 0;
+  const pausaPrompt =
+    stato.stato === 'lavoro' &&
+    !pausaOggiFatta &&
+    durataTurnoMin >= SOGLIA_PAUSA_PRANZO_ORE * 60
+      ? { durataMin: durataTurnoMin }
+      : null;
 
   function handleOk(r: { ts: string; tipo: TipoTimbratura; pausa: boolean }) {
     setOk({ testo: labelConferma(r.tipo, r.pausa), ts: r.ts });
@@ -584,7 +657,13 @@ function SelfFlow({
   if (terminando) {
     return (
       <div className="space-y-3">
-        <TimbraConViaggio token={token} azione="fine" viaggio={viaggio} onOk={handleOk} />
+        <TimbraConViaggio
+          token={token}
+          azione="fine"
+          viaggio={viaggio}
+          onOk={handleOk}
+          pausaPrompt={pausaPrompt}
+        />
         <button
           type="button"
           onClick={() => setTerminando(false)}
@@ -675,6 +754,7 @@ export function TimbraClient({
   capo,
   membri,
   viaggio,
+  pausaOggiFatta = false,
 }: TimbraClientProps) {
   return (
     <div className="space-y-6">
@@ -688,7 +768,13 @@ export function TimbraClient({
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {me.nome}
           </p>
-          <SelfFlow token={token} nome={me.nome} stato={statoSelf} viaggio={viaggio ?? null} />
+          <SelfFlow
+            token={token}
+            nome={me.nome}
+            stato={statoSelf}
+            viaggio={viaggio ?? null}
+            pausaOggiFatta={pausaOggiFatta}
+          />
         </div>
       )}
 

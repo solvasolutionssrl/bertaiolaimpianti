@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { getTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
-import { arrotonda15 } from '@kommessa/api/kantiere-ore';
+import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiArrotondamenti } from '@/app/_lib/kantiere-config';
 import { getRoutingProvider, type Coord } from '@/app/_lib/routing';
 
 /**
@@ -48,6 +49,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ ok: false, error: 'INPUT' }, { status: 400 });
 
   const supabase = createServerSupabase();
+  // Step di arrotondamento del tempo di viaggio (configurabile dall'ufficio,
+  // default 5 min). Applicato sia sul valore in cache sia su quello fresco.
+  const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, ctx.tenantId);
 
   const { data: sedeRaw } = await supabase
     .from('sedi' as never)
@@ -94,7 +98,7 @@ export async function POST(req: Request) {
   if (hit && typeof hit.durata_min === 'number') {
     return NextResponse.json({
       ok: true,
-      minuti: arrotonda15(hit.durata_min),
+      minuti: arrotondaA(hit.durata_min, stepViaggio),
       minutiRaw: hit.durata_min,
       km: hit.distanza_km ?? null,
     });
@@ -125,5 +129,5 @@ export async function POST(req: Request) {
       { onConflict: 'origin_lat,origin_lng,dest_lat,dest_lng,profile' } as never,
     );
 
-  return NextResponse.json({ ok: true, minuti: arrotonda15(durata), minutiRaw: durata, km: distanza });
+  return NextResponse.json({ ok: true, minuti: arrotondaA(durata, stepViaggio), minutiRaw: durata, km: distanza });
 }

@@ -3,9 +3,11 @@ import {
   minutiPerCommessa,
   calcolaOreGiornata,
   minutiViaggioPerTarget,
+  arrotondaA,
 } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { leggiArrotondamenti } from '@/app/_lib/kantiere-config';
 
 /**
  * Auto-derivazione del rapportino giornaliero dalle timbrature.
@@ -216,10 +218,13 @@ export async function ricomputaRapportinoAuto(
 
   const minutiMap = minutiPerCommessa(sintetiche);
   const soglia = await sogliaOreTenant(supabase, tenantId);
+  // Arrotondamento ore-lavoro: default 0 = nessuno (dettaglio massimo, ore
+  // identiche a oggi). Configurabile dall'ufficio per arrotondare in futuro.
+  const { oreMin: stepOre } = await leggiArrotondamenti(supabase, tenantId);
   const risultato = calcolaOreGiornata({
     minutiLavoratiPerCommessa: Array.from(minutiMap.entries()).map(([commessa_id, minuti]) => ({
       commessa_id,
-      minuti,
+      minuti: arrotondaA(minuti, stepOre),
     })),
     sogliaOreOrdinarie: soglia,
   });

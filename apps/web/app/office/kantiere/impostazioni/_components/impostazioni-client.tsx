@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Label } from '@kommessa/ui';
 import { salvaImpostazioniKantiere } from '../../../_actions/kantiere-impostazioni';
+import { useConfirm } from '@/app/_components/confirm-provider';
 
 type AnomalieConfig = {
   incomplete: boolean;
@@ -19,6 +20,8 @@ interface Props {
   sede: string;
   anomalie: AnomalieConfig;
   anomalie_ore_max: number;
+  arrotondamentoViaggio: number;
+  arrotondamentoOre: number;
 }
 
 const ANOMALIE_ETICHETTE: { key: keyof AnomalieConfig; label: string }[] = [
@@ -31,11 +34,21 @@ const ANOMALIE_ETICHETTE: { key: keyof AnomalieConfig; label: string }[] = [
   { key: 'ore_eccessive', label: 'Ore giornaliere oltre soglia (possibile doppio inserimento)' },
 ];
 
-export function ImpostazioniClient({ soglia, sede, anomalie, anomalie_ore_max }: Props) {
+export function ImpostazioniClient({
+  soglia,
+  sede,
+  anomalie,
+  anomalie_ore_max,
+  arrotondamentoViaggio,
+  arrotondamentoOre,
+}: Props) {
+  const askConfirm = useConfirm();
   const [sogliaOreOrdinarie, setSogliaOreOrdinarie] = React.useState<number>(soglia);
   const [sedePartenzaDefault, setSedePartenzaDefault] = React.useState<string>(sede);
   const [anomalieState, setAnomalieState] = React.useState<AnomalieConfig>(anomalie);
   const [oreMax, setOreMax] = React.useState<number>(anomalie_ore_max);
+  const [arrViaggio, setArrViaggio] = React.useState<number>(arrotondamentoViaggio);
+  const [arrOre, setArrOre] = React.useState<number>(arrotondamentoOre);
   const [esito, setEsito] = React.useState<{ ok: true } | { ok: false; error: string } | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -43,7 +56,7 @@ export function ImpostazioniClient({ soglia, sede, anomalie, anomalie_ore_max }:
     setAnomalieState((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  function handleSalva() {
+  function salvaOra() {
     setEsito(null);
     startTransition(async () => {
       const result = await salvaImpostazioniKantiere({
@@ -51,9 +64,36 @@ export function ImpostazioniClient({ soglia, sede, anomalie, anomalie_ore_max }:
         sedePartenzaDefault,
         anomalie: anomalieState,
         anomalie_ore_max: oreMax,
+        arrotondamentoViaggioMin: arrViaggio,
+        arrotondamentoOreMin: arrOre,
       });
       setEsito(result);
     });
+  }
+
+  async function handleSalva() {
+    // Cambiare l'arrotondamento incide sui turni futuri: conferma esplicita.
+    const cambiatoViaggio = arrViaggio !== arrotondamentoViaggio;
+    const cambiatoOre = arrOre !== arrotondamentoOre;
+    if (cambiatoViaggio || cambiatoOre) {
+      const parti: string[] = [];
+      if (cambiatoViaggio)
+        parti.push(`tempo di viaggio arrotondato a ${arrViaggio} min`);
+      if (cambiatoOre)
+        parti.push(
+          arrOre === 0
+            ? 'ore lavoro senza arrotondamento (dettaglio pieno)'
+            : `ore lavoro arrotondate a ${arrOre} min`,
+        );
+      const ok = await askConfirm({
+        title: 'Confermi la modifica degli arrotondamenti?',
+        description: `Da ora in avanti: ${parti.join('; ')}. Vale solo per i turni timbrati d'ora in poi; i turni già registrati non cambiano.`,
+        confirmLabel: 'Sì, applica',
+        cancelLabel: 'Annulla',
+      });
+      if (!ok) return;
+    }
+    salvaOra();
   }
 
   return (
@@ -81,6 +121,59 @@ export function ImpostazioniClient({ soglia, sede, anomalie, anomalie_ore_max }:
             />
             <p className="text-xs text-muted-foreground">
               Le ore oltre questa soglia diventano straordinario.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card: Arrotondamenti */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Arrotondamenti</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-1">
+            <Label htmlFor="arr-viaggio">Tempo di viaggio — arrotonda a (minuti)</Label>
+            <Input
+              id="arr-viaggio"
+              type="number"
+              min={1}
+              max={60}
+              step={1}
+              value={arrViaggio}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) setArrViaggio(Math.min(60, Math.max(1, v)));
+              }}
+              className="w-32"
+            />
+            <p className="text-xs text-muted-foreground">
+              Quando si timbra un viaggio, il tempo stimato viene arrotondato a
+              questo passo. Es. con 5: un viaggio di 4 minuti conta 5 minuti, uno
+              di 12 conta 10. Vale per i viaggi timbrati <strong>da ora in poi</strong>.
+            </p>
+          </div>
+
+          <div className="space-y-1 border-t border-border pt-4">
+            <Label htmlFor="arr-ore">Ore di lavoro — arrotonda a (minuti)</Label>
+            <Input
+              id="arr-ore"
+              type="number"
+              min={0}
+              max={60}
+              step={1}
+              value={arrOre}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v)) setArrOre(Math.min(60, Math.max(0, v)));
+              }}
+              className="w-32"
+            />
+            <p className="text-xs text-muted-foreground">
+              <strong>0 = nessun arrotondamento</strong> (consigliato): le ore
+              vengono raccolte al minuto, con il massimo dettaglio, e potrai
+              arrotondarle a fine mese nel report. Imposta un valore (es. 15) solo
+              se vuoi arrotondare già le ore dei turni futuri.
             </p>
           </div>
         </CardContent>

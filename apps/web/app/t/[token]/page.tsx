@@ -283,8 +283,10 @@ export default async function TokenPage({
   }
 
   // Stato turno per me (idle/lavoro/pausa): guida le opzioni del flusso self.
-  const statoTurnoSelf =
-    me !== null ? statoTurno(await eventiOggiFor(supabase, me.id, target)) : null;
+  const eventiSelf = me !== null ? await eventiOggiFor(supabase, me.id, target) : [];
+  const statoTurnoSelf = me !== null ? statoTurno(eventiSelf) : null;
+  // Oggi risulta già una pausa pranzo timbrata? (per il prompt in uscita)
+  const pausaOggiFatta = eventiSelf.some((e) => e.pausa);
 
   // Membri della squadra (escludo me stesso per non duplicare)
   let membriConTipo: { id: string; nome: string; prossimoTipo: 'ingresso' | 'uscita' }[] = [];
@@ -427,6 +429,7 @@ export default async function TokenPage({
             capo={capo}
             membri={membriConTipo}
             viaggio={viaggioCtx}
+            pausaOggiFatta={pausaOggiFatta}
           />
         </div>
       </div>

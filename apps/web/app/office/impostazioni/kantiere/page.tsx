@@ -39,6 +39,10 @@ export default async function KantiereSettingsPage() {
     ore_eccessive: rawAnomalie['ore_eccessive'] !== false,
   };
   const anomalie_ore_max = typeof config.anomalie_ore_max === 'number' ? config.anomalie_ore_max : 13;
+  const arrotondamentoViaggio =
+    typeof config.arrotondamento_viaggio_min === 'number' ? config.arrotondamento_viaggio_min : 5;
+  const arrotondamentoOre =
+    typeof config.arrotondamento_ore_min === 'number' ? config.arrotondamento_ore_min : 0;
 
   const { data: tRow } = await supabase
     .from('tenants' as never)
@@ -74,7 +78,14 @@ export default async function KantiereSettingsPage() {
         )}
       </div>
 
-      <ImpostazioniClient soglia={soglia} sede={sede} anomalie={anomalie} anomalie_ore_max={anomalie_ore_max} />
+      <ImpostazioniClient
+        soglia={soglia}
+        sede={sede}
+        anomalie={anomalie}
+        anomalie_ore_max={anomalie_ore_max}
+        arrotondamentoViaggio={arrotondamentoViaggio}
+        arrotondamentoOre={arrotondamentoOre}
+      />
     </div>
   );
 }

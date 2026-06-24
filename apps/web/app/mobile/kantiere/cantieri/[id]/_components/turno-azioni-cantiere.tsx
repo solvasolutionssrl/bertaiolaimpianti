@@ -17,6 +17,8 @@ export interface TurnoAzioniCantiereProps {
   inPausa: boolean;
   /** ISO inizio pausa, o null. */
   inizioPausaTs: string | null;
+  /** true se oggi risulta già una pausa pranzo timbrata su questo cantiere. */
+  pausaOggiFatta?: boolean;
 }
 
 function ora(ts: string): string {
@@ -72,6 +74,7 @@ export function TurnoAzioniCantiere({
   inizioTs,
   inPausa,
   inizioPausaTs,
+  pausaOggiFatta = false,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -79,6 +82,13 @@ export function TurnoAzioniCantiere({
   const [err, setErr] = useState<string | null>(null);
   const [cambiaOra, setCambiaOra] = useState(false);
   const [oraSel, setOraSel] = useState(oraLocaleNow());
+  // Pausa pranzo dichiarata in uscita (ripiego se non timbrata).
+  const [pausaFatta, setPausaFatta] = useState(false);
+  const [pausaMin, setPausaMin] = useState<30 | 45 | 60>(30);
+
+  const durataTurnoMin = Math.max(0, Math.floor((now - Date.parse(inizioTs)) / 60000));
+  const promptPausa = !inPausa && !pausaOggiFatta && durataTurnoMin >= 6 * 60;
+  const pausaPranzoMin = promptPausa && pausaFatta ? pausaMin : undefined;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -166,11 +176,53 @@ export function TurnoAzioniCantiere({
           </button>
         )}
 
+        {/* Pausa pranzo non rilevata su turno lungo */}
+        {promptPausa ? (
+          <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+            <p className="flex items-start gap-1.5 text-sm font-semibold text-amber-900">
+              <Utensils className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+              Pausa pranzo non rilevata
+            </p>
+            <p className="text-[13px] leading-snug text-amber-800">
+              Turno lungo senza pausa timbrata. Ricorda: <strong>timbrare la pausa
+              è il modo corretto</strong>; questa è solo una correzione.
+            </p>
+            <label className="flex cursor-pointer items-center gap-2 select-none">
+              <input
+                type="checkbox"
+                checked={pausaFatta}
+                onChange={(e) => setPausaFatta(e.target.checked)}
+                className="h-4 w-4 rounded border-amber-400 accent-amber-600"
+              />
+              <span className="text-sm font-medium text-amber-900">Ho fatto la pausa pranzo</span>
+            </label>
+            {pausaFatta ? (
+              <div className="flex gap-2">
+                {([30, 45, 60] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPausaMin(m)}
+                    className={[
+                      'flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors',
+                      pausaMin === m
+                        ? 'border-amber-500 bg-amber-500 text-white'
+                        : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
+                    ].join(' ')}
+                  >
+                    {m === 60 ? '1h' : `${m} min`}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {!cambiaOra ? (
           <div className="flex flex-col gap-2">
             <button
               type="button"
-              onClick={() => esegui(() => terminaTurnoMio({ cantiereId }))}
+              onClick={() => esegui(() => terminaTurnoMio({ cantiereId, pausaPranzoMin }))}
               disabled={pending}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-base font-semibold text-foreground active:scale-[0.99] transition-all hover:bg-muted disabled:opacity-60"
             >
@@ -198,7 +250,11 @@ export function TurnoAzioniCantiere({
               />
               <button
                 type="button"
-                onClick={() => esegui(() => terminaTurnoMio({ cantiereId, ts: isoDaOraLocale(oraSel) }))}
+                onClick={() =>
+                  esegui(() =>
+                    terminaTurnoMio({ cantiereId, ts: isoDaOraLocale(oraSel), pausaPranzoMin }),
+                  )
+                }
                 disabled={pending}
                 className="rounded-md bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60"
               >

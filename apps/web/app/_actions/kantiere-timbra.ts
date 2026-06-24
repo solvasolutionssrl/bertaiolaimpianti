@@ -5,7 +5,12 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { prossimoTipoTimbratura, statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
+import {
+  prossimoTipoTimbratura,
+  statoTurno,
+  SOGLIA_PAUSA_PRANZO_ORE,
+  type StatoTurno,
+} from '@kommessa/api/kantiere-ore';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
@@ -90,6 +95,60 @@ const AZIONI_AMMESSE: Record<AzioneTimbra, StatoTurno[]> = {
   ripresa: ['pausa'],
 };
 
+/**
+ * Inserisce una pausa pranzo "dichiarata" in uscita come coppia di timbrature
+ * (uscita pausa → ingresso pausa) centrata nel turno. Riusa il modello pausa
+ * esistente: il calcolo ore esclude già il gap, quindi sottrae esattamente i
+ * minuti dichiarati. Marcata `origine='manuale'` per distinguerla nel tracking.
+ */
+async function inserisciPausaDichiarata(
+  supabase: ReturnType<typeof createServerSupabase>,
+  opts: {
+    tenantId: string;
+    dipendenteId: string;
+    commessaId: string | null;
+    cantiereId: string | null;
+    creatoDa: string;
+    startIso: string;
+    endIso: string;
+    minuti: number;
+  },
+): Promise<void> {
+  const start = Date.parse(opts.startIso);
+  const end = Date.parse(opts.endIso);
+  const mid = (start + end) / 2;
+  const half = (opts.minuti * 60000) / 2;
+  const pausaOut = new Date(mid - half).toISOString();
+  const pausaIn = new Date(mid + half).toISOString();
+  const base = {
+    tenant_id: opts.tenantId,
+    dipendente_id: opts.dipendenteId,
+    commessa_id: opts.commessaId,
+    cantiere_id: opts.cantiereId,
+    pausa: true,
+    origine: 'manuale',
+    creato_da: opts.creatoDa,
+  };
+  await supabase.from('timbrature' as never).insert([
+    { ...base, tipo: 'uscita', ts: pausaOut },
+    { ...base, tipo: 'ingresso', ts: pausaIn },
+  ] as never);
+}
+
+/** Eleggibilità del prompt pausa: turno aperto al lavoro, senza pausa oggi, più
+ *  lungo della soglia. Ritorna l'ISO di inizio turno se eleggibile, altrimenti null. */
+function inizioSeEleggibilePausa(
+  info: { stato: StatoTurno; ingressoAperto: string | null },
+  eventi: EventoOggi[],
+  exitIso: string,
+): string | null {
+  if (info.stato !== 'lavoro' || !info.ingressoAperto) return null;
+  if (eventi.some((e) => e.pausa)) return null;
+  const durataMs = Date.parse(exitIso) - Date.parse(info.ingressoAperto);
+  if (durataMs < SOGLIA_PAUSA_PRANZO_ORE * 3600000) return null;
+  return info.ingressoAperto;
+}
+
 /** Mappa azione → (tipo, pausa) della riga timbratura. */
 function azioneATimbra(a: AzioneTimbra): { tipo: 'ingresso' | 'uscita'; pausa: boolean } {
   switch (a) {
@@ -124,6 +183,8 @@ const TimbraSchema = z.object({
   /** Azione esplicita (flusso self con turno attivo). Assente = toggle classico
    *  (inizio/fine), usato dal capo per i membri e per retrocompatibilità. */
   azione: z.enum(['inizio', 'fine', 'pausa', 'ripresa']).optional(),
+  /** Pausa pranzo dichiarata in uscita (solo self, turno lungo senza pausa). */
+  pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
 });
 
 export async function timbra(input: unknown): Promise<Result> {
@@ -211,6 +272,25 @@ export async function timbra(input: unknown): Promise<Result> {
   }
 
   const ts = new Date().toISOString();
+
+  // Pausa pranzo dichiarata in uscita (ripiego: turno lungo senza pausa
+  // timbrata). Solo flusso self, azione fine. Inserita PRIMA dell'uscita di
+  // fine così il ricalcolo la sottrae. Se non eleggibile, ignorata in silenzio.
+  if (azione === 'fine' && self && parsed.data.pausaPranzoMin) {
+    const inizio = inizioSeEleggibilePausa(statoTurno(eventi), eventi, ts);
+    if (inizio) {
+      await inserisciPausaDichiarata(supabase, {
+        tenantId: ctx.tenantId,
+        dipendenteId: bersaglioId,
+        commessaId: target.tipo === 'commessa' ? target.id : null,
+        cantiereId: target.tipo === 'cantiere' ? target.id : null,
+        creatoDa: ctx.userId,
+        startIso: inizio,
+        endIso: ts,
+        minuti: parsed.data.pausaPranzoMin,
+      });
+    }
+  }
 
   // Il viaggio si registra solo per la timbratura PERSONALE su un cantiere, e
   // solo all'inizio/fine turno (mai in pausa/ripresa).
@@ -317,6 +397,8 @@ const TerminaTurnoSchema = z.object({
   // ISO opzionale: se assente, ora attuale. Deve essere oggi (Europe/Rome) e
   // dopo l'apertura del turno.
   ts: z.string().datetime().optional(),
+  /** Pausa pranzo dichiarata (turno lungo senza pausa timbrata). */
+  pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
 });
 
 export async function terminaTurnoMio(input: unknown): Promise<Result> {
@@ -342,6 +424,24 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   const ultima = eventi[eventi.length - 1];
   if (ultima && Date.parse(ts) <= Date.parse(ultima.ts)) {
     return { ok: false, error: 'ORA_NON_VALIDA' };
+  }
+
+  // Pausa pranzo dichiarata (ripiego): inserita prima dell'uscita di fine così
+  // il ricalcolo la sottrae. Ignorata se non eleggibile.
+  if (parsed.data.pausaPranzoMin) {
+    const inizio = inizioSeEleggibilePausa(info, eventi, ts);
+    if (inizio) {
+      await inserisciPausaDichiarata(supabase, {
+        tenantId: ctx.tenantId,
+        dipendenteId: me.id,
+        commessaId: null,
+        cantiereId: parsed.data.cantiereId,
+        creatoDa: ctx.userId,
+        startIso: inizio,
+        endIso: ts,
+        minuti: parsed.data.pausaPranzoMin,
+      });
+    }
   }
 
   const { error } = await supabase.from('timbrature' as never).insert({

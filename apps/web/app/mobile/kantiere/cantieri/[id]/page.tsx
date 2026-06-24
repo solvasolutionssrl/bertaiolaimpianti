@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, MapPin, Navigation, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../../../_lib/guard';
@@ -95,6 +96,31 @@ export default async function CantiereMobileDetailPage({
   const turno = await mioTurnoAttivo();
   const turnoQui = turno && turno.cantiereId === c.id ? turno : null;
 
+  // Per il prompt "pausa pranzo non rilevata" in uscita: oggi risulta già una
+  // pausa timbrata su questo cantiere dal dipendente corrente?
+  let pausaOggiFattaMia = false;
+  if (turnoQui) {
+    const { data: meDip } = await supabase
+      .from('dipendenti' as never)
+      .select('id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('user_id', ctx.userId)
+      .maybeSingle();
+    const dipId = (meDip as { id: string } | null)?.id;
+    if (dipId) {
+      const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+      const { data: evRows } = await supabase
+        .from('timbrature' as never)
+        .select('pausa')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('dipendente_id', dipId)
+        .eq('cantiere_id', c.id)
+        .gte('ts', fromIso)
+        .lt('ts', toIso);
+      pausaOggiFattaMia = ((evRows as { pausa: boolean | null }[] | null) ?? []).some((e) => e.pausa);
+    }
+  }
+
   // Office/admin: chi è in cantiere ORA (live), con dettaglio per persona.
   // Per i tecnici questa sezione non compare (resta la vista squadra).
   const isManager = ctx.role === 'admin' || ctx.role === 'office';
@@ -169,6 +195,7 @@ export default async function CantiereMobileDetailPage({
           inizioTs={turnoQui.inizioTs}
           inPausa={turnoQui.inPausa}
           inizioPausaTs={turnoQui.inizioPausaTs}
+          pausaOggiFatta={pausaOggiFattaMia}
         />
       ) : null}
 
