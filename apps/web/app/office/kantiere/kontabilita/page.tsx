@@ -5,6 +5,7 @@ import { CATEGORIE_SPESA, type CategoriaSpesa } from '@kommessa/api/spese';
 
 import { Filtri, type FiltriValori } from './_components/filtri';
 import { SpeseTable, type SpesaRiga, type CantiereOption } from './_components/spese-table';
+import { SubNav } from './_components/sub-nav';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,8 +156,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
         <p className="text-sm text-muted-foreground">Spese di cantiere</p>
       </header>
 
-      {/* Sotto-nav placeholder: Analisi dei costi e Costo cantiere arrivano in
-          una fase successiva. Per ora una sola vista (Spese). */}
+      <SubNav />
 
       <Filtri
         valori={filtri}
