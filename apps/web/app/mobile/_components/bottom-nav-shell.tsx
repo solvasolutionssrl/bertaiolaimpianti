@@ -14,6 +14,7 @@ import {
   MapPin,
   QrCode,
   Clock,
+  ReceiptText,
 } from 'lucide-react';
 
 import { MobileBottomNav, type MobileTab, type MobileTabId } from '@kommessa/ui';
@@ -70,16 +71,25 @@ export function BottomNavShell({
       ];
     } else {
       // Tecnico in cantiere — "a prova di cantiere": tap target grandi.
-      // Se è caposquadra, lo slot "Attività" diventa "Squadra" (gestione del team).
-      tabs = [
-        { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
-        { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
-        { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
-        isCapo
-          ? { id: 'squadra', label: 'Squadra', icon: Users, href: '/mobile/kantiere/gestione-squadra' }
-          : { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
-        { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
-      ];
+      // Lo slot "Attività" è sostituito da "Spese" (Kontabilità); le notifiche
+      // restano raggiungibili dalla campanella fissa della shell kantiere.
+      // Se è caposquadra, lo slot "Ore" diventa "Squadra" (le ore restano
+      // raggiungibili dalla pagina Squadra).
+      tabs = isCapo
+        ? [
+            { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
+            { id: 'squadra', label: 'Squadra', icon: Users, href: '/mobile/kantiere/gestione-squadra' },
+            { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
+            { id: 'spese', label: 'Spese', icon: ReceiptText, href: '/mobile/kantiere/spese' },
+            { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+          ]
+        : [
+            { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
+            { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
+            { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
+            { id: 'spese', label: 'Spese', icon: ReceiptText, href: '/mobile/kantiere/spese' },
+            { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
+          ];
     }
   } else if (shell === 'gestione') {
     // INVARIATO per app_mode='kommessa'.

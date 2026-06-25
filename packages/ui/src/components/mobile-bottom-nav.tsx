@@ -26,6 +26,7 @@ export type MobileTabId =
   | 'ore'
   | 'cruscotto'
   | 'squadra'
+  | 'spese'
   // Mantenuti per retro-compatibilità con eventuali consumer:
   | 'sopralluogo'
   | 'foto';

@@ -12,6 +12,7 @@ import {
   HardHat,
   LayoutDashboard,
   MapPin,
+  ReceiptText,
   Sparkles,
   Timer,
   Truck,
@@ -157,6 +158,14 @@ function buildNav(
           { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
         ],
       },
+      // Kontabilità: voce top-level (sibling del modulo Kantiere) per dare
+      // stacco visivo, non dentro l'accordion Kantiere.
+      {
+        id: 'kontabilita',
+        label: 'Kontabilità',
+        href: '/office/kantiere/kontabilita',
+        icon: ReceiptText,
+      },
       {
         id: 'sec-altro',
         label: 'Altro',
@@ -228,6 +237,14 @@ function buildNav(
         { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
         { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
       ],
+    },
+    // Kontabilità: voce top-level (sibling del modulo Kantiere) per dare
+    // stacco visivo, non dentro l'accordion Kantiere.
+    {
+      id: 'kontabilita',
+      label: 'Kontabilità',
+      href: '/office/kantiere/kontabilita',
+      icon: ReceiptText,
     },
     {
       id: 'sec-altro',
