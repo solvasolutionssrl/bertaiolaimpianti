@@ -17,6 +17,7 @@
     "./kantiere-ore": "./src/kantiere-ore.ts",
     "./kantiere-report": "./src/kantiere-report.ts",
     "./kantiere-costi": "./src/kantiere-costi.ts",
+    "./spese": "./src/spese.ts",
     "./rome-time": "./src/rome-time.ts"
   },
   "scripts": {

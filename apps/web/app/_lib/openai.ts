@@ -103,9 +103,15 @@ export async function resolveTranscribeModelForTenant(
 // Chat completion (non-streaming)
 // ---------------------------------------------------------------------
 
+/** Parte di un messaggio multimodale (testo o immagine). */
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string; detail?: 'low' | 'high' | 'auto' } };
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  /** Stringa semplice oppure array multimodale (vision). */
+  content: string | ChatContentPart[];
 }
 
 export interface ChatCompletionOptions {
@@ -118,6 +124,11 @@ export interface ChatCompletionOptions {
    * comunque richiedere esplicitamente JSON (regola OpenAI).
    */
   responseFormat?: 'json_object' | 'text';
+  /**
+   * Solo modelli "reasoning" (gpt-5-*). Riduce il ragionamento per
+   * risposte piu' rapide. 'minimal' | 'low' | 'medium' | 'high'.
+   */
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
 }
 
 export interface ChatCompletionResult {
@@ -151,6 +162,9 @@ export async function chatCompletion(
   }
   if (opts.responseFormat === 'json_object') {
     body.response_format = { type: 'json_object' };
+  }
+  if (opts.reasoningEffort) {
+    body.reasoning_effort = opts.reasoningEffort;
   }
 
   const res = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
