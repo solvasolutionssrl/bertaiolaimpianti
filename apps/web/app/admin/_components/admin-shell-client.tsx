@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   QrCode,
+  ReceiptText,
   Timer,
   UserCog,
   Users,
@@ -58,6 +59,7 @@ const NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { id: 'kantiere', label: 'Panoramica', href: '/admin/kantiere', icon: HardHat },
       { id: 'kantiere-timbrature', label: 'Timbrature', href: '/admin/kantiere/timbrature', icon: Timer },
+      { id: 'kantiere-kontabilita', label: 'Kontabilità', href: '/admin/kantiere/kontabilita', icon: ReceiptText },
       { id: 'kantiere-qr', label: 'QR cantiere', href: '/admin/kantiere-qr', icon: QrCode },
     ],
   },

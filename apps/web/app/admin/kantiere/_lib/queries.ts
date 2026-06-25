@@ -123,3 +123,111 @@ export async function statKantierePerTenant(): Promise<KantiereTenantStat[]> {
     })
     .sort((a, b) => b.timbratureOggi - a.timbratureOggi);
 }
+
+// ===================== Kontabilità (spese) =====================
+
+export type KontabilitaTenantStat = {
+  tenantId: string;
+  tenantNome: string;
+  tenantSlug: string;
+  numSpese: number;
+  totaleImporto: number;
+  totaleIva: number;
+  numSenzaCantiere: number;
+  ultimaSpesaAt: string | null;
+};
+
+type SpesaAggrRow = {
+  tenant_id: string;
+  cantiere_id: string | null;
+  importo_totale: number | null;
+  importo_iva: number | null;
+  data_scontrino: string | null;
+  created_at: string;
+};
+
+/**
+ * Statistiche Kontabilità (spese di cantiere) per ogni tenant che usa il modulo
+ * Kantiere. Stesso meccanismo cross-tenant delle timbrature: service-role
+ * (bypass RLS), il chiamante è già gated da `requirePlatformAdmin`.
+ *
+ * Range opzionale su `data_scontrino` (ISO `YYYY-MM-DD`), estremi inclusivi.
+ */
+export async function statKontabilitaPerTenant(range?: {
+  da?: string | null;
+  a?: string | null;
+}): Promise<KontabilitaTenantStat[]> {
+  const sb = createServiceSupabase();
+
+  const [modsRes, tenantsRes] = await Promise.all([
+    sb
+      .from('tenant_modules' as never)
+      .select('tenant_id, attivo')
+      .eq('module_code', 'kantiere'),
+    sb.from('tenants').select('id, nome, slug, app_mode'),
+  ]);
+
+  const modAttivo = new Map<string, boolean>();
+  for (const m of (modsRes.data as { tenant_id: string; attivo: boolean }[] | null) ?? []) {
+    modAttivo.set(m.tenant_id, m.attivo);
+  }
+  const tenants =
+    (tenantsRes.data as
+      | { id: string; nome: string; slug: string | null; app_mode: string | null }[]
+      | null) ?? [];
+
+  const rilevanti = tenants.filter(
+    (t) => modAttivo.get(t.id) === true || t.app_mode === 'kantiere' || t.app_mode === 'full',
+  );
+  if (rilevanti.length === 0) return [];
+
+  const ids = rilevanti.map((t) => t.id);
+
+  let q = sb
+    .from('spese' as never)
+    .select('tenant_id, cantiere_id, importo_totale, importo_iva, data_scontrino, created_at')
+    .in('tenant_id', ids);
+  if (range?.da) q = q.gte('data_scontrino', range.da);
+  if (range?.a) q = q.lte('data_scontrino', `${range.a}T23:59:59.999`);
+
+  const { data: speseRaw } = (await q) as unknown as { data: SpesaAggrRow[] | null };
+  const spese = (speseRaw as SpesaAggrRow[] | null) ?? [];
+
+  type Agg = {
+    numSpese: number;
+    totaleImporto: number;
+    totaleIva: number;
+    numSenzaCantiere: number;
+    ultimaSpesaAt: string | null;
+  };
+  const perTenant = new Map<string, Agg>();
+  for (const s of spese) {
+    let a = perTenant.get(s.tenant_id);
+    if (!a) {
+      a = { numSpese: 0, totaleImporto: 0, totaleIva: 0, numSenzaCantiere: 0, ultimaSpesaAt: null };
+      perTenant.set(s.tenant_id, a);
+    }
+    a.numSpese += 1;
+    a.totaleImporto += Number(s.importo_totale ?? 0);
+    a.totaleIva += Number(s.importo_iva ?? 0);
+    if (!s.cantiere_id) a.numSenzaCantiere += 1;
+    const ref = s.data_scontrino ?? s.created_at;
+    if (ref && (!a.ultimaSpesaAt || ref > a.ultimaSpesaAt)) a.ultimaSpesaAt = ref;
+  }
+
+  return rilevanti
+    .map((t) => {
+      const a = perTenant.get(t.id);
+      return {
+        tenantId: t.id,
+        tenantNome: t.nome,
+        tenantSlug: t.slug ?? '',
+        numSpese: a?.numSpese ?? 0,
+        totaleImporto: a?.totaleImporto ?? 0,
+        totaleIva: a?.totaleIva ?? 0,
+        numSenzaCantiere: a?.numSenzaCantiere ?? 0,
+        ultimaSpesaAt: a?.ultimaSpesaAt ?? null,
+      };
+    })
+    .sort((x, y) => y.totaleImporto - x.totaleImporto);
+}
