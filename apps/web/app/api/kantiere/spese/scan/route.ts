@@ -13,6 +13,7 @@ import {
   parseImportoIt,
   estrazioneSufficiente,
   normalizzaCategoria,
+  parseDataScontrino,
 } from '@kommessa/api/spese';
 
 import { tenantHasModule } from '@/app/_lib/modules';
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest) {
           importo_totale: parseImportoIt(e.importo_totale ?? null),
           importo_iva: parseImportoIt(e.importo_iva ?? null),
           valuta: (e.valuta ?? 'EUR').toUpperCase().slice(0, 8),
-          data_scontrino: e.data_scontrino ?? null,
+          data_scontrino: parseDataScontrino(e.data_scontrino ?? null),
           partita_iva: e.partita_iva ?? null,
           metodo_pagamento: e.metodo_pagamento ?? null,
           numero_documento: e.numero_documento ?? null,

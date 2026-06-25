@@ -6,6 +6,7 @@ import {
   parseImportoIt,
   estrazioneSufficiente,
   calcolaImponibile,
+  parseDataScontrino,
 } from './spese';
 
 describe('parseImportoIt', () => {
@@ -69,6 +70,27 @@ describe('categorie', () => {
     expect(normalizzaCategoria('hotel')).toBe('hotel');
     expect(normalizzaCategoria('xyz')).toBe('varie');
     expect(normalizzaCategoria(null)).toBe('varie');
+  });
+});
+
+describe('parseDataScontrino', () => {
+  it('formato italiano DD-MM-YYYY HH:mm (output scontrino reale)', () => {
+    expect(parseDataScontrino('06-06-2020 09:51')).toBe('2020-06-06T09:51');
+  });
+  it('italiano con slash e senza ora', () => {
+    expect(parseDataScontrino('6/6/2020')).toBe('2020-06-06T00:00');
+  });
+  it('ISO passthrough normalizzato a minuti', () => {
+    expect(parseDataScontrino('2020-06-06T09:51:00')).toBe('2020-06-06T09:51');
+    expect(parseDataScontrino('2020-06-06 09:51')).toBe('2020-06-06T09:51');
+    expect(parseDataScontrino('2020-06-06')).toBe('2020-06-06T00:00');
+  });
+  it('mese/giorno fuori range → null', () => {
+    expect(parseDataScontrino('32-13-2020')).toBeNull();
+  });
+  it('non interpretabile → null', () => {
+    expect(parseDataScontrino('boh')).toBeNull();
+    expect(parseDataScontrino(null)).toBeNull();
   });
 });
 

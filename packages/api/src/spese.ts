@@ -64,6 +64,39 @@ export function estrazioneSufficiente(x: {
   );
 }
 
+/**
+ * Normalizza una data scontrino in formato locale `YYYY-MM-DDTHH:mm`
+ * (adatto a un input datetime-local e poi a new Date()). Gestisce:
+ *  - ISO/quasi-ISO: "2020-06-06T09:51", "2020-06-06 09:51:00", "2020-06-06"
+ *  - italiano: "06-06-2020 09:51", "6/6/2020", "06-06-2020"
+ * Restituisce null se non interpretabile. Ora mancante → 00:00.
+ */
+export function parseDataScontrino(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s) return null;
+  const p2 = (n: string) => n.padStart(2, '0');
+
+  // 1) ISO / quasi-ISO: YYYY-MM-DD[ T]HH:mm
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+  if (m) {
+    const [, y, mo, d, h, mi] = m;
+    return `${y}-${p2(mo!)}-${p2(d!)}T${p2(h ?? '00')}:${mi ?? '00'}`;
+  }
+
+  // 2) Italiano: DD-MM-YYYY o DD/MM/YYYY [HH:mm]
+  m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[ T](\d{1,2}):(\d{2}))?/);
+  if (m) {
+    const [, d, mo, y, h, mi] = m;
+    const moN = Number(mo);
+    const dN = Number(d);
+    if (moN < 1 || moN > 12 || dN < 1 || dN > 31) return null;
+    return `${y}-${p2(mo!)}-${p2(d!)}T${p2(h ?? '00')}:${mi ?? '00'}`;
+  }
+
+  return null;
+}
+
 /** Imponibile = totale - iva, arrotondato a 2 decimali, solo se entrambi noti. */
 export function calcolaImponibile(
   totale: number | null,
