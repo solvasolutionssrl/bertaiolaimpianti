@@ -1,0 +1,212 @@
+'use server';
+
+import { z } from 'zod';
+import { revalidatePath } from 'next/cache';
+
+import { createServerSupabase } from '@kommessa/api/server';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { CATEGORIE_SPESA, calcolaImponibile, normalizzaCategoria } from '@kommessa/api/spese';
+
+import { tenantHasModule } from '@/app/_lib/modules';
+import { mioTurnoAttivo } from '@/app/mobile/kantiere/_lib/turno-attivo';
+
+type Risultato = { ok: true; id?: string } | { ok: false; error: string };
+
+const CreaSchema = z.object({
+  r2Key: z.string().min(1).max(500),
+  r2ThumbKey: z.string().min(1).max(500).nullable().optional(),
+  mime: z.string().min(1).max(127),
+  sizeBytes: z.number().int().positive().max(8 * 1024 * 1024),
+  ragioneSociale: z.string().trim().max(200).nullable().optional(),
+  categoria: z.enum(CATEGORIE_SPESA),
+  importoTotale: z.number().finite().positive(),
+  importoIva: z.number().finite().nonnegative().nullable().optional(),
+  valuta: z.string().trim().min(1).max(8).default('EUR'),
+  dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
+  partitaIva: z.string().trim().max(40).nullable().optional(),
+  metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
+  numeroDocumento: z.string().trim().max(60).nullable().optional(),
+  indirizzoEsercente: z.string().trim().max(200).nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+  aiRaw: z.unknown().optional(),
+});
+
+/**
+ * Risolve il cantiere a cui agganciare la spesa:
+ *  1) turno attivo (lavoro o pausa) → quel cantiere;
+ *  2) fallback: se nel giorno dello scontrino il dipendente ha timbrato su un
+ *     SOLO cantiere, usa quello;
+ *  3) altrimenti null ("da assegnare").
+ */
+async function agganciaCantiere(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  dipId: string,
+  dataScontrinoIso: string | null,
+): Promise<string | null> {
+  const turno = await mioTurnoAttivo();
+  if (turno) return turno.cantiereId;
+
+  if (!dataScontrinoIso) return null;
+  const giorno = romeDay(new Date(dataScontrinoIso));
+  const { fromIso, toIso } = romeDayBoundsUtc(giorno);
+  const { data: rows } = await supabase
+    .from('timbrature' as never)
+    .select('cantiere_id')
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipId)
+    .not('cantiere_id', 'is', null)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  const cantieri = new Set(
+    ((rows as { cantiere_id: string | null }[] | null) ?? [])
+      .map((r) => r.cantiere_id)
+      .filter((x): x is string => !!x),
+  );
+  return cantieri.size === 1 ? [...cantieri][0]! : null;
+}
+
+export async function creaSpesa(input: z.input<typeof CreaSchema>): Promise<Risultato> {
+  const parsed = CreaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
+  const d = parsed.data;
+
+  const ctx = await requireTenantContext();
+  if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+
+  const supabase = createServerSupabase();
+  const { data: dipRow } = await supabase
+    .from('dipendenti' as never)
+    .select('id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('user_id', ctx.userId)
+    .maybeSingle();
+  const dipId = (dipRow as { id: string } | null)?.id;
+  if (!dipId) return { ok: false, error: 'DIPENDENTE_ASSENTE' };
+
+  const cantiereId = await agganciaCantiere(
+    supabase,
+    ctx.tenantId,
+    dipId,
+    d.dataScontrino ?? null,
+  );
+
+  // commessa derivata dal cantiere (se collegato a una commessa)
+  let commessaId: string | null = null;
+  if (cantiereId) {
+    const { data: cant } = await supabase
+      .from('cantieri' as never)
+      .select('commessa_id')
+      .eq('id', cantiereId)
+      .maybeSingle();
+    commessaId = (cant as { commessa_id: string | null } | null)?.commessa_id ?? null;
+  }
+
+  const imponibile = calcolaImponibile(d.importoTotale, d.importoIva ?? null);
+
+  const { data: inserted, error } = await supabase
+    .from('spese' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: dipId,
+      cantiere_id: cantiereId,
+      commessa_id: commessaId,
+      categoria: d.categoria,
+      ragione_sociale: d.ragioneSociale ?? null,
+      importo_totale: d.importoTotale,
+      importo_iva: d.importoIva ?? null,
+      imponibile,
+      valuta: d.valuta,
+      partita_iva: d.partitaIva ?? null,
+      metodo_pagamento: d.metodoPagamento ?? null,
+      numero_documento: d.numeroDocumento ?? null,
+      indirizzo_esercente: d.indirizzoEsercente ?? null,
+      data_scontrino: d.dataScontrino ?? null,
+      r2_key: d.r2Key,
+      r2_thumb_key: d.r2ThumbKey ?? null,
+      foto_mime: d.mime,
+      foto_size_bytes: d.sizeBytes,
+      stato: 'confermata',
+      ai_raw: (d.aiRaw as object | undefined) ?? null,
+    } as never)
+    .select('id')
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/mobile/kantiere/spese');
+  revalidatePath('/office/kantiere/kontabilita');
+  return { ok: true, id: (inserted as { id: string }).id };
+}
+
+const AggiornaSchema = z.object({
+  id: z.string().uuid(),
+  categoria: z.enum(CATEGORIE_SPESA).optional(),
+  cantiereId: z.string().uuid().nullable().optional(),
+  ragioneSociale: z.string().trim().max(200).nullable().optional(),
+  importoTotale: z.number().finite().positive().optional(),
+  importoIva: z.number().finite().nonnegative().nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+});
+
+export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Promise<Risultato> {
+  const parsed = AggiornaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
+  const d = parsed.data;
+
+  await requireTenantContext();
+  const supabase = createServerSupabase();
+
+  // patch costruita solo coi campi presenti (RLS garantisce il permesso)
+  const patch: Record<string, unknown> = {};
+  if (d.categoria !== undefined) patch.categoria = normalizzaCategoria(d.categoria);
+  if (d.cantiereId !== undefined) patch.cantiere_id = d.cantiereId;
+  if (d.ragioneSociale !== undefined) patch.ragione_sociale = d.ragioneSociale;
+  if (d.note !== undefined) patch.note = d.note;
+  if (d.importoTotale !== undefined) patch.importo_totale = d.importoTotale;
+  if (d.importoIva !== undefined) patch.importo_iva = d.importoIva;
+  if (d.importoTotale !== undefined || d.importoIva !== undefined) {
+    // ricalcolo imponibile leggendo i valori effettivi
+    const { data: cur } = await supabase
+      .from('spese' as never)
+      .select('importo_totale, importo_iva')
+      .eq('id', d.id)
+      .maybeSingle();
+    const c = cur as { importo_totale: number | null; importo_iva: number | null } | null;
+    const tot = d.importoTotale ?? c?.importo_totale ?? null;
+    const iva = d.importoIva !== undefined ? d.importoIva : c?.importo_iva ?? null;
+    patch.imponibile = calcolaImponibile(tot, iva);
+  }
+  // riassegnando il cantiere, riallinea la commessa derivata
+  if (d.cantiereId) {
+    const { data: cant } = await supabase
+      .from('cantieri' as never)
+      .select('commessa_id')
+      .eq('id', d.cantiereId)
+      .maybeSingle();
+    patch.commessa_id = (cant as { commessa_id: string | null } | null)?.commessa_id ?? null;
+  } else if (d.cantiereId === null) {
+    patch.commessa_id = null;
+  }
+
+  if (Object.keys(patch).length === 0) return { ok: true };
+
+  const { error } = await supabase.from('spese' as never).update(patch as never).eq('id', d.id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath('/office/kantiere/kontabilita');
+  revalidatePath('/mobile/kantiere/spese');
+  return { ok: true };
+}
+
+export async function eliminaSpesa(id: string): Promise<Risultato> {
+  if (!z.string().uuid().safeParse(id).success) return { ok: false, error: 'ID_NON_VALIDO' };
+  await requireTenantContext();
+  const supabase = createServerSupabase();
+  const { error } = await supabase.from('spese' as never).delete().eq('id', id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath('/office/kantiere/kontabilita');
+  revalidatePath('/mobile/kantiere/spese');
+  return { ok: true };
+}

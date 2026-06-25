@@ -1,0 +1,56 @@
+import { type NextRequest } from 'next/server';
+
+import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
+import {
+  getR2ProviderFromEnv,
+  getR2ProviderFromTenantConfig,
+} from '@kommessa/integrations/storage';
+
+/**
+ * Serve la foto di una spesa: 302 verso un signed GET R2 (5 min TTL).
+ * `?size=thumb` usa la miniatura se presente, altrimenti il full-size.
+ * L'autorizzazione passa dalla RLS: la select su `spese` ritorna la riga solo
+ * se il chiamante puo' vederla (office/admin del tenant o proprietario).
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  let ctx;
+  try {
+    ctx = await requireTenantContext();
+  } catch {
+    return Response.json({ error: 'Non autenticato' }, { status: 401 });
+  }
+
+  const supabase = createServerSupabase();
+  const { data: row } = await supabase
+    .from('spese' as never)
+    .select('id, r2_key, r2_thumb_key')
+    .eq('id', params.id)
+    .maybeSingle();
+
+  const spesa = row as { id: string; r2_key: string | null; r2_thumb_key: string | null } | null;
+  if (!spesa) return Response.json({ error: 'Non trovata' }, { status: 404 });
+
+  const wantThumb = request.nextUrl.searchParams.get('size') === 'thumb';
+  const key = wantThumb && spesa.r2_thumb_key ? spesa.r2_thumb_key : spesa.r2_key;
+  if (!key) return Response.json({ error: 'Nessuna foto' }, { status: 404 });
+
+  const service = createServiceSupabase();
+  const { data: tenantRow } = await service
+    .from('tenants')
+    .select('r2_config')
+    .eq('id', ctx.tenantId)
+    .maybeSingle();
+  const r2 =
+    getR2ProviderFromTenantConfig(
+      (tenantRow?.r2_config as Record<string, unknown> | null) ?? null,
+    ) ?? getR2ProviderFromEnv();
+  if (!r2) return Response.json({ error: 'R2 non configurato' }, { status: 503 });
+
+  const signed = await r2.createPresignedGetUrl(key, { ttlSec: 300 });
+  return Response.redirect(signed.url, 302);
+}
