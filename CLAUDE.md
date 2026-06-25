@@ -60,6 +60,17 @@ La modifica di una commessa finalizzata riapre il flusso di creazione:
 
 L'enum `stato_commessa` resta `bozza/aperta/in_corso/collaudo/completata/archiviata`. A schermo però si mostrano queste **diciture** (decise dal cliente — le commesse non sono "critiche/a rischio", sono lavori nel loro ciclo): `aperta` → **"Non presa"**, `collaudo` → **"In collaudo"**, gli altri col nome naturale. La label vive in `StatoBadge` (`packages/ui`) + mappe locali allineate (liste/filtri, stato-picker, scheda, editor, PWA, admin). Non reintrodurre "Aperta"/"Collaudo" né framing "a rischio" sulla dashboard (la sezione è "Commesse in lavorazione").
 
+### Kantiere (FPM) — impostazioni e scelte recenti (giu 2026)
+
+Modulo presenze (tenant FPM, `app_mode=kantiere`). Tutto gated da `tenantHasModule('kantiere')` → **Bertaiola non ne è toccata**. Decisioni di prodotto stabili:
+
+- **Arrotondamenti** (Impostazioni Kantiere office, conferma prima di salvare, valgono sui turni **futuri**): tempo di **viaggio** default **5 min** con pavimento di uno step (ogni tragitto > 0 conta ≥ 5 min; 0 resta 0); ore **lavoro** default **0 = nessun arrotondamento** — scelta cliente: si raccoglie tutto **al minuto**, si arrotonda **nel report a fine mese** sul dato aggregato. Helper `arrotondaA(min, step)` (step<1 = off), config in `tenant_modules.config.arrotondamento_{viaggio,ore}_min`.
+- **Pausa pranzo dichiarata in uscita**: se il turno è durato **> 6h senza pausa timbrata**, il dialog di uscita mostra un avviso giallo che **ricorda che timbrare la pausa è il modo corretto** (la dichiarazione è un ripiego) + opzioni 30/45/60 min. Lato dati è una **coppia pausa** (`origine='manuale'`) → il calcolo ore la sottrae con la logica pausa esistente. Se la pausa è timbrata regolarmente, **nessun avviso**.
+- **Scanner QR su iPhone-app-installata**: niente stream live (limite WebKit). Si usa **scatto-foto** (`<input capture>` + jsQR) o la fotocamera nativa sul poster. **Android usa BarcodeDetector live — non toccare.**
+- **Super admin**: `/admin/kantiere` (panoramica + timbrature cross-tenant con GPS/origine/chi/viaggio) e `/admin/accessi` (login/logout, tabella `auth_events`). Moduli/app_mode: `kantiere`/`full` richiedono il modulo attivo (guard server); spegnere il modulo riporta a `kommessa` in cascata.
+
+> Dettaglio operativo, milestone e TODO vivono nella memoria (`MEMORY.md` → checkpoint 24–25/06 e `kantiere-overview`).
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione
