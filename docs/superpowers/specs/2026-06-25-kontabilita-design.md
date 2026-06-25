@@ -20,9 +20,11 @@ Visivamente Kontabilità è un **pacchetto a sé**: voce di primo livello nella 
 | Rimborso dipendente | **Solo flag `rimborsabile`**, nessun workflow di approvazione ora (estendibile in Fase 3). |
 | Bottom nav tecnico | **`Spese` sostituisce `Attività`**; le notifiche passano su una **campanella nell'header** PWA. |
 | Conferma AI | **Revisione prima del salvataggio**: campi precompilati, l'utente conferma/corregge. `stato='bozza'` finché non conferma. |
+| Estrazione minima | **`importo_totale` + `data_scontrino` (data/ora) sono obbligatori**. Se l'AI non li ricava entrambi → **errore "Ricevuta non leggibile, riprova"** e si richiede una nuova scansione (niente form di revisione). |
 | Categorie | **6**: Hotel, Ristorante, Bar, Trasporti, Carburante, Varie (con colori). |
 | Storage R2 | Ordinato per tenant: `tenants/{slug}/kantiere/spese/{anno}/{mese}/{spesaId}/{file}`. **R2-only** (no sync Nextcloud). |
-| Modello AI | `OPENAI_MODEL_VISION` (oggi `gpt-5-mini`), override env/per-tenant. |
+| Modello AI | `OPENAI_MODEL_VISION` (override env/per-tenant), chiamato con **`reasoning_effort: 'low'`** e **senza `temperature`** (reasoning model). Default puntabile su un GPT-5 mini. |
+| Bottom nav capo | **Tab unica "Squadra"** che unisce gestione squadra + le ore del capo → libera lo slot per `Spese`. |
 | Deploy | **Nessun push su main** finché non testato. |
 
 ## Attori e permessi
@@ -94,10 +96,11 @@ RLS: pattern dei moduli kantiere. Lettura/scrittura limitata al `tenant_id` del 
   ]}]
   response_format: 'json_object'
   ```
-- Modello: `OPENAI_MODEL_VISION` (default `gpt-5-mini`), overridabile.
+- Modello: `OPENAI_MODEL_VISION` (override env/per-tenant), chiamato con **`reasoning_effort: 'low'`** e **senza `temperature`** (i reasoning model GPT-5 non l'accettano). Richiede di estendere `chatCompletion()` in `apps/web/app/_lib/openai.ts` con il passaggio opzionale di `reasoning_effort`.
 - Output validato con Zod (pattern di `/api/voice/extract`, `.catch(undefined)` per degradare per-campo):
   - `ragione_sociale`, `categoria` (enum, fallback `varie`), `importo_totale`, `importo_iva`, `data_scontrino` (ISO), + extra: `partita_iva`, `metodo_pagamento`, `numero_documento`, `indirizzo_esercente`, `valuta`.
   - Parsing numeri all'italiana (virgola decimale → punto) lato server prima della validazione.
+- **Soglia minima**: se dopo l'estrazione mancano **`importo_totale`** o **`data_scontrino`**, la route ritorna `{ ok:false, code:'RICEVUTA_NON_LEGGIBILE' }`; la PWA mostra "Ricevuta non leggibile, riprova" e ripropone la scansione (la foto già caricata su R2 viene marcata orfana / ripulita).
 - Ritorna i campi + `ai_confidence` (se il modello la fornisce o euristica: campo mancante = bassa).
 - **Mai auto-commit**: l'estrazione popola il form di revisione; il salvataggio è un'azione separata.
 
@@ -116,7 +119,7 @@ RLS: pattern dei moduli kantiere. Lettura/scrittura limitata al `tenant_id` del 
 - **Nuova ricevuta**: "Scatta foto" (`<input capture="environment">`, coerente con scelta iOS dello scanner) o "Allega".
 - Flusso: scatto → upload R2 (+thumbnail) → loading "Analizzo la ricevuta…" → `/extract` → **form revisione** precompilato (importo/IVA/categoria/esercente/data, campi incerti evidenziati) → "Salva" → aggancio cantiere → conferma.
 - Bottom nav (`apps/web/app/mobile/_components/bottom-nav-shell.tsx`): tecnico = Cantieri, Ore, Scansiona(FAB), **Spese**, Profilo. Le notifiche ("Attività") si spostano su una **campanella nell'header** PWA.
-  - Capo: oggi ha slot "Squadra" al posto di "Attività"; per il capo lo slot "Spese" sostituisce un'altra voce a basso uso — **da definire nel piano** (probabile: header bell + Spese al posto di Ore, con Ore raggiungibile dal profilo). Mantiene comunque "Squadra".
+  - **Capo**: la voce "Squadra" diventa una **tab unica che unisce gestione squadra + le ore del capo** (in `/mobile/kantiere/gestione-squadra`, con una sezione/sotto-tab "Le mie ore"), liberando lo slot per `Spese`. Capo = Cantieri, Squadra(+ore), Scansiona(FAB), **Spese**, Profilo.
 
 ### Office tenant — `/office/kantiere/kontabilita` (voce di primo livello in sidebar)
 Sidebar: `apps/web/app/office/_components/office-shell-client.tsx` → aggiungere voce "Kontabilità" (icona `ReceiptText`) come pacchetto a sé (non dentro l'accordion Kantiere, per dare lo "stacco" visivo richiesto), comunque gated dal modulo.
@@ -154,8 +157,7 @@ Definite come costante condivisa (label + classi colore badge) riusata da PWA, o
 
 - **Produzione**: tutto gated da kantiere → Bertaiola intatta. Lavoro su `feat/kontabilita`, **nessun push su main** finché non testato col cliente FPM.
 - **Migration**: solo file SQL in `supabase/migrations/`; l'apply al cloud lo fa l'umano.
-- **AI sui soldi**: revisione obbligatoria prima del salvataggio; `ai_raw` salvato per audit; importi parsati con cura (virgola IT).
-- **Bottom nav capo**: l'arrangiamento esatto degli slot per il ruolo capo va finalizzato nel piano (vincolo 5 slot).
+- **AI sui soldi**: revisione obbligatoria prima del salvataggio; soglia minima (totale + data) o errore + ri-scansione; `ai_raw` salvato per audit; importi parsati con cura (virgola IT).
 - **Copy italiano**: niente "col", niente trattino lungo. Display nomi via `titoloCase()` lato PWA.
 
 ## Definizione di "fatto" (Fase 1)
