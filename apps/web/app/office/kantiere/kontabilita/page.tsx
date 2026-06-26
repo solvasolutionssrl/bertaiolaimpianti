@@ -4,7 +4,12 @@ import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { CATEGORIE_SPESA, type CategoriaSpesa } from '@kommessa/api/spese';
 
 import { Filtri, type FiltriValori } from './_components/filtri';
-import { SpeseTable, type SpesaRiga, type CantiereOption } from './_components/spese-table';
+import {
+  SpeseTable,
+  type SpesaRiga,
+  type CantiereOption,
+  type DipendenteOption,
+} from './_components/spese-table';
 import { SubNav } from './_components/sub-nav';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +27,8 @@ type SpesaRow = {
   data_scontrino: string | null;
   created_at: string | null;
   note: string | null;
+  foto_mime: string | null;
+  r2_key: string | null;
 };
 
 type DipendenteRow = { id: string; nome: string; cognome: string };
@@ -55,7 +62,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   let query = supabase
     .from('spese' as never)
     .select(
-      'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note',
+      'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key',
     )
     .eq('tenant_id', ctx.tenantId)
     .limit(1000);
@@ -120,10 +127,19 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
     .select('id, nome, cognome')
     .eq('tenant_id', ctx.tenantId)
     .order('cognome')) as { data: DipendenteRow[] | null };
-  const dipendentiOptions = (tuttiDipendenti ?? []).map((d) => ({
+  const dipendentiOptions: DipendenteOption[] = (tuttiDipendenti ?? []).map((d) => ({
     id: d.id,
     nome: `${d.nome} ${d.cognome}`.trim(),
   }));
+
+  // Dipendente collegato all'utente office corrente (per il default "a me stesso").
+  const { data: mioDip } = (await supabase
+    .from('dipendenti' as never)
+    .select('id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('user_id', ctx.userId)
+    .maybeSingle()) as { data: { id: string } | null };
+  const mioDipendenteId = mioDip?.id ?? null;
 
   // Righe serializzabili per il client.
   const righe: SpesaRiga[] = spese.map((s) => ({
@@ -139,6 +155,8 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
     valuta: s.valuta || 'EUR',
     dataScontrino: s.data_scontrino,
     note: s.note,
+    fotoMime: s.foto_mime,
+    hasFile: !!s.r2_key,
   }));
 
   const filtri: FiltriValori = {
@@ -165,7 +183,12 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
         righe={righe}
       />
 
-      <SpeseTable spese={righe} cantieri={cantieriOptions} />
+      <SpeseTable
+        spese={righe}
+        cantieri={cantieriOptions}
+        dipendentiOptions={dipendentiOptions}
+        mioDipendenteId={mioDipendenteId}
+      />
     </div>
   );
 }

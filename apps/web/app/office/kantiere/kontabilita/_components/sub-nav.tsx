@@ -8,6 +8,7 @@ const TABS = [
   { href: '/office/kantiere/kontabilita', label: 'Spese', exact: true },
   { href: '/office/kantiere/kontabilita/analisi', label: 'Analisi dei costi', exact: false },
   { href: '/office/kantiere/kontabilita/costo-cantiere', label: 'Costo cantiere', exact: false },
+  { href: '/office/kantiere/kontabilita/ricevute', label: 'Ricevute', exact: false },
 ] as const;
 
 /**

@@ -25,6 +25,11 @@ const nextConfig = {
       'lucide-react',
       'date-fns',
     ],
+    // archiver (zip cartelle ricevute) e' una lib Node lato server: una sua
+    // dipendenza ha un `exports` che webpack 5 rifiuta ("Default condition
+    // should be last one"). La marchiamo esterna: niente bundling, require a
+    // runtime, inclusa nel trace serverless.
+    serverComponentsExternalPackages: ['archiver'],
   },
   images: {
     remotePatterns: [

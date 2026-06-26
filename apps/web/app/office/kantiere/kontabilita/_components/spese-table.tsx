@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Trash2, Receipt } from 'lucide-react';
+import { Loader2, Trash2, Receipt, FileText, MapPin, User, ExternalLink } from 'lucide-react';
 import {
   Button,
   Card,
@@ -15,7 +15,10 @@ import {
 } from '@kommessa/ui';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
+import { MediaLightbox, type MediaItem } from '@/app/_components/media-lightbox';
 import { aggiornaSpesa, eliminaSpesa } from '@/app/_actions/kantiere-spese';
+
+import { NuovaSpesaOffice } from './nuova-spesa-office';
 
 export type SpesaRiga = {
   id: string;
@@ -30,9 +33,12 @@ export type SpesaRiga = {
   valuta: string;
   dataScontrino: string | null;
   note: string | null;
+  fotoMime: string | null;
+  hasFile: boolean;
 };
 
 export type CantiereOption = { id: string; nome: string };
+export type DipendenteOption = { id: string; nome: string };
 
 const SENZA_CANTIERE = 'Da assegnare';
 
@@ -51,12 +57,23 @@ function fmtDataScontrino(iso: string | null): string {
     return new Date(iso).toLocaleDateString('it-IT', {
       timeZone: 'Europe/Rome',
       day: '2-digit',
-      month: '2-digit',
+      month: 'short',
       year: 'numeric',
     });
   } catch {
     return iso.slice(0, 10);
   }
+}
+
+/** Costruisce il MediaItem (1 elemento) per la ricevuta di una spesa. */
+function buildMediaItem(s: SpesaRiga): MediaItem {
+  return {
+    id: s.id,
+    src: `/api/kantiere/spese/${s.id}/foto`,
+    mime: s.fotoMime || 'image/jpeg',
+    filename: `ricevuta_${s.id.slice(0, 8)}`,
+    downloadUrl: `/api/kantiere/spese/${s.id}/foto?download=1`,
+  };
 }
 
 function CategoriaBadge({ categoria }: { categoria: string | null }) {
@@ -79,25 +96,38 @@ function CategoriaBadge({ categoria }: { categoria: string | null }) {
   );
 }
 
-function Thumb({ id }: { id: string }) {
+/** Miniatura ricevuta: thumb immagine, icona PDF/file, o placeholder se nessun file. */
+function Thumb({ spesa }: { spesa: SpesaRiga }) {
   const [errore, setErrore] = React.useState(false);
-  if (errore) {
+  const isPdf = spesa.fotoMime === 'application/pdf';
+  const isImage = !!spesa.fotoMime && spesa.fotoMime.startsWith('image/');
+
+  if (!spesa.hasFile) {
     return (
-      <div className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-muted">
-        <Receipt className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40">
+        <Receipt className="h-5 w-5 text-muted-foreground/60" aria-hidden="true" />
       </div>
     );
   }
+
+  if (isPdf || errore || !isImage) {
+    return (
+      <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-muted">
+        <FileText className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+      </div>
+    );
+  }
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={`/api/kantiere/spese/${id}/foto?size=thumb`}
-      alt="Scontrino"
-      width={40}
-      height={40}
+      src={`/api/kantiere/spese/${spesa.id}/foto?size=thumb`}
+      alt="Ricevuta"
+      width={48}
+      height={48}
       loading="lazy"
       onError={() => setErrore(true)}
-      className="h-10 w-10 rounded-md border border-border object-cover"
+      className="h-12 w-12 rounded-lg border border-border object-cover"
     />
   );
 }
@@ -105,11 +135,18 @@ function Thumb({ id }: { id: string }) {
 interface Props {
   spese: SpesaRiga[];
   cantieri: CantiereOption[];
+  dipendentiOptions: DipendenteOption[];
+  mioDipendenteId: string | null;
 }
 
-export function SpeseTable({ spese, cantieri }: Props) {
+export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId }: Props) {
   const router = useRouter();
   const [aperta, setAperta] = React.useState<SpesaRiga | null>(null);
+  const [lightbox, setLightbox] = React.useState<MediaItem | null>(null);
+
+  const apriRicevuta = React.useCallback((s: SpesaRiga) => {
+    setLightbox(buildMediaItem(s));
+  }, []);
 
   // Raggruppa per cantiere (nome o "Da assegnare").
   const gruppi = React.useMemo(() => {
@@ -120,7 +157,6 @@ export function SpeseTable({ spese, cantieri }: Props) {
       arr.push(s);
       map.set(key, arr);
     }
-    // "Da assegnare" in fondo, gli altri in ordine alfabetico.
     return [...map.entries()].sort((a, b) => {
       if (a[0] === SENZA_CANTIERE) return 1;
       if (b[0] === SENZA_CANTIERE) return -1;
@@ -133,97 +169,122 @@ export function SpeseTable({ spese, cantieri }: Props) {
     [spese],
   );
 
-  if (spese.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Nessuna spesa trovata con i filtri selezionati.
-      </p>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      {/* Totale generale */}
-      <div className="flex items-center gap-3 px-1 text-sm text-muted-foreground">
-        <span>
-          <span className="font-medium text-foreground">{spese.length}</span> spese
-        </span>
-        <span className="text-border">|</span>
-        <span>
-          Totale{' '}
-          <span className="tabular-nums font-semibold text-foreground">
-            {fmtValuta(totaleGenerale, 'EUR')}
+      {/* Intestazione: conteggio + totale + nuova spesa */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 px-1 text-sm text-muted-foreground">
+          <span>
+            <span className="font-medium text-foreground">{spese.length}</span> spes
+            {spese.length === 1 ? 'a' : 'e'}
           </span>
-        </span>
+          <span className="text-border">|</span>
+          <span>
+            Totale{' '}
+            <span className="tabular-nums font-semibold text-foreground">
+              {fmtValuta(totaleGenerale, 'EUR')}
+            </span>
+          </span>
+        </div>
+        <NuovaSpesaOffice
+          cantieri={cantieri}
+          dipendentiOptions={dipendentiOptions}
+          mioDipendenteId={mioDipendenteId}
+        />
       </div>
 
-      {gruppi.map(([nomeCantiere, righe]) => {
-        const subtotale = righe.reduce((acc, s) => acc + (s.importoTotale ?? 0), 0);
-        return (
-          <Card key={nomeCantiere}>
-            <CardContent className="p-0">
-              <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">{nomeCantiere}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {righe.length} spes{righe.length === 1 ? 'a' : 'e'}
+      {spese.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Nessuna spesa trovata con i filtri selezionati.
+        </p>
+      ) : (
+        gruppi.map(([nomeCantiere, righe]) => {
+          const subtotale = righe.reduce((acc, s) => acc + (s.importoTotale ?? 0), 0);
+          return (
+            <Card key={nomeCantiere}>
+              <CardContent className="p-0">
+                <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">{nomeCantiere}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {righe.length} spes{righe.length === 1 ? 'a' : 'e'}
+                    </span>
+                  </div>
+                  <span className="tabular-nums text-sm font-semibold text-foreground">
+                    {fmtValuta(subtotale, 'EUR')}
                   </span>
                 </div>
-                <span className="tabular-nums text-sm font-semibold text-foreground">
-                  {fmtValuta(subtotale, 'EUR')}
-                </span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                      <th className="px-4 py-2 font-medium">Foto</th>
-                      <th className="px-4 py-2 font-medium">Data</th>
-                      <th className="px-4 py-2 font-medium">Esercente</th>
-                      <th className="px-4 py-2 font-medium">Chi</th>
-                      <th className="px-4 py-2 font-medium">Categoria</th>
-                      <th className="px-4 py-2 text-right font-medium">Importo</th>
-                      <th className="px-4 py-2 text-right font-medium">IVA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {righe.map((s) => (
-                      <tr
-                        key={s.id}
-                        onClick={() => setAperta(s)}
-                        className="cursor-pointer border-b border-border/60 transition-colors last:border-0 hover:bg-muted/50"
-                      >
-                        <td className="px-4 py-2">
-                          <Thumb id={s.id} />
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap tabular-nums">
-                          {fmtDataScontrino(s.dataScontrino)}
-                        </td>
-                        <td className="px-4 py-2">{s.ragioneSociale?.trim() || 'Senza nome'}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{s.dipendenteNome}</td>
-                        <td className="px-4 py-2">
+
+                <ul className="divide-y divide-border/60">
+                  {righe.map((s) => (
+                    <li
+                      key={s.id}
+                      onClick={() => setAperta(s)}
+                      className="group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                    >
+                      <Thumb spesa={s} />
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-foreground">
+                            {s.ragioneSociale?.trim() || 'Senza nome'}
+                          </p>
                           <CategoriaBadge categoria={s.categoria} />
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-right tabular-nums font-medium">
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3 w-3" aria-hidden="true" />
+                            {s.dipendenteNome}
+                          </span>
+                          {s.cantiereNome ? (
+                            <span className="inline-flex items-center gap-1">
+                              <MapPin className="h-3 w-3" aria-hidden="true" />
+                              {s.cantiereNome}
+                            </span>
+                          ) : null}
+                          <span className="tabular-nums">{fmtDataScontrino(s.dataScontrino)}</span>
+                        </div>
+                      </div>
+
+                      {s.hasFile ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            apriRicevuta(s);
+                          }}
+                          className="hidden shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground sm:inline-flex"
+                          title="Apri ricevuta fiscale"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                          Ricevuta
+                        </button>
+                      ) : null}
+
+                      <div className="shrink-0 text-right">
+                        <p className="tabular-nums text-sm font-semibold text-foreground">
                           {fmtValuta(s.importoTotale, s.valuta)}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-right tabular-nums text-muted-foreground">
-                          {fmtValuta(s.importoIva, s.valuta)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })}
+                        </p>
+                        {typeof s.importoIva === 'number' && Number.isFinite(s.importoIva) ? (
+                          <p className="tabular-nums text-xs text-muted-foreground">
+                            IVA {fmtValuta(s.importoIva, s.valuta)}
+                          </p>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
 
       {aperta ? (
         <DettaglioDialog
           spesa={aperta}
           cantieri={cantieri}
+          onApriRicevuta={() => apriRicevuta(aperta)}
           onClose={() => setAperta(null)}
           onSaved={() => {
             setAperta(null);
@@ -231,6 +292,15 @@ export function SpeseTable({ spese, cantieri }: Props) {
           }}
         />
       ) : null}
+
+      <MediaLightbox
+        items={lightbox ? [lightbox] : []}
+        initialIndex={lightbox ? 0 : null}
+        open={!!lightbox}
+        onOpenChange={(o) => {
+          if (!o) setLightbox(null);
+        }}
+      />
     </div>
   );
 }
@@ -238,17 +308,21 @@ export function SpeseTable({ spese, cantieri }: Props) {
 interface DettaglioProps {
   spesa: SpesaRiga;
   cantieri: CantiereOption[];
+  onApriRicevuta: () => void;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function DettaglioDialog({ spesa, cantieri, onClose, onSaved }: DettaglioProps) {
+function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: DettaglioProps) {
   const [categoria, setCategoria] = React.useState<string>(spesa.categoria ?? 'varie');
   const [cantiereId, setCantiereId] = React.useState<string>(spesa.cantiereId ?? '');
   const [note, setNote] = React.useState<string>(spesa.note ?? '');
   const [errore, setErrore] = React.useState<string | null>(null);
   const [confermaElimina, setConfermaElimina] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
+
+  const isPdf = spesa.fotoMime === 'application/pdf';
+  const isImage = !!spesa.fotoMime && spesa.fotoMime.startsWith('image/');
 
   function salva() {
     setErrore(null);
@@ -281,15 +355,44 @@ function DettaglioDialog({ spesa, cantieri, onClose, onSaved }: DettaglioProps) 
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Foto full-size */}
-          <div className="overflow-hidden rounded-lg border border-border bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/api/kantiere/spese/${spesa.id}/foto`}
-              alt="Scontrino"
-              className="mx-auto max-h-72 w-auto object-contain"
-            />
-          </div>
+          {/* Anteprima ricevuta */}
+          {spesa.hasFile ? (
+            <button
+              type="button"
+              onClick={onApriRicevuta}
+              className="group relative block w-full overflow-hidden rounded-lg border border-border bg-muted"
+              title="Apri ricevuta fiscale"
+            >
+              {isImage && !isPdf ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={`/api/kantiere/spese/${spesa.id}/foto`}
+                  alt="Ricevuta"
+                  className="mx-auto max-h-64 w-auto object-contain"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+                  <FileText className="h-8 w-8" aria-hidden="true" />
+                  <span className="text-sm font-medium">Documento allegato</span>
+                </div>
+              )}
+              <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t from-black/60 to-transparent py-2 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                Apri ricevuta fiscale
+              </span>
+            </button>
+          ) : null}
+
+          {spesa.hasFile ? (
+            <Button variant="outline" size="sm" className="w-full" onClick={onApriRicevuta}>
+              <ExternalLink className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Apri ricevuta fiscale
+            </Button>
+          ) : (
+            <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+              Nessun file allegato a questa spesa.
+            </p>
+          )}
 
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>

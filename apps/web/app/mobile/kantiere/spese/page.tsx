@@ -35,7 +35,7 @@ export default async function SpeseMobilePage() {
     const { data: rows } = await supabase
       .from('spese' as never)
       .select(
-        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, valuta, data_scontrino, created_at, r2_thumb_key',
+        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, valuta, data_scontrino, created_at, r2_thumb_key, r2_key, foto_mime',
       )
       .eq('tenant_id', ctx.tenantId)
       .eq('dipendente_id', dipId)
@@ -53,6 +53,8 @@ export default async function SpeseMobilePage() {
             data_scontrino: string | null;
             created_at: string | null;
             r2_thumb_key: string | null;
+            r2_key: string | null;
+            foto_mime: string | null;
           }[]
         | null) ?? [];
 
@@ -66,6 +68,8 @@ export default async function SpeseMobilePage() {
       dataScontrino: r.data_scontrino,
       createdAt: r.created_at,
       hasThumb: !!r.r2_thumb_key,
+      hasFile: !!r.r2_key,
+      fotoMime: r.foto_mime,
     }));
 
     // Risolvi i nomi dei cantieri referenziati.

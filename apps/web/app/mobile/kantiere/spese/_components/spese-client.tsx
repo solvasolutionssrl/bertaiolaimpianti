@@ -5,6 +5,7 @@ import { Receipt } from 'lucide-react';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META } from '@/app/_components/spese/categoria';
+import { MediaLightbox, type MediaItem } from '@/app/_components/media-lightbox';
 
 export type SpesaRiga = {
   id: string;
@@ -16,6 +17,8 @@ export type SpesaRiga = {
   dataScontrino: string | null;
   createdAt: string | null;
   hasThumb: boolean;
+  hasFile: boolean;
+  fotoMime: string | null;
 };
 
 function formatImporto(importo: number | null, valuta: string | null): string {
@@ -52,6 +55,19 @@ export function SpeseClient({
   spese: SpesaRiga[];
   cantieriNomi: Record<string, string>;
 }) {
+  const [lightbox, setLightbox] = React.useState<MediaItem | null>(null);
+
+  const apri = React.useCallback((s: SpesaRiga) => {
+    if (!s.hasFile) return;
+    setLightbox({
+      id: s.id,
+      src: `/api/kantiere/spese/${s.id}/foto`,
+      mime: s.fotoMime || 'image/jpeg',
+      filename: `ricevuta_${s.id.slice(0, 8)}`,
+      downloadUrl: `/api/kantiere/spese/${s.id}/foto?download=1`,
+    });
+  }, []);
+
   if (spese.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center">
@@ -75,7 +91,10 @@ export function SpeseClient({
         return (
           <li
             key={s.id}
-            className="flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-soft"
+            onClick={() => apri(s)}
+            className={`flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-soft ${
+              s.hasFile ? 'cursor-pointer active:scale-[0.99] transition-transform' : ''
+            }`}
           >
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
               {s.hasThumb ? (
@@ -122,6 +141,15 @@ export function SpeseClient({
           </li>
         );
       })}
+
+      <MediaLightbox
+        items={lightbox ? [lightbox] : []}
+        initialIndex={lightbox ? 0 : null}
+        open={!!lightbox}
+        onOpenChange={(o) => {
+          if (!o) setLightbox(null);
+        }}
+      />
     </ul>
   );
 }
