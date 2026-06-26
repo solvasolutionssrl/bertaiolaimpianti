@@ -979,6 +979,71 @@ export async function aggiornaAppModeTenant(input: {
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------
+// Routing per-tenant (provider stima viaggio: free vs Google traffico)
+// ---------------------------------------------------------------------
+
+const ROUTING_PROVIDER_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  provider: z.enum(['free', 'google']),
+});
+
+/**
+ * Sceglie il provider di routing del tenant. La CHIAVE Google è unica di
+ * piattaforma (env `GOOGLE_MAPS_API_KEY`): qui si decide solo se questo tenant
+ * la usa ('google' = traffico reale, a pagamento) o resta su 'free'. La scelta
+ * vive in `tenant_modules.config.routing_provider` (merge non distruttivo).
+ */
+export async function aggiornaRoutingProviderTenant(input: {
+  tenantId: string;
+  provider: 'free' | 'google';
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = ROUTING_PROVIDER_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: row } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  if (!row) {
+    return { ok: false, error: 'Modulo Kantiere non attivo per questo tenant.' };
+  }
+
+  const existing = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const previous = existing['routing_provider'] ?? 'free';
+  const newConfig: Record<string, unknown> = {
+    ...existing,
+    routing_provider: parsed.data.provider,
+  };
+
+  const { error } = await supabase
+    .from('tenant_modules' as never)
+    .update({ config: newConfig } as never)
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'kantiere');
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.routing_provider.update',
+    before: { routing_provider: previous },
+    after: { routing_provider: parsed.data.provider },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}
+
 const CODICE_SCHEMA = z.object({
   tenantId: z.string().uuid(),
   // 2-20 char alfanumerici/trattino, oppure vuoto per azzerare.

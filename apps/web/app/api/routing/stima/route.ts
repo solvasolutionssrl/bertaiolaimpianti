@@ -6,7 +6,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { leggiArrotondamenti } from '@/app/_lib/kantiere-config';
+import { leggiArrotondamenti, leggiRoutingProvider } from '@/app/_lib/kantiere-config';
 import { getRoutingProvider, type Coord } from '@/app/_lib/routing';
 
 /**
@@ -83,19 +83,28 @@ export async function POST(req: Request) {
 
   const svc = createServiceSupabase();
 
-  // 1) cache
+  // Provider per-tenant: 'google' (traffico reale) se abilitato dal super admin
+  // e con chiave di piattaforma presente, altrimenti free (ORS/OSRM).
+  const choice = await leggiRoutingProvider(supabase, ctx.tenantId);
+  const provider = getRoutingProvider({ provider: choice });
+  // Cache del traffico a TTL corto (il valore dipende dall'ora); free senza TTL.
+  const TTL_MS = 15 * 60 * 1000;
+
+  // 1) cache, per profilo (free 'driving-car' e traffico 'driving-traffic' non
+  //    si mescolano: cambiando provider non si riusa una stima dell'altro tipo)
   const { data: cached } = await svc
     .from('routing_cache' as never)
-    .select('durata_min, distanza_km')
+    .select('durata_min, distanza_km, created_at')
     .eq('origin_lat', oLat)
     .eq('origin_lng', oLng)
     .eq('dest_lat', dLat)
     .eq('dest_lng', dLng)
-    .eq('profile', 'driving-car')
+    .eq('profile', provider.profile)
     .maybeSingle();
 
-  const hit = cached as { durata_min: number; distanza_km: number | null } | null;
-  if (hit && typeof hit.durata_min === 'number') {
+  const hit = cached as { durata_min: number; distanza_km: number | null; created_at: string } | null;
+  const fresca = hit ? Date.parse(hit.created_at) > Date.now() - TTL_MS : false;
+  if (hit && typeof hit.durata_min === 'number' && (!provider.trafficAware || fresca)) {
     return NextResponse.json({
       ok: true,
       minuti: arrotondaA(hit.durata_min, stepViaggio),
@@ -104,8 +113,7 @@ export async function POST(req: Request) {
     });
   }
 
-  // 2) provider (ORS se chiave, altrimenti OSRM demo: sempre disponibile)
-  const provider = getRoutingProvider();
+  // 2) stima fresca dal provider attivo
   const res = await provider.stima(origin, dest);
   if (res == null) {
     return NextResponse.json({ ok: true, minuti: null, km: null, motivo: 'stima_non_disponibile' });
@@ -113,7 +121,8 @@ export async function POST(req: Request) {
 
   const durata = Math.round(res.minuti);
   const distanza = Math.round(res.km * 100) / 100;
-  // 3) salva in cache (best-effort)
+  // 3) salva in cache (best-effort). created_at aggiornato: per il traffico
+  //    serve a far valere il TTL; per il free è innocuo.
   await svc
     .from('routing_cache' as never)
     .upsert(
@@ -122,9 +131,10 @@ export async function POST(req: Request) {
         origin_lng: oLng,
         dest_lat: dLat,
         dest_lng: dLng,
-        profile: 'driving-car',
+        profile: provider.profile,
         durata_min: durata,
         distanza_km: distanza,
+        created_at: new Date().toISOString(),
       } as never,
       { onConflict: 'origin_lat,origin_lng,dest_lat,dest_lng,profile' } as never,
     );

@@ -59,6 +59,25 @@ export async function leggiSogliaPausaPranzoOre(
   return n >= 1 ? n : 5;
 }
 
+/**
+ * Provider di routing scelto dal super admin per il tenant ('free' | 'google').
+ * Default 'free'. La CHIAVE Google è unica di piattaforma (env), qui c'è solo la
+ * scelta abilitato/no — non è un segreto, quindi sta in `tenant_modules.config`.
+ */
+export async function leggiRoutingProvider(
+  supabase: Supa,
+  tenantId: string,
+): Promise<'free' | 'google'> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  return config['routing_provider'] === 'google' ? 'google' : 'free';
+}
+
 export type PolicyRapportini = {
   /** Auto-approvazione delle giornate "pulite" (turno chiuso, entro soglia). Default true. */
   autoApprova: boolean;

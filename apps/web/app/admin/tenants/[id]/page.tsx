@@ -23,6 +23,8 @@ import { TabBranding } from './_components/tab-branding';
 import { TabNoteInterne } from './_components/tab-note-interne';
 import { TabAi } from './_components/tab-ai';
 import { TabModuli } from './_components/tab-moduli';
+import { TabRouting } from './_components/tab-routing';
+import { googleRoutingDisponibile } from '@/app/_lib/routing';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,7 +70,7 @@ export default async function TenantDetailPage({
         .limit(50),
       supabase
         .from('tenant_modules' as never)
-        .select('module_code, attivo')
+        .select('module_code, attivo, config')
         .eq('tenant_id', params.id),
     ]);
 
@@ -84,6 +86,13 @@ export default async function TenantDetailPage({
   const kantiereAttivo = moduli.some(
     (m) => m.module_code === 'kantiere' && m.attivo === true,
   );
+  const kantiereConfig = (moduli.find((m) => m.module_code === 'kantiere')?.config ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const routingProvider: 'free' | 'google' =
+    kantiereConfig['routing_provider'] === 'google' ? 'google' : 'free';
+  const googleKeyConfigured = googleRoutingDisponibile();
 
   const plan = plans.find((p) => p.id === tenant.plan_id);
 
@@ -171,6 +180,7 @@ export default async function TenantDetailPage({
           <TabsTrigger value="storage">Storage</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="moduli">Moduli</TabsTrigger>
+          {kantiereAttivo ? <TabsTrigger value="routing">Viaggio</TabsTrigger> : null}
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="note">Note interne</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -263,6 +273,18 @@ export default async function TenantDetailPage({
             codiceAzienda={tenant.codice_azienda ?? ''}
           />
         </TabsContent>
+
+        {/* ===== Viaggio (provider stima km/tempo) ===== */}
+        {kantiereAttivo ? (
+          <TabsContent value="routing">
+            <TabRouting
+              tenantId={tenant.id}
+              tenantNome={tenant.nome}
+              currentProvider={routingProvider}
+              googleKeyConfigured={googleKeyConfigured}
+            />
+          </TabsContent>
+        ) : null}
 
         {/* ===== Branding ===== */}
         <TabsContent value="branding">
