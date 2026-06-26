@@ -9,9 +9,8 @@ import {
   ChevronLeft,
   Clock,
   Euro,
-  Gauge,
+  Car,
   Loader2,
-  Plane,
   Truck,
   UserCircle2,
   Wallet,
@@ -107,6 +106,8 @@ interface Props {
   giorni: GiornoView[];
   mezziGuidati: MezzoGuidato[];
   kmPerMese: KmMese[];
+  kmGuidati: number;
+  kmPasseggero: number;
   minutiGuida: number;
   calendario: { mese: string; giorni: GiornoCalendario[] };
 }
@@ -256,6 +257,8 @@ export function DipendenteDetailClient({
   giorni,
   mezziGuidati,
   kmPerMese,
+  kmGuidati,
+  kmPasseggero,
   minutiGuida,
   calendario,
 }: Props) {
@@ -446,14 +449,14 @@ export function DipendenteDetailClient({
         />
         <KpiChip
           accent="blue"
-          icon={<Plane className="h-4 w-4" aria-hidden="true" />}
+          icon={<Car className="h-4 w-4" aria-hidden="true" />}
           valore={`${fmtOreKpi(oreViaggio)} h`}
           label="Viaggio"
         />
         <KpiChip
           accent="emerald"
-          icon={<Gauge className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtKm(kmTotali)}`}
+          icon={<Car className="h-4 w-4" aria-hidden="true" />}
+          valore={`${fmtKm(kmGuidati)}`}
           label="Km guidati (90gg)"
         />
         <KpiChip
@@ -832,7 +835,12 @@ export function DipendenteDetailClient({
               <RigaInfo label="Ore totali">
                 <span className="font-semibold">{fmtOre(oreTotali)} h</span>
               </RigaInfo>
-              <RigaInfo label="Km guidati (90gg)">{fmtKm(kmTotali)}</RigaInfo>
+              <RigaInfo label="Km guidati (90gg)">
+                <span className="font-medium">{fmtKm(kmGuidati)} km</span>
+              </RigaInfo>
+              <RigaInfo label="Km da passeggero">
+                <span className="text-muted-foreground">{fmtKm(kmPasseggero)} km</span>
+              </RigaInfo>
               {costoPeriodo != null ? (
                 <RigaInfo label="Costo lavoro periodo">
                   <span className="font-semibold text-emerald-700 dark:text-emerald-400">
@@ -851,8 +859,8 @@ export function DipendenteDetailClient({
           <Sezione
             header={
               <SezioneHeader
-                icon={<Gauge className="h-4 w-4" aria-hidden="true" />}
-                titolo="Km per mese"
+                icon={<Car className="h-4 w-4" aria-hidden="true" />}
+                titolo="Km percorsi per mese"
                 accent="blue"
               />
             }

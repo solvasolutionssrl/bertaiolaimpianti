@@ -58,6 +58,7 @@ export default async function MezziPage() {
       .from('timbratura_viaggio' as never)
       .select('mezzo_id, distanza_km')
       .eq('tenant_id', ctx.tenantId)
+      .eq('autista', true) // solo chi ha davvero guidato il mezzo
       .not('mezzo_id', 'is', null) as unknown as Promise<{ data: { mezzo_id: string; distanza_km: number | null }[] | null }>,
   ]);
 

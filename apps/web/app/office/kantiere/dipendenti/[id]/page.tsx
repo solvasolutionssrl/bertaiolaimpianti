@@ -228,8 +228,12 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   // (a) Mezzi guidati (autista = true, mezzo_id valorizzato)
   const mezzoAggMap = new Map<string, { viaggi: number; km: number }>();
   let minutiGuida = 0;
-  // (b) Km per mese (tutti i viaggi del dipendente, indipendentemente da autista)
+  // (b) Km per mese (tutti i viaggi = percorsi, autista o passeggero)
   const kmPerMeseMap = new Map<string, number>();
+  // (c) Km GUIDATI (autista=true) vs da PASSEGGERO (autista=false): distinguere
+  //     se ha davvero guidato o solo viaggiato.
+  let kmGuidati = 0;
+  let kmPasseggero = 0;
 
   for (const v of viaggi) {
     const km = Number(v.distanza_km ?? 0);
@@ -238,6 +242,7 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
       kmPerMeseMap.set(mese, (kmPerMeseMap.get(mese) ?? 0) + km);
     }
     if (v.autista === true) {
+      kmGuidati += km;
       minutiGuida += Number(v.durata_confermata_min ?? 0);
       if (v.mezzo_id) {
         const cur = mezzoAggMap.get(v.mezzo_id) ?? { viaggi: 0, km: 0 };
@@ -245,8 +250,12 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
         cur.km += km;
         mezzoAggMap.set(v.mezzo_id, cur);
       }
+    } else {
+      kmPasseggero += km;
     }
   }
+  kmGuidati = Math.round(kmGuidati * 10) / 10;
+  kmPasseggero = Math.round(kmPasseggero * 10) / 10;
 
   // Risolvi targa/modello dei mezzi guidati
   const mezzoIds = [...mezzoAggMap.keys()];
@@ -415,6 +424,8 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
         giorni={giorni}
         mezziGuidati={mezziGuidati}
         kmPerMese={kmPerMese}
+        kmGuidati={kmGuidati}
+        kmPasseggero={kmPasseggero}
         minutiGuida={minutiGuida}
         calendario={{ mese: meseSel, giorni: giorniCalendario }}
       />

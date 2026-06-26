@@ -5,6 +5,7 @@ import { ArrowLeft, MapPin, Navigation, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../../../_lib/guard';
@@ -17,6 +18,7 @@ import {
 } from '../../_lib/presenze';
 import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
 import { ChiInCantiere, type PersonaDentro } from './_components/chi-in-cantiere';
+import { AnaliticaCantiere, type AnaliticaCantiereDati } from './_components/analitica-cantiere';
 
 export const metadata: Metadata = {
   title: 'Cantiere',
@@ -125,8 +127,87 @@ export default async function CantiereMobileDetailPage({
   // Per i tecnici questa sezione non compare (resta la vista squadra).
   const isManager = ctx.role === 'admin' || ctx.role === 'office';
   let personeDentro: PersonaDentro[] = [];
+  let analitica: AnaliticaCantiereDati | null = null;
   if (isManager) {
     const eventiCant = await eventiOggiCantiere(supabase, ctx.tenantId, c.id);
+
+    // ── Analitica "oggi": persone passate + ore lavorate totali sul cantiere ──
+    // Persone presenti o passate oggi = dipendenti con almeno un evento oggi qui.
+    const personeOggi = eventiCant.size;
+    // Ore lavorate totali = somma dei minuti lavorati (pause escluse) per ogni
+    // dipendente, riusando appaiaTimbrature (stessa logica delle presenze).
+    let minutiOggi = 0;
+    for (const [, eventi] of eventiCant) {
+      minutiOggi += appaiaTimbrature(eventi).minutiTotali;
+    }
+
+    // ── Km di oggi su questo cantiere (timbratura_viaggio) ──
+    const oggiData = romeDay(new Date());
+    const { data: viaggiOggiRows } = await supabase
+      .from('timbratura_viaggio' as never)
+      .select('distanza_km, autista')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('cantiere_id', c.id)
+      .eq('data', oggiData);
+    const viaggiOggi =
+      (viaggiOggiRows as { distanza_km: number | null; autista: boolean | null }[] | null) ?? [];
+    let kmGuidatiOggi = 0;
+    let kmPercorsiOggi = 0;
+    for (const v of viaggiOggi) {
+      const km = Number(v.distanza_km ?? 0);
+      if (!Number.isFinite(km) || km <= 0) continue;
+      kmPercorsiOggi += km;
+      if (v.autista) kmGuidatiOggi += km;
+    }
+
+    // ── Ultimi 7 giorni (incluso oggi): ore da rapportini, km guidati da viaggi ──
+    const da7gg = romeDay(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
+    // Ore: righe di rapportino del cantiere, con rapportino nel range di date.
+    const { data: rapRows } = await supabase
+      .from('rapportini' as never)
+      .select('id')
+      .eq('tenant_id', ctx.tenantId)
+      .gte('data', da7gg)
+      .lte('data', oggiData);
+    const rapIds = ((rapRows as { id: string }[] | null) ?? []).map((r) => r.id);
+    let ore7gg = 0;
+    if (rapIds.length > 0) {
+      const { data: righeRows } = await supabase
+        .from('rapportino_righe' as never)
+        .select('ore_ordinarie, ore_straordinarie')
+        .eq('cantiere_id', c.id)
+        .in('rapportino_id', rapIds);
+      const righe =
+        (righeRows as { ore_ordinarie: number | null; ore_straordinarie: number | null }[] | null) ?? [];
+      for (const r of righe) {
+        ore7gg += Number(r.ore_ordinarie ?? 0) + Number(r.ore_straordinarie ?? 0);
+      }
+    }
+    // Km guidati 7gg: viaggi del cantiere con data nel range e autista=true.
+    const { data: viaggi7Rows } = await supabase
+      .from('timbratura_viaggio' as never)
+      .select('distanza_km')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('cantiere_id', c.id)
+      .eq('autista', true)
+      .gte('data', da7gg)
+      .lte('data', oggiData);
+    const viaggi7 = (viaggi7Rows as { distanza_km: number | null }[] | null) ?? [];
+    let kmGuidati7gg = 0;
+    for (const v of viaggi7) {
+      const km = Number(v.distanza_km ?? 0);
+      if (Number.isFinite(km) && km > 0) kmGuidati7gg += km;
+    }
+
+    analitica = {
+      personeOggi,
+      oreOggi: Math.round((minutiOggi / 60) * 100) / 100,
+      kmGuidatiOggi: Math.round(kmGuidatiOggi * 100) / 100,
+      kmPercorsiOggi: Math.round(kmPercorsiOggi * 100) / 100,
+      ore7gg: Math.round(ore7gg * 100) / 100,
+      kmGuidati7gg: Math.round(kmGuidati7gg * 100) / 100,
+    };
+
     const dentro: { dipId: string; stato: 'lavoro' | 'pausa'; eventi: EventoOggi[] }[] = [];
     for (const [dipId, eventi] of eventiCant) {
       const stato = statoDaEventi(eventi);
@@ -201,6 +282,9 @@ export default async function CantiereMobileDetailPage({
 
       {/* Office/admin: chi sta lavorando qui ora (tap → timbrature di oggi) */}
       {isManager ? <ChiInCantiere persone={personeDentro} /> : null}
+
+      {/* Office/admin: statistiche sintetiche del cantiere (oggi + 7 giorni) */}
+      {isManager && analitica ? <AnaliticaCantiere dati={analitica} /> : null}
 
       {/* Indirizzo + apri mappa */}
       {c.indirizzo ? (
