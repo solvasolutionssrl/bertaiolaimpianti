@@ -9,6 +9,7 @@ import {
   type MediaFile,
 } from '../../../../office/commesse/nuova/_components/media-attach-section';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
+import { compressImage } from '../../../../office/commesse/nuova/_lib/compress-image';
 
 interface Props {
   commessaId: string;
@@ -43,27 +44,31 @@ export function AddMediaSection({ commessaId }: Props) {
   const [inviati, setInviati] = React.useState(0);
   const [caricati, setCaricati] = React.useState(0);
 
-  const handleChange = (next: MediaFile[]) => {
-    let nuovi = 0;
-    for (const f of next) {
-      if (enqueuedIdsRef.current.has(f.id)) continue;
-      enqueuedIdsRef.current.add(f.id);
+  const handleChange = async (next: MediaFile[]) => {
+    const daAccodare = next.filter((f) => !enqueuedIdsRef.current.has(f.id));
+    // Svuota subito: i file sono ora "presi in carico" (la coda mostra il
+    // progresso nel pannello in basso).
+    setFiles([]);
+    if (daAccodare.length === 0) return;
+    daAccodare.forEach((f) => enqueuedIdsRef.current.add(f.id));
+    setInviati((n) => n + daAccodare.length);
+    for (const f of daAccodare) {
+      // Le immagini vengono compresse lato client (max 2048px, JPEG 0.82),
+      // come faceva prima la tab Media; video e PDF salgono originali. La coda
+      // globale poi carica in background (persistito su IndexedDB).
+      const blob = f.kind === 'image' ? await compressImage(f.file) : f.file;
       const jobId = queue.enqueue({
-        fileBlob: f.file,
-        fileName: f.file.name,
-        fileMime: f.file.type || 'application/octet-stream',
-        fileSize: f.file.size,
+        fileBlob: blob,
+        fileName: blob.name || f.file.name,
+        fileMime: blob.type || f.file.type || 'application/octet-stream',
+        fileSize: blob.size,
         commessaId,
         momento: 'sopralluogo',
         kind: toAllegatoKind(f.kind),
         takenAtIso: f.takenAt ? f.takenAt.toISOString() : null,
       });
       jobIdsRef.current.add(jobId);
-      nuovi += 1;
     }
-    if (nuovi > 0) setInviati((n) => n + nuovi);
-    // Svuota: i file sono ora in coda.
-    setFiles([]);
   };
 
   // Quando un nostro job arriva a 'done': conta + ricarica (la griglia Media
