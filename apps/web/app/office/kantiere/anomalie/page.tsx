@@ -124,6 +124,7 @@ export type WeekendRow = {
 };
 
 export type OreEccessiveRow = {
+  dipendente_id: string;
   dipendenteNome: string;
   data: string;
   ore_totali: number;
@@ -511,6 +512,7 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
     for (const agg of aggregato.values()) {
       if (agg.ore > anomalie_ore_max) {
         oreEccessive.push({
+          dipendente_id: agg.dipendente_id,
           dipendenteNome: dipendentiMap.get(agg.dipendente_id) ?? agg.dipendente_id,
           data: agg.data,
           ore_totali: agg.ore,

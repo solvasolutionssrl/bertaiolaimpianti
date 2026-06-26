@@ -1,9 +1,11 @@
 'use client';
 
+import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
+import { CorreggiGiornataDialog } from '../../_components/correggi-giornata-dialog';
 import type {
   IncompleteRow,
   StraordinarioRow,
@@ -50,6 +52,9 @@ export function AnomalieClient({
   filtri,
 }: Props) {
   const router = useRouter();
+
+  // Dialog "Correggi giornata" per le righe "turno oltre soglia"
+  const [correggiFor, setCorreggiFor] = React.useState<OreEccessiveRow | null>(null);
 
   function handleFiltri(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -374,7 +379,8 @@ export function AnomalieClient({
                     <tr className="border-b border-border text-left text-xs text-muted-foreground">
                       <th className="pb-2 pr-4 font-medium">Dipendente</th>
                       <th className="pb-2 pr-4 font-medium">Data</th>
-                      <th className="pb-2 font-medium">Ore totali</th>
+                      <th className="pb-2 pr-4 font-medium">Ore totali</th>
+                      <th className="pb-2 font-medium" aria-label="Azioni" />
                     </tr>
                   </thead>
                   <tbody>
@@ -382,7 +388,12 @@ export function AnomalieClient({
                       <tr key={i} className="border-b border-border/50 last:border-0">
                         <td className="py-1.5 pr-4">{row.dipendenteNome}</td>
                         <td className="py-1.5 pr-4">{fmtData(row.data)}</td>
-                        <td className="py-1.5 font-medium text-destructive">{row.ore_totali}</td>
+                        <td className="py-1.5 pr-4 font-medium text-destructive">{row.ore_totali}</td>
+                        <td className="py-1.5 text-right">
+                          <Button variant="outline" size="sm" onClick={() => setCorreggiFor(row)}>
+                            Modifica
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -392,6 +403,19 @@ export function AnomalieClient({
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog Correggi giornata (pausa pranzo) per le righe oltre soglia */}
+      {correggiFor ? (
+        <CorreggiGiornataDialog
+          open={!!correggiFor}
+          onOpenChange={(open) => { if (!open) setCorreggiFor(null); }}
+          dipendenteId={correggiFor.dipendente_id}
+          dipendenteNome={correggiFor.dipendenteNome}
+          data={correggiFor.data}
+          oreLavorate={correggiFor.ore_totali}
+          righe={[]}
+        />
+      ) : null}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 
 import { guardMobile } from '../../_lib/guard';
 import {
@@ -162,6 +163,7 @@ export default async function CruscottoKantierePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Cruscotto</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Panoramica cantieri</h1>
         <p className="mt-0.5 text-xs text-muted-foreground">Presenze e attività di oggi, in tempo reale.</p>
+        <LiveRefresh className="mt-2" />
       </header>
 
       {/* KPI — 2 righe da 3, cliccabili verso l'area dedicata */}

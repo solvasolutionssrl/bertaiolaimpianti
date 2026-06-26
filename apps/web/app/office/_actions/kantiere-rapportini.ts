@@ -744,3 +744,89 @@ export async function ricalcolaPresenzePeriodo(
   revalidatePath('/office/kantiere/dipendenti');
   return { ok: true, giorni: n };
 }
+
+// ── correzione anomalia: aggiungi una pausa pranzo dimenticata ───────────────
+
+const AggiungiPausaSchema = z.object({
+  dipendenteId: z.string().uuid(),
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  minuti: z.number().int().min(5).max(240),
+});
+
+/**
+ * L'ufficio aggiunge una PAUSA PRANZO dimenticata a una giornata (caso tipico:
+ * turno > 10h perché non è stata timbrata la pausa). Inserisce una coppia-pausa
+ * (uscita+ingresso `pausa=true`, origine 'manuale') centrata nel turno, poi
+ * ricalcola: le ore lavorate scendono e, se rientrano nella soglia, la giornata
+ * si AUTO-APPROVA. Le timbrature restano la verità.
+ */
+export async function aggiungiPausaGiornata(
+  input: z.infer<typeof AggiungiPausaSchema>,
+): Promise<{ ok: true; minutiPausa: number } | { ok: false; error: string }> {
+  const parsed = AggiungiPausaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
+  const { dipendenteId, data, minuti } = parsed.data;
+
+  const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') return { ok: false, error: 'NON_AUTORIZZATO' };
+  if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+
+  const supabase = createServerSupabase();
+  const { fromIso, toIso } = romeDayBoundsUtc(data);
+  const { data: timbRaw } = await supabase
+    .from('timbrature' as never)
+    .select('commessa_id, cantiere_id, tipo, ts, pausa')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const timb =
+    (timbRaw as {
+      commessa_id: string | null;
+      cantiere_id: string | null;
+      tipo: 'ingresso' | 'uscita';
+      ts: string;
+      pausa: boolean | null;
+    }[] | null) ?? [];
+
+  // Estremi del turno: primo ingresso reale, ultima uscita reale (escludo pause).
+  const lavori = timb.filter((t) => !t.pausa);
+  const primoIngresso = lavori.find((t) => t.tipo === 'ingresso');
+  const ultimaUscita = [...lavori].reverse().find((t) => t.tipo === 'uscita');
+  if (!primoIngresso || !ultimaUscita) {
+    return { ok: false, error: 'GIORNATA_NON_CHIUSA' };
+  }
+
+  const start = Date.parse(primoIngresso.ts);
+  const end = Date.parse(ultimaUscita.ts);
+  if (!(end > start)) return { ok: false, error: 'TURNO_NON_VALIDO' };
+  // La pausa deve starci dentro al turno.
+  const durataTurnoMin = (end - start) / 60000;
+  if (minuti >= durataTurnoMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
+
+  const mid = (start + end) / 2;
+  const half = (minuti * 60000) / 2;
+  const base = {
+    tenant_id: ctx.tenantId,
+    dipendente_id: dipendenteId,
+    commessa_id: primoIngresso.commessa_id,
+    cantiere_id: primoIngresso.cantiere_id,
+    pausa: true,
+    origine: 'manuale',
+    creato_da: ctx.userId,
+  };
+  const { error: insErr } = await supabase.from('timbrature' as never).insert([
+    { ...base, tipo: 'uscita', ts: new Date(mid - half).toISOString() },
+    { ...base, tipo: 'ingresso', ts: new Date(mid + half).toISOString() },
+  ] as never);
+  if (insErr) return { ok: false, error: insErr.message };
+
+  // Ricalcola la giornata: ore lavorate ridotte → eventuale auto-approvazione.
+  await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, data);
+
+  revalidatePath('/office/kantiere/rapportini');
+  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/kantiere/anomalie');
+  return { ok: true, minutiPausa: minuti };
+}

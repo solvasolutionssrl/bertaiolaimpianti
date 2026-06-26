@@ -32,6 +32,7 @@ import {
   Label,
 } from '@kommessa/ui';
 import { useConfirm } from '@/app/_components/confirm-provider';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
 import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
 import {
@@ -379,6 +380,7 @@ export function CantiereDetailClient({
           </Link>
           <span aria-hidden="true">/</span>
           <span className="text-foreground font-medium">{cantiere.nome}</span>
+          <LiveRefresh intervalMs={60000} className="ml-auto" />
         </div>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">

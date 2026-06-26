@@ -11,6 +11,8 @@ import { VersioniDialog } from './versioni-dialog';
 import { TimbratureRiepilogo, TimbratureSommario } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
+import { CorreggiGiornataDialog, type CorreggiRiga } from '../../_components/correggi-giornata-dialog';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 
 export type TimbraturaItem = {
   tipo: string;
@@ -21,6 +23,9 @@ export type TimbraturaItem = {
 };
 
 export type RigaCommessa = {
+  /** Id del target (commessa o cantiere). Null se la riga non è collegata. */
+  targetId: string | null;
+  targetTipo: 'commessa' | 'cantiere' | null;
   commessaTitolo: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
@@ -30,6 +35,7 @@ export type RigaCommessa = {
 
 export type RapportiniRiga = {
   id: string;
+  dipendenteId: string;
   dipendenteNome: string;
   data: string;
   stato: string;
@@ -138,6 +144,37 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   const [motivoError, setMotivoError] = React.useState('');
 
   const [versioniFor, setVersioniFor] = React.useState<{ id: string; nome: string; data: string } | null>(null);
+
+  // Dialog "Correggi giornata" (pausa pranzo + correzione ore a mano)
+  const [correggiFor, setCorreggiFor] = React.useState<{
+    dipendenteId: string;
+    dipendenteNome: string;
+    data: string;
+    oreLavorate: number;
+    righe: CorreggiRiga[];
+  } | null>(null);
+
+  function openCorreggi(riga: RapportiniRiga) {
+    const righeMod: CorreggiRiga[] = riga.righe
+      .filter((r): r is RigaCommessa & { targetId: string; targetTipo: 'commessa' | 'cantiere' } =>
+        r.targetId != null && r.targetTipo != null,
+      )
+      .map((r) => ({
+        targetId: r.targetId,
+        targetTipo: r.targetTipo,
+        titolo: r.commessaTitolo,
+        ord: r.ore_ordinarie,
+        straord: r.ore_straordinarie,
+        viaggio: r.ore_viaggio,
+      }));
+    setCorreggiFor({
+      dipendenteId: riga.dipendenteId,
+      dipendenteNome: riga.dipendenteNome,
+      data: riga.data,
+      oreLavorate: riga.totale.ord + riga.totale.straord,
+      righe: righeMod,
+    });
+  }
 
   // Dialog registra ore
   const [registraOpen, setRegistraOpen] = React.useState(false);
@@ -473,6 +510,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
               >
                 Esporta CSV
               </a>
+              <LiveRefresh intervalMs={60000} />
             </div>
           </div>
           {ricalcoloMsg ? (
@@ -685,6 +723,15 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                                     onClick={() => setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })}
                                   >
                                     Cronologia
+                                  </Button>
+                                )}
+                                {riga.daVerificare && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => openCorreggi(riga)}
+                                  >
+                                    Modifica
                                   </Button>
                                 )}
                                 {approvabile(riga.stato) && (
@@ -984,6 +1031,19 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
 
       {/* Dialog Cronologia versioni */}
       <VersioniDialog rapportino={versioniFor} onClose={() => setVersioniFor(null)} />
+
+      {/* Dialog Correggi giornata (pausa pranzo + correzione ore) */}
+      {correggiFor ? (
+        <CorreggiGiornataDialog
+          open={!!correggiFor}
+          onOpenChange={(open) => { if (!open) setCorreggiFor(null); }}
+          dipendenteId={correggiFor.dipendenteId}
+          dipendenteNome={correggiFor.dipendenteNome}
+          data={correggiFor.data}
+          oreLavorate={correggiFor.oreLavorate}
+          righe={correggiFor.righe}
+        />
+      ) : null}
     </div>
   );
 }

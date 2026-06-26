@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 
 import { guardMobile } from '../../../_lib/guard';
 import { mioTurnoAttivo } from '../../_lib/turno-attivo';
@@ -268,6 +269,7 @@ export default async function CantiereMobileDetailPage({
           {c.codice ? <span className="font-mono">{c.codice}</span> : null}
           <span>{STATO_LABEL[c.stato] ?? c.stato}</span>
         </p>
+        {isManager ? <LiveRefresh className="mt-2" /> : null}
       </header>
 
       {turnoQui ? (

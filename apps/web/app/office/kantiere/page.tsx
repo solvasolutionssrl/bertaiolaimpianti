@@ -5,6 +5,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
 import { TurniAttivi } from './_components/turni-attivi';
 import { BarsOrizzontali, AreaTrend, DonutOre } from './_components/charts';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 import { turniAttivi } from '@/app/office/_actions/kantiere-turni-attivi';
 import {
   Users,
@@ -299,7 +300,10 @@ export default async function KantierePanoramica() {
       {/* ===== Header ===== */}
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Kantiere</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold tracking-tight">Kantiere</h1>
+            <LiveRefresh className="text-xs" />
+          </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             Riepilogo operativo presenze, cantieri e rapportini.
           </p>

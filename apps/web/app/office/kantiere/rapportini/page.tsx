@@ -317,6 +317,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const autoApprovato = r.stato === 'approvato' && r.approvato_da == null;
     return {
       id: r.id,
+      dipendenteId: r.dipendente_id,
       dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
       data: r.data,
       stato: r.stato,
@@ -329,6 +330,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       totale,
       nRighe: rr.length,
       righe: rr.map((x) => ({
+        targetId: x.commessa_id ?? x.cantiere_id ?? null,
+        targetTipo: x.commessa_id ? ('commessa' as const) : x.cantiere_id ? ('cantiere' as const) : null,
         commessaTitolo: targetLabel(x, commesseTitoloMap, cantieriNomeMap),
         ore_ordinarie: x.ore_ordinarie ?? 0,
         ore_straordinarie: x.ore_straordinarie ?? 0,
