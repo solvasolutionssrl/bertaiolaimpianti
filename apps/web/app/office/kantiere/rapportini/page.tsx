@@ -4,6 +4,7 @@ import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
+import { leggiPolicyRapportini } from '@/app/_lib/kantiere-config';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
@@ -101,6 +102,8 @@ interface PageProps {
 export default async function RapportiniPage({ searchParams }: PageProps) {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
+  // Soglia anomalia turno (per-tenant) per l'anteprima del dialog "Correggi giornata".
+  const { sogliaAnomaliaTurnoOre } = await leggiPolicyRapportini(supabase, ctx.tenantId);
 
   const def = defaultRange();
   const from = searchParams.from ?? def.from;
@@ -412,6 +415,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         commesse={commessePicker}
         cantieri={cantieriPicker}
         giorniAperti={giorniAperti}
+        sogliaOre={sogliaAnomaliaTurnoOre}
       />
     </div>
   );

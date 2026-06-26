@@ -81,6 +81,8 @@ interface Props {
   commesse: CommessaPickerItem[];
   cantieri: CantierePickerItem[];
   giorniAperti: GiornataAperta[];
+  /** Soglia (ore) anomalia turno, per-tenant (`anomalia_turno_ore_max`). Default 10. */
+  sogliaOre?: number;
 }
 
 const STATI_OPTIONS = [
@@ -111,7 +113,7 @@ function TimbraturaIndicator({ tipo }: { tipo: string }) {
   );
 }
 
-export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri, giorniAperti }: Props) {
+export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri, giorniAperti, sogliaOre = 10 }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
 
@@ -1041,6 +1043,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
           dipendenteNome={correggiFor.dipendenteNome}
           data={correggiFor.data}
           oreLavorate={correggiFor.oreLavorate}
+          sogliaOre={sogliaOre}
           righe={correggiFor.righe}
         />
       ) : null}

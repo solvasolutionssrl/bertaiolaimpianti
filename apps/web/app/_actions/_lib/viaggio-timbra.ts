@@ -46,6 +46,25 @@ export function inizioSeEleggibilePausa(
 }
 
 /**
+ * Timestamp ISO della COPPIA-PAUSA (uscita → ingresso) di durata `minuti`,
+ * centrata nell'intervallo [startIso, endIso]. Sorgente unica del calcolo:
+ * riusata sia dalla pausa dichiarata in chiusura turno sia dalla correzione
+ * anomalia dell'ufficio, così la pausa è posizionata in modo identico ovunque.
+ */
+export function coppiaPausaCentrata(
+  startIso: string,
+  endIso: string,
+  minuti: number,
+): { uscitaIso: string; ingressoIso: string } {
+  const mid = (Date.parse(startIso) + Date.parse(endIso)) / 2;
+  const half = (minuti * 60000) / 2;
+  return {
+    uscitaIso: new Date(mid - half).toISOString(),
+    ingressoIso: new Date(mid + half).toISOString(),
+  };
+}
+
+/**
  * Inserisce una pausa pranzo "dichiarata" come coppia di timbrature (uscita
  * pausa → ingresso pausa) centrata nel turno. Il calcolo ore esclude già il gap,
  * quindi sottrae esattamente i minuti dichiarati. `origine='manuale'`.
@@ -63,10 +82,7 @@ export async function inserisciPausaDichiarata(
     minuti: number;
   },
 ): Promise<void> {
-  const start = Date.parse(opts.startIso);
-  const end = Date.parse(opts.endIso);
-  const mid = (start + end) / 2;
-  const half = (opts.minuti * 60000) / 2;
+  const { uscitaIso, ingressoIso } = coppiaPausaCentrata(opts.startIso, opts.endIso, opts.minuti);
   const base = {
     tenant_id: opts.tenantId,
     dipendente_id: opts.dipendenteId,
@@ -77,8 +93,8 @@ export async function inserisciPausaDichiarata(
     creato_da: opts.creatoDa,
   };
   await supabase.from('timbrature' as never).insert([
-    { ...base, tipo: 'uscita', ts: new Date(mid - half).toISOString() },
-    { ...base, tipo: 'ingresso', ts: new Date(mid + half).toISOString() },
+    { ...base, tipo: 'uscita', ts: uscitaIso },
+    { ...base, tipo: 'ingresso', ts: ingressoIso },
   ] as never);
 }
 

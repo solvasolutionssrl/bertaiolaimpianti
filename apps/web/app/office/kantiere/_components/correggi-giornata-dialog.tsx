@@ -36,12 +36,12 @@ interface Props {
   data: string;
   /** Ore lavorate correnti (ordinarie + straordinarie, pause escluse). */
   oreLavorate: number;
+  /** Soglia (ore) oltre cui la giornata è anomalia. Per-tenant (`anomalia_turno_ore_max`), default 10. */
+  sogliaOre?: number;
   righe?: CorreggiRiga[];
 }
 
 const PAUSE_RAPIDE = [30, 45, 60, 90] as const;
-/** Soglia auto-approvazione (allineata al default config `anomalia_turno_ore_max`). */
-const SOGLIA_ORE = 10;
 
 /** "10h 30min" da un numero di ore decimale. */
 function fmtOreMin(ore: number): string {
@@ -64,6 +64,7 @@ export function CorreggiGiornataDialog({
   dipendenteNome,
   data,
   oreLavorate,
+  sogliaOre = 10,
   righe,
 }: Props) {
   const router = useRouter();
@@ -97,12 +98,12 @@ export function CorreggiGiornataDialog({
     }
   }, [open, righe]);
 
-  const oltreSoglia = oreLavorate > SOGLIA_ORE + 0.001;
+  const oltreSoglia = oreLavorate > sogliaOre + 0.001;
 
   // Anteprima ore dopo la pausa selezionata
   const orePausa = pausaSel / 60;
   const oreDopoPausa = Math.max(0, oreLavorate - orePausa);
-  const rientraSoglia = oreDopoPausa <= SOGLIA_ORE + 0.001;
+  const rientraSoglia = oreDopoPausa <= sogliaOre + 0.001;
 
   function handleAggiungiPausa() {
     setErrorePausa(null);

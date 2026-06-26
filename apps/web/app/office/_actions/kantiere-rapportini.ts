@@ -13,6 +13,7 @@ import {
   ricomputaRapportinoAuto,
   marcaRapportinoManuale,
 } from '@/app/_actions/_lib/ricomputa-rapportino';
+import { coppiaPausaCentrata } from '@/app/_actions/_lib/viaggio-timbra';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -805,8 +806,8 @@ export async function aggiungiPausaGiornata(
   const durataTurnoMin = (end - start) / 60000;
   if (minuti >= durataTurnoMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
 
-  const mid = (start + end) / 2;
-  const half = (minuti * 60000) / 2;
+  // Stessa coppia-pausa centrata della pausa dichiarata in chiusura turno.
+  const { uscitaIso, ingressoIso } = coppiaPausaCentrata(primoIngresso.ts, ultimaUscita.ts, minuti);
   const base = {
     tenant_id: ctx.tenantId,
     dipendente_id: dipendenteId,
@@ -817,8 +818,8 @@ export async function aggiungiPausaGiornata(
     creato_da: ctx.userId,
   };
   const { error: insErr } = await supabase.from('timbrature' as never).insert([
-    { ...base, tipo: 'uscita', ts: new Date(mid - half).toISOString() },
-    { ...base, tipo: 'ingresso', ts: new Date(mid + half).toISOString() },
+    { ...base, tipo: 'uscita', ts: uscitaIso },
+    { ...base, tipo: 'ingresso', ts: ingressoIso },
   ] as never);
   if (insErr) return { ok: false, error: insErr.message };
 

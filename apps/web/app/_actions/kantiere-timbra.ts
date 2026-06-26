@@ -220,6 +220,23 @@ export async function timbra(input: unknown): Promise<Result> {
 
   const ts = new Date().toISOString();
 
+  // Il viaggio si registra solo per la timbratura PERSONALE su un cantiere, e
+  // solo all'inizio/fine turno (mai in pausa/ripresa). Lo VALIDIAMO subito, PRIMA
+  // di qualsiasi scrittura (pausa o uscita): un viaggio non valido non deve
+  // lasciare una coppia-pausa orfana. Validazione condivisa con self/capo.
+  const viaggio =
+    self &&
+    target.tipo === 'cantiere' &&
+    !pausa &&
+    azione !== 'ripresa' &&
+    parsed.data.viaggio
+      ? parsed.data.viaggio
+      : null;
+  if (viaggio) {
+    const v = await validaViaggio(supabase, viaggio);
+    if (!v.ok) return { ok: false, error: v.error };
+  }
+
   // Pausa pranzo dichiarata in uscita (ripiego: turno lungo senza pausa
   // timbrata). Solo flusso self, azione fine. Inserita PRIMA dell'uscita di
   // fine così il ricalcolo la sottrae. Se non eleggibile, ignorata in silenzio.
@@ -237,42 +254,6 @@ export async function timbra(input: unknown): Promise<Result> {
         endIso: ts,
         minuti: parsed.data.pausaPranzoMin,
       });
-    }
-  }
-
-  // Il viaggio si registra solo per la timbratura PERSONALE su un cantiere, e
-  // solo all'inizio/fine turno (mai in pausa/ripresa).
-  const viaggio =
-    self &&
-    target.tipo === 'cantiere' &&
-    !pausa &&
-    azione !== 'ripresa' &&
-    parsed.data.viaggio
-      ? parsed.data.viaggio
-      : null;
-
-  // Validazione viaggio: giustificazione se ha corretto la stima + sede/mezzo
-  // devono appartenere al tenant (la lettura RLS-scoped torna null altrimenti).
-  if (viaggio) {
-    const modificato =
-      viaggio.durataStimataMin != null &&
-      viaggio.durataConfermataMin !== viaggio.durataStimataMin;
-    if (modificato && (viaggio.giustificazione ?? '').trim().length < 3) {
-      return { ok: false, error: 'GIUSTIFICAZIONE_RICHIESTA' };
-    }
-    const { data: sedeOk } = await supabase
-      .from('sedi' as never)
-      .select('id')
-      .eq('id', viaggio.sedeId)
-      .maybeSingle();
-    if (!sedeOk) return { ok: false, error: 'SEDE_NON_VALIDA' };
-    if (viaggio.autista && viaggio.mezzoId) {
-      const { data: mezzoOk } = await supabase
-        .from('mezzi' as never)
-        .select('id')
-        .eq('id', viaggio.mezzoId)
-        .maybeSingle();
-      if (!mezzoOk) return { ok: false, error: 'MEZZO_NON_VALIDO' };
     }
   }
 
@@ -376,6 +357,14 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
     return { ok: false, error: 'ORA_NON_VALIDA' };
   }
 
+  // Viaggio di ritorno (chiusura da app): valida PRIMA di qualsiasi scrittura
+  // (pausa o uscita), così un viaggio non valido non lascia una pausa orfana.
+  const viaggio = parsed.data.viaggio ?? null;
+  if (viaggio) {
+    const v = await validaViaggio(supabase, viaggio);
+    if (!v.ok) return { ok: false, error: v.error };
+  }
+
   // Pausa pranzo dichiarata (ripiego): inserita prima dell'uscita di fine così
   // il ricalcolo la sottrae. Ignorata se non eleggibile.
   if (parsed.data.pausaPranzoMin) {
@@ -393,13 +382,6 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
         minuti: parsed.data.pausaPranzoMin,
       });
     }
-  }
-
-  // Viaggio di ritorno (chiusura da app): valida PRIMA di inserire l'uscita.
-  const viaggio = parsed.data.viaggio ?? null;
-  if (viaggio) {
-    const v = await validaViaggio(supabase, viaggio);
-    if (!v.ok) return { ok: false, error: v.error };
   }
 
   const { data: inserita, error } = await supabase

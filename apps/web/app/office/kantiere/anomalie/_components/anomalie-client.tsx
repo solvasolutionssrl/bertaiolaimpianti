@@ -413,6 +413,7 @@ export function AnomalieClient({
           dipendenteNome={correggiFor.dipendenteNome}
           data={correggiFor.data}
           oreLavorate={correggiFor.ore_totali}
+          sogliaOre={anomalie_ore_max}
           righe={[]}
         />
       ) : null}

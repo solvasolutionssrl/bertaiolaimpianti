@@ -8,11 +8,50 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { CATEGORIE_SPESA, calcolaImponibile, normalizzaCategoria } from '@kommessa/api/spese';
+import {
+  getR2ProviderFromEnv,
+  getR2ProviderFromTenantConfig,
+} from '@kommessa/integrations/storage';
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { mioTurnoAttivo } from '@/app/mobile/kantiere/_lib/turno-attivo';
 
 type Risultato = { ok: true; id?: string } | { ok: false; error: string };
+
+/**
+ * Cancella best-effort le chiavi R2 di una spesa (foto + thumb) quando la riga
+ * DB non viene creata: evita di lasciare file orfani caricati da /scan. Risolve
+ * il provider come la route scan (config tenant con fallback env). Non lancia
+ * mai: l'orfano è benigno, non deve a sua volta far fallire il flusso.
+ */
+async function cancellaR2BestEffort(
+  tenantId: string,
+  keys: (string | null | undefined)[],
+): Promise<void> {
+  const presenti = keys.filter((k): k is string => !!k);
+  if (presenti.length === 0) return;
+  try {
+    const service = createServiceSupabase();
+    const { data: t } = await service
+      .from('tenants')
+      .select('r2_config')
+      .eq('id', tenantId)
+      .maybeSingle();
+    const r2 =
+      getR2ProviderFromTenantConfig((t?.r2_config as Record<string, unknown> | null) ?? null) ??
+      getR2ProviderFromEnv();
+    if (!r2) return;
+    for (const k of presenti) {
+      try {
+        await r2.delete(k);
+      } catch {
+        // singola chiave non cancellabile: ignora
+      }
+    }
+  } catch {
+    // best-effort: l'orfano R2 non blocca nulla
+  }
+}
 
 const CreaSchema = z.object({
   r2Key: z.string().min(1).max(500),
@@ -134,7 +173,11 @@ export async function creaSpesa(input: z.input<typeof CreaSchema>): Promise<Risu
     .select('id')
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // DB fallito dopo l'upload /scan: rimuovi la foto orfana da R2.
+    await cancellaR2BestEffort(ctx.tenantId, [d.r2Key, d.r2ThumbKey]);
+    return { ok: false, error: error.message };
+  }
 
   revalidatePath('/mobile/kantiere/spese');
   revalidatePath('/office/kantiere/kontabilita');
@@ -239,7 +282,10 @@ export async function creaSpesaOffice(
     .select('id')
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    await cancellaR2BestEffort(ctx.tenantId, [d.r2Key, d.r2ThumbKey]);
+    return { ok: false, error: error.message };
+  }
 
   revalidatePath('/office/kantiere/kontabilita');
   return { ok: true, id: (inserted as { id: string }).id };
