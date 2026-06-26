@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ChevronRight, Folder, FileText, FolderOpen } from 'lucide-react';
 import { Card, CardContent } from '@kommessa/ui';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { getStorageProvider, type StorageObject } from '@kommessa/integrations/storage';
 import { EmptyState } from '../../../../_components/empty-state';
@@ -31,7 +32,9 @@ export default async function DocumentiTab({
   const supabase = createServerSupabase();
   const tenantPromise = (async () => {
     const c0 = await loadCommessa(params.id);
-    return supabase
+    // `storage_config` è un segreto → service role (non leggibile dal client
+    // authenticated). Scoping al tenant della commessa.
+    return createServiceSupabase()
       .from('tenants')
       .select('storage_provider, storage_config')
       .eq('id', c0.tenant_id)

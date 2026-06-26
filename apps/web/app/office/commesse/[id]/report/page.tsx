@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { getStorageProvider } from '@kommessa/integrations/storage';
 import { loadCommessa } from '../_lib/get-commessa';
 import { fmtData, fmtDataOra } from '../../../_lib/format';
@@ -40,7 +41,9 @@ export default async function ReportPage({
   if (!cRaw) notFound();
   const c = cRaw as any;
 
-  const tenantQ = supabase
+  // `storage_config` è un segreto → service role (la colonna non è leggibile dal
+  // client authenticated). Lo scoping `.eq('id', c.tenant_id)` resta del tenant.
+  const tenantQ = createServiceSupabase()
     .from('tenants')
     .select('id, nome, slug, brand_color, logo_url, storage_provider, storage_config')
     .eq('id', c.tenant_id)

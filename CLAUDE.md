@@ -91,6 +91,8 @@ Working language for the app UI is **Italian**. Preserve it.
 
 **Credenziali**: tutte in `apps/web/.env.local` (gitignored). **Mai citare password in chiaro in prompt/transcript/commit.**
 
+> **Segreti su `tenants` (hardening, migration `20260627010000`)**: le colonne `storage_config` (credenziali Nextcloud) e `r2_config` (secret key R2) sono **segreti** e NON sono leggibili dal client `authenticated`/`anon` (privilegi di colonna: SELECT di tabella revocato, ri-concesso solo sulle colonne non sensibili). Vanno lette **esclusivamente via service role** (`createServiceSupabase`, scoping esplicito `.eq('id', tenantId)`) — già così in tutto il codice. **Mai** passare questi due campi a un componente client per i tenant. ⚠️ Aggiungendo una **nuova colonna NON segreta** a `tenants`, concederla: `grant select (col) on public.tenants to anon, authenticated;` (le colonne segrete NON si concedono). La chiave Google Maps non sta qui (è env globale): vedi sopra.
+
 **Migrazioni DB**: scrivere solo il file SQL in `supabase/migrations/` — l'apply al DB cloud lo esegue l'umano con `supabase db push` o `psql`.
 
 **Deploy**: solo `git push origin main`. La GitHub integration Vercel fa tutto. Non usare `vercel deploy --prod` manualmente (raddoppia la build sul piano Hobby).

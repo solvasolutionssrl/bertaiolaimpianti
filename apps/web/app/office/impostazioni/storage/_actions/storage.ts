@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import type { Json } from '@kommessa/api';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
@@ -79,8 +80,11 @@ export async function aggiornaStorage(
 
   const supabase = createServerSupabase();
 
-  // Recupera config esistente per non sovrascrivere la password se vuota
-  const { data: existing } = await supabase
+  // Recupera config esistente per non sovrascrivere la password se vuota.
+  // `storage_config` è un segreto → lettura via service role (la colonna non è
+  // più leggibile dal client authenticated). La scrittura sotto resta invece
+  // sul client authenticated (l'owner/admin configura il proprio storage).
+  const { data: existing } = await createServiceSupabase()
     .from('tenants')
     .select('storage_config')
     .eq('id', ctx.tenantId)

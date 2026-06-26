@@ -1,6 +1,6 @@
 import { HardDrive } from 'lucide-react';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { SectionHeader } from '../_components/section-header';
 import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';
@@ -13,7 +13,10 @@ type Provider = 'supabase' | 'nextcloud';
 
 export default async function StoragePage() {
   const ctx = await requireTenantContext();
-  const supabase = createServerSupabase();
+  // `storage_config` è un segreto (credenziali Nextcloud): si legge via service
+  // role, scoping esplicito al proprio tenant. La colonna NON è leggibile dal
+  // client authenticated (REVOKE), così un membro non può esfiltrarla via API.
+  const supabase = createServiceSupabase();
   const canEdit = canManageTenant(ctx);
 
   const { data: tenant } = await supabase

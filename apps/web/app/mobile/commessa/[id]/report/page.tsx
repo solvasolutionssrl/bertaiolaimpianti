@@ -4,6 +4,7 @@ import { Printer } from 'lucide-react';
 import { MobileBackButton } from '../../../_components/mobile-back-button';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { getStorageProvider } from '@kommessa/integrations/storage';
 
 import { guardMobile } from '../../../_lib/guard';
@@ -49,7 +50,9 @@ export default async function ReportPageMobile({
   if (!cRaw) notFound();
   const c = cRaw as any;
 
-  const tenantQ = supabase
+  // `storage_config` è un segreto → service role (non leggibile dal client
+  // authenticated). Scoping al tenant via `.eq('id', c.tenant_id)`.
+  const tenantQ = createServiceSupabase()
     .from('tenants')
     .select('id, nome, slug, brand_color, logo_url, storage_provider, storage_config')
     .eq('id', c.tenant_id)
