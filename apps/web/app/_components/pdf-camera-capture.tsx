@@ -25,8 +25,9 @@ import { Button } from '@kommessa/ui';
  *  5. Output: un unico PDF A4 con una pagina per foglio, JPEG ad alta qualità.
  *
  * Qualità: la camera è richiesta ad alta risoluzione (ideal 3840×2160, il
- * browser scala al massimo del device) e i JPEG sono salvati a qualità 0.95
- * per evitare PDF sgranati / troppo compressi.
+ * browser scala al massimo del device), il frame viene catturato alla
+ * risoluzione nativa del video (nessun downscale) e i JPEG sono salvati a
+ * qualità 0.98 per evitare PDF sgranati / troppo compressi.
  */
 interface Props {
   onCancel: () => void;
@@ -56,12 +57,19 @@ const CORNER_DEFAULT: [Corner, Corner, Corner, Corner] = [
 export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const overlayRef = React.useRef<HTMLDivElement | null>(null);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const cropAreaRef = React.useRef<HTMLDivElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
   const [stage, setStage] = React.useState<Stage>('camera');
   const [error, setError] = React.useState<string | null>(null);
   const [capturedDataUrl, setCapturedDataUrl] = React.useState<string | null>(null);
   const [capturedDims, setCapturedDims] = React.useState<{ w: number; h: number } | null>(null);
+  // Dimensione massima (px) consentita all'immagine in fase di ritaglio: misurata
+  // sull'area reale disponibile (NON in vh, che su iOS Safari ignora le toolbar e
+  // farebbe sforare l'immagine). Garantisce che il box renderizzato dell'<img>
+  // coincida con quello dell'overlay, così "ciò che vedi == ciò che ritagli".
+  const [cropAreaSize, setCropAreaSize] = React.useState<{ w: number; h: number } | null>(null);
   const [pagine, setPagine] = React.useState<Pagina[]>([]);
   const [corners, setCorners] = React.useState<[Corner, Corner, Corner, Corner]>(CORNER_DEFAULT);
   const draggingIdx = React.useRef<number | null>(null);
@@ -110,6 +118,27 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     };
   }, []);
 
+  // ─── Misura l'area di ritaglio (per limitare l'immagine ai px reali) ───
+  React.useLayoutEffect(() => {
+    if (stage !== 'crop' || !capturedDataUrl) return;
+    const el = cropAreaRef.current;
+    if (!el) return;
+    const measure = () => {
+      // clientWidth/Height includono il padding (p-2 = 8px per lato): sottraggo
+      // i 16px per ottenere il box-contenuto effettivo dell'immagine.
+      const w = Math.max(50, el.clientWidth - 16);
+      const h = Math.max(50, el.clientHeight - 16);
+      setCropAreaSize({ w, h });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
+  }, [stage, capturedDataUrl]);
+
   const stopCamera = () => {
     const s = streamRef.current;
     if (s) s.getTracks().forEach((t) => t.stop());
@@ -126,7 +155,10 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(v, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    // Frame catturato alla risoluzione nativa del video. Qualità alta (0.98)
+    // perché è la sorgente del ritaglio: limitare qui la qualità degraderebbe
+    // anche la pagina finale (doppia compressione).
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
     setCapturedDataUrl(dataUrl);
     setCapturedDims({ w: v.videoWidth, h: v.videoHeight });
     stopCamera();
@@ -149,9 +181,14 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const onPointerMove = (e: React.PointerEvent) => {
     const idx = draggingIdx.current;
     if (idx === null) return;
-    const overlay = overlayRef.current;
-    if (!overlay) return;
-    const rect = overlay.getBoundingClientRect();
+    // Coordinate normalizzate SULL'IMMAGINE renderizzata (non sul container):
+    // il box dell'<img> è l'unica base coerente con l'overlay SVG, le maniglie e
+    // il ritaglio finale (anch'esso image-relative). getBoundingClientRect tiene
+    // già conto di scroll/zoom su WebKit.
+    const img = imgRef.current;
+    if (!img) return;
+    const rect = img.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     const xRel = (e.clientX - rect.left) / rect.width;
     const yRel = (e.clientY - rect.top) / rect.height;
     const clamped = { x: Math.max(0, Math.min(1, xRel)), y: Math.max(0, Math.min(1, yRel)) };
@@ -185,8 +222,9 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
       cctx.filter = 'contrast(1.08) brightness(1.04)';
       cctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
-      // Qualità alta (0.95) per non sgranare il documento.
-      const jpeg = cropCanvas.toDataURL('image/jpeg', 0.95);
+      // Qualità alta (0.98) per non sgranare il documento. Il canvas conserva
+      // la risoluzione sorgente (sw×sh in px nativi): nessun downscale.
+      const jpeg = cropCanvas.toDataURL('image/jpeg', 0.98);
       setPagine((prev) => [...prev, { jpeg, w: sw, h: sh }]);
       setCapturedDataUrl(null);
       setCapturedDims(null);
@@ -229,7 +267,7 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
         const renderH = p.h * ratio;
         const offX = (pageW - renderW) / 2;
         const offY = (pageH - renderH) / 2;
-        // JPEG embeddato così com'è (qualità 0.95 dalla cattura): niente
+        // JPEG embeddato così com'è (qualità 0.98 dal ritaglio): niente
         // ri-compressione che sgranerebbe il documento.
         pdf!.addImage(p.jpeg, 'JPEG', offX, offY, renderW, renderH);
       }
@@ -292,18 +330,30 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
 
       {/* ─── stage CROP ─────────────────────────────────────────── */}
       {stage === 'crop' && capturedDataUrl ? (
-        <div className="relative flex flex-1 items-center justify-center overflow-hidden p-2">
+        <div
+          ref={cropAreaRef}
+          className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2"
+        >
+          {/* Il wrapper avvolge esattamente l'immagine (inline-block + <img> block,
+              nessun max che lo accorci): così il suo box coincide col box
+              renderizzato dell'immagine e l'overlay non risulta sfalsato. */}
           <div
             ref={overlayRef}
-            className="relative inline-block max-h-full max-w-full select-none"
+            className="relative inline-block select-none"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={imgRef}
               src={capturedDataUrl}
               alt="Foglio acquisito"
-              className="max-h-[75vh] max-w-full"
+              className="block max-h-[75vh] max-w-full"
+              style={
+                cropAreaSize
+                  ? { maxWidth: cropAreaSize.w, maxHeight: cropAreaSize.h }
+                  : undefined
+              }
               draggable={false}
             />
             <svg

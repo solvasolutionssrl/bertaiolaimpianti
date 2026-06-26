@@ -89,7 +89,7 @@ export function AreaTrend({
   if (data.length === 0) return <Vuoto testo="Nessun dato nel periodo." />;
   return (
     <ResponsiveContainer width="100%" height={170}>
-      <AreaChart data={data} margin={{ left: -18, right: 8, top: 8, bottom: 0 }}>
+      <AreaChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={C.blue} stopOpacity={0.28} />
@@ -98,7 +98,7 @@ export function AreaTrend({
         </defs>
         <CartesianGrid vertical={false} stroke={C.grid} />
         <XAxis dataKey="etichetta" tick={{ fontSize: 10, fill: C.slate }} tickLine={false} axisLine={false} />
-        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: C.slate }} tickLine={false} axisLine={false} width={28} />
+        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: C.slate }} tickLine={false} axisLine={false} width={36} />
         <Tooltip
           cursor={{ stroke: C.blueSoft, strokeWidth: 1 }}
           contentStyle={tooltipStyle}
@@ -236,7 +236,7 @@ export function AreaTrendValore({
   const fmt = formatValore ?? ((v: number) => String(Math.round(v * 100) / 100));
   return (
     <ResponsiveContainer width="100%" height={190}>
-      <AreaChart data={data} margin={{ left: -6, right: 8, top: 8, bottom: 0 }}>
+      <AreaChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
         <defs>
           <linearGradient id="areaFillValore" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={C.blue} stopOpacity={0.28} />

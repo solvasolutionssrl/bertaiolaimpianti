@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Check,
   KeyRound,
+  ArrowRight,
 } from 'lucide-react';
 import {
   Badge,
@@ -511,7 +512,7 @@ export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
                     <th className="px-3 py-2 font-medium">Ruolo</th>
                     <th className="px-3 py-2 font-medium">Turni</th>
                     <th className="px-3 py-2 font-medium">Stato</th>
-                    <th className="w-20 px-3 py-2" aria-label="Azioni" />
+                    <th className="w-32 px-3 py-2" aria-label="Azioni" />
                   </tr>
                 </thead>
                 <tbody>
@@ -581,6 +582,15 @@ export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
                         </td>
                         <td className="px-2 py-2 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <Button asChild size="sm" variant="outline">
+                              <Link
+                                href={`/office/kantiere/dipendenti/${d.id}`}
+                                aria-label={`Apri scheda di ${d.cognome} ${d.nome}`}
+                              >
+                                Apri
+                                <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+                              </Link>
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
