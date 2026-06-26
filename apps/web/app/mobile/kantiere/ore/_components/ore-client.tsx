@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Send, Save, CheckCircle2, ChevronDown, PenLine, Clock } from 'lucide-react';
+import { Plus, ChevronDown, PenLine, Clock } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
 import { useConfirm } from '@/app/_components/confirm-provider';
@@ -132,7 +132,7 @@ function OreInput({
 
 function StatoBadge({ stato }: { stato: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    bozza: { label: 'Bozza', cls: 'bg-muted text-muted-foreground border-border' },
+    bozza: { label: 'In verifica', cls: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
     inviato: { label: 'Inviato', cls: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
     approvato: { label: 'Approvato', cls: 'bg-blue-500/15 text-blue-700 border-blue-500/30' },
     respinto: { label: 'Respinto', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
@@ -175,6 +175,10 @@ export function OreClient({
 
   const isBozza = rapportino.stato === 'bozza';
   const isEditabile = ['bozza', 'inviato', 'respinto'].includes(rapportino.stato);
+
+  // La giornata mostrata è oggi (giorno ancora in corso) o una passata/chiusa?
+  const oggiRome = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+  const isOggi = rapportino.data >= oggiRome;
 
   // ── Bozza locale anti-perdita-dati ──────────────────────────────────────────
   // Le modifiche non salvate vengono memorizzate sul dispositivo: se la rete è
@@ -366,8 +370,17 @@ export function OreClient({
   const totStraordinarie = sumOre(righe, 'ore_straordinarie');
   const totViaggio = sumOre(righe, 'ore_viaggio');
 
+  // Le ore si calcolano e si approvano da sole dalle timbrature: la vista del
+  // tecnico è di sola lettura. L'eventuale correzione di un'anomalia la fa
+  // l'ufficio. Resta disponibile solo l'inserimento manuale completo per le
+  // giornate senza timbratura (es. QR non scansionato).
   const puoiManuale = isEditabile && cantieriDisponibili.length > 0;
-  const mostraPicker = isBozza && haTargetLiberi;
+  const mostraPicker = false;
+  // Giornata passata ancora in bozza = "da verificare": il giorno è rimasto
+  // aperto o le ore sono oltre soglia, quindi è in carico all'ufficio. Per il
+  // tecnico è solo un'informazione, non un'azione. (Oggi è normale che sia
+  // bozza: il giorno è ancora in corso e si chiude da sé.)
+  const inVerifica = isBozza && !isOggi;
 
   return (
     <div className="flex flex-col gap-4">
@@ -377,7 +390,13 @@ export function OreClient({
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">
             Totale di oggi
           </p>
-          <StatoBadge stato={rapportino.stato} />
+          {isBozza && isOggi ? (
+            <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              In corso
+            </span>
+          ) : (
+            <StatoBadge stato={rapportino.stato} />
+          )}
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {(
@@ -401,25 +420,10 @@ export function OreClient({
           ))}
         </div>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          {isBozza
-            ? "Compilato in automatico dalle tue timbrature (ingresso/uscita e viaggio). Controlla, correggi se serve e invia all'ufficio."
-            : "Rapportino inviato: e in sola lettura. Per correzioni contatta l'ufficio."}
+          Calcolato in automatico dalle tue timbrature (ingresso/uscita e viaggio): a fine giornata
+          si chiude da sé, non devi inviare nulla. Se qualcosa non torna, contatta l&apos;ufficio.
         </p>
       </section>
-
-      {/* Bozza locale ripristinata */}
-      {draftRestored && isBozza && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <span>Ripristinate modifiche non salvate da questo dispositivo.</span>
-          <button
-            type="button"
-            onClick={scartaDraft}
-            className="shrink-0 font-medium underline-offset-2 hover:underline"
-          >
-            Scarta
-          </button>
-        </div>
-      )}
 
       {/* ── Voci ore ── */}
       <section className="space-y-2.5">
@@ -441,7 +445,7 @@ export function OreClient({
             </span>
             <p className="text-sm font-medium text-foreground">Nessuna voce per oggi</p>
             <p className="mx-auto mt-1 max-w-[16rem] text-xs leading-relaxed text-muted-foreground">
-              Aggiungi un cantiere o una commessa qui sotto e inserisci le ore.
+              Le ore compaiono qui in automatico quando timbri ingresso e uscita.
             </p>
           </div>
         ) : (
@@ -463,57 +467,32 @@ export function OreClient({
                       {titoloCase(riga.target_label)}
                     </p>
                   </div>
-                  {isBozza && (
-                    <button
-                      type="button"
-                      onClick={() => rimuoviRiga(idx)}
-                      disabled={isPending}
-                      aria-label="Rimuovi riga"
-                      className="shrink-0 rounded p-0.5 text-muted-foreground/60 hover:text-destructive disabled:opacity-40"
-                    >
-                      <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                        <path d="M4.293 4.293a1 1 0 011.414 0L8 6.586l2.293-2.293a1 1 0 111.414 1.414L9.414 8l2.293 2.293a1 1 0 01-1.414 1.414L8 9.414l-2.293 2.293a1 1 0 01-1.414-1.414L6.586 8 4.293 5.707a1 1 0 010-1.414z" />
-                      </svg>
-                    </button>
-                  )}
                 </div>
 
-                {/* Inputs ore */}
+                {/* Inputs ore (sola lettura: derivati dalle timbrature) */}
                 <div className="grid grid-cols-3 gap-2">
                   <OreInput
                     label="Ordinarie"
                     value={riga.ore_ordinarie}
-                    onChange={(v) => aggiornaRiga(idx, 'ore_ordinarie', v)}
-                    disabled={!isBozza || isPending}
+                    onChange={() => {}}
+                    disabled
                   />
                   <OreInput
                     label="Straord."
                     value={riga.ore_straordinarie}
-                    onChange={(v) => aggiornaRiga(idx, 'ore_straordinarie', v)}
-                    disabled={!isBozza || isPending}
+                    onChange={() => {}}
+                    disabled
                   />
                   <OreInput
                     label="Viaggio"
                     value={riga.ore_viaggio}
-                    onChange={(v) => aggiornaRiga(idx, 'ore_viaggio', v)}
-                    disabled={!isBozza || isPending}
+                    onChange={() => {}}
+                    disabled
                   />
                 </div>
 
-                {/* Nota riga */}
-                {isBozza && (
-                  <div className="mt-2">
-                    <input
-                      type="text"
-                      placeholder="Nota riga (opzionale)"
-                      value={riga.note}
-                      onChange={(e) => aggiornaRiga(idx, 'note', e.target.value)}
-                      disabled={isPending}
-                      className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-                    />
-                  </div>
-                )}
-                {!isBozza && riga.note && (
+                {/* Nota riga (sola lettura) */}
+                {riga.note && (
                   <p className="mt-1.5 text-xs text-muted-foreground">{riga.note}</p>
                 )}
               </div>
@@ -523,11 +502,11 @@ export function OreClient({
 
       </section>
 
-      {/* ── Aggiungi una voce ── */}
+      {/* ── Inserimento manuale (solo se mancano le timbrature) ── */}
       {(mostraPicker || puoiManuale) && (
         <section className="space-y-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Aggiungi una voce
+            Non hai timbrato?
           </p>
 
           {mostraPicker && (
@@ -615,64 +594,23 @@ export function OreClient({
         </section>
       )}
 
-      {/* ── Note per l'ufficio ── */}
-      <section className="space-y-1.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
-        <label htmlFor="note-testata" className="block text-sm font-semibold text-foreground">
-          Note per l&apos;ufficio
-        </label>
-        <p className="text-xs text-muted-foreground">
-          Facoltative. Segnala imprevisti o spiegazioni sulle ore (es. fermo cantiere).
-        </p>
-        <textarea
-          id="note-testata"
-          rows={3}
-          value={note}
-          onChange={(e) => {
-            dirtyRef.current = true;
-            setNote(e.target.value);
-          }}
-          disabled={!isBozza || isPending}
-          placeholder="Es. fermo per pioggia, materiale mancante..."
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-        />
-      </section>
-
-      {/* Feedback */}
-      {errore && (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {errore}
-        </p>
-      )}
-      {successo && (
-        <p className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {successo}
-        </p>
-      )}
-
-      {/* Bottoni azione */}
-      {isBozza && (
-        <div className="flex flex-col gap-2 pb-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleSalva}
-            disabled={isPending}
-            className="w-full gap-2"
-          >
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {isPending ? 'Attendere...' : 'Salva bozza'}
-          </Button>
-          <Button
-            type="button"
-            onClick={handleInvia}
-            disabled={isPending}
-            className="w-full gap-2"
-          >
-            <Send className="h-4 w-4" aria-hidden="true" />
-            {isPending ? 'Attendere...' : "Invia all'ufficio"}
-          </Button>
+      {/* ── In verifica dall'ufficio ── */}
+      {inVerifica && (
+        <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
+          <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            Giornata in verifica dall&apos;ufficio. Le ore vengono confermate o sistemate da loro:
+            non devi fare nulla.
+          </span>
         </div>
+      )}
+
+      {/* ── Nota per l'ufficio (sola lettura) ── */}
+      {note && (
+        <section className="space-y-1 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+          <p className="text-sm font-semibold text-foreground">Nota per l&apos;ufficio</p>
+          <p className="text-sm text-muted-foreground">{note}</p>
+        </section>
       )}
 
       {/* Dialog inserimento manuale */}

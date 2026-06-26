@@ -189,7 +189,11 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
     weekend: rawAnomalie['weekend'] !== false,
     ore_eccessive: rawAnomalie['ore_eccessive'] !== false,
   };
-  const anomalie_ore_max = typeof modConfig.anomalie_ore_max === 'number' ? modConfig.anomalie_ore_max : 13;
+  // Soglia "turno oltre soglia": allineata all'auto-approvazione delle giornate
+  // (config `anomalia_turno_ore_max`, default 10). Così la vista Anomalie mostra
+  // esattamente le giornate che vengono marcate "da verificare".
+  const anomalie_ore_max =
+    typeof modConfig.anomalia_turno_ore_max === 'number' ? modConfig.anomalia_turno_ore_max : 10;
 
   const def = defaultRange();
   const from = searchParams.from ?? def.from;

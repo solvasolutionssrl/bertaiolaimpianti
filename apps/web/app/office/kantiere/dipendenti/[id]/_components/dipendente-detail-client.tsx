@@ -29,6 +29,7 @@ import {
   type TimbraturaInput,
 } from '../../../_components/timbrature-riepilogo';
 import { aggiornaDipendente } from '../../../../_actions/dipendenti';
+import { CalendarioOre, type GiornoCalendario } from './calendario-ore';
 
 // ── Tipi ──────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,7 @@ interface Props {
   mezziGuidati: MezzoGuidato[];
   kmPerMese: KmMese[];
   minutiGuida: number;
+  calendario: { mese: string; giorni: GiornoCalendario[] };
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -154,6 +156,7 @@ export function DipendenteDetailClient({
   mezziGuidati,
   kmPerMese,
   minutiGuida,
+  calendario,
 }: Props) {
   const router = useRouter();
 
@@ -474,6 +477,9 @@ export function DipendenteDetailClient({
           ) : null}
         </CardContent>
       </Card>
+
+      {/* ── Calendario ore (mese) ── */}
+      <CalendarioOre mese={calendario.mese} giorni={calendario.giorni} />
 
       {/* ── Presenze e ore ── */}
       <Card className="shadow-soft">

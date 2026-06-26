@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, ChevronDown, ChevronRight, PlusCircle, CheckCheck } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, PlusCircle, CheckCheck, AlertTriangle } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
 import { approvaRapportino, approvaRapportiniBulk, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
@@ -36,6 +36,10 @@ export type RapportiniRiga = {
   modificato?: boolean;
   /** Giornata congelata con ore (timbrature) non riportate nel rapportino. */
   oreNonConteggiate?: boolean;
+  /** Bozza di una giornata passata/chiusa: anomalia da gestire (giorno aperto o ore oltre soglia). */
+  daVerificare?: boolean;
+  /** Approvato dal sistema (nessun approvatore umano). */
+  autoApprovato?: boolean;
   inviatoAt: string | null;
   note: string | null;
   totale: { ord: number; straord: number; viaggio: number };
@@ -110,6 +114,9 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   const [to, setTo] = React.useState(filtri.to);
   const [stato, setStato] = React.useState(filtri.stato);
   const [dipendente, setDipendente] = React.useState(filtri.dipendente);
+
+  // Mostra solo le giornate "Da verificare" (anomalie)
+  const [soloDaVerificare, setSoloDaVerificare] = React.useState(false);
 
   // Espansione righe
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
@@ -321,15 +328,49 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   if (filtri.dipendente) exportQs.set('dipendente', filtri.dipendente);
   const exportHref = '/api/office/kantiere/rapportini/export?' + exportQs.toString();
 
-  // Summary totals
-  const totalOrd = righe.reduce((s, r) => s + r.totale.ord, 0);
-  const totalStraord = righe.reduce((s, r) => s + r.totale.straord, 0);
-  const totalViaggio = righe.reduce((s, r) => s + r.totale.viaggio, 0);
+  // Giornate "da verificare" (anomalie): bozze di giorni passati/chiusi.
+  const nDaVerificare = righe.filter((r) => r.daVerificare).length;
+
+  // Righe effettivamente mostrate in tabella (eventualmente filtrate al solo "da verificare").
+  const righeVisibili = soloDaVerificare ? righe.filter((r) => r.daVerificare) : righe;
+
+  // Summary totals (sulle righe visibili)
+  const totalOrd = righeVisibili.reduce((s, r) => s + r.totale.ord, 0);
+  const totalStraord = righeVisibili.reduce((s, r) => s + r.totale.straord, 0);
+  const totalViaggio = righeVisibili.reduce((s, r) => s + r.totale.viaggio, 0);
 
   return (
     <div className="space-y-4">
       {/* Promemoria: giornate rimaste aperte da chiudere */}
       <GiornateApertePanel giorni={giorniAperti} />
+
+      {/* Da verificare: anomalie (giorni passati ancora in bozza). Prominente in cima. */}
+      {nDaVerificare > 0 ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300/70 bg-amber-50 px-4 py-3 shadow-soft">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+              Da verificare
+              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-600 px-1.5 text-xs font-bold text-white">
+                {nDaVerificare}
+              </span>
+            </p>
+            <p className="text-xs text-amber-800">
+              Giornate chiuse non approvate in automatico (giorno rimasto aperto o ore oltre soglia).
+              Controlla, correggi se serve e approva o respingi.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSoloDaVerificare((v) => !v)}
+            className="ml-auto shrink-0 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+          >
+            {soloDaVerificare ? 'Mostra tutte' : 'Mostra solo da verificare'}
+          </button>
+        </div>
+      ) : null}
 
       {/* Barra filtri */}
       <Card>
@@ -411,14 +452,18 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
       </Card>
 
       {/* Tabella */}
-      {righe.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nessun rapportino nel periodo selezionato.</p>
+      {righeVisibili.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          {soloDaVerificare
+            ? 'Nessuna giornata da verificare nel periodo selezionato.'
+            : 'Nessun rapportino nel periodo selezionato.'}
+        </p>
       ) : (
         <>
           {/* Summary line */}
           <div className="flex items-center gap-4 px-1 text-xs text-muted-foreground">
             <span>
-              <span className="font-medium text-foreground">{righe.length}</span> rapportini
+              <span className="font-medium text-foreground">{righeVisibili.length}</span> rapportini
             </span>
             <span className="text-border">|</span>
             <span>
@@ -499,7 +544,7 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                     </tr>
                   </thead>
                   <tbody>
-                    {righe.map((riga, i) => {
+                    {righeVisibili.map((riga, i) => {
                       const isOpen = expanded.has(riga.id);
                       const isRowPending = isPending && pendingId === riga.id;
                       const rowErr = errors[riga.id];
@@ -538,8 +583,33 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
                               </div>
                             </td>
                             <td className="px-3 py-2">
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 <RapportinoBadge stato={riga.stato} />
+                                {riga.daVerificare ? (
+                                  <span
+                                    title="Giornata chiusa non approvata in automatico: giorno rimasto aperto o ore oltre soglia. Controlla e gestisci."
+                                    className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+                                  >
+                                    <AlertTriangle className="h-2.5 w-2.5" aria-hidden="true" />
+                                    Da verificare
+                                  </span>
+                                ) : null}
+                                {riga.autoApprovato ? (
+                                  <span
+                                    title="Approvato in automatico dal sistema (giornata chiusa entro la soglia ore)."
+                                    className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700"
+                                  >
+                                    Auto
+                                  </span>
+                                ) : null}
+                                {riga.stato === 'approvato' && !riga.autoApprovato ? (
+                                  <span
+                                    title="Approvato manualmente dall'ufficio."
+                                    className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600"
+                                  >
+                                    Ufficio
+                                  </span>
+                                ) : null}
                                 {riga.modificato ? (
                                   <span
                                     title="Il tecnico ha modificato il rapportino dopo l'invio"

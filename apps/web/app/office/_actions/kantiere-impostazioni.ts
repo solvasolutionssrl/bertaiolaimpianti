@@ -33,6 +33,9 @@ const schema = z.object({
   // Arrotondamenti (min). Viaggio: default 5. Ore: default 0 = nessuno.
   arrotondamentoViaggioMin: z.number().int().min(1).max(60).optional(),
   arrotondamentoOreMin: z.number().int().min(0).max(60).optional(),
+  // Approvazione presenze. Auto-approva: default true. Soglia turno: default 10 ore.
+  autoApprovaRapportini: z.boolean().optional(),
+  anomaliaTurnoOreMax: z.number().min(1).max(24).optional(),
 });
 
 export async function salvaImpostazioniKantiere(input: unknown): Promise<Result> {
@@ -72,6 +75,12 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   }
   if (parsed.data.arrotondamentoOreMin !== undefined) {
     newConfig['arrotondamento_ore_min'] = parsed.data.arrotondamentoOreMin;
+  }
+  if (parsed.data.autoApprovaRapportini !== undefined) {
+    newConfig['auto_approva_rapportini'] = parsed.data.autoApprovaRapportini;
+  }
+  if (parsed.data.anomaliaTurnoOreMax !== undefined) {
+    newConfig['anomalia_turno_ore_max'] = parsed.data.anomaliaTurnoOreMax;
   }
 
   const { error: updateError } = await supabase

@@ -353,7 +353,7 @@ export function AnomalieClient({
         <Card>
           <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
-              Ore giornaliere oltre soglia (possibile doppio inserimento){' '}
+              Turno oltre soglia (&gt;{anomalie_ore_max}h){' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
                 ({oreEccessive.length})
               </span>
@@ -361,7 +361,9 @@ export function AnomalieClient({
           </CardHeader>
           <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             <p className="mb-3 text-xs text-muted-foreground">
-              Somma di ore ordinarie e straordinarie superiore a {anomalie_ore_max} ore in un giorno.
+              Giornate con più di {anomalie_ore_max} ore lavorate (ordinarie più
+              straordinarie). Sono le giornate che restano da verificare invece di
+              essere approvate in automatico.
             </p>
             {oreEccessive.length === 0 ? (
               <p className="text-sm text-muted-foreground">Nessuna anomalia.</p>

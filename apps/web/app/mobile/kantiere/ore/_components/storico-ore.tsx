@@ -16,7 +16,9 @@ function fmtOre(n: number): string {
 }
 
 const STATO: Record<string, { label: string; cls: string }> = {
-  bozza: { label: 'Bozza', cls: 'bg-muted text-muted-foreground' },
+  // Per il tecnico una bozza è una giornata ancora in verifica dall'ufficio,
+  // non un'azione in sospeso a suo carico.
+  bozza: { label: 'In verifica', cls: 'bg-amber-500/15 text-amber-700' },
   inviato: { label: 'Inviato', cls: 'bg-emerald-500/15 text-emerald-700' },
   verificato: { label: 'Verificato', cls: 'bg-blue-500/15 text-blue-700' },
   approvato: { label: 'Approvato', cls: 'bg-blue-500/15 text-blue-700' },

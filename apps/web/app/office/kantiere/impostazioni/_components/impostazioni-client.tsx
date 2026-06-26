@@ -22,6 +22,8 @@ interface Props {
   anomalie_ore_max: number;
   arrotondamentoViaggio: number;
   arrotondamentoOre: number;
+  autoApprovaRapportini: boolean;
+  anomaliaTurnoOreMax: number;
 }
 
 const ANOMALIE_ETICHETTE: { key: keyof AnomalieConfig; label: string }[] = [
@@ -41,6 +43,8 @@ export function ImpostazioniClient({
   anomalie_ore_max,
   arrotondamentoViaggio,
   arrotondamentoOre,
+  autoApprovaRapportini,
+  anomaliaTurnoOreMax,
 }: Props) {
   const askConfirm = useConfirm();
   const [sogliaOreOrdinarie, setSogliaOreOrdinarie] = React.useState<number>(soglia);
@@ -49,6 +53,8 @@ export function ImpostazioniClient({
   const [oreMax, setOreMax] = React.useState<number>(anomalie_ore_max);
   const [arrViaggio, setArrViaggio] = React.useState<number>(arrotondamentoViaggio);
   const [arrOre, setArrOre] = React.useState<number>(arrotondamentoOre);
+  const [autoApprova, setAutoApprova] = React.useState<boolean>(autoApprovaRapportini);
+  const [sogliaTurno, setSogliaTurno] = React.useState<number>(anomaliaTurnoOreMax);
   const [esito, setEsito] = React.useState<{ ok: true } | { ok: false; error: string } | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -66,6 +72,8 @@ export function ImpostazioniClient({
         anomalie_ore_max: oreMax,
         arrotondamentoViaggioMin: arrViaggio,
         arrotondamentoOreMin: arrOre,
+        autoApprovaRapportini: autoApprova,
+        anomaliaTurnoOreMax: sogliaTurno,
       });
       setEsito(result);
     });
@@ -174,6 +182,58 @@ export function ImpostazioniClient({
               vengono raccolte al minuto, con il massimo dettaglio, e potrai
               arrotondarle a fine mese nel report. Imposta un valore (es. 15) solo
               se vuoi arrotondare già le ore dei turni futuri.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card: Approvazione presenze */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Approvazione presenze</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="flex items-start gap-3">
+            <input
+              id="auto-approva"
+              type="checkbox"
+              checked={autoApprova}
+              onChange={() => setAutoApprova((v) => !v)}
+              className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+            />
+            <label htmlFor="auto-approva" className="cursor-pointer space-y-1">
+              <span className="block text-sm font-medium leading-snug">
+                Auto-approva le giornate
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Le giornate con turno chiuso ed entro la soglia di ore vengono
+                approvate in automatico. Le giornate ancora aperte o oltre soglia
+                restano sempre <strong>da verificare</strong> per l&apos;ufficio.
+                Se disattivi, ogni giornata va verificata a mano.
+              </span>
+            </label>
+          </div>
+
+          <div className="space-y-1 border-t border-border pt-4">
+            <Label htmlFor="soglia-turno">Soglia anomalia turno (ore)</Label>
+            <Input
+              id="soglia-turno"
+              type="number"
+              min={1}
+              max={24}
+              step={0.5}
+              value={sogliaTurno}
+              onChange={(e) => {
+                const v = parseFloat(e.target.value);
+                if (!isNaN(v)) setSogliaTurno(v);
+              }}
+              className="w-32"
+            />
+            <p className="text-xs text-muted-foreground">
+              Le giornate con più ore lavorate di questo valore (pause escluse)
+              vengono segnalate come <strong>da verificare</strong> invece di
+              essere approvate in automatico. La modifica vale per le giornate
+              calcolate <strong>da ora in poi</strong>.
             </p>
           </div>
         </CardContent>

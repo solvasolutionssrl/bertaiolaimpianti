@@ -15,6 +15,7 @@ type RapportinoRow = {
   data: string;
   stato: string;
   inviato_at: string | null;
+  approvato_da: string | null;
   note: string | null;
 };
 
@@ -110,7 +111,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   // Carica rapportini nel range
   let query = supabase
     .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato, inviato_at, note')
+    .select('id, dipendente_id, data, stato, inviato_at, approvato_da, note')
     .eq('tenant_id', ctx.tenantId)
     .gte('data', from)
     .lte('data', to)
@@ -283,6 +284,11 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     }
   }
 
+  // Giorno corrente in Europe/Rome: serve a distinguere le bozze di giornate
+  // ancora aperte (oggi, normali) dalle bozze di giornate passate/chiuse che
+  // NON sono auto-approvate → anomalie "Da verificare" per l'ufficio.
+  const oggiRome = toYYYYMMDD(new Date());
+
   // Costruisci righe per il client
   const righe: RapportiniRiga[] = rapportini.map((r) => {
     const rr = righeByRapportino.get(r.id) ?? [];
@@ -302,6 +308,13 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const oreTimb = oreLavorateTimbByKey.get(timbratureKey) ?? 0;
     const oreRiportate = totale.ord + totale.straord;
     const oreNonConteggiate = r.stato !== 'bozza' && oreTimb - oreRiportate > 0.05;
+    // Anomalia "Da verificare": rapportino ancora in bozza per una giornata
+    // passata/chiusa (non oggi). Col modello auto-approvazione, una bozza così
+    // significa che il sistema NON ha potuto chiudere il giorno in automatico
+    // (giorno rimasto aperto o ore oltre soglia) e richiede l'ufficio.
+    const daVerificare = r.stato === 'bozza' && r.data < oggiRome;
+    // Auto-approvato dal sistema: stato approvato ma senza un approvatore umano.
+    const autoApprovato = r.stato === 'approvato' && r.approvato_da == null;
     return {
       id: r.id,
       dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
@@ -309,6 +322,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       stato: r.stato,
       modificato: modificatiSet.has(r.id),
       oreNonConteggiate,
+      daVerificare,
+      autoApprovato,
       inviatoAt: r.inviato_at,
       note: r.note ?? null,
       totale,
@@ -381,8 +396,10 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       <header>
         <h1 className="text-lg font-semibold">Presenze e timbrature</h1>
         <p className="text-sm text-muted-foreground">
-          Timbrature di ingresso/uscita, ore calcolate e rapportino giornaliero (auto-compilato
-          dalle timbrature) di ogni dipendente. Coda approvazioni inclusa.
+          Le timbrature sono la fonte: il rapportino giornaliero si compila da solo e, a giornata
+          chiusa entro la soglia ore, viene approvato in automatico. Qui serve guardare solo le
+          giornate <span className="font-medium text-foreground">da verificare</span> (giorno
+          rimasto aperto o ore oltre soglia).
         </p>
       </header>
       <RapportiniClient
