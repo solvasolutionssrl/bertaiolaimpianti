@@ -32,6 +32,7 @@ interface Props {
   arrotondamentoOre: number;
   autoApprovaRapportini: boolean;
   anomaliaTurnoOreMax: number;
+  sogliaPausaPranzoOre: number;
   kontabilitaAttiva: boolean;
   codiceAzienda: string | null;
 }
@@ -123,6 +124,7 @@ export function ImpostazioniClient({
   arrotondamentoOre,
   autoApprovaRapportini,
   anomaliaTurnoOreMax,
+  sogliaPausaPranzoOre,
   kontabilitaAttiva,
   codiceAzienda,
 }: Props) {
@@ -136,6 +138,7 @@ export function ImpostazioniClient({
   const [arrOre, setArrOre] = React.useState<number>(arrotondamentoOre);
   const [autoApprova, setAutoApprova] = React.useState<boolean>(autoApprovaRapportini);
   const [sogliaTurno, setSogliaTurno] = React.useState<number>(anomaliaTurnoOreMax);
+  const [sogliaPausa, setSogliaPausa] = React.useState<number>(sogliaPausaPranzoOre);
   const [kontabilita, setKontabilita] = React.useState<boolean>(kontabilitaAttiva);
   const [esito, setEsito] = React.useState<{ ok: true } | { ok: false; error: string } | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -156,6 +159,7 @@ export function ImpostazioniClient({
         arrotondamentoOreMin: arrOre,
         autoApprovaRapportini: autoApprova,
         anomaliaTurnoOreMax: sogliaTurno,
+        sogliaPausaPranzoOre: sogliaPausa,
         kontabilitaAttiva: kontabilita,
       });
       setEsito(result);
@@ -184,6 +188,8 @@ export function ImpostazioniClient({
           : 'auto-approvazione delle giornate disattivata',
       );
     if (cambiatoSogliaTurno) parti.push(`soglia anomalia turno a ${sogliaTurno} ore`);
+    if (sogliaPausa !== sogliaPausaPranzoOre)
+      parti.push(`promemoria pausa pranzo oltre ${sogliaPausa} ore di turno`);
 
     if (parti.length > 0) {
       const ok = await askConfirm({
@@ -354,6 +360,28 @@ export function ImpostazioniClient({
                   Le giornate con più ore lavorate di questo valore (pause escluse) vengono segnalate
                   come <strong>da verificare</strong> invece di essere approvate in automatico. Vale
                   per le giornate calcolate <strong>da ora in poi</strong>.
+                </p>
+              </div>
+              <div className="space-y-1.5 border-t border-border pt-4">
+                <Label htmlFor="soglia-pausa">Promemoria pausa pranzo (ore di turno)</Label>
+                <Input
+                  id="soglia-pausa"
+                  type="number"
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={sogliaPausa}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) setSogliaPausa(v);
+                  }}
+                  className="w-32"
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Quando si chiude un turno più lungo di questo valore <strong>senza aver timbrato
+                  una pausa</strong>, l&apos;app (sia da QR sia dal tasto in-app) ricorda di
+                  dichiarare la pausa pranzo e propone 30/45/60 min. Se la pausa è già timbrata, nessun
+                  avviso.
                 </p>
               </div>
             </div>

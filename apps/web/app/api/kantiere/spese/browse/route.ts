@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
       const { data: dips } = await service
         .from('dipendenti' as never)
         .select('id, nome, cognome')
+        .eq('tenant_id', c.tenantId)
         .in('id', [...dipIds]);
       const nomi = new Map(
         ((dips as { id: string; nome: string; cognome: string }[] | null) ?? []).map((d) => [

@@ -194,8 +194,10 @@ export function arrotondaA(minuti: number, stepMin: number): number {
 
 /** Soglia (ore) oltre la quale, in uscita, se NON risulta alcuna pausa pranzo
  *  registrata si chiede al dipendente di dichiararla (ripiego: l'ideale è
- *  timbrarla). Condivisa client+server per coerenza del prompt. */
-export const SOGLIA_PAUSA_PRANZO_ORE = 6;
+ *  timbrarla). Condivisa client+server per coerenza del prompt. È solo il
+ *  DEFAULT: la soglia effettiva è per-tenant (`config.soglia_pausa_pranzo_ore`,
+ *  gestita dalle Impostazioni Kantiere). */
+export const SOGLIA_PAUSA_PRANZO_ORE = 5;
 
 /** Soglia (ore) di default oltre la quale una giornata NON si auto-approva e
  *  diventa un'anomalia "da verificare" (turno troppo lungo). Configurabile per

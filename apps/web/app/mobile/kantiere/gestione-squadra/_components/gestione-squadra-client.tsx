@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Utensils, Play, LogOut, LogIn, Loader2 } from 'lucide-react';
+import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 import { timbraMembro, timbraMembriBulk } from '@/app/_actions/kantiere-capo';
 import {
   ViaggioRitornoDialog,
@@ -17,9 +18,6 @@ export interface ViaggioContestoCantiere {
   sedi: ViaggioRitornoSede[];
   sedeDefaultId: string | null;
 }
-
-/** Soglia oltre cui, senza pausa timbrata, il dialog propone la pausa dichiarata. */
-const SOGLIA_PAUSA_MIN = 6 * 60;
 
 function ora(ts: string): string {
   return new Intl.DateTimeFormat('it-IT', {
@@ -68,10 +66,13 @@ export function GestioneSquadraClient({
   gruppi,
   viaggioByCantiere,
   mezzi,
+  sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
 }: {
   gruppi: CantiereSquadra[];
   viaggioByCantiere: Record<string, ViaggioContestoCantiere>;
   mezzi: ViaggioRitornoMezzo[];
+  /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
+  sogliaPausaPranzoOre?: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -187,7 +188,7 @@ export function GestioneSquadraClient({
   const promptPausaCorrente =
     corrente &&
     !corrente.membro.pausaOggiFatta &&
-    durataTurnoMin(corrente.membro.inizioTs) >= SOGLIA_PAUSA_MIN
+    durataTurnoMin(corrente.membro.inizioTs) >= sogliaPausaPranzoOre * 60
       ? { durataMin: durataTurnoMin(corrente.membro.inizioTs) }
       : null;
 

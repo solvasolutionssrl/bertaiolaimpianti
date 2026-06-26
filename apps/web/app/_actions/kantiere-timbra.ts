@@ -8,13 +8,19 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import {
   prossimoTipoTimbratura,
   statoTurno,
-  SOGLIA_PAUSA_PRANZO_ORE,
   type StatoTurno,
 } from '@kommessa/api/kantiere-ore';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
-import { ViaggioSchema, validaViaggio, inserisciViaggioRow } from './_lib/viaggio-timbra';
+import {
+  ViaggioSchema,
+  validaViaggio,
+  inserisciViaggioRow,
+  inserisciPausaDichiarata,
+  inizioSeEleggibilePausa,
+} from './_lib/viaggio-timbra';
 
 /** Azione esplicita scelta dal tecnico quando il turno è già attivo. */
 export type AzioneTimbra = 'inizio' | 'fine' | 'pausa' | 'ripresa';
@@ -96,59 +102,8 @@ const AZIONI_AMMESSE: Record<AzioneTimbra, StatoTurno[]> = {
   ripresa: ['pausa'],
 };
 
-/**
- * Inserisce una pausa pranzo "dichiarata" in uscita come coppia di timbrature
- * (uscita pausa → ingresso pausa) centrata nel turno. Riusa il modello pausa
- * esistente: il calcolo ore esclude già il gap, quindi sottrae esattamente i
- * minuti dichiarati. Marcata `origine='manuale'` per distinguerla nel tracking.
- */
-async function inserisciPausaDichiarata(
-  supabase: ReturnType<typeof createServerSupabase>,
-  opts: {
-    tenantId: string;
-    dipendenteId: string;
-    commessaId: string | null;
-    cantiereId: string | null;
-    creatoDa: string;
-    startIso: string;
-    endIso: string;
-    minuti: number;
-  },
-): Promise<void> {
-  const start = Date.parse(opts.startIso);
-  const end = Date.parse(opts.endIso);
-  const mid = (start + end) / 2;
-  const half = (opts.minuti * 60000) / 2;
-  const pausaOut = new Date(mid - half).toISOString();
-  const pausaIn = new Date(mid + half).toISOString();
-  const base = {
-    tenant_id: opts.tenantId,
-    dipendente_id: opts.dipendenteId,
-    commessa_id: opts.commessaId,
-    cantiere_id: opts.cantiereId,
-    pausa: true,
-    origine: 'manuale',
-    creato_da: opts.creatoDa,
-  };
-  await supabase.from('timbrature' as never).insert([
-    { ...base, tipo: 'uscita', ts: pausaOut },
-    { ...base, tipo: 'ingresso', ts: pausaIn },
-  ] as never);
-}
-
-/** Eleggibilità del prompt pausa: turno aperto al lavoro, senza pausa oggi, più
- *  lungo della soglia. Ritorna l'ISO di inizio turno se eleggibile, altrimenti null. */
-function inizioSeEleggibilePausa(
-  info: { stato: StatoTurno; ingressoAperto: string | null },
-  eventi: EventoOggi[],
-  exitIso: string,
-): string | null {
-  if (info.stato !== 'lavoro' || !info.ingressoAperto) return null;
-  if (eventi.some((e) => e.pausa)) return null;
-  const durataMs = Date.parse(exitIso) - Date.parse(info.ingressoAperto);
-  if (durataMs < SOGLIA_PAUSA_PRANZO_ORE * 3600000) return null;
-  return info.ingressoAperto;
-}
+// `inserisciPausaDichiarata` e `inizioSeEleggibilePausa` sono condivise in
+// ./_lib/viaggio-timbra (riusate da QR, self e capo) → niente duplicazione.
 
 /** Mappa azione → (tipo, pausa) della riga timbratura. */
 function azioneATimbra(a: AzioneTimbra): { tipo: 'ingresso' | 'uscita'; pausa: boolean } {
@@ -269,7 +224,8 @@ export async function timbra(input: unknown): Promise<Result> {
   // timbrata). Solo flusso self, azione fine. Inserita PRIMA dell'uscita di
   // fine così il ricalcolo la sottrae. Se non eleggibile, ignorata in silenzio.
   if (azione === 'fine' && self && parsed.data.pausaPranzoMin) {
-    const inizio = inizioSeEleggibilePausa(statoTurno(eventi), eventi, ts);
+    const sogliaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
+    const inizio = inizioSeEleggibilePausa(statoTurno(eventi), eventi, ts, sogliaOre);
     if (inizio) {
       await inserisciPausaDichiarata(supabase, {
         tenantId: ctx.tenantId,
@@ -423,7 +379,8 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   // Pausa pranzo dichiarata (ripiego): inserita prima dell'uscita di fine così
   // il ricalcolo la sottrae. Ignorata se non eleggibile.
   if (parsed.data.pausaPranzoMin) {
-    const inizio = inizioSeEleggibilePausa(info, eventi, ts);
+    const sogliaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
+    const inizio = inizioSeEleggibilePausa(info, eventi, ts, sogliaOre);
     if (inizio) {
       await inserisciPausaDichiarata(supabase, {
         tenantId: ctx.tenantId,

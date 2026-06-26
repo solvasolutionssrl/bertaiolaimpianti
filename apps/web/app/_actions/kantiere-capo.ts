@@ -6,6 +6,7 @@ import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import {
   ViaggioSchema,
@@ -125,7 +126,8 @@ async function applicaAzione(
     if (!v.ok) return { toccato: false, error: v.error };
   }
   if (azione === 'fine' && opts?.pausaPranzoMin) {
-    const inizio = inizioSeEleggibilePausa(info, eventi, ts);
+    const sogliaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
+    const inizio = inizioSeEleggibilePausa(info, eventi, ts, sogliaOre);
     if (inizio) {
       await inserisciPausaDichiarata(supabase, {
         tenantId: ctx.tenantId,

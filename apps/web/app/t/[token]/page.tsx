@@ -21,6 +21,7 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
+import { leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
 import { TimbraClient } from './_components/timbra-client';
 import { LandingPubblica } from './_components/landing-pubblica';
 import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
@@ -287,6 +288,8 @@ export default async function TokenPage({
   const statoTurnoSelf = me !== null ? statoTurno(eventiSelf) : null;
   // Oggi risulta già una pausa pranzo timbrata? (per il prompt in uscita)
   const pausaOggiFatta = eventiSelf.some((e) => e.pausa);
+  // Soglia (ore) del prompt pausa pranzo: per-tenant, identica a tasto in-app.
+  const sogliaPausaPranzoOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
 
   // Membri della squadra (escludo me stesso per non duplicare)
   let membriConTipo: { id: string; nome: string; prossimoTipo: 'ingresso' | 'uscita' }[] = [];
@@ -430,6 +433,7 @@ export default async function TokenPage({
             membri={membriConTipo}
             viaggio={viaggioCtx}
             pausaOggiFatta={pausaOggiFatta}
+            sogliaPausaPranzoOre={sogliaPausaPranzoOre}
           />
         </div>
       </div>

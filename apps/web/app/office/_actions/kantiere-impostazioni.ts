@@ -36,6 +36,9 @@ const schema = z.object({
   // Approvazione presenze. Auto-approva: default true. Soglia turno: default 10 ore.
   autoApprovaRapportini: z.boolean().optional(),
   anomaliaTurnoOreMax: z.number().min(1).max(24).optional(),
+  // Promemoria pausa pranzo: ore di turno senza pausa timbrata oltre cui l'app
+  // (QR e tasto, identici) propone di dichiararla. Default 5.
+  sogliaPausaPranzoOre: z.number().int().min(1).max(12).optional(),
   // Kontabilità: modulo attivo per il tenant. Default true.
   kontabilitaAttiva: z.boolean().optional(),
 });
@@ -83,6 +86,9 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   }
   if (parsed.data.anomaliaTurnoOreMax !== undefined) {
     newConfig['anomalia_turno_ore_max'] = parsed.data.anomaliaTurnoOreMax;
+  }
+  if (parsed.data.sogliaPausaPranzoOre !== undefined) {
+    newConfig['soglia_pausa_pranzo_ore'] = parsed.data.sogliaPausaPranzoOre;
   }
   if (parsed.data.kontabilitaAttiva !== undefined) {
     newConfig['kontabilita_attiva'] = parsed.data.kontabilitaAttiva;

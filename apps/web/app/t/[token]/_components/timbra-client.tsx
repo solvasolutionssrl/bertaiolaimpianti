@@ -49,6 +49,8 @@ export interface TimbraClientProps {
   viaggio?: ViaggioCtx | null;
   /** true se oggi risulta già una pausa pranzo timbrata per questo target. */
   pausaOggiFatta?: boolean;
+  /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
+  sogliaPausaPranzoOre?: number;
 }
 
 // ─── geo best-effort ─────────────────────────────────────────────────────────
@@ -617,12 +619,14 @@ function SelfFlow({
   stato,
   viaggio,
   pausaOggiFatta,
+  sogliaPausaPranzoOre,
 }: {
   token: string;
   nome: string;
   stato: StatoSelf;
   viaggio: ViaggioCtx | null;
   pausaOggiFatta: boolean;
+  sogliaPausaPranzoOre: number;
 }) {
   const router = useRouter();
   // Conferma dopo una timbratura andata a buon fine.
@@ -637,7 +641,7 @@ function SelfFlow({
   const pausaPrompt =
     stato.stato === 'lavoro' &&
     !pausaOggiFatta &&
-    durataTurnoMin >= SOGLIA_PAUSA_PRANZO_ORE * 60
+    durataTurnoMin >= sogliaPausaPranzoOre * 60
       ? { durataMin: durataTurnoMin }
       : null;
 
@@ -755,6 +759,7 @@ export function TimbraClient({
   membri,
   viaggio,
   pausaOggiFatta = false,
+  sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
 }: TimbraClientProps) {
   return (
     <div className="space-y-6">
@@ -774,6 +779,7 @@ export function TimbraClient({
             stato={statoSelf}
             viaggio={viaggio ?? null}
             pausaOggiFatta={pausaOggiFatta}
+            sogliaPausaPranzoOre={sogliaPausaPranzoOre}
           />
         </div>
       )}

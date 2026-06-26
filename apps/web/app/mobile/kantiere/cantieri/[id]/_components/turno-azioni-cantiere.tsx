@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Utensils, Play, LogOut, Loader2 } from 'lucide-react';
+import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 import {
   pausaPranzoMia,
   riprendiTurnoMio,
@@ -31,6 +32,8 @@ export interface TurnoAzioniCantiereProps {
   mezzi?: ViaggioRitornoMezzo[];
   /** Sede preselezionata (default del tenant). */
   sedeDefaultId?: string | null;
+  /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
+  sogliaPausaPranzoOre?: number;
 }
 
 function ora(ts: string): string {
@@ -90,6 +93,7 @@ export function TurnoAzioniCantiere({
   sedi = [],
   mezzi = [],
   sedeDefaultId = null,
+  sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -104,7 +108,7 @@ export function TurnoAzioniCantiere({
 
   const durataTurnoMin = Math.max(0, Math.floor((now - Date.parse(inizioTs)) / 60000));
   // Prompt pausa: turno al lavoro (non in pausa), senza pausa oggi, oltre soglia.
-  const promptPausa = !inPausa && !pausaOggiFatta && durataTurnoMin >= 6 * 60;
+  const promptPausa = !inPausa && !pausaOggiFatta && durataTurnoMin >= sogliaPausaPranzoOre * 60;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);

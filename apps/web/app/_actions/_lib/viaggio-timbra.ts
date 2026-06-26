@@ -29,17 +29,19 @@ export type ViaggioInput = z.infer<typeof ViaggioSchema>;
 
 /**
  * Eleggibilità del prompt pausa: turno aperto al lavoro, senza pausa oggi, più
- * lungo della soglia. Ritorna l'ISO di inizio turno se eleggibile, altrimenti null.
+ * lungo della soglia (ore, per-tenant; default `SOGLIA_PAUSA_PRANZO_ORE`).
+ * Ritorna l'ISO di inizio turno se eleggibile, altrimenti null.
  */
 export function inizioSeEleggibilePausa(
   info: { stato: StatoTurno; ingressoAperto: string | null },
   eventi: EventoOggi[],
   exitIso: string,
+  sogliaOre: number = SOGLIA_PAUSA_PRANZO_ORE,
 ): string | null {
   if (info.stato !== 'lavoro' || !info.ingressoAperto) return null;
   if (eventi.some((e) => e.pausa)) return null;
   const durataMs = Date.parse(exitIso) - Date.parse(info.ingressoAperto);
-  if (durataMs < SOGLIA_PAUSA_PRANZO_ORE * 3600000) return null;
+  if (durataMs < sogliaOre * 3600000) return null;
   return info.ingressoAperto;
 }
 

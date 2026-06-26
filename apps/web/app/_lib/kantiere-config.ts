@@ -39,6 +39,26 @@ export async function leggiArrotondamenti(
   };
 }
 
+/**
+ * Soglia (ore) oltre cui, in chiusura turno SENZA pausa timbrata, l'app propone
+ * di dichiarare la pausa pranzo. Identica per QR e tasto in-app. Default 5h
+ * (`SOGLIA_PAUSA_PRANZO_ORE`), configurabile dalle Impostazioni Kantiere.
+ */
+export async function leggiSogliaPausaPranzoOre(
+  supabase: Supa,
+  tenantId: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  const n = toInt(config['soglia_pausa_pranzo_ore'], 5);
+  return n >= 1 ? n : 5;
+}
+
 export type PolicyRapportini = {
   /** Auto-approvazione delle giornate "pulite" (turno chiuso, entro soglia). Default true. */
   autoApprova: boolean;

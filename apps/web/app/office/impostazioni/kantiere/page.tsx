@@ -46,6 +46,8 @@ export default async function KantiereSettingsPage() {
   const autoApprovaRapportini = config.auto_approva_rapportini === false ? false : true;
   const anomaliaTurnoOreMax =
     typeof config.anomalia_turno_ore_max === 'number' ? config.anomalia_turno_ore_max : 10;
+  const sogliaPausaPranzoOre =
+    typeof config.soglia_pausa_pranzo_ore === 'number' ? config.soglia_pausa_pranzo_ore : 5;
   // Kontabilità: default true, opt-out esplicito con kontabilita_attiva: false.
   const kontabilitaAttivaVal = config.kontabilita_attiva === false ? false : true;
 
@@ -72,6 +74,7 @@ export default async function KantiereSettingsPage() {
         arrotondamentoOre={arrotondamentoOre}
         autoApprovaRapportini={autoApprovaRapportini}
         anomaliaTurnoOreMax={anomaliaTurnoOreMax}
+        sogliaPausaPranzoOre={sogliaPausaPranzoOre}
         kontabilitaAttiva={kontabilitaAttivaVal}
         codiceAzienda={codiceAzienda}
       />
