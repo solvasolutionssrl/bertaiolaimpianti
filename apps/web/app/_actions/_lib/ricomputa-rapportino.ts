@@ -4,10 +4,11 @@ import {
   calcolaOreGiornata,
   minutiViaggioPerTarget,
   arrotondaA,
+  esitoAutoApprovazione,
 } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
-import { leggiArrotondamenti } from '@/app/_lib/kantiere-config';
+import { leggiArrotondamenti, leggiPolicyRapportini } from '@/app/_lib/kantiere-config';
 
 /**
  * Auto-derivazione del rapportino giornaliero dalle timbrature.
@@ -30,6 +31,7 @@ export interface RapportinoBase {
   data: string;
   stato: string;
   note: string | null;
+  approvato_da?: string | null;
 }
 
 // ── chiave sintetica polimorfica (commessa XOR cantiere) ─────────────────────
@@ -154,7 +156,7 @@ export async function ricomputaRapportinoAuto(
   // 1. Trova o crea il rapportino del giorno.
   const { data: esistente } = await supabase
     .from('rapportini' as never)
-    .select('id, data, stato, note')
+    .select('id, data, stato, note, approvato_da')
     .eq('tenant_id', tenantId)
     .eq('dipendente_id', dipendenteId)
     .eq('data', data)
@@ -165,13 +167,13 @@ export async function ricomputaRapportinoAuto(
     const { data: nuovoRaw, error } = await supabase
       .from('rapportini' as never)
       .insert({ tenant_id: tenantId, dipendente_id: dipendenteId, data, stato: 'bozza' } as never)
-      .select('id, data, stato, note')
+      .select('id, data, stato, note, approvato_da')
       .single();
     if (error || !nuovoRaw) {
       // Race: già creato da un'altra chiamata simultanea → rileggi.
       const { data: raceRaw } = await supabase
         .from('rapportini' as never)
-        .select('id, data, stato, note')
+        .select('id, data, stato, note, approvato_da')
         .eq('tenant_id', tenantId)
         .eq('dipendente_id', dipendenteId)
         .eq('data', data)
@@ -183,9 +185,15 @@ export async function ricomputaRapportinoAuto(
   }
   if (!rapp) return null;
 
-  // 2. Decidi se ricalcolare. Solo bozza. Con la colonna: solo se ancora auto.
-  //    Senza colonna (migration da applicare): solo se non ci sono ancora righe.
-  if (rapp.stato !== 'bozza') return rapp;
+  // 2. Decidi se ricalcolare. La giornata è "gestita dal sistema" se è ancora
+  //    bozza OPPURE è stata auto-approvata dal sistema (approvato_da NULL): in
+  //    quel caso resta fluida e si ri-valuta a ogni nuova timbratura. È invece
+  //    CONGELATA se approvata/respinta dall'ufficio (approvato_da valorizzato)
+  //    o modificata a mano (auto_compilato=false). Il rapportino è solo la
+  //    "forma": la sostanza sono le timbrature.
+  const gestitaDalSistema =
+    rapp.stato === 'bozza' || (rapp.stato === 'approvato' && !rapp.approvato_da);
+  if (!gestitaDalSistema) return rapp;
   const auto = await leggiAutoCompilato(supabase, rapp.id);
   if (auto === false) return rapp;
   if (auto === null && (await contaRighe(supabase, rapp.id)) > 0) return rapp;
@@ -268,6 +276,40 @@ export async function ricomputaRapportinoAuto(
 
   if (righeInsert.length > 0) {
     await supabase.from('rapportino_righe' as never).insert(righeInsert as never);
+  }
+
+  // 6. AUTO-APPROVAZIONE. Le timbrature sono le ore effettive: una giornata
+  //    CHIUSA (ingressi === uscite) ed entro soglia si approva da sola (sistema,
+  //    approvato_da NULL). Aperta o oltre soglia → resta "da verificare" (bozza)
+  //    per l'ufficio. Si ri-valuta a ogni ricalcolo, così riaprire un turno
+  //    riporta la giornata in bozza in automatico. Disattivabile per tenant.
+  const policy = await leggiPolicyRapportini(supabase, tenantId);
+  const ingressi = timbrature.filter((t) => t.tipo === 'ingresso').length;
+  const uscite = timbrature.filter((t) => t.tipo === 'uscita').length;
+  let minutiLavoratiTotali = 0;
+  for (const m of minutiMap.values()) minutiLavoratiTotali += m;
+
+  let nuovoStato = 'bozza';
+  let approvatoAt: string | null = null;
+  if (policy.autoApprova) {
+    const esito = esitoAutoApprovazione({
+      ingressi,
+      uscite,
+      minutiLavoratiTotali,
+      sogliaOreMax: policy.sogliaAnomaliaTurnoOre,
+    });
+    if (esito.autoApprova) {
+      nuovoStato = 'approvato';
+      approvatoAt = new Date().toISOString();
+    }
+  }
+
+  if (rapp.stato !== nuovoStato) {
+    await supabase
+      .from('rapportini' as never)
+      .update({ stato: nuovoStato, approvato_da: null, approvato_at: approvatoAt } as never)
+      .eq('id', rapp.id);
+    rapp.stato = nuovoStato;
   }
 
   return rapp;

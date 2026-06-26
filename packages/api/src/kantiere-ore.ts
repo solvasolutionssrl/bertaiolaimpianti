@@ -197,6 +197,43 @@ export function arrotondaA(minuti: number, stepMin: number): number {
  *  timbrarla). Condivisa client+server per coerenza del prompt. */
 export const SOGLIA_PAUSA_PRANZO_ORE = 6;
 
+/** Soglia (ore) di default oltre la quale una giornata NON si auto-approva e
+ *  diventa un'anomalia "da verificare" (turno troppo lungo). Configurabile per
+ *  tenant (`anomalia_turno_ore_max`). */
+export const SOGLIA_ANOMALIA_TURNO_ORE = 10;
+
+export type EsitoAutoApprovazione = {
+  /** true se la giornata può essere auto-approvata dal sistema. */
+  autoApprova: boolean;
+  /** Perché no: nessun turno, turno aperto/incompleto, oltre la soglia ore. */
+  motivo: 'ok' | 'nessun_turno' | 'aperto' | 'oltre_soglia';
+};
+
+/**
+ * Decide se una giornata di timbrature può essere AUTO-APPROVATA (vale per tutti
+ * i tenant con modulo kantiere). Regola:
+ *  - serve almeno un turno (ingressi > 0);
+ *  - giornata CHIUSA (ingressi === uscite: nessun turno aperto/incompleto);
+ *  - ore lavorate totali (pause escluse) entro la soglia.
+ * Altrimenti resta "da verificare" (bozza) per l'ufficio.
+ *
+ * `minutiLavoratiTotali` = minuti effettivi lavorati nel giorno, pause escluse
+ * (es. somma di `minutiPerCommessa`). Viaggio non incluso.
+ */
+export function esitoAutoApprovazione(input: {
+  ingressi: number;
+  uscite: number;
+  minutiLavoratiTotali: number;
+  sogliaOreMax: number;
+}): EsitoAutoApprovazione {
+  const { ingressi, uscite, minutiLavoratiTotali, sogliaOreMax } = input;
+  if (ingressi <= 0) return { autoApprova: false, motivo: 'nessun_turno' };
+  if (ingressi !== uscite) return { autoApprova: false, motivo: 'aperto' };
+  const soglia = Number.isFinite(sogliaOreMax) && sogliaOreMax > 0 ? sogliaOreMax : SOGLIA_ANOMALIA_TURNO_ORE;
+  if (minutiLavoratiTotali > soglia * 60) return { autoApprova: false, motivo: 'oltre_soglia' };
+  return { autoApprova: true, motivo: 'ok' };
+}
+
 /** Somma i minuti di viaggio (andata + ritorno) per ciascun target
  *  (chiave sintetica commessa:/cantiere:). Usato dal precompila rapportino
  *  per riempire ore_viaggio della riga corrispondente. */

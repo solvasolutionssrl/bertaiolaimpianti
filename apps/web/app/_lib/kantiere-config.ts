@@ -38,3 +38,33 @@ export async function leggiArrotondamenti(
     oreMin: toInt(config['arrotondamento_ore_min'], 0),
   };
 }
+
+export type PolicyRapportini = {
+  /** Auto-approvazione delle giornate "pulite" (turno chiuso, entro soglia). Default true. */
+  autoApprova: boolean;
+  /** Soglia ore lavorate (pause escluse) oltre cui la giornata è anomalia "da verificare". Default 10. */
+  sogliaAnomaliaTurnoOre: number;
+};
+
+/**
+ * Policy di approvazione rapportini del tenant. Le timbrature sono le ore
+ * effettive: le giornate complete entro soglia si auto-approvano; quelle oltre
+ * soglia (o aperte) restano "da verificare" per l'ufficio.
+ */
+export async function leggiPolicyRapportini(
+  supabase: Supa,
+  tenantId: string,
+): Promise<PolicyRapportini> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  const auto = config['auto_approva_rapportini'];
+  return {
+    autoApprova: auto === false ? false : true, // default true
+    sogliaAnomaliaTurnoOre: toInt(config['anomalia_turno_ore_max'], 10) || 10,
+  };
+}

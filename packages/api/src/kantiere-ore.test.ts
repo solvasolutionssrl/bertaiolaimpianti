@@ -7,8 +7,40 @@ import {
   minutiViaggioPerTarget,
   appaiaTimbrature,
   statoTurno,
+  esitoAutoApprovazione,
   type Timbratura,
 } from './kantiere-ore';
+
+describe('esitoAutoApprovazione', () => {
+  it('giornata chiusa entro soglia → auto-approva', () => {
+    const r = esitoAutoApprovazione({ ingressi: 2, uscite: 2, minutiLavoratiTotali: 540, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(true);
+    expect(r.motivo).toBe('ok');
+  });
+  it('esattamente alla soglia (10h) → auto-approva', () => {
+    const r = esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 600, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(true);
+  });
+  it('oltre soglia → anomalia (oltre_soglia)', () => {
+    const r = esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 601, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('oltre_soglia');
+  });
+  it('turno aperto (ingressi != uscite) → aperto', () => {
+    const r = esitoAutoApprovazione({ ingressi: 2, uscite: 1, minutiLavoratiTotali: 240, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('aperto');
+  });
+  it('nessun turno → nessun_turno', () => {
+    const r = esitoAutoApprovazione({ ingressi: 0, uscite: 0, minutiLavoratiTotali: 0, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('nessun_turno');
+  });
+  it('soglia non valida → default 10h', () => {
+    expect(esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 600, sogliaOreMax: 0 }).autoApprova).toBe(true);
+    expect(esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 601, sogliaOreMax: 0 }).autoApprova).toBe(false);
+  });
+});
 
 describe('statoTurno (pausa pranzo)', () => {
   it('nessun evento → idle', () => {
