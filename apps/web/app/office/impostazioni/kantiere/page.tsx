@@ -46,6 +46,8 @@ export default async function KantiereSettingsPage() {
   const autoApprovaRapportini = config.auto_approva_rapportini === false ? false : true;
   const anomaliaTurnoOreMax =
     typeof config.anomalia_turno_ore_max === 'number' ? config.anomalia_turno_ore_max : 10;
+  // Kontabilità: default true, opt-out esplicito con kontabilita_attiva: false.
+  const kontabilitaAttivaVal = config.kontabilita_attiva === false ? false : true;
 
   const { data: tRow } = await supabase
     .from('tenants' as never)
@@ -55,31 +57,11 @@ export default async function KantiereSettingsPage() {
   const codiceAzienda = (tRow as { codice_azienda: string | null } | null)?.codice_azienda ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <SectionHeader
-        title="Kantiere"
-        description="Parametri del modulo presenze e cantieri: soglia ore ordinarie, sede di partenza predefinita."
+        title="Impostazioni Kantiere"
+        description="Parametri del modulo presenze e cantieri: calcolo ore, approvazione, anomalie e sede di partenza."
       />
-
-      {/* Codice azienda: sola lettura. Lo imposta SOLVA (super admin). */}
-      <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Codice azienda (accesso)
-        </p>
-        {codiceAzienda ? (
-          <p className="mt-1 text-sm">
-            I tuoi tecnici accedono con codice{' '}
-            <span className="rounded bg-background px-2 py-0.5 font-mono font-semibold tracking-wide">
-              {codiceAzienda}
-            </span>{' '}
-            + username + password.
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-muted-foreground">
-            Nessun codice impostato. Contatta SOLVA per configurarlo.
-          </p>
-        )}
-      </div>
 
       <ImpostazioniClient
         soglia={soglia}
@@ -90,6 +72,8 @@ export default async function KantiereSettingsPage() {
         arrotondamentoOre={arrotondamentoOre}
         autoApprovaRapportini={autoApprovaRapportini}
         anomaliaTurnoOreMax={anomaliaTurnoOreMax}
+        kontabilitaAttiva={kontabilitaAttivaVal}
+        codiceAzienda={codiceAzienda}
       />
     </div>
   );

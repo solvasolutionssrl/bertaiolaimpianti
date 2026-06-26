@@ -1,7 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Label } from '@kommessa/ui';
+import {
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  MapPin,
+  Calculator,
+  KeyRound,
+} from 'lucide-react';
+import { Button, Input, Label, cn } from '@kommessa/ui';
 import { salvaImpostazioniKantiere } from '../../../_actions/kantiere-impostazioni';
 import { useConfirm } from '@/app/_components/confirm-provider';
 
@@ -24,6 +32,8 @@ interface Props {
   arrotondamentoOre: number;
   autoApprovaRapportini: boolean;
   anomaliaTurnoOreMax: number;
+  kontabilitaAttiva: boolean;
+  codiceAzienda: string | null;
 }
 
 const ANOMALIE_ETICHETTE: { key: keyof AnomalieConfig; label: string }[] = [
@@ -36,6 +46,74 @@ const ANOMALIE_ETICHETTE: { key: keyof AnomalieConfig; label: string }[] = [
   { key: 'ore_eccessive', label: 'Ore giornaliere oltre soglia (possibile doppio inserimento)' },
 ];
 
+type SezioneId = 'ore' | 'approvazione' | 'anomalie' | 'cantieri' | 'kontabilita';
+
+const SEZIONI: { id: SezioneId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'ore', label: 'Ore e calcolo', icon: Clock },
+  { id: 'approvazione', label: 'Approvazione presenze', icon: CheckCircle2 },
+  { id: 'anomalie', label: 'Anomalie da segnalare', icon: AlertTriangle },
+  { id: 'cantieri', label: 'Cantieri', icon: MapPin },
+  { id: 'kontabilita', label: 'Kontabilità', icon: Calculator },
+];
+
+/** Riga toggle compatta riusabile. */
+function ToggleRow({
+  id,
+  checked,
+  onChange,
+  title,
+  description,
+}: {
+  id: string;
+  checked: boolean;
+  onChange: () => void;
+  title: React.ReactNode;
+  description?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <input
+        id={id}
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-primary"
+      />
+      <label htmlFor={id} className="cursor-pointer space-y-0.5">
+        <span className="block text-sm font-medium leading-snug">{title}</span>
+        {description ? (
+          <span className="block text-xs leading-relaxed text-muted-foreground">{description}</span>
+        ) : null}
+      </label>
+    </div>
+  );
+}
+
+/** Intestazione di sezione con icona accent. */
+function SezioneHeader({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 border-b border-border pb-3">
+      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+        {description ? (
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function ImpostazioniClient({
   soglia,
   sede,
@@ -45,8 +123,11 @@ export function ImpostazioniClient({
   arrotondamentoOre,
   autoApprovaRapportini,
   anomaliaTurnoOreMax,
+  kontabilitaAttiva,
+  codiceAzienda,
 }: Props) {
   const askConfirm = useConfirm();
+  const [sezione, setSezione] = React.useState<SezioneId>('ore');
   const [sogliaOreOrdinarie, setSogliaOreOrdinarie] = React.useState<number>(soglia);
   const [sedePartenzaDefault, setSedePartenzaDefault] = React.useState<string>(sede);
   const [anomalieState, setAnomalieState] = React.useState<AnomalieConfig>(anomalie);
@@ -55,6 +136,7 @@ export function ImpostazioniClient({
   const [arrOre, setArrOre] = React.useState<number>(arrotondamentoOre);
   const [autoApprova, setAutoApprova] = React.useState<boolean>(autoApprovaRapportini);
   const [sogliaTurno, setSogliaTurno] = React.useState<number>(anomaliaTurnoOreMax);
+  const [kontabilita, setKontabilita] = React.useState<boolean>(kontabilitaAttiva);
   const [esito, setEsito] = React.useState<{ ok: true } | { ok: false; error: string } | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -74,28 +156,39 @@ export function ImpostazioniClient({
         arrotondamentoOreMin: arrOre,
         autoApprovaRapportini: autoApprova,
         anomaliaTurnoOreMax: sogliaTurno,
+        kontabilitaAttiva: kontabilita,
       });
       setEsito(result);
     });
   }
 
   async function handleSalva() {
-    // Cambiare l'arrotondamento incide sui turni futuri: conferma esplicita.
+    // Modifiche che incidono sui turni / approvazioni futuri: conferma esplicita.
     const cambiatoViaggio = arrViaggio !== arrotondamentoViaggio;
     const cambiatoOre = arrOre !== arrotondamentoOre;
-    if (cambiatoViaggio || cambiatoOre) {
-      const parti: string[] = [];
-      if (cambiatoViaggio)
-        parti.push(`tempo di viaggio arrotondato a ${arrViaggio} min`);
-      if (cambiatoOre)
-        parti.push(
-          arrOre === 0
-            ? 'ore lavoro senza arrotondamento (dettaglio pieno)'
-            : `ore lavoro arrotondate a ${arrOre} min`,
-        );
+    const cambiatoAutoApprova = autoApprova !== autoApprovaRapportini;
+    const cambiatoSogliaTurno = sogliaTurno !== anomaliaTurnoOreMax;
+
+    const parti: string[] = [];
+    if (cambiatoViaggio) parti.push(`tempo di viaggio arrotondato a ${arrViaggio} min`);
+    if (cambiatoOre)
+      parti.push(
+        arrOre === 0
+          ? 'ore lavoro senza arrotondamento (dettaglio pieno)'
+          : `ore lavoro arrotondate a ${arrOre} min`,
+      );
+    if (cambiatoAutoApprova)
+      parti.push(
+        autoApprova
+          ? 'auto-approvazione delle giornate attiva'
+          : 'auto-approvazione delle giornate disattivata',
+      );
+    if (cambiatoSogliaTurno) parti.push(`soglia anomalia turno a ${sogliaTurno} ore`);
+
+    if (parti.length > 0) {
       const ok = await askConfirm({
-        title: 'Confermi la modifica degli arrotondamenti?',
-        description: `Da ora in avanti: ${parti.join('; ')}. Vale solo per i turni timbrati d'ora in poi; i turni già registrati non cambiano.`,
+        title: 'Confermi le modifiche?',
+        description: `Da ora in avanti: ${parti.join('; ')}. Vale solo per i turni e le giornate calcolati d'ora in poi; quanto già registrato non cambia.`,
         confirmLabel: 'Sì, applica',
         cancelLabel: 'Annulla',
       });
@@ -105,225 +198,279 @@ export function ImpostazioniClient({
   }
 
   return (
-    <div className="space-y-4" style={{ maxWidth: 640 }}>
-      {/* Card: Calcolo ore */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Calcolo ore</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="soglia-ore">Soglia ore ordinarie al giorno</Label>
-            <Input
-              id="soglia-ore"
-              type="number"
-              min={1}
-              max={24}
-              step={0.5}
-              value={sogliaOreOrdinarie}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                if (!isNaN(v)) setSogliaOreOrdinarie(v);
-              }}
-              className="w-32"
-            />
-            <p className="text-xs text-muted-foreground">
-              Le ore oltre questa soglia diventano straordinario.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4" style={{ maxWidth: 960 }}>
+      {/* Codice azienda: chip compatto sola lettura. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+        <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground">Codice azienda (accesso tecnici):</span>
+        {codiceAzienda ? (
+          <code className="rounded bg-background px-2 py-0.5 font-mono text-xs font-semibold tracking-wide">
+            {codiceAzienda}
+          </code>
+        ) : (
+          <span className="text-xs text-muted-foreground">non impostato, contatta SOLVA</span>
+        )}
+      </div>
 
-      {/* Card: Arrotondamenti */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Arrotondamenti</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-1">
-            <Label htmlFor="arr-viaggio">Tempo di viaggio — arrotonda a (minuti)</Label>
-            <Input
-              id="arr-viaggio"
-              type="number"
-              min={1}
-              max={60}
-              step={1}
-              value={arrViaggio}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v)) setArrViaggio(Math.min(60, Math.max(1, v)));
-              }}
-              className="w-32"
-            />
-            <p className="text-xs text-muted-foreground">
-              Quando si timbra un viaggio, il tempo stimato viene arrotondato a
-              questo passo. Es. con 5: un viaggio di 4 minuti conta 5 minuti, uno
-              di 12 conta 10. Vale per i viaggi timbrati <strong>da ora in poi</strong>.
-            </p>
-          </div>
+      <div className="grid gap-4 md:grid-cols-[200px_1fr]">
+        {/* Section nav */}
+        <nav className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible" aria-label="Sezioni impostazioni">
+          {SEZIONI.map(({ id, label, icon: Icon }) => {
+            const attiva = sezione === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSezione(id)}
+                aria-current={attiva ? 'true' : undefined}
+                className={cn(
+                  'flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                  attiva
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-          <div className="space-y-1 border-t border-border pt-4">
-            <Label htmlFor="arr-ore">Ore di lavoro — arrotonda a (minuti)</Label>
-            <Input
-              id="arr-ore"
-              type="number"
-              min={0}
-              max={60}
-              step={1}
-              value={arrOre}
-              onChange={(e) => {
-                const v = parseInt(e.target.value, 10);
-                if (!isNaN(v)) setArrOre(Math.min(60, Math.max(0, v)));
-              }}
-              className="w-32"
-            />
-            <p className="text-xs text-muted-foreground">
-              <strong>0 = nessun arrotondamento</strong> (consigliato): le ore
-              vengono raccolte al minuto, con il massimo dettaglio, e potrai
-              arrotondarle a fine mese nel report. Imposta un valore (es. 15) solo
-              se vuoi arrotondare già le ore dei turni futuri.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Card: Approvazione presenze */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Approvazione presenze</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="flex items-start gap-3">
-            <input
-              id="auto-approva"
-              type="checkbox"
-              checked={autoApprova}
-              onChange={() => setAutoApprova((v) => !v)}
-              className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
-            />
-            <label htmlFor="auto-approva" className="cursor-pointer space-y-1">
-              <span className="block text-sm font-medium leading-snug">
-                Auto-approva le giornate
-              </span>
-              <span className="block text-xs text-muted-foreground">
-                Le giornate con turno chiuso ed entro la soglia di ore vengono
-                approvate in automatico. Le giornate ancora aperte o oltre soglia
-                restano sempre <strong>da verificare</strong> per l&apos;ufficio.
-                Se disattivi, ogni giornata va verificata a mano.
-              </span>
-            </label>
-          </div>
-
-          <div className="space-y-1 border-t border-border pt-4">
-            <Label htmlFor="soglia-turno">Soglia anomalia turno (ore)</Label>
-            <Input
-              id="soglia-turno"
-              type="number"
-              min={1}
-              max={24}
-              step={0.5}
-              value={sogliaTurno}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                if (!isNaN(v)) setSogliaTurno(v);
-              }}
-              className="w-32"
-            />
-            <p className="text-xs text-muted-foreground">
-              Le giornate con più ore lavorate di questo valore (pause escluse)
-              vengono segnalate come <strong>da verificare</strong> invece di
-              essere approvate in automatico. La modifica vale per le giornate
-              calcolate <strong>da ora in poi</strong>.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Card: Cantieri */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Cantieri</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="sede-partenza">Sede di partenza predefinita</Label>
-            <Input
-              id="sede-partenza"
-              type="text"
-              placeholder="es. Via Roma 1, Milano"
-              maxLength={300}
-              value={sedePartenzaDefault}
-              onChange={(e) => setSedePartenzaDefault(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Usata come base per i nuovi cantieri; servirà al calcolo dei chilometri di viaggio.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Card: Anomalie */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Anomalie da segnalare</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Scegli quali controlli vengono eseguiti nella pagina Anomalie.
-          </p>
-          <div className="space-y-3">
-            {ANOMALIE_ETICHETTE.map(({ key, label }) => (
-              <div key={key} className="flex items-start gap-3">
-                <input
-                  id={`anomalia-${key}`}
-                  type="checkbox"
-                  checked={anomalieState[key]}
-                  onChange={() => toggleAnomalia(key)}
-                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
-                />
-                <label
-                  htmlFor={`anomalia-${key}`}
-                  className="cursor-pointer text-sm leading-snug"
-                >
-                  {label}
-                </label>
-              </div>
-            ))}
-          </div>
-
-          {/* Ore massime - visibile solo se ore_eccessive e' attivo */}
-          {anomalieState.ore_eccessive && (
-            <div className="space-y-1 border-t border-border pt-3">
-              <Label htmlFor="ore-max">Ore massime giornaliere (soglia doppio inserimento)</Label>
-              <Input
-                id="ore-max"
-                type="number"
-                min={1}
-                max={24}
-                step={0.5}
-                value={oreMax}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  if (!isNaN(v)) setOreMax(v);
-                }}
-                className="w-32"
+        {/* Content panel */}
+        <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
+          {sezione === 'ore' && (
+            <div className="space-y-5">
+              <SezioneHeader
+                icon={Clock}
+                title="Ore e calcolo"
+                description="Soglia di straordinario e arrotondamenti di viaggio e ore lavorate."
               />
-              <p className="text-xs text-muted-foreground">
-                Se la somma di ore ordinarie e straordinarie supera questo valore in un giorno, viene segnalata come possibile doppio inserimento.
-              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="soglia-ore">Soglia ore ordinarie al giorno</Label>
+                <Input
+                  id="soglia-ore"
+                  type="number"
+                  min={1}
+                  max={24}
+                  step={0.5}
+                  value={sogliaOreOrdinarie}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) setSogliaOreOrdinarie(v);
+                  }}
+                  className="w-32"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Le ore oltre questa soglia diventano straordinario.
+                </p>
+              </div>
+
+              <div className="grid gap-5 border-t border-border pt-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="arr-viaggio">Tempo di viaggio, arrotonda a (min)</Label>
+                  <Input
+                    id="arr-viaggio"
+                    type="number"
+                    min={1}
+                    max={60}
+                    step={1}
+                    value={arrViaggio}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) setArrViaggio(Math.min(60, Math.max(1, v)));
+                    }}
+                    className="w-32"
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Il tempo stimato di un viaggio viene arrotondato a questo passo. Es. con 5: 4 min
+                    contano 5, 12 min contano 10. Vale per i viaggi timbrati{' '}
+                    <strong>da ora in poi</strong>.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="arr-ore">Ore di lavoro, arrotonda a (min)</Label>
+                  <Input
+                    id="arr-ore"
+                    type="number"
+                    min={0}
+                    max={60}
+                    step={1}
+                    value={arrOre}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (!isNaN(v)) setArrOre(Math.min(60, Math.max(0, v)));
+                    }}
+                    className="w-32"
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    <strong>0 = nessun arrotondamento</strong> (consigliato): le ore restano al
+                    minuto e potrai arrotondarle a fine mese nel report. Imposta un valore (es. 15)
+                    solo per arrotondare già i turni futuri.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Azioni */}
-      <div className="flex items-center gap-3">
+          {sezione === 'approvazione' && (
+            <div className="space-y-5">
+              <SezioneHeader
+                icon={CheckCircle2}
+                title="Approvazione presenze"
+                description="Auto-approvazione delle giornate e soglia di anomalia per turno."
+              />
+              <ToggleRow
+                id="auto-approva"
+                checked={autoApprova}
+                onChange={() => setAutoApprova((v) => !v)}
+                title="Auto-approva le giornate"
+                description={
+                  <>
+                    Le giornate con turno chiuso ed entro la soglia di ore vengono approvate in
+                    automatico. Le giornate ancora aperte o oltre soglia restano sempre{' '}
+                    <strong>da verificare</strong>. Se disattivi, ogni giornata va verificata a
+                    mano.
+                  </>
+                }
+              />
+              <div className="space-y-1.5 border-t border-border pt-4">
+                <Label htmlFor="soglia-turno">Soglia anomalia turno (ore)</Label>
+                <Input
+                  id="soglia-turno"
+                  type="number"
+                  min={1}
+                  max={24}
+                  step={0.5}
+                  value={sogliaTurno}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) setSogliaTurno(v);
+                  }}
+                  className="w-32"
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Le giornate con più ore lavorate di questo valore (pause escluse) vengono segnalate
+                  come <strong>da verificare</strong> invece di essere approvate in automatico. Vale
+                  per le giornate calcolate <strong>da ora in poi</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {sezione === 'anomalie' && (
+            <div className="space-y-4">
+              <SezioneHeader
+                icon={AlertTriangle}
+                title="Anomalie da segnalare"
+                description="Controlli eseguiti nella pagina Anomalie."
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {ANOMALIE_ETICHETTE.map(({ key, label }) => (
+                  <ToggleRow
+                    key={key}
+                    id={`anomalia-${key}`}
+                    checked={anomalieState[key]}
+                    onChange={() => toggleAnomalia(key)}
+                    title={label}
+                  />
+                ))}
+              </div>
+
+              {anomalieState.ore_eccessive && (
+                <div className="space-y-1.5 border-t border-border pt-4">
+                  <Label htmlFor="ore-max">Ore massime giornaliere (soglia doppio inserimento)</Label>
+                  <Input
+                    id="ore-max"
+                    type="number"
+                    min={1}
+                    max={24}
+                    step={0.5}
+                    value={oreMax}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v)) setOreMax(v);
+                    }}
+                    className="w-32"
+                  />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Se la somma di ore ordinarie e straordinarie supera questo valore in un giorno,
+                    viene segnalata come possibile doppio inserimento.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {sezione === 'cantieri' && (
+            <div className="space-y-5">
+              <SezioneHeader
+                icon={MapPin}
+                title="Cantieri"
+                description="Punto di partenza usato come base per i nuovi cantieri."
+              />
+              <div className="space-y-1.5">
+                <Label htmlFor="sede-partenza">Sede di partenza predefinita</Label>
+                <Input
+                  id="sede-partenza"
+                  type="text"
+                  placeholder="es. Via Roma 1, Milano"
+                  maxLength={300}
+                  value={sedePartenzaDefault}
+                  onChange={(e) => setSedePartenzaDefault(e.target.value)}
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Usata come base per i nuovi cantieri; serve al calcolo dei chilometri di viaggio.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {sezione === 'kontabilita' && (
+            <div className="space-y-5">
+              <SezioneHeader
+                icon={Calculator}
+                title="Kontabilità"
+                description="Modulo di gestione contabile collegato alle presenze."
+              />
+              <ToggleRow
+                id="kontabilita-attiva"
+                checked={kontabilita}
+                onChange={() => setKontabilita((v) => !v)}
+                title={
+                  <span className="inline-flex items-center gap-2">
+                    Modulo Kontabilità attivo
+                    <span
+                      className={cn(
+                        'inline-flex h-5 items-center rounded-full px-2 text-[11px] font-medium leading-none',
+                        kontabilita
+                          ? 'bg-accent text-accent-foreground'
+                          : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {kontabilita ? 'Attivo' : 'Disattivo'}
+                    </span>
+                  </span>
+                }
+                description={
+                  <>
+                    Se attivo, le voci di Kontabilità sono disponibili per il tenant. Disattivalo per
+                    nascondere il modulo senza perdere i dati già registrati.
+                  </>
+                }
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Barra azioni */}
+      <div className="flex items-center gap-3 border-t border-border pt-4">
         <Button onClick={handleSalva} disabled={isPending}>
           {isPending ? 'Salvataggio...' : 'Salva'}
         </Button>
-        {esito !== null && esito.ok && (
-          <span className="text-sm text-green-600">Salvato</span>
-        )}
+        {esito !== null && esito.ok && <span className="text-sm text-green-600">Salvato</span>}
         {esito !== null && !esito.ok && (
           <span className="text-sm text-destructive">
             Errore: {(esito as { ok: false; error: string }).error}

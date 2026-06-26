@@ -36,6 +36,8 @@ const schema = z.object({
   // Approvazione presenze. Auto-approva: default true. Soglia turno: default 10 ore.
   autoApprovaRapportini: z.boolean().optional(),
   anomaliaTurnoOreMax: z.number().min(1).max(24).optional(),
+  // Kontabilità: modulo attivo per il tenant. Default true.
+  kontabilitaAttiva: z.boolean().optional(),
 });
 
 export async function salvaImpostazioniKantiere(input: unknown): Promise<Result> {
@@ -82,6 +84,9 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   if (parsed.data.anomaliaTurnoOreMax !== undefined) {
     newConfig['anomalia_turno_ore_max'] = parsed.data.anomaliaTurnoOreMax;
   }
+  if (parsed.data.kontabilitaAttiva !== undefined) {
+    newConfig['kontabilita_attiva'] = parsed.data.kontabilitaAttiva;
+  }
 
   const { error: updateError } = await supabase
     .from('tenant_modules' as never)
@@ -91,6 +96,7 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
 
   if (updateError) return { ok: false, error: updateError.message };
 
+  revalidatePath('/office/impostazioni/kantiere');
   revalidatePath('/office/kantiere/impostazioni');
   return { ok: true };
 }

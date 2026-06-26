@@ -6,8 +6,13 @@ import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ChevronLeft,
+  Clock,
   Crown,
+  HardHat,
+  History,
   Loader2,
+  MapPin,
+  Plane,
   Printer,
   QrCode,
   RefreshCw,
@@ -18,8 +23,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -38,6 +41,8 @@ import {
   rigeneraQrCantiere,
   impostaSquadraCantiere,
 } from '../../../../_actions/cantieri';
+import { ChiInCantiere, SezioneHeader, type PresenteRow } from './chi-in-cantiere';
+import { StoricoPresenze, type StoricoData } from './storico-presenze';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -79,16 +84,6 @@ interface QrInfo {
   dataUrl: string | null;
 }
 
-export interface RapportinoCantiere {
-  rapportinoId: string;
-  dipendenteNome: string;
-  data: string;
-  stato: string;
-  ore_ordinarie: number;
-  ore_straordinarie: number;
-  ore_viaggio: number;
-}
-
 export interface AnomaliaRow {
   dipendente_id: string;
   dipendenteNome: string;
@@ -103,8 +98,9 @@ interface Props {
   printHref: string;
   commesse: CommessaOption[];
   commessaCollegata: string | null;
-  rapportiniCantiere: RapportinoCantiere[];
   anomalie: AnomaliaRow[];
+  chiInCantiere: PresenteRow[];
+  storico: StoricoData;
 }
 
 // ── Select style ──────────────────────────────────────────────────────────
@@ -128,25 +124,56 @@ function StatoCantiereBadge({ stato }: { stato: 'attivo' | 'sospeso' | 'chiuso' 
   );
 }
 
-// ── Rapportino stato badge ────────────────────────────────────────────────
+// ── KPI chip ──────────────────────────────────────────────────────────────
 
-function StatoRapportinoBadge({ stato }: { stato: string }) {
+function KpiChip({
+  icon,
+  valore,
+  label,
+  accent,
+}: {
+  icon: React.ReactNode;
+  valore: React.ReactNode;
+  label: string;
+  accent: 'blue' | 'amber' | 'emerald' | 'slate';
+}) {
   const map: Record<string, string> = {
-    bozza: 'text-muted-foreground',
-    inviato: 'text-blue-600 dark:text-blue-400',
-    approvato: 'text-emerald-600 dark:text-emerald-400',
-    rifiutato: 'text-destructive',
-  };
-  const labelMap: Record<string, string> = {
-    bozza: 'Bozza',
-    inviato: 'Inviato',
-    approvato: 'Approvato',
-    rifiutato: 'Rifiutato',
+    blue: 'border-blue-200/60 bg-blue-50/60 text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300',
+    amber: 'border-amber-200/60 bg-amber-50/60 text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300',
+    emerald: 'border-emerald-200/60 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300',
+    slate: 'border-border bg-muted/40 text-foreground',
   };
   return (
-    <span className={`text-xs font-medium ${map[stato] ?? 'text-muted-foreground'}`}>
-      {labelMap[stato] ?? stato}
-    </span>
+    <div className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${map[accent]}`}>
+      <span className="shrink-0 opacity-80">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-lg font-bold leading-none tabular-nums">{valore}</p>
+        <p className="mt-0.5 truncate text-[11px] font-medium uppercase tracking-wide opacity-80">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function fmtOreKpi(n: number): string {
+  return n % 1 === 0 ? String(n) : n.toFixed(1);
+}
+
+// ── Section card wrapper (compatto, con header a icona) ─────────────────────
+
+function Sezione({
+  header,
+  children,
+  className = '',
+}: {
+  header: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Card className={`shadow-soft ${className}`}>
+      <div className="border-b border-border bg-muted/20 px-4 py-2.5">{header}</div>
+      <CardContent className="p-4">{children}</CardContent>
+    </Card>
   );
 }
 
@@ -160,8 +187,9 @@ export function CantiereDetailClient({
   printHref,
   commesse,
   commessaCollegata,
-  rapportiniCantiere,
   anomalie,
+  chiInCantiere,
+  storico,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -335,9 +363,10 @@ export function CantiereDetailClient({
 
   const capi = squadra.filter((m) => m.ruolo === 'capo');
   const membri = squadra.filter((m) => m.ruolo !== 'capo');
+  const personeAttive = chiInCantiere.length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ── Header band ── */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -366,12 +395,7 @@ export function CantiereDetailClient({
                 </Link>
               </Button>
             ) : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={openSquadraDialog}
-            >
+            <Button type="button" size="sm" variant="outline" onClick={openSquadraDialog}>
               <Users className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               Gestisci squadra
             </Button>
@@ -379,111 +403,57 @@ export function CantiereDetailClient({
         </div>
       </div>
 
-      {/* ── QR prominente in alto ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <QrCode className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            QR cantiere
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {qr ? (
-            <div className="flex flex-col sm:flex-row gap-6 items-start">
-              {/* Immagine QR */}
-              <div className="shrink-0">
-                {qr.dataUrl ? (
-                  <img
-                    src={qr.dataUrl}
-                    alt="QR cantiere"
-                    width={160}
-                    height={160}
-                    className="rounded-md border border-border"
-                  />
-                ) : (
-                  <div className="h-40 w-40 rounded-md border border-border bg-muted/30 flex items-center justify-center">
-                    <QrCode className="h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
-                  </div>
-                )}
-              </div>
-              {/* Info + azioni */}
-              <div className="flex flex-col gap-4 min-w-0">
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-32 shrink-0">Generato il</span>
-                    <span className="font-medium tabular-nums">{fmtDataOra(qr.createdAt)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground w-32 shrink-0">Timbrature totali</span>
-                    <span className="font-mono font-medium tabular-nums">{qr.scansioni}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button asChild size="sm">
-                    <Link href={printHref}>
-                      <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                      Stampa
-                    </Link>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={qrPending}
-                    onClick={handleRigeneraQr}
-                  >
-                    {qrPending ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    Rigenera
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Rigenerando il QR, le copie stampate in precedenza smetteranno di funzionare.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-muted-foreground">
-                Nessun QR attivo. Genera un QR per permettere ai dipendenti di timbrare entrata e uscita da questo cantiere.
-              </p>
-              <div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={qrPending}
-                  onClick={handleGeneraQr}
-                >
-                  {qrPending ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <QrCode className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                  )}
-                  Genera QR
-                </Button>
-              </div>
-            </div>
-          )}
-          {qrError ? (
-            <p role="alert" className="mt-3 text-xs text-destructive">{qrError}</p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {/* ── KPI strip (periodo storico) ── */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <KpiChip
+          accent="emerald"
+          icon={<HardHat className="h-4 w-4" aria-hidden="true" />}
+          valore={personeAttive}
+          label="In cantiere ora"
+        />
+        <KpiChip
+          accent="blue"
+          icon={<Clock className="h-4 w-4" aria-hidden="true" />}
+          valore={`${fmtOreKpi(storico.totali.totale)} h`}
+          label={`Ore (${storico.giorni}gg)`}
+        />
+        <KpiChip
+          accent="amber"
+          icon={<Clock className="h-4 w-4" aria-hidden="true" />}
+          valore={`${fmtOreKpi(storico.totali.straordinarie)} h`}
+          label="Straordinari"
+        />
+        <KpiChip
+          accent="blue"
+          icon={<Plane className="h-4 w-4" aria-hidden="true" />}
+          valore={`${fmtOreKpi(storico.totali.viaggio)} h`}
+          label="Viaggio"
+        />
+        <KpiChip
+          accent={anomalie.length > 0 ? 'amber' : 'slate'}
+          icon={<AlertTriangle className="h-4 w-4" aria-hidden="true" />}
+          valore={anomalie.length}
+          label="Anomalie"
+        />
+      </div>
 
-      {/* ── Grid principale ── */}
-      <div className="grid gap-6 xl:grid-cols-3">
-        {/* ── Anagrafica (2 colonne su xl) ── */}
-        <Card className="xl:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Anagrafica</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
+      {/* ── Due colonne ── */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* ── LEFT (main, 2/3) ── */}
+        <div className="space-y-5 lg:col-span-2">
+          {/* Anagrafica compatta */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon={<MapPin className="h-4 w-4" aria-hidden="true" />}
+                titolo="Anagrafica"
+                accent="blue"
+              />
+            }
+          >
+            <form onSubmit={handleSave} className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
                   <Label htmlFor="nome">Nome *</Label>
                   <Input
                     id="nome"
@@ -495,7 +465,7 @@ export function CantiereDetailClient({
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label htmlFor="stato">Stato</Label>
                   <select
                     id="stato"
@@ -509,31 +479,52 @@ export function CantiereDetailClient({
                     <option value="chiuso">Chiuso</option>
                   </select>
                 </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="indirizzo">Indirizzo cantiere</Label>
+                  <AddressAutocomplete
+                    id="indirizzo"
+                    value={form.indirizzo}
+                    onChange={(label) => {
+                      setForm((f) => ({ ...f, indirizzo: label }));
+                      setSaveOk(false);
+                    }}
+                    onSelect={(r) => {
+                      setForm((f) => ({
+                        ...f,
+                        indirizzo: r.label,
+                        indirizzoLat: r.lat,
+                        indirizzoLng: r.lng,
+                      }));
+                      setSaveOk(false);
+                    }}
+                    placeholder="Via Roma 12, Torino"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="commessaId">Commessa collegata</Label>
+                  <select
+                    id="commessaId"
+                    name="commessaId"
+                    value={form.commessaId}
+                    onChange={handleChange}
+                    className={SELECT_CLS}
+                  >
+                    <option value="">Nessuna</option>
+                    {commesse.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.titolo}
+                      </option>
+                    ))}
+                  </select>
+                  {commessaCollegata && !form.commessaId && (
+                    <p className="text-xs text-muted-foreground">Era collegata a: {commessaCollegata}</p>
+                  )}
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="indirizzo">Indirizzo cantiere</Label>
-                <AddressAutocomplete
-                  id="indirizzo"
-                  value={form.indirizzo}
-                  onChange={(label) => {
-                    setForm((f) => ({ ...f, indirizzo: label }));
-                    setSaveOk(false);
-                  }}
-                  onSelect={(r) => {
-                    setForm((f) => ({
-                      ...f,
-                      indirizzo: r.label,
-                      indirizzoLat: r.lat,
-                      indirizzoLng: r.lng,
-                    }));
-                    setSaveOk(false);
-                  }}
-                  placeholder="Via Roma 12, Torino"
-                />
-              </div>
-
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label htmlFor="sedePartenza">
                   Sede di partenza principale{' '}
                   <span className="text-xs font-normal text-muted-foreground">(facoltativa)</span>
@@ -566,30 +557,7 @@ export function CantiereDetailClient({
                 </p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="commessaId">Commessa collegata</Label>
-                <select
-                  id="commessaId"
-                  name="commessaId"
-                  value={form.commessaId}
-                  onChange={handleChange}
-                  className={SELECT_CLS}
-                >
-                  <option value="">Nessuna</option>
-                  {commesse.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.titolo}
-                    </option>
-                  ))}
-                </select>
-                {commessaCollegata && !form.commessaId && (
-                  <p className="text-xs text-muted-foreground">
-                    Era collegata a: {commessaCollegata}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <Label htmlFor="note">Note</Label>
                 <textarea
                   id="note"
@@ -602,9 +570,7 @@ export function CantiereDetailClient({
                 />
               </div>
 
-              {saveError ? (
-                <p className="text-xs text-destructive">{saveError}</p>
-              ) : null}
+              {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
               {saveOk ? (
                 <p className="text-xs text-emerald-600 dark:text-emerald-400">Salvato.</p>
               ) : null}
@@ -629,38 +595,149 @@ export function CantiereDetailClient({
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+          </Sezione>
 
-        {/* ── Squadra ── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="text-base">
-                Squadra{' '}
-                <span className="font-mono text-xs font-normal text-muted-foreground">
-                  {squadra.length}
-                </span>
-              </CardTitle>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={openSquadraDialog}
-              >
-                <Users className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                Gestisci
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
+          {/* Chi c'è in cantiere ora */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon={<HardHat className="h-4 w-4" aria-hidden="true" />}
+                titolo="Chi c'è in cantiere ora"
+                accent="emerald"
+                right={
+                  personeAttive > 0 ? (
+                    <span className="font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                      {personeAttive}
+                    </span>
+                  ) : null
+                }
+              />
+            }
+          >
+            <ChiInCantiere presenti={chiInCantiere} />
+          </Sezione>
+
+          {/* Storico presenze */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon={<History className="h-4 w-4" aria-hidden="true" />}
+                titolo="Storico presenze"
+                accent="blue"
+              />
+            }
+          >
+            <StoricoPresenze data={storico} />
+          </Sezione>
+        </div>
+
+        {/* ── RIGHT (sidebar, 1/3, sticky) ── */}
+        <div className="space-y-5 lg:sticky lg:top-4 lg:self-start">
+          {/* QR */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon={<QrCode className="h-4 w-4" aria-hidden="true" />}
+                titolo="QR cantiere"
+                accent="blue"
+              />
+            }
+          >
+            {qr ? (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  {qr.dataUrl ? (
+                    <img
+                      src={qr.dataUrl}
+                      alt="QR cantiere"
+                      width={104}
+                      height={104}
+                      className="shrink-0 rounded-md border border-border"
+                    />
+                  ) : (
+                    <div className="flex h-[104px] w-[104px] shrink-0 items-center justify-center rounded-md border border-border bg-muted/30">
+                      <QrCode className="h-8 w-8 text-muted-foreground/40" aria-hidden="true" />
+                    </div>
+                  )}
+                  <div className="min-w-0 space-y-1.5 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Generato il</p>
+                      <p className="font-medium tabular-nums">{fmtDataOra(qr.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Timbrature totali</p>
+                      <p className="font-mono text-sm font-semibold tabular-nums">{qr.scansioni}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild size="sm">
+                    <Link href={printHref}>
+                      <Printer className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                      Stampa
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={qrPending}
+                    onClick={handleRigeneraQr}
+                  >
+                    {qrPending ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    Rigenera
+                  </Button>
+                </div>
+                <p className="text-[11px] leading-snug text-muted-foreground">
+                  Rigenerando il QR, le copie stampate in precedenza smetteranno di funzionare.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Nessun QR attivo. Genera un QR per permettere ai dipendenti di timbrare entrata e
+                  uscita da questo cantiere.
+                </p>
+                <Button type="button" size="sm" disabled={qrPending} onClick={handleGeneraQr}>
+                  {qrPending ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <QrCode className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Genera QR
+                </Button>
+              </div>
+            )}
+            {qrError ? (
+              <p role="alert" className="mt-3 text-xs text-destructive">{qrError}</p>
+            ) : null}
+          </Sezione>
+
+          {/* Squadra */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon="persone"
+                titolo="Squadra"
+                accent="amber"
+                right={
+                  <Button type="button" size="sm" variant="outline" onClick={openSquadraDialog}>
+                    Gestisci
+                  </Button>
+                }
+              />
+            }
+          >
             {squadra.length === 0 ? (
               <p className="text-xs italic text-muted-foreground">
                 Nessun dipendente assegnato a questo cantiere.
               </p>
             ) : (
               <div className="space-y-2">
-                {/* Capo */}
                 {capi.map((m) => (
                   <div
                     key={m.dipendente_id}
@@ -668,10 +745,9 @@ export function CantiereDetailClient({
                   >
                     <Crown className="h-3 w-3 shrink-0 text-orange-500" aria-hidden="true" />
                     <span className="flex-1 truncate text-xs font-semibold">{m.nome}</span>
-                    <span className="shrink-0 text-[10px] text-orange-500/80 uppercase tracking-wide">capo</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-orange-500/80">capo</span>
                   </div>
                 ))}
-                {/* Membri */}
                 {membri.length > 0 && (
                   <div className="rounded-md border border-border bg-muted/30">
                     {capi.length > 0 && (
@@ -681,10 +757,7 @@ export function CantiereDetailClient({
                     )}
                     <ul className={capi.length > 0 ? 'border-t border-border' : undefined}>
                       {membri.map((m) => (
-                        <li
-                          key={m.dipendente_id}
-                          className="flex items-center gap-2 px-2.5 py-1.5"
-                        >
+                        <li key={m.dipendente_id} className="flex items-center gap-2 px-2.5 py-1.5">
                           <span className="ml-1 h-1 w-1 shrink-0 rounded-full bg-muted-foreground/50" />
                           <span className="flex-1 truncate text-xs">{m.nome}</span>
                         </li>
@@ -694,86 +767,33 @@ export function CantiereDetailClient({
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </Sezione>
 
-        {/* ── Rapportini del cantiere ── */}
-        <Card className="xl:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              Rapportini{' '}
-              <span className="font-mono text-xs font-normal text-muted-foreground">
-                {rapportiniCantiere.length}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {rapportiniCantiere.length === 0 ? (
-              <p className="text-xs italic text-muted-foreground">
-                Nessun rapportino registrato per questo cantiere.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Dipendente</th>
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Data</th>
-                      <th className="pb-2 text-left text-xs font-medium text-muted-foreground">Stato</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Ord.</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Straord.</th>
-                      <th className="pb-2 text-right text-xs font-medium text-muted-foreground">Viaggio</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rapportiniCantiere.map((r) => (
-                      <tr
-                        key={r.rapportinoId}
-                        className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors"
-                      >
-                        <td className="py-2 pr-3 text-xs">{r.dipendenteNome}</td>
-                        <td className="py-2 pr-3 text-xs tabular-nums">{fmtData(r.data)}</td>
-                        <td className="py-2 pr-3">
-                          <StatoRapportinoBadge stato={r.stato} />
-                        </td>
-                        <td className="py-2 pr-3 text-right text-xs tabular-nums">
-                          {r.ore_ordinarie > 0 ? r.ore_ordinarie : <span className="text-muted-foreground/50">—</span>}
-                        </td>
-                        <td className="py-2 pr-3 text-right text-xs tabular-nums">
-                          {r.ore_straordinarie > 0 ? r.ore_straordinarie : <span className="text-muted-foreground/50">—</span>}
-                        </td>
-                        <td className="py-2 text-right text-xs tabular-nums">
-                          {r.ore_viaggio > 0 ? r.ore_viaggio : <span className="text-muted-foreground/50">—</span>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ── Anomalie ── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <AlertTriangle
-                className={`h-4 w-4 ${anomalie.length > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}
-                aria-hidden="true"
+          {/* Anomalie */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon={
+                  <AlertTriangle
+                    className={`h-4 w-4 ${anomalie.length > 0 ? 'text-amber-500' : ''}`}
+                    aria-hidden="true"
+                  />
+                }
+                titolo="Anomalie"
+                accent="amber"
+                right={
+                  anomalie.length > 0 ? (
+                    <span className="font-mono text-xs font-semibold text-amber-600 dark:text-amber-400">
+                      {anomalie.length}
+                    </span>
+                  ) : null
+                }
               />
-              Anomalie
-              {anomalie.length > 0 && (
-                <span className="ml-auto font-mono text-xs font-normal text-amber-600 dark:text-amber-400">
-                  {anomalie.length}
-                </span>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
+            }
+          >
             {anomalie.length === 0 ? (
               <p className="text-xs italic text-muted-foreground">
-                Nessuna anomalia negli ultimi 30 giorni.
+                Nessuna anomalia nel periodo selezionato.
               </p>
             ) : (
               <ul className="space-y-1.5">
@@ -783,7 +803,7 @@ export function CantiereDetailClient({
                     className="flex items-center justify-between gap-2 rounded-md border border-amber-200/50 bg-amber-50/30 px-2.5 py-1.5 dark:border-amber-900/30 dark:bg-amber-950/10"
                   >
                     <span className="truncate text-xs">{a.dipendenteNome}</span>
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                       {fmtData(a.giorno)}
                     </span>
                   </li>
@@ -791,15 +811,15 @@ export function CantiereDetailClient({
               </ul>
             )}
             {anomalie.length > 0 && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                Timbrature senza coppia ingresso/uscita negli ultimi 30 giorni.
+              <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
+                Timbrature senza coppia ingresso/uscita nel periodo selezionato.
               </p>
             )}
-          </CardContent>
-        </Card>
+          </Sezione>
+        </div>
       </div>
 
-      {/* ── Dialog Gestisci squadra ── */}
+      {/* ── Dialog Gestisci squadra (invariato) ── */}
       <Dialog open={squadraDialogOpen} onOpenChange={setSquadraDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>

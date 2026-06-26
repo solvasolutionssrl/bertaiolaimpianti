@@ -3,7 +3,9 @@ import QRCode from 'qrcode';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { qrUrl } from '@kommessa/api/kantiere-qr';
-import { giornateIncomplete, type TimbraturaGiorno } from '@kommessa/api/kantiere-report';
+import { giornateIncomplete, aggregaOre, type TimbraturaGiorno, type RigaAgg } from '@kommessa/api/kantiere-report';
+import { statoTurno } from '@kommessa/api/kantiere-ore';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
@@ -13,6 +15,7 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: { id: string };
+  searchParams: { giorni?: string };
 }
 
 /** Converte un timestamp ISO in data YYYY-MM-DD nel fuso Europe/Rome */
@@ -20,9 +23,16 @@ function tsToGiornoRome(ts: string): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(ts));
 }
 
-export default async function CantiereDetailPage({ params }: PageProps) {
+/** Periodi consentiti per lo storico presenze (giorni indietro da oggi). */
+const PERIODI_GIORNI = [7, 14, 30, 60, 90] as const;
+
+export default async function CantiereDetailPage({ params, searchParams }: PageProps) {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
+
+  // Periodo storico (default 30 giorni). Validato contro la whitelist.
+  const giorniReq = Number(searchParams?.giorni);
+  const giorni = PERIODI_GIORNI.includes(giorniReq as (typeof PERIODI_GIORNI)[number]) ? giorniReq : 30;
 
   // 1. Carica cantiere
   const { data: cantiereRaw } = await supabase
@@ -153,7 +163,9 @@ export default async function CantiereDetailPage({ params }: PageProps) {
     commessaCollegata = found?.titolo ?? null;
   }
 
-  // 9. Rapportini del cantiere (righe che referenziano questo cantiere)
+  // ── 9. STORICO PRESENZE: rapportino_righe del cantiere nel periodo ──────────
+  // rapportino_righe NON ha tenant_id: è scoped via cantiere_id (già del tenant)
+  // + RLS. Si filtra per data del rapportino unendo manualmente i rapportini.
   type RigaRapRow = {
     rapportino_id: string;
     ore_ordinarie: number;
@@ -163,19 +175,24 @@ export default async function CantiereDetailPage({ params }: PageProps) {
   type RapportinoRow = {
     id: string;
     dipendente_id: string;
-    data: string;
+    data: string; // YYYY-MM-DD
     stato: string;
   };
 
-  // rapportino_righe NON ha tenant_id: è scoped via cantiere_id (già del tenant) + RLS.
   const { data: righeRapRaw } = (await supabase
     .from('rapportino_righe' as never)
     .select('rapportino_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
     .eq('cantiere_id', params.id)
-    .limit(30)) as { data: RigaRapRow[] | null };
+    .limit(5000)) as { data: RigaRapRow[] | null };
 
-  const righeRap = righeRapRaw ?? [];
-  const rapportinoIds = [...new Set(righeRap.map((r) => r.rapportino_id))];
+  const righeRapAll = righeRapRaw ?? [];
+  const rapportinoIds = [...new Set(righeRapAll.map((r) => r.rapportino_id))];
+
+  // Limite inferiore del periodo come data calendario Rome (YYYY-MM-DD).
+  const oggiRome = romeDay(new Date());
+  const dataDa = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(
+    new Date(Date.now() - (giorni - 1) * 24 * 60 * 60 * 1000),
+  );
 
   let rapportiniRows: RapportinoRow[] = [];
   if (rapportinoIds.length > 0) {
@@ -183,11 +200,19 @@ export default async function CantiereDetailPage({ params }: PageProps) {
       .from('rapportini' as never)
       .select('id, dipendente_id, data, stato')
       .in('id', rapportinoIds)
+      .gte('data', dataDa)
       .order('data', { ascending: false })) as { data: RapportinoRow[] | null };
     rapportiniRows = rapRaw ?? [];
   }
 
-  // Risolvi nomi dipendenti per i rapportini
+  // Mappa rapportino -> meta (dipendente + data), solo quelli nel periodo.
+  const rapMetaById = new Map<string, RapportinoRow>();
+  for (const r of rapportiniRows) rapMetaById.set(r.id, r);
+
+  // Righe del periodo (filtrate ai rapportini caricati = già dentro il range).
+  const righeRapPeriodo = righeRapAll.filter((r) => rapMetaById.has(r.rapportino_id));
+
+  // Risolvi nomi dipendenti per i rapportini del periodo.
   const rapDipIds = [...new Set(rapportiniRows.map((r) => r.dipendente_id))];
   const rapDipMap = new Map<string, string>();
   if (rapDipIds.length > 0) {
@@ -200,76 +225,141 @@ export default async function CantiereDetailPage({ params }: PageProps) {
     }
   }
 
-  // Mappa rapportino_id -> righe ore
-  const righeByRapportino = new Map<string, RigaRapRow>();
-  for (const r of righeRap) {
-    righeByRapportino.set(r.rapportino_id, r);
-  }
-
-  const rapportiniCantiere = rapportiniRows.map((r) => {
-    const riga = righeByRapportino.get(r.id);
+  // Aggregazione per dipendente via aggregaOre (chiave = dipendente_id).
+  const righeAgg: RigaAgg[] = righeRapPeriodo.map((r) => {
+    const meta = rapMetaById.get(r.rapportino_id)!;
     return {
-      rapportinoId: r.id,
-      dipendenteNome: rapDipMap.get(r.dipendente_id) ?? r.dipendente_id,
-      data: r.data,
-      stato: r.stato,
-      ore_ordinarie: riga?.ore_ordinarie ?? 0,
-      ore_straordinarie: riga?.ore_straordinarie ?? 0,
-      ore_viaggio: riga?.ore_viaggio ?? 0,
+      chiaveDipendente: meta.dipendente_id,
+      chiaveCommessa: `k:${params.id}`,
+      ore_ordinarie: Number(r.ore_ordinarie) || 0,
+      ore_straordinarie: Number(r.ore_straordinarie) || 0,
+      ore_viaggio: Number(r.ore_viaggio) || 0,
     };
   });
 
-  // 10. Anomalie (timbrature incomplete ultime 30gg su questo cantiere)
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const fromTs = thirtyDaysAgo.toISOString();
+  const perDipendente = aggregaOre(righeAgg, 'dipendente');
+  const storicoPerPersona = [...perDipendente.entries()]
+    .map(([dipendenteId, agg]) => ({
+      dipendenteId,
+      nome: rapDipMap.get(dipendenteId) ?? dipendenteId,
+      ordinarie: agg.ordinarie,
+      straordinarie: agg.straordinarie,
+      viaggio: agg.viaggio,
+      totale: agg.totale,
+    }))
+    .sort((a, b) => b.totale - a.totale);
 
+  // Totali periodo (per KPI + donut ripartizione).
+  const storicoTotali = storicoPerPersona.reduce(
+    (acc, p) => ({
+      ordinarie: Math.round((acc.ordinarie + p.ordinarie) * 100) / 100,
+      straordinarie: Math.round((acc.straordinarie + p.straordinarie) * 100) / 100,
+      viaggio: Math.round((acc.viaggio + p.viaggio) * 100) / 100,
+      totale: Math.round((acc.totale + p.totale) * 100) / 100,
+    }),
+    { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0 },
+  );
+
+  // Trend giornaliero: somma ore (ord+straord+viaggio) per giorno del periodo.
+  const orePerGiorno = new Map<string, number>();
+  for (const r of righeRapPeriodo) {
+    const meta = rapMetaById.get(r.rapportino_id)!;
+    const tot = (Number(r.ore_ordinarie) || 0) + (Number(r.ore_straordinarie) || 0) + (Number(r.ore_viaggio) || 0);
+    orePerGiorno.set(meta.data, Math.round(((orePerGiorno.get(meta.data) ?? 0) + tot) * 100) / 100);
+  }
+  const trendGiornaliero = [...orePerGiorno.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([giorno, valore]) => ({ giorno, valore, oggi: giorno === oggiRome }));
+
+  // ── 10. CHI C'È IN CANTIERE ORA: timbrature di oggi (Rome), paired ──────────
+  const { fromIso, toIso } = romeDayBoundsUtc(oggiRome);
+  const { data: timbOggiRaw } = (await supabase
+    .from('timbrature' as never)
+    .select('dipendente_id, tipo, ts, pausa')
+    .eq('cantiere_id', params.id)
+    .eq('tenant_id', ctx.tenantId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true })) as {
+    data: { dipendente_id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null }[] | null;
+  };
+
+  const timbOggi = timbOggiRaw ?? [];
+  const eventiPerDip = new Map<string, { tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null }[]>();
+  for (const t of timbOggi) {
+    const arr = eventiPerDip.get(t.dipendente_id) ?? [];
+    arr.push({ tipo: t.tipo, ts: t.ts, pausa: t.pausa });
+    eventiPerDip.set(t.dipendente_id, arr);
+  }
+
+  // Nomi dipendenti presenti oggi (riusa la squadra map dove possibile).
+  const presentiDipIds = [...eventiPerDip.keys()];
+  const presentiDipMap = new Map<string, string>();
+  const mancantiPresenti = presentiDipIds.filter((id) => !rapDipMap.has(id));
+  if (mancantiPresenti.length > 0) {
+    const { data: presDipRaw } = (await supabase
+      .from('dipendenti' as never)
+      .select('id, nome, cognome')
+      .in('id', mancantiPresenti)) as { data: { id: string; nome: string; cognome: string }[] | null };
+    for (const d of presDipRaw ?? []) presentiDipMap.set(d.id, `${d.cognome} ${d.nome}`);
+  }
+  function nomePresente(id: string): string {
+    return rapDipMap.get(id) ?? presentiDipMap.get(id) ?? id;
+  }
+
+  const chiInCantiere = presentiDipIds
+    .map((dipId) => {
+      const info = statoTurno(eventiPerDip.get(dipId)!);
+      if (info.stato === 'idle') return null;
+      return {
+        dipendenteId: dipId,
+        nome: nomePresente(dipId),
+        stato: info.stato as 'lavoro' | 'pausa',
+        da: info.ingressoAperto ?? info.inizioPausa,
+      };
+    })
+    .filter((x): x is { dipendenteId: string; nome: string; stato: 'lavoro' | 'pausa'; da: string | null } => x !== null)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
+
+  // ── 11. ANOMALIE (giornate incomplete sul periodo) ──────────────────────────
+  const fromTs = new Date(Date.now() - giorni * 24 * 60 * 60 * 1000).toISOString();
   const { data: timbRaw } = (await supabase
     .from('timbrature' as never)
     .select('dipendente_id, tipo, ts')
     .eq('cantiere_id', params.id)
     .eq('tenant_id', ctx.tenantId)
     .gte('ts', fromTs)
-    .limit(2000)) as {
+    .limit(5000)) as {
     data: { dipendente_id: string; tipo: string; ts: string }[] | null;
   };
 
   const timbRows = timbRaw ?? [];
-
   const timbraturePerFn: TimbraturaGiorno[] = timbRows
     .filter((t) => t.tipo === 'ingresso' || t.tipo === 'uscita')
     .map((t) => ({
       dipendente_id: t.dipendente_id,
-      commessa_id: `k:${params.id}`, // chiave sintetica uniforme per giornateIncomplete
+      commessa_id: `k:${params.id}`,
       giorno: tsToGiornoRome(t.ts),
       tipo: t.tipo as 'ingresso' | 'uscita',
     }));
 
   const incompleteRaw = giornateIncomplete(timbraturePerFn);
 
-  // Risolvi nomi dipendenti per le anomalie
+  // Risolvi nomi dipendenti per le anomalie (riusa rapDipMap/presentiDipMap).
   const anomaliaDipIds = [...new Set(incompleteRaw.map((r) => r.dipendente_id))];
   const anomaliaDipMap = new Map<string, string>();
-  if (anomaliaDipIds.length > 0) {
-    const existing = rapDipMap; // riusa se sovrapposto
-    const mancanti = anomaliaDipIds.filter((id) => !existing.has(id));
-    if (mancanti.length > 0) {
-      const { data: anDipRaw } = (await supabase
-        .from('dipendenti' as never)
-        .select('id, nome, cognome')
-        .in('id', mancanti)) as { data: { id: string; nome: string; cognome: string }[] | null };
-      for (const d of anDipRaw ?? []) {
-        existing.set(d.id, `${d.cognome} ${d.nome}`);
-      }
-    }
-    for (const id of anomaliaDipIds) {
-      anomaliaDipMap.set(id, existing.get(id) ?? id);
-    }
+  const mancantiAnomalie = anomaliaDipIds.filter((id) => !rapDipMap.has(id) && !presentiDipMap.has(id));
+  if (mancantiAnomalie.length > 0) {
+    const { data: anDipRaw } = (await supabase
+      .from('dipendenti' as never)
+      .select('id, nome, cognome')
+      .in('id', mancantiAnomalie)) as { data: { id: string; nome: string; cognome: string }[] | null };
+    for (const d of anDipRaw ?? []) anomaliaDipMap.set(d.id, `${d.cognome} ${d.nome}`);
   }
 
   const anomalie = incompleteRaw.map((r) => ({
     dipendente_id: r.dipendente_id,
-    dipendenteNome: anomaliaDipMap.get(r.dipendente_id) ?? r.dipendente_id,
+    dipendenteNome: rapDipMap.get(r.dipendente_id) ?? presentiDipMap.get(r.dipendente_id) ?? anomaliaDipMap.get(r.dipendente_id) ?? r.dipendente_id,
     giorno: r.giorno,
   }));
 
@@ -328,8 +418,14 @@ export default async function CantiereDetailPage({ params }: PageProps) {
         printHref={`/office/kantiere/cantieri/${params.id}/stampa`}
         commesse={commesse}
         commessaCollegata={commessaCollegata}
-        rapportiniCantiere={rapportiniCantiere}
         anomalie={anomalie}
+        chiInCantiere={chiInCantiere}
+        storico={{
+          giorni,
+          perPersona: storicoPerPersona,
+          totali: storicoTotali,
+          trend: trendGiornaliero,
+        }}
       />
 
       <CantiereSediPanel

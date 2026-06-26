@@ -292,10 +292,10 @@ export async function generaReportRiunione(
     };
   }
 
-  const system = `Sei un assistente che riepiloga riunioni di cantiere/sopralluogo per un'impresa di impianti idro-termo-sanitari italiana.
+  const system = `Sei un assistente che mette in ordine e in pulito i verbali di riunioni di cantiere/sopralluogo per un'impresa di impianti idro-termo-sanitari italiana.
 
 Ricevi il verbale grezzo di una riunione (può essere scritto a mano o dettato a voce, italiano). Devi produrre:
-1. un "reportino": riassunto sintetico in italiano, max 6 punti, in TESTO SEMPLICE (no markdown). Usa eventualmente "- " per elenchi puntati e a-capo per separare i punti. Linguaggio asciutto, tecnico, professionale.
+1. un "reportino": il testo dell'utente RISCRITTO in italiano in modo chiaro, scorrevole e ben organizzato, in TESTO SEMPLICE (no markdown). Riordina e riscrivi il contenuto per renderlo ordinato e leggibile: NON tagliare contenuti, NON riassumere, NON sintetizzare, NON inventare nulla; mantieni tutto il senso e i dettagli inseriti dall'utente, correggi solo forma, ordine e leggibilità. Puoi usare "- " per elenchi puntati e a-capo per separare i temi. Tono asciutto, tecnico, professionale.
 2. "todo_proposti": lista di azioni SOLO se esplicitamente menzionate nel verbale. Ogni TODO ha titolo breve (max 80 caratteri, imperativo: "Ordinare pompa…", "Chiamare Mario…"), priorita (bassa/media/alta/urgente — desumi dal tono: "subito"/"entro domani" → urgente; "appena puoi"/"settimana prossima" → media; "quando capita" → bassa) e una note opzionale di contesto (max 200 caratteri).
 
 REGOLE STRICT PER I TODO:
