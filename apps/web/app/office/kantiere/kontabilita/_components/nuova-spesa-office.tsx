@@ -64,6 +64,136 @@ function isCategoria(v: string): v is CategoriaSpesa {
   return (CATEGORIE_ORDINATE as string[]).includes(v);
 }
 
+const FASI_ANALISI = [
+  "Leggo l'importo...",
+  "Riconosco l'esercente...",
+  "Estraggo l'IVA...",
+  'Rilevo la data...',
+] as const;
+
+/**
+ * Loading "magic" durante la scansione AI: anteprima della ricevuta sfumata,
+ * con un beam che spazza dall'alto verso il basso + caption che ruota tra le
+ * fasi. Rispetta prefers-reduced-motion (niente beam, solo pulse calmo).
+ */
+function ScanningLoader({ preview }: { preview: string | null }) {
+  const [idx, setIdx] = React.useState(0);
+  React.useEffect(() => {
+    const t = setInterval(() => setIdx((i) => (i + 1) % FASI_ANALISI.length), 900);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="py-2" role="status" aria-live="polite">
+      <style jsx>{`
+        @keyframes spesa-beam {
+          0% {
+            transform: translateY(-120%);
+            opacity: 0;
+          }
+          12% {
+            opacity: 1;
+          }
+          88% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(2400%);
+            opacity: 0;
+          }
+        }
+        @keyframes spesa-shimmer {
+          0%,
+          100% {
+            opacity: 0.35;
+          }
+          50% {
+            opacity: 0.65;
+          }
+        }
+        @keyframes spesa-dot {
+          0%,
+          100% {
+            transform: scale(0.7);
+            opacity: 0.45;
+          }
+          50% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        .spesa-beam {
+          animation: spesa-beam 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        .spesa-shimmer {
+          animation: spesa-shimmer 1.6s ease-in-out infinite;
+        }
+        .spesa-dot {
+          animation: spesa-dot 0.9s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .spesa-beam {
+            display: none;
+          }
+          .spesa-shimmer {
+            animation: spesa-dot 1.8s ease-in-out infinite;
+          }
+          .spesa-dot {
+            animation: spesa-dot 1.8s ease-in-out infinite;
+          }
+        }
+      `}</style>
+
+      <div className="relative mx-auto aspect-[4/3] w-full max-w-xs overflow-hidden rounded-xl border border-border bg-muted/40">
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview}
+            alt=""
+            className="h-full w-full object-contain opacity-70"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <FileText className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
+          </div>
+        )}
+
+        {/* shimmer soffuso */}
+        <div
+          className="spesa-shimmer pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(115deg, transparent 30%, rgba(19,64,166,0.12) 50%, transparent 70%)',
+          }}
+          aria-hidden="true"
+        />
+
+        {/* beam di scansione top→bottom */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+          <div
+            className="spesa-beam absolute left-0 right-0 top-0 h-[6%]"
+            style={{
+              background:
+                'linear-gradient(to bottom, transparent, rgba(19,64,166,0.55), rgba(217,119,6,0.55), transparent)',
+              boxShadow: '0 0 16px 2px rgba(19,64,166,0.35)',
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-2 text-sm font-medium text-foreground">
+        <span
+          className="spesa-dot inline-block h-2 w-2 rounded-full"
+          style={{ backgroundColor: '#D97706' }}
+          aria-hidden="true"
+        />
+        <span>{FASI_ANALISI[idx]}</span>
+        <span aria-hidden="true">✨</span>
+      </div>
+    </div>
+  );
+}
+
 // ISO (con offset) → valore per <input type="datetime-local"> in ora locale.
 function isoToLocalInput(iso: string | null): string {
   if (!iso) return '';
@@ -91,6 +221,8 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
   // file agganciato (presente solo dopo uno scan ok)
   const [scan, setScan] = React.useState<ScanOk | null>(null);
   const [fileName, setFileName] = React.useState<string | null>(null);
+  // anteprima locale del file caricato (per il loading "magic" durante l'analisi)
+  const [preview, setPreview] = React.useState<string | null>(null);
 
   // campi del form
   const defaultDip = mioDipendenteId ?? dipendentiOptions[0]?.id ?? '';
@@ -101,10 +233,24 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
   const [importoIva, setImportoIva] = React.useState('');
   const [ragioneSociale, setRagioneSociale] = React.useState('');
   const [dataLocal, setDataLocal] = React.useState('');
-  const [metodo, setMetodo] = React.useState<MetodoPagamento | ''>('');
+  // default sempre "carta" (Carta aziendale) finche' l'AI non restituisce altro
+  const [metodo, setMetodo] = React.useState<MetodoPagamento>('carta');
   const [valuta, setValuta] = React.useState('EUR');
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const revokePreview = React.useCallback(() => {
+    setPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
+
+  React.useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   const reset = React.useCallback(() => {
     setFase('scelta');
@@ -112,6 +258,7 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
     setAvviso(null);
     setScan(null);
     setFileName(null);
+    revokePreview();
     setDipendenteId(defaultDip);
     setCantiereId('');
     setCategoria('varie');
@@ -119,9 +266,9 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
     setImportoIva('');
     setRagioneSociale('');
     setDataLocal('');
-    setMetodo('');
+    setMetodo('carta');
     setValuta('EUR');
-  }, [defaultDip]);
+  }, [defaultDip, revokePreview]);
 
   const chiudi = React.useCallback(() => {
     reset();
@@ -136,6 +283,11 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
 
       setErrMsg(null);
       setAvviso(null);
+      revokePreview();
+      // anteprima solo per le immagini (i PDF non si mostrano), per il loading "magic"
+      if (file.type.startsWith('image/')) {
+        setPreview(URL.createObjectURL(file));
+      }
       setFase('analisi');
 
       try {
@@ -147,12 +299,14 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
           // immagine non leggibile: nessun r2Key restituito → si prosegue a mano senza file
           setScan(null);
           setFileName(null);
+          revokePreview();
           setAvviso('Ricevuta non leggibile. Compila a mano oppure riprova con uno scatto piu nitido.');
           setFase('form');
           return;
         }
         if (!resp.ok) {
           setErrMsg('Non sono riuscito a leggere la ricevuta. Riprova.');
+          revokePreview();
           setFase('scelta');
           return;
         }
@@ -166,7 +320,8 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
         setCategoria(isCategoria(est.categoria) ? est.categoria : 'varie');
         setRagioneSociale(est.ragione_sociale ?? '');
         setDataLocal(isoToLocalInput(est.data_scontrino));
-        setMetodo(est.metodo_pagamento ?? '');
+        // default "carta": l'AI vince solo se ha restituito un metodo esplicito
+        setMetodo(est.metodo_pagamento ?? 'carta');
         setValuta(est.valuta || 'EUR');
         if (data.isPdf) {
           setAvviso('PDF allegato. Inserisci i dati a mano, il documento resta agganciato alla spesa.');
@@ -174,10 +329,11 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
         setFase('form');
       } catch {
         setErrMsg('Connessione assente o instabile. Riprova.');
+        revokePreview();
         setFase('scelta');
       }
     },
-    [],
+    [revokePreview],
   );
 
   const importoNum = Number(importoTotale.replace(',', '.'));
@@ -199,7 +355,7 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
         valuta: valuta || 'EUR',
         ragioneSociale: ragioneSociale.trim() || null,
         dataScontrino: dataIso,
-        metodoPagamento: metodo || null,
+        metodoPagamento: metodo,
         ...(scan
           ? {
               r2Key: scan.r2Key,
@@ -290,12 +446,9 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
               </div>
             ) : null}
 
-            {/* ANALISI */}
+            {/* ANALISI: loading "magic" con beam di scansione sull'anteprima */}
             {fase === 'analisi' ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
-                <p className="text-sm">Analizzo la ricevuta...</p>
-              </div>
+              <ScanningLoader preview={preview} />
             ) : null}
 
             {errMsg && fase !== 'form' ? (
@@ -464,12 +617,11 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
                     </label>
                     <select
                       value={metodo}
-                      onChange={(e) => setMetodo(e.target.value as MetodoPagamento | '')}
+                      onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
                       className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <option value="">Non indicato</option>
+                      <option value="carta">Carta aziendale</option>
                       <option value="contanti">Contanti</option>
-                      <option value="carta">Carta</option>
                       <option value="altro">Altro</option>
                     </select>
                   </div>

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Button, Card, CardContent } from '@kommessa/ui';
+import { Button } from '@kommessa/ui';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
 import type { SpesaRiga, CantiereOption } from './spese-table';
 
@@ -115,95 +115,87 @@ export function Filtri({ valori, cantieri, dipendenti, righe }: Props) {
     URL.revokeObjectURL(url);
   }
 
+  const selectCls =
+    'h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+  const dateCls =
+    'h-8 rounded-md border border-input bg-background px-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring';
+
   return (
-    <Card>
-      <CardContent className="p-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Cantiere</label>
-            <select
-              value={valori.cantiere}
-              onChange={(e) => applica({ cantiere: e.target.value })}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Tutti i cantieri</option>
-              {cantieri.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nome}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
+      <select
+        aria-label="Cantiere"
+        value={valori.cantiere}
+        onChange={(e) => applica({ cantiere: e.target.value })}
+        className={selectCls}
+      >
+        <option value="">Tutti i cantieri</option>
+        {cantieri.map((k) => (
+          <option key={k.id} value={k.id}>
+            {k.nome}
+          </option>
+        ))}
+      </select>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Dipendente</label>
-            <select
-              value={valori.dipendente}
-              onChange={(e) => applica({ dipendente: e.target.value })}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Tutti i dipendenti</option>
-              {dipendenti.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.nome}
-                </option>
-              ))}
-            </select>
-          </div>
+      <select
+        aria-label="Dipendente"
+        value={valori.dipendente}
+        onChange={(e) => applica({ dipendente: e.target.value })}
+        className={selectCls}
+      >
+        <option value="">Tutti i dipendenti</option>
+        {dipendenti.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.nome}
+          </option>
+        ))}
+      </select>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Categoria</label>
-            <select
-              value={valori.categoria}
-              onChange={(e) => applica({ categoria: e.target.value })}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Tutte le categorie</option>
-              {CATEGORIE_ORDINATE.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORIA_META[c].label}
-                </option>
-              ))}
-            </select>
-          </div>
+      <select
+        aria-label="Categoria"
+        value={valori.categoria}
+        onChange={(e) => applica({ categoria: e.target.value })}
+        className={selectCls}
+      >
+        <option value="">Tutte le categorie</option>
+        {CATEGORIE_ORDINATE.map((c) => (
+          <option key={c} value={c}>
+            {CATEGORIA_META[c].label}
+          </option>
+        ))}
+      </select>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Dal</label>
-            <input
-              type="date"
-              value={valori.da}
-              onChange={(e) => applica({ da: e.target.value })}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-muted-foreground">Dal</span>
+        <input
+          type="date"
+          aria-label="Data dal"
+          value={valori.da}
+          onChange={(e) => applica({ da: e.target.value })}
+          className={dateCls}
+        />
+      </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted-foreground">Al</label>
-            <input
-              type="date"
-              value={valori.a}
-              onChange={(e) => applica({ a: e.target.value })}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-muted-foreground">Al</span>
+        <input
+          type="date"
+          aria-label="Data al"
+          value={valori.a}
+          onChange={(e) => applica({ a: e.target.value })}
+          className={dateCls}
+        />
+      </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            {haFiltri ? (
-              <Button variant="ghost" size="sm" onClick={() => router.push(pathname)}>
-                Pulisci filtri
-              </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={esportaCsv}
-              disabled={righe.length === 0}
-            >
-              Esporta CSV
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="ml-auto flex items-center gap-2">
+        {haFiltri ? (
+          <Button variant="ghost" size="sm" onClick={() => router.push(pathname)}>
+            Pulisci
+          </Button>
+        ) : null}
+        <Button variant="outline" size="sm" onClick={esportaCsv} disabled={righe.length === 0}>
+          Esporta CSV
+        </Button>
+      </div>
+    </div>
   );
 }

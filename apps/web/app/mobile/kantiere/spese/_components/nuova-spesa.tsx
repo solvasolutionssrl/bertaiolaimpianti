@@ -59,6 +59,99 @@ function isCategoria(v: string): v is CategoriaSpesa {
   return (CATEGORIE_ORDINATE as string[]).includes(v);
 }
 
+const FASI_ANALISI = [
+  "Leggo l'importo...",
+  "Riconosco l'esercente...",
+  "Estraggo l'IVA...",
+  'Rilevo la data...',
+] as const;
+
+/**
+ * Overlay "magic" durante la scansione AI: si appoggia sull'anteprima della
+ * ricevuta (gia' sfumata) con un beam che spazza dall'alto verso il basso +
+ * caption che ruota tra le fasi. Rispetta prefers-reduced-motion (niente beam,
+ * solo pulse calmo).
+ */
+function ScanningOverlay() {
+  const [idx, setIdx] = React.useState(0);
+  React.useEffect(() => {
+    const t = setInterval(() => setIdx((i) => (i + 1) % FASI_ANALISI.length), 900);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div className="absolute inset-0" role="status" aria-live="polite">
+      <style jsx>{`
+        @keyframes spesa-beam {
+          0% {
+            transform: translateY(-120%);
+            opacity: 0;
+          }
+          12% {
+            opacity: 1;
+          }
+          88% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(2400%);
+            opacity: 0;
+          }
+        }
+        @keyframes spesa-dot {
+          0%,
+          100% {
+            transform: scale(0.7);
+            opacity: 0.5;
+          }
+          50% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        .spesa-beam {
+          animation: spesa-beam 1.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        .spesa-dot {
+          animation: spesa-dot 0.9s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .spesa-beam {
+            display: none;
+          }
+          .spesa-dot {
+            animation: spesa-dot 1.8s ease-in-out infinite;
+          }
+        }
+      `}</style>
+
+      {/* velo + beam di scansione top→bottom */}
+      <div className="absolute inset-0 bg-black/30" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div
+          className="spesa-beam absolute left-0 right-0 top-0 h-[6%]"
+          style={{
+            background:
+              'linear-gradient(to bottom, transparent, rgba(96,165,250,0.7), rgba(251,191,36,0.7), transparent)',
+            boxShadow: '0 0 18px 3px rgba(96,165,250,0.45)',
+          }}
+        />
+      </div>
+
+      {/* caption rotante */}
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-8 text-sm font-medium text-white">
+        <span
+          className="spesa-dot inline-block h-2 w-2 rounded-full"
+          style={{ backgroundColor: '#FBBF24' }}
+          aria-hidden="true"
+        />
+        <span>{FASI_ANALISI[idx]}</span>
+        <span aria-hidden="true">✨</span>
+      </div>
+    </div>
+  );
+}
+
 // ISO (con offset) → valore per <input type="datetime-local"> in ora locale.
 function isoToLocalInput(iso: string | null): string {
   if (!iso) return '';
@@ -87,7 +180,8 @@ export function NuovaSpesa() {
   const [categoria, setCategoria] = React.useState<CategoriaSpesa>('varie');
   const [ragioneSociale, setRagioneSociale] = React.useState('');
   const [dataLocal, setDataLocal] = React.useState('');
-  const [metodo, setMetodo] = React.useState<MetodoPagamento | ''>('');
+  // default sempre "carta" (Carta aziendale) finche' l'AI non restituisce altro
+  const [metodo, setMetodo] = React.useState<MetodoPagamento>('carta');
 
   const fotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const allegaInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -116,7 +210,7 @@ export function NuovaSpesa() {
     setCategoria('varie');
     setRagioneSociale('');
     setDataLocal('');
-    setMetodo('');
+    setMetodo('carta');
   }, [revokePreview]);
 
   const chiudi = React.useCallback(() => {
@@ -163,7 +257,8 @@ export function NuovaSpesa() {
         setCategoria(isCategoria(est.categoria) ? est.categoria : 'varie');
         setRagioneSociale(est.ragione_sociale ?? '');
         setDataLocal(isoToLocalInput(est.data_scontrino));
-        setMetodo(est.metodo_pagamento ?? '');
+        // default "carta": l'AI vince solo se ha restituito un metodo esplicito
+        setMetodo(est.metodo_pagamento ?? 'carta');
         setFase('revisione');
       } catch {
         setErrMsg('Connessione assente o instabile. Riprova.');
@@ -194,7 +289,7 @@ export function NuovaSpesa() {
         ragioneSociale: ragioneSociale.trim() || null,
         valuta: est.valuta || 'EUR',
         dataScontrino: dataIso,
-        metodoPagamento: metodo || null,
+        metodoPagamento: metodo,
         partitaIva: est.partita_iva,
         numeroDocumento: est.numero_documento,
         indirizzoEsercente: est.indirizzo_esercente,
@@ -269,13 +364,14 @@ export function NuovaSpesa() {
       {preview ? (
         <div className="relative mt-3 aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted/40">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="" className="h-full w-full object-contain" />
-          {fase === 'analisi' ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 text-white">
-              <Loader2 className="h-7 w-7 animate-spin" aria-hidden="true" />
-              <p className="text-sm font-medium">Leggo la ricevuta…</p>
-            </div>
-          ) : null}
+          <img
+            src={preview}
+            alt=""
+            className={`h-full w-full object-contain ${
+              fase === 'analisi' ? 'opacity-70' : ''
+            }`}
+          />
+          {fase === 'analisi' ? <ScanningOverlay /> : null}
           {fase === 'fatto' ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-emerald-600/85 text-white">
               <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
@@ -448,12 +544,11 @@ export function NuovaSpesa() {
             <select
               id="spesa-metodo"
               value={metodo}
-              onChange={(e) => setMetodo(e.target.value as MetodoPagamento | '')}
+              onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
             >
-              <option value="">Non indicato</option>
+              <option value="carta">Carta aziendale</option>
               <option value="contanti">Contanti</option>
-              <option value="carta">Carta</option>
               <option value="altro">Altro</option>
             </select>
           </div>
