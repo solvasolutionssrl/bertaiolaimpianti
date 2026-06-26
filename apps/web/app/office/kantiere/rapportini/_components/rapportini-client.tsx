@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, ChevronDown, ChevronRight, PlusCircle, CheckCheck, AlertTriangle } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, PlusCircle, CheckCheck, AlertTriangle, RotateCw } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
-import { approvaRapportino, approvaRapportiniBulk, respingiRapportino, riapriRapportino, registraOrePerDipendente } from '../../../_actions/kantiere-rapportini';
+import { approvaRapportino, approvaRapportiniBulk, respingiRapportino, riapriRapportino, registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
 import { RapportinoBadge } from './rapportino-badge';
 import { VersioniDialog } from './versioni-dialog';
 import { TimbratureRiepilogo, TimbratureSommario } from '../../_components/timbrature-riepilogo';
@@ -150,6 +150,10 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
   const [regNote, setRegNote] = React.useState('');
   const [regError, setRegError] = React.useState('');
   const [isRegPending, startRegAction] = React.useTransition();
+
+  // Ricalcolo presenze dalle timbrature (riparazione giornate bloccate)
+  const [isRicalcolo, startRicalcolo] = React.useTransition();
+  const [ricalcoloMsg, setRicalcoloMsg] = React.useState<string | null>(null);
 
   function openRegistra() {
     setRegDipendenteId(dipendenti[0]?.id ?? '');
@@ -436,6 +440,29 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
               </select>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  startRicalcolo(async () => {
+                    setRicalcoloMsg(null);
+                    const res = await ricalcolaPresenzePeriodo({ da: from, a: to });
+                    setRicalcoloMsg(
+                      res.ok ? `Ricalcolate ${res.giorni} giornate dalle timbrature.` : 'Ricalcolo non riuscito.',
+                    );
+                    router.refresh();
+                  })
+                }
+                disabled={isRicalcolo}
+                title="Riallinea le ore alle timbrature del periodo"
+              >
+                {isRicalcolo ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <RotateCw className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                )}
+                Ricalcola dalle timbrature
+              </Button>
               <Button variant="default" size="sm" onClick={openRegistra}>
                 <PlusCircle className="mr-1.5 h-4 w-4" aria-hidden="true" />
                 Registra ore
@@ -448,6 +475,9 @@ export function RapportiniClient({ righe, filtri, dipendenti, commesse, cantieri
               </a>
             </div>
           </div>
+          {ricalcoloMsg ? (
+            <p className="mt-2 text-xs text-muted-foreground">{ricalcoloMsg}</p>
+          ) : null}
         </CardContent>
       </Card>
 

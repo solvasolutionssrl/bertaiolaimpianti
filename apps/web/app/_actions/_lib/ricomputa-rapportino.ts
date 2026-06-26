@@ -185,18 +185,13 @@ export async function ricomputaRapportinoAuto(
   }
   if (!rapp) return null;
 
-  // 2. Decidi se ricalcolare. La giornata è "gestita dal sistema" se è ancora
-  //    bozza OPPURE è stata auto-approvata dal sistema (approvato_da NULL): in
-  //    quel caso resta fluida e si ri-valuta a ogni nuova timbratura. È invece
-  //    CONGELATA se approvata/respinta dall'ufficio (approvato_da valorizzato)
-  //    o modificata a mano (auto_compilato=false). Il rapportino è solo la
-  //    "forma": la sostanza sono le timbrature.
+  // 2. È CONGELATA solo se l'ufficio ci ha messo mano: approvata/respinta da
+  //    office (approvato_da valorizzato) o stato non gestito dal sistema. In
+  //    quel caso non si tocca. Tutto il resto (bozza / auto-approvato dal
+  //    sistema con approvato_da NULL) è "forma": riflette le timbrature.
   const gestitaDalSistema =
     rapp.stato === 'bozza' || (rapp.stato === 'approvato' && !rapp.approvato_da);
   if (!gestitaDalSistema) return rapp;
-  const auto = await leggiAutoCompilato(supabase, rapp.id);
-  if (auto === false) return rapp;
-  if (auto === null && (await contaRighe(supabase, rapp.id)) > 0) return rapp;
 
   // 3. Timbrature del giorno italiano esatto (confini in Europe/Rome).
   const { fromIso, toIso } = romeDayBoundsUtc(data);
@@ -215,6 +210,16 @@ export async function ricomputaRapportinoAuto(
     tipo: 'ingresso' | 'uscita';
     ts: string;
   }[]) ?? [];
+
+  // 3b. Le timbrature sono la verità: se ci sono, il rapportino le riflette
+  //     SEMPRE (anche se in passato era stato toccato a mano: lo rimettiamo
+  //     "auto"). Se NON ci sono timbrature, NON sovrascriviamo un eventuale
+  //     inserimento manuale (es. fallback "non ho timbrato").
+  if (timbrature.length === 0) {
+    const auto = await leggiAutoCompilato(supabase, rapp.id);
+    if (auto === false) return rapp;
+    if (auto === null && (await contaRighe(supabase, rapp.id)) > 0) return rapp;
+  }
 
   // 4. Minuti lavorati per target + viaggio (da timbrature + tratte manuali).
   const sintetiche = timbrature
@@ -304,13 +309,19 @@ export async function ricomputaRapportinoAuto(
     }
   }
 
-  if (rapp.stato !== nuovoStato) {
-    await supabase
-      .from('rapportini' as never)
-      .update({ stato: nuovoStato, approvato_da: null, approvato_at: approvatoAt } as never)
-      .eq('id', rapp.id);
-    rapp.stato = nuovoStato;
-  }
+  // Aggiorna stato + rimette auto_compilato=true (la giornata, ricalcolata
+  // dalle timbrature, è di nuovo gestita dal sistema). Sempre, così un giorno
+  // ex-manuale con timbrature torna "auto" anche se lo stato non cambia.
+  await supabase
+    .from('rapportini' as never)
+    .update({
+      stato: nuovoStato,
+      approvato_da: null,
+      approvato_at: approvatoAt,
+      auto_compilato: true,
+    } as never)
+    .eq('id', rapp.id);
+  rapp.stato = nuovoStato;
 
   return rapp;
 }

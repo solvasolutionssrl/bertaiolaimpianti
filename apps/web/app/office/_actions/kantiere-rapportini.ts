@@ -687,3 +687,60 @@ export async function giornateAperte(
 
   return { ok: true, giorni };
 }
+
+// ── ricalcolo presenze dalle timbrature (riparazione/manutenzione) ───────────
+
+const RicalcoloSchema = z.object({
+  da: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  a: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+/**
+ * Ricalcola i rapportini dalle timbrature per il periodo indicato (solo
+ * office/admin). Utile per riparare giornate rimaste "bloccate" (es. vecchio
+ * flusso manuale con righe vuote): le timbrature sono la verità, qui le
+ * riallineiamo. Salta le giornate già approvate/respinte dall'ufficio.
+ */
+export async function ricalcolaPresenzePeriodo(
+  input: z.infer<typeof RicalcoloSchema>,
+): Promise<{ ok: true; giorni: number } | { ok: false; error: string }> {
+  const parsed = RicalcoloSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
+  const { da, a } = parsed.data;
+
+  const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') return { ok: false, error: 'NON_AUTORIZZATO' };
+  if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+  if (da > a) return { ok: false, error: 'PERIODO_NON_VALIDO' };
+
+  const supabase = createServerSupabase();
+  const fromIso = romeDayBoundsUtc(da).fromIso;
+  const toIso = romeDayBoundsUtc(a).toIso;
+
+  const { data: timbRaw } = await supabase
+    .from('timbrature' as never)
+    .select('dipendente_id, ts')
+    .eq('tenant_id', ctx.tenantId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .limit(20000);
+  const righe = (timbRaw as { dipendente_id: string; ts: string }[] | null) ?? [];
+
+  // coppie distinte (dipendente, giorno italiano)
+  const coppie = new Map<string, { dipId: string; giorno: string }>();
+  for (const r of righe) {
+    const giorno = romeDay(new Date(r.ts));
+    const k = `${r.dipendente_id}|${giorno}`;
+    if (!coppie.has(k)) coppie.set(k, { dipId: r.dipendente_id, giorno });
+  }
+
+  let n = 0;
+  for (const { dipId, giorno } of coppie.values()) {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipId, giorno);
+    n += 1;
+  }
+
+  revalidatePath('/office/kantiere/rapportini');
+  revalidatePath('/office/kantiere/dipendenti');
+  return { ok: true, giorni: n };
+}
