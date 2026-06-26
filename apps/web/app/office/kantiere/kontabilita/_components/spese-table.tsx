@@ -149,10 +149,10 @@ export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId
               <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2 font-medium">Costo</th>
                 <th className="px-3 py-2 font-medium">Data</th>
-                <th className="px-3 py-2 font-medium">Esercente</th>
-                <th className="px-3 py-2 font-medium">Categoria</th>
-                <th className="px-3 py-2 font-medium">Cantiere</th>
                 <th className="px-3 py-2 font-medium">Dipendente</th>
+                <th className="px-3 py-2 font-medium">Cantiere</th>
+                <th className="px-3 py-2 font-medium">Categoria</th>
+                <th className="px-3 py-2 font-medium">Esercente</th>
                 <th className="px-3 py-2 text-right font-medium">Azioni</th>
               </tr>
             </thead>
@@ -179,16 +179,9 @@ export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId
                     {fmtDataScontrino(s.dataScontrino)}
                   </td>
 
-                  {/* Esercente */}
-                  <td className="max-w-[14rem] px-3 py-1.5 align-middle">
-                    <span className="block truncate font-medium text-foreground">
-                      {s.ragioneSociale?.trim() || 'Senza nome'}
-                    </span>
-                  </td>
-
-                  {/* Categoria */}
-                  <td className="whitespace-nowrap px-3 py-1.5 align-middle">
-                    <CategoriaBadge categoria={s.categoria} />
+                  {/* Dipendente */}
+                  <td className="max-w-[12rem] px-3 py-1.5 align-middle">
+                    <span className="block truncate text-muted-foreground">{s.dipendenteNome}</span>
                   </td>
 
                   {/* Cantiere (assegnazione inline) */}
@@ -201,9 +194,16 @@ export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId
                     />
                   </td>
 
-                  {/* Dipendente */}
-                  <td className="max-w-[12rem] px-3 py-1.5 align-middle">
-                    <span className="block truncate text-muted-foreground">{s.dipendenteNome}</span>
+                  {/* Categoria */}
+                  <td className="whitespace-nowrap px-3 py-1.5 align-middle">
+                    <CategoriaBadge categoria={s.categoria} />
+                  </td>
+
+                  {/* Esercente */}
+                  <td className="max-w-[14rem] px-3 py-1.5 align-middle">
+                    <span className="block truncate font-medium text-foreground">
+                      {s.ragioneSociale?.trim() || 'Senza nome'}
+                    </span>
                   </td>
 
                   {/* Azioni */}
