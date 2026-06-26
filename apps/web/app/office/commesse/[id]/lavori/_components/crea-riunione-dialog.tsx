@@ -672,8 +672,30 @@ export function CreaRiunioneDialog({
               >
                 Annulla
               </Button>
+              {/* Secondario, azzurrino: comunica che l'AI RISCRIVE il testo.
+                  Volutamente meno prominente del salvataggio normale. */}
               <Button
                 variant="outline"
+                size="sm"
+                onClick={generaReport}
+                disabled={generating || !hasTextContent}
+                title={
+                  !hasTextContent
+                    ? 'Scrivi o detta del contenuto per riscrivere con AI'
+                    : "L'AI riordina e riscrive il testo per renderlo più chiaro e leggibile"
+                }
+                className="border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
+              >
+                {generating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {generating ? 'Riscrittura…' : 'Riscrivi con AI'}
+              </Button>
+              {/* Azione PRIMARIA: salvataggio normale (l'utente raramente vuole
+                  che l'AI riscriva). Bottone solido, posizione prominente. */}
+              <Button
                 size="sm"
                 onClick={submit}
                 disabled={submitting || !hasContent}
@@ -684,19 +706,6 @@ export function CreaRiunioneDialog({
                   <Save className="h-3.5 w-3.5" />
                 )}
                 Salva senza AI
-              </Button>
-              <Button
-                size="sm"
-                onClick={generaReport}
-                disabled={generating || !hasTextContent}
-                title={!hasTextContent ? 'Scrivi o detta del contenuto per usare il report AI' : undefined}
-              >
-                {generating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3.5 w-3.5" />
-                )}
-                {generating ? 'Generazione…' : 'Genera report AI'}
               </Button>
             </>
           ) : null}

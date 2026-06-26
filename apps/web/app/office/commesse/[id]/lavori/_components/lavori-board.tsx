@@ -205,6 +205,32 @@ export function LavoriBoard({
   const [riunioneOpen, setRiunioneOpen] = React.useState(false);
   const [todoInEdit, setTodoInEdit] = React.useState<TodoView | null>(null);
 
+  // ─── Auto-refresh allegati riunione ────────────────────────────────
+  // Gli allegati di una riunione salgono via UploadQueue globale (R2 →
+  // server crea il link commessa_riunione_allegato al complete). Il dialog
+  // di creazione si chiude subito e fa un solo router.refresh(): a quel
+  // punto gli upload non sono ancora finiti, quindi gli allegati non sono
+  // ancora linkati. Senza un watcher persistente la UI resterebbe ferma
+  // finché non si ricarica a mano. Qui, a livello board (che sopravvive
+  // alla chiusura del dialog), facciamo refresh quando un job con
+  // riunioneId arriva a 'done' → gli allegati compaiono da soli.
+  const queue = useUploadQueue();
+  const allegatiRiunioneDoneRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    let nuoviDone = false;
+    for (const job of queue.jobs) {
+      if (
+        job.payload.riunioneId &&
+        job.status === 'done' &&
+        !allegatiRiunioneDoneRef.current.has(job.id)
+      ) {
+        allegatiRiunioneDoneRef.current.add(job.id);
+        nuoviDone = true;
+      }
+    }
+    if (nuoviDone) router.refresh();
+  }, [queue.jobs, router]);
+
   // ─── separa todos aperti/chiusi ─────────────────────────────────────
   const todosAperti = React.useMemo(
     () =>

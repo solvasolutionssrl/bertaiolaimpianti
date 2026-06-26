@@ -19,6 +19,38 @@ const baseSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
+/**
+ * Cerca clienti dell'anagrafica per nome (match parziale, case-insensitive).
+ * Usata dal flusso di dettato vocale per evitare duplicati: quando l'AI
+ * rileva un nome cliente, proponiamo i clienti esistenti che combaciano
+ * così l'utente può associare la commessa a quello giusto invece di
+ * crearne uno nuovo ogni volta. RLS scopa già sul tenant corrente.
+ */
+export interface ClienteSimile {
+  id: string;
+  ragione_sociale: string;
+  tipo: 'persona_fisica' | 'azienda' | null;
+  citta: string | null;
+  telefoni: string[] | null;
+  email: string[] | null;
+}
+
+export async function cercaClientiPerNome(input: {
+  nome: string;
+}): Promise<ClienteSimile[]> {
+  await requireTenantContext();
+  const term = (input.nome ?? '').trim();
+  if (term.length < 3) return [];
+  const supabase = createServerSupabase();
+  const { data } = await supabase
+    .from('clienti')
+    .select('id, ragione_sociale, tipo, citta, telefoni, email')
+    .ilike('ragione_sociale', `%${term}%`)
+    .order('ragione_sociale')
+    .limit(5);
+  return (data ?? []) as ClienteSimile[];
+}
+
 export async function creaCliente(input: z.infer<typeof baseSchema>) {
   const ctx = await requireTenantContext();
   const parsed = baseSchema.parse(input);

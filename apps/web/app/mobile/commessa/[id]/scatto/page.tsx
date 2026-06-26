@@ -1,6 +1,5 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { MobileBackButton } from '../../../_components/mobile-back-button';
 
 import { createServerSupabase } from '@kommessa/api/server';
 
@@ -79,12 +78,7 @@ export default async function ScattoPage({
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 p-4">
-      <Link
-        href={`/mobile/commessa/${params.id}`}
-        className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Indietro
-      </Link>
+      <MobileBackButton href={`/mobile/commessa/${params.id}`} />
 
       <header>
         <p className="font-mono text-sm text-muted-foreground">

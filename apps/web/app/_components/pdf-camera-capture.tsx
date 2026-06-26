@@ -25,8 +25,10 @@ import { Button } from '@kommessa/ui';
  *  5. Output: un unico PDF A4 con una pagina per foglio, JPEG ad alta qualità.
  *
  * Qualità: la camera è richiesta ad alta risoluzione (ideal 3840×2160, il
- * browser scala al massimo del device) e i JPEG sono salvati a qualità 0.95
- * per evitare PDF sgranati / troppo compressi.
+ * browser scala al massimo del device) e i JPEG sono salvati a qualità 0.98
+ * per evitare PDF sgranati / troppo compressi (i documenti sono testo da
+ * leggere: meglio comprimere poco). Nessun downscaling: si usa la
+ * risoluzione nativa del frame.
  */
 interface Props {
   onCancel: () => void;
@@ -56,6 +58,8 @@ const CORNER_DEFAULT: [Corner, Corner, Corner, Corner] = [
 export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const overlayRef = React.useRef<HTMLDivElement | null>(null);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const cropAreaRef = React.useRef<HTMLDivElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
 
   const [stage, setStage] = React.useState<Stage>('camera');
@@ -65,6 +69,15 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const [pagine, setPagine] = React.useState<Pagina[]>([]);
   const [corners, setCorners] = React.useState<[Corner, Corner, Corner, Corner]>(CORNER_DEFAULT);
   const draggingIdx = React.useRef<number | null>(null);
+  // Dimensione reale (px) dell'area di crop, misurata dal contenitore. Serve a
+  // vincolare l'immagine allo spazio tra header e footer SENZA usare 75vh: su
+  // iOS Safari "vh" usa il viewport grande (toolbar nascoste) e farebbe
+  // traboccare l'immagine → wrapper e immagine non coincidono e gli angoli
+  // risultano sfalsati verso il basso. Misurando il contenitore, immagine,
+  // overlay SVG, maniglie e ritaglio finale condividono la stessa box.
+  const [cropBox, setCropBox] = React.useState<{ w: number; h: number } | null>(
+    null,
+  );
 
   // ─── Camera lifecycle ─────────────────────────────────────────────
   React.useEffect(() => {
@@ -110,6 +123,26 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     };
   }, []);
 
+  // Misura l'area di crop disponibile (e ri-misura su resize / rotazione).
+  React.useLayoutEffect(() => {
+    if (stage !== 'crop') return;
+    const measure = () => {
+      const el = cropAreaRef.current;
+      if (!el) return;
+      // -16px = padding p-2 (8px per lato) del contenitore.
+      const w = Math.max(0, el.clientWidth - 16);
+      const h = Math.max(0, el.clientHeight - 16);
+      setCropBox({ w, h });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
+  }, [stage]);
+
   const stopCamera = () => {
     const s = streamRef.current;
     if (s) s.getTracks().forEach((t) => t.stop());
@@ -126,7 +159,7 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(v, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.98);
     setCapturedDataUrl(dataUrl);
     setCapturedDims({ w: v.videoWidth, h: v.videoHeight });
     stopCamera();
@@ -149,9 +182,13 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const onPointerMove = (e: React.PointerEvent) => {
     const idx = draggingIdx.current;
     if (idx === null) return;
-    const overlay = overlayRef.current;
-    if (!overlay) return;
-    const rect = overlay.getBoundingClientRect();
+    // Coordinate relative alla BOX REALE dell'immagine renderizzata (non al
+    // wrapper): così ciò che si vede combacia con ciò che viene ritagliato,
+    // anche su iPhone dove l'immagine potrebbe non riempire il contenitore.
+    const el = imgRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
     const xRel = (e.clientX - rect.left) / rect.width;
     const yRel = (e.clientY - rect.top) / rect.height;
     const clamped = { x: Math.max(0, Math.min(1, xRel)), y: Math.max(0, Math.min(1, yRel)) };
@@ -185,8 +222,8 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
       cctx.filter = 'contrast(1.08) brightness(1.04)';
       cctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
-      // Qualità alta (0.95) per non sgranare il documento.
-      const jpeg = cropCanvas.toDataURL('image/jpeg', 0.95);
+      // Qualità alta (0.98) per non sgranare il documento (testo leggibile).
+      const jpeg = cropCanvas.toDataURL('image/jpeg', 0.98);
       setPagine((prev) => [...prev, { jpeg, w: sw, h: sh }]);
       setCapturedDataUrl(null);
       setCapturedDims(null);
@@ -292,18 +329,27 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
 
       {/* ─── stage CROP ─────────────────────────────────────────── */}
       {stage === 'crop' && capturedDataUrl ? (
-        <div className="relative flex flex-1 items-center justify-center overflow-hidden p-2">
+        <div
+          ref={cropAreaRef}
+          className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2"
+        >
           <div
             ref={overlayRef}
-            className="relative inline-block max-h-full max-w-full select-none"
+            className="relative inline-block select-none"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              ref={imgRef}
               src={capturedDataUrl}
               alt="Foglio acquisito"
-              className="max-h-[75vh] max-w-full"
+              className="block"
+              style={
+                cropBox
+                  ? { maxWidth: cropBox.w, maxHeight: cropBox.h }
+                  : { maxWidth: '100%', maxHeight: '75vh' }
+              }
               draggable={false}
             />
             <svg

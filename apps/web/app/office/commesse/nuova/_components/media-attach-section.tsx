@@ -11,6 +11,7 @@ import {
   Loader2,
   Paperclip,
   CalendarClock,
+  FileText,
 } from 'lucide-react';
 import {
   Button,
@@ -35,7 +36,8 @@ import {
 export interface MediaFile {
   id: string;
   file: File;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'pdf';
+  /** Vuoto per i PDF (nessuna anteprima immagine): si mostra l'icona file. */
   previewUrl: string;
   sizeMB: number;
   /** Data di scatto da EXIF o fallback File.lastModified. null se non rilevabile. */
@@ -44,6 +46,9 @@ export interface MediaFile {
 
 const MAX_VIDEO_MB = 500;
 const MAX_PHOTO_MB = 25;
+// Documenti PDF (capitolati, schemi, preventivi cartacei scansionati): cap
+// generoso ma sotto la soglia multipart, niente compressione client-side.
+const MAX_DOC_MB = 50;
 // Cap pratico: 30 file in un singolo intake (foto + video). Sopra è quasi
 // sempre un errore (sopralluogo lungo = meglio scattarne 30, creare la
 // commessa, poi continuare dal pannello commessa). 30 lascia tantissimo
@@ -69,6 +74,7 @@ interface Props {
 export function MediaAttachSection({ files, onChange, uploading = false, uploadProgress, onCancel }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const docInputRef = React.useRef<HTMLInputElement>(null);
   const [skipOpen, setSkipOpen] = React.useState(false);
   const [validationErrors, setValidationErrors] = React.useState<ValidationError[]>([]);
   const [confirmCancel, setConfirmCancel] = React.useState(false);
@@ -83,23 +89,31 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
         errors.push({ name: f.name, reason: `Limite di ${MAX_FILES} file raggiunto` });
         return;
       }
-      const isVideo = f.type.startsWith('video/');
+      // I PDF arrivano dal picker documenti (mime application/pdf) ma su alcuni
+      // device il mime può mancare: ricadiamo sull'estensione del nome.
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      const isVideo = !isPdf && f.type.startsWith('video/');
       const sizeMB = f.size / (1024 * 1024);
-      const limit = isVideo ? MAX_VIDEO_MB : MAX_PHOTO_MB;
+      const limit = isPdf ? MAX_DOC_MB : isVideo ? MAX_VIDEO_MB : MAX_PHOTO_MB;
       if (sizeMB > limit) {
         errors.push({
           name: f.name,
-          reason: isVideo
-            ? `Video troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_VIDEO_MB} MB). Vai su Impostazioni iPhone → Fotocamera → Formato e scegli "Alta efficienza" (H.265).`
-            : `Foto troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_PHOTO_MB} MB).`,
+          reason: isPdf
+            ? `File troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_DOC_MB} MB).`
+            : isVideo
+              ? `Video troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_VIDEO_MB} MB). Vai su Impostazioni iPhone → Fotocamera → Formato e scegli "Alta efficienza" (H.265).`
+              : `Foto troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_PHOTO_MB} MB).`,
         });
         return;
       }
+      const kind: MediaFile['kind'] = isPdf ? 'pdf' : isVideo ? 'video' : 'image';
       accepted.push({
         id: crypto.randomUUID(),
         file: f,
-        kind: isVideo ? 'video' : 'image',
-        previewUrl: URL.createObjectURL(f),
+        kind,
+        // I PDF non hanno anteprima immagine: previewUrl resta vuoto (nessun
+        // object URL da revocare, nessun <img> da renderizzare).
+        previewUrl: isPdf ? '' : URL.createObjectURL(f),
         sizeMB,
         takenAt: null,
       });
@@ -111,7 +125,11 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
     // Aggiunge la data a ogni MediaFile prima di esporlo al parent: la UI mostra
     // direttamente la pill con la data corretta.
     const withDates = await Promise.all(
-      accepted.map(async (m) => ({ ...m, takenAt: await readImageDate(m.file) })),
+      accepted.map(async (m) => ({
+        ...m,
+        // I PDF non hanno EXIF utile: niente data di scatto.
+        takenAt: m.kind === 'pdf' ? null : await readImageDate(m.file),
+      })),
     );
     onChange([...files, ...withDates]);
   };
@@ -182,7 +200,7 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
         ) : null}
 
         {files.length === 0 ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
@@ -199,7 +217,16 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
             >
               <Paperclip className="h-6 w-6 opacity-70" aria-hidden="true" />
               <span className="text-sm font-semibold text-foreground">Allega</span>
-              <span className="text-[11px]">Scegli dalla libreria</span>
+              <span className="text-[11px]">Foto e video</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => docInputRef.current?.click()}
+              className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition hover:bg-muted/40 active:scale-[.98]"
+            >
+              <FileText className="h-6 w-6 opacity-70" aria-hidden="true" />
+              <span className="text-sm font-semibold text-foreground">Allega file</span>
+              <span className="text-[11px]">PDF e documenti</span>
             </button>
           </div>
         ) : (
@@ -213,8 +240,10 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
                 >
                   {f.kind === 'image' ? (
                     <img src={f.previewUrl} alt={f.file.name} className="h-full w-full object-cover" />
-                  ) : (
+                  ) : f.kind === 'video' ? (
                     <VideoThumb src={f.previewUrl} />
+                  ) : (
+                    <PdfThumb name={f.file.name} />
                   )}
 
                   {/* Progress overlay */}
@@ -327,6 +356,17 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
                     Allega
                   </span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => docInputRef.current?.click()}
+                  aria-label="Allega un file PDF o documento"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
+                >
+                  <FileText className="h-5 w-5" aria-hidden="true" />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider">
+                    File
+                  </span>
+                </button>
               </>
             )}
           </div>
@@ -348,6 +388,16 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
           type="file"
           accept="image/*"
           capture="environment"
+          className="sr-only"
+          onChange={(e) => addFiles(e.target.files)}
+          onClick={(e) => ((e.target as HTMLInputElement).value = '')}
+        />
+        {/* File picker — documenti PDF (multipli) */}
+        <input
+          ref={docInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          multiple
           className="sr-only"
           onChange={(e) => addFiles(e.target.files)}
           onClick={(e) => ((e.target as HTMLInputElement).value = '')}
@@ -486,6 +536,17 @@ function VideoThumb({ src }: { src: string }) {
   ) : (
     <div className="flex h-full w-full items-center justify-center">
       <Video className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+    </div>
+  );
+}
+
+function PdfThumb({ name }: { name: string }) {
+  return (
+    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted/60 px-1.5 text-center">
+      <FileText className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
+      <span className="line-clamp-2 break-all text-[9px] leading-tight text-muted-foreground">
+        {name}
+      </span>
     </div>
   );
 }

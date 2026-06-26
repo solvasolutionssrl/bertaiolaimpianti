@@ -72,7 +72,7 @@ export function AddMediaSection({ commessaId }: Props) {
         {ok > 0 && (
           <div className="flex items-center gap-2 text-sm text-success">
             <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{ok} foto/video caricati con successo</span>
+            <span>{ok} file caricati con successo</span>
           </div>
         )}
         {fail > 0 && (
@@ -109,7 +109,7 @@ export function AddMediaSection({ commessaId }: Props) {
           onClick={handleUpload}
         >
           <Upload className="h-4 w-4" aria-hidden="true" />
-          Carica {files.length} foto/video
+          Carica {files.length} file
         </Button>
       )}
     </div>
