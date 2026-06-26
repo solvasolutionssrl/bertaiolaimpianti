@@ -57,7 +57,6 @@ const CORNER_DEFAULT: [Corner, Corner, Corner, Corner] = [
 
 export function PdfCameraCapture({ onCancel, onReady }: Props) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const overlayRef = React.useRef<HTMLDivElement | null>(null);
   const imgRef = React.useRef<HTMLImageElement | null>(null);
   const cropAreaRef = React.useRef<HTMLDivElement | null>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -334,7 +333,6 @@ export function PdfCameraCapture({ onCancel, onReady }: Props) {
           className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2"
         >
           <div
-            ref={overlayRef}
             className="relative inline-block select-none"
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}

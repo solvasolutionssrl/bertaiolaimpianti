@@ -344,6 +344,34 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
     }
   };
 
+  // Bottone primario "Crea commessa": mostrato sia IN ALTO (il cliente boomer
+  // non scrollava fino in fondo e non lo vedeva) sia in fondo per chi scorre.
+  const creaCommessaButton = (
+    <Button
+      size="lg"
+      className="min-h-[56px] w-full text-base"
+      onClick={handleCreate}
+      disabled={state.phase === 'creating' || bozzaMediaUploading}
+    >
+      {bozzaMediaUploading ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Carico foto/video ({mediaFiles.length} file)…
+        </>
+      ) : state.phase === 'creating' ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Creo la commessa…
+        </>
+      ) : (
+        <>
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          Crea commessa{mediaFiles.length > 0 ? ` + ${mediaFiles.length} foto/video` : ''}
+        </>
+      )}
+    </Button>
+  );
+
   // ---------- Header / progress ----------
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-screen-sm flex-col gap-5 px-4 pb-32 pt-6">
@@ -524,6 +552,13 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Conferma e crea</h2>
 
+          {/* Tasto Crea IN ALTO, subito visibile (il cliente non scrolla fino in
+              fondo). Resta anche in fondo per chi scorre. */}
+          {creaCommessaButton}
+          <p className="-mt-1 text-center text-[11px] text-muted-foreground">
+            Aggiungi foto e controlla i dati qui sotto, poi crea.
+          </p>
+
           {/* Foto/video prima — l'utente le vede subito e le aggiunge prima di confermare */}
           {state.phase === 'confirm' && (
             <MediaAttachSection
@@ -575,29 +610,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             </code>
           </div>
 
-          <Button
-            size="lg"
-            className="min-h-[56px] w-full text-base"
-            onClick={handleCreate}
-            disabled={state.phase === 'creating' || bozzaMediaUploading}
-          >
-            {bozzaMediaUploading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Carico foto/video ({mediaFiles.length} file)…
-              </>
-            ) : state.phase === 'creating' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Creo la commessa…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                Crea commessa{mediaFiles.length > 0 ? ` + ${mediaFiles.length} foto/video` : ''}
-              </>
-            )}
-          </Button>
+          {creaCommessaButton}
 
           <Button
             type="button"
