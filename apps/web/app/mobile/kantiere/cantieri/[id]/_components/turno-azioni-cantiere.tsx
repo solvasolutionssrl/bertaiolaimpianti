@@ -8,6 +8,12 @@ import {
   riprendiTurnoMio,
   terminaTurnoMio,
 } from '@/app/_actions/kantiere-timbra';
+import {
+  ViaggioRitornoDialog,
+  type ViaggioRitornoSede,
+  type ViaggioRitornoMezzo,
+  type ViaggioRitornoConfirm,
+} from '@/app/_components/viaggio-ritorno-dialog';
 
 export interface TurnoAzioniCantiereProps {
   cantiereId: string;
@@ -19,6 +25,12 @@ export interface TurnoAzioniCantiereProps {
   inizioPausaTs: string | null;
   /** true se oggi risulta già una pausa pranzo timbrata su questo cantiere. */
   pausaOggiFatta?: boolean;
+  /** Sedi selezionabili per il viaggio di ritorno (vuoto = niente viaggio). */
+  sedi?: ViaggioRitornoSede[];
+  /** Parco mezzi attivo del tenant. */
+  mezzi?: ViaggioRitornoMezzo[];
+  /** Sede preselezionata (default del tenant). */
+  sedeDefaultId?: string | null;
 }
 
 function ora(ts: string): string {
@@ -75,20 +87,24 @@ export function TurnoAzioniCantiere({
   inPausa,
   inizioPausaTs,
   pausaOggiFatta = false,
+  sedi = [],
+  mezzi = [],
+  sedeDefaultId = null,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  // Il dialog "Viaggio di ritorno + pausa" gestisce sia il viaggio sia la pausa
+  // pranzo dichiarata; qui teniamo solo se è aperto e l'eventuale ora scelta.
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [tsScelto, setTsScelto] = useState<string | undefined>(undefined);
   const [cambiaOra, setCambiaOra] = useState(false);
   const [oraSel, setOraSel] = useState(oraLocaleNow());
-  // Pausa pranzo dichiarata in uscita (ripiego se non timbrata).
-  const [pausaFatta, setPausaFatta] = useState(false);
-  const [pausaMin, setPausaMin] = useState<30 | 45 | 60>(30);
 
   const durataTurnoMin = Math.max(0, Math.floor((now - Date.parse(inizioTs)) / 60000));
+  // Prompt pausa: turno al lavoro (non in pausa), senza pausa oggi, oltre soglia.
   const promptPausa = !inPausa && !pausaOggiFatta && durataTurnoMin >= 6 * 60;
-  const pausaPranzoMin = promptPausa && pausaFatta ? pausaMin : undefined;
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -106,6 +122,30 @@ export function TurnoAzioniCantiere({
         setErr(messaggioErrore(res.error ?? ''));
       }
     });
+  }
+
+  /** Apre il dialog viaggio+pausa, ricordando l'eventuale ora di fine scelta. */
+  function apriTermina(ts?: string) {
+    setErr(null);
+    setTsScelto(ts);
+    setDialogOpen(true);
+  }
+
+  /** Conferma dal dialog: registra viaggio + pausa + ora scelta sul server. */
+  async function confermaTermina(
+    payload: ViaggioRitornoConfirm,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const res = await terminaTurnoMio({
+      cantiereId,
+      ts: tsScelto,
+      viaggio: payload.viaggio ?? undefined,
+      pausaPranzoMin: payload.pausaPranzoMin,
+    });
+    if (res.ok) {
+      setCambiaOra(false);
+      router.refresh();
+    }
+    return res;
   }
 
   const trascorso = formatTrascorso(now - Date.parse(inizioTs));
@@ -176,58 +216,18 @@ export function TurnoAzioniCantiere({
           </button>
         )}
 
-        {/* Pausa pranzo non rilevata su turno lungo */}
-        {promptPausa ? (
-          <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
-            <p className="flex items-start gap-1.5 text-sm font-semibold text-amber-900">
-              <Utensils className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
-              Pausa pranzo non rilevata
-            </p>
-            <p className="text-[13px] leading-snug text-amber-800">
-              Turno lungo senza pausa timbrata. Ricorda: <strong>timbrare la pausa
-              è il modo corretto</strong>; questa è solo una correzione.
-            </p>
-            <label className="flex cursor-pointer items-center gap-2 select-none">
-              <input
-                type="checkbox"
-                checked={pausaFatta}
-                onChange={(e) => setPausaFatta(e.target.checked)}
-                className="h-4 w-4 rounded border-amber-400 accent-amber-600"
-              />
-              <span className="text-sm font-medium text-amber-900">Ho fatto la pausa pranzo</span>
-            </label>
-            {pausaFatta ? (
-              <div className="flex gap-2">
-                {([30, 45, 60] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setPausaMin(m)}
-                    className={[
-                      'flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors',
-                      pausaMin === m
-                        ? 'border-amber-500 bg-amber-500 text-white'
-                        : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
-                    ].join(' ')}
-                  >
-                    {m === 60 ? '1h' : `${m} min`}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
+        {/* La pausa pranzo dichiarata + il viaggio di ritorno vivono ora nel
+            dialog "Termina turno" (apre su tap del pulsante qui sotto). */}
         {!cambiaOra ? (
           <div className="flex flex-col gap-2">
             <button
               type="button"
-              onClick={() => esegui(() => terminaTurnoMio({ cantiereId, pausaPranzoMin }))}
+              onClick={() => apriTermina(undefined)}
               disabled={pending}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-base font-semibold text-foreground active:scale-[0.99] transition-all hover:bg-muted disabled:opacity-60"
             >
               <LogOut className="h-5 w-5" strokeWidth={2} />
-              Termina turno ora ({oraLocaleNow()})
+              Termina turno ({oraLocaleNow()})
             </button>
             <button
               type="button"
@@ -250,11 +250,7 @@ export function TurnoAzioniCantiere({
               />
               <button
                 type="button"
-                onClick={() =>
-                  esegui(() =>
-                    terminaTurnoMio({ cantiereId, ts: isoDaOraLocale(oraSel), pausaPranzoMin }),
-                  )
-                }
+                onClick={() => apriTermina(isoDaOraLocale(oraSel))}
                 disabled={pending}
                 className="rounded-md bg-foreground px-3 py-2 text-sm font-semibold text-background disabled:opacity-60"
               >
@@ -273,6 +269,17 @@ export function TurnoAzioniCantiere({
 
         {err && <p className="text-xs text-destructive">{err}</p>}
       </div>
+
+      <ViaggioRitornoDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        cantiereId={cantiereId}
+        sedi={sedi}
+        sedeDefaultId={sedeDefaultId}
+        mezzi={mezzi}
+        pausaPrompt={promptPausa ? { durataMin: durataTurnoMin } : null}
+        onConfirm={confermaTermina}
+      />
     </div>
   );
 }

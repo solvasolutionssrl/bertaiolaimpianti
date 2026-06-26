@@ -24,6 +24,8 @@ export interface MembroStato {
   inizioTs: string | null;
   /** ISO inizio pausa in corso, o null. */
   inizioPausa: string | null;
+  /** true se oggi risulta già una pausa pranzo timbrata su questo cantiere. */
+  pausaOggiFatta: boolean;
 }
 
 export interface CantiereSquadra {
@@ -145,6 +147,9 @@ export async function squadraDelCapo(tenantId: string, userId: string): Promise<
           const inizioTs = aperto
             ? eventi.find((e) => e.tipo === 'ingresso' && !e.pausa)?.ts ?? info.ingressoAperto
             : null;
+          // Pausa pranzo già fatta oggi su questo cantiere: serve a decidere se
+          // il dialog di fine turno deve mostrare il box "pausa non rilevata".
+          const pausaOggiFatta = eventi.some((e) => e.pausa);
           return {
             dipendenteId: s.dipendente_id,
             nome: dipMap.get(s.dipendente_id) ?? s.dipendente_id,
@@ -152,6 +157,7 @@ export async function squadraDelCapo(tenantId: string, userId: string): Promise<
             stato: info.stato,
             inizioTs,
             inizioPausa: info.inizioPausa,
+            pausaOggiFatta,
           };
         })
         .sort((a, b) => {

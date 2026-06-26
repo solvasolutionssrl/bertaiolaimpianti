@@ -1,10 +1,25 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Utensils, Play, LogOut, LogIn, Loader2 } from 'lucide-react';
 import { timbraMembro, timbraMembriBulk } from '@/app/_actions/kantiere-capo';
+import {
+  ViaggioRitornoDialog,
+  type ViaggioRitornoConfirm,
+  type ViaggioRitornoMezzo,
+  type ViaggioRitornoSede,
+} from '@/app/_components/viaggio-ritorno-dialog';
 import type { CantiereSquadra, MembroStato, StatoMembro } from '../../_lib/capo';
+
+/** Contesto viaggio (sedi + sede di default) per un singolo cantiere. */
+export interface ViaggioContestoCantiere {
+  sedi: ViaggioRitornoSede[];
+  sedeDefaultId: string | null;
+}
+
+/** Soglia oltre cui, senza pausa timbrata, il dialog propone la pausa dichiarata. */
+const SOGLIA_PAUSA_MIN = 6 * 60;
 
 function ora(ts: string): string {
   return new Intl.DateTimeFormat('it-IT', {
@@ -12,6 +27,16 @@ function ora(ts: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(ts));
+}
+
+/**
+ * Durata del turno aperto in minuti (now − inizio). Usata per decidere se
+ * mostrare il box "pausa pranzo non rilevata" nel dialog di fine turno.
+ * Calcolata al volo all'apertura del dialog (device = ora Italia).
+ */
+function durataTurnoMin(inizioTs: string | null): number {
+  if (!inizioTs) return 0;
+  return Math.max(0, Math.floor((Date.now() - Date.parse(inizioTs)) / 60000));
 }
 
 function messaggioErrore(code: string): string {
@@ -33,16 +58,45 @@ const STATO_BADGE: Record<StatoMembro, { label: string; cls: string }> = {
   idle: { label: 'A casa', cls: 'bg-muted text-muted-foreground' },
 };
 
-export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] }) {
+/** Un membro da chiudere nel wizard sequenziale di fine turno. */
+interface DaChiudere {
+  cantiereId: string;
+  membro: MembroStato;
+}
+
+export function GestioneSquadraClient({
+  gruppi,
+  viaggioByCantiere,
+  mezzi,
+}: {
+  gruppi: CantiereSquadra[];
+  viaggioByCantiere: Record<string, ViaggioContestoCantiere>;
+  mezzi: ViaggioRitornoMezzo[];
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'err'; testo: string } | null>(null);
 
+  // ── Wizard "Termina turno" sequenziale ────────────────────────────────────
+  // Coda dei membri da chiudere (uno o più) e indice corrente. Il dialog si
+  // apre per il membro `coda[idx]`; alla conferma si avanza al successivo.
+  const [coda, setCoda] = useState<DaChiudere[]>([]);
+  const [idx, setIdx] = useState(0);
+  const dialogAperto = coda.length > 0 && idx < coda.length;
+  const corrente = dialogAperto ? coda[idx] : null;
+  // Conteggio dei membri confermati nel wizard corrente. Ref (non state) perché
+  // viene letto subito dopo l'incremento, nello stesso tick della chiusura.
+  const chiusi = useRef(0);
+  // Il dialog chiama `onOpenChange(false)` dopo OGNI conferma riuscita: questo
+  // flag distingue l'avanzamento al membro successivo (non chiudere il wizard,
+  // basta remontare con la nuova key) dalla chiusura/annulla manuale del capo.
+  const avanzamento = useRef(false);
+
   function membro(
     cantiereId: string,
     dipendenteId: string,
-    azione: 'inizio' | 'fine' | 'pausa' | 'ripresa',
+    azione: 'inizio' | 'pausa' | 'ripresa',
     key: string,
   ) {
     setMsg(null);
@@ -55,24 +109,68 @@ export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] })
     });
   }
 
-  function bulk(cantiereId: string, azione: 'pausa' | 'ripresa' | 'fine', key: string) {
+  /** Avvia il wizard di fine turno per uno o più membri (in stato chiudibile). */
+  function avviaFine(membri: DaChiudere[]) {
+    const chiudibili = membri.filter(
+      (x) => x.membro.stato === 'lavoro' || x.membro.stato === 'pausa',
+    );
+    if (chiudibili.length === 0) return;
     setMsg(null);
-    setBusy(key);
-    start(async () => {
-      const res = await timbraMembriBulk({ cantiereId, azione });
-      setBusy(null);
-      if (res.ok) {
-        setMsg({
-          tipo: 'ok',
-          testo: res.toccati
-            ? `${res.toccati} aggiornati${res.saltati ? `, ${res.saltati} già a posto` : ''}.`
-            : 'Nessuno da aggiornare.',
-        });
-        router.refresh();
-      } else {
-        setMsg({ tipo: 'err', testo: messaggioErrore(res.error) });
-      }
+    chiusi.current = 0;
+    avanzamento.current = false;
+    setIdx(0);
+    setCoda(chiudibili);
+  }
+
+  /** Chiude il wizard e aggiorna la pagina (membri già confermati restano fatti). */
+  function chiudiWizard() {
+    const fatti = chiusi.current;
+    chiusi.current = 0;
+    avanzamento.current = false;
+    setCoda([]);
+    setIdx(0);
+    if (fatti > 0) {
+      setMsg({
+        tipo: 'ok',
+        testo: `${fatti} ${fatti === 1 ? 'turno terminato' : 'turni terminati'}.`,
+      });
+      router.refresh();
+    }
+  }
+
+  /** Conferma dal dialog per il membro corrente: timbra fine + avanza. */
+  async function confermaFine(
+    payload: ViaggioRitornoConfirm,
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (!corrente) return { ok: false, error: 'AZIONE_NON_VALIDA' };
+    const res = await timbraMembro({
+      cantiereId: corrente.cantiereId,
+      dipendenteId: corrente.membro.dipendenteId,
+      azione: 'fine',
+      viaggio: payload.viaggio ?? undefined,
+      pausaPranzoMin: payload.pausaPranzoMin,
     });
+    if (res.ok) {
+      const ultimo = idx >= coda.length - 1;
+      chiusi.current += 1;
+      // Se restano membri, è un avanzamento: il dialog chiamerà onOpenChange(false)
+      // ma noi NON chiudiamo il wizard, ci limitiamo a passare al successivo.
+      if (!ultimo) avanzamento.current = true;
+      setIdx((i) => i + 1);
+    }
+    return res;
+  }
+
+  // Chiusura del dialog. Dopo una conferma riuscita non-finale è un avanzamento
+  // (remount sul membro dopo) → non chiudere. Altrimenti (ultimo confermato o
+  // annulla manuale a metà) chiudiamo il wizard tenendo i già confermati.
+  function onOpenChange(o: boolean) {
+    if (o) return;
+    if (avanzamento.current) {
+      avanzamento.current = false;
+      return;
+    }
+    chiudiWizard();
   }
 
   if (gruppi.length === 0) {
@@ -83,6 +181,15 @@ export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] })
       </p>
     );
   }
+
+  const ctxCorrente = corrente ? viaggioByCantiere[corrente.cantiereId] : undefined;
+  // Pausa dichiarata: turno aperto > 6h senza pausa timbrata oggi.
+  const promptPausaCorrente =
+    corrente &&
+    !corrente.membro.pausaOggiFatta &&
+    durataTurnoMin(corrente.membro.inizioTs) >= SOGLIA_PAUSA_MIN
+      ? { durataMin: durataTurnoMin(corrente.membro.inizioTs) }
+      : null;
 
   return (
     <div className="space-y-5">
@@ -122,8 +229,8 @@ export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] })
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => bulk(g.cantiereId, 'pausa', `${g.cantiereId}:bulk:pausa`)}
-                  disabled={pending}
+                  onClick={() => bulkPausaRipresa(g.cantiereId, 'pausa', `${g.cantiereId}:bulk:pausa`)}
+                  disabled={pending || dialogAperto}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900 active:scale-[0.98] transition-all hover:bg-amber-200 disabled:opacity-50"
                 >
                   {busy === `${g.cantiereId}:bulk:pausa` ? (
@@ -135,8 +242,8 @@ export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] })
                 </button>
                 <button
                   type="button"
-                  onClick={() => bulk(g.cantiereId, 'ripresa', `${g.cantiereId}:bulk:ripresa`)}
-                  disabled={pending}
+                  onClick={() => bulkPausaRipresa(g.cantiereId, 'ripresa', `${g.cantiereId}:bulk:ripresa`)}
+                  disabled={pending || dialogAperto}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-900 active:scale-[0.98] transition-all hover:bg-emerald-200 disabled:opacity-50"
                 >
                   {busy === `${g.cantiereId}:bulk:ripresa` ? (
@@ -148,15 +255,15 @@ export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] })
                 </button>
                 <button
                   type="button"
-                  onClick={() => bulk(g.cantiereId, 'fine', `${g.cantiereId}:bulk:fine`)}
-                  disabled={pending}
+                  onClick={() =>
+                    avviaFine(
+                      g.membri.map((m) => ({ cantiereId: g.cantiereId, membro: m })),
+                    )
+                  }
+                  disabled={pending || dialogAperto}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground active:scale-[0.98] transition-all hover:bg-muted disabled:opacity-50"
                 >
-                  {busy === `${g.cantiereId}:bulk:fine` ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <LogOut className="h-3.5 w-3.5" />
-                  )}
+                  <LogOut className="h-3.5 w-3.5" />
                   Termina a tutti
                 </button>
               </div>
@@ -168,35 +275,76 @@ export function GestioneSquadraClient({ gruppi }: { gruppi: CantiereSquadra[] })
                 <MembroRiga
                   key={m.dipendenteId}
                   membro={m}
-                  cantiereId={g.cantiereId}
                   busyKey={busy}
-                  pending={pending}
+                  pending={pending || dialogAperto}
                   onAzione={(az, key) => membro(g.cantiereId, m.dipendenteId, az, key)}
+                  onFine={() => avviaFine([{ cantiereId: g.cantiereId, membro: m }])}
                 />
               ))}
             </ul>
           </section>
         );
       })}
+
+      {/* Wizard "Termina turno" sequenziale: un dialog per ogni membro. */}
+      {corrente ? (
+        <ViaggioRitornoDialog
+          key={`${corrente.cantiereId}:${corrente.membro.dipendenteId}`}
+          open={dialogAperto}
+          onOpenChange={onOpenChange}
+          cantiereId={corrente.cantiereId}
+          sedi={ctxCorrente?.sedi ?? []}
+          sedeDefaultId={ctxCorrente?.sedeDefaultId ?? null}
+          mezzi={mezzi}
+          pausaPrompt={promptPausaCorrente}
+          intestazione={
+            coda.length > 1
+              ? `Rientro ${idx + 1} di ${coda.length} · ${corrente.membro.nome}`
+              : `Termina turno · ${corrente.membro.nome}`
+          }
+          onConfirm={confermaFine}
+        />
+      ) : null}
     </div>
   );
+
+  // ── helper interno: pausa/ripresa in blocco (invariato, niente viaggio) ────
+  function bulkPausaRipresa(cantiereId: string, azione: 'pausa' | 'ripresa', key: string) {
+    setMsg(null);
+    setBusy(key);
+    start(async () => {
+      const res = await timbraMembriBulk({ cantiereId, azione });
+      setBusy(null);
+      if (res.ok) {
+        setMsg({
+          tipo: 'ok',
+          testo: res.toccati
+            ? `${res.toccati} aggiornati${res.saltati ? `, ${res.saltati} già a posto` : ''}.`
+            : 'Nessuno da aggiornare.',
+        });
+        router.refresh();
+      } else {
+        setMsg({ tipo: 'err', testo: messaggioErrore(res.error) });
+      }
+    });
+  }
 }
 
 function MembroRiga({
   membro,
-  cantiereId,
   busyKey,
   pending,
   onAzione,
+  onFine,
 }: {
   membro: MembroStato;
-  cantiereId: string;
   busyKey: string | null;
   pending: boolean;
-  onAzione: (azione: 'inizio' | 'fine' | 'pausa' | 'ripresa', key: string) => void;
+  onAzione: (azione: 'inizio' | 'pausa' | 'ripresa', key: string) => void;
+  onFine: () => void;
 }) {
   const badge = STATO_BADGE[membro.stato];
-  const base = `${cantiereId}:${membro.dipendenteId}`;
+  const base = membro.dipendenteId;
   const Spin = <Loader2 className="h-4 w-4 animate-spin" />;
 
   return (
@@ -250,11 +398,11 @@ function MembroRiga({
             </button>
             <button
               type="button"
-              onClick={() => onAzione('fine', `${base}:fine`)}
+              onClick={onFine}
               disabled={pending}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-all hover:bg-muted disabled:opacity-50"
             >
-              {busyKey === `${base}:fine` ? Spin : <LogOut className="h-4 w-4" />}
+              <LogOut className="h-4 w-4" />
               Esci
             </button>
           </>
@@ -273,11 +421,11 @@ function MembroRiga({
             </button>
             <button
               type="button"
-              onClick={() => onAzione('fine', `${base}:fine`)}
+              onClick={onFine}
               disabled={pending}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-semibold text-foreground active:scale-[0.98] transition-all hover:bg-muted disabled:opacity-50"
             >
-              {busyKey === `${base}:fine` ? Spin : <LogOut className="h-4 w-4" />}
+              <LogOut className="h-4 w-4" />
               Esci
             </button>
           </>

@@ -14,6 +14,7 @@ import {
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
+import { ViaggioSchema, validaViaggio, inserisciViaggioRow } from './_lib/viaggio-timbra';
 
 /** Azione esplicita scelta dal tecnico quando il turno è già attivo. */
 export type AzioneTimbra = 'inizio' | 'fine' | 'pausa' | 'ripresa';
@@ -164,17 +165,8 @@ function azioneATimbra(a: AzioneTimbra): { tipo: 'ingresso' | 'uscita'; pausa: b
 }
 
 // ── 1) timbra da QR (sé o, per il capo, un membro) ──────────────────────
-const ViaggioSchema = z.object({
-  sedeId: z.string().uuid(),
-  durataStimataMin: z.number().int().nonnegative().nullable(),
-  durataConfermataMin: z.number().int().nonnegative(),
-  giustificazione: z.string().max(500).optional(),
-  autista: z.boolean(),
-  mezzoId: z.string().uuid().nullable().optional(),
-  /** Distanza in km dalla stima API: DEFINITIVA (non corretta dal tecnico). */
-  distanzaKm: z.number().nonnegative().max(100000).nullable().optional(),
-});
-
+// ViaggioSchema condiviso (vedi ./_lib/viaggio-timbra): riusato da timbra,
+// terminaTurnoMio e dal flusso capo.
 const TimbraSchema = z.object({
   token: z.string().min(1),
   dipendenteId: z.string().uuid().optional(),
@@ -399,6 +391,8 @@ const TerminaTurnoSchema = z.object({
   ts: z.string().datetime().optional(),
   /** Pausa pranzo dichiarata (turno lungo senza pausa timbrata). */
   pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
+  /** Viaggio di RITORNO (chiusura da app): sede, stima, autista, mezzo, km. */
+  viaggio: ViaggioSchema.optional(),
 });
 
 export async function terminaTurnoMio(input: unknown): Promise<Result> {
@@ -444,18 +438,48 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
     }
   }
 
-  const { error } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: me.id,
-    cantiere_id: parsed.data.cantiereId,
-    commessa_id: null,
-    tipo: 'uscita',
-    pausa: false,
-    origine: 'qr',
-    ts,
-    creato_da: ctx.userId,
-  } as never);
+  // Viaggio di ritorno (chiusura da app): valida PRIMA di inserire l'uscita.
+  const viaggio = parsed.data.viaggio ?? null;
+  if (viaggio) {
+    const v = await validaViaggio(supabase, viaggio);
+    if (!v.ok) return { ok: false, error: v.error };
+  }
+
+  const { data: inserita, error } = await supabase
+    .from('timbrature' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: me.id,
+      cantiere_id: parsed.data.cantiereId,
+      commessa_id: null,
+      tipo: 'uscita',
+      pausa: false,
+      // Chiusura da app (non da QR): origine 'cronometro' per tracciare la fonte.
+      origine: 'cronometro',
+      ts,
+      creato_da: ctx.userId,
+    } as never)
+    .select('id')
+    .single();
   if (error) return { ok: false, error: error.message };
+
+  // Tratta di ritorno collegata. Compensazione: se fallisce, annulla l'uscita.
+  if (viaggio) {
+    const timbraturaId = (inserita as { id: string }).id;
+    const res = await inserisciViaggioRow(supabase, {
+      tenantId: ctx.tenantId,
+      dipendenteId: me.id,
+      cantiereId: parsed.data.cantiereId,
+      timbraturaId,
+      ts,
+      tipo: 'uscita',
+      viaggio,
+    });
+    if (!res.ok) {
+      await supabase.from('timbrature' as never).delete().eq('id', timbraturaId);
+      return { ok: false, error: res.error };
+    }
+  }
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ts)));

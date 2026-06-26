@@ -7,6 +7,14 @@ import { statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
+import {
+  ViaggioSchema,
+  type ViaggioInput,
+  validaViaggio,
+  inserisciViaggioRow,
+  inserisciPausaDichiarata,
+  inizioSeEleggibilePausa,
+} from './_lib/viaggio-timbra';
 
 /**
  * Azioni "gestione squadra" del caposquadra: timbra per i membri (e per sé)
@@ -91,7 +99,9 @@ async function eventiOggi(
   return (data as { tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null }[] | null) ?? [];
 }
 
-/** Applica un'azione a un dipendente solo se lo stato attuale la consente. */
+/** Applica un'azione a un dipendente solo se lo stato attuale la consente.
+ *  In chiusura ('fine') accetta opzionalmente il viaggio di ritorno + la pausa
+ *  pranzo dichiarata del membro (il capo compila il dialog per ciascuno). */
 async function applicaAzione(
   supabase: ReturnType<typeof createServerSupabase>,
   ctx: TenantContext,
@@ -99,6 +109,7 @@ async function applicaAzione(
   dipendenteId: string,
   azione: AzioneTimbra,
   self: boolean,
+  opts?: { viaggio?: ViaggioInput | null; pausaPranzoMin?: 30 | 45 | 60 },
 ): Promise<{ toccato: boolean; error?: string }> {
   const eventi = await eventiOggi(supabase, dipendenteId, cantiereId);
   const info = statoTurno(eventi);
@@ -106,18 +117,62 @@ async function applicaAzione(
 
   const { tipo, pausa } = azioneATimbra(azione);
   const ts = new Date().toISOString();
-  const { error } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: dipendenteId,
-    cantiere_id: cantiereId,
-    commessa_id: null,
-    tipo,
-    pausa,
-    origine: self ? 'qr' : 'capo',
-    ts,
-    creato_da: ctx.userId,
-  } as never);
+
+  // Solo in chiusura turno ('fine'): pausa dichiarata + viaggio di ritorno.
+  const viaggio = azione === 'fine' && opts?.viaggio ? opts.viaggio : null;
+  if (viaggio) {
+    const v = await validaViaggio(supabase, viaggio);
+    if (!v.ok) return { toccato: false, error: v.error };
+  }
+  if (azione === 'fine' && opts?.pausaPranzoMin) {
+    const inizio = inizioSeEleggibilePausa(info, eventi, ts);
+    if (inizio) {
+      await inserisciPausaDichiarata(supabase, {
+        tenantId: ctx.tenantId,
+        dipendenteId,
+        commessaId: null,
+        cantiereId,
+        creatoDa: ctx.userId,
+        startIso: inizio,
+        endIso: ts,
+        minuti: opts.pausaPranzoMin,
+      });
+    }
+  }
+
+  const { data: inserita, error } = await supabase
+    .from('timbrature' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: dipendenteId,
+      cantiere_id: cantiereId,
+      commessa_id: null,
+      tipo,
+      pausa,
+      origine: self ? 'cronometro' : 'capo',
+      ts,
+      creato_da: ctx.userId,
+    } as never)
+    .select('id')
+    .single();
   if (error) return { toccato: false, error: error.message };
+
+  if (viaggio) {
+    const timbraturaId = (inserita as { id: string }).id;
+    const res = await inserisciViaggioRow(supabase, {
+      tenantId: ctx.tenantId,
+      dipendenteId,
+      cantiereId,
+      timbraturaId,
+      ts,
+      tipo,
+      viaggio,
+    });
+    if (!res.ok) {
+      await supabase.from('timbrature' as never).delete().eq('id', timbraturaId);
+      return { toccato: false, error: res.error };
+    }
+  }
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, romeDay(new Date(ts)));
@@ -132,6 +187,10 @@ const TimbraMembroSchema = z.object({
   cantiereId: z.string().uuid(),
   dipendenteId: z.string().uuid(),
   azione: z.enum(['inizio', 'fine', 'pausa', 'ripresa']),
+  /** Solo azione 'fine': viaggio di ritorno del membro (compilato dal capo). */
+  viaggio: ViaggioSchema.optional(),
+  /** Solo azione 'fine': pausa pranzo dichiarata del membro. */
+  pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
 });
 
 export async function timbraMembro(
@@ -157,6 +216,7 @@ export async function timbraMembro(
     parsed.data.dipendenteId,
     parsed.data.azione,
     self,
+    { viaggio: parsed.data.viaggio ?? null, pausaPranzoMin: parsed.data.pausaPranzoMin },
   );
   if (res.error) return { ok: false, error: res.error };
   if (!res.toccato) return { ok: false, error: 'AZIONE_NON_VALIDA' };
