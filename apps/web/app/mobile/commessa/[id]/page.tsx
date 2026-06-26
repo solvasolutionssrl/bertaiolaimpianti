@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
+import { MobileBackButton } from '../../_components/mobile-back-button';
 import {
-  ArrowLeft,
   Camera,
   Phone,
   FileText,
@@ -489,13 +489,7 @@ export default async function CommessaDetailPage({
       {/* Hero dark con codice + cliente + LED — pb un pelo ridotto vs default */}
       <Hero className="pb-10">
         <div className="flex items-center justify-between">
-          <Link
-            href="/mobile"
-            className="inline-flex items-center gap-1.5 text-primary-foreground/80 transition-colors hover:text-primary-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Indietro</span>
-          </Link>
+          <MobileBackButton href="/mobile" tone="dark" />
           <div className="inline-flex items-center gap-2">
             {commessa.is_critica && (
               <span className="inline-flex items-center gap-1 rounded-full bg-destructive/25 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-destructive ring-1 ring-destructive/40">
@@ -723,9 +717,9 @@ export default async function CommessaDetailPage({
       {/* ── Tab principali — l'utente si muove qui dentro ─────────── */}
       <section className="animate-fade-up [animation-delay:60ms]">
         <Tabs
-          defaultValue={
-            todoApertiCount > 0 || riunioniMobile.length > 0 ? 'todo' : 'foto'
-          }
+          // Default sempre "Lavori" (riunioni/attività): è l'hub operativo.
+          // Media resta a un tap di distanza ma non è più la tab iniziale.
+          defaultValue="todo"
           className="w-full"
         >
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft-md">

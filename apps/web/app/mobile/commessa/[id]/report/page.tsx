@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { Printer } from 'lucide-react';
+import { MobileBackButton } from '../../../_components/mobile-back-button';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { getStorageProvider } from '@kommessa/integrations/storage';
@@ -210,15 +210,11 @@ export default async function ReportPageMobile({
         <div className="no-print">
           <Hero>
             <div className="flex items-center justify-between">
-              <Link
+              <MobileBackButton
                 href={`/mobile/commessa/${params.id}`}
-                className="inline-flex items-center gap-1.5 text-primary-foreground/80 transition-colors hover:text-primary-foreground"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
-                  Commessa
-                </span>
-              </Link>
+                tone="dark"
+                label="Commessa"
+              />
               <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
                 {c.codice_interno}
               </span>

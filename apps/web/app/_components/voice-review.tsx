@@ -18,6 +18,8 @@ import {
   ChevronUp,
   X,
   Search,
+  Users,
+  UserCheck,
 } from 'lucide-react';
 
 import { Button, Input, Label, cn } from '@kommessa/ui';
@@ -27,6 +29,10 @@ import {
   vociSimili,
   type VoceSimile as NuovaVoceSimile,
 } from '../office/impostazioni/voci/_actions/voci';
+import {
+  cercaClientiPerNome,
+  type ClienteSimile,
+} from '../office/_actions/clienti';
 
 /**
  * Voice Review (Schermo 2 del voice-intake flow).
@@ -72,6 +78,12 @@ export interface VoiceReviewData {
   note?: string;
   tag_suggeriti?: string[];
   referenti?: VoiceReferente[];
+  /**
+   * Se valorizzato, l'utente ha associato la commessa a un cliente già
+   * esistente in anagrafica (match proposto dal nome rilevato dall'AI):
+   * la finalizzazione userà QUESTO cliente invece di crearne uno nuovo.
+   */
+  clienteId?: string;
 }
 
 export interface VoceOption {
@@ -174,6 +186,81 @@ export function VoiceReview({
     });
   };
 
+  // ─── Match anagrafica clienti (evita duplicati) ────────────────────
+  // L'AI legge benissimo il nome cliente dal dettato, ma finora creava
+  // SEMPRE un cliente nuovo → duplicati (es. più commesse "Mirco Favini").
+  // Qui, quando un nome è rilevato, cerchiamo i clienti già in anagrafica:
+  // se ne troviamo, chiediamo all'utente se intende uno di quelli.
+  const ragioneSociale = cliente.value.ragione_sociale;
+  const [matchCandidates, setMatchCandidates] = React.useState<ClienteSimile[]>(
+    [],
+  );
+  const [clienteEsistente, setClienteEsistente] =
+    React.useState<ClienteSimile | null>(null);
+  // Nome per cui l'utente ha scelto "è un nuovo cliente": nascondiamo il match
+  // solo per QUEL nome. Se poi cambia nome (magari in uno già esistente) il
+  // match riappare → evitiamo davvero i duplicati.
+  const [dismissedForName, setDismissedForName] = React.useState<string | null>(
+    null,
+  );
+
+  React.useEffect(() => {
+    const term = ragioneSociale.trim();
+    // Già associato a un esistente e il nome combacia → nessuna ricerca.
+    if (
+      clienteEsistente &&
+      clienteEsistente.ragione_sociale.toLowerCase() === term.toLowerCase()
+    ) {
+      return;
+    }
+    // Nome cambiato rispetto al cliente associato → annulla l'associazione.
+    if (clienteEsistente) {
+      setClienteEsistente(null);
+    }
+    if (term.length < 3) {
+      setMatchCandidates([]);
+      return;
+    }
+    let active = true;
+    const handle = setTimeout(() => {
+      void cercaClientiPerNome({ nome: term })
+        .then((res) => {
+          if (active) setMatchCandidates(res);
+        })
+        .catch(() => {
+          if (active) setMatchCandidates([]);
+        });
+    }, 400);
+    return () => {
+      active = false;
+      clearTimeout(handle);
+    };
+  }, [ragioneSociale, clienteEsistente]);
+
+  const associaClienteEsistente = (c: ClienteSimile) => {
+    setClienteEsistente(c);
+    setDismissedForName(null);
+    setMatchCandidates([]);
+    // Allinea i campi mostrati al cliente reale (la panoramica li userà).
+    setCliente((s) => ({
+      status: 'confirmed',
+      value: {
+        ...s.value,
+        ragione_sociale: c.ragione_sociale,
+        tipo: c.tipo === 'azienda' ? 'azienda' : 'persona_fisica',
+        telefono: c.telefoni?.[0] ?? s.value.telefono,
+        email: c.email?.[0] ?? s.value.email,
+        citta: c.citta ?? s.value.citta,
+      },
+    }));
+  };
+
+  const mostraMatch =
+    !clienteEsistente &&
+    dismissedForName !== ragioneSociale.trim() &&
+    ragioneSociale.trim().length >= 3 &&
+    matchCandidates.length > 0;
+
   const allConfirmed =
     cliente.status === 'confirmed' &&
     vociState.status === 'confirmed' &&
@@ -203,6 +290,9 @@ export function VoiceReview({
       // può aggiungere/correggere il telefono di un referente dalla
       // sezione "Referenti rilevati" qui sotto).
       referenti: referenti.length > 0 ? referenti : undefined,
+      // Se l'utente ha confermato un cliente già in anagrafica, la commessa
+      // verrà associata a quello invece di crearne uno nuovo.
+      clienteId: clienteEsistente?.id,
     });
   };
 
@@ -439,6 +529,93 @@ export function VoiceReview({
             </div>
           )}
         </ReviewCard>
+
+        {/* Match anagrafica: cliente già esistente con lo stesso nome. */}
+        {mostraMatch ? (
+          <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-950/25">
+            <div className="flex items-start gap-2">
+              <Users
+                className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  Cliente già in anagrafica?
+                </p>
+                <p className="mt-0.5 text-xs leading-snug text-amber-900/80 dark:text-amber-200/80">
+                  Ho rilevato &laquo;{ragioneSociale.trim()}&raquo;.{' '}
+                  {matchCandidates.length === 1
+                    ? 'Esiste già questo cliente. Intendi lui?'
+                    : 'Esistono già clienti simili. Intendi uno di questi?'}
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {matchCandidates.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => associaClienteEsistente(c)}
+                        className="flex w-full items-center gap-2 rounded-md border border-amber-300 bg-card px-2.5 py-2 text-left transition-colors hover:bg-amber-100/60 active:scale-[0.99] dark:border-amber-500/40 dark:hover:bg-amber-900/30"
+                      >
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-foreground">
+                            {c.ragione_sociale}
+                          </span>
+                          {(c.citta || c.telefoni?.[0]) ? (
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {[c.citta, c.telefoni?.[0]]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                          <Check className="h-3 w-3" aria-hidden="true" />
+                          Usa
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => setDismissedForName(ragioneSociale.trim())}
+                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-300"
+                >
+                  No, è un nuovo cliente
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Cliente esistente associato: conferma + possibilità di annullare. */}
+        {clienteEsistente ? (
+          <div className="flex items-center gap-2 rounded-lg border-2 border-emerald-400/60 bg-emerald-50 p-3 dark:border-emerald-500/40 dark:bg-emerald-950/25">
+            <UserCheck
+              className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+              aria-hidden="true"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+                Cliente esistente associato
+              </p>
+              <p className="truncate text-xs text-emerald-900/80 dark:text-emerald-200/80">
+                {clienteEsistente.ragione_sociale}
+                {clienteEsistente.citta ? ` · ${clienteEsistente.citta}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setClienteEsistente(null);
+                setDismissedForName(null);
+              }}
+              className="shrink-0 text-xs font-medium text-emerald-800 underline underline-offset-2 dark:text-emerald-300"
+            >
+              Cambia
+            </button>
+          </div>
+        ) : null}
 
         {/* Referenti rilevati dall'AI. Telefono editable inline (quick-add):
             se manca, l'utente lo aggiunge subito senza tornare dopo.

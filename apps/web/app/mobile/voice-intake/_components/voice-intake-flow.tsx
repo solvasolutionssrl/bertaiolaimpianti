@@ -3,12 +3,12 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
   Loader2,
   Sparkles,
   Lightbulb,
   CheckCircle2,
   ChevronRight,
+  Pencil,
 } from 'lucide-react';
 
 import {
@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from '@kommessa/ui';
 
+import { MobileBackButton } from '../../_components/mobile-back-button';
 import { VoiceRecorder } from '../../../_components/voice-recorder';
 import {
   VoiceReview,
@@ -55,7 +56,12 @@ function reviewToPayload(
   vociDefault: number[],
 ): BozzaPayload {
   return {
-    clienteId: undefined, // il flow voce crea sempre un nuovo cliente
+    // Se l'utente ha confermato un cliente già in anagrafica (match sul nome
+    // rilevato dall'AI), la commessa viene associata a quello. Altrimenti
+    // resta undefined e si crea un cliente nuovo da clienteNew. clienteId ha
+    // la precedenza in creaCommessa, quindi clienteNew viene ignorato.
+    clienteId: d.clienteId,
+    _clienteLabel: d.clienteId ? d.ragione_sociale?.trim() : undefined,
     clienteNew: {
       ragione_sociale: d.ragione_sociale?.trim() ?? '',
       tipo: d.tipo ?? 'persona_fisica',
@@ -338,19 +344,39 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
     }
   };
 
+  // Bottone primario "Crea commessa": mostrato sia IN ALTO (il cliente boomer
+  // non scrollava fino in fondo e non lo vedeva) sia in fondo per chi scorre.
+  const creaCommessaButton = (
+    <Button
+      size="lg"
+      className="min-h-[56px] w-full text-base"
+      onClick={handleCreate}
+      disabled={state.phase === 'creating' || bozzaMediaUploading}
+    >
+      {bozzaMediaUploading ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Carico foto/video ({mediaFiles.length} file)…
+        </>
+      ) : state.phase === 'creating' ? (
+        <>
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Creo la commessa…
+        </>
+      ) : (
+        <>
+          <Sparkles className="h-4 w-4" aria-hidden="true" />
+          Crea commessa{mediaFiles.length > 0 ? ` + ${mediaFiles.length} foto/video` : ''}
+        </>
+      )}
+    </Button>
+  );
+
   // ---------- Header / progress ----------
   return (
     <div className="mx-auto flex min-h-[100dvh] max-w-screen-sm flex-col gap-5 px-4 pb-32 pt-6">
       <header className="space-y-3">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          aria-label="Torna indietro"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          Indietro
-        </button>
+        <MobileBackButton label="Indietro" />
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
             Dettato vocale
@@ -526,6 +552,13 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Conferma e crea</h2>
 
+          {/* Tasto Crea IN ALTO, subito visibile (il cliente non scrolla fino in
+              fondo). Resta anche in fondo per chi scorre. */}
+          {creaCommessaButton}
+          <p className="-mt-1 text-center text-[11px] text-muted-foreground">
+            Aggiungi foto e controlla i dati qui sotto, poi crea.
+          </p>
+
           {/* Foto/video prima — l'utente le vede subito e le aggiunge prima di confermare */}
           {state.phase === 'confirm' && (
             <MediaAttachSection
@@ -537,6 +570,23 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
           )}
 
           <div className="space-y-3 rounded-lg border-2 border-primary/20 bg-card p-4 shadow-soft-md">
+            {/* Header con matita: torna allo step Rivedi per modificare i dati.
+                Il capo arriva qui e istintivamente vuole correggere un campo. */}
+            <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Riepilogo
+              </p>
+              <button
+                type="button"
+                onClick={() => setState((s) => ({ ...s, phase: 'review' }))}
+                disabled={state.phase === 'creating' || bozzaMediaUploading}
+                className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary-soft/60 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary-soft disabled:opacity-50"
+                aria-label="Modifica i dati"
+              >
+                <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                Modifica
+              </button>
+            </div>
             <SummaryRow label="Cliente" value={state.data.ragione_sociale} />
             <SummaryRow label="Indirizzo" value={state.data.indirizzo} />
             <SummaryRow label="Città" value={state.data.citta} />
@@ -560,29 +610,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             </code>
           </div>
 
-          <Button
-            size="lg"
-            className="min-h-[56px] w-full text-base"
-            onClick={handleCreate}
-            disabled={state.phase === 'creating' || bozzaMediaUploading}
-          >
-            {bozzaMediaUploading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Carico foto/video ({mediaFiles.length} file)…
-              </>
-            ) : state.phase === 'creating' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Creo la commessa…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                Crea commessa{mediaFiles.length > 0 ? ` + ${mediaFiles.length} foto/video` : ''}
-              </>
-            )}
-          </Button>
+          {creaCommessaButton}
 
           <Button
             type="button"

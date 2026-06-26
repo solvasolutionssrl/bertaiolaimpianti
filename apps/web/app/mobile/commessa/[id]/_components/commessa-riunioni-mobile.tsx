@@ -49,6 +49,28 @@ interface Props {
 }
 
 export function CommessaRiunioniMobile({ riunioni, commessaId, canUpload }: Props) {
+  // Auto-refresh quando gli allegati di una riunione finiscono di salire.
+  // Il dialog di creazione accoda i job nella UploadQueue globale e si chiude
+  // subito: senza questo watcher gli allegati non comparirebbero finché non si
+  // ricarica la pagina a mano. Watcher a livello lista (sopravvive al dialog).
+  const router = useRouter();
+  const queue = useUploadQueue();
+  const allegatiRiunioneDoneRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    let nuoviDone = false;
+    for (const job of queue.jobs) {
+      if (
+        job.payload.riunioneId &&
+        job.status === 'done' &&
+        !allegatiRiunioneDoneRef.current.has(job.id)
+      ) {
+        allegatiRiunioneDoneRef.current.add(job.id);
+        nuoviDone = true;
+      }
+    }
+    if (nuoviDone) router.refresh();
+  }, [queue.jobs, router]);
+
   if (riunioni.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">

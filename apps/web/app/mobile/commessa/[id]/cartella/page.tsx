@@ -1,8 +1,8 @@
 import Link from 'next/link';
+import { MobileBackButton } from '../../../_components/mobile-back-button';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
-  ArrowLeft,
   Folder,
   AlertTriangle,
 } from 'lucide-react';
@@ -144,13 +144,7 @@ export default async function CartellaPage({
       {/* Hero dark */}
       <Hero>
         <div className="flex items-center justify-between">
-          <Link
-            href={backHref}
-            className="inline-flex items-center gap-1.5 text-primary-foreground/80 transition-colors hover:text-primary-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em]">Indietro</span>
-          </Link>
+          <MobileBackButton href={backHref} tone="dark" />
           <span className="rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
             {providerLabel}
           </span>

@@ -1,117 +1,121 @@
 'use client';
 
 import * as React from 'react';
-import { Upload, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Button } from '@kommessa/ui';
+import { useRouter } from 'next/navigation';
+import { CheckCircle2, Loader2 } from 'lucide-react';
 
 import {
   MediaAttachSection,
   type MediaFile,
 } from '../../../../office/commesse/nuova/_components/media-attach-section';
-import {
-  uploadMediaBatch,
-  type UploadProgressMap,
-  type UploadMediaResult,
-} from '../../../../office/commesse/nuova/_lib/upload-media';
+import { useUploadQueue } from '../../../../_components/upload-queue-provider';
+import { compressImage } from '../../../../office/commesse/nuova/_lib/compress-image';
 
 interface Props {
   commessaId: string;
 }
 
-type State = 'idle' | 'uploading' | 'done' | 'error';
+/**
+ * Aggiunta media a una commessa esistente (tab Media mobile).
+ *
+ * Carica SUBITO appena selezioni: i file finiscono nella UploadQueue globale
+ * (upload in background, persistito su IndexedDB → sopravvive a cambio pagina
+ * e refresh). Niente più tasto "Carica" da premere: prima il cliente
+ * selezionava e dimenticava di confermare, perdendo la roba. Lo stato lo
+ * mostra il pannello upload in basso; quando un file finisce ricarichiamo la
+ * pagina così compare nella griglia.
+ */
+function toAllegatoKind(k: MediaFile['kind']): 'foto' | 'video' | 'pdf_acquisito' {
+  if (k === 'video') return 'video';
+  if (k === 'pdf') return 'pdf_acquisito';
+  return 'foto';
+}
 
 export function AddMediaSection({ commessaId }: Props) {
-  const [files, setFiles] = React.useState<MediaFile[]>([]);
-  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
-  const [results, setResults] = React.useState<UploadMediaResult[]>([]);
-  const [uploadState, setUploadState] = React.useState<State>('idle');
-  const abortRef = React.useRef<AbortController | null>(null);
+  const queue = useUploadQueue();
+  const router = useRouter();
 
-  const handleUpload = async () => {
-    if (files.length === 0) return;
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setUploadState('uploading');
-    try {
-      const res = await uploadMediaBatch(
-        files,
+  // Lista transitoria: appena un file viene selezionato lo accodiamo e
+  // svuotiamo la lista (il progresso è nel pannello in basso).
+  const [files, setFiles] = React.useState<MediaFile[]>([]);
+  const enqueuedIdsRef = React.useRef<Set<string>>(new Set()); // MediaFile.id
+  const jobIdsRef = React.useRef<Set<string>>(new Set()); // job accodati da qui
+  const doneJobIdsRef = React.useRef<Set<string>>(new Set());
+  const [inviati, setInviati] = React.useState(0);
+  const [caricati, setCaricati] = React.useState(0);
+
+  const handleChange = async (next: MediaFile[]) => {
+    const daAccodare = next.filter((f) => !enqueuedIdsRef.current.has(f.id));
+    // Svuota subito: i file sono ora "presi in carico" (la coda mostra il
+    // progresso nel pannello in basso).
+    setFiles([]);
+    if (daAccodare.length === 0) return;
+    daAccodare.forEach((f) => enqueuedIdsRef.current.add(f.id));
+    setInviati((n) => n + daAccodare.length);
+    for (const f of daAccodare) {
+      // Le immagini vengono compresse lato client (max 2048px, JPEG 0.82),
+      // come faceva prima la tab Media; video e PDF salgono originali. La coda
+      // globale poi carica in background (persistito su IndexedDB).
+      const blob = f.kind === 'image' ? await compressImage(f.file) : f.file;
+      const jobId = queue.enqueue({
+        fileBlob: blob,
+        fileName: blob.name || f.file.name,
+        fileMime: blob.type || f.file.type || 'application/octet-stream',
+        fileSize: blob.size,
         commessaId,
-        (map) => setUploadProgress(new Map(map)),
-        controller.signal,
-      );
-      setResults(res);
-      const cancelled = res.every((r) => r.error === 'Annullato');
-      setUploadState(cancelled ? 'idle' : res.some((r) => !r.ok) ? 'error' : 'done');
-    } catch {
-      setUploadState('error');
-    } finally {
-      abortRef.current = null;
+        momento: 'sopralluogo',
+        kind: toAllegatoKind(f.kind),
+        takenAtIso: f.takenAt ? f.takenAt.toISOString() : null,
+      });
+      jobIdsRef.current.add(jobId);
     }
   };
 
-  const handleCancel = () => {
-    abortRef.current?.abort();
-    setUploadProgress(new Map());
-    setUploadState('idle');
-  };
+  // Quando un nostro job arriva a 'done': conta + ricarica (la griglia Media
+  // mostra il nuovo file).
+  React.useEffect(() => {
+    let nuoviDone = false;
+    for (const job of queue.jobs) {
+      if (
+        jobIdsRef.current.has(job.id) &&
+        job.status === 'done' &&
+        !doneJobIdsRef.current.has(job.id)
+      ) {
+        doneJobIdsRef.current.add(job.id);
+        setCaricati((n) => n + 1);
+        nuoviDone = true;
+      }
+    }
+    if (nuoviDone) router.refresh();
+  }, [queue.jobs, router]);
 
-  const reset = () => {
-    setFiles([]);
-    setUploadProgress(new Map());
-    setResults([]);
-    setUploadState('idle');
-  };
-
-  const ok = results.filter((r) => r.ok).length;
-  const fail = results.filter((r) => !r.ok && r.error !== 'Annullato').length;
-  const uploading = uploadState === 'uploading';
-
-  if (uploadState === 'done' || (uploadState === 'error' && results.length > 0)) {
-    return (
-      <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-        {ok > 0 && (
-          <div className="flex items-center gap-2 text-sm text-success">
-            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>{ok} foto/video caricati con successo</span>
-          </div>
-        )}
-        {fail > 0 && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
-            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>
-              {fail} file non caricati —{' '}
-              {results.find((r) => !r.ok && r.error !== 'Annullato')?.error ?? 'errore sconosciuto'}
-            </span>
-          </div>
-        )}
-        <Button type="button" variant="outline" size="sm" onClick={reset} className="w-full">
-          Carica altri file
-        </Button>
-      </div>
-    );
-  }
+  const inCorso = Math.max(0, inviati - caricati);
 
   return (
     <div className="space-y-3">
-      <MediaAttachSection
-        files={files}
-        onChange={setFiles}
-        uploading={uploading}
-        uploadProgress={uploadProgress}
-        onCancel={handleCancel}
-      />
+      <MediaAttachSection files={files} onChange={handleChange} />
 
-      {files.length > 0 && !uploading && (
-        <Button
-          type="button"
-          size="lg"
-          className="min-h-[48px] w-full"
-          onClick={handleUpload}
-        >
-          <Upload className="h-4 w-4" aria-hidden="true" />
-          Carica {files.length} foto/video
-        </Button>
-      )}
+      {inviati > 0 ? (
+        <div className="rounded-lg border border-border bg-card p-3 text-sm">
+          {inCorso > 0 ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2
+                className="h-4 w-4 shrink-0 animate-spin"
+                aria-hidden="true"
+              />
+              <span>
+                {inCorso} in caricamento… puoi continuare, lo stato è nel
+                pannello in basso.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-success">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>{caricati} file caricati</span>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

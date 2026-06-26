@@ -44,7 +44,8 @@ function targetInitFields(t: UploadTarget): {
  *
  * Strategia batch:
  *  - Immagini: compressione client-side (Canvas) poi upload parallelo max 3
- *  - Video: upload sequenziale (file grandi, evita pressione di memoria/banda)
+ *  - Video e PDF: nessuna compressione, upload sequenziale del file originale
+ *    (file grandi, evita pressione di memoria/banda)
  *  - Ogni file: 2 retry automatici su errore rete, backoff 2s / 5s
  *  - signal: AbortSignal per cancel — ferma il file corrente, marca gli altri 'Annullato'
  *
@@ -65,7 +66,9 @@ export async function uploadMediaBatch(
   const notify = () => onProgress(new Map(progress));
 
   const images = files.filter((f) => f.kind === 'image');
-  const videos = files.filter((f) => f.kind === 'video');
+  // Non-immagini (video + PDF): nessuna compressione client-side, upload del
+  // File originale in sequenza.
+  const nonImages = files.filter((f) => f.kind !== 'image');
   const results: UploadMediaResult[] = [];
   const compressed = new Map<string, File>();
 
@@ -81,7 +84,7 @@ export async function uploadMediaBatch(
       notify();
     }),
   );
-  for (const mf of videos) {
+  for (const mf of nonImages) {
     compressed.set(mf.id, mf.file);
     progress.set(mf.id, { pct: 0, step: 'uploading' });
   }
@@ -120,8 +123,8 @@ export async function uploadMediaBatch(
     3,
   );
 
-  // Step 3: upload video in sequenza
-  for (const mf of videos) {
+  // Step 3: upload non-immagini (video + PDF) in sequenza
+  for (const mf of nonImages) {
     if (signal?.aborted) {
       progress.set(mf.id, { pct: 0, step: 'error' });
       results.push({ id: mf.id, name: mf.file.name, ok: false, error: 'Annullato' });
