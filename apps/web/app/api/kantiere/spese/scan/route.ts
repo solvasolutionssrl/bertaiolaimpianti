@@ -80,8 +80,9 @@ export async function POST(request: NextRequest) {
     return Response.json({ ok: false, code: 'FILE_TROPPO_GRANDE' }, { status: 413 });
   }
   const mime = file.type || 'image/jpeg';
-  if (!mime.startsWith('image/')) {
-    return Response.json({ ok: false, code: 'NON_IMMAGINE' }, { status: 415 });
+  const isPdf = mime === 'application/pdf';
+  if (!mime.startsWith('image/') && !isPdf) {
+    return Response.json({ ok: false, code: 'FORMATO_NON_SUPPORTATO' }, { status: 415 });
   }
   const originalBuf = Buffer.from(await file.arrayBuffer());
 
@@ -106,11 +107,17 @@ export async function POST(request: NextRequest) {
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const id = randomUUID();
-  const ext = mime === 'image/png' ? '.png' : mime === 'image/webp' ? '.webp' : '.jpg';
+  const ext = isPdf
+    ? '.pdf'
+    : mime === 'image/png'
+      ? '.png'
+      : mime === 'image/webp'
+        ? '.webp'
+        : '.jpg';
   const r2Key = `tenants/${slug}/kantiere/spese/${yyyy}/${mm}/${id}/scontrino${ext}`;
   const thumbKey = `tenants/${slug}/kantiere/spese/${yyyy}/${mm}/${id}/thumb.webp`;
 
-  // 5. Upload originale + thumbnail (best-effort sulla thumb)
+  // 5. Upload originale + thumbnail (solo immagini; i PDF non hanno thumb)
   try {
     await r2.putObject(r2Key, originalBuf, mime);
   } catch (e) {
@@ -120,16 +127,18 @@ export async function POST(request: NextRequest) {
     );
   }
   let r2ThumbKey: string | null = null;
-  try {
-    const thumbBuf = await sharp(originalBuf, { failOn: 'none' })
-      .rotate()
-      .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'cover', position: 'centre' })
-      .webp({ quality: 75 })
-      .toBuffer();
-    await r2.putObject(thumbKey, thumbBuf, 'image/webp');
-    r2ThumbKey = thumbKey;
-  } catch {
-    // thumb non critica: si ricade sul full-size
+  if (!isPdf) {
+    try {
+      const thumbBuf = await sharp(originalBuf, { failOn: 'none' })
+        .rotate()
+        .resize(THUMB_SIZE, THUMB_SIZE, { fit: 'cover', position: 'centre' })
+        .webp({ quality: 75 })
+        .toBuffer();
+      await r2.putObject(thumbKey, thumbBuf, 'image/webp');
+      r2ThumbKey = thumbKey;
+    } catch {
+      // thumb non critica: si ricade sul full-size
+    }
   }
 
   // 6. Estrazione vision (se OpenAI non configurato: lascio i campi vuoti,
@@ -148,7 +157,7 @@ export async function POST(request: NextRequest) {
   };
   let aiOk = false;
 
-  if (isOpenAIConfigured()) {
+  if (!isPdf && isOpenAIConfigured()) {
     try {
       const b64 = originalBuf.toString('base64');
       const completion = await chatCompletion({
@@ -210,6 +219,7 @@ export async function POST(request: NextRequest) {
     r2ThumbKey,
     mime,
     sizeBytes: originalBuf.length,
+    isPdf,
     estratto: dati,
     aiEstratto: aiOk,
   });

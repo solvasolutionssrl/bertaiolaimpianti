@@ -36,6 +36,7 @@ export async function GET(
   if (!spesa) return Response.json({ error: 'Non trovata' }, { status: 404 });
 
   const wantThumb = request.nextUrl.searchParams.get('size') === 'thumb';
+  const wantDownload = request.nextUrl.searchParams.get('download') === '1';
   const key = wantThumb && spesa.r2_thumb_key ? spesa.r2_thumb_key : spesa.r2_key;
   if (!key) return Response.json({ error: 'Nessuna foto' }, { status: 404 });
 
@@ -51,6 +52,16 @@ export async function GET(
     ) ?? getR2ProviderFromEnv();
   if (!r2) return Response.json({ error: 'R2 non configurato' }, { status: 503 });
 
-  const signed = await r2.createPresignedGetUrl(key, { ttlSec: 300 });
+  // download: forza Content-Disposition attachment con un nome leggibile
+  const nomeFile = wantDownload ? `ricevuta_${params.id.slice(0, 8)}${estDaKey(key)}` : undefined;
+  const signed = await r2.createPresignedGetUrl(key, {
+    ttlSec: 300,
+    ...(nomeFile ? { downloadAs: nomeFile } : {}),
+  });
   return Response.redirect(signed.url, 302);
+}
+
+function estDaKey(key: string): string {
+  const m = key.match(/\.[a-zA-Z0-9]+$/);
+  return m ? m[0].toLowerCase() : '';
 }

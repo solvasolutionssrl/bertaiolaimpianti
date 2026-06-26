@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { CATEGORIE_SPESA, calcolaImponibile, normalizzaCategoria } from '@kommessa/api/spese';
@@ -136,6 +137,110 @@ export async function creaSpesa(input: z.input<typeof CreaSchema>): Promise<Risu
   if (error) return { ok: false, error: error.message };
 
   revalidatePath('/mobile/kantiere/spese');
+  revalidatePath('/office/kantiere/kontabilita');
+  return { ok: true, id: (inserted as { id: string }).id };
+}
+
+const CreaOfficeSchema = z.object({
+  dipendenteId: z.string().uuid(),
+  cantiereId: z.string().uuid().nullable().optional(),
+  categoria: z.enum(CATEGORIE_SPESA),
+  importoTotale: z.number().finite().positive(),
+  importoIva: z.number().finite().nonnegative().nullable().optional(),
+  valuta: z.string().trim().min(1).max(8).default('EUR'),
+  ragioneSociale: z.string().trim().max(200).nullable().optional(),
+  dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
+  partitaIva: z.string().trim().max(40).nullable().optional(),
+  metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
+  numeroDocumento: z.string().trim().max(60).nullable().optional(),
+  indirizzoEsercente: z.string().trim().max(200).nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+  // foto opzionale (caricata via /scan prima del salvataggio)
+  r2Key: z.string().min(1).max(500).nullable().optional(),
+  r2ThumbKey: z.string().min(1).max(500).nullable().optional(),
+  mime: z.string().min(1).max(127).nullable().optional(),
+  sizeBytes: z.number().int().positive().max(20 * 1024 * 1024).nullable().optional(),
+  aiRaw: z.unknown().optional(),
+});
+
+/**
+ * Creazione spesa lato OFFICE/ADMIN per conto di un dipendente scelto.
+ * Usa service role (la RLS consente l'insert solo "le proprie"): il permesso
+ * e' garantito qui dal controllo di ruolo + scoping esplicito al tenant.
+ */
+export async function creaSpesaOffice(
+  input: z.input<typeof CreaOfficeSchema>,
+): Promise<Risultato> {
+  const parsed = CreaOfficeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
+  const d = parsed.data;
+
+  const ctx = await requireTenantContext();
+  if (!['owner', 'admin', 'office'].includes(ctx.role)) {
+    return { ok: false, error: 'NON_AUTORIZZATO' };
+  }
+  if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+
+  const service = createServiceSupabase();
+
+  // dipendente scelto deve appartenere al tenant del chiamante
+  const { data: dip } = await service
+    .from('dipendenti' as never)
+    .select('id, tenant_id')
+    .eq('id', d.dipendenteId)
+    .maybeSingle();
+  const dipRow = dip as { id: string; tenant_id: string } | null;
+  if (!dipRow || dipRow.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'DIPENDENTE_NON_VALIDO' };
+  }
+
+  // cantiere (se scelto) deve appartenere al tenant → ricava commessa
+  let commessaId: string | null = null;
+  if (d.cantiereId) {
+    const { data: cant } = await service
+      .from('cantieri' as never)
+      .select('id, tenant_id, commessa_id')
+      .eq('id', d.cantiereId)
+      .maybeSingle();
+    const cantRow = cant as { id: string; tenant_id: string; commessa_id: string | null } | null;
+    if (!cantRow || cantRow.tenant_id !== ctx.tenantId) {
+      return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+    }
+    commessaId = cantRow.commessa_id ?? null;
+  }
+
+  const imponibile = calcolaImponibile(d.importoTotale, d.importoIva ?? null);
+
+  const { data: inserted, error } = await service
+    .from('spese' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: d.dipendenteId,
+      cantiere_id: d.cantiereId ?? null,
+      commessa_id: commessaId,
+      categoria: d.categoria,
+      ragione_sociale: d.ragioneSociale ?? null,
+      importo_totale: d.importoTotale,
+      importo_iva: d.importoIva ?? null,
+      imponibile,
+      valuta: d.valuta,
+      partita_iva: d.partitaIva ?? null,
+      metodo_pagamento: d.metodoPagamento ?? null,
+      numero_documento: d.numeroDocumento ?? null,
+      indirizzo_esercente: d.indirizzoEsercente ?? null,
+      data_scontrino: d.dataScontrino ?? null,
+      r2_key: d.r2Key ?? null,
+      r2_thumb_key: d.r2ThumbKey ?? null,
+      foto_mime: d.mime ?? null,
+      foto_size_bytes: d.sizeBytes ?? null,
+      stato: 'confermata',
+      ai_raw: (d.aiRaw as object | undefined) ?? null,
+    } as never)
+    .select('id')
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+
   revalidatePath('/office/kantiere/kontabilita');
   return { ok: true, id: (inserted as { id: string }).id };
 }
