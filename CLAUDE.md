@@ -78,6 +78,21 @@ Modulo presenze (tenant FPM, `app_mode=kantiere`). Tutto gated da `tenantHasModu
 
 > Dettaglio operativo, milestone e TODO vivono nella memoria (`MEMORY.md` → `kantiere-overview`, `project-branch-kontabilita-wip`, checkpoint 24–25/06).
 
+#### Presenze e ore — UI alleggerita + dettaglio origine/viaggio (29-30/06/2026)
+
+La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semplificata e arricchita (solo UI/lettura, motore auto-approvazione invariato):
+
+- **Niente più Approva/Respingi/selezione-bulk a schermo** (l'auto-approvazione resta sotto, nascosta): storico **per giorno** + blocco **"In corso oggi"** (sfondino verde, colonne allineate, timeline inline `GiornataFlow`). Esito per giornata: 🟢 Regolare / 🔴 anomalia con motivo (giorno aperto / oltre soglia) / ☕ pausa non timbrata (giornate lunghe). **Modifica + Cronologia su OGNI giornata** → correzione retroattiva tracciata (`commessa_versioni`-style `rapportino_versioni`, azione `modifica_ufficio`). Filtro "Solo anomalie".
+- **`rapportino` ≠ PDF**: nel codice è il **record-giornata** (con stato approvazione), ed è il nome di questa pagina. Non esiste un PDF "rapportino"; il prospetto ore È questa tabella + export CSV + Ore e costi.
+- **Ore in formato `H:MM`** (es. 7:30, non 7.5/2,6) in **tutte** le tabelle/KPI Kantiere (office desktop + mobile). Il viaggio mostra sempre **km + tempo H:MM** (da `timbratura_viaggio.distanza_km`).
+- **Origine + viaggio nel dettaglio espanso** (office desktop + cruscotto mobile): ogni timbratura/pausa mostra l'**origine** (`origine` = `qr`/`cronometro` = "Timbrata"; `manuale` = "Inserita a mano · da {chi} · agg. {quando}" da `created_at`+`creato_da`), e il **viaggio** come tratte (sede→cantiere / cantiere→sede al ritorno, km, H:MM, autista/passeggero). Componente condiviso `office/kantiere/_components/timbrature-riepilogo.tsx` (`TimbratureRiepilogo` con `OrigineLine`, `GiornataFlow`).
+- **Cruscotto mobile office** (`/mobile/kantiere/cruscotto`, gated admin/office) = **dashboard navigabile per giorni** (`?giorno=YYYY-MM-DD`, no futuro): consultabile lo **storico** di un giorno passato; "Presenze del giorno" per-persona espandibili con origine+viaggio.
+- **Anomalie** tolta dalla **sidebar** office (pagina ancora raggiungibile dalla dashboard — non del tutto ridondante: ha festivo/weekend/straordinari). Soglia promemoria pausa **configurabile, default 5h**. Icona card viaggio scheda cantiere: aereo → **macchina** (`Car`).
+
+#### Funzioni per-tenant (feature-flag) — super admin (29/06/2026, migration `20260629120000`)
+
+`tenants.features jsonb` (NON segreto, `grant select (features) to anon, authenticated`) per **mostrare/nascondere funzioni office per-tenant** dal super admin. Tab **"Funzioni"** in `/admin/tenants/[id]` (Predefinito/Mostra/Nascondi). Default per-funzione derivato dall'app_mode (mondo commesse = `app_mode ≠ kantiere`). Reader **difensivo** `_lib/tenant-features.ts` (+ registry client-safe `_lib/tenant-features-registry.ts`) → finché la colonna non c'è, si usano i default. Oggi gestisce **Voci catalogo** e **Preset di lavoro** (nascoste ai tenant solo-Kantiere, anche via route `notFound()`). Per aggiungerne: 1 voce nel registry + `tenantFeatureEnabled(key, kommessaWorld)` al gate. Migration **applicata** al cloud il 29/06.
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione
