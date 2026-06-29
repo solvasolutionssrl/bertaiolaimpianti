@@ -12,7 +12,7 @@ import {
   History,
   Loader2,
   MapPin,
-  Plane,
+  Car,
   Printer,
   QrCode,
   RefreshCw,
@@ -428,7 +428,7 @@ export function CantiereDetailClient({
         />
         <KpiChip
           accent="blue"
-          icon={<Plane className="h-4 w-4" aria-hidden="true" />}
+          icon={<Car className="h-4 w-4" aria-hidden="true" />}
           valore={`${fmtOreKpi(storico.totali.viaggio)}`}
           label="Viaggio"
         />

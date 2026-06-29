@@ -1,32 +1,31 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Timer, UserCheck, Utensils, Users, MapPin, Clock } from 'lucide-react';
+import {
+  Timer,
+  UserCheck,
+  Utensils,
+  Users,
+  MapPin,
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { LiveRefresh } from '@/app/_components/live-refresh';
+import type { TimbraturaInput } from '@/app/office/kantiere/_components/timbrature-riepilogo';
+import type { ViaggioTratta } from '@/app/office/kantiere/rapportini/_components/rapportini-client';
 
 import { guardMobile } from '../../_lib/guard';
-import {
-  dettaglioPresenza,
-  statoDaEventi,
-  type EventoOggi,
-} from '../_lib/presenze';
-import { UltimeTimbrature, type RigaUltima } from './_components/ultime-timbrature';
+import { statoDaEventi, type EventoOggi } from '../_lib/presenze';
+import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
 
 export const metadata: Metadata = { title: 'Cruscotto Kantiere' };
 export const dynamic = 'force-dynamic';
-
-function formatOra(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
-}
 
 type TimbRow = {
   id: string;
@@ -35,6 +34,21 @@ type TimbRow = {
   pausa: boolean | null;
   dipendente_id: string | null;
   cantiere_id: string | null;
+  origine: string | null;
+  created_at: string | null;
+  creato_da: string | null;
+};
+
+type ViaggioRow = {
+  timbratura_id: string | null;
+  dipendente_id: string;
+  data: string | null;
+  direzione: 'andata' | 'ritorno';
+  sede_id: string | null;
+  cantiere_id: string | null;
+  distanza_km: number | null;
+  durata_confermata_min: number | null;
+  autista: boolean | null;
 };
 
 const KPI_TONE = {
@@ -43,79 +57,162 @@ const KPI_TONE = {
   pausa: 'border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20',
 } as const;
 
-export default async function CruscottoKantierePage() {
+function isGiornoValido(s: string | undefined): s is string {
+  return !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+/** Giorno adiacente (±delta) in formato YYYY-MM-DD. */
+function addGiorni(giorno: string, delta: number): string {
+  const d = new Date(`${giorno}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtGiornoLungo(giorno: string): string {
+  try {
+    const d = new Date(`${giorno}T12:00:00`);
+    const s = new Intl.DateTimeFormat('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  } catch {
+    return giorno;
+  }
+}
+
+function oreLabelMin(min: number): string {
+  const m = Math.max(0, Math.round(min));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+}
+
+export default async function CruscottoKantierePage({
+  searchParams,
+}: {
+  searchParams: { giorno?: string };
+}) {
   const ctx = await guardMobile();
   // Solo gestione (admin/office). I tecnici non hanno il cruscotto.
   if (ctx.role !== 'admin' && ctx.role !== 'office') redirect('/mobile/kantiere');
 
   const supabase = createServerSupabase();
 
-  // Confini giornata odierna (Europe/Rome), robusti al DST.
-  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const oggi = romeDay(new Date());
+  let giorno = isGiornoValido(searchParams.giorno) ? searchParams.giorno : oggi;
+  if (giorno > oggi) giorno = oggi; // niente futuro
+  const isOggi = giorno === oggi;
+  const { fromIso, toIso } = romeDayBoundsUtc(giorno);
 
-  const [dipRes, cantRes, oggiRes, ultimeRes] = await Promise.all([
-    supabase
-      .from('dipendenti' as never)
-      .select('id, nome, cognome')
-      .eq('tenant_id', ctx.tenantId),
-    supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .eq('tenant_id', ctx.tenantId),
-    // Timbrature di oggi (tutte): base per i conteggi live + dettaglio per persona.
+  const [dipRes, cantRes, timbRes] = await Promise.all([
+    supabase.from('dipendenti' as never).select('id, nome, cognome').eq('tenant_id', ctx.tenantId),
+    supabase.from('cantieri' as never).select('id, nome, codice').eq('tenant_id', ctx.tenantId),
     supabase
       .from('timbrature' as never)
-      .select('id, tipo, ts, pausa, dipendente_id, cantiere_id')
+      .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da')
       .eq('tenant_id', ctx.tenantId)
       .gte('ts', fromIso)
       .lt('ts', toIso)
       .order('ts', { ascending: true }),
-    // Ultime timbrature (anche di ieri sera): elenco recente.
-    supabase
-      .from('timbrature' as never)
-      .select('id, tipo, ts, pausa, dipendente_id, cantiere_id')
-      .eq('tenant_id', ctx.tenantId)
-      .order('ts', { ascending: false })
-      .limit(8),
   ]);
 
-  const dipendenti =
-    (dipRes.data as { id: string; nome: string; cognome: string }[] | null) ?? [];
-  const cantieri =
-    (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
-  const oggiRows = (oggiRes.data as TimbRow[] | null) ?? [];
-  const ultime = (ultimeRes.data as TimbRow[] | null) ?? [];
+  const dipendenti = (dipRes.data as { id: string; nome: string; cognome: string }[] | null) ?? [];
+  const cantieri = (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
+  const timbRows = (timbRes.data as TimbRow[] | null) ?? [];
 
   const dipMap = new Map(dipendenti.map((d) => [d.id, titoloCase(`${d.nome} ${d.cognome}`)]));
   const cantMap = new Map(cantieri.map((c) => [c.id, titoloCase(c.nome || c.codice || '')]));
 
-  // Eventi di oggi per dipendente (per stato + dettaglio).
-  const eventiPerDip = new Map<string, EventoOggi[]>();
-  for (const r of oggiRows) {
-    if (!r.dipendente_id) continue;
-    const arr = eventiPerDip.get(r.dipendente_id) ?? [];
-    arr.push({ tipo: r.tipo, ts: r.ts, pausa: r.pausa, cantiere_id: r.cantiere_id });
-    eventiPerDip.set(r.dipendente_id, arr);
+  // Nomi di chi ha inserito le timbrature (per "Inserita a mano · da …").
+  const creatoNomeMap = new Map<string, string>();
+  const creatoDaIds = [...new Set(timbRows.map((t) => t.creato_da).filter((id): id is string => id != null))];
+  if (creatoDaIds.length > 0) {
+    const { data } = (await supabase.from('users' as never).select('id, display_name').in('id', creatoDaIds)) as {
+      data: { id: string; display_name: string | null }[] | null;
+    };
+    for (const u of data ?? []) if (u.display_name) creatoNomeMap.set(u.id, u.display_name);
   }
 
-  // Conteggi live pausa-aware.
+  // ── Viaggio del giorno per dipendente (tratte sede↔cantiere) ───────────────
+  const timbIdToDip = new Map<string, string>();
+  for (const t of timbRows) if (t.dipendente_id) timbIdToDip.set(t.id, t.dipendente_id);
+  const VIAGGIO_COLS =
+    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, distanza_km, durata_confermata_min, autista';
+  const dipIds = dipendenti.map((d) => d.id);
+  const viaggioRows: ViaggioRow[] = [];
+  if (timbRows.length > 0) {
+    const { data } = (await supabase
+      .from('timbratura_viaggio' as never)
+      .select(VIAGGIO_COLS)
+      .in('timbratura_id', timbRows.map((t) => t.id))) as { data: ViaggioRow[] | null };
+    viaggioRows.push(...(data ?? []));
+  }
+  if (dipIds.length > 0) {
+    const { data } = (await supabase
+      .from('timbratura_viaggio' as never)
+      .select(VIAGGIO_COLS)
+      .in('dipendente_id', dipIds)
+      .is('timbratura_id', null)
+      .eq('data', giorno)) as { data: ViaggioRow[] | null };
+    viaggioRows.push(...(data ?? []));
+  }
+  const sediNomeMap = new Map<string, string>();
+  const sedeIds = [...new Set(viaggioRows.map((v) => v.sede_id).filter((id): id is string => id != null))];
+  if (sedeIds.length > 0) {
+    const { data } = (await supabase.from('sedi' as never).select('id, nome').in('id', sedeIds)) as {
+      data: { id: string; nome: string | null }[] | null;
+    };
+    for (const s of data ?? []) sediNomeMap.set(s.id, titoloCase(s.nome || 'Sede'));
+  }
+  const viaggiPerDip = new Map<string, ViaggioTratta[]>();
+  for (const v of viaggioRows) {
+    const dip = v.timbratura_id ? timbIdToDip.get(v.timbratura_id) : v.dipendente_id;
+    if (!dip) continue;
+    const arr = viaggiPerDip.get(dip) ?? [];
+    arr.push({
+      direzione: v.direzione === 'ritorno' ? 'ritorno' : 'andata',
+      sede: v.sede_id ? sediNomeMap.get(v.sede_id) ?? 'Sede' : 'Sede',
+      cantiere: v.cantiere_id ? cantMap.get(v.cantiere_id) ?? '' : '',
+      km: Number(v.distanza_km) || 0,
+      minuti: Number(v.durata_confermata_min) || 0,
+      autista: !!v.autista,
+    });
+    viaggiPerDip.set(dip, arr);
+  }
+
+  // Eventi del giorno per dipendente (stato + dettaglio).
+  const eventiPerDip = new Map<string, EventoOggi[]>();
+  const timbPerDip = new Map<string, TimbraturaInput[]>();
+  for (const r of timbRows) {
+    if (!r.dipendente_id) continue;
+    const ev = eventiPerDip.get(r.dipendente_id) ?? [];
+    ev.push({ tipo: r.tipo, ts: r.ts, pausa: r.pausa, cantiere_id: r.cantiere_id });
+    eventiPerDip.set(r.dipendente_id, ev);
+
+    const ti = timbPerDip.get(r.dipendente_id) ?? [];
+    ti.push({
+      tipo: r.tipo,
+      ts: r.ts,
+      pausa: r.pausa,
+      commessaTitolo: r.cantiere_id ? cantMap.get(r.cantiere_id) ?? null : null,
+      origine: r.origine,
+      createdAt: r.created_at,
+      creatoNome: r.creato_da ? creatoNomeMap.get(r.creato_da) ?? null : null,
+    });
+    timbPerDip.set(r.dipendente_id, ti);
+  }
+
+  // Conteggi pausa-aware (per OGGI sono "live"; per i giorni passati sono lo
+  // stato finale del giorno).
   let inCantiere = 0;
   let inPausa = 0;
-  let oreOggiMin = 0;
+  let oreTotMin = 0;
   for (const [, eventi] of eventiPerDip) {
     const stato = statoDaEventi(eventi);
     if (stato === 'lavoro') inCantiere += 1;
     else if (stato === 'pausa') inPausa += 1;
-    oreOggiMin += appaiaTimbrature(eventi).minutiTotali;
+    oreTotMin += appaiaTimbrature(eventi).minutiTotali;
   }
-  const personeOggi = eventiPerDip.size;
+  const personeGiorno = eventiPerDip.size;
   const cantieriAttivi = new Set(
-    oggiRows.filter((r) => r.tipo === 'ingresso' && r.cantiere_id).map((r) => r.cantiere_id),
+    timbRows.filter((r) => r.tipo === 'ingresso' && r.cantiere_id).map((r) => r.cantiere_id),
   ).size;
-  const oreOggiLabel =
-    oreOggiMin > 0
-      ? `${Math.floor(oreOggiMin / 60)}:${String(Math.round(oreOggiMin % 60)).padStart(2, '0')}`
-      : '0:00';
 
   const kpis: {
     label: string;
@@ -124,49 +221,89 @@ export default async function CruscottoKantierePage() {
     tone: keyof typeof KPI_TONE;
     href: string;
   }[] = [
-    { label: 'Timbrature oggi', value: oggiRows.length, icon: Timer, tone: 'default', href: '#ultime' },
+    { label: 'Timbrature', value: timbRows.length, icon: Timer, tone: 'default', href: '#persone' },
     {
-      label: 'In cantiere',
+      label: isOggi ? 'In cantiere' : 'In cantiere (fine)',
       value: inCantiere,
       icon: UserCheck,
       tone: inCantiere > 0 ? 'success' : 'default',
-      href: '/mobile/kantiere/cantieri',
+      href: '#persone',
     },
     {
-      label: 'In pausa pranzo',
+      label: 'In pausa',
       value: inPausa,
       icon: Utensils,
       tone: inPausa > 0 ? 'pausa' : 'default',
-      href: '/mobile/kantiere/cantieri',
+      href: '#persone',
     },
-    { label: 'Persone oggi', value: personeOggi, icon: Users, tone: 'default', href: '#ultime' },
-    { label: 'Cantieri attivi', value: cantieriAttivi, icon: MapPin, tone: 'default', href: '/mobile/kantiere/cantieri' },
-    { label: 'Ore oggi', value: oreOggiLabel, icon: Clock, tone: 'default', href: '/mobile/kantiere/ore' },
+    { label: 'Persone', value: personeGiorno, icon: Users, tone: 'default', href: '#persone' },
+    { label: 'Cantieri', value: cantieriAttivi, icon: MapPin, tone: 'default', href: '/mobile/kantiere/cantieri' },
+    { label: 'Ore', value: oreLabelMin(oreTotMin), icon: Clock, tone: 'default', href: '#persone' },
   ];
 
-  // Righe "ultime timbrature" con dettaglio presenza di oggi del dipendente.
-  const righeUltime: RigaUltima[] = ultime.map((t) => {
-    const eventi = t.dipendente_id ? eventiPerDip.get(t.dipendente_id) ?? [] : [];
-    return {
-      id: t.id,
-      tipo: t.tipo,
-      oraLabel: formatOra(t.ts),
-      dipNome: dipMap.get(t.dipendente_id ?? '') ?? 'Dipendente',
-      cantNome: t.cantiere_id ? cantMap.get(t.cantiere_id) ?? null : null,
-      dettaglio: dettaglioPresenza(eventi),
-    };
-  });
+  // Una riga per persona che ha timbrato quel giorno, espandibile al dettaglio.
+  const persone: PersonaGiorno[] = [...eventiPerDip.keys()]
+    .map((dipId) => {
+      const eventi = eventiPerDip.get(dipId) ?? [];
+      const stato = statoDaEventi(eventi);
+      const cantId =
+        [...eventi].reverse().find((e) => e.cantiere_id)?.cantiere_id ?? null;
+      return {
+        dipId,
+        nome: dipMap.get(dipId) ?? 'Dipendente',
+        stato,
+        oreLabel: oreLabelMin(appaiaTimbrature(eventi).minutiTotali),
+        cantNome: cantId ? cantMap.get(cantId) ?? null : null,
+        timbrature: timbPerDip.get(dipId) ?? [],
+        viaggi: viaggiPerDip.get(dipId) ?? [],
+      };
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const prevGiorno = addGiorni(giorno, -1);
+  const nextGiorno = addGiorni(giorno, 1);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-6 p-4">
+    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Cruscotto</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Panoramica cantieri</h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">Presenze e attività di oggi, in tempo reale.</p>
-        <LiveRefresh className="mt-2" />
+        {isOggi ? <LiveRefresh className="mt-2" /> : null}
       </header>
 
-      {/* KPI — 2 righe da 3, cliccabili verso l'area dedicata */}
+      {/* Navigatore giorno */}
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-2 py-1.5 shadow-soft">
+        <Link
+          href={`/mobile/kantiere/cruscotto?giorno=${prevGiorno}`}
+          aria-label="Giorno precedente"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95"
+        >
+          <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+        </Link>
+        <div className="flex min-w-0 flex-col items-center text-center">
+          <span className="truncate text-sm font-semibold capitalize">{fmtGiornoLungo(giorno)}</span>
+          {isOggi ? (
+            <span className="text-[11px] text-emerald-600">Oggi · in tempo reale</span>
+          ) : (
+            <Link href="/mobile/kantiere/cruscotto" className="text-[11px] font-medium text-primary">
+              Torna a oggi
+            </Link>
+          )}
+        </div>
+        <Link
+          href={isOggi ? '/mobile/kantiere/cruscotto' : `/mobile/kantiere/cruscotto?giorno=${nextGiorno}`}
+          aria-label="Giorno successivo"
+          aria-disabled={isOggi}
+          className={
+            'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95 ' +
+            (isOggi ? 'pointer-events-none opacity-30' : '')
+          }
+        >
+          <ChevronRight className="h-5 w-5" aria-hidden="true" />
+        </Link>
+      </div>
+
+      {/* KPI — 2 righe da 3 */}
       <div className="grid grid-cols-3 gap-2">
         {kpis.map((k) => (
           <Link
@@ -184,14 +321,14 @@ export default async function CruscottoKantierePage() {
         ))}
       </div>
 
-      {/* Ultime timbrature (espandibili → stato di oggi del dipendente) */}
-      <section id="ultime" className="scroll-mt-4 space-y-2">
+      {/* Persone del giorno (espandibili → timeline con origine + viaggio) */}
+      <section id="persone" className="scroll-mt-4 space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Ultime timbrature
+          Presenze del giorno
         </p>
-        <UltimeTimbrature righe={righeUltime} />
+        <PresenzeGiorno persone={persone} />
         <p className="pt-1 text-[11px] text-muted-foreground">
-          Tocca una riga per vedere lo stato e le timbrature di oggi della persona.
+          Tocca una persona per vedere timbrature, origine (timbrata / inserita a mano) e viaggio.
         </p>
       </section>
 
