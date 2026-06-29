@@ -255,10 +255,18 @@ export function RapportiniClient({
   if (filtri.dipendente) exportQs.set('dipendente', filtri.dipendente);
   const exportHref = '/api/office/kantiere/rapportini/export?' + exportQs.toString();
 
+  // Giornata "fantasma": il guscio bozza creato aprendo il rapportino senza mai
+  // timbrare (0 timbrature e 0 ore). Non è una presenza → non va mostrata.
+  const èVuota = (r: RapportiniRiga) =>
+    r.timbrature.length === 0 &&
+    r.totale.ord === 0 &&
+    r.totale.straord === 0 &&
+    r.totale.viaggio === 0;
+
   // Giornate di OGGI (provvisorie: i turni possono essere ancora aperti).
-  const oggiRighe = righe.filter((r) => r.data === oggi);
+  const oggiRighe = righe.filter((r) => r.data === oggi && !èVuota(r));
   // Storico = giornate passate (definitive), eventualmente filtrate alle sole anomalie.
-  const storicoTutte = righe.filter((r) => r.data < oggi);
+  const storicoTutte = righe.filter((r) => r.data < oggi && !èVuota(r));
   const storicoRighe = soloAnomalie ? storicoTutte.filter((r) => r.daVerificare) : storicoTutte;
 
   // Anomalie (da verificare) nello storico: giornate passate non finalizzate.
@@ -565,10 +573,11 @@ export function RapportiniClient({
                                       </span>
                                       {pausaMancante ? (
                                         <span
-                                          title="Pausa pranzo non timbrata in una giornata lunga"
-                                          className="inline-flex items-center text-amber-600"
+                                          title={`Pausa pranzo non timbrata in una giornata oltre ${fmtOre(sogliaPausaOre)}. Controlla se è stata fatta e, se sì, aggiungila con Modifica.`}
+                                          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
                                         >
-                                          <Coffee className="h-3.5 w-3.5" aria-hidden="true" />
+                                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                                          <Coffee className="h-3 w-3" aria-hidden="true" />
                                         </span>
                                       ) : null}
                                     </span>
