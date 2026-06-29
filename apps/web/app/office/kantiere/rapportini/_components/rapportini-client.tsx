@@ -13,11 +13,12 @@ import {
   Pencil,
   History,
   Coffee,
+  MapPin,
 } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
 import { VersioniDialog } from './versioni-dialog';
-import { TimbratureRiepilogo, TimbratureSommario } from '../../_components/timbrature-riepilogo';
+import { TimbratureRiepilogo, TimbratureSommario, GiornataFlow } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
 import { CorreggiGiornataDialog, type CorreggiRiga } from '../../_components/correggi-giornata-dialog';
@@ -114,6 +115,105 @@ function fmtGiornoLungo(data: string): string {
   }
 }
 
+/** Etichette dei target (cantiere/commessa) su cui la persona ha speso tempo. */
+function targetLabels(riga: RapportiniRiga): string[] {
+  const labels = new Set<string>();
+  for (const r of riga.righe) if (r.commessaTitolo) labels.add(r.commessaTitolo);
+  if (labels.size === 0) for (const t of riga.timbrature) if (t.commessaTitolo) labels.add(t.commessaTitolo);
+  return [...labels];
+}
+
+/** Pill compatte del cantiere/commessa (max 2 + "+N"). */
+function CantierePills({ labels }: { labels: string[] }) {
+  if (labels.length === 0) return <span className="text-[11px] text-muted-foreground/50">—</span>;
+  const shown = labels.slice(0, 2);
+  const extra = labels.length - shown.length;
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {shown.map((l) => (
+        <span
+          key={l}
+          className="inline-flex max-w-[12rem] items-center gap-1 rounded-full border border-border bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-foreground/80"
+        >
+          <MapPin className="h-2.5 w-2.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate">{l}</span>
+        </span>
+      ))}
+      {extra > 0 ? <span className="text-[11px] text-muted-foreground">+{extra}</span> : null}
+    </span>
+  );
+}
+
+/** Dettaglio espanso condiviso (storico + oggi): righe commessa + timeline timbrature. */
+function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModifica?: () => void }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Righe commessa */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Righe commessa
+        </p>
+        {riga.righe.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Nessuna riga commessa.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-left text-muted-foreground border-b border-border/40">
+                <th className="pb-1 pr-4 font-medium">Commessa / Cantiere</th>
+                <th className="pb-1 pr-3 font-medium text-right">Ord.</th>
+                <th className="pb-1 pr-3 font-medium text-right">Straord.</th>
+                <th className="pb-1 pr-3 font-medium text-right">Viaggio</th>
+                <th className="pb-1 font-medium">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {riga.righe.map((r, j) => (
+                <tr key={j} className="border-b border-border/30">
+                  <td className="py-1 pr-4 font-medium text-foreground">{r.commessaTitolo}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOre(r.ore_ordinarie)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOre(r.ore_straordinarie)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOre(r.ore_viaggio)}</td>
+                  <td className="py-1 text-muted-foreground max-w-[200px] truncate">
+                    {r.note ?? <span className="select-none opacity-40">·</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {riga.note ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Nota:</span> {riga.note}
+          </p>
+        ) : null}
+        {riga.oreNonConteggiate ? (
+          <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            <span>
+              Sono arrivate timbrature dopo la finalizzazione: usa{' '}
+              <span className="font-medium">Ricalcola dalle timbrature</span> per riallineare le ore.
+            </span>
+          </p>
+        ) : null}
+        {onModifica ? (
+          <Button variant="outline" size="sm" className="mt-3" onClick={onModifica}>
+            <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            Modifica giornata
+          </Button>
+        ) : null}
+      </div>
+
+      {/* Timeline timbrature */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Timbrature del giorno
+        </p>
+        <TimbratureRiepilogo timbrature={riga.timbrature} />
+      </div>
+    </div>
+  );
+}
+
 export function RapportiniClient({
   righe,
   filtri,
@@ -136,7 +236,7 @@ export function RapportiniClient({
   // Mostra solo le giornate "anomale" (da verificare)
   const [soloAnomalie, setSoloAnomalie] = React.useState(false);
 
-  // Espansione righe
+  // Espansione righe (condivisa tra "oggi" e storico)
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
 
   const [versioniFor, setVersioniFor] = React.useState<{ id: string; nome: string; data: string } | null>(null);
@@ -299,32 +399,32 @@ export function RapportiniClient({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Promemoria: giornate rimaste aperte da chiudere */}
       <GiornateApertePanel giorni={giorniAperti} />
 
       {/* Anomalie: giornate passate non finalizzate. Prominente in cima. */}
       {nAnomalie > 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-300/70 bg-amber-50 px-4 py-3 shadow-soft">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 shadow-soft">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+            <p className="flex items-center gap-2 text-xs font-semibold text-amber-900">
               Anomalie da sistemare
-              <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-600 px-1.5 text-xs font-bold text-white">
+              <span className="inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-amber-600 px-1.5 text-[10px] font-bold text-white">
                 {nAnomalie}
               </span>
             </p>
-            <p className="text-xs text-amber-800">
+            <p className="text-[11px] text-amber-800">
               Giornate con il turno rimasto aperto o oltre soglia ore. Apri{' '}
-              <span className="font-medium">Modifica</span> per correggerle (es. aggiungere la pausa pranzo dimenticata).
+              <span className="font-medium">Modifica</span> per correggerle (es. pausa pranzo dimenticata).
             </p>
           </div>
           <button
             type="button"
             onClick={() => setSoloAnomalie((v) => !v)}
-            className="ml-auto shrink-0 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+            className="ml-auto shrink-0 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-100"
           >
             {soloAnomalie ? 'Mostra tutte' : 'Mostra solo anomalie'}
           </button>
@@ -333,10 +433,10 @@ export function RapportiniClient({
 
       {/* Barra filtri */}
       <Card>
-        <CardContent className="p-3">
+        <CardContent className="p-2.5">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-foreground">Dal</label>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[11px] font-medium text-muted-foreground">Dal</label>
               <input
                 type="date"
                 value={from}
@@ -344,11 +444,11 @@ export function RapportiniClient({
                   setFrom(e.target.value);
                   applyFiltri({ from: e.target.value });
                 }}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-foreground">Al</label>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[11px] font-medium text-muted-foreground">Al</label>
               <input
                 type="date"
                 value={to}
@@ -356,18 +456,18 @@ export function RapportiniClient({
                   setTo(e.target.value);
                   applyFiltri({ to: e.target.value });
                 }}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-muted-foreground">Dipendente</label>
+            <div className="flex flex-col gap-0.5">
+              <label className="text-[11px] font-medium text-muted-foreground">Dipendente</label>
               <select
                 value={dipendente}
                 onChange={(e) => {
                   setDipendente(e.target.value);
                   applyFiltri({ dipendente: e.target.value });
                 }}
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Tutti i dipendenti</option>
                 {dipendenti.map((d) => (
@@ -378,12 +478,12 @@ export function RapportiniClient({
               </select>
             </div>
             {nAnomalie > 0 ? (
-              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground">
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground">
                 <input
                   type="checkbox"
                   checked={soloAnomalie}
                   onChange={(e) => setSoloAnomalie(e.target.checked)}
-                  className="h-4 w-4 cursor-pointer rounded border-input accent-amber-600"
+                  className="h-3.5 w-3.5 cursor-pointer rounded border-input accent-amber-600"
                 />
                 Solo anomalie
               </label>
@@ -418,7 +518,7 @@ export function RapportiniClient({
               </Button>
               <a
                 href={exportHref}
-                className="inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                className="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
               >
                 Esporta CSV
               </a>
@@ -426,17 +526,17 @@ export function RapportiniClient({
             </div>
           </div>
           {ricalcoloMsg ? (
-            <p className="mt-2 text-xs text-muted-foreground">{ricalcoloMsg}</p>
+            <p className="mt-2 text-[11px] text-muted-foreground">{ricalcoloMsg}</p>
           ) : null}
         </CardContent>
       </Card>
 
-      {/* OGGI — giornate in corso (provvisorie). Nascoste quando si filtrano le anomalie. */}
+      {/* OGGI — giornate in corso (provvisorie), con timeline inline ed espandibili. */}
       {oggiRighe.length > 0 && !soloAnomalie ? (
         <Card>
           <CardContent className="p-0">
-            <div className="flex items-center justify-between gap-2 border-b border-border bg-emerald-50/60 px-4 py-2">
-              <p className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+            <div className="flex items-center justify-between gap-2 border-b border-border bg-emerald-50/60 px-3 py-1.5">
+              <p className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/70" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -444,21 +544,44 @@ export function RapportiniClient({
                 In corso oggi
                 <span className="font-normal text-emerald-800/80">· {fmtGiornoLungo(oggi)}</span>
               </p>
-              <span className="text-xs text-emerald-800/70">Dati provvisori, si finalizzano a fine giornata</span>
+              <span className="text-[11px] text-emerald-800/70">Dati provvisori, si finalizzano a fine giornata</span>
             </div>
             <ul className="divide-y divide-border">
               {oggiRighe.map((riga) => {
+                const isOpen = expanded.has(riga.id);
                 const ore = riga.totale.ord + riga.totale.straord;
+                const labels = targetLabels(riga);
                 return (
-                  <li key={riga.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5">
-                    <span className="min-w-[10rem] font-medium text-foreground">{riga.dipendenteNome}</span>
-                    <TimbratureSommario timbrature={riga.timbrature} />
-                    <span className="ml-auto tabular-nums text-sm text-muted-foreground">
-                      {ore > 0 ? <span className="font-semibold text-foreground">{fmtOre(ore)}</span> : '—'}
-                      {riga.totale.viaggio > 0 ? (
-                        <span className="ml-1 text-xs">+ {fmtOre(riga.totale.viaggio)} viaggio</span>
-                      ) : null}
-                    </span>
+                  <li key={riga.id}>
+                    <div
+                      className="flex cursor-pointer items-start gap-2 px-3 py-2 transition-colors hover:bg-emerald-50/40"
+                      onClick={() => toggleExpand(riga.id)}
+                    >
+                      <span className="mt-0.5 text-muted-foreground">
+                        {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</span>
+                          <CantierePills labels={labels} />
+                        </div>
+                        <div className="mt-1">
+                          <GiornataFlow timbrature={riga.timbrature} oreViaggio={riga.totale.viaggio} />
+                        </div>
+                      </div>
+                      <span className="shrink-0 tabular-nums text-xs">
+                        {ore > 0 ? (
+                          <span className="text-sm font-semibold text-foreground">{fmtOre(ore)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </span>
+                    </div>
+                    {isOpen ? (
+                      <div className="border-t border-border bg-muted/20 px-4 py-3">
+                        <DettaglioGiornata riga={riga} />
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
@@ -477,7 +600,7 @@ export function RapportiniClient({
       ) : (
         <>
           {/* Summary line */}
-          <div className="flex items-center gap-4 px-1 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 px-1 text-[11px] text-muted-foreground">
             <span>
               <span className="font-medium text-foreground">{storicoRighe.length}</span> giornate
             </span>
@@ -496,14 +619,15 @@ export function RapportiniClient({
           <Card>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <table className="w-full text-xs">
+                  <thead className="border-b border-border bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="w-8 px-2 py-2" />
-                      <th className="px-3 py-2 font-medium">Dipendente</th>
-                      <th className="px-3 py-2 font-medium">Ore</th>
-                      <th className="px-3 py-2 font-medium">Esito</th>
-                      <th className="w-40 px-3 py-2" aria-label="Azioni" />
+                      <th className="w-7 px-2 py-1.5" />
+                      <th className="px-2.5 py-1.5 font-medium">Dipendente</th>
+                      <th className="px-2.5 py-1.5 font-medium">Cantiere</th>
+                      <th className="px-2.5 py-1.5 font-medium">Ore</th>
+                      <th className="px-2.5 py-1.5 font-medium">Esito</th>
+                      <th className="w-20 px-2.5 py-1.5" aria-label="Azioni" />
                     </tr>
                   </thead>
                   <tbody>
@@ -511,11 +635,11 @@ export function RapportiniClient({
                       <React.Fragment key={g.giorno}>
                         {/* Intestazione giorno */}
                         <tr className="border-b border-border bg-muted/30">
-                          <td colSpan={5} className="px-3 py-1.5">
-                            <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+                          <td colSpan={6} className="px-2.5 py-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
                               {fmtGiornoLungo(g.giorno)}
                             </span>
-                            <span className="ml-2 text-xs text-muted-foreground">
+                            <span className="ml-2 text-[11px] text-muted-foreground">
                               {g.righe.length} {g.righe.length === 1 ? 'persona' : 'persone'}
                             </span>
                           </td>
@@ -523,58 +647,62 @@ export function RapportiniClient({
                         {g.righe.map((riga) => {
                           const isOpen = expanded.has(riga.id);
                           const { oreLavorate, pausaMancante, motivo } = esitoRiga(riga);
+                          const labels = targetLabels(riga);
                           return (
                             <React.Fragment key={riga.id}>
                               <tr
                                 className="border-b border-border transition-colors hover:bg-primary-soft/50 cursor-pointer"
                                 onClick={() => toggleExpand(riga.id)}
                               >
-                                <td className="px-2 py-2 text-muted-foreground">
+                                <td className="px-2 py-1.5 align-top text-muted-foreground">
                                   {isOpen ? (
-                                    <ChevronDown className="h-3.5 w-3.5" />
+                                    <ChevronDown className="mt-0.5 h-3.5 w-3.5" />
                                   ) : (
-                                    <ChevronRight className="h-3.5 w-3.5" />
+                                    <ChevronRight className="mt-0.5 h-3.5 w-3.5" />
                                   )}
                                 </td>
-                                <td className="px-3 py-2">
-                                  <div className="font-medium text-foreground">{riga.dipendenteNome}</div>
+                                <td className="px-2.5 py-1.5 align-top">
+                                  <div className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</div>
                                   <div className="mt-0.5">
                                     <TimbratureSommario timbrature={riga.timbrature} />
                                   </div>
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2.5 py-1.5 align-top">
+                                  <CantierePills labels={labels} />
+                                </td>
+                                <td className="px-2.5 py-1.5 align-top">
                                   <div className="flex items-baseline gap-1.5">
-                                    <span className="tabular-nums text-base font-semibold text-foreground">
+                                    <span className="tabular-nums text-sm font-semibold text-foreground">
                                       {fmtOre(oreLavorate)}
                                     </span>
                                     {riga.totale.straord > 0 ? (
-                                      <span className="text-[11px] text-muted-foreground">
+                                      <span className="text-[10px] text-muted-foreground">
                                         di cui {fmtOre(riga.totale.straord)} str.
                                       </span>
                                     ) : null}
                                   </div>
                                   {riga.totale.viaggio > 0 ? (
-                                    <div className="text-[11px] tabular-nums text-muted-foreground">
+                                    <div className="text-[10px] tabular-nums text-muted-foreground">
                                       + {fmtOre(riga.totale.viaggio)} viaggio
                                     </div>
                                   ) : null}
                                 </td>
-                                <td className="px-3 py-2">
+                                <td className="px-2.5 py-1.5 align-top">
                                   {riga.daVerificare ? (
-                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                                      <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                                       {motivo}
                                     </span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-2">
-                                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
                                         <Check className="h-3.5 w-3.5" aria-hidden="true" />
                                         Regolare
                                       </span>
                                       {pausaMancante ? (
                                         <span
                                           title={`Pausa pranzo non timbrata in una giornata oltre ${fmtOre(sogliaPausaOre)}. Controlla se è stata fatta e, se sì, aggiungila con Modifica.`}
-                                          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+                                          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
                                         >
                                           <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                                           <Coffee className="h-3 w-3" aria-hidden="true" />
@@ -583,25 +711,26 @@ export function RapportiniClient({
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                                  <div className="flex items-center justify-end gap-1">
+                                <td className="px-2 py-1.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end gap-0.5">
                                     <Button
-                                      variant={riga.daVerificare ? 'outline' : 'ghost'}
+                                      variant="ghost"
                                       size="sm"
+                                      className="h-7 w-7 p-0"
+                                      title="Modifica giornata"
                                       onClick={() => openCorreggi(riga)}
-                                      title="Correggi le ore / aggiungi pausa (resta tracciato nello storico)"
                                     >
-                                      <Pencil className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                                      Modifica
+                                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                                     </Button>
                                     {riga.stato !== 'bozza' ? (
                                       <Button
                                         variant="ghost"
                                         size="sm"
+                                        className="h-7 w-7 p-0"
+                                        title="Cronologia modifiche"
                                         onClick={() =>
                                           setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })
                                         }
-                                        title="Cronologia delle modifiche"
                                       >
                                         <History className="h-3.5 w-3.5" aria-hidden="true" />
                                       </Button>
@@ -612,74 +741,8 @@ export function RapportiniClient({
 
                               {isOpen && (
                                 <tr className="border-b border-border bg-muted/20">
-                                  <td colSpan={5} className="px-6 py-4">
-                                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                                      {/* Colonna sinistra: righe commessa */}
-                                      <div>
-                                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                          Righe commessa
-                                        </p>
-                                        {riga.righe.length === 0 ? (
-                                          <p className="text-xs text-muted-foreground">Nessuna riga commessa.</p>
-                                        ) : (
-                                          <table className="w-full text-xs">
-                                            <thead>
-                                              <tr className="text-left text-muted-foreground border-b border-border/40">
-                                                <th className="pb-1.5 pr-4 font-medium">Commessa / Cantiere</th>
-                                                <th className="pb-1.5 pr-3 font-medium text-right">Ord.</th>
-                                                <th className="pb-1.5 pr-3 font-medium text-right">Straord.</th>
-                                                <th className="pb-1.5 pr-3 font-medium text-right">Viaggio</th>
-                                                <th className="pb-1.5 font-medium">Note</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {riga.righe.map((r, j) => (
-                                                <tr key={j} className="border-b border-border/30">
-                                                  <td className="py-1.5 pr-4 font-medium text-foreground">
-                                                    {r.commessaTitolo}
-                                                  </td>
-                                                  <td className="py-1.5 pr-3 tabular-nums text-right text-muted-foreground">
-                                                    {fmtOre(r.ore_ordinarie)}
-                                                  </td>
-                                                  <td className="py-1.5 pr-3 tabular-nums text-right text-muted-foreground">
-                                                    {fmtOre(r.ore_straordinarie)}
-                                                  </td>
-                                                  <td className="py-1.5 pr-3 tabular-nums text-right text-muted-foreground">
-                                                    {fmtOre(r.ore_viaggio)}
-                                                  </td>
-                                                  <td className="py-1.5 text-muted-foreground max-w-[200px] truncate">
-                                                    {r.note ?? <span className="select-none opacity-40">·</span>}
-                                                  </td>
-                                                </tr>
-                                              ))}
-                                            </tbody>
-                                          </table>
-                                        )}
-                                        {riga.note ? (
-                                          <p className="mt-3 text-xs text-muted-foreground">
-                                            <span className="font-medium text-foreground">Nota:</span> {riga.note}
-                                          </p>
-                                        ) : null}
-                                        {riga.oreNonConteggiate ? (
-                                          <p className="mt-3 flex items-start gap-1.5 text-xs text-amber-700">
-                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                            <span>
-                                              Sono arrivate timbrature dopo la finalizzazione: usa{' '}
-                                              <span className="font-medium">Ricalcola dalle timbrature</span> per
-                                              riallineare le ore.
-                                            </span>
-                                          </p>
-                                        ) : null}
-                                      </div>
-
-                                      {/* Colonna destra: timeline timbrature */}
-                                      <div>
-                                        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                          Timbrature del giorno
-                                        </p>
-                                        <TimbratureRiepilogo timbrature={riga.timbrature} />
-                                      </div>
-                                    </div>
+                                  <td colSpan={6} className="px-4 py-3">
+                                    <DettaglioGiornata riga={riga} onModifica={() => openCorreggi(riga)} />
                                   </td>
                                 </tr>
                               )}

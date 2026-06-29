@@ -389,10 +389,10 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const giorniAperti = giorniApertiRes.ok ? giorniApertiRes.giorni : [];
 
   return (
-    <div className="w-full space-y-5">
+    <div className="w-full space-y-3">
       <header>
-        <h1 className="text-lg font-semibold">Presenze e ore</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-base font-semibold">Presenze e ore</h1>
+        <p className="text-xs text-muted-foreground">
           Storico giorno per giorno delle ore lavorate, dalle timbrature. Le giornate entro la
           soglia ore sono <span className="font-medium text-emerald-700">regolari</span>; restano da
           guardare solo le <span className="font-medium text-amber-700">anomalie</span> (turno

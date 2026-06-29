@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Car, Coffee } from 'lucide-react';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 
 export interface TimbraturaInput {
@@ -108,6 +109,114 @@ export function TimbratureSommario({ timbrature }: { timbrature: TimbraturaInput
           In pausa
         </span>
       )}
+    </span>
+  );
+}
+
+function fmtOreDec(n: number): string {
+  const v = parseFloat(n.toFixed(2));
+  return Number.isInteger(v) ? `${v}h` : `${v.toFixed(1)}h`;
+}
+
+/**
+ * Timeline INLINE della giornata, a colpo d'occhio: viaggio → segmenti di lavoro
+ * (ingresso→uscita) → pause, in ordine cronologico, con il totale ore in coda.
+ * Pensata per le righe "in corso oggi" (live se la giornata è aperta).
+ */
+export function GiornataFlow({
+  timbrature,
+  oreViaggio = 0,
+}: {
+  timbrature: TimbraturaInput[];
+  oreViaggio?: number;
+}) {
+  const r = appaiaTimbrature(soloTimbrature(timbrature));
+  const now = useLiveNow(r.aperto);
+  const pause = calcolaPause(timbrature);
+
+  if (r.coppie.length === 0 && oreViaggio <= 0) {
+    return <span className="text-[11px] text-muted-foreground/60">Nessuna timbratura</span>;
+  }
+
+  const liveMin = r.ingressoAperto ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
+  const totaleConLive = r.minutiTotali + (r.aperto ? liveMin : 0);
+
+  // Eventi cronologici: segmenti di lavoro + pause.
+  const eventi: { t: number; el: JSX.Element }[] = [];
+  r.coppie.forEach((c, i) => {
+    eventi.push({
+      t: Date.parse(c.ingresso),
+      el: (
+        <span
+          key={`s${i}`}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-1.5 py-0.5 tabular-nums text-foreground/80"
+        >
+          {fmtOra(c.ingresso)}
+          <span className="text-muted-foreground">→</span>
+          {c.uscita ? fmtOra(c.uscita) : <span className="font-medium text-emerald-700">in corso</span>}
+        </span>
+      ),
+    });
+  });
+  pause.forEach((p, i) => {
+    const min = p.fine ? Math.round((Date.parse(p.fine) - Date.parse(p.inizio)) / 60000) : null;
+    eventi.push({
+      t: Date.parse(p.inizio),
+      el: (
+        <span
+          key={`p${i}`}
+          className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-300 bg-amber-50 px-1.5 py-0.5 text-amber-700"
+        >
+          <Coffee className="h-2.5 w-2.5" aria-hidden="true" />
+          Pausa{min != null ? ` ${fmtMinuti(min)}` : ''}
+        </span>
+      ),
+    });
+  });
+  eventi.sort((a, b) => a.t - b.t);
+
+  const items: JSX.Element[] = [];
+  if (oreViaggio > 0) {
+    items.push(
+      <span
+        key="v"
+        className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-700"
+      >
+        <Car className="h-2.5 w-2.5" aria-hidden="true" />
+        Viaggio {fmtOreDec(oreViaggio)}
+      </span>,
+    );
+  }
+  for (const e of eventi) items.push(e.el);
+
+  return (
+    <span className="flex flex-wrap items-center gap-1 text-[11px]">
+      {items.map((el, i) => (
+        <span key={i} className="inline-flex items-center gap-1">
+          {i > 0 ? (
+            <span className="text-muted-foreground/40" aria-hidden="true">→</span>
+          ) : null}
+          {el}
+        </span>
+      ))}
+      {r.coppie.length > 0 ? (
+        <span className="ml-0.5 tabular-nums font-semibold text-foreground">· {fmtMinuti(totaleConLive)}</span>
+      ) : null}
+      {r.aperto ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/70" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+          </span>
+          Aperta
+        </span>
+      ) : null}
+      {r.inPausa ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+          <span className="inline-flex h-1.5 w-1.5 rounded-full bg-amber-500" />
+          In pausa
+        </span>
+      ) : null}
     </span>
   );
 }
