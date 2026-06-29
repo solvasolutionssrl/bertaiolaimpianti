@@ -10,6 +10,12 @@ export interface TimbraturaInput {
   commessaTitolo?: string | null;
   /** true se è un evento di pausa pranzo (uscita = inizio pausa, ingresso = ripresa). */
   pausa?: boolean | null;
+  /** Origine della riga: 'qr' | 'cronometro' (timbrata) | 'manuale' (inserita a mano). */
+  origine?: string | null;
+  /** Quando la riga è stata inserita (ISO). */
+  createdAt?: string | null;
+  /** Nome di chi l'ha inserita (per le manuali). */
+  creatoNome?: string | null;
 }
 
 /** Intervalli di pausa pranzo (da un'uscita-pausa alla ripresa successiva). */
@@ -45,6 +51,52 @@ function fmtMinuti(min: number): string {
   if (h === 0) return `${r}min`;
   if (r === 0) return `${h}h`;
   return `${h}h ${String(r).padStart(2, '0')}min`;
+}
+
+function fmtDataOra(ts: string): string {
+  return new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(ts));
+}
+
+type OrigineMeta = { origine?: string | null; createdAt?: string | null; creatoNome?: string | null };
+
+/**
+ * Riga origine di un evento: badge "Timbrata · QR/app" oppure "Inserita a mano"
+ * (con "da {chi} · agg. {quando}"). Così office e super admin vedono SEMPRE come
+ * e quando è nata la riga (es. pausa timbrata vs dichiarata a fine giornata).
+ */
+function OrigineLine({ meta }: { meta?: OrigineMeta }) {
+  if (!meta || !meta.origine) return null;
+  const o = meta.origine;
+  const manuale = o !== 'qr' && o !== 'cronometro';
+  const label = o === 'qr' ? 'Timbrata · QR' : o === 'cronometro' ? 'Timbrata · app' : 'Inserita a mano';
+  const quando = manuale && meta.createdAt ? fmtDataOra(meta.createdAt) : null;
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+      <span
+        className={[
+          'inline-flex items-center rounded-full border px-1.5 py-0.5 font-medium uppercase tracking-wide',
+          manuale
+            ? 'border-amber-300 bg-amber-100/60 text-amber-700'
+            : 'border-border bg-muted text-muted-foreground',
+        ].join(' ')}
+      >
+        {label}
+      </span>
+      {manuale && (meta.creatoNome || quando) ? (
+        <span>
+          {meta.creatoNome ? `da ${meta.creatoNome}` : ''}
+          {meta.creatoNome && quando ? ' · ' : ''}
+          {quando ? `agg. ${quando}` : ''}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 function soloTimbrature(timbrature: TimbraturaInput[]) {
@@ -238,6 +290,12 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
   const now = useLiveNow(r.aperto);
   const pause = calcolaPause(timbrature);
 
+  // Origine per timestamp evento (per badge "Timbrata/Inserita a mano").
+  const meta = new Map<string, OrigineMeta>();
+  for (const t of timbrature) {
+    meta.set(t.ts, { origine: t.origine, createdAt: t.createdAt, creatoNome: t.creatoNome });
+  }
+
   if (r.coppie.length === 0) {
     return <p className="text-xs text-muted-foreground">Nessuna timbratura registrata.</p>;
   }
@@ -277,24 +335,27 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
         {r.coppie.map((c, i) => (
           <li
             key={i}
-            className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2.5 py-1.5 text-xs"
+            className="rounded-md border border-border/60 px-2.5 py-1.5 text-xs"
           >
-            <span className="inline-flex items-center gap-1.5 tabular-nums">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-              <span className="font-medium text-foreground">{fmtOra(c.ingresso)}</span>
-              <span className="text-muted-foreground">→</span>
-              {c.uscita ? (
-                <>
-                  <span className="inline-block h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
-                  <span className="font-medium text-foreground">{fmtOra(c.uscita)}</span>
-                </>
-              ) : (
-                <span className="font-medium text-emerald-700">in corso</span>
-              )}
-            </span>
-            <span className="tabular-nums font-semibold text-muted-foreground">
-              {c.minuti != null ? fmtMinuti(c.minuti) : fmtMinuti(liveMin)}
-            </span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 tabular-nums">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                <span className="font-medium text-foreground">{fmtOra(c.ingresso)}</span>
+                <span className="text-muted-foreground">→</span>
+                {c.uscita ? (
+                  <>
+                    <span className="inline-block h-2 w-2 rounded-full bg-slate-400" aria-hidden="true" />
+                    <span className="font-medium text-foreground">{fmtOra(c.uscita)}</span>
+                  </>
+                ) : (
+                  <span className="font-medium text-emerald-700">in corso</span>
+                )}
+              </span>
+              <span className="tabular-nums font-semibold text-muted-foreground">
+                {c.minuti != null ? fmtMinuti(c.minuti) : fmtMinuti(liveMin)}
+              </span>
+            </div>
+            <OrigineLine meta={meta.get(c.ingresso)} />
           </li>
         ))}
       </ul>
@@ -307,16 +368,19 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
             return (
               <li
                 key={`p-${i}`}
-                className="flex items-center justify-between gap-2 rounded-md border border-dashed border-amber-300/70 bg-amber-50/50 px-2.5 py-1.5 text-xs"
+                className="rounded-md border border-dashed border-amber-300/70 bg-amber-50/50 px-2.5 py-1.5 text-xs"
               >
-                <span className="inline-flex items-center gap-1.5 tabular-nums text-amber-800">
-                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
-                  Pausa pranzo {fmtOra(p.inizio)}
-                  {p.fine ? <> → {fmtOra(p.fine)}</> : <> · in corso</>}
-                </span>
-                <span className="tabular-nums font-medium text-amber-700">
-                  {min != null ? fmtMinuti(min) : ''}
-                </span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 tabular-nums text-amber-800">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-400" aria-hidden="true" />
+                    Pausa pranzo {fmtOra(p.inizio)}
+                    {p.fine ? <> → {fmtOra(p.fine)}</> : <> · in corso</>}
+                  </span>
+                  <span className="tabular-nums font-medium text-amber-700">
+                    {min != null ? fmtMinuti(min) : ''}
+                  </span>
+                </div>
+                <OrigineLine meta={meta.get(p.inizio)} />
               </li>
             );
           })}

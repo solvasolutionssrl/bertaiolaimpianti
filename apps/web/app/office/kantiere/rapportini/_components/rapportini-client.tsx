@@ -14,6 +14,7 @@ import {
   History,
   Coffee,
   MapPin,
+  Car,
 } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
@@ -35,6 +36,20 @@ export type TimbraturaItem = {
   origine: string | null;
   commessaTitolo: string | null;
   pausa?: boolean | null;
+  /** Quando la riga è stata inserita (ISO) — per "aggiunta il …" sulle manuali. */
+  createdAt?: string | null;
+  /** Nome di chi ha inserito la riga (per le manuali). */
+  creatoNome?: string | null;
+};
+
+/** Tratta di viaggio della giornata (andata sede→cantiere, ritorno cantiere→sede). */
+export type ViaggioTratta = {
+  direzione: 'andata' | 'ritorno';
+  sede: string;
+  cantiere: string;
+  km: number;
+  minuti: number;
+  autista: boolean;
 };
 
 export type RigaCommessa = {
@@ -64,6 +79,8 @@ export type RapportiniRiga = {
   pausaTimbrata?: boolean;
   /** Km di viaggio della giornata (somma distanza_km da timbratura_viaggio). */
   viaggioKm?: number;
+  /** Tratte di viaggio della giornata (per il dettaglio espanso). */
+  viaggi?: ViaggioTratta[];
   inviatoAt: string | null;
   note: string | null;
   totale: { ord: number; straord: number; viaggio: number };
@@ -222,12 +239,47 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
         ) : null}
       </div>
 
-      {/* Timeline timbrature */}
-      <div>
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Timbrature del giorno
-        </p>
-        <TimbratureRiepilogo timbrature={riga.timbrature} />
+      {/* Timeline timbrature + viaggio */}
+      <div className="space-y-3">
+        <div>
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Timbrature del giorno
+          </p>
+          <TimbratureRiepilogo timbrature={riga.timbrature} />
+        </div>
+
+        {riga.viaggi && riga.viaggi.length > 0 ? (
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Viaggio
+            </p>
+            <ul className="space-y-1">
+              {riga.viaggi.map((v, i) => {
+                const da = v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere';
+                const a = v.direzione === 'andata' ? v.cantiere || 'cantiere' : v.sede;
+                return (
+                  <li
+                    key={i}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-sky-200/70 bg-sky-50/60 px-2.5 py-1.5 text-xs"
+                  >
+                    <Car className="h-3 w-3 shrink-0 text-sky-600" aria-hidden="true" />
+                    <span className="font-medium capitalize text-sky-900">{v.direzione}</span>
+                    <span className="text-sky-800">
+                      {da} <span className="text-sky-400">→</span> {a}
+                    </span>
+                    <span className="ml-auto tabular-nums font-medium text-sky-700">
+                      {v.km > 0 ? `${Math.round(v.km)} km · ` : ''}
+                      {minToColon(v.minuti)}
+                    </span>
+                    <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                      {v.autista ? 'autista' : 'passeggero'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -252,7 +304,7 @@ function OggiRow({
   return (
     <>
       <tr
-        className="border-b border-border cursor-pointer transition-colors hover:bg-emerald-50/40"
+        className="border-b border-border cursor-pointer bg-emerald-50/50 transition-colors hover:bg-emerald-100/50"
         onClick={onToggle}
       >
         <td className="px-2 py-1.5 align-top text-muted-foreground">
@@ -276,7 +328,7 @@ function OggiRow({
         </td>
       </tr>
       {isOpen ? (
-        <tr className="border-b border-border bg-muted/20">
+        <tr className="border-b border-border bg-emerald-50/30">
           <td colSpan={6} className="px-4 py-3">
             <DettaglioGiornata riga={riga} />
           </td>

@@ -5,7 +5,7 @@ import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
 import { leggiPolicyRapportini, leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
-import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
+import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +40,8 @@ type TimbratureRow = {
   ts: string;
   origine: string | null;
   pausa: boolean | null;
+  created_at: string | null;
+  creato_da: string | null;
 };
 
 type DipendenteRow = {
@@ -172,7 +174,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const { toIso: tsTo } = romeDayBoundsUtc(to);
     const { data } = (await supabase
       .from('timbrature' as never)
-      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa')
+      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da')
       .eq('tenant_id', ctx.tenantId)
       .in('dipendente_id', dipIds)
       .gte('ts', tsFrom)
@@ -223,6 +225,17 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     }
   }
 
+  // Risolvi i nomi di chi ha creato le timbrature (per "aggiunta da …" sulle
+  // righe inserite a mano).
+  const creatoNomeMap = new Map<string, string>();
+  const creatoDaIds = [...new Set(timbratureData.map((t) => t.creato_da).filter((id): id is string => id != null))];
+  if (creatoDaIds.length > 0) {
+    const { data } = (await supabase.from('users' as never).select('id, display_name').in('id', creatoDaIds)) as {
+      data: { id: string; display_name: string | null }[] | null;
+    };
+    for (const u of data ?? []) if (u.display_name) creatoNomeMap.set(u.id, u.display_name);
+  }
+
   // Bucket timbrature per `dipendente_id:YYYY-MM-DD`
   type TimbraturaItem = {
     tipo: string;
@@ -230,6 +243,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     origine: string | null;
     commessaTitolo: string | null;
     pausa: boolean | null;
+    createdAt: string | null;
+    creatoNome: string | null;
   };
   const timbratureByKey = new Map<string, TimbraturaItem[]>();
   for (const t of timbratureData) {
@@ -243,6 +258,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       origine: t.origine ?? null,
       commessaTitolo: label || null,
       pausa: t.pausa ?? false,
+      createdAt: t.created_at ?? null,
+      creatoNome: t.creato_da ? creatoNomeMap.get(t.creato_da) ?? null : null,
     });
     timbratureByKey.set(key, arr);
   }
@@ -274,39 +291,83 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     oreLavorateTimbByKey.set(key, oreDaMin(min));
   }
 
-  // ── Km di viaggio per (dipendente:giorno) — da timbratura_viaggio ──────────
+  // ── Viaggio per (dipendente:giorno) — da timbratura_viaggio ────────────────
   // Sorgenti: viaggi legati a una timbratura (QR) → giorno della timbratura;
-  // viaggi manuali (timbratura_id null) → colonna `data`. Somma distanza_km.
-  const viaggioKmByKey = new Map<string, number>();
+  // viaggi manuali (timbratura_id null) → colonna `data`. Raccoglie km totali +
+  // le singole tratte (direzione, sede, cantiere, km, minuti, autista).
+  type ViaggioRow = {
+    timbratura_id: string | null;
+    dipendente_id: string;
+    data: string | null;
+    direzione: 'andata' | 'ritorno';
+    sede_id: string | null;
+    cantiere_id: string | null;
+    distanza_km: number | null;
+    durata_confermata_min: number | null;
+    autista: boolean | null;
+  };
+  const VIAGGIO_COLS =
+    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, distanza_km, durata_confermata_min, autista';
+  const timbIdToKey = new Map<string, string>();
+  for (const t of timbratureData) timbIdToKey.set(t.id, `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`);
+  const viaggioRows: ViaggioRow[] = [];
   if (timbratureData.length > 0) {
-    const timbIdToKey = new Map<string, string>();
-    for (const t of timbratureData) timbIdToKey.set(t.id, `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`);
-    const { data: viaQR } = (await supabase
+    const { data } = (await supabase
       .from('timbratura_viaggio' as never)
-      .select('timbratura_id, distanza_km')
-      .in('timbratura_id', timbratureData.map((t) => t.id))) as {
-      data: { timbratura_id: string; distanza_km: number | null }[] | null;
-    };
-    for (const v of viaQR ?? []) {
-      const key = timbIdToKey.get(v.timbratura_id);
-      if (!key) continue;
-      viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + (Number(v.distanza_km) || 0));
-    }
+      .select(VIAGGIO_COLS)
+      .in('timbratura_id', timbratureData.map((t) => t.id))) as { data: ViaggioRow[] | null };
+    viaggioRows.push(...(data ?? []));
   }
   if (dipIds.length > 0) {
-    const { data: viaMan } = (await supabase
+    const { data } = (await supabase
       .from('timbratura_viaggio' as never)
-      .select('dipendente_id, data, distanza_km')
+      .select(VIAGGIO_COLS)
       .in('dipendente_id', dipIds)
       .is('timbratura_id', null)
       .gte('data', from)
-      .lte('data', to)) as {
-      data: { dipendente_id: string; data: string; distanza_km: number | null }[] | null;
+      .lte('data', to)) as { data: ViaggioRow[] | null };
+    viaggioRows.push(...(data ?? []));
+  }
+  // Nomi sedi citate nei viaggi + cantieri non già risolti.
+  const sediNomeMap = new Map<string, string>();
+  const sedeIds = [...new Set(viaggioRows.map((v) => v.sede_id).filter((id): id is string => id != null))];
+  if (sedeIds.length > 0) {
+    const { data } = (await supabase.from('sedi' as never).select('id, nome').in('id', sedeIds)) as {
+      data: { id: string; nome: string | null }[] | null;
     };
-    for (const v of viaMan ?? []) {
-      const key = `${v.dipendente_id}:${v.data}`;
-      viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + (Number(v.distanza_km) || 0));
-    }
+    for (const s of data ?? []) sediNomeMap.set(s.id, s.nome || 'Sede');
+  }
+  const viaggioCantIds = [
+    ...new Set(viaggioRows.map((v) => v.cantiere_id).filter((id): id is string => id != null && !cantieriNomeMap.has(id))),
+  ];
+  if (viaggioCantIds.length > 0) {
+    const { data } = (await supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .in('id', viaggioCantIds)) as { data: CantiereRow[] | null };
+    for (const k of data ?? []) cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
+  }
+  const viaggioKmByKey = new Map<string, number>();
+  const viaggiByKey = new Map<string, ViaggioTratta[]>();
+  for (const v of viaggioRows) {
+    const key = v.timbratura_id
+      ? timbIdToKey.get(v.timbratura_id)
+      : v.data
+        ? `${v.dipendente_id}:${v.data}`
+        : null;
+    if (!key) continue;
+    const km = Number(v.distanza_km) || 0;
+    viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + km);
+    const arr = viaggiByKey.get(key) ?? [];
+    arr.push({
+      direzione: v.direzione === 'ritorno' ? 'ritorno' : 'andata',
+      sede: v.sede_id ? sediNomeMap.get(v.sede_id) ?? 'Sede' : 'Sede',
+      cantiere: v.cantiere_id ? cantieriNomeMap.get(v.cantiere_id) ?? '' : '',
+      km,
+      minuti: Number(v.durata_confermata_min) || 0,
+      autista: !!v.autista,
+    });
+    viaggiByKey.set(key, arr);
   }
 
   // Giorno corrente in Europe/Rome: serve a distinguere le bozze di giornate
@@ -355,6 +416,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       aperta,
       pausaTimbrata,
       viaggioKm: viaggioKmByKey.get(timbratureKey) ?? 0,
+      viaggi: viaggiByKey.get(timbratureKey) ?? [],
       inviatoAt: r.inviato_at,
       note: r.note ?? null,
       totale,
