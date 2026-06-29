@@ -238,12 +238,25 @@ export function NuovaSpesa() {
           body: fd,
         });
 
-        if (resp.status === 422) {
-          setNonLeggibile(true);
-          setFase('errore');
-          return;
-        }
         if (!resp.ok) {
+          let code = '';
+          try {
+            code = ((await resp.json()) as { code?: string }).code ?? '';
+          } catch {
+            // body non-JSON
+          }
+          // AI non disponibile (crediti/quota/down): messaggio generico, niente
+          // dettagli tecnici. Il super admin viene avvisato lato server.
+          if (resp.status === 503 || code === 'AI_NON_DISPONIBILE') {
+            setErrMsg('Funzioni AI non disponibili al momento, riprova più tardi.');
+            setFase('errore');
+            return;
+          }
+          if (resp.status === 422 || code === 'RICEVUTA_NON_LEGGIBILE') {
+            setNonLeggibile(true);
+            setFase('errore');
+            return;
+          }
           setErrMsg('Non sono riuscito a leggere la ricevuta. Riprova.');
           setFase('errore');
           return;

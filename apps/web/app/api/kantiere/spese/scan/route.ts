@@ -21,7 +21,10 @@ import {
   chatCompletion,
   getVisionModel,
   isOpenAIConfigured,
+  isAiUnavailable,
+  OpenAiError,
 } from '@/app/_lib/openai';
+import { segnalaAiNonDisponibile } from '@/app/_lib/ai-alert';
 
 export const maxDuration = 60;
 
@@ -158,6 +161,7 @@ export async function POST(request: NextRequest) {
   let aiOk = false;
 
   if (!isPdf && isOpenAIConfigured()) {
+    let completionText: string | null = null;
     try {
       const b64 = originalBuf.toString('base64');
       const completion = await chatCompletion({
@@ -175,29 +179,58 @@ export async function POST(request: NextRequest) {
           },
         ],
       });
-      const cleaned = completion.text
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim();
-      const parsed = Estratto.safeParse(JSON.parse(cleaned || '{}'));
-      if (parsed.success) {
-        const e = parsed.data;
-        dati = {
-          ragione_sociale: e.ragione_sociale ?? null,
-          categoria: normalizzaCategoria(e.categoria),
-          importo_totale: parseImportoIt(e.importo_totale ?? null),
-          importo_iva: parseImportoIt(e.importo_iva ?? null),
-          valuta: (e.valuta ?? 'EUR').toUpperCase().slice(0, 8),
-          data_scontrino: parseDataScontrino(e.data_scontrino ?? null),
-          partita_iva: e.partita_iva ?? null,
-          metodo_pagamento: e.metodo_pagamento ?? null,
-          numero_documento: e.numero_documento ?? null,
-          indirizzo_esercente: e.indirizzo_esercente ?? null,
-        };
-        aiOk = true;
+      completionText = completion.text;
+    } catch (err) {
+      // AI NON DISPONIBILE (crediti/quota 429, chiave 401/403, OpenAI down 5xx,
+      // rete): è un problema di SERVIZIO, non "ricevuta illeggibile". L'utente
+      // non deve vederne il motivo: avvisa il super admin, pulisci la foto
+      // orfana su R2 e chiedi di riprovare più tardi.
+      if (isAiUnavailable(err)) {
+        try {
+          await r2.delete(r2Key);
+          if (r2ThumbKey) await r2.delete(r2ThumbKey);
+        } catch {
+          // cleanup best-effort
+        }
+        await segnalaAiNonDisponibile({
+          tenantId: ctx.tenantId,
+          feature: 'spese_scan',
+          model: getVisionModel(),
+          status: err instanceof OpenAiError ? err.status ?? null : null,
+          detail: err instanceof Error ? err.message : null,
+        });
+        return Response.json({ ok: false, code: 'AI_NON_DISPONIBILE' }, { status: 503 });
       }
-    } catch {
-      // estrazione fallita: si prosegue con i campi vuoti (compilazione manuale)
+      // Errore imprevisto NON del servizio: si prosegue coi campi vuoti.
+      completionText = null;
+    }
+
+    if (completionText != null) {
+      try {
+        const cleaned = completionText
+          .replace(/^```(?:json)?\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim();
+        const parsed = Estratto.safeParse(JSON.parse(cleaned || '{}'));
+        if (parsed.success) {
+          const e = parsed.data;
+          dati = {
+            ragione_sociale: e.ragione_sociale ?? null,
+            categoria: normalizzaCategoria(e.categoria),
+            importo_totale: parseImportoIt(e.importo_totale ?? null),
+            importo_iva: parseImportoIt(e.importo_iva ?? null),
+            valuta: (e.valuta ?? 'EUR').toUpperCase().slice(0, 8),
+            data_scontrino: parseDataScontrino(e.data_scontrino ?? null),
+            partita_iva: e.partita_iva ?? null,
+            metodo_pagamento: e.metodo_pagamento ?? null,
+            numero_documento: e.numero_documento ?? null,
+            indirizzo_esercente: e.indirizzo_esercente ?? null,
+          };
+          aiOk = true;
+        }
+      } catch {
+        // output non parsabile: campi vuoti (compilazione manuale)
+      }
     }
   }
 

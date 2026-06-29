@@ -42,6 +42,38 @@ export function isOpenAIConfigured(): boolean {
   return !isPlaceholderKey(getOpenAIKey());
 }
 
+/**
+ * Errore di una chiamata OpenAI con lo status HTTP. `aiUnavailable=true` quando
+ * il problema è del SERVIZIO (non del nostro input): 429 (rate limit / crediti
+ * esauriti `insufficient_quota`), 401/403 (chiave/billing), 5xx (OpenAI down).
+ * Serve a distinguere "AI momentaneamente non disponibile" da "AI ha risposto
+ * ma il contenuto non era leggibile".
+ */
+export class OpenAiError extends Error {
+  status?: number;
+  aiUnavailable: boolean;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = 'OpenAiError';
+    this.status = status;
+    this.aiUnavailable =
+      status === 429 ||
+      status === 401 ||
+      status === 403 ||
+      (typeof status === 'number' && status >= 500);
+  }
+}
+
+/** true se l'errore indica AI non disponibile (servizio): quota/chiave/5xx o rete. */
+export function isAiUnavailable(e: unknown): boolean {
+  if (e instanceof OpenAiError) return e.aiUnavailable;
+  // Errori di rete/timeout prima ancora di avere una risposta HTTP.
+  return (
+    e instanceof Error &&
+    /fetch failed|network|ECONNRESET|ETIMEDOUT|EAI_AGAIN|aborted|timeout/i.test(e.message)
+  );
+}
+
 export function getChatModel(): string {
   return process.env.OPENAI_MODEL_CHAT?.trim() || 'gpt-5-mini';
 }
@@ -178,8 +210,9 @@ export async function chatCompletion(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(
+    throw new OpenAiError(
       `OpenAI HTTP ${res.status}: ${errText.slice(0, 300) || 'unknown'}`,
+      res.status,
     );
   }
 
@@ -237,8 +270,9 @@ export async function* chatCompletionStream(
 
   if (!res.ok || !res.body) {
     const errText = await res.text().catch(() => '');
-    throw new Error(
+    throw new OpenAiError(
       `OpenAI stream HTTP ${res.status}: ${errText.slice(0, 300) || 'unknown'}`,
+      res.status,
     );
   }
 
@@ -311,8 +345,9 @@ export async function transcribeAudio(
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
-    throw new Error(
+    throw new OpenAiError(
       `Transcribe HTTP ${res.status}: ${errText.slice(0, 300) || 'unknown'}`,
+      res.status,
     );
   }
   const json = (await res.json()) as { text?: string };

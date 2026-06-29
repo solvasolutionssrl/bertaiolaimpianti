@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { Resend, type CreateEmailOptions } from 'resend';
 
 let cached: Resend | null = null;
 function client() {
@@ -20,7 +20,10 @@ export interface SendEmailInput {
 }
 
 export async function sendEmail(input: SendEmailInput) {
-  return client().emails.send({
+  // Resend tipizza il payload come unione "html | text | react" obbligatorio:
+  // il nostro wrapper accetta html e/o text opzionali (a runtime ne passiamo
+  // sempre almeno uno), quindi il cast è sicuro e non cambia il comportamento.
+  const payload: CreateEmailOptions = {
     from: input.from,
     to: Array.isArray(input.to) ? input.to : [input.to],
     subject: input.subject,
@@ -28,7 +31,8 @@ export async function sendEmail(input: SendEmailInput) {
     text: input.text,
     replyTo: input.replyTo,
     headers: input.headers,
-  });
+  } as CreateEmailOptions;
+  return client().emails.send(payload);
 }
 
 /** Parsing minimal di una webhook payload Resend "email.received" → ticket draft. */
