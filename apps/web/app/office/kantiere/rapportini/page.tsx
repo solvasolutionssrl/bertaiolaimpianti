@@ -4,7 +4,7 @@ import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
-import { leggiPolicyRapportini } from '@/app/_lib/kantiere-config';
+import { leggiPolicyRapportini, leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
@@ -104,6 +104,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const supabase = createServerSupabase();
   // Soglia anomalia turno (per-tenant) per l'anteprima del dialog "Correggi giornata".
   const { sogliaAnomaliaTurnoOre } = await leggiPolicyRapportini(supabase, ctx.tenantId);
+  // Soglia "turno lungo" (per-tenant) oltre cui ci si aspetta la pausa pranzo → flag ⚠.
+  const sogliaPausaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
 
   const def = defaultRange();
   const from = searchParams.from ?? def.from;
@@ -272,21 +274,6 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     oreLavorateTimbByKey.set(key, oreDaMin(min));
   }
 
-  // Rapportini modificati dal tecnico dopo l'invio → badge "Modificato"
-  const rappIds = rapportini.map((r) => r.id);
-  const modificatiSet = new Set<string>();
-  if (rappIds.length > 0) {
-    const { data: vModRaw } = await supabase
-      .from('rapportino_versioni' as never)
-      .select('rapportino_id')
-      .eq('tenant_id', ctx.tenantId)
-      .eq('azione', 'modifica_tecnico')
-      .in('rapportino_id', rappIds);
-    for (const v of (vModRaw as { rapportino_id: string }[] | null) ?? []) {
-      modificatiSet.add(v.rapportino_id);
-    }
-  }
-
   // Giorno corrente in Europe/Rome: serve a distinguere le bozze di giornate
   // ancora aperte (oggi, normali) dalle bozze di giornate passate/chiuse che
   // NON sono auto-approvate → anomalie "Da verificare" per l'ufficio.
@@ -316,18 +303,22 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     // significa che il sistema NON ha potuto chiudere il giorno in automatico
     // (giorno rimasto aperto o ore oltre soglia) e richiede l'ufficio.
     const daVerificare = r.stato === 'bozza' && r.data < oggiRome;
-    // Auto-approvato dal sistema: stato approvato ma senza un approvatore umano.
-    const autoApprovato = r.stato === 'approvato' && r.approvato_da == null;
+    // Giornata con un turno ancora aperto (più ingressi di chiusura che uscite,
+    // pause escluse) e se è stata timbrata almeno una pausa pranzo.
+    const ingressiChiusura = timbrature.filter((t) => t.tipo === 'ingresso' && !t.pausa).length;
+    const usciteChiusura = timbrature.filter((t) => t.tipo === 'uscita' && !t.pausa).length;
+    const aperta = ingressiChiusura > usciteChiusura;
+    const pausaTimbrata = timbrature.some((t) => !!t.pausa);
     return {
       id: r.id,
       dipendenteId: r.dipendente_id,
       dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,
       data: r.data,
       stato: r.stato,
-      modificato: modificatiSet.has(r.id),
       oreNonConteggiate,
       daVerificare,
-      autoApprovato,
+      aperta,
+      pausaTimbrata,
       inviatoAt: r.inviato_at,
       note: r.note ?? null,
       totale,
@@ -400,12 +391,13 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   return (
     <div className="w-full space-y-5">
       <header>
-        <h1 className="text-lg font-semibold">Presenze e timbrature</h1>
+        <h1 className="text-lg font-semibold">Presenze e ore</h1>
         <p className="text-sm text-muted-foreground">
-          Le timbrature sono la fonte: il rapportino giornaliero si compila da solo e, a giornata
-          chiusa entro la soglia ore, viene approvato in automatico. Qui serve guardare solo le
-          giornate <span className="font-medium text-foreground">da verificare</span> (giorno
-          rimasto aperto o ore oltre soglia).
+          Storico giorno per giorno delle ore lavorate, dalle timbrature. Le giornate entro la
+          soglia ore sono <span className="font-medium text-emerald-700">regolari</span>; restano da
+          guardare solo le <span className="font-medium text-amber-700">anomalie</span> (turno
+          rimasto aperto o ore oltre soglia), correggibili al volo con{' '}
+          <span className="font-medium text-foreground">Modifica</span>.
         </p>
       </header>
       <RapportiniClient
@@ -415,7 +407,9 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         commesse={commessePicker}
         cantieri={cantieriPicker}
         giorniAperti={giorniAperti}
+        oggi={oggiRome}
         sogliaOre={sogliaAnomaliaTurnoOre}
+        sogliaPausaOre={sogliaPausaOre}
       />
     </div>
   );
