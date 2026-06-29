@@ -221,6 +221,14 @@ export function NuovaSpesa() {
     setAperto(false);
   }, [reset]);
 
+  // Dopo il salvataggio (fase "fatto") torna da solo alla pagina spese dopo 3s.
+  // L'utente può comunque toccare "Altra ricevuta" o "Chiudi" prima.
+  React.useEffect(() => {
+    if (fase !== 'fatto') return;
+    const t = setTimeout(() => chiudi(), 3000);
+    return () => clearTimeout(t);
+  }, [fase, chiudi]);
+
   const onFile = React.useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -347,10 +355,15 @@ export function NuovaSpesa() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex flex-col bg-background"
+      className="fixed inset-x-0 top-0 z-[60] flex flex-col bg-background"
       role="dialog"
       aria-modal="true"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        // Si ferma SOPRA la bottom-nav (h-16 = 4rem + safe-area): la nav resta
+        // visibile sotto, così non si "esce" visivamente dall'app.
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)',
+      }}
     >
       {/* HEADER */}
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
@@ -639,10 +652,7 @@ export function NuovaSpesa() {
 
       {/* FOOTER sticky: Salva (con importo), sempre visibile in revisione */}
       {fase === 'revisione' && scan ? (
-        <footer
-          className="shrink-0 border-t border-border bg-background px-4 py-3"
-          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
-        >
+        <footer className="shrink-0 border-t border-border bg-background px-4 py-3">
           {errMsg ? (
             <p className="mb-2 text-center text-sm text-destructive">{errMsg}</p>
           ) : null}

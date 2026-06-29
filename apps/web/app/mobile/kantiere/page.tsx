@@ -7,6 +7,8 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../_lib/guard';
+import { mioTurnoAttivo } from './_lib/turno-attivo';
+import { TurnoPausaHome } from './_components/turno-pausa-home';
 
 export const metadata: Metadata = {
   title: 'Kantiere',
@@ -43,6 +45,9 @@ export default async function KantiereHomePage() {
     .eq('user_id', ctx.userId)
     .maybeSingle();
   const me = (meRow as { id: string; nome: string; cognome: string } | null) ?? null;
+
+  // Turno aperto del dipendente (per il tasto pausa pranzo diretto in home).
+  const turno = me ? await mioTurnoAttivo() : null;
 
   // Ultima timbratura di oggi → stato corrente (dentro/fuori)
   let ultima: { tipo: 'ingresso' | 'uscita'; ts: string } | null = null;
@@ -87,8 +92,16 @@ export default async function KantiereHomePage() {
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
 
-      {/* Stato timbratura corrente */}
-      {me ? (
+      {/* Turno aperto → card con pausa pranzo diretta; altrimenti stato di oggi */}
+      {turno ? (
+        <TurnoPausaHome
+          cantiereId={turno.cantiereId}
+          cantiereNome={turno.cantiereNome}
+          inizioTs={turno.inizioTs}
+          inPausa={turno.inPausa}
+          inizioPausaTs={turno.inizioPausaTs}
+        />
+      ) : me ? (
         <div
           className={
             'rounded-2xl border p-5 shadow-soft ' +
