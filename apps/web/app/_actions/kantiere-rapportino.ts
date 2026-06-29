@@ -5,6 +5,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
+import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
 
@@ -142,6 +143,37 @@ function oggiRome(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 }
 
+/**
+ * Esiste già un rapportino per (dipendente, giorno) OPPURE almeno una timbratura
+ * in quel giorno? Serve a `precompilaMioRapportino` per NON creare un rapportino
+ * "guscio" vuoto solo perché il tecnico apre la vista di una giornata in cui non
+ * ha (ancora) timbrato. Confini-giorno in Europe/Rome.
+ */
+async function esisteRapportinoOTimbrature(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  dipendenteId: string,
+  data: string,
+): Promise<boolean> {
+  const { data: rapp } = await supabase
+    .from('rapportini' as never)
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .eq('data', data)
+    .maybeSingle();
+  if (rapp) return true;
+  const { fromIso, toIso } = romeDayBoundsUtc(data);
+  const { count } = await supabase
+    .from('timbrature' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  return (count ?? 0) > 0;
+}
+
 // Carica le righe di un rapportino esistente come payload per il client.
 async function caricaPayloadRapportino(
   supabase: ReturnType<typeof createServerSupabase>,
@@ -205,9 +237,18 @@ export async function precompilaMioRapportino(
   const data = parsed.data.data ?? oggiRome();
 
   // Auto-deriva (o ricalcola, se ancora automatico) il rapportino del giorno
-  // dalle timbrature, poi carica il payload per il client.
-  const rapp = await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data);
-  if (!rapp) return { ok: false, error: 'ERRORE_CREAZIONE' };
+  // dalle timbrature, poi carica il payload per il client. MA: se per quel
+  // giorno non esiste un rapportino NÉ alcuna timbratura, NON creiamo un guscio
+  // vuoto solo perché il tecnico ha aperto la vista — mostriamo un payload vuoto
+  // NON persistito. La riga nascerà al primo timbro o con la registrazione
+  // manuale (`registraOreManuali`, che crea da sé). Così non si accumulano più
+  // giornate-fantasma a 0 ore.
+  const rapp = (await esisteRapportinoOTimbrature(supabase, ctx.tenantId, me.id, data))
+    ? await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data)
+    : null;
+  if (!rapp) {
+    return { ok: true, rapportino: { id: '', data, stato: 'bozza', note: null, righe: [] } };
+  }
 
   return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp) };
 }
