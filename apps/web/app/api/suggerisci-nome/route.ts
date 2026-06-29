@@ -9,7 +9,10 @@ import {
   chatCompletion,
   getChatModel,
   isOpenAIConfigured,
+  isAiUnavailable,
+  OpenAiError,
 } from '../../_lib/openai';
+import { segnalaAiNonDisponibile } from '../../_lib/ai-alert';
 
 /**
  * POST /api/suggerisci-nome
@@ -67,8 +70,9 @@ Note: duplex nuovo, pavimento radiante + centrale termica
 export async function POST(req: Request) {
   // Solo utenti autenticati: l'endpoint chiama l'AI (costo) ed è interno
   // ai flussi office. Senza questo, un estraneo potrebbe abusarne da fuori.
+  let ctx;
   try {
-    await requireTenantContext();
+    ctx = await requireTenantContext();
   } catch {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
   }
@@ -196,8 +200,19 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ proposta, alternatives }, { status: 200 });
   } catch (err) {
-    // Network/SDK error → fallback locale, niente crash al client.
+    // Network/SDK error → fallback locale, niente crash al client (l'utente
+    // ottiene comunque un nome). Se l'AI è non disponibile (crediti/quota/down)
+    // avvisa il super admin: l'utente non se ne accorge ma è critico saperlo.
     console.error('[suggerisci-nome] OpenAI error, falling back:', err);
+    if (isAiUnavailable(err)) {
+      await segnalaAiNonDisponibile({
+        tenantId: ctx.tenantId,
+        feature: 'suggerisci_nome',
+        model: getChatModel(),
+        status: err instanceof OpenAiError ? err.status ?? null : null,
+        detail: err instanceof Error ? err.message : null,
+      });
+    }
     const out = suggerisciDescrizione(parsed.data);
     return NextResponse.json(out, { status: 200 });
   }

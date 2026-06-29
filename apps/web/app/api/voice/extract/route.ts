@@ -15,7 +15,11 @@ import {
   resolveTranscribeModelForTenant,
   isOpenAIConfigured,
   transcribeAudio,
+  isAiUnavailable,
+  OpenAiError,
 } from '../../../_lib/openai';
+import { segnalaAiNonDisponibile } from '../../../_lib/ai-alert';
+import { MSG_AI_NON_DISPONIBILE, CODE_AI_NON_DISPONIBILE } from '../../../_lib/ai-messages';
 
 /**
  * POST /api/voice/extract
@@ -180,6 +184,21 @@ export async function POST(req: NextRequest) {
       // (API key), 429 (rate limit), 413 (file troppo grande lato OpenAI).
       const msg = err instanceof Error ? err.message : 'unknown';
       console.error(`[voice/extract] Whisper FAIL: ${msg}`);
+      // AI non disponibile (crediti/quota/chiave/down): messaggio generico
+      // all'utente (niente dettaglio tecnico) + alert al super admin.
+      if (isAiUnavailable(err)) {
+        await segnalaAiNonDisponibile({
+          tenantId: ctx.tenantId,
+          feature: 'dettatura_trascrizione',
+          model: null,
+          status: err instanceof OpenAiError ? err.status ?? null : null,
+          detail: msg,
+        });
+        return NextResponse.json(
+          { error: MSG_AI_NON_DISPONIBILE, code: CODE_AI_NON_DISPONIBILE },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         {
           error: 'Trascrizione fallita (Whisper).',
@@ -296,15 +315,25 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       // Errore reale OpenAI (HTTP 4xx/5xx, timeout, rete).
-      // In modalità preview usiamo le euristiche locali; in produzione
-      // restituiamo un errore chiaro invece di degradare silenziosamente.
       console.error('[voice/extract] OpenAI extraction error:', err);
+      // AI non disponibile (crediti/quota/chiave/down): messaggio generico +
+      // alert al super admin (niente dettaglio tecnico all'utente).
+      if (isAiUnavailable(err)) {
+        await segnalaAiNonDisponibile({
+          tenantId: ctx.tenantId,
+          feature: 'dettatura_estrazione',
+          model: process.env.OPENAI_MODEL_EXTRACT?.trim() || 'gpt-4o-mini',
+          status: err instanceof OpenAiError ? err.status ?? null : null,
+          detail: err instanceof Error ? err.message : null,
+        });
+        return NextResponse.json(
+          { error: MSG_AI_NON_DISPONIBILE, code: CODE_AI_NON_DISPONIBILE },
+          { status: 503 },
+        );
+      }
       return NextResponse.json(
         {
-          error:
-            err instanceof Error && err.message.includes('429')
-              ? 'Limite API raggiunto — riprova tra qualche secondo.'
-              : 'Estrazione AI non riuscita. Riprova tra qualche secondo.',
+          error: 'Estrazione AI non riuscita. Riprova tra qualche secondo.',
           detail: err instanceof Error ? err.message.slice(0, 300) : 'unknown',
         },
         { status: 502 },

@@ -11,7 +11,11 @@ import {
   chatCompletion,
   getChatModel,
   isOpenAIConfigured,
+  isAiUnavailable,
+  OpenAiError,
 } from '../_lib/openai';
+import { segnalaAiNonDisponibile } from '../_lib/ai-alert';
+import { MSG_AI_NON_DISPONIBILE } from '../_lib/ai-messages';
 import {
   cleanupAllegatoFiles,
   getRiunioneFileRefIds,
@@ -382,10 +386,19 @@ REGOLE STRICT PER I TODO:
       },
     };
   } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message.slice(0, 300) : 'Errore OpenAI',
-    };
+    // AI non disponibile (crediti/quota/chiave/down): messaggio generico +
+    // alert al super admin. Mai restituire il motivo tecnico all'utente.
+    if (isAiUnavailable(e)) {
+      await segnalaAiNonDisponibile({
+        tenantId: ctx.tenantId,
+        feature: 'riunione_reportino',
+        model,
+        status: e instanceof OpenAiError ? e.status ?? null : null,
+        detail: e instanceof Error ? e.message : null,
+      });
+      return { ok: false, error: MSG_AI_NON_DISPONIBILE };
+    }
+    return { ok: false, error: 'Generazione non riuscita. Riprova.' };
   }
 }
 

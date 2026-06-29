@@ -7,7 +7,11 @@ import {
   chatCompletionStream,
   getChatModel,
   isOpenAIConfigured,
+  isAiUnavailable,
+  OpenAiError,
 } from '../../../_lib/openai';
+import { segnalaAiNonDisponibile } from '../../../_lib/ai-alert';
+import { MSG_AI_NON_DISPONIBILE } from '../../../_lib/ai-messages';
 
 /**
  * POST /api/copilot/chat
@@ -119,8 +123,21 @@ export async function POST(req: NextRequest) {
         }
         controller.close();
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Errore OpenAI API';
-        controller.enqueue(encoder.encode(`\n\n[Errore: ${msg}]`));
+        // Mai emettere il motivo tecnico nello stream (lo vedrebbe l'utente).
+        if (isAiUnavailable(err)) {
+          await segnalaAiNonDisponibile({
+            tenantId: ctx.tenantId,
+            feature: 'copilot',
+            model: getChatModel(),
+            status: err instanceof OpenAiError ? err.status ?? null : null,
+            detail: err instanceof Error ? err.message : null,
+          });
+          controller.enqueue(encoder.encode(`\n\n${MSG_AI_NON_DISPONIBILE}`));
+        } else {
+          controller.enqueue(
+            encoder.encode('\n\nSi è verificato un errore. Riprova tra qualche secondo.'),
+          );
+        }
         controller.close();
       }
     },
