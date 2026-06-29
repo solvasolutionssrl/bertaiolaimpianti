@@ -355,16 +355,19 @@ export function NuovaSpesa() {
   }
 
   return (
+    <>
     <div
-      className="fixed inset-x-0 top-0 z-[60] flex flex-col bg-background"
+      className="fixed inset-0 z-[35] flex flex-col bg-background"
       role="dialog"
       aria-modal="true"
       style={{
         paddingTop: 'env(safe-area-inset-top, 0px)',
-        // Si ferma SOPRA la bottom-nav lasciando spazio anche al FAB centrale
-        // "Scansiona" che si alza ~28px sopra la barra (h-16=4rem): 6rem ≈ barra
-        // + cappello FAB + ombra, così resta tutto visibile sotto al foglio.
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)',
+        // Foglio a TUTTA pagina (il bianco prosegue dietro la bottom-nav → niente
+        // "gradino" di sfondo colorato). Z gestita: z-[35] sta SOPRA la campanella
+        // (z-30, così non sbuca in alto) e SOTTO la bottom-nav + FAB "Scansiona"
+        // (z-40), che restano davanti senza essere tagliati. Il padding-bottom
+        // tiene contenuti e azioni sopra la barra + cappello FAB (~6rem).
+        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)',
       }}
     >
       {/* HEADER */}
@@ -688,7 +691,10 @@ export function NuovaSpesa() {
         </footer>
       ) : null}
 
-      {/* Lightbox foto (tap miniatura) */}
+    </div>
+
+      {/* Lightbox foto: FUORI dal foglio (che è z-[35]) così il suo z-[70]
+          compete globalmente e copre anche la bottom-nav. */}
       {fotoGrande && preview ? (
         <button
           type="button"
@@ -700,6 +706,6 @@ export function NuovaSpesa() {
           <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
         </button>
       ) : null}
-    </div>
+    </>
   );
 }
