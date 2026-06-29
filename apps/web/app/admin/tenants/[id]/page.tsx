@@ -23,6 +23,7 @@ import { TabBranding } from './_components/tab-branding';
 import { TabNoteInterne } from './_components/tab-note-interne';
 import { TabAi } from './_components/tab-ai';
 import { TabModuli } from './_components/tab-moduli';
+import { TabFunzioni } from './_components/tab-funzioni';
 import { TabRouting } from './_components/tab-routing';
 import { googleRoutingDisponibile } from '@/app/_lib/routing';
 
@@ -93,6 +94,11 @@ export default async function TenantDetailPage({
   const routingProvider: 'free' | 'google' =
     kantiereConfig['routing_provider'] === 'google' ? 'google' : 'free';
   const googleKeyConfigured = googleRoutingDisponibile();
+
+  const appModeTenant: 'kommessa' | 'kantiere' | 'full' =
+    tenant.app_mode === 'kantiere' || tenant.app_mode === 'full' ? tenant.app_mode : 'kommessa';
+  const kommessaWorld = appModeTenant !== 'kantiere';
+  const tenantFeatures = (tenant.features ?? {}) as Record<string, boolean>;
 
   const plan = plans.find((p) => p.id === tenant.plan_id);
 
@@ -180,6 +186,7 @@ export default async function TenantDetailPage({
           <TabsTrigger value="storage">Storage</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="moduli">Moduli</TabsTrigger>
+          <TabsTrigger value="funzioni">Funzioni</TabsTrigger>
           {kantiereAttivo ? <TabsTrigger value="routing">Viaggio</TabsTrigger> : null}
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="note">Note interne</TabsTrigger>
@@ -271,6 +278,15 @@ export default async function TenantDetailPage({
                 : 'kommessa'
             }
             codiceAzienda={tenant.codice_azienda ?? ''}
+          />
+        </TabsContent>
+
+        {/* ===== Funzioni (visibilità funzioni office per-tenant) ===== */}
+        <TabsContent value="funzioni">
+          <TabFunzioni
+            tenantId={tenant.id}
+            features={tenantFeatures}
+            kommessaWorld={kommessaWorld}
           />
         </TabsContent>
 

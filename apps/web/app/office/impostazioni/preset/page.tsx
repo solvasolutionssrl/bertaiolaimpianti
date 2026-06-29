@@ -1,6 +1,9 @@
 import { Layers } from 'lucide-react';
+import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
+import { getAppModeCached } from '@/app/_lib/app-mode';
+import { tenantFeatureEnabled } from '@/app/_lib/tenant-features';
 import { SectionHeader } from '../_components/section-header';
 import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';
@@ -15,6 +18,9 @@ export const metadata = { title: 'Preset · Impostazioni' };
 
 export default async function PresetPage() {
   const ctx = await requireTenantContext();
+  // Funzione "mondo commesse": bloccata (404) se nascosta per il tenant.
+  const kommessaWorld = (await getAppModeCached()) !== 'kantiere';
+  if (!(await tenantFeatureEnabled('preset_lavoro', kommessaWorld))) notFound();
   const supabase = createServerSupabase();
   const canEdit = canManageTenant(ctx);
 

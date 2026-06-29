@@ -1,6 +1,9 @@
+import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { ListTree, PackageOpen } from 'lucide-react';
+import { getAppModeCached } from '@/app/_lib/app-mode';
+import { tenantFeatureEnabled } from '@/app/_lib/tenant-features';
 import { EmptyState } from '../../../_components/empty-state';
 import { SectionHeader } from '../_components/section-header';
 import { AdminRequiredNotice } from '../_components/admin-required';
@@ -16,6 +19,9 @@ export const metadata = { title: 'Voci catalogo · Impostazioni' };
 
 export default async function VociPage() {
   const ctx = await requireTenantContext();
+  // Funzione "mondo commesse": bloccata (404) se nascosta per il tenant.
+  const kommessaWorld = (await getAppModeCached()) !== 'kantiere';
+  if (!(await tenantFeatureEnabled('voci_catalogo', kommessaWorld))) notFound();
   const supabase = createServerSupabase();
   const canEdit = canManageTenant(ctx);
 

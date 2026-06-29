@@ -343,11 +343,15 @@ function OfficeShell({
 
   return (
     <div className={cn('flex min-h-screen flex-col bg-background', className)}>
-      {/* Brand top hairline */}
-      <div aria-hidden="true" className="border-brand-line h-[2px] w-full shrink-0" />
+      {/* Sticky top: righetta brand + header INSIEME in un solo contenitore
+          sticky. Prima la righetta era fuori dallo sticky → scrollando scorreva
+          via e l'header (sticky top-0) saliva di 2px, lasciando una lineetta
+          grigia sotto. Ora restano agganciati a top:0 senza gap. */}
+      <div className="sticky top-0 z-30 shrink-0">
+        <div aria-hidden="true" className="border-brand-line h-[2px] w-full" />
 
-      {/* ===================== Header ===================== */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 md:px-6">
+        {/* ===================== Header ===================== */}
+        <header className="flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur-md supports-[backdrop-filter]:bg-background/70 md:px-6">
         <Button
           variant="ghost"
           size="icon"
@@ -472,7 +476,8 @@ function OfficeShell({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </header>
+        </header>
+      </div>
 
       <div className="flex flex-1">
         {/* ===================== Sidebar (desktop) — cobalt-tinted ===================== */}

@@ -3,6 +3,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { getAppModeCached } from '@/app/_lib/app-mode';
+import { tenantFeatureEnabled } from '@/app/_lib/tenant-features';
 import { SettingsTopNav } from './_components/settings-tabs';
 
 export const metadata = { title: 'Impostazioni · Kommessa' };
@@ -21,15 +22,24 @@ export default async function ImpostazioniLayout({
     meta.platform_admin === 'true' ||
     ctx.email.toLowerCase() === 'dev@solva.it';
   const hasKantiere = await tenantHasModule('kantiere');
-  // Mondo commesse (KOMMESSA): attivo se app_mode non è kantiere-only.
-  const hasKommessa = (await getAppModeCached()) !== 'kantiere';
+  // Visibilità funzioni "mondo commesse": feature-flag per-tenant (default =
+  // app_mode ≠ kantiere), gestibile dal super admin.
+  const kommessaWorld = (await getAppModeCached()) !== 'kantiere';
+  const [showVoci, showPreset] = await Promise.all([
+    tenantFeatureEnabled('voci_catalogo', kommessaWorld),
+    tenantFeatureEnabled('preset_lavoro', kommessaWorld),
+  ]);
+  const hiddenIds = [
+    ...(showVoci ? [] : ['voci']),
+    ...(showPreset ? [] : ['preset']),
+  ];
 
   return (
     <div className="w-full">
       <SettingsTopNav
         isPlatformAdmin={isPlatformAdmin}
         hasKantiere={hasKantiere}
-        hasKommessa={hasKommessa}
+        hiddenIds={hiddenIds}
       />
       <div className="mt-6">{children}</div>
     </div>

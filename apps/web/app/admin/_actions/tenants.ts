@@ -980,6 +980,66 @@ export async function aggiornaAppModeTenant(input: {
 }
 
 // ---------------------------------------------------------------------
+// Funzioni office per-tenant (override visibilità — tab "Funzioni")
+// ---------------------------------------------------------------------
+
+const FUNZIONE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  key: z.enum(['voci_catalogo', 'preset_lavoro']),
+  // true = forza mostra · false = forza nascondi · null = torna al predefinito
+  value: z.union([z.boolean(), z.null()]),
+});
+
+/**
+ * Imposta l'override di visibilità di una FUNZIONE office per un tenant
+ * (`tenants.features[key]`). `value=null` rimuove l'override (torna al default
+ * derivato dall'app_mode). Solo platform admin; audit con metadata.platform.
+ */
+export async function aggiornaFunzioneTenant(input: {
+  tenantId: string;
+  key: 'voci_catalogo' | 'preset_lavoro';
+  value: boolean | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = FUNZIONE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: prev } = await supabase
+    .from('tenants')
+    .select('features')
+    .eq('id', parsed.data.tenantId)
+    .maybeSingle();
+  const features: Record<string, unknown> = {
+    ...(((prev as { features?: Record<string, unknown> | null } | null)?.features) ?? {}),
+  };
+  if (parsed.data.value === null) delete features[parsed.data.key];
+  else features[parsed.data.key] = parsed.data.value;
+
+  const { error } = await supabase
+    .from('tenants')
+    .update({ features } as never)
+    .eq('id', parsed.data.tenantId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.feature.update',
+    before: {},
+    after: { key: parsed.data.key, value: parsed.data.value },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------
 // Routing per-tenant (provider stima viaggio: free vs Google traffico)
 // ---------------------------------------------------------------------
 
