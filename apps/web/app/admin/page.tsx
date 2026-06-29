@@ -101,6 +101,9 @@ export default async function AdminDashboardPage() {
     }),
   );
 
+  // Finestra 24h per gli allarmi "AI non disponibile" (platform.ai_unavailable).
+  const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
   const [
     tenantsRes,
     usageRes,
@@ -108,6 +111,7 @@ export default async function AdminDashboardPage() {
     quotaRes,
     auditRes,
     totalUsersRes,
+    aiAlertsRes,
     mediaCounts,
   ] = await Promise.all([
     supabase
@@ -134,6 +138,13 @@ export default async function AdminDashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('attivo', true)
       .eq('is_platform_admin', false),
+    supabase
+      .from('audit_events')
+      .select('id, created_at, tenant_id, metadata')
+      .eq('action', 'platform.ai_unavailable')
+      .gte('created_at', since24h)
+      .order('created_at', { ascending: false })
+      .limit(100),
     mediaCountsPromise,
   ]);
 
@@ -164,6 +175,39 @@ export default async function AdminDashboardPage() {
   const planById = new Map(plans.map((p) => [p.id, p]));
   const quotaByTenant = new Map(quotas.map((q) => [q.tenant_id, q]));
   const tenantById = new Map(tenants.map((t) => [t.id, t]));
+
+  // ---- Allarmi "AI non disponibile" (platform.ai_unavailable) ultime 24h ----
+  const aiAlerts = (aiAlertsRes.data ?? []) as Array<{
+    id: string;
+    created_at: string;
+    tenant_id: string | null;
+    metadata: Record<string, unknown> | null;
+  }>;
+  const aiCount = aiAlerts.length;
+  const aiUltimo = aiAlerts[0]?.created_at ?? null;
+  const aiFeatureLabel: Record<string, string> = {
+    spese_scan: 'Scan ricevute',
+    dettatura_trascrizione: 'Dettatura',
+    dettatura_estrazione: 'Dettatura',
+    copilot: 'Copilot',
+    riunione_reportino: 'Reportino riunione',
+    suggerisci_nome: 'Suggerisci nome',
+  };
+  const aiFeatures = Array.from(
+    new Set(
+      aiAlerts
+        .map((a) => (a.metadata?.feature as string | undefined) ?? '')
+        .filter(Boolean)
+        .map((f) => aiFeatureLabel[f] ?? f),
+    ),
+  );
+  const aiTenantSlugs = Array.from(
+    new Set(
+      aiAlerts
+        .map((a) => (a.tenant_id ? tenantById.get(a.tenant_id)?.slug : null))
+        .filter((s): s is string => !!s),
+    ),
+  );
 
   const tenantsAttivi = tenants.filter((t) => !t.sospeso).length;
   const tenantsSospesi = tenants.filter((t) => t.sospeso).length;
@@ -241,6 +285,51 @@ export default async function AdminDashboardPage() {
           </Button>
         </form>
       </header>
+
+      {/* ===== ALLARME: funzioni AI non disponibili (ultime 24h) ===== */}
+      {aiCount > 0 ? (
+        <section className="rounded-xl border-2 border-destructive/40 bg-destructive/[0.04] px-5 py-4 shadow-soft">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive/15 text-destructive">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold text-destructive">
+                  Funzioni AI non disponibili
+                </h2>
+                <Badge
+                  variant="outline"
+                  className="border-destructive/40 font-mono text-[10px] text-destructive"
+                >
+                  {aiCount} {aiCount === 1 ? 'segnalazione' : 'segnalazioni'} · 24h
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm text-foreground/80">
+                OpenAI non ha risposto (probabile credito/quota esaurito). Gli utenti vedono un
+                messaggio generico; verifica il billing su{' '}
+                <span className="font-medium">platform.openai.com → Billing</span>.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                {aiUltimo ? (
+                  <span>
+                    Ultima:{' '}
+                    <span className="font-medium text-foreground/80">
+                      {new Date(aiUltimo).toLocaleString('it-IT', {
+                        timeZone: 'Europe/Rome',
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      })}
+                    </span>
+                  </span>
+                ) : null}
+                {aiFeatures.length ? <span>Funzioni: {aiFeatures.join(', ')}</span> : null}
+                {aiTenantSlugs.length ? <span>Tenant: {aiTenantSlugs.join(', ')}</span> : null}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       {/* ===== KPI ===== */}
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">

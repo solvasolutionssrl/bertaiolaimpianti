@@ -173,6 +173,9 @@ export function NuovaSpesa() {
 
   const [scan, setScan] = React.useState<ScanOk | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
+  // Lightbox foto in revisione (la miniatura è piccola per far stare i dati
+  // nello schermo; tap → foto a tutto schermo).
+  const [fotoGrande, setFotoGrande] = React.useState(false);
 
   // campi del form di revisione
   const [importoTotale, setImportoTotale] = React.useState('');
@@ -343,18 +346,24 @@ export function NuovaSpesa() {
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-soft">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-foreground">Nuova ricevuta</p>
+    <div
+      className="fixed inset-0 z-[60] flex flex-col bg-background"
+      role="dialog"
+      aria-modal="true"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
+      {/* HEADER */}
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <p className="text-base font-semibold text-foreground">Nuova ricevuta</p>
         <button
           type="button"
           onClick={chiudi}
           aria-label="Chiudi"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95 transition"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95 transition"
         >
-          <X className="h-4 w-4" aria-hidden="true" />
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
-      </div>
+      </header>
 
       {/* input nativi nascosti */}
       <input
@@ -373,256 +382,315 @@ export function NuovaSpesa() {
         onChange={(e) => void onFile(e)}
       />
 
-      {/* anteprima */}
-      {preview ? (
-        <div className="relative mt-3 aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted/40">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={preview}
-            alt=""
-            className={`h-full w-full object-contain ${
-              fase === 'analisi' ? 'opacity-70' : ''
-            }`}
-          />
-          {fase === 'analisi' ? <ScanningOverlay /> : null}
-          {fase === 'fatto' ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-emerald-600/85 text-white">
-              <CheckCircle2 className="h-8 w-8" aria-hidden="true" />
-              <p className="text-sm font-semibold">Spesa salvata</p>
+      {/* BODY scrollabile */}
+      <div className="flex-1 overflow-y-auto">
+        {/* IDLE: scelta sorgente */}
+        {fase === 'idle' ? (
+          <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Receipt className="h-8 w-8" aria-hidden="true" />
+            </span>
+            <p className="text-sm text-muted-foreground">
+              Scatta o allega la foto dello scontrino: i dati vengono compilati in automatico.
+            </p>
+            <div className="grid w-full grid-cols-2 gap-2">
+              <Button
+                type="button"
+                size="lg"
+                className="w-full py-3.5"
+                onClick={() => fotoInputRef.current?.click()}
+              >
+                <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
+                Scatta foto
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                className="w-full py-3.5"
+                onClick={() => allegaInputRef.current?.click()}
+              >
+                <Paperclip className="mr-2 h-5 w-5" aria-hidden="true" />
+                Allega
+              </Button>
             </div>
-          ) : null}
-        </div>
-      ) : null}
+          </div>
+        ) : null}
 
-      {/* IDLE: scelta sorgente */}
-      {fase === 'idle' ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            size="lg"
-            className="w-full py-3"
-            onClick={() => fotoInputRef.current?.click()}
+        {/* ANALISI: loading a tutta pagina */}
+        {fase === 'analisi' ? (
+          <div
+            className="flex h-full flex-col items-center justify-center gap-6 px-8 text-center"
+            role="status"
+            aria-live="polite"
           >
-            <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
-            Scatta foto
-          </Button>
-          <Button
-            type="button"
-            size="lg"
-            variant="outline"
-            className="w-full py-3"
-            onClick={() => allegaInputRef.current?.click()}
-          >
-            <Paperclip className="mr-2 h-5 w-5" aria-hidden="true" />
-            Allega
-          </Button>
-        </div>
-      ) : null}
+            {preview ? (
+              <div className="relative h-48 w-40 overflow-hidden rounded-xl border border-border bg-muted/40 shadow-soft">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="" className="h-full w-full object-cover opacity-70" />
+                <ScanningOverlay />
+              </div>
+            ) : null}
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden="true" />
+              <p className="text-lg font-semibold text-foreground">Analisi in corso…</p>
+              <p className="text-sm text-muted-foreground">Sto leggendo lo scontrino, un attimo.</p>
+            </div>
+          </div>
+        ) : null}
 
-      {/* ERRORE / ricevuta non leggibile */}
-      {fase === 'errore' ? (
-        <div className="mt-3 space-y-3">
-          <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>
-              {nonLeggibile
-                ? 'Ricevuta non leggibile, riprova. Inquadra bene tutto lo scontrino con buona luce.'
-                : errMsg ?? 'Qualcosa è andato storto. Riprova.'}
+        {/* ERRORE / ricevuta non leggibile */}
+        {fase === 'errore' ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-6">
+            <div className="flex w-full items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <p>
+                {nonLeggibile
+                  ? 'Ricevuta non leggibile, riprova. Inquadra bene tutto lo scontrino con buona luce.'
+                  : errMsg ?? 'Qualcosa è andato storto. Riprova.'}
+              </p>
+            </div>
+            <Button type="button" size="lg" className="w-full py-3.5" onClick={reset}>
+              <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
+              Riprova
+            </Button>
+          </div>
+        ) : null}
+
+        {/* REVISIONE: form compatto (dati + foto-thumb) */}
+        {fase === 'revisione' && scan ? (
+          <div className="space-y-3 px-4 py-3">
+            {/* miniatura foto: tap per ingrandire (libera spazio per i dati) */}
+            {preview ? (
+              <button
+                type="button"
+                onClick={() => setFotoGrande(true)}
+                className="flex w-full items-center gap-3 rounded-xl border border-border bg-muted/30 p-2 text-left active:scale-[0.99] transition"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                <span className="text-xs text-muted-foreground">Tocca per ingrandire la foto</span>
+              </button>
+            ) : null}
+
+            {/* Importo (prominente) */}
+            <div>
+              <label
+                htmlFor="spesa-importo"
+                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Importo totale
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <input
+                  id="spesa-importo"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  required
+                  value={importoTotale}
+                  onChange={(e) => setImportoTotale(e.target.value)}
+                  placeholder="0,00"
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-xl font-semibold tabular-nums outline-none focus:border-primary"
+                />
+                <span className="text-sm font-medium text-muted-foreground">
+                  {scan.estratto.valuta || 'EUR'}
+                </span>
+              </div>
+            </div>
+
+            {/* IVA + Pagamento in 2 colonne */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label
+                  htmlFor="spesa-iva"
+                  className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  IVA
+                </label>
+                <input
+                  id="spesa-iva"
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  value={importoIva}
+                  onChange={(e) => setImportoIva(e.target.value)}
+                  placeholder="0,00"
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="spesa-metodo"
+                  className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  Pagamento
+                </label>
+                <select
+                  id="spesa-metodo"
+                  value={metodo}
+                  onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2.5 text-base outline-none focus:border-primary"
+                >
+                  <option value="carta">Carta aziendale</option>
+                  <option value="contanti">Contanti</option>
+                  <option value="altro">Altro</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Data */}
+            <div>
+              <label
+                htmlFor="spesa-data"
+                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Data scontrino
+              </label>
+              <input
+                id="spesa-data"
+                type="datetime-local"
+                value={dataLocal}
+                onChange={(e) => setDataLocal(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
+              />
+            </div>
+
+            {/* Categoria: riga orizzontale scrollabile (compatta) */}
+            <div>
+              <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Categoria
+              </span>
+              <div className="mt-2 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+                {CATEGORIE_ORDINATE.map((cat) => {
+                  const meta = CATEGORIA_META[cat];
+                  const attiva = cat === categoria;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategoria(cat)}
+                      aria-pressed={attiva}
+                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                        attiva
+                          ? meta.badge + ' ring-2 ring-primary/40'
+                          : 'border-border bg-background text-muted-foreground'
+                      }`}
+                    >
+                      <span className={`h-2 w-2 rounded-full ${meta.dot}`} aria-hidden="true" />
+                      {meta.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Esercente */}
+            <div>
+              <label
+                htmlFor="spesa-rs"
+                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Esercente
+              </label>
+              <input
+                id="spesa-rs"
+                type="text"
+                value={ragioneSociale}
+                onChange={(e) => setRagioneSociale(e.target.value)}
+                placeholder="Nome del locale o negozio"
+                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
+              />
+            </div>
+
+            <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              La spesa verrà collegata in automatico al cantiere su cui stai lavorando.
             </p>
           </div>
-          <Button type="button" size="lg" className="w-full py-3" onClick={reset}>
-            <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
-            Riprova
-          </Button>
-        </div>
-      ) : null}
+        ) : null}
 
-      {/* REVISIONE: form precompilato */}
-      {fase === 'revisione' && scan ? (
-        <div className="mt-4 space-y-4">
-          <div>
-            <label
-              htmlFor="spesa-importo"
-              className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Importo totale
-            </label>
-            <div className="mt-1 flex items-center gap-2">
-              <input
-                id="spesa-importo"
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min="0"
-                required
-                value={importoTotale}
-                onChange={(e) => setImportoTotale(e.target.value)}
-                placeholder="0,00"
-                className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-              />
-              <span className="text-sm font-medium text-muted-foreground">
-                {scan.estratto.valuta || 'EUR'}
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <label
-              htmlFor="spesa-iva"
-              className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              IVA (facoltativo)
-            </label>
-            <input
-              id="spesa-iva"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={importoIva}
-              onChange={(e) => setImportoIva(e.target.value)}
-              placeholder="0,00"
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Categoria
+        {/* FATTO */}
+        {fase === 'fatto' ? (
+          <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
             </span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {CATEGORIE_ORDINATE.map((cat) => {
-                const meta = CATEGORIA_META[cat];
-                const attiva = cat === categoria;
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setCategoria(cat)}
-                    aria-pressed={attiva}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                      attiva
-                        ? meta.badge + ' ring-2 ring-primary/40'
-                        : 'border-border bg-background text-muted-foreground'
-                    }`}
-                  >
-                    <span className={`h-2 w-2 rounded-full ${meta.dot}`} aria-hidden="true" />
-                    {meta.label}
-                  </button>
-                );
-              })}
+            <p className="text-lg font-semibold text-foreground">Spesa registrata</p>
+            <div className="grid w-full grid-cols-2 gap-2">
+              <Button type="button" size="lg" className="w-full py-3.5" onClick={reset}>
+                <Receipt className="mr-2 h-5 w-5" aria-hidden="true" />
+                Altra ricevuta
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full py-3.5"
+                onClick={chiudi}
+              >
+                Chiudi
+              </Button>
             </div>
           </div>
+        ) : null}
+      </div>
 
-          <div>
-            <label
-              htmlFor="spesa-rs"
-              className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Esercente (facoltativo)
-            </label>
-            <input
-              id="spesa-rs"
-              type="text"
-              value={ragioneSociale}
-              onChange={(e) => setRagioneSociale(e.target.value)}
-              placeholder="Nome del locale o negozio"
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="spesa-data"
-              className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Data scontrino (facoltativo)
-            </label>
-            <input
-              id="spesa-data"
-              type="datetime-local"
-              value={dataLocal}
-              onChange={(e) => setDataLocal(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="spesa-metodo"
-              className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-            >
-              Metodo di pagamento (facoltativo)
-            </label>
-            <select
-              id="spesa-metodo"
-              value={metodo}
-              onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-            >
-              <option value="carta">Carta aziendale</option>
-              <option value="contanti">Contanti</option>
-              <option value="altro">Altro</option>
-            </select>
-          </div>
-
-          <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            La spesa verrà collegata in automatico al cantiere su cui stai
-            lavorando.
-          </p>
-
-          {errMsg ? <p className="text-sm text-destructive">{errMsg}</p> : null}
-
-          <div className="flex gap-2">
+      {/* FOOTER sticky: Salva (con importo), sempre visibile in revisione */}
+      {fase === 'revisione' && scan ? (
+        <footer
+          className="shrink-0 border-t border-border bg-background px-4 py-3"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+        >
+          {errMsg ? (
+            <p className="mb-2 text-center text-sm text-destructive">{errMsg}</p>
+          ) : null}
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="outline"
               size="lg"
-              className="flex-1 py-3"
+              className="shrink-0 px-4 py-3.5"
               onClick={reset}
               disabled={pending}
             >
-              Annulla
+              Rifai
             </Button>
             <Button
               type="button"
               size="lg"
-              className="flex-1 py-3"
+              className="flex-1 py-3.5 text-base font-semibold"
               onClick={salva}
               disabled={!importoValido || pending}
             >
               {pending ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
-              ) : null}
-              Salva
+              ) : (
+                <CheckCircle2 className="mr-2 h-5 w-5" aria-hidden="true" />
+              )}
+              {importoValido
+                ? `Salva spesa · ${importoNum.toLocaleString('it-IT', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })} ${scan.estratto.valuta || 'EUR'}`
+                : 'Salva spesa'}
             </Button>
           </div>
-        </div>
+        </footer>
       ) : null}
 
-      {/* FATTO: messaggio + nuova */}
-      {fase === 'fatto' ? (
-        <div className="mt-3 space-y-3">
-          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-            Spesa registrata.
-          </p>
-          <div className="flex gap-2">
-            <Button type="button" size="lg" className="flex-1 py-3" onClick={reset}>
-              <Receipt className="mr-2 h-5 w-5" aria-hidden="true" />
-              Altra ricevuta
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              className="flex-1 py-3"
-              onClick={chiudi}
-            >
-              Chiudi
-            </Button>
-          </div>
-        </div>
+      {/* Lightbox foto (tap miniatura) */}
+      {fotoGrande && preview ? (
+        <button
+          type="button"
+          onClick={() => setFotoGrande(false)}
+          aria-label="Chiudi foto"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
+        </button>
       ) : null}
     </div>
   );
