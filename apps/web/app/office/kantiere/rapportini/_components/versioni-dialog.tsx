@@ -19,7 +19,8 @@ const AZIONE_LABEL: Record<string, string> = {
 };
 
 function fmtOre(n: number | undefined): string {
-  return String(Math.round((n ?? 0) * 100) / 100).replace('.', ',');
+  const totMin = Math.max(0, Math.round((n ?? 0) * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 export function VersioniDialog({

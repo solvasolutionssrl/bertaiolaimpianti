@@ -300,7 +300,13 @@ export function DonutOre({
               <Cell key={d.nome} fill={d.colore} />
             ))}
           </Pie>
-          <Tooltip contentStyle={tooltipStyle} formatter={(v, n) => [`${v} h`, n]} />
+          <Tooltip
+            contentStyle={tooltipStyle}
+            formatter={(v, n) => {
+              const m = Math.max(0, Math.round(Number(v) * 60));
+              return [`${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`, n];
+            }}
+          />
         </PieChart>
       </ResponsiveContainer>
       <ul className="flex-1 space-y-1.5">
@@ -311,14 +317,14 @@ export function DonutOre({
               <span className="text-muted-foreground">{d.nome}</span>
             </span>
             <span className="font-mono tabular-nums font-medium text-foreground">
-              {d.valore % 1 === 0 ? d.valore : d.valore.toFixed(1)} h
+              {((m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`)(Math.max(0, Math.round(d.valore * 60)))}
             </span>
           </li>
         ))}
         <li className="flex items-center justify-between gap-2 border-t border-border pt-1.5 text-sm">
           <span className="text-muted-foreground">Totale</span>
           <span className="font-mono tabular-nums font-semibold text-foreground">
-            {totale % 1 === 0 ? totale : totale.toFixed(1)} h
+            {((m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`)(Math.max(0, Math.round(totale * 60)))}
           </span>
         </li>
       </ul>

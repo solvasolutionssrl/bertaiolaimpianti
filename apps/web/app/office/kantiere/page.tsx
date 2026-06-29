@@ -147,11 +147,8 @@ export default async function KantierePanoramica() {
   }
   const oreSettimana = oreOrd + oreStraord + oreViaggio;
 
-  const oreSettimanaDisplay = Number.isFinite(oreSettimana)
-    ? oreSettimana % 1 === 0
-      ? String(oreSettimana)
-      : oreSettimana.toFixed(1)
-    : '0';
+  const oreSettimanaMin = Number.isFinite(oreSettimana) ? Math.max(0, Math.round(oreSettimana * 60)) : 0;
+  const oreSettimanaDisplay = `${Math.floor(oreSettimanaMin / 60)}:${String(oreSettimanaMin % 60).padStart(2, '0')}`;
 
   // ===== Anomalie aperte (conteggio sintetico) =====
   const { count: anomalieAperte } = await supabase

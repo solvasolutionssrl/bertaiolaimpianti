@@ -156,7 +156,8 @@ function KpiChip({
 }
 
 function fmtOreKpi(n: number): string {
-  return n % 1 === 0 ? String(n) : n.toFixed(1);
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 // ── Section card wrapper (compatto, con header a icona) ─────────────────────
@@ -416,19 +417,19 @@ export function CantiereDetailClient({
         <KpiChip
           accent="blue"
           icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtOreKpi(storico.totali.totale)} h`}
+          valore={`${fmtOreKpi(storico.totali.totale)}`}
           label={`Ore (${storico.giorni}gg)`}
         />
         <KpiChip
           accent="amber"
           icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtOreKpi(storico.totali.straordinarie)} h`}
+          valore={`${fmtOreKpi(storico.totali.straordinarie)}`}
           label="Straordinari"
         />
         <KpiChip
           accent="blue"
           icon={<Plane className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtOreKpi(storico.totali.viaggio)} h`}
+          valore={`${fmtOreKpi(storico.totali.viaggio)}`}
           label="Viaggio"
         />
         <KpiChip

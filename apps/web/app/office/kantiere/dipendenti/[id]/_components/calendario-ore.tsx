@@ -29,10 +29,8 @@ interface Props {
 // ── Helpers formato (it-IT, Europe/Rome) ────────────────────────────────────
 
 function fmtOre(n: number): string {
-  return new Intl.NumberFormat('it-IT', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(n);
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 function fmtMeseLungo(mese: string): string {
@@ -135,9 +133,9 @@ function CellaGiorno({ cella }: { cella: Cella }) {
   const titolo = g
     ? [
         fmtGiornoLungo(cella.data),
-        `Lavoro: ${fmtOre(g.oreLavoro)}h${g.oreViaggio > 0 ? ` · Viaggio: ${fmtOre(g.oreViaggio)}h` : ''}`,
+        `Lavoro: ${fmtOre(g.oreLavoro)}${g.oreViaggio > 0 ? ` · Viaggio: ${fmtOre(g.oreViaggio)}` : ''}`,
         g.stato === 'approvato' ? 'Approvato' : 'Da verificare',
-        ...g.voci.map((v) => `• ${v.nome}: ${fmtOre(v.oreLavoro)}h`),
+        ...g.voci.map((v) => `• ${v.nome}: ${fmtOre(v.oreLavoro)}`),
       ].join('\n')
     : fmtGiornoLungo(cella.data);
 
@@ -180,11 +178,11 @@ function CellaGiorno({ cella }: { cella: Cella }) {
                 : 'text-emerald-700 dark:text-emerald-300'
             }`}
           >
-            {fmtOre(g!.oreLavoro)}h
+            {fmtOre(g!.oreLavoro)}
           </span>
           {g!.oreViaggio > 0 && (
             <span className="ml-1 text-[10px] text-muted-foreground">
-              +{fmtOre(g!.oreViaggio)}h vg
+              +{fmtOre(g!.oreViaggio)} vg
             </span>
           )}
         </div>
@@ -281,7 +279,7 @@ export function CalendarioOre({ mese, giorni }: Props) {
               ))}
               <div className="flex min-h-[58px] flex-col items-center justify-center rounded-md bg-muted/40 px-1">
                 <span className="text-sm font-semibold tabular-nums text-foreground">
-                  {sett.totaleLavoro > 0 ? `${fmtOre(sett.totaleLavoro)}h` : '·'}
+                  {sett.totaleLavoro > 0 ? `${fmtOre(sett.totaleLavoro)}` : '·'}
                 </span>
               </div>
             </React.Fragment>
@@ -308,10 +306,10 @@ export function CalendarioOre({ mese, giorni }: Props) {
           </div>
           <div className="text-sm">
             <span className="text-muted-foreground">Totale mese </span>
-            <span className="font-semibold tabular-nums text-foreground">{fmtOre(totaleMese)}h</span>
+            <span className="font-semibold tabular-nums text-foreground">{fmtOre(totaleMese)}</span>
             {totaleViaggio > 0 && (
               <span className="ml-2 text-xs text-muted-foreground">
-                + {fmtOre(totaleViaggio)}h viaggio
+                + {fmtOre(totaleViaggio)} viaggio
               </span>
             )}
           </div>

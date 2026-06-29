@@ -12,7 +12,8 @@ function fmtGiorno(data: string): string {
 }
 
 function fmtOre(n: number): string {
-  return `${parseFloat(n.toFixed(2))}h`;
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 const STATO: Record<string, { label: string; cls: string }> = {

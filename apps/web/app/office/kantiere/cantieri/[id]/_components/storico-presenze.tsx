@@ -44,7 +44,8 @@ const PERIODI = [
 
 function fmtOre(n: number): string {
   if (!n) return '—';
-  return n % 1 === 0 ? String(n) : n.toFixed(1);
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 /** Etichetta breve "gg/mm" da una data YYYY-MM-DD per gli assi grafico. */

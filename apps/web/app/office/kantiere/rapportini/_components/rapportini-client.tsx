@@ -107,17 +107,13 @@ interface Props {
   sogliaPausaOre?: number;
 }
 
-function fmtOre(n: number): string {
-  return n % 1 === 0 ? `${n}h` : `${n.toFixed(1)}h`;
-}
-
 /** Minuti → "H:MM". */
 function minToColon(min: number): string {
   const m = Math.max(0, Math.round(min));
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** Ore decimali → "H:MM" (es. 2.6 → "2:36"). */
+/** Ore decimali → "H:MM" (es. 7.5 → "7:30"). Formato ore usato ovunque in tabella. */
 function fmtOreColon(ore: number): string {
   return minToColon(ore * 60);
 }
@@ -193,9 +189,9 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
               {riga.righe.map((r, j) => (
                 <tr key={j} className="border-b border-border/30">
                   <td className="py-1 pr-4 font-medium text-foreground">{r.commessaTitolo}</td>
-                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOre(r.ore_ordinarie)}</td>
-                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOre(r.ore_straordinarie)}</td>
-                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOre(r.ore_viaggio)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ore_ordinarie)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ore_straordinarie)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ore_viaggio)}</td>
                   <td className="py-1 text-muted-foreground max-w-[200px] truncate">
                     {r.note ?? <span className="select-none opacity-40">·</span>}
                   </td>
@@ -237,7 +233,11 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
   );
 }
 
-/** Riga "In corso oggi": tutto inline + totale ore LIVE sempre popolato a destra. */
+/**
+ * Riga "In corso oggi" come riga di tabella (colonne allineate allo storico).
+ * Niente esito: le pill della giornata occupano lo spazio Ore+Esito (colSpan 2);
+ * il totale ore LIVE va nell'ultima colonna, sempre popolato.
+ */
 function OggiRow({
   riga,
   isOpen,
@@ -250,34 +250,39 @@ function OggiRow({
   const { minuti } = useTotaleGiornata(riga.timbrature);
   const labels = targetLabels(riga);
   return (
-    <li>
-      <div
-        className="flex cursor-pointer items-start gap-2 px-3 py-2 transition-colors hover:bg-emerald-50/40"
+    <>
+      <tr
+        className="border-b border-border cursor-pointer transition-colors hover:bg-emerald-50/40"
         onClick={onToggle}
       >
-        <span className="mt-0.5 shrink-0 text-muted-foreground">
-          {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </span>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</span>
+        <td className="px-2 py-1.5 align-top text-muted-foreground">
+          {isOpen ? <ChevronDown className="mt-0.5 h-3.5 w-3.5" /> : <ChevronRight className="mt-0.5 h-3.5 w-3.5" />}
+        </td>
+        <td className="px-2.5 py-1.5 align-top">
+          <div className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</div>
+        </td>
+        <td className="px-2.5 py-1.5 align-top">
           <CantierePills labels={labels} />
-          <span className="mx-0.5 h-3.5 w-px bg-border" aria-hidden="true" />
+        </td>
+        <td className="px-2.5 py-1.5 align-top" colSpan={2}>
           <GiornataFlow
             timbrature={riga.timbrature}
             oreViaggio={riga.totale.viaggio}
             kmViaggio={riga.viaggioKm ?? 0}
           />
-        </div>
-        <span className="shrink-0 self-center tabular-nums text-sm font-semibold text-foreground">
-          {minToColon(minuti)}
-        </span>
-      </div>
+        </td>
+        <td className="px-2 py-1.5 text-right align-top">
+          <span className="tabular-nums text-sm font-semibold text-foreground">{minToColon(minuti)}</span>
+        </td>
+      </tr>
       {isOpen ? (
-        <div className="border-t border-border bg-muted/20 px-4 py-3">
-          <DettaglioGiornata riga={riga} />
-        </div>
+        <tr className="border-b border-border bg-muted/20">
+          <td colSpan={6} className="px-4 py-3">
+            <DettaglioGiornata riga={riga} />
+          </td>
+        </tr>
       ) : null}
-    </li>
+    </>
   );
 }
 
@@ -435,12 +440,10 @@ export function RapportiniClient({
   // Storico = giornate passate (definitive), eventualmente filtrate alle sole anomalie.
   const storicoTutte = righe.filter((r) => r.data < oggi && !èVuota(r));
   const storicoRighe = soloAnomalie ? storicoTutte.filter((r) => r.daVerificare) : storicoTutte;
+  const mostraOggi = oggiRighe.length > 0 && !soloAnomalie;
 
   // Anomalie (da verificare) nello storico: giornate passate non finalizzate.
   const nAnomalie = storicoTutte.filter((r) => r.daVerificare).length;
-
-  // I filtri stanno in cima alla card "oggi" se è mostrata, altrimenti alla card storico.
-  const filtriInOggi = oggiRighe.length > 0 && !soloAnomalie;
 
   // Raggruppa lo storico per giorno (le righe arrivano già ordinate per data desc).
   const gruppi: { giorno: string; righe: RapportiniRiga[] }[] = [];
@@ -468,7 +471,7 @@ export function RapportiniClient({
     return { oreLavorate, pausaMancante, motivo };
   }
 
-  // Barra filtri (integrata in cima alla card "oggi" o "storico", non più a sé).
+  // Barra filtri — in cima alla card unica (giorni di oggi + storico).
   const filtriBar = (
     <div className="border-b border-border p-2.5">
       <div className="flex flex-wrap items-end gap-2">
@@ -566,6 +569,8 @@ export function RapportiniClient({
     </div>
   );
 
+  const vuoto = oggiRighe.length === 0 && storicoRighe.length === 0;
+
   return (
     <div className="space-y-3">
       {/* Promemoria: giornate rimaste aperte da chiudere */}
@@ -599,207 +604,209 @@ export function RapportiniClient({
         </div>
       ) : null}
 
-      {/* OGGI — giornate in corso (provvisorie). Filtri integrati in cima se mostrata. */}
-      {oggiRighe.length > 0 && !soloAnomalie ? (
-        <Card>
-          <CardContent className="p-0">
-            {filtriBar}
-            <div className="flex items-center justify-between gap-2 border-b border-border bg-emerald-50/60 px-3 py-1.5">
-              <p className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/70" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                In corso oggi
-                <span className="font-normal text-emerald-800/80">· {fmtGiornoLungo(oggi)}</span>
-              </p>
-              <span className="text-[11px] text-emerald-800/70">Dati provvisori, si finalizzano a fine giornata</span>
-            </div>
-            <ul className="divide-y divide-border">
-              {oggiRighe.map((riga) => (
-                <OggiRow
-                  key={riga.id}
-                  riga={riga}
-                  isOpen={expanded.has(riga.id)}
-                  onToggle={() => toggleExpand(riga.id)}
-                />
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
+      {/* Card unica: filtri in alto, poi tabella con "In corso oggi" + storico. */}
+      <Card>
+        <CardContent className="p-0">
+          {filtriBar}
 
-      {/* STORICO — giornate definitive, raggruppate per giorno. Ospita i filtri se non c'è "oggi". */}
-      {storicoRighe.length > 0 || !filtriInOggi ? (
-        <Card>
-          <CardContent className="p-0">
-            {!filtriInOggi ? filtriBar : null}
-            {storicoRighe.length > 0 ? (
-              <>
-                {/* Summary */}
+          {vuoto ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              {soloAnomalie
+                ? 'Nessuna anomalia nel periodo selezionato.'
+                : 'Nessuna giornata registrata nel periodo selezionato.'}
+            </p>
+          ) : (
+            <>
+              {/* Summary (storico) */}
+              {storicoRighe.length > 0 ? (
                 <div className="flex items-center gap-3 border-b border-border px-2.5 py-1.5 text-[11px] text-muted-foreground">
                   <span>
                     <span className="font-medium text-foreground">{storicoRighe.length}</span> giornate
                   </span>
                   <span className="text-border">|</span>
                   <span>
-                    Ord. <span className="tabular-nums font-medium text-foreground">{fmtOre(totalOrd)}</span>
+                    Ord. <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalOrd)}</span>
                   </span>
                   <span>
-                    Straord. <span className="tabular-nums font-medium text-foreground">{fmtOre(totalStraord)}</span>
+                    Straord. <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalStraord)}</span>
                   </span>
                   <span>
-                    Viaggio <span className="tabular-nums font-medium text-foreground">{fmtOre(totalViaggio)}</span>
+                    Viaggio <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalViaggio)}</span>
                   </span>
                 </div>
+              ) : null}
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead className="border-b border-border bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
-                      <tr>
-                        <th className="w-7 px-2 py-1.5" />
-                        <th className="px-2.5 py-1.5 font-medium">Dipendente</th>
-                        <th className="px-2.5 py-1.5 font-medium">Cantiere</th>
-                        <th className="px-2.5 py-1.5 font-medium">Ore</th>
-                        <th className="px-2.5 py-1.5 font-medium">Esito</th>
-                        <th className="w-20 px-2.5 py-1.5" aria-label="Azioni" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {gruppi.map((g) => (
-                        <React.Fragment key={g.giorno}>
-                          {/* Intestazione giorno */}
-                          <tr className="border-b border-border bg-muted/30">
-                            <td colSpan={6} className="px-2.5 py-1">
-                              <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
-                                {fmtGiornoLungo(g.giorno)}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="border-b border-border bg-muted/40 text-left text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="w-7 px-2 py-1.5" />
+                      <th className="px-2.5 py-1.5 font-medium">Dipendente</th>
+                      <th className="px-2.5 py-1.5 font-medium">Cantiere</th>
+                      <th className="px-2.5 py-1.5 font-medium">Ore</th>
+                      <th className="px-2.5 py-1.5 font-medium">Esito</th>
+                      <th className="w-20 px-2.5 py-1.5" aria-label="Azioni" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* ── In corso oggi ── */}
+                    {mostraOggi ? (
+                      <>
+                        <tr className="border-b border-border bg-emerald-50/60">
+                          <td colSpan={6} className="px-2.5 py-1.5">
+                            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                              <span className="flex items-center gap-2 text-xs font-semibold text-emerald-900">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/70" />
+                                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                </span>
+                                In corso oggi
+                                <span className="font-normal text-emerald-800/80">· {fmtGiornoLungo(oggi)}</span>
                               </span>
-                              <span className="ml-2 text-[11px] text-muted-foreground">
-                                {g.righe.length} {g.righe.length === 1 ? 'persona' : 'persone'}
+                              <span className="text-[11px] text-emerald-800/70">
+                                Dati provvisori, si finalizzano a fine giornata
                               </span>
-                            </td>
-                          </tr>
-                          {g.righe.map((riga) => {
-                            const isOpen = expanded.has(riga.id);
-                            const { oreLavorate, pausaMancante, motivo } = esitoRiga(riga);
-                            const labels = targetLabels(riga);
-                            return (
-                              <React.Fragment key={riga.id}>
-                                <tr
-                                  className="border-b border-border transition-colors hover:bg-primary-soft/50 cursor-pointer"
-                                  onClick={() => toggleExpand(riga.id)}
-                                >
-                                  <td className="px-2 py-1.5 align-top text-muted-foreground">
-                                    {isOpen ? (
-                                      <ChevronDown className="mt-0.5 h-3.5 w-3.5" />
-                                    ) : (
-                                      <ChevronRight className="mt-0.5 h-3.5 w-3.5" />
-                                    )}
-                                  </td>
-                                  <td className="px-2.5 py-1.5 align-top">
-                                    <div className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</div>
-                                    <div className="mt-0.5">
-                                      <TimbratureSommario timbrature={riga.timbrature} />
-                                    </div>
-                                  </td>
-                                  <td className="px-2.5 py-1.5 align-top">
-                                    <CantierePills labels={labels} />
-                                  </td>
-                                  <td className="px-2.5 py-1.5 align-top">
-                                    <div className="flex items-baseline gap-1.5">
-                                      <span className="tabular-nums text-sm font-semibold text-foreground">
-                                        {fmtOre(oreLavorate)}
+                            </div>
+                          </td>
+                        </tr>
+                        {oggiRighe.map((riga) => (
+                          <OggiRow
+                            key={riga.id}
+                            riga={riga}
+                            isOpen={expanded.has(riga.id)}
+                            onToggle={() => toggleExpand(riga.id)}
+                          />
+                        ))}
+                      </>
+                    ) : null}
+
+                    {/* ── Storico per giorno ── */}
+                    {gruppi.map((g) => (
+                      <React.Fragment key={g.giorno}>
+                        <tr className="border-b border-border bg-muted/30">
+                          <td colSpan={6} className="px-2.5 py-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-foreground">
+                              {fmtGiornoLungo(g.giorno)}
+                            </span>
+                            <span className="ml-2 text-[11px] text-muted-foreground">
+                              {g.righe.length} {g.righe.length === 1 ? 'persona' : 'persone'}
+                            </span>
+                          </td>
+                        </tr>
+                        {g.righe.map((riga) => {
+                          const isOpen = expanded.has(riga.id);
+                          const { oreLavorate, pausaMancante, motivo } = esitoRiga(riga);
+                          const labels = targetLabels(riga);
+                          return (
+                            <React.Fragment key={riga.id}>
+                              <tr
+                                className="border-b border-border transition-colors hover:bg-primary-soft/50 cursor-pointer"
+                                onClick={() => toggleExpand(riga.id)}
+                              >
+                                <td className="px-2 py-1.5 align-top text-muted-foreground">
+                                  {isOpen ? (
+                                    <ChevronDown className="mt-0.5 h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="mt-0.5 h-3.5 w-3.5" />
+                                  )}
+                                </td>
+                                <td className="px-2.5 py-1.5 align-top">
+                                  <div className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</div>
+                                  <div className="mt-0.5">
+                                    <TimbratureSommario timbrature={riga.timbrature} />
+                                  </div>
+                                </td>
+                                <td className="px-2.5 py-1.5 align-top">
+                                  <CantierePills labels={labels} />
+                                </td>
+                                <td className="px-2.5 py-1.5 align-top">
+                                  <div className="flex items-baseline gap-1.5">
+                                    <span className="tabular-nums text-sm font-semibold text-foreground">
+                                      {fmtOreColon(oreLavorate)}
+                                    </span>
+                                    {riga.totale.straord > 0 ? (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        di cui {fmtOreColon(riga.totale.straord)} str.
                                       </span>
-                                      {riga.totale.straord > 0 ? (
-                                        <span className="text-[10px] text-muted-foreground">
-                                          di cui {fmtOre(riga.totale.straord)} str.
+                                    ) : null}
+                                  </div>
+                                  {riga.totale.viaggio > 0 ? (
+                                    <div className="text-[10px] tabular-nums text-muted-foreground">
+                                      + viaggio {fmtViaggio(riga.viaggioKm ?? 0, riga.totale.viaggio)}
+                                    </div>
+                                  ) : null}
+                                </td>
+                                <td className="px-2.5 py-1.5 align-top">
+                                  {riga.daVerificare ? (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                                      {motivo}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                        Regolare
+                                      </span>
+                                      {pausaMancante ? (
+                                        <span
+                                          title={`Pausa pranzo non timbrata in una giornata oltre ${fmtOreColon(sogliaPausaOre)}. Controlla se è stata fatta e, se sì, aggiungila con Modifica.`}
+                                          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                                        >
+                                          <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                                          <Coffee className="h-3 w-3" aria-hidden="true" />
                                         </span>
                                       ) : null}
-                                    </div>
-                                    {riga.totale.viaggio > 0 ? (
-                                      <div className="text-[10px] tabular-nums text-muted-foreground">
-                                        + viaggio {fmtViaggio(riga.viaggioKm ?? 0, riga.totale.viaggio)}
-                                      </div>
-                                    ) : null}
-                                  </td>
-                                  <td className="px-2.5 py-1.5 align-top">
-                                    {riga.daVerificare ? (
-                                      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                                        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                                        {motivo}
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.5">
-                                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
-                                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                                          Regolare
-                                        </span>
-                                        {pausaMancante ? (
-                                          <span
-                                            title={`Pausa pranzo non timbrata in una giornata oltre ${fmtOre(sogliaPausaOre)}. Controlla se è stata fatta e, se sì, aggiungila con Modifica.`}
-                                            className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
-                                          >
-                                            <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-                                            <Coffee className="h-3 w-3" aria-hidden="true" />
-                                          </span>
-                                        ) : null}
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="px-2 py-1.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex items-center justify-end gap-0.5">
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-2 py-1.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end gap-0.5">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      title="Modifica giornata"
+                                      onClick={() => openCorreggi(riga)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                    </Button>
+                                    {riga.stato !== 'bozza' ? (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         className="h-7 w-7 p-0"
-                                        title="Modifica giornata"
-                                        onClick={() => openCorreggi(riga)}
+                                        title="Cronologia modifiche"
+                                        onClick={() =>
+                                          setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })
+                                        }
                                       >
-                                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                        <History className="h-3.5 w-3.5" aria-hidden="true" />
                                       </Button>
-                                      {riga.stato !== 'bozza' ? (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 w-7 p-0"
-                                          title="Cronologia modifiche"
-                                          onClick={() =>
-                                            setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })
-                                          }
-                                        >
-                                          <History className="h-3.5 w-3.5" aria-hidden="true" />
-                                        </Button>
-                                      ) : null}
-                                    </div>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {isOpen && (
+                                <tr className="border-b border-border bg-muted/20">
+                                  <td colSpan={6} className="px-4 py-3">
+                                    <DettaglioGiornata riga={riga} onModifica={() => openCorreggi(riga)} />
                                   </td>
                                 </tr>
-
-                                {isOpen && (
-                                  <tr className="border-b border-border bg-muted/20">
-                                    <td colSpan={6} className="px-4 py-3">
-                                      <DettaglioGiornata riga={riga} onModifica={() => openCorreggi(riga)} />
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </React.Fragment>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            ) : (
-              <p className="p-4 text-sm text-muted-foreground">
-                {soloAnomalie
-                  ? 'Nessuna anomalia nel periodo selezionato.'
-                  : 'Nessuna giornata registrata nel periodo selezionato.'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Dialog Registra ore */}
       <Dialog open={registraOpen} onOpenChange={(open) => { if (!open) setRegistraOpen(false); }}>

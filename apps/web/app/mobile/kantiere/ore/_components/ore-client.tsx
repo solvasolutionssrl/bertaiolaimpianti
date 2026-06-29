@@ -89,8 +89,9 @@ function sumOre(righe: RigaEditable[], field: 'ore_ordinarie' | 'ore_straordinar
 }
 
 function fmtOre(n: number): string {
-  // Formatta con max 2 decimali, senza trailing zeros
-  return parseFloat(n.toFixed(2)).toString();
+  // Ore in formato H:MM (es. 7.5 → "7:30").
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 // ── input numerico ore ───────────────────────────────────────────────────────

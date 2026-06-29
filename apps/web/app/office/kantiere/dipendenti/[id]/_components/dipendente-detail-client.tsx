@@ -120,8 +120,10 @@ const TEXTAREA_CLS =
 const fmtKm = (km: number) =>
   new Intl.NumberFormat('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(km);
 
-const fmtOre = (n: number) =>
-  new Intl.NumberFormat('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
+const fmtOre = (n: number) => {
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
+};
 
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', {
@@ -131,7 +133,7 @@ const fmtEuro = (n: number) =>
   }).format(n);
 
 function fmtOreKpi(n: number): string {
-  return n % 1 === 0 ? String(n) : fmtOre(n);
+  return fmtOre(n);
 }
 
 function fmtGiorno(d: string): string {
@@ -438,19 +440,19 @@ export function DipendenteDetailClient({
         <KpiChip
           accent="blue"
           icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtOreKpi(oreTotali)} h`}
+          valore={`${fmtOreKpi(oreTotali)}`}
           label="Ore totali (45gg)"
         />
         <KpiChip
           accent="amber"
           icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtOreKpi(oreStraord)} h`}
+          valore={`${fmtOreKpi(oreStraord)}`}
           label="Straordinari"
         />
         <KpiChip
           accent="blue"
           icon={<Car className="h-4 w-4" aria-hidden="true" />}
-          valore={`${fmtOreKpi(oreViaggio)} h`}
+          valore={`${fmtOreKpi(oreViaggio)}`}
           label="Viaggio"
         />
         <KpiChip
@@ -829,11 +831,11 @@ export function DipendenteDetailClient({
             }
           >
             <div className="divide-y divide-border">
-              <RigaInfo label="Ore ordinarie">{fmtOre(oreOrd)} h</RigaInfo>
-              <RigaInfo label="Straordinari">{fmtOre(oreStraord)} h</RigaInfo>
-              <RigaInfo label="Viaggio">{fmtOre(oreViaggio)} h</RigaInfo>
+              <RigaInfo label="Ore ordinarie">{fmtOre(oreOrd)}</RigaInfo>
+              <RigaInfo label="Straordinari">{fmtOre(oreStraord)}</RigaInfo>
+              <RigaInfo label="Viaggio">{fmtOre(oreViaggio)}</RigaInfo>
               <RigaInfo label="Ore totali">
-                <span className="font-semibold">{fmtOre(oreTotali)} h</span>
+                <span className="font-semibold">{fmtOre(oreTotali)}</span>
               </RigaInfo>
               <RigaInfo label="Km guidati (90gg)">
                 <span className="font-medium">{fmtKm(kmGuidati)} km</span>

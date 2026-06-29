@@ -155,7 +155,6 @@ function buildNav(
           { id: 'kant-rapp', label: 'Presenze e ore', href: '/office/kantiere/rapportini' },
           { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
           { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
-          { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
         ],
       },
       // Kontabilità: voce top-level (sibling del modulo Kantiere) per dare

@@ -114,8 +114,8 @@ export default async function CruscottoKantierePage() {
   ).size;
   const oreOggiLabel =
     oreOggiMin > 0
-      ? `${(oreOggiMin / 60).toLocaleString('it-IT', { maximumFractionDigits: 1 })}h`
-      : '0h';
+      ? `${Math.floor(oreOggiMin / 60)}:${String(Math.round(oreOggiMin % 60)).padStart(2, '0')}`
+      : '0:00';
 
   const kpis: {
     label: string;

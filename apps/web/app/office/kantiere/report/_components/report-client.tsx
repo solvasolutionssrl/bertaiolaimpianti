@@ -30,10 +30,8 @@ function fmtKm(km: number): string {
 }
 
 function fmtOre(ore: number): string {
-  return new Intl.NumberFormat('it-IT', {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
-  }).format(ore);
+  const totMin = Math.max(0, Math.round(ore * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 function buildQs(f: Filtri): string {
@@ -256,7 +254,7 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
                           <td className="px-3 py-1.5 font-medium">{r.dipendente}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtKm(r.kmTotali)} km</td>
                           <td className="px-3 py-1.5 text-right tabular-nums">{r.nViaggi}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtOre(r.oreGuida)} h</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{fmtOre(r.oreGuida)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -270,7 +268,7 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
                           {viaggiPerDipendente.reduce((s, r) => s + r.nViaggi, 0)}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap">
-                          {fmtOre(viaggiPerDipendente.reduce((s, r) => s + r.oreGuida, 0))} h
+                          {fmtOre(viaggiPerDipendente.reduce((s, r) => s + r.oreGuida, 0))}
                         </td>
                       </tr>
                     </tfoot>

@@ -8,8 +8,8 @@ import { RefreshCw } from 'lucide-react';
  * Auto-aggiornamento "soft" dei dati di una pagina (timbrature, pause, presenze).
  * Ogni `intervalMs` (default 60s) chiama `router.refresh()` — ri-fetch dei
  * Server Component senza reload, senza scatti di scroll. Si aggiorna anche
- * quando la tab torna visibile. Si ferma quando la tab è nascosta (no spreco).
- * Mostra un piccolo indicatore "Aggiornato alle HH:MM" non invadente.
+ * quando la tab torna visibile. È anche un **bottone**: cliccando "Aggiornato
+ * alle HH:MM" si forza un refresh manuale immediato (mini effetto di rotazione).
  */
 export function LiveRefresh({
   intervalMs = 60000,
@@ -22,32 +22,30 @@ export function LiveRefresh({
   const [ultimo, setUltimo] = React.useState<Date | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
 
-  React.useEffect(() => {
-    setUltimo(new Date()); // primo timestamp lato client (evita mismatch SSR)
-
-    let timer: ReturnType<typeof setInterval> | null = null;
-
-    const aggiorna = () => {
-      if (document.visibilityState !== 'visible') return;
+  const aggiorna = React.useCallback(
+    (manuale = false) => {
+      // L'auto-refresh salta se la tab è nascosta; il click manuale aggiorna sempre.
+      if (!manuale && document.visibilityState !== 'visible') return;
       setRefreshing(true);
       router.refresh();
       setUltimo(new Date());
-      // breve pulse visivo
       window.setTimeout(() => setRefreshing(false), 800);
-    };
+    },
+    [router],
+  );
 
-    timer = setInterval(aggiorna, intervalMs);
-
+  React.useEffect(() => {
+    setUltimo(new Date()); // primo timestamp lato client (evita mismatch SSR)
+    const timer = setInterval(() => aggiorna(false), intervalMs);
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') aggiorna();
+      if (document.visibilityState === 'visible') aggiorna(false);
     };
     document.addEventListener('visibilitychange', onVisibility);
-
     return () => {
-      if (timer) clearInterval(timer);
+      clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [router, intervalMs]);
+  }, [aggiorna, intervalMs]);
 
   const ora = ultimo
     ? new Intl.DateTimeFormat('it-IT', {
@@ -58,19 +56,28 @@ export function LiveRefresh({
     : '--:--';
 
   return (
-    <span
+    <button
+      type="button"
+      onClick={() => aggiorna(true)}
+      disabled={refreshing}
+      title="Aggiorna i dati adesso (si aggiornano comunque da soli ogni minuto)"
+      aria-label="Aggiorna i dati adesso"
       className={[
-        'inline-flex items-center gap-1.5 text-[11px] text-muted-foreground select-none',
+        'group inline-flex select-none items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors',
+        'hover:bg-muted hover:text-foreground active:scale-95 disabled:opacity-70',
         className ?? '',
       ].join(' ')}
-      title="I dati si aggiornano da soli ogni minuto"
-      aria-live="polite"
     >
       <RefreshCw
-        className={`h-3 w-3 ${refreshing ? 'animate-spin text-primary' : 'opacity-60'}`}
+        className={[
+          'h-3 w-3 transition-transform duration-200',
+          refreshing
+            ? 'animate-spin text-primary'
+            : 'opacity-60 group-hover:rotate-90 group-hover:opacity-100',
+        ].join(' ')}
         aria-hidden="true"
       />
       Aggiornato alle {ora}
-    </span>
+    </button>
   );
 }
