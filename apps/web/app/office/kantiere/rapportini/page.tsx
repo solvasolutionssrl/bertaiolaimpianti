@@ -274,6 +274,41 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     oreLavorateTimbByKey.set(key, oreDaMin(min));
   }
 
+  // ── Km di viaggio per (dipendente:giorno) — da timbratura_viaggio ──────────
+  // Sorgenti: viaggi legati a una timbratura (QR) → giorno della timbratura;
+  // viaggi manuali (timbratura_id null) → colonna `data`. Somma distanza_km.
+  const viaggioKmByKey = new Map<string, number>();
+  if (timbratureData.length > 0) {
+    const timbIdToKey = new Map<string, string>();
+    for (const t of timbratureData) timbIdToKey.set(t.id, `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`);
+    const { data: viaQR } = (await supabase
+      .from('timbratura_viaggio' as never)
+      .select('timbratura_id, distanza_km')
+      .in('timbratura_id', timbratureData.map((t) => t.id))) as {
+      data: { timbratura_id: string; distanza_km: number | null }[] | null;
+    };
+    for (const v of viaQR ?? []) {
+      const key = timbIdToKey.get(v.timbratura_id);
+      if (!key) continue;
+      viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + (Number(v.distanza_km) || 0));
+    }
+  }
+  if (dipIds.length > 0) {
+    const { data: viaMan } = (await supabase
+      .from('timbratura_viaggio' as never)
+      .select('dipendente_id, data, distanza_km')
+      .in('dipendente_id', dipIds)
+      .is('timbratura_id', null)
+      .gte('data', from)
+      .lte('data', to)) as {
+      data: { dipendente_id: string; data: string; distanza_km: number | null }[] | null;
+    };
+    for (const v of viaMan ?? []) {
+      const key = `${v.dipendente_id}:${v.data}`;
+      viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + (Number(v.distanza_km) || 0));
+    }
+  }
+
   // Giorno corrente in Europe/Rome: serve a distinguere le bozze di giornate
   // ancora aperte (oggi, normali) dalle bozze di giornate passate/chiuse che
   // NON sono auto-approvate → anomalie "Da verificare" per l'ufficio.
@@ -319,6 +354,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       daVerificare,
       aperta,
       pausaTimbrata,
+      viaggioKm: viaggioKmByKey.get(timbratureKey) ?? 0,
       inviatoAt: r.inviato_at,
       note: r.note ?? null,
       totale,

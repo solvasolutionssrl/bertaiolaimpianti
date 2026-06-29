@@ -10,12 +10,14 @@ interface NavItem {
   href: string;
   superadminOnly?: boolean;
   kantiereOnly?: boolean;
+  /** Voci del mondo commesse (KOMMESSA): nascoste ai tenant senza (es. kantiere-only). */
+  kommessaOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'profilo',  label: 'Profilo',           href: '/office/impostazioni/profilo' },
-  { id: 'voci',     label: 'Voci catalogo',     href: '/office/impostazioni/voci' },
-  { id: 'preset',   label: 'Preset lavoro',     href: '/office/impostazioni/preset' },
+  { id: 'voci',     label: 'Voci catalogo',     href: '/office/impostazioni/voci', kommessaOnly: true },
+  { id: 'preset',   label: 'Preset lavoro',     href: '/office/impostazioni/preset', kommessaOnly: true },
   { id: 'sla',      label: 'SLA',               href: '/office/impostazioni/sla' },
   { id: 'utenti',   label: 'Utenti',            href: '/office/impostazioni/utenti' },
   { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding' },
@@ -27,15 +29,18 @@ const NAV_ITEMS: NavItem[] = [
 export function SettingsTopNav({
   isPlatformAdmin = false,
   hasKantiere = false,
+  hasKommessa = true,
 }: {
   isPlatformAdmin?: boolean;
   hasKantiere?: boolean;
+  hasKommessa?: boolean;
 }) {
   const pathname = usePathname() ?? '';
   const visible = NAV_ITEMS.filter(
     (item) =>
       (!item.superadminOnly || isPlatformAdmin) &&
-      (!item.kantiereOnly || hasKantiere),
+      (!item.kantiereOnly || hasKantiere) &&
+      (!item.kommessaOnly || hasKommessa),
   );
 
   return (

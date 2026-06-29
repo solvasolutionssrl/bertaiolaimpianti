@@ -113,33 +113,42 @@ export function TimbratureSommario({ timbrature }: { timbrature: TimbraturaInput
   );
 }
 
-function fmtOreDec(n: number): string {
-  const v = parseFloat(n.toFixed(2));
-  return Number.isInteger(v) ? `${v}h` : `${v.toFixed(1)}h`;
+function fmtOreColon(n: number): string {
+  const totMin = Math.max(0, Math.round(n * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
 /**
- * Timeline INLINE della giornata, a colpo d'occhio: viaggio → segmenti di lavoro
- * (ingresso→uscita) → pause, in ordine cronologico, con il totale ore in coda.
- * Pensata per le righe "in corso oggi" (live se la giornata è aperta).
+ * Totale ore lavorate della giornata, LIVE (ticka se il turno è aperto). Hook:
+ * va chiamato a livello di componente. La pausa pranzo è già esclusa.
+ */
+export function useTotaleGiornata(timbrature: TimbraturaInput[]): { minuti: number; aperto: boolean } {
+  const r = appaiaTimbrature(soloTimbrature(timbrature));
+  const now = useLiveNow(r.aperto);
+  const liveMin = r.ingressoAperto ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
+  return { minuti: r.minutiTotali + (r.aperto ? liveMin : 0), aperto: r.aperto };
+}
+
+/**
+ * Timeline INLINE della giornata, a colpo d'occhio: viaggio (km + tempo) →
+ * segmenti di lavoro (ingresso→uscita) → pause, in ordine cronologico. Il totale
+ * ore NON è qui (va mostrato a destra della riga). Live se la giornata è aperta.
  */
 export function GiornataFlow({
   timbrature,
   oreViaggio = 0,
+  kmViaggio = 0,
 }: {
   timbrature: TimbraturaInput[];
   oreViaggio?: number;
+  kmViaggio?: number;
 }) {
   const r = appaiaTimbrature(soloTimbrature(timbrature));
-  const now = useLiveNow(r.aperto);
   const pause = calcolaPause(timbrature);
 
   if (r.coppie.length === 0 && oreViaggio <= 0) {
     return <span className="text-[11px] text-muted-foreground/60">Nessuna timbratura</span>;
   }
-
-  const liveMin = r.ingressoAperto ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
-  const totaleConLive = r.minutiTotali + (r.aperto ? liveMin : 0);
 
   // Eventi cronologici: segmenti di lavoro + pause.
   const eventi: { t: number; el: JSX.Element }[] = [];
@@ -183,7 +192,8 @@ export function GiornataFlow({
         className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-sky-700"
       >
         <Car className="h-2.5 w-2.5" aria-hidden="true" />
-        Viaggio {fmtOreDec(oreViaggio)}
+        Viaggio {kmViaggio > 0 ? `${Math.round(kmViaggio)} km · ` : ''}
+        {fmtOreColon(oreViaggio)}
       </span>,
     );
   }
@@ -199,9 +209,6 @@ export function GiornataFlow({
           {el}
         </span>
       ))}
-      {r.coppie.length > 0 ? (
-        <span className="ml-0.5 tabular-nums font-semibold text-foreground">· {fmtMinuti(totaleConLive)}</span>
-      ) : null}
       {r.aperto ? (
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
           <span className="relative flex h-1.5 w-1.5">
