@@ -9,6 +9,7 @@ import {
   Receipt,
   CheckCircle2,
   AlertTriangle,
+  Plus,
   X,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -345,10 +346,10 @@ export function NuovaSpesa() {
       <button
         type="button"
         onClick={() => setAperto(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-4 py-3.5 text-base font-semibold text-primary-foreground shadow-soft active:scale-[0.99] transition-transform"
+        className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary px-4 py-4 text-base font-semibold text-primary-foreground shadow-[0_12px_30px_-10px_rgba(0,0,0,0.35)] active:scale-[0.99] transition-transform"
       >
-        <Receipt className="h-5 w-5" aria-hidden="true" />
-        Nuova ricevuta
+        <Plus className="h-5 w-5" strokeWidth={2.5} aria-hidden="true" />
+        Aggiungi nuova ricevuta
       </button>
     );
   }
@@ -360,9 +361,10 @@ export function NuovaSpesa() {
       aria-modal="true"
       style={{
         paddingTop: 'env(safe-area-inset-top, 0px)',
-        // Si ferma SOPRA la bottom-nav (h-16 = 4rem + safe-area): la nav resta
-        // visibile sotto, così non si "esce" visivamente dall'app.
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4rem)',
+        // Si ferma SOPRA la bottom-nav lasciando spazio anche al FAB centrale
+        // "Scansiona" che si alza ~28px sopra la barra (h-16=4rem): 6rem ≈ barra
+        // + cappello FAB + ombra, così resta tutto visibile sotto al foglio.
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)',
       }}
     >
       {/* HEADER */}
@@ -571,33 +573,29 @@ export function NuovaSpesa() {
               />
             </div>
 
-            {/* Categoria: riga orizzontale scrollabile (compatta) */}
+            {/* Categoria: dropdown */}
             <div>
-              <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <label
+                htmlFor="spesa-categoria"
+                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
                 Categoria
-              </span>
-              <div className="mt-2 -mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-                {CATEGORIE_ORDINATE.map((cat) => {
-                  const meta = CATEGORIA_META[cat];
-                  const attiva = cat === categoria;
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategoria(cat)}
-                      aria-pressed={attiva}
-                      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                        attiva
-                          ? meta.badge + ' ring-2 ring-primary/40'
-                          : 'border-border bg-background text-muted-foreground'
-                      }`}
-                    >
-                      <span className={`h-2 w-2 rounded-full ${meta.dot}`} aria-hidden="true" />
-                      {meta.label}
-                    </button>
-                  );
-                })}
-              </div>
+              </label>
+              <select
+                id="spesa-categoria"
+                value={categoria}
+                onChange={(e) => setCategoria(e.target.value as CategoriaSpesa)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
+              >
+                {CATEGORIE_ORDINATE.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {CATEGORIA_META[cat].label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Seleziona la categoria corretta.
+              </p>
             </div>
 
             {/* Esercente */}
@@ -650,18 +648,18 @@ export function NuovaSpesa() {
         ) : null}
       </div>
 
-      {/* FOOTER sticky: Salva (con importo), sempre visibile in revisione */}
+      {/* FOOTER: action area FLOTTANTE (arrotondata, tinta, sopra tutto) */}
       {fase === 'revisione' && scan ? (
-        <footer className="shrink-0 border-t border-border bg-background px-4 py-3">
+        <footer className="shrink-0 px-3 pb-3 pt-2">
           {errMsg ? (
             <p className="mb-2 text-center text-sm text-destructive">{errMsg}</p>
           ) : null}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/[0.06] p-2 shadow-[0_12px_30px_-10px_rgba(0,0,0,0.32)]">
             <Button
               type="button"
               variant="outline"
               size="lg"
-              className="shrink-0 px-4 py-3.5"
+              className="shrink-0 bg-background px-4 py-3.5"
               onClick={reset}
               disabled={pending}
             >
@@ -670,7 +668,7 @@ export function NuovaSpesa() {
             <Button
               type="button"
               size="lg"
-              className="flex-1 py-3.5 text-base font-semibold"
+              className="flex-1 py-3.5 text-base font-semibold shadow-soft"
               onClick={salva}
               disabled={!importoValido || pending}
             >
