@@ -225,6 +225,28 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     }
   }
 
+  // Km di viaggio aggregati per dipendente su QUESTO cantiere nel periodo
+  // (da timbratura_viaggio, cantiere_id + data popolati). `percorsi` = tutti i km,
+  // `guidati` = solo quando era l'autista.
+  const kmPerDip = new Map<string, { percorsi: number; guidati: number }>();
+  const { data: viaRaw } = (await supabase
+    .from('timbratura_viaggio' as never)
+    .select('dipendente_id, distanza_km, autista')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('cantiere_id', params.id)
+    .gte('data', dataDa)
+    .limit(10000)) as {
+    data: { dipendente_id: string; distanza_km: number | null; autista: boolean | null }[] | null;
+  };
+  for (const v of viaRaw ?? []) {
+    if (!v.dipendente_id) continue;
+    const km = Number(v.distanza_km) || 0;
+    const cur = kmPerDip.get(v.dipendente_id) ?? { percorsi: 0, guidati: 0 };
+    cur.percorsi += km;
+    if (v.autista) cur.guidati += km;
+    kmPerDip.set(v.dipendente_id, cur);
+  }
+
   // Aggregazione per dipendente via aggregaOre (chiave = dipendente_id).
   const righeAgg: RigaAgg[] = righeRapPeriodo.map((r) => {
     const meta = rapMetaById.get(r.rapportino_id)!;
@@ -246,6 +268,8 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
       straordinarie: agg.straordinarie,
       viaggio: agg.viaggio,
       totale: agg.totale,
+      km: Math.round(kmPerDip.get(dipendenteId)?.percorsi ?? 0),
+      kmGuidati: Math.round(kmPerDip.get(dipendenteId)?.guidati ?? 0),
     }))
     .sort((a, b) => b.totale - a.totale);
 
@@ -256,8 +280,10 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
       straordinarie: Math.round((acc.straordinarie + p.straordinarie) * 100) / 100,
       viaggio: Math.round((acc.viaggio + p.viaggio) * 100) / 100,
       totale: Math.round((acc.totale + p.totale) * 100) / 100,
+      km: acc.km + p.km,
+      kmGuidati: acc.kmGuidati + p.kmGuidati,
     }),
-    { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0 },
+    { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0, km: 0, kmGuidati: 0 },
   );
 
   // Trend giornaliero: somma ore (ord+straord+viaggio) per giorno del periodo.

@@ -12,6 +12,10 @@ export interface StoricoPersona {
   straordinarie: number;
   viaggio: number;
   totale: number;
+  /** Km percorsi su questo cantiere nel periodo (tutti). */
+  km: number;
+  /** Km percorsi come autista (sottoinsieme di `km`). */
+  kmGuidati: number;
 }
 
 export interface StoricoTotali {
@@ -19,6 +23,8 @@ export interface StoricoTotali {
   straordinarie: number;
   viaggio: number;
   totale: number;
+  km: number;
+  kmGuidati: number;
 }
 
 export interface TrendGiorno {
@@ -46,6 +52,10 @@ function fmtOre(n: number): string {
   if (!n) return '—';
   const totMin = Math.max(0, Math.round(n * 60));
   return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
+}
+
+function fmtKm(n: number): string {
+  return n > 0 ? `${Math.round(n)} km` : '—';
 }
 
 /** Etichetta breve "gg/mm" da una data YYYY-MM-DD per gli assi grafico. */
@@ -116,6 +126,7 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Ordinarie</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Straord.</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Viaggio</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Km</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Totale</th>
                 </tr>
               </thead>
@@ -142,6 +153,12 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                     <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
                       {fmtOre(p.viaggio)}
                     </td>
+                    <td
+                      className="px-3 py-2 text-right tabular-nums text-sky-700 dark:text-sky-400"
+                      title={p.kmGuidati > 0 ? `di cui ${fmtKm(p.kmGuidati)} come autista` : undefined}
+                    >
+                      {fmtKm(p.km)}
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtOre(p.totale)}</td>
                   </tr>
                 ))}
@@ -157,6 +174,12 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                     {fmtOre(data.totali.viaggio)}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right font-semibold tabular-nums text-sky-700 dark:text-sky-400"
+                    title={data.totali.kmGuidati > 0 ? `di cui ${fmtKm(data.totali.kmGuidati)} come autista` : undefined}
+                  >
+                    {fmtKm(data.totali.km)}
                   </td>
                   <td className="px-3 py-2 text-right font-bold tabular-nums">{fmtOre(data.totali.totale)}</td>
                 </tr>
