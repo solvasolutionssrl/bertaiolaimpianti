@@ -17,6 +17,7 @@ import { Button } from '@kommessa/ui';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
 import { creaSpesa } from '@/app/_actions/kantiere-spese';
+import { compressImage } from '@/app/office/commesse/nuova/_lib/compress-image';
 
 /**
  * Nuova ricevuta (PWA Kantiere).
@@ -232,12 +233,17 @@ export function NuovaSpesa() {
 
   const onFile = React.useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
+      const original = e.target.files?.[0];
       e.target.value = ''; // permette di riscegliere lo stesso file
-      if (!file) return;
+      if (!original) return;
 
       setErrMsg(null);
       setNonLeggibile(false);
+      // Comprimi le immagini prima dell'upload: 2048px / q0.88 (leggermente piu'
+      // alta del default per il testo piccolo degli scontrini), ~tipico 0,5-1MB.
+      // Meno banda dal cantiere, R2 piu' leggero, stesso invio a OpenAI. I PDF e
+      // i file gia' piccoli passano invariati (compressImage li salta).
+      const file = await compressImage(original, { quality: 0.88 });
       revokePreview();
       setPreview(URL.createObjectURL(file));
       setFase('analisi');

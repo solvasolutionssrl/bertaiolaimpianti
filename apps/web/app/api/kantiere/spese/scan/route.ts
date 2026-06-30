@@ -89,6 +89,28 @@ export async function POST(request: NextRequest) {
   }
   const originalBuf = Buffer.from(await file.arrayBuffer());
 
+  // Downscale di sicurezza lato server: immagini a max 2048px lato lungo,
+  // JPEG q88 (un filo piu' alta per il testo piccolo degli scontrini).
+  // Garantisce il risultato anche se il client invia il grezzo (app vecchie /
+  // upload office, che passa anch'esso da qui). I PDF restano intatti. Oltre
+  // 2048px non si va: OpenAI vision ridimensiona comunque a 2048.
+  let uploadBuf: Buffer = originalBuf;
+  let uploadMime = mime;
+  if (!isPdf) {
+    try {
+      uploadBuf = await sharp(originalBuf, { failOn: 'none' })
+        .rotate()
+        .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 88 })
+        .toBuffer();
+      uploadMime = 'image/jpeg';
+    } catch {
+      // sharp fallito: ripiego sul buffer originale
+      uploadBuf = originalBuf;
+      uploadMime = mime;
+    }
+  }
+
   // 3. R2 provider (per-tenant config con fallback env)
   const service = createServiceSupabase();
   const { data: tenantRow } = await service
@@ -112,9 +134,9 @@ export async function POST(request: NextRequest) {
   const id = randomUUID();
   const ext = isPdf
     ? '.pdf'
-    : mime === 'image/png'
+    : uploadMime === 'image/png'
       ? '.png'
-      : mime === 'image/webp'
+      : uploadMime === 'image/webp'
         ? '.webp'
         : '.jpg';
   const r2Key = `tenants/${slug}/kantiere/spese/${yyyy}/${mm}/${id}/scontrino${ext}`;
@@ -122,7 +144,7 @@ export async function POST(request: NextRequest) {
 
   // 5. Upload originale + thumbnail (solo immagini; i PDF non hanno thumb)
   try {
-    await r2.putObject(r2Key, originalBuf, mime);
+    await r2.putObject(r2Key, uploadBuf, uploadMime);
   } catch (e) {
     return Response.json(
       { ok: false, code: 'UPLOAD_FALLITO', detail: e instanceof Error ? e.message : 'unknown' },
@@ -163,7 +185,7 @@ export async function POST(request: NextRequest) {
   if (!isPdf && isOpenAIConfigured()) {
     let completionText: string | null = null;
     try {
-      const b64 = originalBuf.toString('base64');
+      const b64 = uploadBuf.toString('base64');
       const completion = await chatCompletion({
         model: getVisionModel(),
         reasoningEffort: 'low',
@@ -174,7 +196,7 @@ export async function POST(request: NextRequest) {
             role: 'user',
             content: [
               { type: 'text', text: PROMPT_SCONTRINO },
-              { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}`, detail: 'high' } },
+              { type: 'image_url', image_url: { url: `data:${uploadMime};base64,${b64}`, detail: 'high' } },
             ],
           },
         ],
@@ -250,8 +272,8 @@ export async function POST(request: NextRequest) {
     ok: true,
     r2Key,
     r2ThumbKey,
-    mime,
-    sizeBytes: originalBuf.length,
+    mime: uploadMime,
+    sizeBytes: uploadBuf.length,
     isPdf,
     estratto: dati,
     aiEstratto: aiOk,
