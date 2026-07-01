@@ -25,7 +25,10 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     orientation: 'portrait',
     theme_color: '#1340A6',
-    background_color: '#FBFAF6',
+    // Sfondo della schermata di lancio (splash): il sistema centra l'icona
+    // Kommessa su questo colore mentre l'app carica, poi sparisce → niente più
+    // "bianco" stridente. Allineato alla base dello sfondo app (bg-canvas-mobile).
+    background_color: '#E2E9F4',
     lang: 'it',
     dir: 'ltr',
     categories: ['productivity', 'business', 'utilities'],

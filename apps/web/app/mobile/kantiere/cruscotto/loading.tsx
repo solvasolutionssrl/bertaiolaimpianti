@@ -6,7 +6,7 @@ import { SkelHeader, SkelKpiRow, SkelCardList } from '../../_components/skeleton
  */
 export default function CruscottoLoading() {
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 bg-foreground/[0.05] p-4 pb-24">
+    <div className="flex min-h-[100dvh] flex-col gap-5 p-4 pb-24">
       <SkelHeader />
       <SkelKpiRow />
       <SkelCardList count={5} className="h-[64px]" />
