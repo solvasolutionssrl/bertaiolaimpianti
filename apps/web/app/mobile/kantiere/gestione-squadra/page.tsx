@@ -92,7 +92,7 @@ export default async function GestioneSquadraPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-1">
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <Users className="h-5 w-5 text-primary" aria-hidden="true" />

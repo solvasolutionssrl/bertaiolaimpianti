@@ -93,7 +93,7 @@ export default async function SpeseMobilePage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-1">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
           <Receipt className="h-3.5 w-3.5" aria-hidden="true" />

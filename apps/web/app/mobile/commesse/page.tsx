@@ -83,7 +83,7 @@ export default async function MobileCommessePage() {
   }, {});
 
   return (
-    <div className="flex min-h-[100dvh] flex-col pb-24">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
       {/* Hero dark */}
       <Hero>
         <HeroMeta>Gestione · Tutte le commesse</HeroMeta>

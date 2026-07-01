@@ -185,8 +185,9 @@
    * (sotto l'Hero blu, che copre la parte alta). Base leggermente più calda
    * del background piatto così le card bianche non "galleggiano sul bianco".
    * Pensato per il wrapper del layout /mobile. */
-  /* Canvas mondo COMMESSE (Bertaiola): sfondo chiaro morbido — glow blu ai lati
-     + caldo in alto a destra. Volutamente più tenue del canvas Kantiere. */
+  /* Canvas PWA mobile (entrambi i mondi): sfondo CHIARO morbido — glow blu ai lati
+     + caldo in alto a destra. Base hsl(214 44% 92%). Volutamente leggero: il dark
+     blu è stato provato e scartato ("scuro è brutto"). */
   .bg-canvas-mobile {
     background:
       radial-gradient(640px 440px at 112% 13%, hsl(28 100% 91%) 0%, transparent 60%),
@@ -197,25 +198,6 @@
   .dark .bg-canvas-mobile {
     background:
       radial-gradient(620px 420px at 112% 15%, hsl(22 60% 16% / 0.5) 0%, transparent 58%),
-      radial-gradient(700px 520px at -12% 33%, hsl(220 70% 16% / 0.6) 0%, transparent 55%),
-      hsl(var(--background));
-  }
-
-  /* Canvas mondo KANTIERE (FPM): più BLU e più SCURO, spinto verso il primary del
-     brand — le card bianche e i badge pastello (emerald/amber/sky) risaltano, la
-     striscia status-bar blu si fonde meglio. Resta abbastanza chiaro perché il
-     testo scuro delle intestazioni bare-on-canvas (es. "Cruscotto") e le card KPI
-     a tinta translucida (border-primary/25) restino leggibili: oltre questo serve
-     ricolorare quei componenti in chiaro. Base hsl(217 60% 81%) = #B1C8EC. */
-  .bg-canvas-kantiere {
-    background:
-      radial-gradient(640px 460px at 112% 8%, hsl(214 88% 88%) 0%, transparent 55%),
-      radial-gradient(720px 560px at -12% 26%, hsl(219 76% 84%) 0%, transparent 56%),
-      radial-gradient(660px 700px at 52% 106%, hsl(217 62% 83%) 0%, transparent 60%),
-      hsl(217 60% 81%);
-  }
-  .dark .bg-canvas-kantiere {
-    background:
       radial-gradient(700px 520px at -12% 33%, hsl(220 70% 16% / 0.6) 0%, transparent 55%),
       hsl(var(--background));
   }
@@ -265,6 +247,14 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .animate-fade-up { animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+  /* Ingresso del CONTENUTO reale quando sostituisce lo skeleton (loading.tsx):
+     solo opacità (niente transform → sicuro con figli position:fixed), così lo
+     swap skeleton→pagina non è "secco". Il template anima lo skeleton in entrata;
+     questa classe, sul root della pagina, fa dissolvere il contenuto. */
+  @keyframes content-in { from { opacity: 0; } to { opacity: 1; } }
+  .animate-content-in { animation: content-in 0.3s ease-out both; }
+  @media (prefers-reduced-motion: reduce) { .animate-content-in { animation: none; } }
   .stagger > * {
     animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   }

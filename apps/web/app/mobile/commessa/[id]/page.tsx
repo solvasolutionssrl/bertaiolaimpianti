@@ -485,7 +485,7 @@ export default async function CommessaDetailPage({
     : null;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col pb-28">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col pb-28">
       {/* Hero dark con codice + cliente + LED — pb un pelo ridotto vs default */}
       <Hero className="pb-10">
         <div className="flex items-center justify-between">

@@ -130,7 +130,7 @@ async function GestioneDashboard({
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col pb-24">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
       {/* Hero dark */}
       <Hero>
         <HeroMeta>
@@ -365,7 +365,7 @@ async function CampoOggi({
   }));
 
   return (
-    <div className="flex min-h-[100dvh] flex-col pb-24">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
       {/* Hero dark */}
       <Hero>
         <HeroMeta>
@@ -694,7 +694,7 @@ function fmtScadenza(iso: string): string {
 
 function CampoVuoto({ title, body }: { title: string; body: string }) {
   return (
-    <div className="flex min-h-[100dvh] flex-col">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col">
       <Hero>
         <HeroMeta>il tuo lavoro di oggi</HeroMeta>
         <h1 className="mt-1 font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">

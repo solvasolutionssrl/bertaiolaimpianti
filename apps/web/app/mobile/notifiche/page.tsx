@@ -106,7 +106,7 @@ export default async function AttivitaPage() {
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col pb-24">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
       <Hero>
         <HeroMeta>
           {isAdminLike ? 'tutti gli utenti' : 'le tue azioni'} · ultime 60

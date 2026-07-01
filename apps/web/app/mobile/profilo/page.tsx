@@ -65,7 +65,7 @@ export default async function ProfiloPage() {
     .join('');
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="mt-2 flex items-center gap-3">
         <Avatar className="h-14 w-14">
           <AvatarFallback className="text-base">{initials}</AvatarFallback>

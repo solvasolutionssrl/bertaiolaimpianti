@@ -278,7 +278,7 @@ export default async function CruscottoKantierePage({
   const nextGiorno = addGiorni(giorno, 1);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Cruscotto</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Panoramica cantieri</h1>
