@@ -40,6 +40,8 @@ export type TimbraturaItem = {
   createdAt?: string | null;
   /** Nome di chi ha inserito la riga (per le manuali). */
   creatoNome?: string | null;
+  /** true se è la RIPRESA di una pausa chiusa in automatico (dimenticata oltre soglia). */
+  autoChiusa?: boolean | null;
 };
 
 /** Tratta di viaggio della giornata (andata sede→cantiere, ritorno cantiere→sede). */
@@ -268,7 +270,7 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
                       {da} <span className="text-sky-400">→</span> {a}
                     </span>
                     <span className="ml-auto tabular-nums font-medium text-sky-700">
-                      {v.km > 0 ? `${Math.round(v.km)} km · ` : ''}
+                      {v.autista && v.km > 0 ? `${Math.round(v.km)} km · ` : ''}
                       {minToColon(v.minuti)}
                     </span>
                     <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">

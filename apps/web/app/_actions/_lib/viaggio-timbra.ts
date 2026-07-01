@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { createServerSupabase } from '@kommessa/api/server';
-import { SOGLIA_PAUSA_PRANZO_ORE, type StatoTurno } from '@kommessa/api/kantiere-ore';
-import { romeDay } from '@kommessa/api/rome-time';
+import { SOGLIA_PAUSA_PRANZO_ORE, statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 
 /**
  * Helper condivisi per timbrature di VIAGGIO e PAUSA dichiarata, riusati da
@@ -96,6 +96,74 @@ export async function inserisciPausaDichiarata(
     { ...base, tipo: 'uscita', ts: uscitaIso },
     { ...base, tipo: 'ingresso', ts: ingressoIso },
   ] as never);
+}
+
+/**
+ * Rete di sicurezza per la pausa pranzo DIMENTICATA (app chiusa): se il turno
+ * del dipendente in `data` è ancora in pausa e sono passati almeno `sogliaOre`
+ * dall'inizio pausa, materializza la RIPRESA (ingresso pausa) a
+ * `inizioPausa + sogliaOre`, così l'orologio riparte e vengono scalati
+ * esattamente `sogliaOre` di pausa. La riga è `origine='manuale'`,
+ * `auto_chiusa=true`, `creato_da=null`.
+ *
+ * Idempotente: agisce solo quando lo stato turno è `pausa` (ultimo evento =
+ * uscita pausa). Dopo l'inserimento l'ultimo evento diventa un ingresso, quindi
+ * al ricalcolo successivo non re-inserisce nulla. Vale anche per giorni passati
+ * (al primo ricalcolo la pausa viene chiusa). Ritorna true se ha inserito.
+ */
+export async function chiudiPausaScadutaSePresente(
+  supabase: Supa,
+  opts: { tenantId: string; dipendenteId: string; data: string; sogliaOre: number },
+): Promise<boolean> {
+  const soglia =
+    Number.isFinite(opts.sogliaOre) && opts.sogliaOre >= 0.5 ? opts.sogliaOre : 1.5;
+  const { fromIso, toIso } = romeDayBoundsUtc(opts.data);
+  const { data: rows } = await supabase
+    .from('timbrature' as never)
+    .select('tipo, ts, pausa, commessa_id, cantiere_id')
+    .eq('tenant_id', opts.tenantId)
+    .eq('dipendente_id', opts.dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const eventi =
+    (rows as
+      | {
+          tipo: 'ingresso' | 'uscita';
+          ts: string;
+          pausa: boolean | null;
+          commessa_id: string | null;
+          cantiere_id: string | null;
+        }[]
+      | null) ?? [];
+  if (eventi.length === 0) return false;
+
+  const info = statoTurno(eventi);
+  if (info.stato !== 'pausa' || !info.inizioPausa) return false;
+
+  const scadenzaMs = Date.parse(info.inizioPausa) + soglia * 3600000;
+  if (Date.now() < scadenzaMs) return false;
+
+  // Riga di inizio pausa = ultima uscita pausa (per ereditare commessa/cantiere).
+  const start = eventi
+    .filter((e) => e.tipo === 'uscita' && e.pausa)
+    .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts))
+    .pop();
+
+  const { error } = await supabase.from('timbrature' as never).insert({
+    tenant_id: opts.tenantId,
+    dipendente_id: opts.dipendenteId,
+    commessa_id: start?.commessa_id ?? null,
+    cantiere_id: start?.cantiere_id ?? null,
+    tipo: 'ingresso',
+    pausa: true,
+    origine: 'manuale',
+    auto_chiusa: true,
+    creato_da: null,
+    ts: new Date(scadenzaMs).toISOString(),
+  } as never);
+  if (error) return false;
+  return true;
 }
 
 /**

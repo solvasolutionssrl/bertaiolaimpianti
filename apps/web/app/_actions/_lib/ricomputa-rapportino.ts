@@ -8,7 +8,12 @@ import {
 } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
-import { leggiArrotondamenti, leggiPolicyRapportini } from '@/app/_lib/kantiere-config';
+import {
+  leggiArrotondamenti,
+  leggiPolicyRapportini,
+  leggiSogliaAutoSpegnimentoPausa,
+} from '@/app/_lib/kantiere-config';
+import { chiudiPausaScadutaSePresente } from '@/app/_actions/_lib/viaggio-timbra';
 
 /**
  * Auto-derivazione del rapportino giornaliero dalle timbrature.
@@ -192,6 +197,22 @@ export async function ricomputaRapportinoAuto(
   const gestitaDalSistema =
     rapp.stato === 'bozza' || (rapp.stato === 'approvato' && !rapp.approvato_da);
   if (!gestitaDalSistema) return rapp;
+
+  // 2b. Rete di sicurezza: se una pausa pranzo è rimasta aperta oltre la soglia
+  //     (dimenticata, es. app chiusa), materializza la RIPRESA PRIMA di leggere
+  //     le timbrature, così il calcolo ore la include e scala esattamente la
+  //     soglia. Best-effort: non deve mai bloccare il ricalcolo.
+  try {
+    const sogliaAuto = await leggiSogliaAutoSpegnimentoPausa(supabase, tenantId);
+    await chiudiPausaScadutaSePresente(supabase, {
+      tenantId,
+      dipendenteId,
+      data,
+      sogliaOre: sogliaAuto,
+    });
+  } catch {
+    // best-effort
+  }
 
   // 3. Timbrature del giorno italiano esatto (confini in Europe/Rome).
   const { fromIso, toIso } = romeDayBoundsUtc(data);

@@ -42,6 +42,7 @@ type TimbratureRow = {
   pausa: boolean | null;
   created_at: string | null;
   creato_da: string | null;
+  auto_chiusa: boolean | null;
 };
 
 type DipendenteRow = {
@@ -174,7 +175,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const { toIso: tsTo } = romeDayBoundsUtc(to);
     const { data } = (await supabase
       .from('timbrature' as never)
-      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da')
+      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa')
       .eq('tenant_id', ctx.tenantId)
       .in('dipendente_id', dipIds)
       .gte('ts', tsFrom)
@@ -245,6 +246,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     pausa: boolean | null;
     createdAt: string | null;
     creatoNome: string | null;
+    autoChiusa: boolean | null;
   };
   const timbratureByKey = new Map<string, TimbraturaItem[]>();
   for (const t of timbratureData) {
@@ -260,6 +262,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       pausa: t.pausa ?? false,
       createdAt: t.created_at ?? null,
       creatoNome: t.creato_da ? creatoNomeMap.get(t.creato_da) ?? null : null,
+      autoChiusa: t.auto_chiusa ?? false,
     });
     timbratureByKey.set(key, arr);
   }
@@ -357,7 +360,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         : null;
     if (!key) continue;
     const km = Number(v.distanza_km) || 0;
-    viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + km);
+    // I km si attribuiscono solo all'autista; le ore di viaggio spettano anche ai passeggeri.
+    if (v.autista) viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + km);
     const arr = viaggiByKey.get(key) ?? [];
     arr.push({
       direzione: v.direzione === 'ritorno' ? 'ritorno' : 'andata',

@@ -16,6 +16,8 @@ export interface TimbraturaInput {
   createdAt?: string | null;
   /** Nome di chi l'ha inserita (per le manuali). */
   creatoNome?: string | null;
+  /** true se è la RIPRESA di una pausa chiusa in automatico (dimenticata oltre soglia). */
+  autoChiusa?: boolean | null;
 }
 
 /** Intervalli di pausa pranzo (da un'uscita-pausa alla ripresa successiva). */
@@ -34,6 +36,21 @@ function calcolaPause(timbrature: TimbraturaInput[]): { inizio: string; fine: st
   }
   if (inizio) pause.push({ inizio, fine: null });
   return pause;
+}
+
+/** Set dei timestamp di RIPRESA (ingresso pausa) chiusi in automatico. */
+function ripreseAutoChiuse(timbrature: TimbraturaInput[]): Set<string> {
+  const set = new Set<string>();
+  for (const t of timbrature) {
+    if (t.tipo === 'ingresso' && t.pausa && t.autoChiusa) set.add(t.ts);
+  }
+  return set;
+}
+
+/** Durata in minuti formattata "H:MM" (es. 90 → "1:30"). */
+function fmtMinColon(min: number): string {
+  const m = Math.max(0, Math.round(min));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
 function fmtOra(ts: string): string {
@@ -197,6 +214,7 @@ export function GiornataFlow({
 }) {
   const r = appaiaTimbrature(soloTimbrature(timbrature));
   const pause = calcolaPause(timbrature);
+  const autoSet = ripreseAutoChiuse(timbrature);
 
   if (r.coppie.length === 0 && oreViaggio <= 0) {
     return <span className="text-[11px] text-muted-foreground/60">Nessuna timbratura</span>;
@@ -221,6 +239,7 @@ export function GiornataFlow({
   });
   pause.forEach((p, i) => {
     const min = p.fine ? Math.round((Date.parse(p.fine) - Date.parse(p.inizio)) / 60000) : null;
+    const auto = !!(p.fine && autoSet.has(p.fine));
     eventi.push({
       t: Date.parse(p.inizio),
       el: (
@@ -230,6 +249,7 @@ export function GiornataFlow({
         >
           <Coffee className="h-2.5 w-2.5" aria-hidden="true" />
           Pausa{min != null ? ` ${fmtMinuti(min)}` : ''}
+          {auto ? ' · chiusa automaticamente' : ''}
         </span>
       ),
     });
@@ -289,6 +309,7 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
   const r = appaiaTimbrature(soloTimbrature(timbrature));
   const now = useLiveNow(r.aperto);
   const pause = calcolaPause(timbrature);
+  const autoSet = ripreseAutoChiuse(timbrature);
 
   // Origine per timestamp evento (per badge "Timbrata/Inserita a mano").
   const meta = new Map<string, OrigineMeta>();
@@ -365,6 +386,7 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
         <ul className="space-y-1">
           {pause.map((p, i) => {
             const min = p.fine ? Math.round((Date.parse(p.fine) - Date.parse(p.inizio)) / 60000) : null;
+            const auto = !!(p.fine && autoSet.has(p.fine));
             return (
               <li
                 key={`p-${i}`}
@@ -380,6 +402,11 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
                     {min != null ? fmtMinuti(min) : ''}
                   </span>
                 </div>
+                {auto ? (
+                  <p className="mt-1 text-[10px] font-medium text-amber-700">
+                    Pausa {min != null ? fmtMinColon(min) : ''} · chiusa automaticamente (dimenticata)
+                  </p>
+                ) : null}
                 <OrigineLine meta={meta.get(p.inizio)} />
               </li>
             );

@@ -60,6 +60,34 @@ export async function leggiSogliaPausaPranzoOre(
 }
 
 /**
+ * Soglia (ore) oltre cui una pausa pranzo avviata e DIMENTICATA si auto-spegne:
+ * il turno riprende in automatico (l'orologio riparte) e vengono scalati
+ * esattamente `soglia` minuti. Distinta da `soglia_pausa_pranzo_ore` (5h, che
+ * governa il PROMEMORIA a dichiarare la pausa in chiusura turno). Default 1.5h,
+ * forzata >= 0.5h. Configurabile dalle Impostazioni Kantiere.
+ */
+export async function leggiSogliaAutoSpegnimentoPausa(
+  supabase: Supa,
+  tenantId: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  const raw = config['soglia_auto_spegnimento_pausa_ore'];
+  let n = 1.5;
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) n = raw;
+  else if (typeof raw === 'string') {
+    const parsed = parseFloat(raw);
+    if (!isNaN(parsed) && parsed > 0) n = parsed;
+  }
+  return n >= 0.5 ? n : 0.5;
+}
+
+/**
  * Provider di routing scelto dal super admin per il tenant ('free' | 'google').
  * Default 'free'. La CHIAVE Google è unica di piattaforma (env), qui c'è solo la
  * scelta abilitato/no — non è un segreto, quindi sta in `tenant_modules.config`.

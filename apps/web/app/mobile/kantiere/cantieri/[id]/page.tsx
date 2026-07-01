@@ -7,7 +7,10 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appaiaTimbrature, SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
+import {
+  leggiSogliaPausaPranzoOre,
+  leggiSogliaAutoSpegnimentoPausa,
+} from '@/app/_lib/kantiere-config';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 
 import { guardMobile } from '../../../_lib/guard';
@@ -108,8 +111,12 @@ export default async function CantiereMobileDetailPage({
   let mezziViaggio: { id: string; targa: string; modello: string | null }[] = [];
   let sedeDefaultId: string | null = null;
   let sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE;
+  let sogliaAutoSpegnimentoPausaOre = 1.5;
   if (turnoQui) {
-    sogliaPausaPranzoOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
+    [sogliaPausaPranzoOre, sogliaAutoSpegnimentoPausaOre] = await Promise.all([
+      leggiSogliaPausaPranzoOre(supabase, ctx.tenantId),
+      leggiSogliaAutoSpegnimentoPausa(supabase, ctx.tenantId),
+    ]);
     const [sediRes, assocRes, mezziRes] = await Promise.all([
       supabase
         .from('sedi' as never)
@@ -329,6 +336,7 @@ export default async function CantiereMobileDetailPage({
           mezzi={mezziViaggio}
           sedeDefaultId={sedeDefaultId}
           sogliaPausaPranzoOre={sogliaPausaPranzoOre}
+          sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
         />
       ) : null}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Utensils, Play, LogOut, Loader2 } from 'lucide-react';
 import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
@@ -34,6 +34,8 @@ export interface TurnoAzioniCantiereProps {
   sedeDefaultId?: string | null;
   /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
   sogliaPausaPranzoOre?: number;
+  /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
+  sogliaAutoSpegnimentoPausaOre?: number;
 }
 
 function ora(ts: string): string {
@@ -50,6 +52,12 @@ function formatTrascorso(ms: number): string {
   const m = totMin % 60;
   if (h === 0) return `${m}min`;
   return `${h}h ${String(m).padStart(2, '0')}min`;
+}
+
+/** Countdown "mm:ss" (minuti totali : secondi). */
+function fmtCountdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 /** "HH:MM" ora locale corrente (device = Italia). */
@@ -94,6 +102,7 @@ export function TurnoAzioniCantiere({
   mezzi = [],
   sedeDefaultId = null,
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
+  sogliaAutoSpegnimentoPausaOre = 1.5,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
@@ -110,10 +119,33 @@ export function TurnoAzioniCantiere({
   // Prompt pausa: turno al lavoro (non in pausa), senza pausa oggi, oltre soglia.
   const promptPausa = !inPausa && !pausaOggiFatta && durataTurnoMin >= sogliaPausaPranzoOre * 60;
 
+  // Auto-spegnimento pausa dimenticata: scadenza e tempo rimanente (mm:ss).
+  const scadenzaPausaMs =
+    inPausa && inizioPausaTs
+      ? Date.parse(inizioPausaTs) + sogliaAutoSpegnimentoPausaOre * 3600000
+      : null;
+  const rimanentePausaMs = scadenzaPausaMs != null ? scadenzaPausaMs - now : null;
+
+  // In pausa ticka al secondo (countdown preciso), altrimenti ogni 30s.
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(Date.now()), inPausa ? 1000 : 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [inPausa]);
+
+  // Quando la pausa supera la soglia, riprende il turno da solo UNA volta (il
+  // server resta la fonte di verità: qui è solo per l'app aperta).
+  const autoRipresaRef = useRef(false);
+  useEffect(() => {
+    if (!inPausa) {
+      autoRipresaRef.current = false;
+      return;
+    }
+    if (scadenzaPausaMs != null && now >= scadenzaPausaMs && !autoRipresaRef.current) {
+      autoRipresaRef.current = true;
+      esegui(() => riprendiTurnoMio({ cantiereId }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, inPausa, scadenzaPausaMs, cantiereId]);
 
   function esegui(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setErr(null);
@@ -196,6 +228,11 @@ export function TurnoAzioniCantiere({
           ? `In pausa dalle ${inizioPausaTs ? ora(inizioPausaTs) : '--:--'}`
           : `Timbrato alle ${ora(inizioTs)}`}
       </p>
+      {inPausa && rimanentePausaMs != null ? (
+        <p className="mt-1 text-[11px] font-medium tabular-nums text-amber-800">
+          La pausa si chiude tra {fmtCountdown(rimanentePausaMs)} · ricordati di interromperla a mano
+        </p>
+      ) : null}
 
       <div className="mt-3 space-y-2">
         {inPausa ? (

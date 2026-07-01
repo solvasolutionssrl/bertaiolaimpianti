@@ -5,7 +5,10 @@ import { ChevronRight, Clock, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
+import {
+  leggiSogliaPausaPranzoOre,
+  leggiSogliaAutoSpegnimentoPausa,
+} from '@/app/_lib/kantiere-config';
 
 import { guardMobile } from '../../_lib/guard';
 import { sonoCapoSquadra, squadraDelCapo } from '../_lib/capo';
@@ -26,7 +29,10 @@ export default async function GestioneSquadraPage() {
   if (!capo) redirect('/mobile/kantiere/cantieri');
 
   const gruppi = await squadraDelCapo(ctx.tenantId, ctx.userId);
-  const sogliaPausaPranzoOre = await leggiSogliaPausaPranzoOre(createServerSupabase(), ctx.tenantId);
+  const [sogliaPausaPranzoOre, sogliaAutoSpegnimentoPausaOre] = await Promise.all([
+    leggiSogliaPausaPranzoOre(createServerSupabase(), ctx.tenantId),
+    leggiSogliaAutoSpegnimentoPausa(createServerSupabase(), ctx.tenantId),
+  ]);
 
   // Contesto viaggio di ritorno per il dialog "Termina turno" che il capo
   // compila per ogni membro: sedi selezionabili per cantiere (default tenant +
@@ -121,6 +127,7 @@ export default async function GestioneSquadraPage() {
         viaggioByCantiere={viaggioByCantiere}
         mezzi={mezzi}
         sogliaPausaPranzoOre={sogliaPausaPranzoOre}
+        sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
       />
     </div>
   );

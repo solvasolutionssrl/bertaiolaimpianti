@@ -5,6 +5,7 @@ import { QrCode, Clock, MapPin, HardHat } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { leggiSogliaAutoSpegnimentoPausa } from '@/app/_lib/kantiere-config';
 
 import { guardMobile } from '../_lib/guard';
 import { mioTurnoAttivo } from './_lib/turno-attivo';
@@ -48,6 +49,9 @@ export default async function KantiereHomePage() {
 
   // Turno aperto del dipendente (per il tasto pausa pranzo diretto in home).
   const turno = me ? await mioTurnoAttivo() : null;
+  // Soglia auto-spegnimento pausa (per il countdown della card in pausa).
+  const sogliaAutoSpegnimentoPausaOre =
+    turno && turno.inPausa ? await leggiSogliaAutoSpegnimentoPausa(supabase, ctx.tenantId) : 1.5;
 
   // Ultima timbratura di oggi → stato corrente (dentro/fuori)
   let ultima: { tipo: 'ingresso' | 'uscita'; ts: string } | null = null;
@@ -100,6 +104,7 @@ export default async function KantiereHomePage() {
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
+          sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
         />
       ) : me ? (
         <div

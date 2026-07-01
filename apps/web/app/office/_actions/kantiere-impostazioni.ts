@@ -39,6 +39,10 @@ const schema = z.object({
   // Promemoria pausa pranzo: ore di turno senza pausa timbrata oltre cui l'app
   // (QR e tasto, identici) propone di dichiararla. Default 5.
   sogliaPausaPranzoOre: z.number().int().min(1).max(12).optional(),
+  // Auto-spegnimento pausa dimenticata: ore oltre cui una pausa avviata si
+  // chiude da sola e il turno riprende (scalando esattamente la soglia).
+  // Default 1.5. Distinta da sogliaPausaPranzoOre (promemoria).
+  sogliaAutoSpegnimentoPausaOre: z.number().min(0.5).max(8).optional(),
   // Kontabilità: modulo attivo per il tenant. Default true.
   kontabilitaAttiva: z.boolean().optional(),
 });
@@ -89,6 +93,9 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   }
   if (parsed.data.sogliaPausaPranzoOre !== undefined) {
     newConfig['soglia_pausa_pranzo_ore'] = parsed.data.sogliaPausaPranzoOre;
+  }
+  if (parsed.data.sogliaAutoSpegnimentoPausaOre !== undefined) {
+    newConfig['soglia_auto_spegnimento_pausa_ore'] = parsed.data.sogliaAutoSpegnimentoPausaOre;
   }
   if (parsed.data.kontabilitaAttiva !== undefined) {
     newConfig['kontabilita_attiva'] = parsed.data.kontabilitaAttiva;

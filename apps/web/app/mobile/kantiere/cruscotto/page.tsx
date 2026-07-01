@@ -37,6 +37,7 @@ type TimbRow = {
   origine: string | null;
   created_at: string | null;
   creato_da: string | null;
+  auto_chiusa: boolean | null;
 };
 
 type ViaggioRow = {
@@ -105,7 +106,7 @@ export default async function CruscottoKantierePage({
     supabase.from('cantieri' as never).select('id, nome, codice').eq('tenant_id', ctx.tenantId),
     supabase
       .from('timbrature' as never)
-      .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da')
+      .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da, auto_chiusa')
       .eq('tenant_id', ctx.tenantId)
       .gte('ts', fromIso)
       .lt('ts', toIso)
@@ -194,6 +195,7 @@ export default async function CruscottoKantierePage({
       origine: r.origine,
       createdAt: r.created_at,
       creatoNome: r.creato_da ? creatoNomeMap.get(r.creato_da) ?? null : null,
+      autoChiusa: r.auto_chiusa ?? false,
     });
     timbPerDip.set(r.dipendente_id, ti);
   }

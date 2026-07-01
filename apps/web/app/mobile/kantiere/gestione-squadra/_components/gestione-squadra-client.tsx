@@ -67,12 +67,15 @@ export function GestioneSquadraClient({
   viaggioByCantiere,
   mezzi,
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
+  sogliaAutoSpegnimentoPausaOre = 1.5,
 }: {
   gruppi: CantiereSquadra[];
   viaggioByCantiere: Record<string, ViaggioContestoCantiere>;
   mezzi: ViaggioRitornoMezzo[];
   /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
   sogliaPausaPranzoOre?: number;
+  /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
+  sogliaAutoSpegnimentoPausaOre?: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -278,6 +281,7 @@ export function GestioneSquadraClient({
                   membro={m}
                   busyKey={busy}
                   pending={pending || dialogAperto}
+                  sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
                   onAzione={(az, key) => membro(g.cantiereId, m.dipendenteId, az, key)}
                   onFine={() => avviaFine([{ cantiereId: g.cantiereId, membro: m }])}
                 />
@@ -335,18 +339,29 @@ function MembroRiga({
   membro,
   busyKey,
   pending,
+  sogliaAutoSpegnimentoPausaOre,
   onAzione,
   onFine,
 }: {
   membro: MembroStato;
   busyKey: string | null;
   pending: boolean;
+  sogliaAutoSpegnimentoPausaOre: number;
   onAzione: (azione: 'inizio' | 'pausa' | 'ripresa', key: string) => void;
   onFine: () => void;
 }) {
   const badge = STATO_BADGE[membro.stato];
   const base = membro.dipendenteId;
   const Spin = <Loader2 className="h-4 w-4 animate-spin" />;
+
+  // Minuti mancanti all'auto-spegnimento della pausa dimenticata (informativo).
+  const minAutoChiusura =
+    membro.stato === 'pausa' && membro.inizioPausa
+      ? Math.ceil(
+          (Date.parse(membro.inizioPausa) + sogliaAutoSpegnimentoPausaOre * 3600000 - Date.now()) /
+            60000,
+        )
+      : null;
 
   return (
     <li className="rounded-xl border border-border bg-background p-3">
@@ -367,6 +382,11 @@ function MembroRiga({
                 ? `In pausa dalle ${ora(membro.inizioPausa)}`
                 : 'Non in turno'}
           </p>
+          {minAutoChiusura != null && minAutoChiusura > 0 ? (
+            <p className="mt-0.5 text-[11px] font-medium text-amber-700">
+              La pausa si chiude da sola tra ~{minAutoChiusura} min
+            </p>
+          ) : null}
         </div>
         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.cls}`}>
           {badge.label}

@@ -33,6 +33,7 @@ interface Props {
   autoApprovaRapportini: boolean;
   anomaliaTurnoOreMax: number;
   sogliaPausaPranzoOre: number;
+  sogliaAutoSpegnimentoPausaOre: number;
   kontabilitaAttiva: boolean;
   codiceAzienda: string | null;
 }
@@ -46,6 +47,12 @@ const ANOMALIE_ETICHETTE: { key: keyof AnomalieConfig; label: string }[] = [
   { key: 'weekend', label: 'Ore nel weekend' },
   { key: 'ore_eccessive', label: 'Ore giornaliere oltre soglia (possibile doppio inserimento)' },
 ];
+
+/** Formatta un valore in ORE (decimale) come "H:MM". Es. 1.5 → "1:30". */
+function oreLabel(h: number): string {
+  const totMin = Math.max(0, Math.round(h * 60));
+  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
+}
 
 type SezioneId = 'ore' | 'approvazione' | 'anomalie' | 'cantieri' | 'kontabilita';
 
@@ -125,6 +132,7 @@ export function ImpostazioniClient({
   autoApprovaRapportini,
   anomaliaTurnoOreMax,
   sogliaPausaPranzoOre,
+  sogliaAutoSpegnimentoPausaOre,
   kontabilitaAttiva,
   codiceAzienda,
 }: Props) {
@@ -139,6 +147,7 @@ export function ImpostazioniClient({
   const [autoApprova, setAutoApprova] = React.useState<boolean>(autoApprovaRapportini);
   const [sogliaTurno, setSogliaTurno] = React.useState<number>(anomaliaTurnoOreMax);
   const [sogliaPausa, setSogliaPausa] = React.useState<number>(sogliaPausaPranzoOre);
+  const [sogliaAutoPausa, setSogliaAutoPausa] = React.useState<number>(sogliaAutoSpegnimentoPausaOre);
   const [kontabilita, setKontabilita] = React.useState<boolean>(kontabilitaAttiva);
   const [esito, setEsito] = React.useState<{ ok: true } | { ok: false; error: string } | null>(null);
   const [isPending, startTransition] = React.useTransition();
@@ -160,6 +169,7 @@ export function ImpostazioniClient({
         autoApprovaRapportini: autoApprova,
         anomaliaTurnoOreMax: sogliaTurno,
         sogliaPausaPranzoOre: sogliaPausa,
+        sogliaAutoSpegnimentoPausaOre: sogliaAutoPausa,
         kontabilitaAttiva: kontabilita,
       });
       setEsito(result);
@@ -190,6 +200,8 @@ export function ImpostazioniClient({
     if (cambiatoSogliaTurno) parti.push(`soglia anomalia turno a ${sogliaTurno} ore`);
     if (sogliaPausa !== sogliaPausaPranzoOre)
       parti.push(`promemoria pausa pranzo oltre ${sogliaPausa} ore di turno`);
+    if (sogliaAutoPausa !== sogliaAutoSpegnimentoPausaOre)
+      parti.push(`auto-spegnimento pausa dimenticata dopo ${oreLabel(sogliaAutoPausa)}`);
 
     if (parti.length > 0) {
       const ok = await askConfirm({
@@ -382,6 +394,28 @@ export function ImpostazioniClient({
                   una pausa</strong>, l&apos;app (sia da QR sia dal tasto in-app) ricorda di
                   dichiarare la pausa pranzo e propone 30/45/60 min. Se la pausa è già timbrata, nessun
                   avviso.
+                </p>
+              </div>
+              <div className="space-y-1.5 border-t border-border pt-4">
+                <Label htmlFor="soglia-auto-pausa">Auto-spegnimento pausa dimenticata (ore)</Label>
+                <Input
+                  id="soglia-auto-pausa"
+                  type="number"
+                  min={0.5}
+                  max={8}
+                  step={0.5}
+                  value={sogliaAutoPausa}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!isNaN(v)) setSogliaAutoPausa(Math.min(8, Math.max(0.5, v)));
+                  }}
+                  className="w-32"
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Se una pausa pranzo resta avviata più a lungo di questo tempo, viene{' '}
+                  <strong>chiusa in automatico</strong> e il turno riprende da solo: vengono scalati
+                  esattamente {oreLabel(sogliaAutoPausa)} di pausa. Serve a non perdere ore quando ci
+                  si dimentica di riprendere il turno. Vale <strong>da ora in poi</strong>.
                 </p>
               </div>
             </div>

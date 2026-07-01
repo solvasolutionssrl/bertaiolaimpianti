@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Utensils, Play, Loader2, ChevronRight } from 'lucide-react';
@@ -16,6 +16,8 @@ export interface TurnoPausaHomeProps {
   inPausa: boolean;
   /** ISO inizio pausa, o null. */
   inizioPausaTs: string | null;
+  /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
+  sogliaAutoSpegnimentoPausaOre?: number;
 }
 
 function ora(ts: string): string {
@@ -34,6 +36,12 @@ function trascorsoLabel(ms: number): string {
   return `${h}h ${String(m).padStart(2, '0')}min`;
 }
 
+/** Countdown "mm:ss" (minuti totali : secondi). */
+function fmtCountdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 /**
  * Card "Turno in corso" sulla HOME Kantiere con l'azione pausa pranzo diretta
  * (senza QR). In pausa la card LAMPEGGIA per ricordare al tecnico di riprendere
@@ -45,16 +53,25 @@ export function TurnoPausaHome({
   inizioTs,
   inPausa,
   inizioPausaTs,
+  sogliaAutoSpegnimentoPausaOre = 1.5,
 }: TurnoPausaHomeProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
+  // Auto-spegnimento pausa dimenticata: scadenza e tempo rimanente (mm:ss).
+  const scadenzaPausaMs =
+    inPausa && inizioPausaTs
+      ? Date.parse(inizioPausaTs) + sogliaAutoSpegnimentoPausaOre * 3600000
+      : null;
+  const rimanentePausaMs = scadenzaPausaMs != null ? scadenzaPausaMs - now : null;
+
+  // In pausa ticka al secondo (countdown preciso), altrimenti ogni 30s.
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setNow(Date.now()), inPausa ? 1000 : 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [inPausa]);
 
   function esegui(fn: () => Promise<{ ok: boolean; error?: string }>) {
     setErr(null);
@@ -64,6 +81,21 @@ export function TurnoPausaHome({
       else setErr('Operazione non riuscita. Riprova.');
     });
   }
+
+  // Quando la pausa supera la soglia, riprende il turno da solo UNA volta (il
+  // server resta la fonte di verità: qui è solo per l'app aperta).
+  const autoRipresaRef = useRef(false);
+  useEffect(() => {
+    if (!inPausa) {
+      autoRipresaRef.current = false;
+      return;
+    }
+    if (scadenzaPausaMs != null && now >= scadenzaPausaMs && !autoRipresaRef.current) {
+      autoRipresaRef.current = true;
+      esegui(() => riprendiTurnoMio({ cantiereId }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, inPausa, scadenzaPausaMs, cantiereId]);
 
   const trascorso = trascorsoLabel(now - Date.parse(inizioTs));
 
@@ -87,6 +119,11 @@ export function TurnoPausaHome({
         <p className="mt-1 text-xs font-medium text-amber-800">
           Ricordati di riprendere il turno quando rientri.
         </p>
+        {rimanentePausaMs != null ? (
+          <p className="mt-1 text-[11px] font-medium tabular-nums text-amber-800">
+            La pausa si chiude tra {fmtCountdown(rimanentePausaMs)} · ricordati di interromperla a mano
+          </p>
+        ) : null}
 
         <button
           type="button"
