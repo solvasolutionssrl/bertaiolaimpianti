@@ -863,8 +863,13 @@ function Step3Voci({
         </div>
       ) : null}
 
-      {/* Search compatta sticky in alto del container scrollabile */}
-      <div className="sticky top-0 z-10 -mx-1 bg-background/95 px-1 pt-1 backdrop-blur-sm">
+      {/* Search compatta sticky in alto del container scrollabile. `top`
+          inset-aware: con status-bar iOS translucent resta sotto la Dynamic
+          Island invece di sparirci dietro (0 su browser/Android). */}
+      <div
+        className="sticky z-10 -mx-1 bg-background/95 px-1 pt-1 backdrop-blur-sm"
+        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+      >
         <div className="relative">
           <Search
             className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"

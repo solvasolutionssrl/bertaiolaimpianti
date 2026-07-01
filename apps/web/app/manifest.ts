@@ -27,8 +27,11 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#1340A6',
     // Sfondo della schermata di lancio (splash): il sistema centra l'icona
     // Kommessa su questo colore mentre l'app carica, poi sparisce → niente più
-    // "bianco" stridente. Allineato alla base dello sfondo app (bg-canvas-mobile).
-    background_color: '#E2E9F4',
+    // "bianco" stridente. Allineato alla base dello sfondo app (bg-canvas-mobile
+    // = hsl(216 52% 87%)). Su iOS l'immagine intera è servita dai
+    // apple-touch-startup-image (vedi AppleSplashLinks); questo colore resta il
+    // fallback (Android + iPhone senza immagine corrispondente).
+    background_color: '#CDDAEF',
     lang: 'it',
     dir: 'ltr',
     categories: ['productivity', 'business', 'utilities'],

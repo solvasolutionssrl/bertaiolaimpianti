@@ -4,10 +4,8 @@ export default function ReportLoading() {
   return (
     <div className="flex min-h-[100dvh] flex-col">
       {/* Hero placeholder */}
-      <div
-        className="bg-primary px-5 pb-8"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}
-      >
+      <div className="bg-primary px-5 pb-8 pt-6">
+        {/* inset alto gestito dal <main> del layout mobile */}
         <div className="flex items-center justify-between">
           <Skeleton className="h-5 w-24 rounded-full bg-primary-foreground/10" />
           <Skeleton className="h-4 w-20 rounded-full bg-primary-foreground/10" />

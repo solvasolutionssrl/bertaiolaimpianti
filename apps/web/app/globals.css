@@ -186,13 +186,14 @@
    * del background piatto così le card bianche non "galleggiano sul bianco".
    * Pensato per il wrapper del layout /mobile. */
   .bg-canvas-mobile {
-    /* Base un filo più profonda e leggermente più satura sul BLU (non grigia):
-       dà più contrasto alle card, uniforme su tutte le pagine mobile. */
+    /* Base più profonda e più satura, spinta verso il BLU del brand (non grigia):
+       dà più contrasto alle card bianche/status-bar, uniforme su tutte le pagine
+       mobile. Tiene un filo di gradiente (glow blu ai lati + caldo in alto a dx). */
     background:
-      radial-gradient(640px 440px at 112% 13%, hsl(28 100% 91%) 0%, transparent 60%),
-      radial-gradient(720px 540px at -14% 30%, hsl(214 88% 92%) 0%, transparent 58%),
-      radial-gradient(600px 660px at 50% 103%, hsl(214 72% 94%) 0%, transparent 62%),
-      hsl(214 44% 92%);
+      radial-gradient(640px 440px at 112% 13%, hsl(28 100% 90%) 0%, transparent 60%),
+      radial-gradient(720px 540px at -14% 30%, hsl(218 86% 89%) 0%, transparent 58%),
+      radial-gradient(600px 660px at 50% 103%, hsl(217 74% 90%) 0%, transparent 62%),
+      hsl(216 52% 87%);
   }
   .dark .bg-canvas-mobile {
     background:

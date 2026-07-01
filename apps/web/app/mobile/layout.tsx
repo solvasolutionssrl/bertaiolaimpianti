@@ -7,6 +7,7 @@ import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
+import { AppleSplashLinks } from '../_components/apple-splash-links';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
 import { sonoCapoSquadra } from './kantiere/_lib/capo';
@@ -26,12 +27,10 @@ export const metadata: Metadata = {
   other: {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
-    // black-translucent: la status bar diventa overlay trasparente,
-    // il viewport include l'area sotto Dynamic Island / notch e l'Hero
-    // blu si estende fino al bordo superiore (con safe-area-inset-top
-    // gestito nel componente Hero). Testo status bar bianco leggibile
-    // sopra il blu primary.
-    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    // NB: `apple-mobile-web-app-status-bar-style` è impostato una sola volta nel
+    // root layout (appleWebApp.statusBarStyle = 'black-translucent'). NON
+    // ripeterlo qui: due meta con lo stesso nome creerebbero un duplicato e iOS
+    // userebbe il primo (era il vecchio 'default' → barra bianca).
   },
 };
 
@@ -84,11 +83,31 @@ export default async function MobileLayout({
 
   return (
     <div className="min-h-[100dvh] bg-canvas-mobile">
+      {/* <link apple-touch-startup-image> → issati nell'<head> da Next */}
+      <AppleSplashLinks />
       <SwRegistrar />
+
+      {/* Scrim status bar: con status-bar iOS 'black-translucent' il contenuto va
+          a tutto schermo sotto la Dynamic Island. Questa striscia blu brand,
+          alta quanto il safe-area-inset-top, riempie l'area dietro l'isola così
+          le icone bianche di sistema restano leggibili su OGNI pagina (anche
+          quelle a sfondo chiaro, es. cruscotto/cantieri Kantiere). Sulle pagine
+          con Hero blu (mondo commesse) è dello stesso colore → giunzione
+          invisibile. Su browser / Android l'inset è 0 → invisibile. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-30 bg-primary"
+        style={{ height: 'env(safe-area-inset-top, 0px)' }}
+      />
 
       <main
         className="mx-auto w-full max-w-screen-sm"
         style={{
+          // Inset alto centralizzato: spinge il contenuto di OGNI pagina sotto la
+          // Dynamic Island / notch (0 su browser e Android). Prima era gestito
+          // dentro ogni Hero: ora è qui, così anche le pagine senza Hero (Kantiere)
+          // non finiscono sotto l'isola.
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           // Safe-area-aware bottom padding per iPhone con home indicator
           // (e Dynamic Island). Garantisce che il contenuto non finisca
           // mai sotto il bottom-nav fisso.

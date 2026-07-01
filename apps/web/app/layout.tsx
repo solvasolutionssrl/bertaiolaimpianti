@@ -24,7 +24,12 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'default',
+    // black-translucent: la status bar iOS diventa un overlay trasparente e il
+    // contenuto va a tutto schermo SOTTO Dynamic Island / notch. Lo sfondo
+    // dell'app prosegue dietro l'isola (niente più barra bianca). L'inset in
+    // alto è gestito centralmente nel layout mobile (padding + scrim blu).
+    // La PWA installata apre sempre /mobile (start_url), quindi vale lì.
+    statusBarStyle: 'black-translucent',
     title: 'Kommessa',
   },
   formatDetection: {

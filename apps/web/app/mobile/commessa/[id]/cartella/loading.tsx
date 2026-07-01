@@ -4,10 +4,8 @@ export default function CartellaLoading() {
   return (
     <div className="flex min-h-[100dvh] flex-col pb-24">
       {/* Hero placeholder */}
-      <div
-        className="bg-primary px-5 pb-12"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}
-      >
+      <div className="bg-primary px-5 pb-12 pt-6">
+        {/* inset alto gestito dal <main> del layout mobile */}
         <div className="flex items-center justify-between">
           <Skeleton className="h-5 w-24 rounded-full bg-primary-foreground/10" />
           <Skeleton className="h-5 w-20 rounded-full bg-primary-foreground/10" />

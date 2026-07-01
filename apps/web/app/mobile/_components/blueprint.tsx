@@ -111,9 +111,11 @@ export function Hero({
         className,
       )}
       style={{
-        // Padding-top combina il padding visivo (1.5rem) col safe-area-inset-top
-        // del notch/status-bar quando la PWA è installata in standalone.
-        paddingTop: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)',
+        // Solo il padding visivo: il safe-area-inset-top (notch/Dynamic Island
+        // in standalone) è ora applicato una volta sola dal <main> del layout
+        // mobile. Lo scrim blu del layout riempie l'area dietro l'isola, dello
+        // stesso colore dell'Hero → giunzione invisibile.
+        paddingTop: '1.5rem',
       }}
     >
       {/* Grid pattern texture — alleggerito (opacity + maglia più larga) */}
