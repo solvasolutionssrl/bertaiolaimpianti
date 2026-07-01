@@ -51,10 +51,14 @@ export default async function MobileHomePage() {
   const ctx = await guardMobile();
 
   // Tenant puro-Kantiere (es. FPM): non esiste una "home commessa". Subito dopo
-  // il login si atterra sulla lista Cantieri (con ricerca + eventuale turno
-  // attivo in alto). Bertaiola (app_mode kommessa) resta invariata.
+  // il login si atterra a seconda del ruolo: admin/ufficio sul Cruscotto
+  // (dashboard gestionale), i tecnici/capi sulla lista Cantieri. Bertaiola
+  // (app_mode kommessa) resta invariata.
   const appMode = await getAppModeCached();
-  if (appMode === 'kantiere') redirect('/mobile/kantiere/cantieri');
+  if (appMode === 'kantiere') {
+    const isManager = ctx.role === 'admin' || ctx.role === 'office';
+    redirect(isManager ? '/mobile/kantiere/cruscotto' : '/mobile/kantiere/cantieri');
+  }
 
   const shell = getMobileShell(ctx.role);
 
