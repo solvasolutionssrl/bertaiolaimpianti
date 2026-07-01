@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import * as Sentry from '@sentry/nextjs';
+import { isChunkLoadError, reloadOnceOnChunkError } from './_lib/chunk-reload';
 
 export default function Error({
   error,
@@ -10,12 +11,36 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Chunk mancante dopo un deploy: ricarica una volta invece di mostrare 500.
+  const chunk = isChunkLoadError(error);
+
   useEffect(() => {
+    if (chunk && reloadOnceOnChunkError(error)) return;
     // Sentry cattura l'errore se DSN configurato; in dev senza DSN no-op
     Sentry.captureException(error);
     // In produzione il messaggio è offuscato; il digest è utile per i log
     console.error('[app error]', error.digest ?? error.message);
-  }, [error]);
+  }, [error, chunk]);
+
+  if (chunk) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-[hsl(32,28%,98%)] p-6 text-center">
+        <h1 className="text-lg font-semibold tracking-tight text-[hsl(220,30%,9%)]">
+          Aggiornamento in corso
+        </h1>
+        <p className="max-w-xs text-sm text-[hsl(220,10%,45%)]">
+          Sto caricando l&apos;ultima versione, un istante.
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-1 inline-flex h-11 items-center gap-2 rounded-xl bg-[hsl(220,80%,32%)] px-5 font-mono text-[11px] uppercase tracking-[0.16em] text-white active:scale-[0.99]"
+        >
+          ↺ Ricarica
+        </button>
+      </main>
+    );
+  }
 
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[hsl(32,28%,98%)] p-6 text-center">

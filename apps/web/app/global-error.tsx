@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import * as Sentry from '@sentry/nextjs';
+import { isChunkLoadError, reloadOnceOnChunkError } from './_lib/chunk-reload';
 
 // Cattura errori nel root layout (raro ma possibile — es. font fail).
 // Non può usare componenti del layout (niente <html> wrapper esterno).
@@ -12,10 +13,65 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Chunk mancante dopo un deploy: ricarica una volta per prendere gli asset
+  // freschi, invece di mostrare "Errore critico" (tipico su PWA iOS).
+  const chunk = isChunkLoadError(error);
+
   useEffect(() => {
+    if (chunk && reloadOnceOnChunkError(error)) return;
     Sentry.captureException(error);
     console.error('[global error]', error.digest ?? error.message);
-  }, [error]);
+  }, [error, chunk]);
+
+  if (chunk) {
+    return (
+      <html lang="it">
+        <body
+          style={{
+            margin: 0,
+            minHeight: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'hsl(32,28%,98%)',
+            fontFamily: 'system-ui, sans-serif',
+            textAlign: 'center',
+            padding: '24px',
+            gap: '14px',
+            color: 'hsl(220,30%,9%)',
+          }}
+        >
+          <h1 style={{ margin: 0, fontSize: '19px', fontWeight: 600, letterSpacing: '-0.3px' }}>
+            Aggiornamento in corso
+          </h1>
+          <p style={{ margin: 0, color: 'hsl(220,10%,45%)', fontSize: '14px', maxWidth: '320px' }}>
+            Sto caricando l&apos;ultima versione dell&apos;app, un istante.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{
+              marginTop: '4px',
+              height: '44px',
+              padding: '0 20px',
+              borderRadius: '10px',
+              background: 'hsl(220,80%,32%)',
+              color: 'white',
+              border: 'none',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.15em',
+              cursor: 'pointer',
+            }}
+          >
+            ↺ Ricarica
+          </button>
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html lang="it">
