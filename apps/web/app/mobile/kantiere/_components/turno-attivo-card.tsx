@@ -44,9 +44,14 @@ export function TurnoAttivoCard({
   inPausa = false,
   inizioPausaTs = null,
 }: TurnoAttivoCardProps) {
-  const [now, setNow] = useState(() => Date.now());
+  // Seed DETERMINISTICO (inizio turno, uguale su server e client) per evitare
+  // il mismatch di hydration: `Date.now()` nell'initializer darebbe orari
+  // diversi tra SSR e client → React rifà il render (flash). Dopo il mount
+  // l'effect passa al tempo reale, così il contatore resta live.
+  const [now, setNow] = useState(() => Date.parse(inizioTs));
 
   useEffect(() => {
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);

@@ -105,7 +105,9 @@ export function TurnoAzioniCantiere({
   sogliaAutoSpegnimentoPausaOre = 1.5,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
-  const [now, setNow] = useState(() => Date.now());
+  // Seed deterministico (inizio turno) per evitare il mismatch di hydration;
+  // l'effect passa al tempo reale dopo il mount (contatore/countdown live).
+  const [now, setNow] = useState(() => Date.parse(inizioTs));
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   // Il dialog "Viaggio di ritorno + pausa" gestisce sia il viaggio sia la pausa
@@ -128,6 +130,7 @@ export function TurnoAzioniCantiere({
 
   // In pausa ticka al secondo (countdown preciso), altrimenti ogni 30s.
   useEffect(() => {
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), inPausa ? 1000 : 30_000);
     return () => clearInterval(id);
   }, [inPausa]);
