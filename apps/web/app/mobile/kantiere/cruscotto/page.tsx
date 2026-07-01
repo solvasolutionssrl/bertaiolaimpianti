@@ -52,10 +52,22 @@ type ViaggioRow = {
   autista: boolean | null;
 };
 
+// Tinte KPI dalla palette dell'app (primary/emerald/amber/sky). Solo colore +
+// opacità: card leggermente tintata, bordo più marcato, icona a colore.
 const KPI_TONE = {
-  default: 'border-border bg-card',
-  success: 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20',
-  pausa: 'border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20',
+  primary: { card: 'border-primary/25 bg-primary/[0.06]', icon: 'text-primary/80' },
+  emerald: {
+    card: 'border-emerald-300/70 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20',
+    icon: 'text-emerald-600',
+  },
+  amber: {
+    card: 'border-amber-300/70 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20',
+    icon: 'text-amber-600',
+  },
+  sky: {
+    card: 'border-sky-300/70 bg-sky-50 dark:border-sky-900/40 dark:bg-sky-950/20',
+    icon: 'text-sky-600',
+  },
 } as const;
 
 function isGiornoValido(s: string | undefined): s is string {
@@ -223,24 +235,24 @@ export default async function CruscottoKantierePage({
     tone: keyof typeof KPI_TONE;
     href: string;
   }[] = [
-    { label: 'Timbrature', value: timbRows.length, icon: Timer, tone: 'default', href: '#persone' },
+    { label: 'Timbrature', value: timbRows.length, icon: Timer, tone: 'primary', href: '#persone' },
     {
       label: isOggi ? 'In cantiere' : 'In cantiere (fine)',
       value: inCantiere,
       icon: UserCheck,
-      tone: inCantiere > 0 ? 'success' : 'default',
+      tone: 'emerald',
       href: '#persone',
     },
     {
       label: 'In pausa',
       value: inPausa,
       icon: Utensils,
-      tone: inPausa > 0 ? 'pausa' : 'default',
+      tone: 'amber',
       href: '#persone',
     },
-    { label: 'Persone', value: personeGiorno, icon: Users, tone: 'default', href: '#persone' },
-    { label: 'Cantieri', value: cantieriAttivi, icon: MapPin, tone: 'default', href: '/mobile/kantiere/cantieri' },
-    { label: 'Ore', value: oreLabelMin(oreTotMin), icon: Clock, tone: 'default', href: '#persone' },
+    { label: 'Persone', value: personeGiorno, icon: Users, tone: 'sky', href: '#persone' },
+    { label: 'Cantieri', value: cantieriAttivi, icon: MapPin, tone: 'primary', href: '/mobile/kantiere/cantieri' },
+    { label: 'Ore', value: oreLabelMin(oreTotMin), icon: Clock, tone: 'sky', href: '#persone' },
   ];
 
   // Una riga per persona che ha timbrato quel giorno, espandibile al dettaglio.
@@ -266,7 +278,7 @@ export default async function CruscottoKantierePage({
   const nextGiorno = addGiorni(giorno, 1);
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="flex min-h-[100dvh] flex-col gap-5 bg-foreground/[0.05] p-4">
       <header className="pt-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Cruscotto</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Panoramica cantieri</h1>
@@ -313,10 +325,10 @@ export default async function CruscottoKantierePage({
             href={k.href}
             className={
               'flex flex-col gap-1 rounded-xl border p-3 shadow-soft transition-transform active:scale-[0.97] ' +
-              KPI_TONE[k.tone]
+              KPI_TONE[k.tone].card
             }
           >
-            <k.icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <k.icon className={'h-4 w-4 ' + KPI_TONE[k.tone].icon} aria-hidden="true" />
             <span className="text-xl font-semibold leading-none tabular-nums">{k.value}</span>
             <span className="text-[10px] leading-tight text-muted-foreground">{k.label}</span>
           </Link>
