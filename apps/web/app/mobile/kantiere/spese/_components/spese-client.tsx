@@ -5,6 +5,7 @@ import { Receipt } from 'lucide-react';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META } from '@/app/_components/spese/categoria';
+import { PersoneBadge } from '@/app/_components/spese/persone-badge';
 import { MediaLightbox, type MediaItem } from '@/app/_components/media-lightbox';
 
 export type SpesaRiga = {
@@ -19,6 +20,7 @@ export type SpesaRiga = {
   hasThumb: boolean;
   hasFile: boolean;
   fotoMime: string | null;
+  numeroPersone: number;
 };
 
 function formatImporto(importo: number | null, valuta: string | null): string {
@@ -137,6 +139,9 @@ export function SpeseClient({
               <p className="text-sm font-semibold tabular-nums text-foreground">
                 {formatImporto(s.importoTotale, s.valuta)}
               </p>
+              <div className="mt-1 flex justify-end">
+                <PersoneBadge numero={s.numeroPersone} />
+              </div>
             </div>
           </li>
         );

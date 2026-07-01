@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@kommessa/ui';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
+import { PersoneBadge } from '@/app/_components/spese/persone-badge';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { MediaLightbox, type MediaItem } from '@/app/_components/media-lightbox';
 import { aggiornaSpesa, eliminaSpesa } from '@/app/_actions/kantiere-spese';
@@ -34,6 +35,7 @@ export type SpesaRiga = {
   note: string | null;
   fotoMime: string | null;
   hasFile: boolean;
+  numeroPersone: number;
 };
 
 export type CantiereOption = { id: string; nome: string };
@@ -162,11 +164,12 @@ export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId
                   key={s.id}
                   className="h-11 odd:bg-transparent even:bg-muted/20 transition-colors hover:bg-muted/40"
                 >
-                  {/* Costo + IVA */}
+                  {/* Costo + IVA + persone */}
                   <td className="whitespace-nowrap px-3 py-1.5 align-middle">
                     <span className="tabular-nums font-semibold text-foreground">
                       {fmtValuta(s.importoTotale, s.valuta)}
                     </span>
+                    <PersoneBadge numero={s.numeroPersone} className="ml-2 align-middle" />
                     {typeof s.importoIva === 'number' && Number.isFinite(s.importoIva) ? (
                       <span className="ml-2 tabular-nums text-xs text-muted-foreground">
                         IVA {fmtValuta(s.importoIva, s.valuta)}
@@ -369,6 +372,13 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
             <div>
               <span className="text-xs text-muted-foreground">IVA</span>
               <p className="font-medium tabular-nums">{fmtValuta(spesa.importoIva, spesa.valuta)}</p>
+            </div>
+            <div>
+              <span className="text-xs text-muted-foreground">Persone</span>
+              <p className="flex items-center gap-1.5 font-medium">
+                <PersoneBadge numero={spesa.numeroPersone} />
+                {spesa.numeroPersone > 1 ? `${spesa.numeroPersone} persone` : '1 persona'}
+              </p>
             </div>
           </div>
 
