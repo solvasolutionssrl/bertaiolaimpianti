@@ -185,16 +185,17 @@
    * (sotto l'Hero blu, che copre la parte alta). Base leggermente più calda
    * del background piatto così le card bianche non "galleggiano sul bianco".
    * Pensato per il wrapper del layout /mobile. */
-  /* Canvas PWA mobile (entrambi i mondi): sfondo CHIARO morbido — un soffio di glow
-     blu ai lati + caldo in alto a destra. Base hsl(214 42% 94%): un filo più chiaro
-     e gradiente più tenue (stop più vicini alla base). Il dark blu è stato provato
-     e scartato ("scuro è brutto"). */
+  /* Canvas PWA mobile (entrambi i mondi): sfondo CHIARO col gradiente ORIGINALE
+     (glow blu ai lati + caldo pesca in alto a destra). Scelta finale di Luca — "il
+     bel gradiente coi colorini dell'inizio è la scelta vincente". Base
+     hsl(214 44% 92%). Provati e scartati: il dark blu ("scuro è brutto") e la
+     versione più chiara/piatta. */
   .bg-canvas-mobile {
     background:
-      radial-gradient(640px 440px at 112% 13%, hsl(32 80% 94%) 0%, transparent 60%),
-      radial-gradient(720px 540px at -14% 30%, hsl(214 60% 95%) 0%, transparent 58%),
-      radial-gradient(600px 660px at 50% 103%, hsl(214 52% 96%) 0%, transparent 62%),
-      hsl(214 42% 94%);
+      radial-gradient(640px 440px at 112% 13%, hsl(28 100% 91%) 0%, transparent 60%),
+      radial-gradient(720px 540px at -14% 30%, hsl(214 88% 92%) 0%, transparent 58%),
+      radial-gradient(600px 660px at 50% 103%, hsl(214 72% 94%) 0%, transparent 62%),
+      hsl(214 44% 92%);
   }
   .dark .bg-canvas-mobile {
     background:

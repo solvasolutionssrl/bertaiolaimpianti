@@ -31,7 +31,7 @@ export default function manifest(): MetadataRoute.Manifest {
     // = hsl(216 52% 87%)). Su iOS l'immagine intera è servita dai
     // apple-touch-startup-image (vedi AppleSplashLinks); questo colore resta il
     // fallback (Android + iPhone senza immagine corrispondente).
-    background_color: '#E9EFF6',
+    background_color: '#E2E9F4',
     lang: 'it',
     dir: 'ltr',
     categories: ['productivity', 'business', 'utilities'],
