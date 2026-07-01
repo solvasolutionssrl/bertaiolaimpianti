@@ -83,6 +83,7 @@ export function Filtri({ valori, cantieri, dipendenti, righe }: Props) {
       'IVA',
       'Imponibile',
       'Valuta',
+      'Persone',
     ];
     const righeTesto = righe.map((s) => {
       const cat = s.categoria && CATEGORIA_META[s.categoria as keyof typeof CATEGORIA_META]
@@ -98,6 +99,7 @@ export function Filtri({ valori, cantieri, dipendenti, righe }: Props) {
         numIt(s.importoIva),
         numIt(s.imponibile),
         s.valuta || 'EUR',
+        String(s.numeroPersone ?? 1),
       ]
         .map(csvCell)
         .join(';');
