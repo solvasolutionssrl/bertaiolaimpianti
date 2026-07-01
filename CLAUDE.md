@@ -93,6 +93,11 @@ La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semp
 
 `tenants.features jsonb` (NON segreto, `grant select (features) to anon, authenticated`) per **mostrare/nascondere funzioni office per-tenant** dal super admin. Tab **"Funzioni"** in `/admin/tenants/[id]` (Predefinito/Mostra/Nascondi). Default per-funzione derivato dall'app_mode (mondo commesse = `app_mode ≠ kantiere`). Reader **difensivo** `_lib/tenant-features.ts` (+ registry client-safe `_lib/tenant-features-registry.ts`) → finché la colonna non c'è, si usano i default. Oggi gestisce **Voci catalogo** e **Preset di lavoro** (nascoste ai tenant solo-Kantiere, anche via route `notFound()`). Per aggiungerne: 1 voce nel registry + `tenantFeatureEnabled(key, kommessaWorld)` al gate. Migration **applicata** al cloud il 29/06.
 
+#### PWA — landing role-based e fluidità (01/07/2026)
+
+- **Landing mobile role-based nel MIDDLEWARE, non nel render.** `/mobile` → `/mobile/kantiere/cruscotto` (admin/office) o `/cantieri` (tecnici) è un **redirect HTTP** in `middleware.ts` (`resolveMobileLanding` in `packages/api/src/server.ts`), scoped al solo `/mobile`, fail-soft. ⚠️ NON rimettere il `redirect()` dentro `mobile/page.tsx` (resta lì solo come fallback): un `redirect()` in un Server Component sotto `<Suspense>` innesca il **bug Next.js #63121 → React #310 transitorio** (schermata "Errore critico" all'avvio a freddo, visibile SOLO sui tenant kantiere perché solo loro rediregono). Vedi memoria `project-pwa-chunk-reload`.
+- **Fluidità PWA**: ogni rotta mobile `force-dynamic` deve avere un `loading.tsx` skeleton (helper `apps/web/app/mobile/_components/skeletons.tsx`) → al tap tab compare subito lo skeleton invece di restare fermi. Transizione pagina in `apps/web/app/mobile/template.tsx` (`animate-page-in`, fill-mode **`backwards`** per non lasciare transform residui che romperebbero elementi `position:fixed`). Mai `Date.now()`/`new Date()` in `useState(initializer)` o direttamente nel render di un client component SSRato (mismatch di hydration): seed deterministico da una prop, poi tempo reale in `useEffect`.
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione
