@@ -1,0 +1,361 @@
+'use client';
+
+import { useState, useEffect, useCallback, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { Coffee, Info, Loader2 } from 'lucide-react';
+import { Button } from '@kommessa/ui';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@kommessa/ui';
+import {
+  caricaMiaGiornata,
+  modificaMiaGiornata,
+  type RigaGiornataModifica,
+} from '@/app/_actions/kantiere-rapportino';
+
+// ── props ────────────────────────────────────────────────────────────────────
+
+export interface ModificaGiornataDialogProps {
+  open: boolean;
+  onClose: () => void;
+  /** Giornata da modificare, 'YYYY-MM-DD' (Europe/Rome). */
+  data: string;
+}
+
+// ── stato riga editabile (ore in H + MM) ─────────────────────────────────────
+
+interface RigaEdit {
+  commessa_id: string | null;
+  cantiere_id: string | null;
+  target_label: string;
+  lavoroH: number;
+  lavoroM: number;
+  viaggioH: number;
+  viaggioM: number;
+}
+
+const PAUSA_OPZIONI = [30, 45, 60] as const;
+
+// ── helper ────────────────────────────────────────────────────────────────────
+
+function fmtGiorno(data: string): string {
+  return new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(`${data}T12:00:00Z`));
+}
+
+/** Ore decimali -> { h, m } (arrotondato al minuto). */
+function decToHM(dec: number): { h: number; m: number } {
+  const tot = Math.max(0, Math.round(dec * 60));
+  return { h: Math.floor(tot / 60), m: tot % 60 };
+}
+
+/** { h, m } -> ore decimali. */
+function hmToDec(h: number, m: number): number {
+  return h + m / 60;
+}
+
+function rigaFromPayload(r: RigaGiornataModifica): RigaEdit {
+  const lav = decToHM(r.ore_lavoro);
+  const via = decToHM(r.ore_viaggio);
+  return {
+    commessa_id: r.commessa_id,
+    cantiere_id: r.cantiere_id,
+    target_label: r.target_label,
+    lavoroH: lav.h,
+    lavoroM: lav.m,
+    viaggioH: via.h,
+    viaggioM: via.m,
+  };
+}
+
+function messaggioErrore(code: string): string {
+  switch (code) {
+    case 'FUORI_FINESTRA':
+      return 'Questa giornata non e piu modificabile (oltre 3 giorni fa).';
+    case 'NON_MODIFICABILE':
+      return 'La giornata e stata gestita dall ufficio e non e piu modificabile.';
+    case 'GIORNATA_NON_CHIUSA':
+      return 'Per aggiungere la pausa la giornata deve avere ingresso e uscita.';
+    case 'PAUSA_TROPPO_LUNGA':
+      return 'La pausa non puo essere piu lunga del turno.';
+    case 'NESSUN_DIPENDENTE':
+      return 'Nessun profilo dipendente collegato a questo account.';
+    case 'NON_AUTENTICATO':
+      return 'Devi essere autenticato per modificare le ore.';
+    case 'MODULO_OFF':
+      return 'Il modulo Kantiere non e abilitato per questo spazio.';
+    default:
+      return 'Modifica non riuscita. Riprova.';
+  }
+}
+
+// ── input ore H:MM ────────────────────────────────────────────────────────────
+
+function OreHM({
+  label,
+  h,
+  m,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  h: number;
+  m: number;
+  disabled: boolean;
+  onChange: (h: number, m: number) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </p>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={23}
+          value={h}
+          onChange={(e) => onChange(clampInt(e.target.value, 0, 23), m)}
+          disabled={disabled}
+          aria-label={`${label} ore`}
+          className="w-full rounded-md border border-border bg-background px-2 py-2 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+        />
+        <span className="text-sm font-semibold text-muted-foreground">:</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={59}
+          value={String(m).padStart(2, '0')}
+          onChange={(e) => onChange(h, clampInt(e.target.value, 0, 59))}
+          disabled={disabled}
+          aria-label={`${label} minuti`}
+          className="w-full rounded-md border border-border bg-background px-2 py-2 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+        />
+      </div>
+    </div>
+  );
+}
+
+function clampInt(v: string, min: number, max: number): number {
+  const n = parseInt(v, 10);
+  if (isNaN(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+// ── componente principale ─────────────────────────────────────────────────────
+
+export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornataDialogProps) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const [loading, setLoading] = useState(true);
+  const [righe, setRighe] = useState<RigaEdit[]>([]);
+  const [pausaPresente, setPausaPresente] = useState(false);
+  const [giornataChiusa, setGiornataChiusa] = useState(false);
+  const [modificabile, setModificabile] = useState(true);
+  const [pausaMinuti, setPausaMinuti] = useState<number | null>(null);
+  const [errore, setErrore] = useState<string | null>(null);
+
+  const carica = useCallback(async () => {
+    setLoading(true);
+    setErrore(null);
+    setPausaMinuti(null);
+    const res = await caricaMiaGiornata({ data });
+    if (res.ok) {
+      setRighe(res.righe.map(rigaFromPayload));
+      setPausaPresente(res.pausaPresente);
+      setGiornataChiusa(res.giornataChiusa);
+      setModificabile(res.modificabile);
+    } else {
+      setErrore(messaggioErrore(res.error));
+      setRighe([]);
+    }
+    setLoading(false);
+  }, [data]);
+
+  useEffect(() => {
+    if (open) void carica();
+  }, [open, carica]);
+
+  function patchRiga(idx: number, patch: Partial<RigaEdit>) {
+    setRighe((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    setErrore(null);
+  }
+
+  function handleSalva() {
+    setErrore(null);
+    startTransition(async () => {
+      const res = await modificaMiaGiornata({
+        data,
+        righe: righe.map((r) => ({
+          commessa_id: r.commessa_id,
+          cantiere_id: r.cantiere_id,
+          ore_lavoro: hmToDec(r.lavoroH, r.lavoroM),
+          ore_viaggio: hmToDec(r.viaggioH, r.viaggioM),
+        })),
+        pausaMinuti: pausaMinuti,
+      });
+      if (res.ok) {
+        router.refresh();
+        onClose();
+      } else {
+        setErrore(messaggioErrore(res.error));
+      }
+    });
+  }
+
+  const puoAggiungerePausa = !pausaPresente && giornataChiusa;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent
+        // Foglio quasi full-screen su mobile, modale centrato su desktop.
+        // Il footer "Salva" resta sticky in fondo al contenitore scrollabile.
+        className="flex max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 p-0 sm:max-w-[560px]"
+      >
+        <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
+          <DialogTitle>Modifica giornata</DialogTitle>
+          <p className="text-xs capitalize text-muted-foreground">{fmtGiorno(data)}</p>
+        </DialogHeader>
+
+        {/* Body scrollabile */}
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Caricamento...
+            </div>
+          ) : (
+            <>
+              {!modificabile && (
+                <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  Questa giornata e oltre la finestra di modifica (fino a 3 giorni fa).
+                </p>
+              )}
+
+              {righe.length === 0 ? (
+                <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-6 text-center text-sm text-muted-foreground">
+                  Nessuna ora registrata per questa giornata.
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {righe.map((r, idx) => (
+                    <div
+                      key={r.cantiere_id ?? r.commessa_id ?? idx}
+                      className="rounded-xl border border-border bg-muted/20 p-3 space-y-3"
+                    >
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {r.target_label || 'Cantiere'}
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <OreHM
+                          label="Ore lavoro"
+                          h={r.lavoroH}
+                          m={r.lavoroM}
+                          disabled={isPending || !modificabile}
+                          onChange={(h, m) => patchRiga(idx, { lavoroH: h, lavoroM: m })}
+                        />
+                        <OreHM
+                          label="Ore viaggio"
+                          h={r.viaggioH}
+                          m={r.viaggioM}
+                          disabled={isPending || !modificabile}
+                          onChange={(h, m) => patchRiga(idx, { viaggioH: h, viaggioM: m })}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Pausa pranzo */}
+              <div className="space-y-2">
+                <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  <Coffee className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Pausa pranzo
+                </p>
+                {pausaPresente ? (
+                  <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                    Pausa gia registrata per questa giornata.
+                  </p>
+                ) : !giornataChiusa ? (
+                  <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
+                    La pausa si puo aggiungere solo su una giornata con ingresso e uscita.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    {PAUSA_OPZIONI.map((min) => {
+                      const attivo = pausaMinuti === min;
+                      return (
+                        <button
+                          key={min}
+                          type="button"
+                          onClick={() => setPausaMinuti(attivo ? null : min)}
+                          disabled={isPending || !modificabile}
+                          className={[
+                            'rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors',
+                            attivo
+                              ? 'border-primary bg-primary/5 text-foreground'
+                              : 'border-border bg-background text-muted-foreground hover:bg-muted/40',
+                          ].join(' ')}
+                        >
+                          {min} min
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {puoAggiungerePausa && pausaMinuti !== null && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Verra aggiunta una pausa di {pausaMinuti} minuti al centro del turno.
+                  </p>
+                )}
+              </div>
+
+              {/* Nota informativa */}
+              <p className="flex items-start gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/5 px-3 py-2 text-[11px] text-blue-700">
+                <Info className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+                La modifica avvisa l&apos;ufficio.
+              </p>
+
+              {errore && (
+                <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {errore}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer sticky con azione primaria */}
+        <div className="sticky bottom-0 flex flex-col gap-2 border-t border-border bg-background px-4 py-3 sm:flex-row-reverse sm:px-6">
+          <Button
+            type="button"
+            onClick={handleSalva}
+            disabled={isPending || loading || !modificabile}
+            className="w-full sm:w-auto"
+          >
+            {isPending ? 'Salvataggio...' : 'Salva'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isPending}
+            className="w-full sm:w-auto"
+          >
+            Annulla
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

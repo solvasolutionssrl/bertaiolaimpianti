@@ -22,7 +22,6 @@ import {
 
 import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';
-import { fmtDataOra } from '../_lib/format';
 import {
   ALERT_DEFAULTS,
   computeAlerts,
@@ -31,6 +30,7 @@ import {
   type AlertType,
 } from '../../_lib/alerts';
 import { AlertSettingsForm } from './_components/alert-settings-form';
+import { StoricoNotifiche } from './_components/storico-notifiche';
 
 export const metadata = { title: 'Avvisi' };
 export const dynamic = 'force-dynamic';
@@ -38,15 +38,6 @@ export const dynamic = 'force-dynamic';
 interface SearchParams {
   tab?: 'avvisi' | 'storico' | 'impostazioni';
 }
-
-const NOTIF_TYPE_LABEL: Record<string, string> = {
-  ticket_assigned: 'Ticket assegnato',
-  ticket_new_message: 'Nuovo messaggio ticket',
-  fase_zero_foto: 'Fase senza foto',
-  dico_scadenza: 'DICO in scadenza',
-  commessa_pronta: 'Commessa pronta per chiusura',
-  voice_note: 'Nota vocale',
-};
 
 export default async function NotifichePage({
   searchParams,
@@ -154,54 +145,7 @@ export default async function NotifichePage({
               description="Quando arriverà un evento (assegnazione ticket, ecc.) lo troverai qui."
             />
           ) : (
-            <Card>
-              <CardContent className="divide-y divide-border p-0">
-                {storico.map((n) => {
-                  const unread = !n.read_at;
-                  const label = NOTIF_TYPE_LABEL[n.type] ?? n.type;
-                  const titoloFromPayload = (n.payload as { title?: string } | null)
-                    ?.title;
-                  const href =
-                    ((n.payload as { href?: string } | null)?.href as string | undefined) ??
-                    null;
-                  const body = (
-                    <>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className={cn('flex-1 text-sm', unread && 'font-semibold')}>
-                          {titoloFromPayload ?? label}
-                        </p>
-                        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {fmtDataOra(n.created_at)}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
-                    </>
-                  );
-                  return href ? (
-                    <Link
-                      key={n.id}
-                      href={href}
-                      className={cn(
-                        'block px-4 py-3 transition-colors hover:bg-muted/40',
-                        unread && 'bg-primary/5',
-                      )}
-                    >
-                      {body}
-                    </Link>
-                  ) : (
-                    <div
-                      key={n.id}
-                      className={cn(
-                        'px-4 py-3',
-                        unread && 'bg-primary/5',
-                      )}
-                    >
-                      {body}
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
+            <StoricoNotifiche rows={storico} />
           )}
         </TabsContent>
 

@@ -2,12 +2,14 @@
 
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
+import { inserisciPausaDichiarata } from './_lib/viaggio-timbra';
 
 // Stati in cui il tecnico può ancora modificare il proprio rapportino
 // (fino all'approvazione dell'ufficio; dopo, lo tocca solo l'ufficio).
@@ -141,6 +143,24 @@ function labelRiga(
 function oggiRome(): string {
   // en-CA locale produce YYYY-MM-DD; more reliable than toISOString() (UTC)
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
+}
+
+// Finestra di auto-modifica del tecnico: oggi + i N giorni precedenti.
+const FINESTRA_MODIFICA_GIORNI = 3;
+
+/**
+ * Giorni (YYYY-MM-DD) in cui il tecnico può ancora modificare la propria
+ * giornata: oggi + i `FINESTRA_MODIFICA_GIORNI` precedenti. Confini Europe/Rome,
+ * TZ-safe (ancoraggio a mezzogiorno UTC del giorno italiano corrente, così lo
+ * scivolamento di data non capita mai vicino alla mezzanotte).
+ */
+function calcolaGiorniModificabili(): string[] {
+  const noon = Date.parse(`${oggiRome()}T12:00:00Z`);
+  const out: string[] = [];
+  for (let i = 0; i <= FINESTRA_MODIFICA_GIORNI; i += 1) {
+    out.push(new Date(noon - i * 86400000).toISOString().slice(0, 10));
+  }
+  return out;
 }
 
 /**
@@ -670,6 +690,300 @@ export async function mioStoricoRapportini(
       return { id: x.id, data: x.data, stato: x.stato, ord: t.ord, straord: t.straord, viaggio: t.viaggio };
     }),
   };
+}
+
+// ── 6) caricaMiaGiornata (loader del dialog di modifica) ─────────────────────
+// Dettaglio per-cantiere di una giornata (oggi + i 3 gg precedenti) per
+// precompilare il dialog di modifica del tecnico. Riflette le timbrature come
+// `precompilaMioRapportino`, e indica se c'è già una pausa e se la giornata è
+// chiusa (per abilitare l'aggiunta della pausa pranzo).
+
+const CaricaGiornataSchema = z.object({
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type RigaGiornataModifica = {
+  commessa_id: string | null;
+  cantiere_id: string | null;
+  target_label: string;
+  ore_lavoro: number;
+  ore_viaggio: number;
+};
+
+export async function caricaMiaGiornata(
+  input: unknown,
+): Promise<
+  | {
+      ok: true;
+      data: string;
+      stato: string;
+      modificabile: boolean;
+      pausaPresente: boolean;
+      giornataChiusa: boolean;
+      righe: RigaGiornataModifica[];
+    }
+  | ResultErr
+> {
+  const parsed = CaricaGiornataSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const { data } = parsed.data;
+  const modificabile = calcolaGiorniModificabili().includes(data);
+
+  // Righe correnti (riflettono le timbrature, come la vista "oggi").
+  const rapp = (await esisteRapportinoOTimbrature(supabase, ctx.tenantId, me.id, data))
+    ? await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data)
+    : null;
+
+  let righe: RigaGiornataModifica[] = [];
+  let stato = 'bozza';
+  if (rapp) {
+    const payload = await caricaPayloadRapportino(supabase, rapp);
+    stato = payload.stato;
+    righe = payload.righe.map((rr) => ({
+      commessa_id: rr.commessa_id,
+      cantiere_id: rr.cantiere_id,
+      target_label: rr.target_label,
+      ore_lavoro: rr.ore_ordinarie + rr.ore_straordinarie,
+      ore_viaggio: rr.ore_viaggio,
+    }));
+  }
+
+  // Pausa già presente? Giornata chiusa (ingresso + uscita reali)?
+  const { fromIso, toIso } = romeDayBoundsUtc(data);
+  const { data: timbRaw } = await supabase
+    .from('timbrature' as never)
+    .select('tipo, pausa')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  const timb = (timbRaw as { tipo: 'ingresso' | 'uscita'; pausa: boolean | null }[] | null) ?? [];
+  const pausaPresente = timb.some((t) => t.pausa);
+  const lavori = timb.filter((t) => !t.pausa);
+  const giornataChiusa =
+    lavori.some((t) => t.tipo === 'ingresso') && lavori.some((t) => t.tipo === 'uscita');
+
+  return { ok: true, data, stato, modificabile, pausaPresente, giornataChiusa, righe };
+}
+
+// ── 7) modificaMiaGiornata (tecnico: modifica ultimi 3 giorni) ───────────────
+// Il tecnico corregge le proprie ore (e/o aggiunge la pausa pranzo) di oggi o
+// dei 3 giorni precedenti. La modifica è immediata, versionata e avvisa
+// l'ufficio (notifica di sistema). Gate di proprietà + finestra + stato.
+
+const RigaModificaSchema = z
+  .object({
+    commessa_id: z.string().uuid().nullable().optional(),
+    cantiere_id: z.string().uuid().nullable().optional(),
+    ore_lavoro: z.number().min(0).max(24),
+    ore_viaggio: z.number().min(0).max(24),
+  })
+  .refine((d) => !!d.commessa_id !== !!d.cantiere_id, {
+    message: 'Ogni riga deve avere esattamente uno tra commessa_id e cantiere_id',
+  });
+
+const ModificaGiornataSchema = z.object({
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  righe: z.array(RigaModificaSchema).max(50),
+  pausaMinuti: z.number().int().min(5).max(240).nullable().optional(),
+});
+
+/**
+ * Notifica di sistema all'ufficio (utenti office/admin del tenant, escluso chi
+ * modifica) che un tecnico ha corretto le ore di una giornata. Best-effort via
+ * service role (l'attore tecnico non vede le righe `notifiche` altrui).
+ */
+async function notificaModificaTecnicoOffice(
+  tenantId: string,
+  attoreUserId: string,
+  info: { rapportinoId: string; dipendenteId: string; dipendenteNome: string; data: string },
+): Promise<void> {
+  try {
+    const service = createServiceSupabase();
+    const { data: destRaw } = await service
+      .from('users')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .in('role', ['admin', 'office'])
+      .eq('attivo', true);
+    const dest = ((destRaw as { id: string }[] | null) ?? []).filter(
+      (u) => u.id !== attoreUserId,
+    );
+    if (dest.length === 0) return;
+
+    const url = `/office/kantiere/rapportini?giorno=${info.data}`;
+    const rows = dest.map((u) => ({
+      tenant_id: tenantId,
+      user_id: u.id,
+      type: 'kantiere_modifica_tecnico',
+      payload: {
+        rapportinoId: info.rapportinoId,
+        dipendenteId: info.dipendenteId,
+        dipendenteNome: info.dipendenteNome,
+        data: info.data,
+        url,
+      },
+    }));
+    await service.from('notifiche').insert(rows);
+  } catch (e) {
+    console.warn('[modificaMiaGiornata] notifica office fallita', e);
+  }
+}
+
+export async function modificaMiaGiornata(
+  input: unknown,
+): Promise<ResultSimple | ResultErr> {
+  const parsed = ModificaGiornataSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const { data, righe, pausaMinuti } = parsed.data;
+
+  // Finestra: oggi + i 3 giorni precedenti (Europe/Rome).
+  if (!calcolaGiorniModificabili().includes(data)) {
+    return { ok: false, error: 'FUORI_FINESTRA' };
+  }
+
+  // Stato: bloccata SOLO se l'ufficio l'ha approvata/respinta a mano
+  // (`approvato_da` valorizzato). Le giornate auto-approvate dal sistema
+  // (`approvato_da` NULL) restano modificabili: si riapre e si riversiona.
+  const { data: rappPre } = await supabase
+    .from('rapportini' as never)
+    .select('id, stato, approvato_da')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .eq('data', data)
+    .maybeSingle();
+  const pre = rappPre as { id: string; stato: string; approvato_da: string | null } | null;
+  if (pre?.approvato_da) return { ok: false, error: 'NON_MODIFICABILE' };
+
+  // 1) Pausa pranzo dichiarata: coppia-pausa centrata nel turno reale (come
+  //    fa l'ufficio in `aggiungiPausaGiornata`). Solo se non già presente.
+  if (pausaMinuti && pausaMinuti > 0) {
+    const { fromIso, toIso } = romeDayBoundsUtc(data);
+    const { data: timbRaw } = await supabase
+      .from('timbrature' as never)
+      .select('commessa_id, cantiere_id, tipo, ts, pausa')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('dipendente_id', me.id)
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
+      .order('ts', { ascending: true });
+    const timb =
+      (timbRaw as
+        | {
+            commessa_id: string | null;
+            cantiere_id: string | null;
+            tipo: 'ingresso' | 'uscita';
+            ts: string;
+            pausa: boolean | null;
+          }[]
+        | null) ?? [];
+    const giaPausa = timb.some((t) => t.pausa);
+    if (!giaPausa) {
+      const lavori = timb.filter((t) => !t.pausa);
+      const primoIngresso = lavori.find((t) => t.tipo === 'ingresso');
+      const ultimaUscita = [...lavori].reverse().find((t) => t.tipo === 'uscita');
+      if (!primoIngresso || !ultimaUscita) return { ok: false, error: 'GIORNATA_NON_CHIUSA' };
+      const durataMin =
+        (Date.parse(ultimaUscita.ts) - Date.parse(primoIngresso.ts)) / 60000;
+      if (!(durataMin > 0)) return { ok: false, error: 'TURNO_NON_VALIDO' };
+      if (pausaMinuti >= durataMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
+      await inserisciPausaDichiarata(supabase, {
+        tenantId: ctx.tenantId,
+        dipendenteId: me.id,
+        commessaId: primoIngresso.commessa_id,
+        cantiereId: primoIngresso.cantiere_id,
+        creatoDa: ctx.userId,
+        startIso: primoIngresso.ts,
+        endIso: ultimaUscita.ts,
+        minuti: pausaMinuti,
+      });
+    }
+  }
+
+  // 2) Ricalcolo: riflette timbrature + pausa e ri-valuta l'auto-approvazione.
+  const rappBase = await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data);
+  if (!rappBase) return { ok: false, error: 'ERRORE_RAPPORTINO' };
+  const rapportinoId = rappBase.id;
+
+  // 3) Applica le ore inserite dal tecnico (override esplicito, per target).
+  //    Upsert come `registraOreManuali`: aggiorna la riga se esiste, altrimenti
+  //    la crea. Le ore di lavoro finiscono in `ore_ordinarie` (il tecnico non
+  //    distingue ord/straord dal suo dialog).
+  for (const rr of righe) {
+    const filtroCol = rr.cantiere_id ? 'cantiere_id' : 'commessa_id';
+    const filtroVal = rr.cantiere_id ?? (rr.commessa_id as string);
+    const { data: rigaRaw } = await supabase
+      .from('rapportino_righe' as never)
+      .select('id')
+      .eq('rapportino_id', rapportinoId)
+      .eq(filtroCol, filtroVal)
+      .maybeSingle();
+    const riga = rigaRaw as { id: string } | null;
+    if (riga) {
+      await supabase
+        .from('rapportino_righe' as never)
+        .update({
+          ore_ordinarie: rr.ore_lavoro,
+          ore_straordinarie: 0,
+          ore_viaggio: rr.ore_viaggio,
+        } as never)
+        .eq('id', riga.id);
+    } else {
+      await supabase.from('rapportino_righe' as never).insert({
+        rapportino_id: rapportinoId,
+        commessa_id: rr.commessa_id ?? null,
+        cantiere_id: rr.cantiere_id ?? null,
+        ore_ordinarie: rr.ore_lavoro,
+        ore_straordinarie: 0,
+        ore_viaggio: rr.ore_viaggio,
+      } as never);
+    }
+  }
+
+  // Modifica a mano del tecnico: stop all'auto-ricalcolo (le sue ore restano).
+  if (righe.length > 0) {
+    await marcaRapportinoManuale(supabase, rapportinoId);
+  }
+
+  // 4) Versione tracciata (storico per l'ufficio).
+  const modificatoDaNome = await nomeDipendente(supabase, me.id);
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'modifica_tecnico',
+    modificatoDa: ctx.userId,
+    modificatoDaNome,
+  });
+
+  // 5) Notifica di sistema all'ufficio (campanella office). Chi modifica NON
+  //    la riceve.
+  await notificaModificaTecnicoOffice(ctx.tenantId, ctx.userId, {
+    rapportinoId,
+    dipendenteId: me.id,
+    dipendenteNome: modificatoDaNome ?? 'Un tecnico',
+    data,
+  });
+
+  return { ok: true };
 }
 
 // Approvazione/respinta/riapertura rapportini: implementate lato ufficio in
