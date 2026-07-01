@@ -228,7 +228,7 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   // (a) Mezzi guidati (autista = true, mezzo_id valorizzato)
   const mezzoAggMap = new Map<string, { viaggi: number; km: number }>();
   let minutiGuida = 0;
-  // (b) Km per mese (tutti i viaggi = percorsi, autista o passeggero)
+  // (b) Km per mese (solo da autista: i km si attribuiscono a chi guida)
   const kmPerMeseMap = new Map<string, number>();
   // (c) Km GUIDATI (autista=true) vs da PASSEGGERO (autista=false): distinguere
   //     se ha davvero guidato o solo viaggiato.
@@ -237,11 +237,11 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
 
   for (const v of viaggi) {
     const km = Number(v.distanza_km ?? 0);
-    if (v.data) {
-      const mese = dataToMeseRome(v.data);
-      kmPerMeseMap.set(mese, (kmPerMeseMap.get(mese) ?? 0) + km);
-    }
     if (v.autista === true) {
+      if (v.data) {
+        const mese = dataToMeseRome(v.data);
+        kmPerMeseMap.set(mese, (kmPerMeseMap.get(mese) ?? 0) + km);
+      }
       kmGuidati += km;
       minutiGuida += Number(v.durata_confermata_min ?? 0);
       if (v.mezzo_id) {

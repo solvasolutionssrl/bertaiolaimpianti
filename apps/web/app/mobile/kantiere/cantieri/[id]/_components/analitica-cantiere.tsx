@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BarChart3, Users, Clock, Car, Route } from 'lucide-react';
+import { BarChart3, Users, Clock, Car } from 'lucide-react';
 
 export type AnaliticaCantiereDati = {
   /** Persone presenti o passate oggi su questo cantiere. */
@@ -101,13 +101,6 @@ export function AnaliticaCantiere({ dati }: { dati: AnaliticaCantiereDati }) {
           unita="km"
           label="Km guidati"
           tinta="blue"
-        />
-        <Chip
-          icon={<Route className="h-3.5 w-3.5" aria-hidden="true" />}
-          valore={kmLabel(dati.kmPercorsiOggi)}
-          unita="km"
-          label="Km percorsi"
-          tinta="amber"
         />
       </div>
 

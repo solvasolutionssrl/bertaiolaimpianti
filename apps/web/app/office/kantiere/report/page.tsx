@@ -110,6 +110,7 @@ type ViaggioRow = {
   mezzo_id: string | null;
   distanza_km: number | null;
   durata_confermata_min: number | null;
+  autista: boolean | null;
 };
 
 type MezzoLightRow = {
@@ -149,7 +150,7 @@ export default async function ReportPage({ searchParams }: PageProps) {
   // Carica viaggi nel range (in parallelo)
   const viaggiPromise = (supabase
     .from('timbratura_viaggio' as never)
-    .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min')
+    .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min, autista')
     .eq('tenant_id', ctx.tenantId)
     .gte('data', from)
     .lte('data', to)
@@ -275,7 +276,8 @@ export default async function ReportPage({ searchParams }: PageProps) {
   for (const v of viaggi) {
     const nome = dipendentiMap.get(v.dipendente_id) ?? v.dipendente_id;
     const cur = dipViaggioMap.get(nome) ?? { km: 0, n: 0, min: 0 };
-    cur.km += v.distanza_km ?? 0;
+    // Km attribuiti solo all'autista; le ore di viaggio spettano anche ai passeggeri.
+    if (v.autista) cur.km += v.distanza_km ?? 0;
     cur.n += 1;
     cur.min += v.durata_confermata_min ?? 0;
     dipViaggioMap.set(nome, cur);
