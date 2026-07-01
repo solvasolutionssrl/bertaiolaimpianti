@@ -117,11 +117,21 @@ export default function GlobalError({
         <p style={{ margin: 0, color: 'hsl(220,10%,45%)', fontSize: '14px', maxWidth: '320px' }}>
           Si è verificato un errore che impedisce il caricamento dell&apos;app.
         </p>
-        {error.digest ? (
-          <code style={{ fontSize: '11px', color: 'hsl(220,10%,60%)', fontFamily: 'monospace' }}>
-            ref: {error.digest}
-          </code>
-        ) : null}
+        {/* Diagnostica temporanea: mostra l'errore reale (Sentry non ancora
+            configurato). Rimuovere una volta individuata la causa. */}
+        <code
+          style={{
+            fontSize: '11px',
+            color: 'hsl(220,10%,55%)',
+            fontFamily: 'monospace',
+            maxWidth: '320px',
+            wordBreak: 'break-word',
+            lineHeight: 1.4,
+          }}
+        >
+          {(error.name || 'Error')}: {(error.message || '(nessun messaggio)').slice(0, 240)}
+          {error.digest ? ` · ref ${error.digest}` : ''}
+        </code>
         <button
           type="button"
           onClick={reset}
