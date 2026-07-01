@@ -27,7 +27,7 @@ const sharp = require('sharp');
 const OUT_DIR = resolve(__dirname, '../apps/web/public/splash');
 
 const BASE = '#E2E9F4'; // hsl(214 44% 92%) — base sfondo (allineata a .bg-canvas-mobile, gradiente originale)
-const WARM = '#FFE7D1'; // hsl(28 100% 91%) — glow caldo pesca top-right
+const WARM = '#D3ECFD'; // hsl(205 92% 91%) — glow azzurro top-right (ex pesca: troppo giocoso)
 const BLUE_L = '#D9E8FD'; // hsl(214 88% 92%) — glow blu sinistra
 const BLUE_B = '#E5EEFB'; // hsl(214 72% 94%) — glow blu basso
 const BRAND = '#1340A6'; // --primary — striscia status bar
