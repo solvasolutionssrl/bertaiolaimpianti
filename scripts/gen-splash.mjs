@@ -26,10 +26,10 @@ const require = createRequire(resolve(__dirname, '../apps/web/package.json'));
 const sharp = require('sharp');
 const OUT_DIR = resolve(__dirname, '../apps/web/public/splash');
 
-const BASE = '#CDDAEF'; // hsl(216 52% 87%) — base sfondo
-const WARM = '#FFE4CC'; // hsl(28 100% 90%)  — glow caldo top-right
-const BLUE_L = '#CBDDFB'; // hsl(218 86% 89%) — glow blu sinistra
-const BLUE_B = '#D3E1F8'; // hsl(217 74% 90%) — glow blu basso
+const BASE = '#E9EFF6'; // hsl(214 42% 94%) — base sfondo (allineata a .bg-canvas-mobile)
+const WARM = '#FCF0E4'; // hsl(32 80% 94%)  — glow caldo top-right (tenue)
+const BLUE_L = '#EBF1FA'; // hsl(214 60% 95%) — glow blu sinistra (tenue)
+const BLUE_B = '#F0F4FA'; // hsl(214 52% 96%) — glow blu basso (tenue)
 const BRAND = '#1340A6'; // --primary — striscia status bar
 
 // [larghezza CSS, altezza CSS, device-pixel-ratio, safe-area-inset-top in pt].

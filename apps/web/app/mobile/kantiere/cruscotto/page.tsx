@@ -52,21 +52,26 @@ type ViaggioRow = {
   autista: boolean | null;
 };
 
-// Tinte KPI dalla palette dell'app (primary/emerald/amber/sky). Solo colore +
-// opacità: card leggermente tintata, bordo più marcato, icona a colore.
+// Tinte KPI dalla palette dell'app (primary/emerald/amber/sky). Sfondo card
+// tenue INVARIATO, ma bordo e testo (valore) più DECISI nel loro colore: sullo
+// sfondo chiaro le tinte pallide sbiadivano. Bordo definito + numero a colore
+// carico + icona piena → ogni card è chiaramente la sua.
 const KPI_TONE = {
-  primary: { card: 'border-primary/25 bg-primary/[0.06]', icon: 'text-primary/80' },
+  primary: { card: 'border-primary/45 bg-primary/[0.06]', icon: 'text-primary', value: 'text-primary' },
   emerald: {
-    card: 'border-emerald-300/70 bg-emerald-50 dark:border-emerald-900/40 dark:bg-emerald-950/20',
+    card: 'border-emerald-400 bg-emerald-50 dark:border-emerald-700/70 dark:bg-emerald-950/25',
     icon: 'text-emerald-600',
+    value: 'text-emerald-700 dark:text-emerald-300',
   },
   amber: {
-    card: 'border-amber-300/70 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20',
+    card: 'border-amber-400 bg-amber-50 dark:border-amber-700/70 dark:bg-amber-950/25',
     icon: 'text-amber-600',
+    value: 'text-amber-700 dark:text-amber-300',
   },
   sky: {
-    card: 'border-sky-300/70 bg-sky-50 dark:border-sky-900/40 dark:bg-sky-950/20',
+    card: 'border-sky-400 bg-sky-50 dark:border-sky-700/70 dark:bg-sky-950/25',
     icon: 'text-sky-600',
+    value: 'text-sky-700 dark:text-sky-300',
   },
 } as const;
 
@@ -329,7 +334,7 @@ export default async function CruscottoKantierePage({
             }
           >
             <k.icon className={'h-4 w-4 ' + KPI_TONE[k.tone].icon} aria-hidden="true" />
-            <span className="text-xl font-semibold leading-none tabular-nums">{k.value}</span>
+            <span className={'text-xl font-semibold leading-none tabular-nums ' + KPI_TONE[k.tone].value}>{k.value}</span>
             <span className="text-[10px] leading-tight text-muted-foreground">{k.label}</span>
           </Link>
         ))}
