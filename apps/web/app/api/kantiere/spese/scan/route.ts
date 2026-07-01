@@ -14,6 +14,7 @@ import {
   estrazioneSufficiente,
   normalizzaCategoria,
   parseDataScontrino,
+  parseNumeroPersone,
 } from '@kommessa/api/spese';
 
 import { tenantHasModule } from '@/app/_lib/modules';
@@ -43,9 +44,11 @@ Estrai SOLO questi campi e restituisci ESCLUSIVAMENTE un JSON valido (nessun tes
   "partita_iva": string|null,
   "metodo_pagamento": "contanti"|"carta"|"altro"|null,
   "numero_documento": string|null,
-  "indirizzo_esercente": string|null
+  "indirizzo_esercente": string|null,
+  "numero_persone": number|null       // numero di coperti o di menu' fissi rilevati; se non deducibile null
 }
 Regole: categoria dedotta dall'esercente (ristorante/trattoria/pizzeria=ristorante; bar/caffe=bar; albergo/hotel/B&B=hotel; benzina/carburante/distributore=carburante; pedaggio/parcheggio/taxi/treno/bus=trasporti; altrimenti varie).
+numero_persone = numero di coperti o di menu' fissi rilevati sullo scontrino; se non deducibile usa null.
 Importi col formato dello scontrino (virgola decimale ammessa). Se un campo non e' leggibile usa null. Rispondi solo col JSON.`;
 
 const Estratto = z.object({
@@ -59,6 +62,7 @@ const Estratto = z.object({
   metodo_pagamento: z.enum(['contanti', 'carta', 'altro']).optional().catch(undefined),
   numero_documento: z.string().trim().min(1).max(60).optional().catch(undefined),
   indirizzo_esercente: z.string().trim().min(2).max(200).optional().catch(undefined),
+  numero_persone: z.union([z.string(), z.number()]).optional().catch(undefined),
 });
 
 export async function POST(request: NextRequest) {
@@ -179,6 +183,7 @@ export async function POST(request: NextRequest) {
     metodo_pagamento: null as 'contanti' | 'carta' | 'altro' | null,
     numero_documento: null as string | null,
     indirizzo_esercente: null as string | null,
+    numero_persone: null as number | null,
   };
   let aiOk = false;
 
@@ -247,6 +252,7 @@ export async function POST(request: NextRequest) {
             metodo_pagamento: e.metodo_pagamento ?? null,
             numero_documento: e.numero_documento ?? null,
             indirizzo_esercente: e.indirizzo_esercente ?? null,
+            numero_persone: parseNumeroPersone(e.numero_persone),
           };
           aiOk = true;
         }

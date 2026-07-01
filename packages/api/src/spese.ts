@@ -97,6 +97,27 @@ export function parseDataScontrino(raw: string | null | undefined): string | nul
   return null;
 }
 
+/**
+ * Numero di persone per cui è stata pagata la spesa (coperti).
+ * Accetta number o string (output AI), ritorna un intero >= 1 oppure null se
+ * non deducibile. I decimali vengono troncati verso il basso.
+ */
+export function parseNumeroPersone(raw: unknown): number | null {
+  let n: number;
+  if (typeof raw === 'number') {
+    n = raw;
+  } else if (typeof raw === 'string') {
+    const s = raw.replace(/[^0-9.,-]/g, '').replace(',', '.').trim();
+    if (!s) return null;
+    n = Number.parseFloat(s);
+  } else {
+    return null;
+  }
+  if (!Number.isFinite(n)) return null;
+  const intero = Math.floor(n);
+  return intero >= 1 ? intero : null;
+}
+
 /** Imponibile = totale - iva, arrotondato a 2 decimali, solo se entrambi noti. */
 export function calcolaImponibile(
   totale: number | null,

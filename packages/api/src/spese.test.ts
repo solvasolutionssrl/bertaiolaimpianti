@@ -7,6 +7,7 @@ import {
   estrazioneSufficiente,
   calcolaImponibile,
   parseDataScontrino,
+  parseNumeroPersone,
 } from './spese';
 
 describe('parseImportoIt', () => {
@@ -91,6 +92,26 @@ describe('parseDataScontrino', () => {
   it('non interpretabile → null', () => {
     expect(parseDataScontrino('boh')).toBeNull();
     expect(parseDataScontrino(null)).toBeNull();
+  });
+});
+
+describe('parseNumeroPersone', () => {
+  it('number e string interi >= 1', () => {
+    expect(parseNumeroPersone(5)).toBe(5);
+    expect(parseNumeroPersone('3')).toBe(3);
+    expect(parseNumeroPersone('2 persone')).toBe(2);
+  });
+  it('tronca i decimali', () => {
+    expect(parseNumeroPersone(2.9)).toBe(2);
+    expect(parseNumeroPersone('4,5')).toBe(4);
+  });
+  it('null se < 1 o non deducibile', () => {
+    expect(parseNumeroPersone(0)).toBeNull();
+    expect(parseNumeroPersone('0')).toBeNull();
+    expect(parseNumeroPersone('abc')).toBeNull();
+    expect(parseNumeroPersone('')).toBeNull();
+    expect(parseNumeroPersone(null)).toBeNull();
+    expect(parseNumeroPersone(undefined)).toBeNull();
   });
 });
 

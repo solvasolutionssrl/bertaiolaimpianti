@@ -68,6 +68,7 @@ const CreaSchema = z.object({
   metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
   numeroDocumento: z.string().trim().max(60).nullable().optional(),
   indirizzoEsercente: z.string().trim().max(200).nullable().optional(),
+  numeroPersone: z.number().int().positive().max(99).default(1),
   note: z.string().trim().max(2000).nullable().optional(),
   aiRaw: z.unknown().optional(),
 });
@@ -162,6 +163,7 @@ export async function creaSpesa(input: z.input<typeof CreaSchema>): Promise<Risu
       metodo_pagamento: d.metodoPagamento ?? null,
       numero_documento: d.numeroDocumento ?? null,
       indirizzo_esercente: d.indirizzoEsercente ?? null,
+      numero_persone: d.numeroPersone,
       data_scontrino: d.dataScontrino ?? null,
       r2_key: d.r2Key,
       r2_thumb_key: d.r2ThumbKey ?? null,
@@ -197,6 +199,7 @@ const CreaOfficeSchema = z.object({
   metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
   numeroDocumento: z.string().trim().max(60).nullable().optional(),
   indirizzoEsercente: z.string().trim().max(200).nullable().optional(),
+  numeroPersone: z.number().int().positive().max(99).default(1),
   note: z.string().trim().max(2000).nullable().optional(),
   // foto opzionale (caricata via /scan prima del salvataggio)
   r2Key: z.string().min(1).max(500).nullable().optional(),
@@ -271,6 +274,7 @@ export async function creaSpesaOffice(
       metodo_pagamento: d.metodoPagamento ?? null,
       numero_documento: d.numeroDocumento ?? null,
       indirizzo_esercente: d.indirizzoEsercente ?? null,
+      numero_persone: d.numeroPersone,
       data_scontrino: d.dataScontrino ?? null,
       r2_key: d.r2Key ?? null,
       r2_thumb_key: d.r2ThumbKey ?? null,

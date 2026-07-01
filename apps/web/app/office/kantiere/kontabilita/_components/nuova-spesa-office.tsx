@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Upload, PenLine, AlertTriangle, FileText, X } from 'lucide-react';
+import { Loader2, Upload, PenLine, AlertTriangle, FileText, X, Minus, Plus } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -45,6 +45,7 @@ type Estratto = {
   metodo_pagamento: MetodoPagamento | null;
   numero_documento: string | null;
   indirizzo_esercente: string | null;
+  numero_persone: number | null;
 };
 
 type ScanOk = {
@@ -236,6 +237,8 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
   // default sempre "carta" (Carta aziendale) finche' l'AI non restituisce altro
   const [metodo, setMetodo] = React.useState<MetodoPagamento>('carta');
   const [valuta, setValuta] = React.useState('EUR');
+  // numero di persone (coperti): default 1, proposto dall'AI
+  const [numeroPersone, setNumeroPersone] = React.useState(1);
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -268,6 +271,7 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
     setDataLocal('');
     setMetodo('carta');
     setValuta('EUR');
+    setNumeroPersone(1);
   }, [defaultDip, revokePreview]);
 
   const chiudi = React.useCallback(() => {
@@ -323,6 +327,7 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
         // default "carta": l'AI vince solo se ha restituito un metodo esplicito
         setMetodo(est.metodo_pagamento ?? 'carta');
         setValuta(est.valuta || 'EUR');
+        setNumeroPersone(est.numero_persone ?? 1);
         if (data.isPdf) {
           setAvviso('PDF allegato. Inserisci i dati a mano, il documento resta agganciato alla spesa.');
         }
@@ -356,6 +361,7 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
         ragioneSociale: ragioneSociale.trim() || null,
         dataScontrino: dataIso,
         metodoPagamento: metodo,
+        numeroPersone,
         ...(scan
           ? {
               r2Key: scan.r2Key,
@@ -388,6 +394,7 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
     ragioneSociale,
     dataLocal,
     metodo,
+    numeroPersone,
     scan,
     router,
     chiudi,
@@ -624,6 +631,44 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
                       <option value="contanti">Contanti</option>
                       <option value="altro">Altro</option>
                     </select>
+                  </div>
+                </div>
+
+                {/* Numero persone */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Per quante persone?
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      aria-label="Diminuisci"
+                      onClick={() => setNumeroPersone((n) => Math.max(1, n - 1))}
+                      disabled={numeroPersone <= 1}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground transition hover:bg-muted/40 disabled:opacity-40"
+                    >
+                      <Minus className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      step="1"
+                      value={numeroPersone}
+                      onChange={(e) => {
+                        const n = Math.floor(Number(e.target.value));
+                        setNumeroPersone(Number.isFinite(n) && n >= 1 ? n : 1);
+                      }}
+                      className="w-20 rounded-md border border-input bg-background px-3 py-1.5 text-center text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Aumenta"
+                      onClick={() => setNumeroPersone((n) => n + 1)}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input bg-background text-foreground transition hover:bg-muted/40"
+                    >
+                      <Plus className="h-4 w-4" aria-hidden="true" />
+                    </button>
                   </div>
                 </div>
 

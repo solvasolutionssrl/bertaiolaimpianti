@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Plus,
+  Minus,
+  Users,
   X,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -43,6 +45,7 @@ type Estratto = {
   metodo_pagamento: MetodoPagamento | null;
   numero_documento: string | null;
   indirizzo_esercente: string | null;
+  numero_persone: number | null;
 };
 
 type ScanOk = {
@@ -187,6 +190,12 @@ export function NuovaSpesa() {
   const [dataLocal, setDataLocal] = React.useState('');
   // default sempre "carta" (Carta aziendale) finche' l'AI non restituisce altro
   const [metodo, setMetodo] = React.useState<MetodoPagamento>('carta');
+  // numero di persone (coperti): default 1, proposto dall'AI. Se l'utente non lo
+  // tocca, alla submit compare un pop-up di conferma (personeToccato = false).
+  const [numeroPersone, setNumeroPersone] = React.useState(1);
+  const [personeToccato, setPersoneToccato] = React.useState(false);
+  // overlay full-screen di conferma "per quante persone?" (solo se non toccato)
+  const [confermaPersone, setConfermaPersone] = React.useState(false);
 
   const fotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const allegaInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -216,6 +225,9 @@ export function NuovaSpesa() {
     setRagioneSociale('');
     setDataLocal('');
     setMetodo('carta');
+    setNumeroPersone(1);
+    setPersoneToccato(false);
+    setConfermaPersone(false);
   }, [revokePreview]);
 
   const chiudi = React.useCallback(() => {
@@ -290,6 +302,9 @@ export function NuovaSpesa() {
         setDataLocal(isoToLocalInput(est.data_scontrino));
         // default "carta": l'AI vince solo se ha restituito un metodo esplicito
         setMetodo(est.metodo_pagamento ?? 'carta');
+        // numero persone proposto dall'AI (fallback 1): l'utente conferma o corregge
+        setNumeroPersone(est.numero_persone ?? 1);
+        setPersoneToccato(false);
         setFase('revisione');
       } catch {
         setErrMsg('Connessione assente o instabile. Riprova.');
@@ -303,48 +318,65 @@ export function NuovaSpesa() {
   const importoValido = Number.isFinite(importoNum) && importoNum > 0;
   const ivaNum = importoIva.trim() ? Number(importoIva.replace(',', '.')) : null;
 
+  // Scrive la spesa col numero di persone passato. Usato sia dal salvataggio
+  // diretto (utente ha toccato il campo) sia dalla conferma del pop-up.
+  const eseguiSalva = React.useCallback(
+    (persone: number) => {
+      if (!scan || !importoValido) return;
+      const est = scan.estratto;
+      const dataIso = dataLocal ? new Date(dataLocal).toISOString() : null;
+
+      startTransition(async () => {
+        const res = await creaSpesa({
+          r2Key: scan.r2Key,
+          r2ThumbKey: scan.r2ThumbKey,
+          mime: scan.mime,
+          sizeBytes: scan.sizeBytes,
+          importoTotale: importoNum,
+          importoIva: ivaNum != null && Number.isFinite(ivaNum) ? ivaNum : null,
+          categoria,
+          ragioneSociale: ragioneSociale.trim() || null,
+          valuta: est.valuta || 'EUR',
+          dataScontrino: dataIso,
+          metodoPagamento: metodo,
+          numeroPersone: persone,
+          partitaIva: est.partita_iva,
+          numeroDocumento: est.numero_documento,
+          indirizzoEsercente: est.indirizzo_esercente,
+          aiRaw: est,
+        });
+
+        if (!res.ok) {
+          setErrMsg('Salvataggio non riuscito. Riprova.');
+          return;
+        }
+        setConfermaPersone(false);
+        setFase('fatto');
+        router.refresh();
+      });
+    },
+    [
+      scan,
+      importoValido,
+      importoNum,
+      ivaNum,
+      categoria,
+      ragioneSociale,
+      metodo,
+      dataLocal,
+      router,
+    ],
+  );
+
   const salva = React.useCallback(() => {
     if (!scan || !importoValido) return;
-    const est = scan.estratto;
-    const dataIso = dataLocal ? new Date(dataLocal).toISOString() : null;
-
-    startTransition(async () => {
-      const res = await creaSpesa({
-        r2Key: scan.r2Key,
-        r2ThumbKey: scan.r2ThumbKey,
-        mime: scan.mime,
-        sizeBytes: scan.sizeBytes,
-        importoTotale: importoNum,
-        importoIva: ivaNum != null && Number.isFinite(ivaNum) ? ivaNum : null,
-        categoria,
-        ragioneSociale: ragioneSociale.trim() || null,
-        valuta: est.valuta || 'EUR',
-        dataScontrino: dataIso,
-        metodoPagamento: metodo,
-        partitaIva: est.partita_iva,
-        numeroDocumento: est.numero_documento,
-        indirizzoEsercente: est.indirizzo_esercente,
-        aiRaw: est,
-      });
-
-      if (!res.ok) {
-        setErrMsg('Salvataggio non riuscito. Riprova.');
-        return;
-      }
-      setFase('fatto');
-      router.refresh();
-    });
-  }, [
-    scan,
-    importoValido,
-    importoNum,
-    ivaNum,
-    categoria,
-    ragioneSociale,
-    metodo,
-    dataLocal,
-    router,
-  ]);
+    // Se l'utente non ha confermato il numero di persone, prima chiediglielo.
+    if (!personeToccato) {
+      setConfermaPersone(true);
+      return;
+    }
+    eseguiSalva(numeroPersone);
+  }, [scan, importoValido, personeToccato, numeroPersone, eseguiSalva]);
 
   // ── ENTRY: bottone + scelta sorgente foto ──────────────────────────────────
   if (!aperto) {
@@ -457,8 +489,10 @@ export function NuovaSpesa() {
             ) : null}
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="h-9 w-9 animate-spin text-primary" aria-hidden="true" />
-              <p className="text-lg font-semibold text-foreground">Analisi in corso…</p>
-              <p className="text-sm text-muted-foreground">Sto leggendo lo scontrino, un attimo.</p>
+              <p className="text-lg font-semibold text-foreground">
+                Attendi qualche secondo mentre vengono estratti i dati dello scontrino
+              </p>
+              <p className="text-sm text-muted-foreground">Non chiudere questa schermata</p>
             </div>
           </div>
         ) : null}
@@ -580,6 +614,55 @@ export function NuovaSpesa() {
                 onChange={(e) => setDataLocal(e.target.value)}
                 className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
               />
+            </div>
+
+            {/* Numero persone: stepper meno/più con input manuale */}
+            <div>
+              <label
+                htmlFor="spesa-persone"
+                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Per quante persone?
+              </label>
+              <div className="mt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Diminuisci"
+                  onClick={() => {
+                    setPersoneToccato(true);
+                    setNumeroPersone((n) => Math.max(1, n - 1));
+                  }}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 transition disabled:opacity-40"
+                  disabled={numeroPersone <= 1}
+                >
+                  <Minus className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <input
+                  id="spesa-persone"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  step="1"
+                  value={numeroPersone}
+                  onChange={(e) => {
+                    setPersoneToccato(true);
+                    const n = Math.floor(Number(e.target.value));
+                    setNumeroPersone(Number.isFinite(n) && n >= 1 ? n : 1);
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-center text-lg font-semibold tabular-nums outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  aria-label="Aumenta"
+                  onClick={() => {
+                    setPersoneToccato(true);
+                    setNumeroPersone((n) => n + 1);
+                  }}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 transition"
+                >
+                  <Plus className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             {/* Categoria: dropdown */}
@@ -711,6 +794,101 @@ export function NuovaSpesa() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
         </button>
+      ) : null}
+
+      {/* Conferma numero persone: pop-up full-screen quando l'utente non ha
+          toccato il campo. Ricorda l'importo e chiede i coperti. */}
+      {confermaPersone && scan ? (
+        <div
+          className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1rem)' }}
+        >
+          <div className="w-full rounded-2xl bg-background p-5 shadow-[0_-8px_40px_-8px_rgba(0,0,0,0.4)]">
+            <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Users className="h-6 w-6" aria-hidden="true" />
+            </span>
+            <p className="text-center text-base font-semibold text-foreground">
+              Stai aggiungendo una spesa da{' '}
+              {importoNum.toLocaleString('it-IT', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{' '}
+              {scan.estratto.valuta || 'EUR'}.
+            </p>
+            <p className="mt-1 text-center text-sm text-muted-foreground">
+              Per quante persone hai pagato?
+            </p>
+
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                aria-label="Diminuisci"
+                onClick={() => {
+                  setPersoneToccato(true);
+                  setNumeroPersone((n) => Math.max(1, n - 1));
+                }}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground active:scale-95 transition disabled:opacity-40"
+                disabled={numeroPersone <= 1}
+              >
+                <Minus className="h-6 w-6" aria-hidden="true" />
+              </button>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                step="1"
+                aria-label="Numero di persone"
+                value={numeroPersone}
+                onChange={(e) => {
+                  setPersoneToccato(true);
+                  const n = Math.floor(Number(e.target.value));
+                  setNumeroPersone(Number.isFinite(n) && n >= 1 ? n : 1);
+                }}
+                className="w-24 rounded-xl border border-border bg-background px-3 py-3 text-center text-2xl font-bold tabular-nums outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                aria-label="Aumenta"
+                onClick={() => {
+                  setPersoneToccato(true);
+                  setNumeroPersone((n) => n + 1);
+                }}
+                className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground active:scale-95 transition"
+              >
+                <Plus className="h-6 w-6" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full py-3.5"
+                onClick={() => setConfermaPersone(false)}
+                disabled={pending}
+              >
+                Modifica
+              </Button>
+              <Button
+                type="button"
+                size="lg"
+                className="w-full py-3.5 font-semibold"
+                onClick={() => eseguiSalva(numeroPersone)}
+                disabled={pending}
+              >
+                {pending ? (
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <CheckCircle2 className="mr-2 h-5 w-5" aria-hidden="true" />
+                )}
+                Conferma
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   );
