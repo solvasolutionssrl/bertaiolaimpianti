@@ -81,8 +81,22 @@ export default async function MobileLayout({
     isCapo = await sonoCapoSquadra(ctx.tenantId, ctx.userId);
   }
 
+  // Sfondo PER MONDO: Kantiere (FPM) usa un canvas più blu/scuro; il mondo
+  // commesse (Bertaiola) tiene il suo canvas chiaro. `canvasBase` è il colore
+  // pieno della base (= base del rispettivo gradiente) usato per dipingere
+  // SUBITO — inline sul div + su <html> — così all'apertura a freddo non si
+  // vede il flash bianco prima che il CSS/gradiente sia applicato.
+  const isKantiere = shell === 'kantiere';
+  const canvasBase = isKantiere ? '#B1C8EC' : '#E2E9F4';
+
   return (
-    <div className="min-h-[100dvh] bg-canvas-mobile">
+    <div
+      className={`min-h-[100dvh] ${isKantiere ? 'bg-canvas-kantiere' : 'bg-canvas-mobile'}`}
+      style={{ backgroundColor: canvasBase }}
+    >
+      {/* Anti-flash: dipinge <html> col colore base già in fase di parsing HTML
+          (prima che il gradiente del CSS sia applicato). Solo su /mobile. */}
+      <style dangerouslySetInnerHTML={{ __html: `html{background-color:${canvasBase}}` }} />
       {/* <link apple-touch-startup-image> → issati nell'<head> da Next */}
       <AppleSplashLinks />
       <SwRegistrar />
