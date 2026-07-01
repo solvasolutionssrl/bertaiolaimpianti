@@ -112,6 +112,11 @@ const preset: Partial<Config> = {
           '0%': { backgroundPosition: '200% 0' },
           '100%': { backgroundPosition: '-200% 0' },
         },
+        // Transizione d'ingresso pagina (PWA feel): entra dal basso, veloce.
+        'page-in': {
+          from: { opacity: '0', transform: 'translateY(8px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -119,6 +124,10 @@ const preset: Partial<Config> = {
         'fade-up': 'fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
         'fade-in': 'fade-in 0.3s ease-out both',
         'shimmer': 'shimmer 2s linear infinite',
+        // `backwards` (non `both`): applica lo stato iniziale prima di partire
+        // ma NON lascia un transform residuo a fine animazione (altrimenti gli
+        // elementi position:fixed dentro la pagina verrebbero ancorati male).
+        'page-in': 'page-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) backwards',
       },
     },
   },
