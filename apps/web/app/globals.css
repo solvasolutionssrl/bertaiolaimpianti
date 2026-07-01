@@ -241,6 +241,17 @@
       0 8px 24px -8px hsl(var(--primary) / 0.35);
   }
 
+  /* Elevazione card sul canvas MOBILE chiaro: ombra morbida blu-inchiostro
+     (contatto + ambient) per staccare i componenti (KPI in alto, card, liste)
+     dallo sfondo. Scoped dentro .bg-canvas-mobile → vale solo nella PWA, l'office
+     desktop resta invariato. Volutamente leggera, non aggressiva. Override della
+     `.shadow-soft` piatta (1px) usata ovunque nel mobile. */
+  .bg-canvas-mobile .shadow-soft {
+    box-shadow:
+      0 1px 2px -1px hsl(220 45% 20% / 0.10),
+      0 7px 16px -6px hsl(220 45% 22% / 0.14);
+  }
+
   /* ===== Animations ===== */
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(6px); }

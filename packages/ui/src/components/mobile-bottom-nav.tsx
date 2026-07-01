@@ -103,8 +103,9 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
           // con liste lunghe). Lo sfondo opaco elimina il bug su tutti i tenant.
           'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background',
           'pb-[env(safe-area-inset-bottom)]',
-          // safety-shadow leggera per separare dal contenuto su sfondo bianco
-          'shadow-[0_-1px_0_0_rgba(0,0,0,0.02),0_-8px_24px_-12px_rgba(0,0,0,0.08)]',
+          // Ombra morbida verso l'alto (blu-inchiostro) per staccare la barra dal
+          // contenuto e dare profondità sul canvas chiaro. Leggera, non aggressiva.
+          'shadow-[0_-1px_0_0_rgba(15,30,66,0.06),0_-10px_26px_-12px_rgba(15,30,66,0.22)]',
           className,
         )}
         {...rest}
