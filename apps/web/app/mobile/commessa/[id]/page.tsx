@@ -26,7 +26,6 @@ import {
 
 import { guardMobile } from '../../_lib/guard';
 import { titoloCase } from '../../_lib/display-case';
-import { fmtData } from '../../../office/_lib/format';
 import {
   Divider,
   CornerTicks,
@@ -410,9 +409,6 @@ export default async function CommessaDetailPage({
   });
   const cloudFileCount = sortedCloudEntries.filter((e) => !e.isDirectory).length;
   const cliente = Array.isArray(commessa.cliente) ? commessa.cliente[0] : commessa.cliente;
-  const responsabile = Array.isArray(commessa.responsabile)
-    ? commessa.responsabile[0]
-    : commessa.responsabile;
   const stato = commessa.stato as StatoCommessa;
 
   const tutteFoto = (fotoRes.data ?? []) as FotoItem[];
@@ -526,15 +522,16 @@ export default async function CommessaDetailPage({
             (descrizione AI / nota capo) è la cosa più grande, cliente +
             indirizzo come meta sotto, codice/data come micro-tag sopra. */}
         <div className="mt-4">
-          <p className="text-xs font-medium text-primary-foreground/65">
-            {commessa.codice_interno} · {fmtData(commessa.data_apertura)}
-            {responsabile?.display_name ? ` · Resp. ${titoloCase(responsabile.display_name)}` : ''}
-          </p>
-
-          {/* Titolo della commessa — la cosa più grande dell'hero */}
-          <h1 className="mt-1.5 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
-            {titoloCase(pickCommessaTitolo(commessa)) || commessa.nome_cartella || '—'}
-          </h1>
+          {/* Titolo + codice a destra (niente riga meta pesante: data e
+              responsabile non servono al tecnico in mobile) */}
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+            <h1 className="text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
+              {titoloCase(pickCommessaTitolo(commessa)) || commessa.nome_cartella || '—'}
+            </h1>
+            <span className="font-mono text-[11px] font-medium tracking-tight text-primary-foreground/45">
+              {commessa.codice_interno}
+            </span>
+          </div>
 
           {/* Cliente + Indirizzo con icona, leggibili (niente micro-maiuscolo) */}
           <div className="mt-2.5 flex items-center gap-2">

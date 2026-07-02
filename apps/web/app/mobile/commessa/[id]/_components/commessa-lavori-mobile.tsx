@@ -113,7 +113,7 @@ export function CommessaLavoriMobile({
 
       {/* Filtri — pill comode e tappabili, riga scrollabile */}
       <p className="mb-2.5 px-1 text-xs font-medium text-muted-foreground">Filtra</p>
-      <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="-mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1">
         <FiltroChip
           label="Tutto"
           count={totale}
