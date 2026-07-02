@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Calendar,
   Camera,
   Check,
   FileText,
@@ -374,7 +375,13 @@ export function CreaRiunioneDialog({
   // ─── render ───────────────────────────────────────────────────────
   return (
     <Dialog open onOpenChange={(o) => !o && void handleClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+        // Niente auto-focus all'apertura: su iOS il focus automatico sul campo
+        // data apriva subito il date picker (fastidio segnalato). Il focus resta
+        // comunque intrappolato nel dialog.
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4 text-primary" />
@@ -387,27 +394,42 @@ export function CreaRiunioneDialog({
         {/* ─── STEP 1 — CONTENUTO ──────────────────────────────── */}
         {step === 'contenuto' ? (
           <div className="space-y-3">
-            {/* Data + Titolo — impilati, così restano sempre allineati su mobile */}
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="r_data" className="text-xs text-muted-foreground">Data</Label>
-                <Input
-                  id="r_data"
-                  type="date"
-                  value={dataRiunione}
-                  onChange={(e) => setDataRiunione(e.target.value)}
-                  className="mt-1 h-10"
-                />
+            {/* Data + Titolo affiancati 50/50. Data = campo custom (display
+                formattato + <input type=date> INVISIBILE sopra) così su iOS non
+                sfora dal box (stesso pattern delle spese). `items-end` tiene gli
+                input allineati anche se una label andasse a capo. */}
+            <div className="grid grid-cols-2 items-end gap-3">
+              <div className="min-w-0">
+                <Label htmlFor="r_data" className="block truncate text-xs text-muted-foreground">
+                  Data
+                </Label>
+                <div className="relative mt-1">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none flex h-10 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 truncate tabular-nums">{fmtDataBreve(dataRiunione)}</span>
+                  </div>
+                  <input
+                    id="r_data"
+                    type="date"
+                    value={dataRiunione}
+                    onChange={(e) => setDataRiunione(e.target.value)}
+                    aria-label="Data riunione"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="r_tit" className="text-xs text-muted-foreground">
-                  Titolo <span className="font-normal opacity-60">(opzionale)</span>
+              <div className="min-w-0">
+                <Label htmlFor="r_tit" className="block truncate text-xs text-muted-foreground">
+                  Titolo <span className="font-normal opacity-60">(opz.)</span>
                 </Label>
                 <Input
                   id="r_tit"
                   value={titolo}
                   onChange={(e) => setTitolo(e.target.value)}
-                  placeholder="Es. Sopralluogo, Allineamento…"
+                  placeholder="Es. Sopralluogo…"
                   className="mt-1 h-10"
                 />
               </div>
@@ -437,7 +459,6 @@ export function CreaRiunioneDialog({
               ) : null}
 
               <div className="mt-3">
-                <p className="mb-1 text-[11px] font-medium text-muted-foreground">…oppure scrivi a mano</p>
                 <textarea
                   value={corpoLibero}
                   onChange={(e) => setCorpoLibero(e.target.value)}
@@ -753,7 +774,7 @@ function StepIndicator({ step }: { step: Step }) {
   ];
   const idx = steps.findIndex((s) => s.key === step);
   return (
-    <div className="-mt-1 mb-3 flex items-center gap-1">
+    <div className="-mt-1 mb-1.5 flex items-center gap-1">
       {steps.map((s, i) => (
         <React.Fragment key={s.key}>
           <div
@@ -852,6 +873,12 @@ function fmtSecs(s: number): string {
   const m = Math.floor(s / 60);
   const rem = s % 60;
   return `${m}:${rem.toString().padStart(2, '0')}`;
+}
+
+/** "YYYY-MM-DD" → "DD/MM/YYYY" (senza `new Date`, così niente shift di fuso). */
+function fmtDataBreve(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return y && m && d ? `${d}/${m}/${y}` : iso;
 }
 
 function pickAudioMime(): string {
