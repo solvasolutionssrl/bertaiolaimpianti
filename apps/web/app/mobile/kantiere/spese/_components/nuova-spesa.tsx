@@ -46,8 +46,12 @@ type NuovaSpesaProps = {
   cantieri?: { id: string; nome: string }[];
   /** Id del profilo dipendente dell'admin (richiesto in adminMode). */
   dipendenteId?: string | null;
-  /** 'default' = bottone grande; 'quick' = pill da griglia azioni. */
-  triggerVariant?: 'default' | 'quick';
+  /**
+   * 'default' = bottone grande; 'quick' = pill da griglia azioni;
+   * 'fab-top' = pill fissa in alto a destra (accanto alla campanella), presente
+   * su tutte le pagine della shell Kantiere.
+   */
+  triggerVariant?: 'default' | 'quick' | 'fab-top';
 };
 
 type Estratto = {
@@ -420,6 +424,23 @@ export function NuovaSpesa({
 
   // ── ENTRY: bottone + scelta sorgente foto ──────────────────────────────────
   if (!aperto) {
+    // Pill fissa in alto a destra, accanto alla campanella (shell Kantiere):
+    // aggiungi spesa da qualunque pagina. Stessa altezza della campanella (h-10)
+    // e safe-area aware; sta alla sua sinistra.
+    if (triggerVariant === 'fab-top') {
+      return (
+        <button
+          type="button"
+          onClick={() => setAperto(true)}
+          aria-label="Aggiungi spesa"
+          className="fixed z-30 inline-flex h-10 items-center gap-1.5 rounded-full border border-primary/30 bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-soft active:scale-95 transition-transform"
+          style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)', right: '3.6rem' }}
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+          Spesa
+        </button>
+      );
+    }
     // Pill compatta per le griglie azioni (cruscotto/profilo admin).
     if (triggerVariant === 'quick') {
       return (
