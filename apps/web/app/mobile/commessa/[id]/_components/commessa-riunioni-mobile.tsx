@@ -9,6 +9,7 @@ import {
   ImagePlus,
   Loader2,
   Paperclip,
+  ScanLine,
   Sparkles,
 } from 'lucide-react';
 import { Button, cn } from '@kommessa/ui';
@@ -17,6 +18,7 @@ import { MediaLightbox, type MediaItem } from '../../../../_components/media-lig
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
 import { VIDEO_MAX_SIZE_BYTES } from '../../../../_lib/upload-queue/types';
 import { useAlert } from '../../../../_components/confirm-provider';
+import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
 
 export interface RiunioneAllegatoMobile {
   id: string;
@@ -342,6 +344,7 @@ function AllegatiAttacher({
   const cameraRef = React.useRef<HTMLInputElement | null>(null);
   const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
   const completedJobIdsRef = React.useRef<Set<string>>(new Set());
+  const [scannerOpen, setScannerOpen] = React.useState(false);
 
   // Rileva il done dei job di questa riunione → refresh server-side.
   React.useEffect(() => {
@@ -393,31 +396,34 @@ function AllegatiAttacher({
       <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-primary/80">
         Aggiungi alla riunione
       </p>
-      <div className="grid grid-cols-[1fr_auto] gap-1.5">
-        <Button
+      {/* 3 modalità 33/33/33: Foto/video · Scatta · Scansione (PDF da fotocamera) */}
+      <div className="grid grid-cols-3 gap-1.5">
+        <button
           type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 justify-center gap-1.5 border-primary/40 bg-card text-primary hover:bg-primary/5 hover:text-primary"
           onClick={() => galleryRef.current?.click()}
+          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-primary/30 bg-card px-2 py-2.5 text-primary transition-colors hover:bg-primary/5 active:scale-[0.98]"
         >
           <ImagePlus className="h-4 w-4" aria-hidden="true" />
-          <span className="text-xs font-medium">Foto / video</span>
-        </Button>
-        <Button
+          <span className="text-[11px] font-medium">Foto/video</span>
+        </button>
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-9 gap-1 px-2 text-muted-foreground hover:text-foreground"
           onClick={() => cameraRef.current?.click()}
           aria-label="Scatta foto"
-          title="Scatta foto"
+          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card px-2 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
         >
-          <Camera className="h-4 w-4" aria-hidden="true" />
-          <span className="text-[10px] font-medium uppercase tracking-wider">
-            Scatta
-          </span>
-        </Button>
+          <Camera className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          <span className="text-[11px] font-medium">Scatta</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setScannerOpen(true)}
+          aria-label="Scansiona un PDF con la fotocamera"
+          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-sky-300 bg-sky-50/60 px-2 py-2.5 text-sky-700 transition-colors hover:bg-sky-50 active:scale-[0.98]"
+        >
+          <ScanLine className="h-4 w-4" aria-hidden="true" />
+          <span className="text-[11px] font-medium">Scansione</span>
+        </button>
       </div>
       <input
         ref={galleryRef}
@@ -442,6 +448,25 @@ function AllegatiAttacher({
           e.target.value = '';
         }}
       />
+      {scannerOpen ? (
+        <PdfCameraCapture
+          onCancel={() => setScannerOpen(false)}
+          onReady={(blob, filename) => {
+            const file = new File([blob], filename, { type: 'application/pdf' });
+            const id = queue.enqueue({
+              fileBlob: file,
+              fileName: file.name,
+              fileMime: 'application/pdf',
+              fileSize: file.size,
+              commessaId,
+              riunioneId,
+              kind: 'pdf_acquisito',
+            });
+            enqueuedJobIdsRef.current.add(id);
+            setScannerOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

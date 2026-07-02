@@ -2,12 +2,11 @@
 
 import * as React from 'react';
 import {
-  CheckCircle2,
-  CircleDot,
+  ChevronDown,
   Plus,
   Sparkles,
 } from 'lucide-react';
-import { Button, cn } from '@kommessa/ui';
+import { Button } from '@kommessa/ui';
 
 import {
   CommessaTodoMobile,
@@ -111,37 +110,26 @@ export function CommessaLavoriMobile({
         </div>
       ) : null}
 
-      {/* Filtri — pill comode e tappabili, riga scrollabile */}
-      <p className="mb-2.5 px-1 text-xs font-medium text-muted-foreground">Filtra</p>
-      <div className="-mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1">
-        <FiltroChip
-          label="Tutto"
-          count={totale}
-          active={filtro === 'tutto'}
-          onClick={() => setFiltro('tutto')}
-        />
-        <FiltroChip
-          label="Da fare"
-          count={todosAperti.length}
-          active={filtro === 'todo_aperti'}
-          onClick={() => setFiltro('todo_aperti')}
-          Icon={CircleDot}
-        />
-        <FiltroChip
-          label="Riunioni"
-          count={riunioni.length}
-          active={filtro === 'riunioni'}
-          onClick={() => setFiltro('riunioni')}
-          Icon={Sparkles}
-        />
-        <FiltroChip
-          label="Fatti"
-          count={todosCompletati.length}
-          active={filtro === 'todo_completati'}
-          onClick={() => setFiltro('todo_completati')}
-          Icon={CheckCircle2}
-          muted
-        />
+      {/* Filtro compatto (dropdown) — leggero, non occupa tutta la riga */}
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Mostra</span>
+        <div className="relative">
+          <select
+            aria-label="Filtra lavori"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value as Filtro)}
+            className="h-9 appearance-none rounded-full border border-border bg-card pl-3.5 pr-9 text-[13px] font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            <option value="tutto">Tutto ({totale})</option>
+            <option value="todo_aperti">Da fare ({todosAperti.length})</option>
+            <option value="riunioni">Riunioni ({riunioni.length})</option>
+            <option value="todo_completati">Fatti ({todosCompletati.length})</option>
+          </select>
+          <ChevronDown
+            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </div>
       </div>
 
       {/* Lista contenuti */}
@@ -206,44 +194,3 @@ export function CommessaLavoriMobile({
   );
 }
 
-function FiltroChip({
-  label,
-  count,
-  active,
-  onClick,
-  Icon,
-  muted,
-}: {
-  label: string;
-  count: number;
-  active: boolean;
-  onClick: () => void;
-  Icon?: React.ComponentType<{ className?: string }>;
-  muted?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'flex h-10 flex-none items-center gap-2 rounded-full border px-4 text-[13px] font-semibold transition-colors active:scale-[0.98]',
-        active
-          ? 'border-primary bg-primary text-primary-foreground shadow-soft'
-          : muted
-            ? 'border-border bg-card text-muted-foreground hover:bg-muted/50'
-            : 'border-border bg-card text-foreground/80 hover:bg-muted/50',
-      )}
-    >
-      {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
-      <span>{label}</span>
-      <span
-        className={cn(
-          'rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums',
-          active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground',
-        )}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}
