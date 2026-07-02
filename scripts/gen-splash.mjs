@@ -26,10 +26,12 @@ const require = createRequire(resolve(__dirname, '../apps/web/package.json'));
 const sharp = require('sharp');
 const OUT_DIR = resolve(__dirname, '../apps/web/public/splash');
 
-const BASE = '#E2E9F4'; // hsl(214 44% 92%) — base sfondo (allineata a .bg-canvas-mobile, gradiente originale)
-const WARM = '#D3ECFD'; // hsl(205 92% 91%) — glow azzurro top-right (ex pesca: troppo giocoso)
-const BLUE_L = '#D9E8FD'; // hsl(214 88% 92%) — glow blu sinistra
-const BLUE_B = '#E5EEFB'; // hsl(214 72% 94%) — glow blu basso
+// Azzurro (sky) coerente con .bg-canvas-mobile: gradiente verticale scuro→chiaro
+// + soffio di glow azzurro in alto a destra + striscia status bar brand.
+const TOP = '#D3E4F3'; // hsl(208 56% 89%) — azzurro (in alto)
+const MID = '#E0ECF5'; // hsl(207 50% 92%)
+const BOT = '#ECF3F8'; // hsl(205 46% 95%) — azzurro chiaro (in basso)
+const GLOW = '#DDF1FD'; // hsl(202 90% 93%) — glow azzurro top-right
 const BRAND = '#1340A6'; // --primary — striscia status bar
 
 // [larghezza CSS, altezza CSS, device-pixel-ratio, safe-area-inset-top in pt].
@@ -50,28 +52,22 @@ const DEVICES = [
 ];
 
 function svgFor(w, h, insetPx) {
-  // Glow con radialGradient objectBoundingBox (frazioni 0..1): risoluzione-
-  // indipendenti, si adattano all'aspect del device. Ordine di pittura come in
-  // CSS: base → blu basso → blu sinistra → caldo (l'ultimo sopra).
+  // Gradiente verticale azzurro scuro→chiaro (come .bg-canvas-mobile) + soffio di
+  // glow azzurro in alto a destra + striscia status bar brand in cima.
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
   <defs>
-    <radialGradient id="warm" cx="1.0" cy="0.12" r="0.72">
-      <stop offset="0" stop-color="${WARM}"/>
-      <stop offset="0.62" stop-color="${WARM}" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="blueL" cx="-0.05" cy="0.28" r="0.78">
-      <stop offset="0" stop-color="${BLUE_L}"/>
-      <stop offset="0.6" stop-color="${BLUE_L}" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="blueB" cx="0.5" cy="1.02" r="0.85">
-      <stop offset="0" stop-color="${BLUE_B}"/>
-      <stop offset="0.62" stop-color="${BLUE_B}" stop-opacity="0"/>
+    <linearGradient id="v" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${TOP}"/>
+      <stop offset="0.52" stop-color="${MID}"/>
+      <stop offset="1" stop-color="${BOT}"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="1.08" cy="0.06" r="0.58">
+      <stop offset="0" stop-color="${GLOW}"/>
+      <stop offset="0.58" stop-color="${GLOW}" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect x="0" y="0" width="${w}" height="${h}" fill="${BASE}"/>
-  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#blueB)"/>
-  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#blueL)"/>
-  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#warm)"/>
+  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#v)"/>
+  <rect x="0" y="0" width="${w}" height="${h}" fill="url(#glow)"/>
   <rect x="0" y="0" width="${w}" height="${insetPx}" fill="${BRAND}"/>
 </svg>`;
 }
