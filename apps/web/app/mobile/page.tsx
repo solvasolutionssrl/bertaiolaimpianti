@@ -79,37 +79,20 @@ async function GestioneDashboard({
   const treGiorniFa = new Date(today);
   treGiorniFa.setDate(treGiorniFa.getDate() - 3);
 
-  const [aperte, fasiAttesa, fotoOggi, recenti] = await Promise.all([
-    supabase
-      .from('commesse')
-      .select('id', { count: 'exact', head: true })
-      .in('stato', ['aperta', 'in_corso', 'collaudo']),
-    supabase
-      .from('commessa_voci')
-      .select('commessa_id', { count: 'exact', head: true })
-      .eq('stato', 'da_iniziare')
-      .lt('updated_at', treGiorniFa.toISOString()),
-    supabase
-      .from('file_refs')
-      .select('id', { count: 'exact', head: true })
-      .gte('uploaded_at', `${todayIso}T00:00:00Z`)
-      .like('mime', 'image/%')
-      .is('deleted_at', null),
-    supabase
-      .from('commesse')
-      .select(
-        `
-          id, codice_interno, nome_cartella, stato, is_critica,
-          cliente_indirizzo_cantiere, data_apertura,
-          descrizione_ai_finale, descrizione_ai_proposta, note_iniziali,
-          cliente:clienti ( id, ragione_sociale )
-        `,
-      )
-      .in('stato', ['aperta', 'in_corso', 'collaudo'])
-      .order('data_apertura', { ascending: false })
+  const recenti = await supabase
+    .from('commesse')
+    .select(
+      `
+        id, codice_interno, nome_cartella, stato, is_critica,
+        cliente_indirizzo_cantiere, data_apertura,
+        descrizione_ai_finale, descrizione_ai_proposta, note_iniziali,
+        cliente:clienti ( id, ragione_sociale )
+      `,
+    )
+    .in('stato', ['aperta', 'in_corso', 'collaudo'])
+    .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
-      .limit(5),
-  ]);
+    .limit(5);
 
   const recentRows: CommessaRow[] = ((recenti.data ?? []) as any[]).map((r) => ({
     id: r.id,
@@ -150,41 +133,30 @@ async function GestioneDashboard({
       </Hero>
 
       <div className="flex flex-col gap-7 px-4 pt-4">
-        {/* ── 01 / METRICHE ──────── (overlap parziale sull'hero) ────────────── */}
-        <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
+        {/* ── CREA NUOVA COMMESSA — card bianca in risalto, overlap sull'hero ── */}
+        <section className="-mt-12 animate-fade-up [animation-delay:40ms]">
           <div className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-soft-lg">
             <CornerTicks />
             {/* Grid pattern decorativo sullo sfondo */}
             <div className="pointer-events-none absolute inset-0 bg-grid opacity-[0.18]" aria-hidden="true" />
             <div className="relative">
-              <SectionNumber
-                n={1}
-                title="Metriche oggi"
-                trailing={
-                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/50">
-                    live
-                  </span>
-                }
-                className="mb-4"
-              />
-              <div className="grid grid-cols-3 gap-3">
-                <MetricCell
-                  value={aperte.count ?? 0}
-                  label="Attive"
-                  icon={<TrendingUp className="h-3 w-3" />}
+              <h2 className="mb-4 text-sm font-semibold text-foreground">Crea nuova commessa</h2>
+              <div className="grid grid-cols-2 gap-2.5">
+                <QuickAction
+                  href="/mobile/voice-intake"
+                  icon={Mic}
+                  label="Voce"
+                  hint="detta e crea"
                   tone="primary"
+                  tag="REC"
+                  highlighted
                 />
-                <MetricCell
-                  value={fasiAttesa.count ?? 0}
-                  label="Voci ferme"
-                  icon={<Clock className="h-3 w-3" />}
-                  tone={fasiAttesa.count && fasiAttesa.count > 0 ? 'warn' : 'neutral'}
-                />
-                <MetricCell
-                  value={fotoOggi.count ?? 0}
-                  label="Foto/video"
-                  icon={<Camera className="h-3 w-3" />}
-                  tone="neutral"
+                <QuickAction
+                  href="/mobile/sopralluogo"
+                  icon={Plus}
+                  label="Sopralluogo"
+                  hint="step guidati"
+                  tone="primary"
                 />
               </div>
             </div>
@@ -194,42 +166,17 @@ async function GestioneDashboard({
       {/* Bozze da completare (solo se presenti) — resume del dettato/form */}
       <BozzeDaCompletare resumeBase="/mobile/voice-intake" variant="mobile" />
 
-      {/* ── 02 / AZIONI RAPIDE ─────────────────────────────────────────────── */}
-      <section className="space-y-3 animate-fade-up [animation-delay:80ms]">
-        <SectionNumber n={2} title="Azioni rapide" />
-        <div className="grid grid-cols-2 gap-2">
-          <QuickAction
-            href="/mobile/sopralluogo"
-            icon={Plus}
-            label="Sopralluogo"
-            hint="step guidati · foto/video"
-            tone="primary"
-          />
-          <QuickAction
-            href="/mobile/voice-intake"
-            icon={Mic}
-            label="Voce"
-            hint="detta nota o ordine"
-            tone="primary"
-            tag="REC"
-          />
-        </div>
-      </section>
-
-      {/* ── 03 / ULTIME COMMESSE ───────────────────────────────────────────── */}
+      {/* ── ULTIME COMMESSE ────────────────────────────────────────────────── */}
       <section className="space-y-3 animate-fade-up [animation-delay:120ms]">
-        <SectionNumber
-          n={3}
-          title="Ultime commesse"
-          trailing={
-            <Link
-              href="/mobile/commesse"
-              className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary hover:underline"
-            >
-              Tutte →
-            </Link>
-          }
-        />
+        <div className="flex items-baseline justify-between gap-2">
+          <h2 className="text-sm font-semibold text-foreground">Ultime commesse</h2>
+          <Link
+            href="/mobile/commesse"
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Tutte →
+          </Link>
+        </div>
         {recentRows.length === 0 ? (
           <EmptyState />
         ) : (
@@ -503,6 +450,7 @@ function QuickAction({
   tone = 'default',
   tag,
   dataTour,
+  highlighted = false,
 }: {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -511,6 +459,8 @@ function QuickAction({
   tone?: 'default' | 'primary';
   tag?: string;
   dataTour?: string;
+  /** Leggermente in risalto rispetto alle altre azioni (es. "Voce"). */
+  highlighted?: boolean;
 }) {
   return (
     <Link
@@ -518,9 +468,11 @@ function QuickAction({
       data-tour={dataTour}
       className={[
         'group relative flex flex-col gap-2 overflow-hidden rounded-lg border p-3 transition-all active:scale-[0.98]',
-        tone === 'primary'
-          ? 'border-primary/30 bg-primary/5 hover:bg-primary/10'
-          : 'border-border bg-card hover:bg-muted/40',
+        highlighted
+          ? 'border-primary/45 bg-primary/[0.1] ring-1 ring-primary/20 hover:bg-primary/[0.14]'
+          : tone === 'primary'
+            ? 'border-primary/30 bg-primary/5 hover:bg-primary/10'
+            : 'border-border bg-card hover:bg-muted/40',
       ].join(' ')}
     >
       <div className="flex items-center justify-between">
