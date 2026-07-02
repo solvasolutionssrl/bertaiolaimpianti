@@ -512,8 +512,11 @@ export function NuovaSpesa({
         onChange={(e) => void onFile(e)}
       />
 
-      {/* BODY scrollabile */}
-      <div className="flex-1 overflow-y-auto">
+      {/* BODY scrollabile SOLO in verticale. Con `overflow-y-auto` da solo l'asse
+          x diventa `auto` (spec CSS) e scrolla se un campo sfora → il form "si
+          muove" orizzontalmente. `overflow-x-hidden` lo blocca; i campi hanno
+          `min-w-0` per rientrare nella larghezza. */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* IDLE: scelta sorgente */}
         {fase === 'idle' ? (
           <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
@@ -591,210 +594,208 @@ export function NuovaSpesa({
 
         {/* REVISIONE: form compatto (dati + foto-thumb) */}
         {fase === 'revisione' && scan ? (
-          <div className="space-y-3 px-4 py-3">
+          <div className="space-y-2.5 px-4 py-3">
             {/* miniatura foto: tap per ingrandire (libera spazio per i dati) */}
             {preview ? (
               <button
                 type="button"
                 onClick={() => setFotoGrande(true)}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-muted/30 p-2 text-left active:scale-[0.99] transition"
+                className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-muted/30 p-1.5 text-left active:scale-[0.99] transition"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+                <img src={preview} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
                 <span className="text-xs text-muted-foreground">Tocca per ingrandire la foto</span>
               </button>
             ) : null}
 
-            {/* Importo (prominente) */}
-            <div>
-              <label
-                htmlFor="spesa-importo"
-                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Importo totale
-              </label>
-              <div className="mt-1 flex items-center gap-2">
-                <input
-                  id="spesa-importo"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  required
-                  value={importoTotale}
-                  onChange={(e) => setImportoTotale(e.target.value)}
-                  placeholder="0,00"
-                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-xl font-semibold tabular-nums outline-none focus:border-primary"
-                />
-                <span className="text-sm font-medium text-muted-foreground">
-                  {scan.estratto.valuta || 'EUR'}
-                </span>
-              </div>
-            </div>
-
-            {/* IVA + Pagamento in 2 colonne */}
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label
-                  htmlFor="spesa-iva"
-                  className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  IVA
-                </label>
-                <input
-                  id="spesa-iva"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  value={importoIva}
-                  onChange={(e) => setImportoIva(e.target.value)}
-                  placeholder="0,00"
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="spesa-metodo"
-                  className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
-                  Pagamento
-                </label>
-                <select
-                  id="spesa-metodo"
-                  value={metodo}
-                  onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-2 py-2.5 text-base outline-none focus:border-primary"
-                >
-                  <option value="carta">Carta aziendale</option>
-                  <option value="contanti">Contanti</option>
-                  <option value="altro">Altro</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Data */}
-            <div>
-              <label
-                htmlFor="spesa-data"
-                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Data scontrino
-              </label>
-              <input
-                id="spesa-data"
-                type="datetime-local"
-                value={dataLocal}
-                onChange={(e) => setDataLocal(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-              />
-            </div>
-
-            {/* Numero persone: stepper meno/più con input manuale */}
-            <div>
-              <label
-                htmlFor="spesa-persone"
-                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Per quante persone?
-              </label>
-              <div className="mt-1 flex items-center gap-2">
-                <button
-                  type="button"
-                  aria-label="Diminuisci"
-                  onClick={() => {
-                    setPersoneToccato(true);
-                    setNumeroPersone((n) => Math.max(1, n - 1));
-                  }}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 transition disabled:opacity-40"
-                  disabled={numeroPersone <= 1}
-                >
-                  <Minus className="h-5 w-5" aria-hidden="true" />
-                </button>
-                <input
-                  id="spesa-persone"
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  step="1"
-                  value={numeroPersone}
-                  onChange={(e) => {
-                    setPersoneToccato(true);
-                    const n = Math.floor(Number(e.target.value));
-                    setNumeroPersone(Number.isFinite(n) && n >= 1 ? n : 1);
-                  }}
-                  className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2.5 text-center text-lg font-semibold tabular-nums outline-none focus:border-primary"
-                />
-                <button
-                  type="button"
-                  aria-label="Aumenta"
-                  onClick={() => {
-                    setPersoneToccato(true);
-                    setNumeroPersone((n) => n + 1);
-                  }}
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 transition"
-                >
-                  <Plus className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-
-            {/* Categoria: dropdown */}
-            <div>
-              <label
-                htmlFor="spesa-categoria"
-                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Categoria
-              </label>
-              <select
-                id="spesa-categoria"
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value as CategoriaSpesa)}
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-              >
-                {CATEGORIE_ORDINATE.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {CATEGORIA_META[cat].label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Seleziona la categoria corretta.
+            {/* GRUPPO Importo: Totale+IVA / Pagamento+Data (2 righe da 2) */}
+            <div className="space-y-2 rounded-xl border border-border bg-muted/25 p-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+                Importo
               </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="min-w-0">
+                  <label
+                    htmlFor="spesa-importo"
+                    className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Totale ({scan.estratto.valuta || 'EUR'})
+                  </label>
+                  <input
+                    id="spesa-importo"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    required
+                    value={importoTotale}
+                    onChange={(e) => setImportoTotale(e.target.value)}
+                    placeholder="0,00"
+                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-lg font-semibold tabular-nums outline-none focus:border-primary"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label
+                    htmlFor="spesa-iva"
+                    className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    IVA
+                  </label>
+                  <input
+                    id="spesa-iva"
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    value={importoIva}
+                    onChange={(e) => setImportoIva(e.target.value)}
+                    placeholder="0,00"
+                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-base tabular-nums outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="min-w-0">
+                  <label
+                    htmlFor="spesa-metodo"
+                    className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Pagamento
+                  </label>
+                  <select
+                    id="spesa-metodo"
+                    value={metodo}
+                    onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
+                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2 py-2 text-base outline-none focus:border-primary"
+                  >
+                    <option value="carta">Carta aziendale</option>
+                    <option value="contanti">Contanti</option>
+                    <option value="altro">Altro</option>
+                  </select>
+                </div>
+                <div className="min-w-0">
+                  <label
+                    htmlFor="spesa-data"
+                    className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Data
+                  </label>
+                  <input
+                    id="spesa-data"
+                    type="datetime-local"
+                    value={dataLocal}
+                    onChange={(e) => setDataLocal(e.target.value)}
+                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-base outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Esercente */}
-            <div>
-              <label
-                htmlFor="spesa-rs"
-                className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Esercente
-              </label>
-              <input
-                id="spesa-rs"
-                type="text"
-                value={ragioneSociale}
-                onChange={(e) => setRagioneSociale(e.target.value)}
-                placeholder="Nome del locale o negozio"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
-              />
+            {/* GRUPPO Dettaglio: Persone (in evidenza) + Categoria/Esercente */}
+            <div className="space-y-2 rounded-xl border border-border bg-muted/25 p-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+                Dettaglio
+              </p>
+              {/* Persone: in evidenza (bordo + tinta primary, grassetto) */}
+              <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-2">
+                <label
+                  htmlFor="spesa-persone"
+                  className="block text-[11px] font-bold uppercase tracking-wider text-primary"
+                >
+                  Per quante persone?
+                </label>
+                <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label="Diminuisci"
+                    onClick={() => {
+                      setPersoneToccato(true);
+                      setNumeroPersone((n) => Math.max(1, n - 1));
+                    }}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 transition disabled:opacity-40"
+                    disabled={numeroPersone <= 1}
+                  >
+                    <Minus className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                  <input
+                    id="spesa-persone"
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    value={numeroPersone}
+                    onChange={(e) => {
+                      setPersoneToccato(true);
+                      const n = Math.floor(Number(e.target.value));
+                      setNumeroPersone(Number.isFinite(n) && n >= 1 ? n : 1);
+                    }}
+                    className="min-w-0 flex-1 rounded-lg border border-primary/30 bg-background px-2.5 py-2 text-center text-lg font-bold tabular-nums outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Aumenta"
+                    onClick={() => {
+                      setPersoneToccato(true);
+                      setNumeroPersone((n) => n + 1);
+                    }}
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 transition"
+                  >
+                    <Plus className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              {/* Categoria + Esercente in 2 colonne */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="min-w-0">
+                  <label
+                    htmlFor="spesa-categoria"
+                    className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Categoria
+                  </label>
+                  <select
+                    id="spesa-categoria"
+                    value={categoria}
+                    onChange={(e) => setCategoria(e.target.value as CategoriaSpesa)}
+                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2 py-2 text-base outline-none focus:border-primary"
+                  >
+                    {CATEGORIE_ORDINATE.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {CATEGORIA_META[cat].label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="min-w-0">
+                  <label
+                    htmlFor="spesa-rs"
+                    className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                  >
+                    Esercente
+                  </label>
+                  <input
+                    id="spesa-rs"
+                    type="text"
+                    value={ragioneSociale}
+                    onChange={(e) => setRagioneSociale(e.target.value)}
+                    placeholder="Locale o negozio"
+                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-base outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
             </div>
 
             {adminMode ? (
-              <div>
-                <label
-                  htmlFor="spesa-cantiere"
-                  className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-                >
+              <div className="space-y-1.5 rounded-xl border border-border bg-muted/25 p-2.5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                   Cantiere
-                </label>
+                </p>
                 <select
                   id="spesa-cantiere"
+                  aria-label="Cantiere"
                   value={cantiereId}
                   onChange={(e) => setCantiereId(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
+                  className="w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-base outline-none focus:border-primary"
                 >
                   <option value="">Da assegnare</option>
                   {cantieri.map((c) => (
@@ -803,7 +804,7 @@ export function NuovaSpesa({
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Non stai timbrando: scegli tu il cantiere (o lascia “Da assegnare”).
                 </p>
               </div>
@@ -886,15 +887,34 @@ export function NuovaSpesa({
       {/* Lightbox foto: FUORI dal foglio (che è z-[35]) così il suo z-[70]
           compete globalmente e copre anche la bottom-nav. */}
       {fotoGrande && preview ? (
-        <button
-          type="button"
+        <div
+          role="dialog"
+          aria-modal="true"
           onClick={() => setFotoGrande(false)}
-          aria-label="Chiudi foto"
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4"
         >
+          {/* X di chiusura sempre visibile: chi non sa del tap-fuori non preme
+              "Indietro" (che chiuderebbe il form perdendo l'estrazione). */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFotoGrande(false);
+            }}
+            aria-label="Chiudi anteprima"
+            className="absolute right-3 z-[71] inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur active:scale-95 transition"
+            style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
+          >
+            <X className="h-6 w-6" aria-hidden="true" />
+          </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="" className="max-h-full max-w-full object-contain" />
-        </button>
+          <img
+            src={preview}
+            alt=""
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full object-contain"
+          />
+        </div>
       ) : null}
 
       {/* Conferma numero persone: pop-up full-screen quando l'utente non ha
