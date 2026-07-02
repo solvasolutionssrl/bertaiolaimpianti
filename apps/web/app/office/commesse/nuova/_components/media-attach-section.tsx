@@ -12,6 +12,7 @@ import {
   Paperclip,
   CalendarClock,
   FileText,
+  ScanLine,
 } from 'lucide-react';
 import {
   Button,
@@ -69,9 +70,23 @@ interface Props {
   uploading?: boolean;
   uploadProgress?: UploadProgressMap;
   onCancel?: () => void;
+  /** Se presente, mostra un tasto "Scansiona" (scanner PDF da fotocamera). */
+  onScanPdf?: () => void;
+  /** Titolo/descrizione della card. Default: contesto sopralluogo. */
+  title?: string;
+  description?: string;
 }
 
-export function MediaAttachSection({ files, onChange, uploading = false, uploadProgress, onCancel }: Props) {
+export function MediaAttachSection({
+  files,
+  onChange,
+  uploading = false,
+  uploadProgress,
+  onCancel,
+  onScanPdf,
+  title,
+  description,
+}: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const docInputRef = React.useRef<HTMLInputElement>(null);
@@ -162,9 +177,10 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
             <Camera className="h-4 w-4" aria-hidden="true" />
           </span>
           <div>
-            <CardTitle className="text-base">Foto/video · sopralluogo</CardTitle>
+            <CardTitle className="text-base">{title ?? 'Foto/video · sopralluogo'}</CardTitle>
             <CardDescription>
-              Documenta lo stato iniziale del cantiere. Opzionale — puoi aggiungere altro in seguito.
+              {description ??
+                'Documenta lo stato iniziale del cantiere. Opzionale — puoi aggiungere altro in seguito.'}
             </CardDescription>
           </div>
         </div>
@@ -200,15 +216,15 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
         ) : null}
 
         {files.length === 0 ? (
-          <div className="grid grid-cols-3 gap-2">
+          <div className={onScanPdf ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-3 gap-2'}>
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
               className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/30 bg-primary-soft/20 text-primary transition hover:bg-primary-soft/40 active:scale-[.98]"
             >
               <Camera className="h-6 w-6 opacity-70" aria-hidden="true" />
-              <span className="text-sm font-semibold">Scatta</span>
-              <span className="text-[11px] text-muted-foreground">Apri fotocamera</span>
+              <span className="text-sm font-semibold">Scatta foto</span>
+              <span className="text-[11px] text-muted-foreground">Fotocamera</span>
             </button>
             <button
               type="button"
@@ -216,8 +232,8 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
               className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition hover:bg-muted/40 active:scale-[.98]"
             >
               <Paperclip className="h-6 w-6 opacity-70" aria-hidden="true" />
-              <span className="text-sm font-semibold text-foreground">Allega</span>
-              <span className="text-[11px]">Foto e video</span>
+              <span className="text-sm font-semibold text-foreground">Foto e video</span>
+              <span className="text-[11px]">Dalla galleria</span>
             </button>
             <button
               type="button"
@@ -228,6 +244,17 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
               <span className="text-sm font-semibold text-foreground">Allega file</span>
               <span className="text-[11px]">PDF e documenti</span>
             </button>
+            {onScanPdf ? (
+              <button
+                type="button"
+                onClick={onScanPdf}
+                className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50/60 text-sky-700 transition hover:bg-sky-50 active:scale-[.98]"
+              >
+                <ScanLine className="h-6 w-6 opacity-80" aria-hidden="true" />
+                <span className="text-sm font-semibold">Scansiona PDF</span>
+                <span className="text-[11px] text-sky-700/70">Foto dei fogli</span>
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -332,43 +359,83 @@ export function MediaAttachSection({ files, onChange, uploading = false, uploadP
                 Prima c'era solo un "+" generico che apriva la GALLERIA,
                 rendendo impossibile scattare in sequenza dal terzo step
                 voice-intake. Fix richiesto da Bertaiola. */}
-            {!atLimit && !uploading && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  aria-label="Scatta un'altra foto"
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-primary/40 bg-primary-soft/30 text-primary transition hover:bg-primary-soft/50 active:scale-[.98]"
-                >
-                  <Camera className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Scatta
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  aria-label="Allega altri file dalla libreria"
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
-                >
-                  <Paperclip className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    Allega
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => docInputRef.current?.click()}
-                  aria-label="Allega un file PDF o documento"
-                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
-                >
-                  <FileText className="h-5 w-5" aria-hidden="true" />
-                  <span className="text-[10px] font-semibold uppercase tracking-wider">
-                    File
-                  </span>
-                </button>
-              </>
-            )}
+            {!atLimit && !uploading &&
+              (onScanPdf ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    aria-label="Scatta una foto"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-primary/40 bg-primary-soft/30 text-primary transition hover:bg-primary-soft/50 active:scale-[.98]"
+                  >
+                    <Camera className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[11px] font-medium">Scatta</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    aria-label="Allega foto o video dalla galleria"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
+                  >
+                    <Paperclip className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[11px] font-medium">Galleria</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => docInputRef.current?.click()}
+                    aria-label="Allega un file PDF o documento"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
+                  >
+                    <FileText className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[11px] font-medium">File</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onScanPdf}
+                    aria-label="Scansiona un PDF con la fotocamera"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-sky-300 bg-sky-50/60 text-sky-700 transition hover:bg-sky-50 active:scale-[.98]"
+                  >
+                    <ScanLine className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[11px] font-medium">Scansiona</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    aria-label="Scatta un'altra foto"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-primary/40 bg-primary-soft/30 text-primary transition hover:bg-primary-soft/50 active:scale-[.98]"
+                  >
+                    <Camera className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      Scatta
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    aria-label="Allega altri file dalla libreria"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
+                  >
+                    <Paperclip className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      Allega
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => docInputRef.current?.click()}
+                    aria-label="Allega un file PDF o documento"
+                    className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
+                  >
+                    <FileText className="h-5 w-5" aria-hidden="true" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider">
+                      File
+                    </span>
+                  </button>
+                </>
+              ))}
           </div>
         )}
 

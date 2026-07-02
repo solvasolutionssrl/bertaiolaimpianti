@@ -61,19 +61,6 @@ export default async function ScattoPage({
     }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
 
-  // Ultime foto di oggi su questa commessa (max 8)
-  const startToday = new Date();
-  startToday.setHours(0, 0, 0, 0);
-  const { data: ultimeOggi } = await supabase
-    .from('file_refs')
-    .select('id, path, filename, uploaded_at')
-    .eq('commessa_id', params.id)
-    .like('mime', 'image/%')
-    .gte('uploaded_at', startToday.toISOString())
-    .is('deleted_at', null)
-    .order('uploaded_at', { ascending: false })
-    .limit(8);
-
   const preselectedVoceId = searchParams?.voce ? Number(searchParams.voce) : null;
 
   return (
@@ -93,7 +80,6 @@ export default async function ScattoPage({
         commessaId={params.id}
         voci={voci}
         preselectedVoceId={preselectedVoceId}
-        ultimeOggi={ultimeOggi ?? []}
       />
     </div>
   );
