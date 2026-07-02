@@ -12,6 +12,7 @@ import {
   Plus,
   Minus,
   Users,
+  Calendar,
   X,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -185,6 +186,20 @@ function isoToLocalInput(iso: string | null): string {
   // datetime-local vuole "YYYY-MM-DDTHH:mm" in ora locale del device.
   const off = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+
+// "YYYY-MM-DDTHH:mm" (locale) → etichetta leggibile "6 feb 2016, 13:45".
+function fmtDataInput(v: string): string {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v;
+  return new Intl.DateTimeFormat('it-IT', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
 }
 
 export function NuovaSpesa({
@@ -683,13 +698,33 @@ export function NuovaSpesa({
                   >
                     Data
                   </label>
-                  <input
-                    id="spesa-data"
-                    type="datetime-local"
-                    value={dataLocal}
-                    onChange={(e) => setDataLocal(e.target.value)}
-                    className="mt-1 w-full min-w-0 max-w-full rounded-lg border border-border bg-background px-2 py-2 text-base outline-none focus:border-primary"
-                  />
+                  {/* Campo data custom: display pulito (icona + testo formattato,
+                      troncabile) con l'<input datetime-local> nativo INVISIBILE
+                      sopra, che apre comunque il picker iOS al tap. Il nativo
+                      sforava perché iOS lo disegna alla larghezza intrinseca
+                      ignorando width; così controllo formato/spaziatura e il
+                      campo non esce mai dal box (pattern standard iOS). */}
+                  <div className="relative mt-1">
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-2 text-base"
+                    >
+                      <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      {dataLocal ? (
+                        <span className="min-w-0 truncate">{fmtDataInput(dataLocal)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Scegli data</span>
+                      )}
+                    </div>
+                    <input
+                      id="spesa-data"
+                      type="datetime-local"
+                      value={dataLocal}
+                      onChange={(e) => setDataLocal(e.target.value)}
+                      aria-label="Data e ora"
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -822,10 +857,18 @@ export function NuovaSpesa({
         {/* FATTO */}
         {fase === 'fatto' ? (
           <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-              <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
+            {/* Conferma "premium": il check fa un pop morbido, un anello verde si
+                espande dietro, poi il testo sale in dissolvenza. */}
+            <span className="relative flex h-16 w-16 items-center justify-center">
+              <span
+                aria-hidden="true"
+                className="animate-success-ring absolute inset-0 rounded-full bg-emerald-400/40"
+              />
+              <span className="animate-success-pop relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
+              </span>
             </span>
-            <p className="text-lg font-semibold text-foreground">Spesa registrata</p>
+            <p className="animate-fade-up text-lg font-semibold text-foreground">Spesa registrata</p>
             <div className="grid w-full grid-cols-2 gap-2">
               <Button type="button" size="lg" className="w-full py-3.5" onClick={reset}>
                 <Receipt className="mr-2 h-5 w-5" aria-hidden="true" />
