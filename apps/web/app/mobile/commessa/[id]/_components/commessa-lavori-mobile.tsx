@@ -74,8 +74,11 @@ export function CommessaLavoriMobile({
         </div>
       ) : null}
 
-      {/* Elenco (il filtro è stato rimosso — vedi nota) */}
-      <h3 className="mb-3 px-1 text-sm font-semibold text-foreground">Elenco</h3>
+      {/* Elenco — etichetta + riga che attraversa la card, con aria sotto */}
+      <div className="mb-4 flex items-center gap-3 px-1">
+        <h3 className="text-sm font-semibold text-foreground">Elenco</h3>
+        <span className="h-px flex-1 bg-border" aria-hidden="true" />
+      </div>
 
       {/* Lista contenuti */}
       <div className="space-y-3">
