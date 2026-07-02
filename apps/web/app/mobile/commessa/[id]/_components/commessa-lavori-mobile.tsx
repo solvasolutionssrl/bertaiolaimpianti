@@ -75,7 +75,7 @@ export function CommessaLavoriMobile({
       ) : null}
 
       {/* Elenco — etichetta + riga che attraversa la card, con aria sotto */}
-      <div className="mb-6 flex items-center gap-3 px-1">
+      <div className="mb-8 flex items-center gap-3 px-1">
         <h3 className="text-sm font-semibold text-foreground">Elenco</h3>
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
       </div>

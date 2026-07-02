@@ -2,9 +2,12 @@
 
 import * as React from 'react';
 import {
+  Briefcase,
   FolderLock,
   Lock,
+  Mail,
   MapPin,
+  Phone,
   Plus,
   Trash2,
   User,
@@ -222,6 +225,7 @@ export function ReferentiFields({
               className="space-y-2 rounded-md border border-border bg-card p-2.5"
             >
               <div className="flex items-center gap-2">
+                <User className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <Input
                   value={r.nome}
                   onChange={(e) => update(i, { nome: e.target.value })}
@@ -237,27 +241,38 @@ export function ReferentiFields({
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
+              {/* Ruolo / Telefono / Email — ognuno con icona a sinistra così si
+                  capisce cos'è anche quando è compilato (senza placeholder). */}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <Input
-                  value={r.ruolo}
-                  onChange={(e) => update(i, { ruolo: e.target.value })}
-                  placeholder="Ruolo"
-                  className="h-10 text-sm"
-                />
-                <Input
-                  value={r.telefono}
-                  inputMode="tel"
-                  onChange={(e) => update(i, { telefono: e.target.value })}
-                  placeholder="Telefono"
-                  className="h-10 text-sm"
-                />
-                <Input
-                  value={r.email}
-                  inputMode="email"
-                  onChange={(e) => update(i, { email: e.target.value })}
-                  placeholder="Email"
-                  className="h-10 text-sm"
-                />
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    value={r.ruolo}
+                    onChange={(e) => update(i, { ruolo: e.target.value })}
+                    placeholder="Ruolo"
+                    className="h-10 flex-1 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    value={r.telefono}
+                    inputMode="tel"
+                    onChange={(e) => update(i, { telefono: e.target.value })}
+                    placeholder="Telefono"
+                    className="h-10 flex-1 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <Input
+                    value={r.email}
+                    inputMode="email"
+                    onChange={(e) => update(i, { email: e.target.value })}
+                    placeholder="Email"
+                    className="h-10 flex-1 text-sm"
+                  />
+                </div>
               </div>
             </li>
           ))}

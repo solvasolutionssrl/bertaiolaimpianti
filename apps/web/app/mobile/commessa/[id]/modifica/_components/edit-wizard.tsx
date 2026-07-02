@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -14,6 +13,8 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@kommessa/ui';
+
+import { MobileBackButton } from '../../../../_components/mobile-back-button';
 
 import {
   DatiCommessaFields,
@@ -102,19 +103,11 @@ export function EditWizardMobile({
 
   return (
     <div className="min-h-dvh bg-canvas-mobile pb-28">
-      {/* Header */}
-      <header className="bg-primary px-4 pb-4 pt-3 text-primary-foreground">
-        <button
-          type="button"
-          onClick={tornaIndietro}
-          className="inline-flex items-center gap-1.5 text-primary-foreground/80 transition-colors hover:text-primary-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          <span className="font-mono text-[11px] uppercase tracking-[0.18em]">
-            Annulla
-          </span>
-        </button>
-        <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
+      {/* Header — stessa impostazione della scheda commessa: back a pill in
+          alto a sx (MobileBackButton) con un filo d'aria dal bordo alto. */}
+      <header className="bg-primary px-4 pb-4 pt-5 text-primary-foreground">
+        <MobileBackButton tone="dark" label="Annulla" onClick={tornaIndietro} />
+        <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
           {codiceInterno}
           {clienteNome ? ` · ${clienteNome}` : ''}
         </p>

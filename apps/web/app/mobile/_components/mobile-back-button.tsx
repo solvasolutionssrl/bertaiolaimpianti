@@ -19,11 +19,13 @@ import { cn } from '@kommessa/ui';
  * a freddo / deep-link); altrimenti usa la history del browser (router.back).
  */
 interface MobileBackButtonProps {
-  /** Destinazione esplicita. Se assente usa `router.back()`. */
+  /** Destinazione esplicita. Se assente usa `onClick` oppure `router.back()`. */
   href?: string;
   label?: string;
   tone?: 'light' | 'dark';
   className?: string;
+  /** Azione custom (es. "Annulla" con eventuale conferma). Ignorata se `href`. */
+  onClick?: () => void;
 }
 
 export function MobileBackButton({
@@ -31,6 +33,7 @@ export function MobileBackButton({
   label = 'Indietro',
   tone = 'light',
   className,
+  onClick,
 }: MobileBackButtonProps) {
   const router = useRouter();
 
@@ -63,7 +66,7 @@ export function MobileBackButton({
   return (
     <button
       type="button"
-      onClick={() => router.back()}
+      onClick={onClick ?? (() => router.back())}
       aria-label={label}
       className={cn(base, toneCls, className)}
     >
