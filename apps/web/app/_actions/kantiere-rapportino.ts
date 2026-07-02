@@ -719,6 +719,8 @@ export async function caricaMiaGiornata(
       stato: string;
       modificabile: boolean;
       pausaPresente: boolean;
+      /** Durata (min) della pausa già registrata, o null se assente. */
+      pausaMinutiEsistente: number | null;
       giornataChiusa: boolean;
       righe: RigaGiornataModifica[];
     }
@@ -761,18 +763,39 @@ export async function caricaMiaGiornata(
   const { fromIso, toIso } = romeDayBoundsUtc(data);
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('tipo, pausa')
+    .select('tipo, pausa, ts')
     .eq('tenant_id', ctx.tenantId)
     .eq('dipendente_id', me.id)
     .gte('ts', fromIso)
     .lt('ts', toIso);
-  const timb = (timbRaw as { tipo: 'ingresso' | 'uscita'; pausa: boolean | null }[] | null) ?? [];
+  const timb =
+    (timbRaw as { tipo: 'ingresso' | 'uscita'; pausa: boolean | null; ts: string }[] | null) ?? [];
   const pausaPresente = timb.some((t) => t.pausa);
   const lavori = timb.filter((t) => !t.pausa);
   const giornataChiusa =
     lavori.some((t) => t.tipo === 'ingresso') && lavori.some((t) => t.tipo === 'uscita');
 
-  return { ok: true, data, stato, modificabile, pausaPresente, giornataChiusa, righe };
+  // Durata della pausa già registrata (coppia uscita→ingresso con pausa=true),
+  // così il dialog può precompilarla e permetterne la modifica.
+  let pausaMinutiEsistente: number | null = null;
+  const pause = timb.filter((t) => t.pausa);
+  const usPausa = pause.find((t) => t.tipo === 'uscita');
+  const igPausa = pause.find((t) => t.tipo === 'ingresso');
+  if (usPausa && igPausa) {
+    const m = Math.round((Date.parse(igPausa.ts) - Date.parse(usPausa.ts)) / 60000);
+    if (m > 0) pausaMinutiEsistente = m;
+  }
+
+  return {
+    ok: true,
+    data,
+    stato,
+    modificabile,
+    pausaPresente,
+    pausaMinutiEsistente,
+    giornataChiusa,
+    righe,
+  };
 }
 
 // ── 7) modificaMiaGiornata (tecnico: modifica ultimi 3 giorni) ───────────────
@@ -874,7 +897,9 @@ export async function modificaMiaGiornata(
   if (pre?.approvato_da) return { ok: false, error: 'NON_MODIFICABILE' };
 
   // 1) Pausa pranzo dichiarata: coppia-pausa centrata nel turno reale (come
-  //    fa l'ufficio in `aggiungiPausaGiornata`). Solo se non già presente.
+  //    fa l'ufficio in `aggiungiPausaGiornata`). Se una pausa esiste già, la si
+  //    SOSTITUISCE (il tecnico può correggerne la durata): rimozione della
+  //    coppia pausa=true del giorno + reinserimento centrato.
   if (pausaMinuti && pausaMinuti > 0) {
     const { fromIso, toIso } = romeDayBoundsUtc(data);
     const { data: timbRaw } = await supabase
@@ -895,27 +920,38 @@ export async function modificaMiaGiornata(
             pausa: boolean | null;
           }[]
         | null) ?? [];
-    const giaPausa = timb.some((t) => t.pausa);
-    if (!giaPausa) {
-      const lavori = timb.filter((t) => !t.pausa);
-      const primoIngresso = lavori.find((t) => t.tipo === 'ingresso');
-      const ultimaUscita = [...lavori].reverse().find((t) => t.tipo === 'uscita');
-      if (!primoIngresso || !ultimaUscita) return { ok: false, error: 'GIORNATA_NON_CHIUSA' };
-      const durataMin =
-        (Date.parse(ultimaUscita.ts) - Date.parse(primoIngresso.ts)) / 60000;
-      if (!(durataMin > 0)) return { ok: false, error: 'TURNO_NON_VALIDO' };
-      if (pausaMinuti >= durataMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
-      await inserisciPausaDichiarata(supabase, {
-        tenantId: ctx.tenantId,
-        dipendenteId: me.id,
-        commessaId: primoIngresso.commessa_id,
-        cantiereId: primoIngresso.cantiere_id,
-        creatoDa: ctx.userId,
-        startIso: primoIngresso.ts,
-        endIso: ultimaUscita.ts,
-        minuti: pausaMinuti,
-      });
+    // Il turno reale è dato dalle timbrature di lavoro (pausa esclusa).
+    const lavori = timb.filter((t) => !t.pausa);
+    const primoIngresso = lavori.find((t) => t.tipo === 'ingresso');
+    const ultimaUscita = [...lavori].reverse().find((t) => t.tipo === 'uscita');
+    if (!primoIngresso || !ultimaUscita) return { ok: false, error: 'GIORNATA_NON_CHIUSA' };
+    const durataMin = (Date.parse(ultimaUscita.ts) - Date.parse(primoIngresso.ts)) / 60000;
+    if (!(durataMin > 0)) return { ok: false, error: 'TURNO_NON_VALIDO' };
+    if (pausaMinuti >= durataMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
+
+    // Sostituzione: se esiste già una pausa, rimuovo la coppia pausa=true del
+    // giorno (user client, la policy `for all` sulle timbrature lo consente al
+    // tecnico nel proprio tenant), poi reinserisco la nuova durata centrata.
+    if (timb.some((t) => t.pausa)) {
+      await supabase
+        .from('timbrature' as never)
+        .delete()
+        .eq('tenant_id', ctx.tenantId)
+        .eq('dipendente_id', me.id)
+        .eq('pausa', true)
+        .gte('ts', fromIso)
+        .lt('ts', toIso);
     }
+    await inserisciPausaDichiarata(supabase, {
+      tenantId: ctx.tenantId,
+      dipendenteId: me.id,
+      commessaId: primoIngresso.commessa_id,
+      cantiereId: primoIngresso.cantiere_id,
+      creatoDa: ctx.userId,
+      startIso: primoIngresso.ts,
+      endIso: ultimaUscita.ts,
+      minuti: pausaMinuti,
+    });
   }
 
   // 2) Ricalcolo: riflette timbrature + pausa e ri-valuta l'auto-approvazione.

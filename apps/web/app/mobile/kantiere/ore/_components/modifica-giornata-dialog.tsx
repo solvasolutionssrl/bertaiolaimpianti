@@ -162,6 +162,8 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
   const [pausaPresente, setPausaPresente] = useState(false);
   const [giornataChiusa, setGiornataChiusa] = useState(false);
   const [modificabile, setModificabile] = useState(true);
+  // Durata pausa caricata dal server (per confronto/prefill) + selezione corrente.
+  const [pausaMinutiEsistente, setPausaMinutiEsistente] = useState<number | null>(null);
   const [pausaMinuti, setPausaMinuti] = useState<number | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
 
@@ -169,12 +171,16 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
     setLoading(true);
     setErrore(null);
     setPausaMinuti(null);
+    setPausaMinutiEsistente(null);
     const res = await caricaMiaGiornata({ data });
     if (res.ok) {
       setRighe(res.righe.map(rigaFromPayload));
       setPausaPresente(res.pausaPresente);
       setGiornataChiusa(res.giornataChiusa);
       setModificabile(res.modificabile);
+      // Prefill: la selezione parte dalla pausa già registrata (se c'è).
+      setPausaMinutiEsistente(res.pausaMinutiEsistente);
+      setPausaMinuti(res.pausaMinutiEsistente);
     } else {
       setErrore(messaggioErrore(res.error));
       setRighe([]);
@@ -193,6 +199,9 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
 
   function handleSalva() {
     setErrore(null);
+    // Invio la pausa solo se cambiata: aggiunta (era assente) o durata diversa.
+    const pausaDaInviare =
+      pausaMinuti !== null && pausaMinuti !== pausaMinutiEsistente ? pausaMinuti : null;
     startTransition(async () => {
       const res = await modificaMiaGiornata({
         data,
@@ -202,7 +211,7 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
           ore_lavoro: hmToDec(r.lavoroH, r.lavoroM),
           ore_viaggio: hmToDec(r.viaggioH, r.viaggioM),
         })),
-        pausaMinuti: pausaMinuti,
+        pausaMinuti: pausaDaInviare,
       });
       if (res.ok) {
         router.refresh();
@@ -212,8 +221,6 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
       }
     });
   }
-
-  const puoAggiungerePausa = !pausaPresente && giornataChiusa;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -246,16 +253,17 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                   Nessuna ora registrata per questa giornata.
                 </p>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {righe.map((r, idx) => (
                     <div
                       key={r.cantiere_id ?? r.commessa_id ?? idx}
-                      className="rounded-xl border border-border bg-muted/20 p-3 space-y-3"
+                      className="space-y-2.5 rounded-xl border border-border bg-card p-3 shadow-soft"
                     >
-                      <p className="truncate text-sm font-medium text-foreground">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {r.target_label || 'Cantiere'}
                       </p>
-                      <div className="grid grid-cols-2 gap-3">
+                      {/* Ore lavoro — riquadro neutro */}
+                      <div className="rounded-lg border border-border bg-muted/40 p-2.5">
                         <OreHM
                           label="Ore lavoro"
                           h={r.lavoroH}
@@ -263,6 +271,9 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                           disabled={isPending || !modificabile}
                           onChange={(h, m) => patchRiga(idx, { lavoroH: h, lavoroM: m })}
                         />
+                      </div>
+                      {/* Ore viaggio — riquadro azzurrino, staccato dal lavoro */}
+                      <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-2.5">
                         <OreHM
                           label="Ore viaggio"
                           h={r.viaggioH}
@@ -276,21 +287,31 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                 </div>
               )}
 
-              {/* Pausa pranzo */}
-              <div className="space-y-2">
-                <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              {/* Pausa pranzo — zona gialla dedicata */}
+              <div className="space-y-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3">
+                <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-800">
                   <Coffee className="h-3.5 w-3.5" strokeWidth={1.75} />
                   Pausa pranzo
                 </p>
+
                 {pausaPresente ? (
-                  <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                    Pausa gia registrata per questa giornata.
+                  <p className="text-xs font-medium text-amber-900">
+                    Pausa già registrata
+                    {pausaMinutiEsistente ? ` di ${pausaMinutiEsistente} min` : ''}.
+                    {giornataChiusa ? ' Puoi modificarla qui sotto.' : ''}
                   </p>
-                ) : !giornataChiusa ? (
-                  <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
-                    La pausa si puo aggiungere solo su una giornata con ingresso e uscita.
+                ) : giornataChiusa ? (
+                  <p className="text-xs text-amber-800/90">
+                    Nessuna pausa registrata. Aggiungila se hai fatto la pausa pranzo.
                   </p>
                 ) : (
+                  <p className="text-xs text-amber-800/90">
+                    Nessuna pausa registrata. Puoi aggiungerla solo su una giornata con ingresso e
+                    uscita timbrati.
+                  </p>
+                )}
+
+                {giornataChiusa && (
                   <div className="grid grid-cols-3 gap-2">
                     {PAUSA_OPZIONI.map((min) => {
                       const attivo = pausaMinuti === min;
@@ -301,10 +322,10 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                           onClick={() => setPausaMinuti(attivo ? null : min)}
                           disabled={isPending || !modificabile}
                           className={[
-                            'rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors',
+                            'rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors',
                             attivo
-                              ? 'border-primary bg-primary/5 text-foreground'
-                              : 'border-border bg-background text-muted-foreground hover:bg-muted/40',
+                              ? 'border-amber-500 bg-amber-200/70 text-amber-900'
+                              : 'border-amber-300 bg-white/70 text-amber-800 hover:bg-amber-100',
                           ].join(' ')}
                         >
                           {min} min
@@ -313,9 +334,12 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                     })}
                   </div>
                 )}
-                {puoAggiungerePausa && pausaMinuti !== null && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Verra aggiunta una pausa di {pausaMinuti} minuti al centro del turno.
+
+                {pausaMinuti !== null && pausaMinuti !== pausaMinutiEsistente && (
+                  <p className="text-[11px] font-medium text-amber-800">
+                    {pausaPresente
+                      ? `La pausa verrà aggiornata a ${pausaMinuti} minuti.`
+                      : `Verrà aggiunta una pausa di ${pausaMinuti} minuti al centro del turno.`}
                   </p>
                 )}
               </div>
