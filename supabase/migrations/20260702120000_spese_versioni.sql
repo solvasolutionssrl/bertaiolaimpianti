@@ -24,6 +24,7 @@ create index if not exists spese_versioni_tenant_idx
 alter table public.spese_versioni enable row level security;
 
 -- Lettura: admin/office del tenant.
+drop policy if exists spese_versioni_tenant_read on public.spese_versioni;
 create policy spese_versioni_tenant_read on public.spese_versioni
   for select
   using (
@@ -34,6 +35,7 @@ create policy spese_versioni_tenant_read on public.spese_versioni
   );
 
 -- Scrittura: admin/office del tenant (le action di modifica scrivono le versioni).
+drop policy if exists spese_versioni_tenant_insert on public.spese_versioni;
 create policy spese_versioni_tenant_insert on public.spese_versioni
   for insert
   with check (
@@ -44,6 +46,7 @@ create policy spese_versioni_tenant_insert on public.spese_versioni
   );
 
 -- Platform admin legge cross-tenant.
+drop policy if exists spese_versioni_platform_admin_read on public.spese_versioni;
 create policy spese_versioni_platform_admin_read on public.spese_versioni
   for select
   using (public.is_platform_admin());
