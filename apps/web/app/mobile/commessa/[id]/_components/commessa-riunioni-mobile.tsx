@@ -342,6 +342,7 @@ function AllegatiAttacher({
   const showAlert = useAlert();
   const galleryRef = React.useRef<HTMLInputElement | null>(null);
   const cameraRef = React.useRef<HTMLInputElement | null>(null);
+  const docRef = React.useRef<HTMLInputElement | null>(null);
   const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
   const completedJobIdsRef = React.useRef<Set<string>>(new Set());
   const [scannerOpen, setScannerOpen] = React.useState(false);
@@ -366,16 +367,22 @@ function AllegatiAttacher({
     if (!files || files.length === 0) return;
     const oversized: string[] = [];
     for (const file of Array.from(files)) {
-      const isVideo = file.type.startsWith('video/');
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      const isVideo = !isPdf && file.type.startsWith('video/');
       if (isVideo && file.size > VIDEO_MAX_SIZE_BYTES) {
         oversized.push(file.name);
         continue;
       }
-      const kind: 'foto' | 'video' = isVideo ? 'video' : 'foto';
+      const kind: 'foto' | 'video' | 'pdf_acquisito' = isPdf
+        ? 'pdf_acquisito'
+        : isVideo
+          ? 'video'
+          : 'foto';
       const id = queue.enqueue({
         fileBlob: file,
         fileName: file.name,
-        fileMime: file.type || (isVideo ? 'video/mp4' : 'image/jpeg'),
+        fileMime:
+          file.type || (isPdf ? 'application/pdf' : isVideo ? 'video/mp4' : 'image/jpeg'),
         fileSize: file.size,
         commessaId,
         riunioneId,
@@ -396,33 +403,42 @@ function AllegatiAttacher({
       <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-primary/80">
         Aggiungi alla riunione
       </p>
-      {/* 3 modalità 33/33/33: Foto/video · Scatta · Scansione (PDF da fotocamera) */}
-      <div className="grid grid-cols-3 gap-1.5">
+      {/* 4 modalità: Foto/video · Scatta · File (PDF esistente) · Scansione (PDF da foto) */}
+      <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
           onClick={() => galleryRef.current?.click()}
-          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-primary/30 bg-card px-2 py-2.5 text-primary transition-colors hover:bg-primary/5 active:scale-[0.98]"
+          className="flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-3 py-2.5 text-primary transition-colors hover:bg-primary/5 active:scale-[0.98]"
         >
-          <ImagePlus className="h-4 w-4" aria-hidden="true" />
-          <span className="text-[11px] font-medium">Foto/video</span>
+          <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="text-[12px] font-medium">Foto/video</span>
         </button>
         <button
           type="button"
           onClick={() => cameraRef.current?.click()}
           aria-label="Scatta foto"
-          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-border bg-card px-2 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
+          className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
         >
-          <Camera className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <span className="text-[11px] font-medium">Scatta</span>
+          <Camera className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="text-[12px] font-medium">Scatta</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => docRef.current?.click()}
+          aria-label="Allega un file PDF"
+          className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
+        >
+          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="text-[12px] font-medium">File</span>
         </button>
         <button
           type="button"
           onClick={() => setScannerOpen(true)}
           aria-label="Scansiona un PDF con la fotocamera"
-          className="flex flex-col items-center justify-center gap-1 rounded-lg border border-sky-300 bg-sky-50/60 px-2 py-2.5 text-sky-700 transition-colors hover:bg-sky-50 active:scale-[0.98]"
+          className="flex items-center justify-center gap-2 rounded-lg border border-sky-300 bg-sky-50/60 px-3 py-2.5 text-sky-700 transition-colors hover:bg-sky-50 active:scale-[0.98]"
         >
-          <ScanLine className="h-4 w-4" aria-hidden="true" />
-          <span className="text-[11px] font-medium">Scansione</span>
+          <ScanLine className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="text-[12px] font-medium">Scansione</span>
         </button>
       </div>
       <input
@@ -442,6 +458,17 @@ function AllegatiAttacher({
         type="file"
         accept="image/*"
         capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          enqueueFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={docRef}
+        type="file"
+        accept="application/pdf,.pdf"
+        multiple
         className="hidden"
         onChange={(e) => {
           enqueueFiles(e.target.files);

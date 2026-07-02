@@ -96,6 +96,18 @@
        contenuto di altezza diversa (alcune con scroll, altre senza).
        Supportato da Safari 16+, Chrome 94+, Firefox 91+. */
     scrollbar-gutter: stable;
+    /* Niente auto-inflazione del testo su Android/Chrome: la scala resta
+       identica a iOS (usiamo il 100% di quanto specificato). */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  /* Scala un filo più piccola su mobile (~-6%): font e spaziature in rem si
+     riducono in proporzione. Gli input restano 16px (regola sotto) per non
+     innescare lo zoom-on-focus di iOS. */
+  @media (max-width: 767px) {
+    html {
+      font-size: 15px;
+    }
   }
   body {
     @apply bg-background text-foreground;

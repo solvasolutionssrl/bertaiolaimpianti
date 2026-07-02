@@ -1,11 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import {
-  ChevronDown,
-  Plus,
-  Sparkles,
-} from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
 import {
@@ -18,12 +14,6 @@ import {
 } from './commessa-riunioni-mobile';
 import { CreaTodoDialog } from '../../../../office/commesse/[id]/lavori/_components/crea-todo-dialog';
 import { CreaRiunioneDialog } from '../../../../office/commesse/[id]/lavori/_components/crea-riunione-dialog';
-
-type Filtro =
-  | 'tutto'
-  | 'todo_aperti'
-  | 'todo_completati'
-  | 'riunioni';
 
 interface Props {
   commessaId: string;
@@ -53,39 +43,13 @@ export function CommessaLavoriMobile({
   riunioni,
   tecniciTenant,
 }: Props) {
-  const [filtro, setFiltro] = React.useState<Filtro>('tutto');
   const [todoOpen, setTodoOpen] = React.useState(false);
   const [riunOpen, setRiunOpen] = React.useState(false);
 
-  // ─── Conteggi (sempre calcolati su lista completa) ─────────────────
-  const todosAperti = todos.filter(
-    (t) => t.stato === 'aperto' || t.stato === 'in_corso',
-  );
-  const todosCompletati = todos.filter((t) => t.stato === 'completato');
-
-  // ─── Filtraggio per la vista ───────────────────────────────────────
-  let todosShown: TodoMobileRow[] = [];
-  let mostraRiunioni = true;
-  switch (filtro) {
-    case 'tutto':
-      todosShown = todos; // tutti: aperti + completati + annullati
-      mostraRiunioni = true;
-      break;
-    case 'todo_aperti':
-      todosShown = todosAperti;
-      mostraRiunioni = false;
-      break;
-    case 'todo_completati':
-      todosShown = todosCompletati;
-      mostraRiunioni = false;
-      break;
-    case 'riunioni':
-      todosShown = [];
-      mostraRiunioni = true;
-      break;
-  }
-
-  const totale = todosAperti.length + riunioni.length;
+  // Elenco completo: TODO (aperti/completati/annullati) + Riunioni. Il filtro
+  // è stato rimosso (vedi nota in memoria): si mostra tutto in ordine.
+  const todosShown = todos;
+  const mostraRiunioni = true;
 
   return (
     <div className="space-y-0">
@@ -110,27 +74,8 @@ export function CommessaLavoriMobile({
         </div>
       ) : null}
 
-      {/* Filtro compatto (dropdown) — leggero, non occupa tutta la riga */}
-      <div className="mb-4 flex items-center gap-2">
-        <span className="text-xs font-medium text-muted-foreground">Mostra</span>
-        <div className="relative">
-          <select
-            aria-label="Filtra lavori"
-            value={filtro}
-            onChange={(e) => setFiltro(e.target.value as Filtro)}
-            className="h-9 appearance-none rounded-full border border-border bg-card pl-3.5 pr-9 text-[13px] font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-          >
-            <option value="tutto">Tutto ({totale})</option>
-            <option value="todo_aperti">Da fare ({todosAperti.length})</option>
-            <option value="riunioni">Riunioni ({riunioni.length})</option>
-            <option value="todo_completati">Fatti ({todosCompletati.length})</option>
-          </select>
-          <ChevronDown
-            className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-        </div>
-      </div>
+      {/* Elenco (il filtro è stato rimosso — vedi nota) */}
+      <h3 className="mb-3 px-1 text-sm font-semibold text-foreground">Elenco</h3>
 
       {/* Lista contenuti */}
       <div className="space-y-3">
@@ -140,18 +85,12 @@ export function CommessaLavoriMobile({
             todos={todosShown}
             currentUserId={currentUserId}
           />
-        ) : filtro !== 'riunioni' ? (
+        ) : riunioni.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/60 bg-background/50 p-5 text-center text-sm text-muted-foreground">
-            {filtro === 'todo_completati' ? (
-              <p>Nessun da fare completato di recente.</p>
-            ) : filtro === 'tutto' && riunioni.length === 0 ? (
-              <p>
-                Nessun lavoro tracciato.
-                {canWrite ? ' Crea il primo dai bottoni sopra.' : ''}
-              </p>
-            ) : (
-              <p>Nessun da fare aperto.</p>
-            )}
+            <p>
+              Nessun lavoro tracciato.
+              {canWrite ? ' Crea il primo dai bottoni sopra.' : ''}
+            </p>
           </div>
         ) : null}
 
