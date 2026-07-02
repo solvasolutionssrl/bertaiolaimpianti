@@ -129,6 +129,10 @@
     textarea,
     select {
       font-size: 16px !important;
+      /* Nessun campo può sforare il proprio contenitore su mobile. Fix
+         dell'overflow orizzontale di <input type="datetime-local"> su iOS
+         Safari, che si disegna alla larghezza intrinseca ignorando width:100%. */
+      max-width: 100%;
     }
   }
 }

@@ -654,7 +654,10 @@ export function NuovaSpesa({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* Data più larga di Pagamento: il datetime-local iOS ha bisogno
+                  di più spazio orizzontale (il max-width globale evita comunque
+                  qualsiasi sfondamento). */}
+              <div className="grid grid-cols-[1fr_1.3fr] gap-2">
                 <div className="min-w-0">
                   <label
                     htmlFor="spesa-metodo"
@@ -666,7 +669,7 @@ export function NuovaSpesa({
                     id="spesa-metodo"
                     value={metodo}
                     onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
-                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2 py-2 text-base outline-none focus:border-primary"
+                    className="mt-1 w-full min-w-0 max-w-full rounded-lg border border-border bg-background px-2 py-2 text-base outline-none focus:border-primary"
                   >
                     <option value="carta">Carta aziendale</option>
                     <option value="contanti">Contanti</option>
@@ -685,7 +688,7 @@ export function NuovaSpesa({
                     type="datetime-local"
                     value={dataLocal}
                     onChange={(e) => setDataLocal(e.target.value)}
-                    className="mt-1 w-full min-w-0 rounded-lg border border-border bg-background px-2.5 py-2 text-base outline-none focus:border-primary"
+                    className="mt-1 w-full min-w-0 max-w-full rounded-lg border border-border bg-background px-2 py-2 text-base outline-none focus:border-primary"
                   />
                 </div>
               </div>
