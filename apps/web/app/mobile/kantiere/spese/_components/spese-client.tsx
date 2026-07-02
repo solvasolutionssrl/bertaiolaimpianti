@@ -1,12 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, ChevronRight } from 'lucide-react';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META } from '@/app/_components/spese/categoria';
 import { PersoneBadge } from '@/app/_components/spese/persone-badge';
-import { MediaLightbox, type MediaItem } from '@/app/_components/media-lightbox';
+import { SpesaDettaglio } from './spesa-dettaglio';
 
 export type SpesaRiga = {
   id: string;
@@ -14,8 +14,12 @@ export type SpesaRiga = {
   categoria: CategoriaSpesa;
   ragioneSociale: string | null;
   importoTotale: number | null;
+  importoIva: number | null;
+  imponibile: number | null;
   valuta: string | null;
   dataScontrino: string | null;
+  metodoPagamento: 'contanti' | 'carta' | 'altro' | null;
+  note: string | null;
   createdAt: string | null;
   hasThumb: boolean;
   hasFile: boolean;
@@ -26,15 +30,9 @@ export type SpesaRiga = {
 function formatImporto(importo: number | null, valuta: string | null): string {
   if (importo == null) return '—';
   try {
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: valuta || 'EUR',
-    }).format(importo);
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: valuta || 'EUR' }).format(importo);
   } catch {
-    return new Intl.NumberFormat('it-IT', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(importo);
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(importo);
   }
 }
 
@@ -50,25 +48,80 @@ function formatData(iso: string | null): string {
   }).format(d);
 }
 
+// "YYYY-MM-DD" (Rome) per confronto giorno.
+function romeDayKeyOf(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+function meseLabel(iso: string): string {
+  const d = new Date(iso);
+  const s = new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    month: 'long',
+    year: 'numeric',
+  }).format(d);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+type Sezione = { key: string; label: string; items: SpesaRiga[] };
+
+function raggruppa(spese: SpesaRiga[], todayKey: string, yesterdayKey: string): Sezione[] {
+  const sezioni: Sezione[] = [];
+  const byKey = new Map<string, Sezione>();
+  for (const s of spese) {
+    const iso = s.dataScontrino ?? s.createdAt;
+    const dk = romeDayKeyOf(iso);
+    let key: string;
+    let label: string;
+    if (dk && dk === todayKey) {
+      key = 'oggi';
+      label = 'Oggi';
+    } else if (dk && dk === yesterdayKey) {
+      key = 'ieri';
+      label = 'Ieri';
+    } else if (dk && iso) {
+      key = `m-${dk.slice(0, 7)}`;
+      label = meseLabel(iso);
+    } else {
+      key = 'senza-data';
+      label = 'Senza data';
+    }
+    let sez = byKey.get(key);
+    if (!sez) {
+      sez = { key, label, items: [] };
+      byKey.set(key, sez);
+      sezioni.push(sez);
+    }
+    sez.items.push(s);
+  }
+  return sezioni;
+}
+
 export function SpeseClient({
   spese,
   cantieriNomi,
+  canEdit = false,
+  cantieri = [],
+  todayKey,
+  yesterdayKey,
 }: {
   spese: SpesaRiga[];
   cantieriNomi: Record<string, string>;
+  /** admin/office → dettaglio modificabile; tecnico → sola lettura. */
+  canEdit?: boolean;
+  cantieri?: { id: string; nome: string }[];
+  todayKey: string;
+  yesterdayKey: string;
 }) {
-  const [lightbox, setLightbox] = React.useState<MediaItem | null>(null);
-
-  const apri = React.useCallback((s: SpesaRiga) => {
-    if (!s.hasFile) return;
-    setLightbox({
-      id: s.id,
-      src: `/api/kantiere/spese/${s.id}/foto`,
-      mime: s.fotoMime || 'image/jpeg',
-      filename: `ricevuta_${s.id.slice(0, 8)}`,
-      downloadUrl: `/api/kantiere/spese/${s.id}/foto?download=1`,
-    });
-  }, []);
+  const [dettaglio, setDettaglio] = React.useState<SpesaRiga | null>(null);
 
   if (spese.length === 0) {
     return (
@@ -77,84 +130,94 @@ export function SpeseClient({
           <Receipt className="h-5 w-5" aria-hidden="true" />
         </span>
         <p className="text-sm font-medium text-foreground">Nessuna spesa ancora.</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Scatta la prima ricevuta.
-        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Scatta la prima ricevuta.</p>
       </div>
     );
   }
 
+  const sezioni = raggruppa(spese, todayKey, yesterdayKey);
+
   return (
-    <ul className="space-y-2.5">
-      {spese.map((s) => {
-        const meta = CATEGORIA_META[s.categoria];
-        const cantiereNome = s.cantiereId ? cantieriNomi[s.cantiereId] : null;
-        const data = formatData(s.dataScontrino ?? s.createdAt);
-        return (
-          <li
-            key={s.id}
-            onClick={() => apri(s)}
-            className={`flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-soft ${
-              s.hasFile ? 'cursor-pointer active:scale-[0.99] transition-transform' : ''
-            }`}
-          >
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-              {s.hasThumb ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/api/kantiere/spese/${s.id}/foto?size=thumb`}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <span className="flex h-full w-full items-center justify-center text-muted-foreground">
-                  <Receipt className="h-5 w-5" aria-hidden="true" />
-                </span>
-              )}
-            </div>
+    <div className="space-y-5">
+      {sezioni.map((sez) => (
+        <section key={sez.key}>
+          <h2 className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+            {sez.label}
+          </h2>
+          <ul className="space-y-2.5">
+            {sez.items.map((s) => {
+              const meta = CATEGORIA_META[s.categoria];
+              const cantiereNome = s.cantiereId ? cantieriNomi[s.cantiereId] : null;
+              const data = formatData(s.dataScontrino ?? s.createdAt);
+              return (
+                <li
+                  key={s.id}
+                  onClick={() => setDettaglio(s)}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-soft transition-transform active:scale-[0.99]"
+                >
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
+                    {s.hasThumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/kantiere/spese/${s.id}/foto?size=thumb`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+                        <Receipt className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                    )}
+                  </div>
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-foreground">
-                {s.ragioneSociale || 'Spesa'}
-              </p>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                {meta ? (
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}
-                  >
-                    {meta.label}
-                  </span>
-                ) : null}
-                <span className="truncate text-xs text-muted-foreground">
-                  {cantiereNome || 'Da assegnare'}
-                </span>
-              </div>
-              {data ? (
-                <p className="mt-0.5 text-xs text-muted-foreground">{data}</p>
-              ) : null}
-            </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {s.ragioneSociale || 'Spesa'}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {meta ? (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}
+                        >
+                          {meta.label}
+                        </span>
+                      ) : null}
+                      <span className="truncate text-xs text-muted-foreground">
+                        {cantiereNome || 'Da assegnare'}
+                      </span>
+                    </div>
+                    {data ? <p className="mt-0.5 text-xs text-muted-foreground">{data}</p> : null}
+                  </div>
 
-            <div className="shrink-0 text-right">
-              <p className="text-sm font-semibold tabular-nums text-foreground">
-                {formatImporto(s.importoTotale, s.valuta)}
-              </p>
-              <div className="mt-1 flex justify-end">
-                <PersoneBadge numero={s.numeroPersone} />
-              </div>
-            </div>
-          </li>
-        );
-      })}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="text-right">
+                      <p className="text-sm font-semibold tabular-nums text-foreground">
+                        {formatImporto(s.importoTotale, s.valuta)}
+                      </p>
+                      <div className="mt-1 flex justify-end">
+                        <PersoneBadge numero={s.numeroPersone} />
+                      </div>
+                    </div>
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-muted-foreground/50"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
 
-      <MediaLightbox
-        items={lightbox ? [lightbox] : []}
-        initialIndex={lightbox ? 0 : null}
-        open={!!lightbox}
-        onOpenChange={(o) => {
-          if (!o) setLightbox(null);
-        }}
+      <SpesaDettaglio
+        spesa={dettaglio}
+        cantieriNomi={cantieriNomi}
+        canEdit={canEdit}
+        cantieri={cantieri}
+        onClose={() => setDettaglio(null)}
       />
-    </ul>
+    </div>
   );
 }

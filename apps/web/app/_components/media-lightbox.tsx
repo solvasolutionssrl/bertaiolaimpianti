@@ -162,10 +162,13 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
             {current.filename}
           </DialogPrimitive.Title>
 
-          {/* Header */}
+          {/* Header — safe-area top: a tutto schermo su mobile (inset-0) i tasti
+              (X/Scarica) finivano dietro la status bar iOS. Su desktop
+              (sm:inset-4) l'inset è 0 → invariato. */}
           <div
+            style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' }}
             className={
-              'flex items-center justify-between border-b px-4 py-3 ' +
+              'flex items-center justify-between border-b px-4 pb-3 ' +
               (lightTheme
                 ? 'border-neutral-200 bg-white/80 text-neutral-700 backdrop-blur'
                 : 'border-white/5 bg-black/30 text-white backdrop-blur-md')

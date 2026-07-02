@@ -3,6 +3,7 @@ import { Receipt } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
+import { romeDay } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../../_lib/guard';
@@ -50,7 +51,7 @@ export default async function SpeseMobilePage() {
     const { data: rows } = await supabase
       .from('spese' as never)
       .select(
-        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, valuta, data_scontrino, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone',
+        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone',
       )
       .eq('tenant_id', ctx.tenantId)
       .eq('dipendente_id', dipId)
@@ -64,8 +65,11 @@ export default async function SpeseMobilePage() {
             ragione_sociale: string | null;
             importo_totale: number | null;
             importo_iva: number | null;
+            imponibile: number | null;
             valuta: string | null;
             data_scontrino: string | null;
+            metodo_pagamento: string | null;
+            note: string | null;
             created_at: string | null;
             r2_thumb_key: string | null;
             r2_key: string | null;
@@ -80,8 +84,12 @@ export default async function SpeseMobilePage() {
       categoria: r.categoria as CategoriaSpesa,
       ragioneSociale: r.ragione_sociale,
       importoTotale: r.importo_totale,
+      importoIva: r.importo_iva,
+      imponibile: r.imponibile,
       valuta: r.valuta,
       dataScontrino: r.data_scontrino,
+      metodoPagamento: (r.metodo_pagamento as 'contanti' | 'carta' | 'altro' | null) ?? null,
+      note: r.note,
       createdAt: r.created_at,
       hasThumb: !!r.r2_thumb_key,
       hasFile: !!r.r2_key,
@@ -107,6 +115,11 @@ export default async function SpeseMobilePage() {
     }
   }
 
+  // Chiavi giorno (Rome) per il raggruppamento Oggi/Ieri lato client — calcolate
+  // sul server → deterministiche (niente Date.now() nel render del client).
+  const todayKey = romeDay(new Date());
+  const yesterdayKey = romeDay(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
       <header className="pt-1">
@@ -129,7 +142,14 @@ export default async function SpeseMobilePage() {
         <NuovaSpesa adminMode={isManager} cantieri={cantieriOpts} dipendenteId={dipId} />
       )}
 
-      <SpeseClient spese={spese} cantieriNomi={cantieriNomi} />
+      <SpeseClient
+        spese={spese}
+        cantieriNomi={cantieriNomi}
+        canEdit={isManager}
+        cantieri={cantieriOpts}
+        todayKey={todayKey}
+        yesterdayKey={yesterdayKey}
+      />
     </div>
   );
 }

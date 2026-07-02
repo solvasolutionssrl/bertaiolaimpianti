@@ -15,6 +15,14 @@ import {
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { mioTurnoAttivo } from '@/app/mobile/kantiere/_lib/turno-attivo';
+import {
+  buildSnapshotSpesa,
+  diffSnapshotSpesa,
+  type SpesaRowForSnapshot,
+  type DiffEntry,
+} from '@/app/_lib/versioni/snapshot-spesa';
+import { scriviVersioneSpesa } from '@/app/_actions/_lib/scrivi-versione-spesa';
+import { nomeUtente } from '@/app/_actions/_lib/scrivi-versione';
 
 type Risultato = { ok: true; id?: string } | { ok: false; error: string };
 
@@ -302,35 +310,53 @@ const AggiornaSchema = z.object({
   ragioneSociale: z.string().trim().max(200).nullable().optional(),
   importoTotale: z.number().finite().positive().optional(),
   importoIva: z.number().finite().nonnegative().nullable().optional(),
+  metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
+  numeroPersone: z.number().int().positive().max(99).optional(),
+  dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
   note: z.string().trim().max(2000).nullable().optional(),
 });
 
+const SNAP_COLS =
+  'categoria, cantiere_id, ragione_sociale, importo_totale, importo_iva, metodo_pagamento, numero_persone, data_scontrino, note';
+
+/**
+ * Modifica una spesa (ufficio). Solo owner/admin/office (i tecnici sono sola
+ * lettura). Scrive una versione in `spese_versioni` ad ogni modifica reale
+ * (best-effort: se la tabella non è ancora applicata, la modifica passa lo stesso).
+ */
 export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Promise<Risultato> {
   const parsed = AggiornaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
   const d = parsed.data;
 
-  await requireTenantContext();
+  const ctx = await requireTenantContext();
+  if (!['owner', 'admin', 'office'].includes(ctx.role)) {
+    return { ok: false, error: 'NON_AUTORIZZATO' };
+  }
   const supabase = createServerSupabase();
 
-  // patch costruita solo coi campi presenti (RLS garantisce il permesso)
+  // Stato PRIMA (per snapshot versione + ricalcolo imponibile).
+  const { data: prev } = await supabase
+    .from('spese' as never)
+    .select(SNAP_COLS)
+    .eq('id', d.id)
+    .maybeSingle();
+  const prevRow = prev as SpesaRowForSnapshot | null;
+  if (!prevRow) return { ok: false, error: 'NON_TROVATA' };
+
   const patch: Record<string, unknown> = {};
   if (d.categoria !== undefined) patch.categoria = normalizzaCategoria(d.categoria);
   if (d.cantiereId !== undefined) patch.cantiere_id = d.cantiereId;
   if (d.ragioneSociale !== undefined) patch.ragione_sociale = d.ragioneSociale;
   if (d.note !== undefined) patch.note = d.note;
+  if (d.metodoPagamento !== undefined) patch.metodo_pagamento = d.metodoPagamento;
+  if (d.numeroPersone !== undefined) patch.numero_persone = d.numeroPersone;
+  if (d.dataScontrino !== undefined) patch.data_scontrino = d.dataScontrino;
   if (d.importoTotale !== undefined) patch.importo_totale = d.importoTotale;
   if (d.importoIva !== undefined) patch.importo_iva = d.importoIva;
   if (d.importoTotale !== undefined || d.importoIva !== undefined) {
-    // ricalcolo imponibile leggendo i valori effettivi
-    const { data: cur } = await supabase
-      .from('spese' as never)
-      .select('importo_totale, importo_iva')
-      .eq('id', d.id)
-      .maybeSingle();
-    const c = cur as { importo_totale: number | null; importo_iva: number | null } | null;
-    const tot = d.importoTotale ?? c?.importo_totale ?? null;
-    const iva = d.importoIva !== undefined ? d.importoIva : c?.importo_iva ?? null;
+    const tot = d.importoTotale ?? prevRow.importo_totale ?? null;
+    const iva = d.importoIva !== undefined ? d.importoIva : prevRow.importo_iva ?? null;
     patch.imponibile = calcolaImponibile(tot, iva);
   }
   // riassegnando il cantiere, riallinea la commessa derivata
@@ -350,6 +376,37 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
   const { error } = await supabase.from('spese' as never).update(patch as never).eq('id', d.id);
   if (error) return { ok: false, error: error.message };
 
+  // Versione (best-effort): snapshot DOPO + diff coi campi labelati.
+  try {
+    const pick = <T,>(k: string, cur: T): T => (k in patch ? (patch[k] as T) : cur);
+    const dopoRow: SpesaRowForSnapshot = {
+      categoria: pick('categoria', prevRow.categoria),
+      cantiere_id: pick('cantiere_id', prevRow.cantiere_id),
+      ragione_sociale: pick('ragione_sociale', prevRow.ragione_sociale),
+      importo_totale: pick('importo_totale', prevRow.importo_totale),
+      importo_iva: pick('importo_iva', prevRow.importo_iva),
+      metodo_pagamento: pick('metodo_pagamento', prevRow.metodo_pagamento),
+      numero_persone: pick('numero_persone', prevRow.numero_persone),
+      data_scontrino: pick('data_scontrino', prevRow.data_scontrino),
+      note: pick('note', prevRow.note),
+    };
+    const diff = diffSnapshotSpesa(buildSnapshotSpesa(prevRow), buildSnapshotSpesa(dopoRow));
+    if (diff.length > 0) {
+      const nome = await nomeUtente(supabase, ctx.userId);
+      await scriviVersioneSpesa(supabase, {
+        tenantId: ctx.tenantId,
+        spesaId: d.id,
+        snapshot: buildSnapshotSpesa(dopoRow),
+        diff,
+        azione: 'modifica',
+        modificatoDa: ctx.userId,
+        modificatoDaNome: nome,
+      });
+    }
+  } catch {
+    // versioning best-effort: non blocca la modifica
+  }
+
   revalidatePath('/office/kantiere/kontabilita');
   revalidatePath('/mobile/kantiere/spese');
   return { ok: true };
@@ -364,4 +421,44 @@ export async function eliminaSpesa(id: string): Promise<Risultato> {
   revalidatePath('/office/kantiere/kontabilita');
   revalidatePath('/mobile/kantiere/spese');
   return { ok: true };
+}
+
+export type VersioneSpesa = {
+  versione: number;
+  azione: string;
+  diff: DiffEntry[];
+  modificatoDaNome: string | null;
+  createdAt: string;
+};
+
+/** Cronologia modifiche di una spesa (owner/admin/office). Best-effort. */
+export async function cronologiaSpesa(
+  id: string,
+): Promise<{ ok: true; versioni: VersioneSpesa[] } | { ok: false; error: string }> {
+  if (!z.string().uuid().safeParse(id).success) return { ok: false, error: 'ID_NON_VALIDO' };
+  const ctx = await requireTenantContext();
+  if (!['owner', 'admin', 'office'].includes(ctx.role)) return { ok: false, error: 'NON_AUTORIZZATO' };
+  const supabase = createServerSupabase();
+  try {
+    const { data, error } = await supabase
+      .from('spese_versioni' as never)
+      .select('versione, azione, diff, modificato_da_nome, created_at')
+      .eq('spesa_id', id)
+      .order('versione', { ascending: false })
+      .limit(20);
+    if (error) return { ok: true, versioni: [] }; // tabella non applicata → vuota
+    const rows = (data as Record<string, unknown>[] | null) ?? [];
+    return {
+      ok: true,
+      versioni: rows.map((r) => ({
+        versione: Number(r.versione),
+        azione: String(r.azione),
+        diff: (r.diff as DiffEntry[]) ?? [],
+        modificatoDaNome: (r.modificato_da_nome as string | null) ?? null,
+        createdAt: String(r.created_at),
+      })),
+    };
+  } catch {
+    return { ok: true, versioni: [] };
+  }
 }
