@@ -22,6 +22,7 @@ import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/cate
 import { creaSpesa, creaSpesaOffice } from '@/app/_actions/kantiere-spese';
 import { compressImage } from '@/app/office/commesse/nuova/_lib/compress-image';
 import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
+import { Portal } from '@/app/mobile/_components/portal';
 
 /**
  * Nuova ricevuta (PWA Kantiere).
@@ -947,6 +948,7 @@ export function NuovaSpesa({
       {/* Lightbox foto: FUORI dal foglio (che è z-[35]) così il suo z-[70]
           compete globalmente e copre anche la bottom-nav. */}
       {fotoGrande && preview ? (
+        <Portal>
         <div
           role="dialog"
           aria-modal="true"
@@ -975,11 +977,12 @@ export function NuovaSpesa({
             className="max-h-full max-w-full object-contain"
           />
         </div>
+        </Portal>
       ) : null}
 
-      {/* Conferma numero persone: pop-up full-screen quando l'utente non ha
-          toccato il campo. Ricorda l'importo e chiede i coperti. */}
+      {/* Conferma numero persone — portale su body → sopra la bottom-nav. */}
       {confermaPersone && scan ? (
+        <Portal>
         <div
           className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/60 p-4"
           role="dialog"
@@ -1070,6 +1073,7 @@ export function NuovaSpesa({
             </div>
           </div>
         </div>
+        </Portal>
       ) : null}
     </>
   );

@@ -26,6 +26,7 @@ import {
   type VersioneSpesa,
 } from '@/app/_actions/kantiere-spese';
 import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
+import { Portal } from '@/app/mobile/_components/portal';
 import type { SpesaRiga } from './spese-client';
 
 type Metodo = 'contanti' | 'carta' | 'altro';
@@ -580,8 +581,9 @@ export function SpesaDettaglio({
         </footer>
       </div>
 
-      {/* Lightbox foto — X safe-area aware (mai dietro la status bar). */}
+      {/* Lightbox foto — X safe-area aware; portale su body → sopra la bottom-nav. */}
       {fotoGrande && spesa.hasFile ? (
+        <Portal>
         <div
           role="dialog"
           aria-modal="true"
@@ -608,10 +610,12 @@ export function SpesaDettaglio({
             className="max-h-full max-w-full object-contain"
           />
         </div>
+        </Portal>
       ) : null}
 
-      {/* Conferma eliminazione (2 step). */}
+      {/* Conferma eliminazione (2 step) — portale su body → sopra la bottom-nav. */}
       {confermaElimina ? (
+        <Portal>
         <div
           role="dialog"
           aria-modal="true"
@@ -647,6 +651,7 @@ export function SpesaDettaglio({
             </div>
           </div>
         </div>
+        </Portal>
       ) : null}
     </>
   );
