@@ -52,7 +52,7 @@ export function CommessaLavoriMobile({
   const mostraRiunioni = true;
 
   return (
-    <div className="space-y-0">
+    <div>
       {/* Action bar — solo per admin/office */}
       {canWrite ? (
         <div className="mb-5 grid grid-cols-2 gap-2.5">
@@ -75,7 +75,7 @@ export function CommessaLavoriMobile({
       ) : null}
 
       {/* Elenco — etichetta + riga che attraversa la card, con aria sotto */}
-      <div className="mb-8 flex items-center gap-3 px-1">
+      <div className="mb-6 flex items-center gap-3 px-1">
         <h3 className="text-sm font-semibold text-foreground">Elenco</h3>
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
       </div>
