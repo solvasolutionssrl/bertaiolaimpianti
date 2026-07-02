@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { ChevronRight, Search, MapPin } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { TurnoAttivoCard } from '../../_components/turno-attivo-card';
+import { TurnoAzioniCantiere } from '../../_components/turno-azioni-cantiere';
 import type { TurnoAttivoMio } from '../../_lib/turno-attivo';
+import type { TurnoAzioniContesto } from '../../_lib/turno-azioni-contesto';
 
 export interface CantiereItem {
   id: string;
@@ -25,9 +26,11 @@ const STATO_LABEL: Record<string, string> = {
 export function CantieriBrowser({
   cantieri,
   turno,
+  azioni,
 }: {
   cantieri: CantiereItem[];
   turno: TurnoAttivoMio | null;
+  azioni: TurnoAzioniContesto | null;
 }) {
   const [q, setQ] = useState('');
 
@@ -43,17 +46,24 @@ export function CantieriBrowser({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Stato attivo (turno) — in alto, sopra la ricerca. Spazio per future
-          notifiche. */}
-      {turno && (
-        <TurnoAttivoCard
+      {/* Turno in corso — card azioni completa (pausa pranzo + fine turno) in
+          alto, sopra la ricerca, con header tappabile verso la scheda cantiere. */}
+      {turno && azioni ? (
+        <TurnoAzioniCantiere
           cantiereId={turno.cantiereId}
           cantiereNome={turno.cantiereNome}
+          cantiereHref={`/mobile/kantiere/cantieri/${turno.cantiereId}`}
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
+          pausaOggiFatta={azioni.pausaOggiFatta}
+          sedi={azioni.sedi}
+          mezzi={azioni.mezzi}
+          sedeDefaultId={azioni.sedeDefaultId}
+          sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
+          sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
         />
-      )}
+      ) : null}
 
       {/* Ricerca */}
       <div className="relative">

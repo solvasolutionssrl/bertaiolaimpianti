@@ -5,6 +5,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../../_lib/guard';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
+import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { CantieriBrowser, type CantiereItem } from './_components/cantieri-browser';
 
 export const metadata: Metadata = {
@@ -29,6 +30,12 @@ export default async function CantieriMobilePage() {
 
   const cantieri = (cantieriRes.data as CantiereItem[] | null) ?? [];
 
+  // Se c'è un turno aperto, la card in cima diventa la card azioni completa
+  // (pausa pranzo + fine turno), come nella home e nella tab Ore.
+  const azioni = turno
+    ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, turno.cantiereId)
+    : null;
+
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
       <header className="pt-2">
@@ -44,7 +51,7 @@ export default async function CantieriMobilePage() {
         </p>
       </header>
 
-      <CantieriBrowser cantieri={cantieri} turno={turno} />
+      <CantieriBrowser cantieri={cantieri} turno={turno} azioni={azioni} />
     </div>
   );
 }
