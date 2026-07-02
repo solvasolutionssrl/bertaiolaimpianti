@@ -18,7 +18,7 @@ import { Button } from '@kommessa/ui';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
-import { creaSpesa } from '@/app/_actions/kantiere-spese';
+import { creaSpesa, creaSpesaOffice } from '@/app/_actions/kantiere-spese';
 import { compressImage } from '@/app/office/commesse/nuova/_lib/compress-image';
 
 /**
@@ -30,9 +30,25 @@ import { compressImage } from '@/app/office/commesse/nuova/_lib/compress-image';
  *
  * Idioma di cattura riusato da scansiona-client: <input capture="environment">
  * per lo scatto, <input> senza capture per l'allegato dalla galleria.
+ *
+ * Modalità ADMIN (`adminMode`): admin/office non timbrano, quindi il cantiere
+ * NON si deriva dal turno → si mostra un selettore cantiere e si salva via
+ * `creaSpesaOffice` (dipendente = l'admin stesso, ruolo-gated lato server).
+ * `triggerVariant='quick'` = pill compatta da griglia (cruscotto/profilo).
  */
 
 type MetodoPagamento = 'contanti' | 'carta' | 'altro';
+
+type NuovaSpesaProps = {
+  /** Admin/office: mostra il picker cantiere e salva via creaSpesaOffice. */
+  adminMode?: boolean;
+  /** Opzioni cantiere per il picker admin. */
+  cantieri?: { id: string; nome: string }[];
+  /** Id del profilo dipendente dell'admin (richiesto in adminMode). */
+  dipendenteId?: string | null;
+  /** 'default' = bottone grande; 'quick' = pill da griglia azioni. */
+  triggerVariant?: 'default' | 'quick';
+};
 
 type Estratto = {
   ragione_sociale: string | null;
@@ -167,7 +183,12 @@ function isoToLocalInput(iso: string | null): string {
   return new Date(d.getTime() - off).toISOString().slice(0, 16);
 }
 
-export function NuovaSpesa() {
+export function NuovaSpesa({
+  adminMode = false,
+  cantieri = [],
+  dipendenteId = null,
+  triggerVariant = 'default',
+}: NuovaSpesaProps = {}) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
 
@@ -196,6 +217,8 @@ export function NuovaSpesa() {
   const [personeToccato, setPersoneToccato] = React.useState(false);
   // overlay full-screen di conferma "per quante persone?" (solo se non toccato)
   const [confermaPersone, setConfermaPersone] = React.useState(false);
+  // cantiere scelto (solo adminMode): '' = "Da assegnare".
+  const [cantiereId, setCantiereId] = React.useState('');
 
   const fotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const allegaInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -228,6 +251,7 @@ export function NuovaSpesa() {
     setNumeroPersone(1);
     setPersoneToccato(false);
     setConfermaPersone(false);
+    setCantiereId('');
   }, [revokePreview]);
 
   const chiudi = React.useCallback(() => {
@@ -323,28 +347,41 @@ export function NuovaSpesa() {
   const eseguiSalva = React.useCallback(
     (persone: number) => {
       if (!scan || !importoValido) return;
+      if (adminMode && !dipendenteId) {
+        setErrMsg('Profilo dipendente non collegato: non puoi registrare spese a tuo nome.');
+        return;
+      }
       const est = scan.estratto;
       const dataIso = dataLocal ? new Date(dataLocal).toISOString() : null;
+      const comune = {
+        r2Key: scan.r2Key,
+        r2ThumbKey: scan.r2ThumbKey,
+        mime: scan.mime,
+        sizeBytes: scan.sizeBytes,
+        importoTotale: importoNum,
+        importoIva: ivaNum != null && Number.isFinite(ivaNum) ? ivaNum : null,
+        categoria,
+        ragioneSociale: ragioneSociale.trim() || null,
+        valuta: est.valuta || 'EUR',
+        dataScontrino: dataIso,
+        metodoPagamento: metodo,
+        numeroPersone: persone,
+        partitaIva: est.partita_iva,
+        numeroDocumento: est.numero_documento,
+        indirizzoEsercente: est.indirizzo_esercente,
+        aiRaw: est,
+      };
 
       startTransition(async () => {
-        const res = await creaSpesa({
-          r2Key: scan.r2Key,
-          r2ThumbKey: scan.r2ThumbKey,
-          mime: scan.mime,
-          sizeBytes: scan.sizeBytes,
-          importoTotale: importoNum,
-          importoIva: ivaNum != null && Number.isFinite(ivaNum) ? ivaNum : null,
-          categoria,
-          ragioneSociale: ragioneSociale.trim() || null,
-          valuta: est.valuta || 'EUR',
-          dataScontrino: dataIso,
-          metodoPagamento: metodo,
-          numeroPersone: persone,
-          partitaIva: est.partita_iva,
-          numeroDocumento: est.numero_documento,
-          indirizzoEsercente: est.indirizzo_esercente,
-          aiRaw: est,
-        });
+        // adminMode: l'admin non timbra → cantiere scelto a mano, salva a proprio
+        // nome via creaSpesaOffice (ruolo-gated + service role lato server).
+        const res = adminMode
+          ? await creaSpesaOffice({
+              ...comune,
+              dipendenteId: dipendenteId as string,
+              cantiereId: cantiereId || null,
+            })
+          : await creaSpesa(comune);
 
         if (!res.ok) {
           setErrMsg('Salvataggio non riuscito. Riprova.');
@@ -365,6 +402,9 @@ export function NuovaSpesa() {
       metodo,
       dataLocal,
       router,
+      adminMode,
+      dipendenteId,
+      cantiereId,
     ],
   );
 
@@ -380,6 +420,19 @@ export function NuovaSpesa() {
 
   // ── ENTRY: bottone + scelta sorgente foto ──────────────────────────────────
   if (!aperto) {
+    // Pill compatta per le griglie azioni (cruscotto/profilo admin).
+    if (triggerVariant === 'quick') {
+      return (
+        <button
+          type="button"
+          onClick={() => setAperto(true)}
+          className="flex items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/[0.06] px-4 py-3 text-center text-sm font-semibold text-primary shadow-soft transition-transform active:scale-[0.99]"
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+          Aggiungi spesa
+        </button>
+      );
+    }
     return (
       <button
         type="button"
@@ -708,9 +761,36 @@ export function NuovaSpesa() {
               />
             </div>
 
-            <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              La spesa verrà collegata in automatico al cantiere su cui stai lavorando.
-            </p>
+            {adminMode ? (
+              <div>
+                <label
+                  htmlFor="spesa-cantiere"
+                  className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  Cantiere
+                </label>
+                <select
+                  id="spesa-cantiere"
+                  value={cantiereId}
+                  onChange={(e) => setCantiereId(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-base outline-none focus:border-primary"
+                >
+                  <option value="">Da assegnare</option>
+                  {cantieri.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Non stai timbrando: scegli tu il cantiere (o lascia “Da assegnare”).
+                </p>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                La spesa verrà collegata in automatico al cantiere su cui stai lavorando.
+              </p>
+            )}
           </div>
         ) : null}
 

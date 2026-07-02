@@ -28,6 +28,21 @@ export default async function SpeseMobilePage() {
     .maybeSingle();
   const dipId = (dipRow as { id: string } | null)?.id ?? null;
 
+  // Admin/office non timbrano → aggiungono spese scegliendo il cantiere
+  // (creaSpesaOffice). Caricare le opzioni cantiere solo per loro.
+  const isManager = ctx.role === 'admin' || ctx.role === 'office';
+  let cantieriOpts: { id: string; nome: string }[] = [];
+  if (isManager) {
+    const { data } = await supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .eq('tenant_id', ctx.tenantId)
+      .order('nome', { ascending: true });
+    cantieriOpts = ((data as { id: string; nome: string | null; codice: string | null }[] | null) ?? []).map(
+      (c) => ({ id: c.id, nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere' }),
+    );
+  }
+
   let spese: SpesaRiga[] = [];
   const cantieriNomi: Record<string, string> = {};
 
@@ -105,7 +120,14 @@ export default async function SpeseMobilePage() {
         </p>
       </header>
 
-      <NuovaSpesa />
+      {isManager && !dipId ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Il tuo profilo non è collegato a un dipendente: non puoi registrare spese a tuo
+          nome. Chiedi in ufficio di collegarti.
+        </p>
+      ) : (
+        <NuovaSpesa adminMode={isManager} cantieri={cantieriOpts} dipendenteId={dipId} />
+      )}
 
       <SpeseClient spese={spese} cantieriNomi={cantieriNomi} />
     </div>

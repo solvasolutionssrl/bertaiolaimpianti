@@ -10,6 +10,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  Receipt,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -23,6 +24,7 @@ import type { ViaggioTratta } from '@/app/office/kantiere/rapportini/_components
 import { guardMobile } from '../../_lib/guard';
 import { statoDaEventi, type EventoOggi } from '../_lib/presenze';
 import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
+import { NuovaSpesa } from '../spese/_components/nuova-spesa';
 
 export const metadata: Metadata = { title: 'Cruscotto Kantiere' };
 export const dynamic = 'force-dynamic';
@@ -119,7 +121,7 @@ export default async function CruscottoKantierePage({
   const { fromIso, toIso } = romeDayBoundsUtc(giorno);
 
   const [dipRes, cantRes, timbRes] = await Promise.all([
-    supabase.from('dipendenti' as never).select('id, nome, cognome').eq('tenant_id', ctx.tenantId),
+    supabase.from('dipendenti' as never).select('id, nome, cognome, user_id').eq('tenant_id', ctx.tenantId),
     supabase.from('cantieri' as never).select('id, nome, codice').eq('tenant_id', ctx.tenantId),
     supabase
       .from('timbrature' as never)
@@ -130,12 +132,19 @@ export default async function CruscottoKantierePage({
       .order('ts', { ascending: true }),
   ]);
 
-  const dipendenti = (dipRes.data as { id: string; nome: string; cognome: string }[] | null) ?? [];
+  const dipendenti = (dipRes.data as { id: string; nome: string; cognome: string; user_id: string | null }[] | null) ?? [];
   const cantieri = (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
   const timbRows = (timbRes.data as TimbRow[] | null) ?? [];
 
   const dipMap = new Map(dipendenti.map((d) => [d.id, titoloCase(`${d.nome} ${d.cognome}`)]));
   const cantMap = new Map(cantieri.map((c) => [c.id, titoloCase(c.nome || c.codice || '')]));
+
+  // Profilo dipendente dell'admin (per registrare spese a proprio nome) +
+  // opzioni cantiere per il picker admin.
+  const mioDip = dipendenti.find((d) => d.user_id === ctx.userId)?.id ?? null;
+  const cantieriOpts = cantieri
+    .map((c) => ({ id: c.id, nome: titoloCase(c.nome || c.codice || 'Cantiere') }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   // Nomi di chi ha inserito le timbrature (per "Inserita a mano · da …").
   const creatoNomeMap = new Map<string, string>();
@@ -350,6 +359,26 @@ export default async function CruscottoKantierePage({
           Tocca una persona per vedere timbrature, origine (timbrata / inserita a mano) e viaggio.
         </p>
       </section>
+
+      {/* Spese: registra una ricevuta a tuo nome (l'admin non timbra → sceglie il
+          cantiere) + scorciatoia a "Le mie spese". Solo se hai un profilo dipendente. */}
+      {mioDip ? (
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <NuovaSpesa
+            adminMode
+            cantieri={cantieriOpts}
+            dipendenteId={mioDip}
+            triggerVariant="quick"
+          />
+          <Link
+            href="/mobile/kantiere/spese"
+            className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-center text-sm font-semibold shadow-soft transition-transform active:scale-[0.99]"
+          >
+            <Receipt className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Le mie spese
+          </Link>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 pt-1">
         <Link
