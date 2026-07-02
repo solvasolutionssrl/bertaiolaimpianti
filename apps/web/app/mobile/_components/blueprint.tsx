@@ -100,9 +100,12 @@ export function Stagger({ children, className }: { children: React.ReactNode; cl
 export function Hero({
   children,
   className,
+  paddingTop = '1.5rem',
 }: {
   children: React.ReactNode;
   className?: string;
+  /** Padding-top visivo (oltre al safe-area del layout). Default 1.5rem. */
+  paddingTop?: string;
 }) {
   return (
     <div
@@ -115,7 +118,7 @@ export function Hero({
         // in standalone) è ora applicato una volta sola dal <main> del layout
         // mobile. Lo scrim blu del layout riempie l'area dietro l'isola, dello
         // stesso colore dell'Hero → giunzione invisibile.
-        paddingTop: '1.5rem',
+        paddingTop,
       }}
     >
       {/* Grid pattern texture — alleggerito (opacity + maglia più larga) */}

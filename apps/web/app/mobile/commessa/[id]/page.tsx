@@ -481,8 +481,8 @@ export default async function CommessaDetailPage({
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col pb-28">
-      {/* Hero dark con codice + cliente + LED — pb un pelo ridotto vs default */}
-      <Hero className="pb-10">
+      {/* Hero compatto: pb allineato ai lati (px-5) e top un filo più su */}
+      <Hero className="pb-5" paddingTop="1.15rem">
         <div className="flex items-center justify-between">
           <MobileBackButton href="/mobile" tone="dark" />
           <div className="inline-flex items-center gap-2">

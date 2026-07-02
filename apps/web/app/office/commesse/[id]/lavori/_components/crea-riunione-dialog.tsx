@@ -387,8 +387,8 @@ export function CreaRiunioneDialog({
         {/* ─── STEP 1 — CONTENUTO ──────────────────────────────── */}
         {step === 'contenuto' ? (
           <div className="space-y-3">
-            {/* Data + Titolo */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Data + Titolo — impilati, così restano sempre allineati su mobile */}
+            <div className="space-y-3">
               <div>
                 <Label htmlFor="r_data" className="text-xs text-muted-foreground">Data</Label>
                 <Input
@@ -396,7 +396,7 @@ export function CreaRiunioneDialog({
                   type="date"
                   value={dataRiunione}
                   onChange={(e) => setDataRiunione(e.target.value)}
-                  className="mt-1 h-8"
+                  className="mt-1 h-10"
                 />
               </div>
               <div>
@@ -408,15 +408,15 @@ export function CreaRiunioneDialog({
                   value={titolo}
                   onChange={(e) => setTitolo(e.target.value)}
                   placeholder="Es. Sopralluogo, Allineamento…"
-                  className="mt-1 h-8"
+                  className="mt-1 h-10"
                 />
               </div>
             </div>
 
-            {/* Contenuto con dettatura */}
+            {/* Contenuto: la voce è la via preferita, la scrittura è il fallback */}
             <div>
-              <div className="mb-1 flex items-center justify-between">
-                <Label className="text-xs text-muted-foreground">Contenuto</Label>
+              <Label className="text-xs text-muted-foreground">Contenuto della riunione</Label>
+              <div className="mt-1.5">
                 <RecordingButton
                   recording={recording}
                   transcribing={transcribing}
@@ -427,32 +427,30 @@ export function CreaRiunioneDialog({
               </div>
 
               {recording ? (
-                <div className="mb-1.5 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-destructive" />
-                  <span className="font-medium">Registrazione — {fmtSecs(recSecs)}</span>
-                  <span className="ml-auto text-destructive/60">Premi «Ferma» quando hai finito</span>
-                </div>
-              ) : null}
-
-              {transcribing ? (
-                <div className="mb-1.5 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Trascrizione in corso…
-                </div>
-              ) : null}
-
-              <textarea
-                value={corpoLibero}
-                onChange={(e) => setCorpoLibero(e.target.value)}
-                rows={6}
-                placeholder="Punti discussi, decisioni, cose da fare… oppure premi «Vocale» per dettare."
-                className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              {corpoLibero.length > 0 ? (
-                <p className="mt-0.5 text-right text-[10px] text-muted-foreground">
-                  {corpoLibero.length} car.
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                  Parla pure: quando hai finito premi «Ferma», l&apos;AI trascrive e compila i campi.
+                </p>
+              ) : !transcribing ? (
+                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                  Racconta la riunione a voce: l&apos;AI la trascrive e prepara reportino e cose da fare.
                 </p>
               ) : null}
+
+              <div className="mt-3">
+                <p className="mb-1 text-[11px] font-medium text-muted-foreground">…oppure scrivi a mano</p>
+                <textarea
+                  value={corpoLibero}
+                  onChange={(e) => setCorpoLibero(e.target.value)}
+                  rows={5}
+                  placeholder="Punti discussi, decisioni, cose da fare…"
+                  className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                {corpoLibero.length > 0 ? (
+                  <p className="mt-0.5 text-right text-[10px] text-muted-foreground">
+                    {corpoLibero.length} car.
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             {/* Allegati */}
@@ -815,10 +813,10 @@ function RecordingButton({
 }: RecordingButtonProps) {
   if (transcribing) {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        Trascrizione…
-      </span>
+      <div className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 py-3.5 text-sm font-medium text-primary">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Trascrizione in corso…
+      </div>
     );
   }
   if (recording) {
@@ -826,10 +824,10 @@ function RecordingButton({
       <button
         type="button"
         onClick={onStop}
-        className="inline-flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm font-semibold text-destructive hover:bg-destructive/15 transition-colors"
+        className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-destructive/50 bg-destructive/10 py-3.5 text-base font-semibold text-destructive transition-colors hover:bg-destructive/15"
       >
         <Square className="h-4 w-4 fill-current" />
-        Ferma · {fmtSecs(recSecs)}
+        Ferma registrazione · {fmtSecs(recSecs)}
       </button>
     );
   }
@@ -837,10 +835,12 @@ function RecordingButton({
     <button
       type="button"
       onClick={onStart}
-      className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-4 py-2 text-sm font-semibold text-primary hover:bg-primary/10 transition-colors"
+      className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-primary/40 bg-primary/[0.06] py-3.5 text-base font-semibold text-primary transition-all hover:bg-primary/10 active:scale-[0.99]"
     >
-      <Mic className="h-4 w-4" />
-      Vocale
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+        <Mic className="h-4 w-4" aria-hidden="true" />
+      </span>
+      Detta a voce
     </button>
   );
 }
