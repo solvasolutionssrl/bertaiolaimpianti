@@ -11,13 +11,12 @@ import {
   CloudUpload,
   HardHat,
   MapPin,
-  Pencil,
   User,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
-import { Button, StatoLed, Tabs, TabsContent, TabsList, TabsTrigger } from '@kommessa/ui';
+import { StatoLed, Tabs, TabsContent, TabsList, TabsTrigger } from '@kommessa/ui';
 import type { StatoCommessa } from '@kommessa/api/types';
 import {
   getStorageProvider,
@@ -44,8 +43,8 @@ import {
 } from './_components/commessa-riunioni-mobile';
 import { CommessaLavoriMobile } from './_components/commessa-lavori-mobile';
 import { CartellaEntries } from './cartella/_components/cartella-entries';
-import { DettagliEdit } from '../../../_components/dettagli-edit';
-import { AggiungiTipologieDialog } from '../../../_components/aggiungi-tipologie-dialog';
+import { HeroGestione } from './_components/hero-gestione';
+import { DettagliCollapsible } from './_components/dettagli-collapsible';
 import { TecniciMobile } from './_components/tecnici-mobile';
 import {
   elencaTecniciAssegnati,
@@ -496,9 +495,9 @@ export default async function CommessaDetailPage({
                 <span aria-hidden="true">●</span> Critica
               </span>
             )}
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1">
+            <span className="inline-flex items-center gap-2 rounded-full border border-primary-foreground/20 bg-primary-foreground/10 px-2.5 py-1.5">
               <StatoLed stato={stato} />
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/90">
+              <span className="text-[12px] font-semibold text-primary-foreground/90">
                 {{
                   aperta: 'Non presa',
                   in_corso: 'In corso',
@@ -509,6 +508,14 @@ export default async function CommessaDetailPage({
                 }[stato] ?? stato}
               </span>
             </span>
+            {canEditCommessa ? (
+              <HeroGestione
+                commessaId={commessa.id}
+                vociPresenti={tipVociPresenti}
+                voci={tipVoci}
+                presets={tipPresets}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -519,60 +526,39 @@ export default async function CommessaDetailPage({
             (descrizione AI / nota capo) è la cosa più grande, cliente +
             indirizzo come meta sotto, codice/data come micro-tag sopra. */}
         <div className="mt-4">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary-foreground/60">
+          <p className="text-xs font-medium text-primary-foreground/65">
             {commessa.codice_interno} · {fmtData(commessa.data_apertura)}
-            {responsabile?.display_name ? ` · Resp ${titoloCase(responsabile.display_name)}` : ''}
+            {responsabile?.display_name ? ` · Resp. ${titoloCase(responsabile.display_name)}` : ''}
           </p>
 
-          {/* Titolone — la modifica vive nel blocco "Dettagli" sotto la righetta */}
-          <h1 className="mt-1 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
+          {/* Titolo della commessa — la cosa più grande dell'hero */}
+          <h1 className="mt-1.5 text-xl font-semibold leading-snug tracking-tight text-primary-foreground">
             {titoloCase(pickCommessaTitolo(commessa)) || commessa.nome_cartella || '—'}
           </h1>
 
-          {/* Cliente + Indirizzo etichettati (stesso stile dell'ex "Dettagli:") */}
-          <p className="mt-2 text-sm font-medium text-primary-foreground/85">
-            <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">
-              Cliente:
+          {/* Cliente + Indirizzo con icona, leggibili (niente micro-maiuscolo) */}
+          <div className="mt-2.5 flex items-center gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/10 text-primary-foreground/85">
+              <User className="h-4 w-4" aria-hidden="true" />
             </span>
-            {titoloCase(cliente?.ragione_sociale) || '—'}
-          </p>
+            <span className="min-w-0 truncate text-[15px] font-semibold text-primary-foreground">
+              {titoloCase(cliente?.ragione_sociale) || '—'}
+            </span>
+          </div>
           {(commessa.cliente_indirizzo_cantiere || cliente?.citta) && (
-            <p className="mt-1 text-xs text-primary-foreground/70">
-              <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">
-                Indirizzo:
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/5 text-primary-foreground/70">
+                <MapPin className="h-4 w-4" aria-hidden="true" />
               </span>
-              {titoloCase(
-                [commessa.cliente_indirizzo_cantiere, cliente?.citta]
-                  .filter(Boolean)
-                  .join(' · '),
-              )}
-            </p>
-          )}
-
-          {canEditCommessa ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
-              >
-                <Link href={`/mobile/commessa/${commessa.id}/modifica`}>
-                  <Pencil className="h-4 w-4" aria-hidden="true" />
-                  Modifica
-                </Link>
-              </Button>
-              <AggiungiTipologieDialog
-                commessaId={commessa.id}
-                vociPresenti={tipVociPresenti}
-                voci={tipVoci}
-                presets={tipPresets}
-                variant="sheet"
-                triggerLabel="Tipologie"
-                triggerClassName="border-primary-foreground/25 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"
-              />
+              <span className="min-w-0 truncate text-[13px] font-medium text-primary-foreground/80">
+                {titoloCase(
+                  [commessa.cliente_indirizzo_cantiere, cliente?.citta]
+                    .filter(Boolean)
+                    .join(' · '),
+                )}
+              </span>
             </div>
-          ) : null}
+          )}
 
           {/* Azioni rapide: Chiama (lancia la chiamata) + Mappa (apre Google
               Maps sull'indirizzo). Sopra la righetta, a portata di pollice. */}
@@ -682,32 +668,15 @@ export default async function CommessaDetailPage({
             </div>
           ) : null}
 
-          {/* Dettagli del lavoro — sotto la righetta. Testo integrale del capo
-              + matita di modifica (admin). È la "verità sacrosanta" del lavoro. */}
+          {/* Dettagli del lavoro — una riga a riposo, tap per espandere. È la
+              "verità sacrosanta" del lavoro; la matita modifica (admin). */}
           {(dettagliTesto || canEditDettagli) ? (
-            <div className="relative mt-3 border-t border-primary-foreground/10 pt-3">
-              {dettagliTesto ? (
-                <p className="pr-7 text-[13px] leading-relaxed text-primary-foreground/90 line-clamp-3">
-                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/45">
-                    Dettagli:
-                  </span>
-                  {dettagliTesto}
-                </p>
-              ) : (
-                <p className="pr-7 text-[11px] italic text-primary-foreground/40">
-                  <span className="mr-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground/35">
-                    Dettagli:
-                  </span>
-                  Nessun dettaglio lavoro.
-                </p>
-              )}
-              <DettagliEdit
-                commessaId={params.id}
-                initial={commessa.note_iniziali ?? dettagliTesto ?? null}
-                canEdit={canEditDettagli}
-                triggerClassName="text-primary-foreground/40 hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              />
-            </div>
+            <DettagliCollapsible
+              commessaId={params.id}
+              testo={dettagliTesto}
+              initial={commessa.note_iniziali ?? dettagliTesto ?? null}
+              canEdit={canEditDettagli}
+            />
           ) : null}
         </div>
       </Hero>

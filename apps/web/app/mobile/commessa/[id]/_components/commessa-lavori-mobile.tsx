@@ -92,20 +92,18 @@ export function CommessaLavoriMobile({
     <div className="space-y-0">
       {/* Action bar — solo per admin/office */}
       {canWrite ? (
-        <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="mb-5 grid grid-cols-2 gap-2.5">
           <Button
             onClick={() => setTodoOpen(true)}
-            size="sm"
-            className="h-9 justify-center gap-1.5 text-[13px] font-semibold"
+            className="h-11 justify-center gap-1.5 rounded-xl text-[14px] font-semibold"
           >
             <Plus className="h-4 w-4" />
             Nuovo Da Fare
           </Button>
           <Button
             variant="outline"
-            size="sm"
             onClick={() => setRiunOpen(true)}
-            className="h-9 justify-center gap-1.5 border-primary/40 text-[13px] font-semibold text-primary"
+            className="h-11 justify-center gap-1.5 rounded-xl border-primary/40 text-[14px] font-semibold text-primary"
           >
             <Sparkles className="h-4 w-4" />
             Riunione AI
@@ -113,13 +111,9 @@ export function CommessaLavoriMobile({
         </div>
       ) : null}
 
-      {/* Sezione da fare — titolo + filtri */}
-      <h3 className="mb-2 flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
-        <CircleDot className="h-3 w-3" />
-        Da fare
-        <span className="ml-auto font-sans text-[9px] tabular-nums">{todosAperti.length}</span>
-      </h3>
-      <div className="mb-3 grid grid-cols-4 gap-1">
+      {/* Filtri — pill comode e tappabili, riga scrollabile */}
+      <p className="mb-2.5 px-1 text-xs font-medium text-muted-foreground">Filtra</p>
+      <div className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
         <FiltroChip
           label="Tutto"
           count={totale}
@@ -127,7 +121,7 @@ export function CommessaLavoriMobile({
           onClick={() => setFiltro('tutto')}
         />
         <FiltroChip
-          label="Da Fare"
+          label="Da fare"
           count={todosAperti.length}
           active={filtro === 'todo_aperti'}
           onClick={() => setFiltro('todo_aperti')}
@@ -151,7 +145,7 @@ export function CommessaLavoriMobile({
       </div>
 
       {/* Lista contenuti */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {/* Da Fare list */}
         {todosShown.length > 0 ? (
           <CommessaTodoMobile
@@ -175,10 +169,10 @@ export function CommessaLavoriMobile({
 
         {/* Riunioni list */}
         {mostraRiunioni && riunioni.length > 0 ? (
-          <section className="-mx-3 space-y-2 rounded-lg bg-blue-50/60 px-3 py-2.5 dark:bg-blue-950/20">
-            <h3 className="flex items-center gap-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
+          <section className="space-y-2 rounded-xl border border-primary/10 bg-primary/[0.04] p-3">
+            <h3 className="flex items-center gap-1.5 px-0.5 text-xs font-semibold text-primary">
               <span
-                className="inline-block h-1 w-1 rounded-full bg-primary"
+                className="inline-block h-1.5 w-1.5 rounded-full bg-primary"
                 aria-hidden="true"
               />
               Riunioni ({riunioni.length})
@@ -232,20 +226,20 @@ function FiltroChip({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex w-full items-center justify-center gap-1 rounded-md border px-1 py-1 text-[10px] font-medium transition-colors',
+        'flex h-10 flex-none items-center gap-2 rounded-full border px-4 text-[13px] font-semibold transition-colors active:scale-[0.98]',
         active
-          ? 'border-primary/30 bg-primary/10 text-primary'
+          ? 'border-primary bg-primary text-primary-foreground shadow-soft'
           : muted
-            ? 'border-transparent text-muted-foreground hover:bg-muted/60'
-            : 'border-transparent text-foreground/70 hover:bg-muted/60',
+            ? 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+            : 'border-border bg-card text-foreground/80 hover:bg-muted/50',
       )}
     >
-      {Icon ? <Icon className="h-2.5 w-2.5 shrink-0" /> : null}
-      <span className="truncate">{label}</span>
+      {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
+      <span>{label}</span>
       <span
         className={cn(
-          'font-mono text-[9px] tabular-nums',
-          active ? 'text-primary/60' : 'text-muted-foreground',
+          'rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums',
+          active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground',
         )}
       >
         {count}

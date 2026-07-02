@@ -42,6 +42,12 @@ interface Props {
   triggerLabel?: string;
   triggerClassName?: string;
   triggerSize?: 'sm' | 'default' | 'lg';
+  /** Modalità controllata (es. voce di un menu esterno): se passato, l'apertura
+   *  è gestita dal parent. Default: stato interno. */
+  open?: boolean;
+  onOpenChange?: (v: boolean) => void;
+  /** Se false, non renderizza il bottone trigger (utile in modalità controllata). */
+  renderTrigger?: boolean;
 }
 
 /**
@@ -60,21 +66,31 @@ export function AggiungiTipologieDialog({
   triggerLabel = 'Aggiungi tipologie',
   triggerClassName,
   triggerSize = 'sm',
+  open: openProp,
+  onOpenChange,
+  renderTrigger = true,
 }: Props) {
-  const [open, setOpen] = React.useState(false);
+  const [openState, setOpenState] = React.useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (v: boolean) => {
+    if (onOpenChange) onOpenChange(v);
+    else setOpenState(v);
+  };
 
   return (
     <>
-      <Button
-        type="button"
-        size={triggerSize}
-        variant="outline"
-        className={triggerClassName}
-        onClick={() => setOpen(true)}
-      >
-        <Plus className="h-4 w-4" aria-hidden="true" />
-        {triggerLabel}
-      </Button>
+      {renderTrigger ? (
+        <Button
+          type="button"
+          size={triggerSize}
+          variant="outline"
+          className={triggerClassName}
+          onClick={() => setOpen(true)}
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          {triggerLabel}
+        </Button>
+      ) : null}
       {open ? (
         <TipologieModal
           commessaId={commessaId}
