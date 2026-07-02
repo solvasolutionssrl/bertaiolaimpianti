@@ -4,24 +4,21 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, MapPin, Navigation, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
-import { appaiaTimbrature, SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
+import { romeDay } from '@kommessa/api/rome-time';
+import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import {
-  leggiSogliaPausaPranzoOre,
-  leggiSogliaAutoSpegnimentoPausa,
-} from '@/app/_lib/kantiere-config';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 
 import { guardMobile } from '../../../_lib/guard';
 import { mioTurnoAttivo } from '../../_lib/turno-attivo';
+import { caricaTurnoAzioniContesto } from '../../_lib/turno-azioni-contesto';
 import {
   eventiOggiCantiere,
   dettaglioPresenza,
   statoDaEventi,
   type EventoOggi,
 } from '../../_lib/presenze';
-import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
+import { TurnoAzioniCantiere } from '../../_components/turno-azioni-cantiere';
 import { ChiInCantiere, type PersonaDentro } from './_components/chi-in-cantiere';
 import { AnaliticaCantiere, type AnaliticaCantiereDati } from './_components/analitica-cantiere';
 
@@ -103,79 +100,13 @@ export default async function CantiereMobileDetailPage({
   const turno = await mioTurnoAttivo();
   const turnoQui = turno && turno.cantiereId === c.id ? turno : null;
 
-  // Contesto viaggio di ritorno per il termina turno IN-APP: sedi disponibili
-  // (default tenant + sedi associate al cantiere, solo attive) + parco mezzi
-  // attivo. Mirror della logica del QR (`/t/[token]`). Caricato solo se il
-  // turno è aperto su questo cantiere (altrimenti le azioni non compaiono).
-  let sediViaggio: { id: string; nome: string; tipo: string }[] = [];
-  let mezziViaggio: { id: string; targa: string; modello: string | null }[] = [];
-  let sedeDefaultId: string | null = null;
-  let sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE;
-  let sogliaAutoSpegnimentoPausaOre = 1.5;
-  if (turnoQui) {
-    [sogliaPausaPranzoOre, sogliaAutoSpegnimentoPausaOre] = await Promise.all([
-      leggiSogliaPausaPranzoOre(supabase, ctx.tenantId),
-      leggiSogliaAutoSpegnimentoPausa(supabase, ctx.tenantId),
-    ]);
-    const [sediRes, assocRes, mezziRes] = await Promise.all([
-      supabase
-        .from('sedi' as never)
-        .select('id, nome, tipo, is_default')
-        .eq('tenant_id', ctx.tenantId)
-        .eq('attivo', true),
-      supabase
-        .from('cantiere_sede' as never)
-        .select('sede_id')
-        .eq('cantiere_id', c.id)
-        .eq('tenant_id', ctx.tenantId),
-      supabase
-        .from('mezzi' as never)
-        .select('id, targa, modello')
-        .eq('tenant_id', ctx.tenantId)
-        .eq('attivo', true)
-        .order('targa'),
-    ]);
-
-    const allSedi =
-      (sediRes.data as
-        | { id: string; nome: string; tipo: string; is_default: boolean }[]
-        | null) ?? [];
-    const assocIds = new Set(
-      ((assocRes.data as { sede_id: string }[] | null) ?? []).map((r) => r.sede_id),
-    );
-    sediViaggio = allSedi
-      .filter((s) => s.is_default || assocIds.has(s.id))
-      .map((s) => ({ id: s.id, nome: titoloCase(s.nome), tipo: s.tipo }));
-    sedeDefaultId = allSedi.find((s) => s.is_default)?.id ?? null;
-    mezziViaggio = (
-      (mezziRes.data as { id: string; targa: string; modello: string | null }[] | null) ?? []
-    ).map((m) => ({ id: m.id, targa: m.targa, modello: m.modello }));
-  }
-
-  // Per il prompt "pausa pranzo non rilevata" in uscita: oggi risulta già una
-  // pausa timbrata su questo cantiere dal dipendente corrente?
-  let pausaOggiFattaMia = false;
-  if (turnoQui) {
-    const { data: meDip } = await supabase
-      .from('dipendenti' as never)
-      .select('id')
-      .eq('tenant_id', ctx.tenantId)
-      .eq('user_id', ctx.userId)
-      .maybeSingle();
-    const dipId = (meDip as { id: string } | null)?.id;
-    if (dipId) {
-      const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
-      const { data: evRows } = await supabase
-        .from('timbrature' as never)
-        .select('pausa')
-        .eq('tenant_id', ctx.tenantId)
-        .eq('dipendente_id', dipId)
-        .eq('cantiere_id', c.id)
-        .gte('ts', fromIso)
-        .lt('ts', toIso);
-      pausaOggiFattaMia = ((evRows as { pausa: boolean | null }[] | null) ?? []).some((e) => e.pausa);
-    }
-  }
+  // Contesto viaggio+pausa per il termina turno IN-APP (sedi/mezzi/soglie +
+  // se oggi ha già timbrato la pausa qui). Solo se il turno è aperto su questo
+  // cantiere (altrimenti le azioni non compaiono). Helper condiviso con la home
+  // e la tab Ore.
+  const azioni = turnoQui
+    ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, c.id)
+    : null;
 
   // Office/admin: chi è in cantiere ORA (live), con dettaglio per persona.
   // Per i tecnici questa sezione non compare (resta la vista squadra).
@@ -325,18 +256,18 @@ export default async function CantiereMobileDetailPage({
         {isManager ? <LiveRefresh className="mt-2" /> : null}
       </header>
 
-      {turnoQui ? (
+      {turnoQui && azioni ? (
         <TurnoAzioniCantiere
           cantiereId={c.id}
           inizioTs={turnoQui.inizioTs}
           inPausa={turnoQui.inPausa}
           inizioPausaTs={turnoQui.inizioPausaTs}
-          pausaOggiFatta={pausaOggiFattaMia}
-          sedi={sediViaggio}
-          mezzi={mezziViaggio}
-          sedeDefaultId={sedeDefaultId}
-          sogliaPausaPranzoOre={sogliaPausaPranzoOre}
-          sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
+          pausaOggiFatta={azioni.pausaOggiFatta}
+          sedi={azioni.sedi}
+          mezzi={azioni.mezzi}
+          sedeDefaultId={azioni.sedeDefaultId}
+          sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
+          sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
         />
       ) : null}
 

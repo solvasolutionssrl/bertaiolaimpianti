@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Utensils, Play, LogOut, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Utensils, Play, LogOut, Loader2, ChevronRight } from 'lucide-react';
 import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 import {
   pausaPranzoMia,
@@ -36,6 +37,12 @@ export interface TurnoAzioniCantiereProps {
   sogliaPausaPranzoOre?: number;
   /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
   sogliaAutoSpegnimentoPausaOre?: number;
+  /** Nome del cantiere: se presente, l'header diventa un link alla scheda. */
+  cantiereNome?: string;
+  /** Href della scheda cantiere: rende l'header tappabile (home / tab Ore). */
+  cantiereHref?: string;
+  /** Card più grande e in evidenza (usata sulla home Kantiere). */
+  prominente?: boolean;
 }
 
 function ora(ts: string): string {
@@ -103,6 +110,9 @@ export function TurnoAzioniCantiere({
   sedeDefaultId = null,
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
   sogliaAutoSpegnimentoPausaOre = 1.5,
+  cantiereNome,
+  cantiereHref,
+  prominente = false,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   // Seed deterministico (inizio turno) per evitare il mismatch di hydration;
@@ -206,7 +216,7 @@ export function TurnoAzioniCantiere({
       };
 
   return (
-    <div className={`rounded-2xl border ${palette.ring} ${palette.bg} p-4 shadow-soft`}>
+    <div className={`rounded-2xl border ${palette.ring} ${palette.bg} ${prominente ? 'p-5' : 'p-4'} shadow-soft`}>
       <div className="flex items-center justify-between gap-2">
         <span className="inline-flex items-center gap-1.5">
           <span className="relative flex h-2.5 w-2.5">
@@ -226,11 +236,32 @@ export function TurnoAzioniCantiere({
           </span>
         )}
       </div>
-      <p className={`mt-1.5 text-xs ${palette.sub}`}>
-        {inPausa
-          ? `In pausa dalle ${inizioPausaTs ? ora(inizioPausaTs) : '--:--'}`
-          : `Timbrato alle ${ora(inizioTs)}`}
-      </p>
+      {cantiereHref ? (
+        <Link
+          href={cantiereHref}
+          className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-black/5 bg-white/40 px-3 py-2.5 transition-transform active:scale-[0.99]"
+        >
+          <span className="min-w-0">
+            <span
+              className={`block truncate font-semibold leading-tight text-foreground ${prominente ? 'text-base' : 'text-sm'}`}
+            >
+              {cantiereNome ?? 'Cantiere'}
+            </span>
+            <span className={`mt-0.5 block text-xs ${palette.sub}`}>
+              {inPausa
+                ? `In pausa dalle ${inizioPausaTs ? ora(inizioPausaTs) : '--:--'} · apri cantiere`
+                : `Timbrato alle ${ora(inizioTs)} · apri cantiere`}
+            </span>
+          </span>
+          <ChevronRight className={`h-4 w-4 shrink-0 ${palette.tag}`} aria-hidden="true" />
+        </Link>
+      ) : (
+        <p className={`mt-1.5 text-xs ${palette.sub}`}>
+          {inPausa
+            ? `In pausa dalle ${inizioPausaTs ? ora(inizioPausaTs) : '--:--'}`
+            : `Timbrato alle ${ora(inizioTs)}`}
+        </p>
+      )}
       {inPausa && rimanentePausaMs != null ? (
         <p className="mt-1 text-[11px] font-medium tabular-nums text-amber-800">
           La pausa si chiude tra {fmtCountdown(rimanentePausaMs)} · ricordati di interromperla a mano

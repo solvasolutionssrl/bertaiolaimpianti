@@ -12,6 +12,7 @@ import {
   inviaMioRapportino,
 } from '@/app/_actions/kantiere-rapportino';
 import { ManualeDialog } from './manuale-dialog';
+import { ModificaGiornataDialog } from './modifica-giornata-dialog';
 
 // ── tipi ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,9 @@ interface OreClientProps {
   cantieriDisponibili: { id: string; nome: string }[];
   sediDisponibili: { id: string; nome: string; tipo: string }[];
   mezziDisponibili: { id: string; targa: string; modello: string | null }[];
+  /** true se c'è un turno aperto: il totale di oggi è ancora 0/parziale, quindi
+   *  la panoramica compare solo a turno finito. */
+  turnoInCorso: boolean;
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -156,6 +160,7 @@ export function OreClient({
   cantieriDisponibili,
   sediDisponibili,
   mezziDisponibili,
+  turnoInCorso,
 }: OreClientProps) {
   const router = useRouter();
   const askConfirm = useConfirm();
@@ -173,6 +178,8 @@ export function OreClient({
 
   // dialog inserimento manuale
   const [manualeOpen, setManualeOpen] = useState(false);
+  // dialog panoramica/correzione della giornata di oggi (pencil sul totale)
+  const [panoramicaOpen, setPanoramicaOpen] = useState(false);
 
   const isBozza = rapportino.stato === 'bozza';
   const isEditabile = ['bozza', 'inviato', 'respinto'].includes(rapportino.stato);
@@ -370,6 +377,10 @@ export function OreClient({
   const totOrdinarie = sumOre(righe, 'ore_ordinarie');
   const totStraordinarie = sumOre(righe, 'ore_straordinarie');
   const totViaggio = sumOre(righe, 'ore_viaggio');
+  // Per il tecnico "lavoro" = ordinarie + straordinarie (lo split lo fa
+  // l'ufficio); la panoramica di oggi mostra Lavoro + Viaggio.
+  const totLavoro = totOrdinarie + totStraordinarie;
+  const haOreOggi = totLavoro + totViaggio > 0;
 
   // Le ore si calcolano e si approvano da sole dalle timbrature: la vista del
   // tecnico è di sola lettura. L'eventuale correzione di un'anomalia la fa
@@ -385,123 +396,49 @@ export function OreClient({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Riepilogo di oggi ── */}
-      <section className="rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/[0.06] to-transparent p-4 shadow-soft">
-        <div className="flex items-center justify-between">
-          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-            Totale di oggi
-          </p>
-          {isBozza && isOggi ? (
-            <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              In corso
-            </span>
-          ) : (
-            <StatoBadge stato={rapportino.stato} />
-          )}
-        </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          {(
-            [
-              { label: 'Ordinarie', val: totOrdinarie, tone: 'text-foreground' },
-              { label: 'Straord.', val: totStraordinarie, tone: 'text-amber-600' },
-              { label: 'Viaggio', val: totViaggio, tone: 'text-sky-600' },
-            ] as const
-          ).map(({ label, val, tone }) => (
-            <div
-              key={label}
-              className="rounded-xl border border-border/60 bg-background/70 px-2.5 py-2 text-center"
-            >
-              <span className={`block font-mono text-2xl font-bold leading-none tabular-nums ${tone}`}>
-                {fmtOre(val)}
-              </span>
-              <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                {label}
-              </span>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          Calcolato in automatico dalle tue timbrature (ingresso/uscita e viaggio): a fine giornata
-          si chiude da sé, non devi inviare nulla. Se qualcosa non torna, contatta l&apos;ufficio.
-        </p>
-      </section>
-
-      {/* ── Voci ore ── */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between px-0.5">
-          <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Cantieri e commesse
-          </h2>
-          {righe.length > 0 && (
-            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-              {righe.length} {righe.length === 1 ? 'voce' : 'voci'}
-            </span>
-          )}
-        </div>
-
-        {righe.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card/60 px-4 py-8 text-center shadow-soft">
-            <span className="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Clock className="h-5 w-5" aria-hidden="true" />
-            </span>
-            <p className="text-sm font-medium text-foreground">Nessuna voce per oggi</p>
-            <p className="mx-auto mt-1 max-w-[16rem] text-xs leading-relaxed text-muted-foreground">
-              Le ore compaiono qui in automatico quando timbri ingresso e uscita.
+      {/* ── Panoramica di oggi: compare solo a turno finito (con turno in corso
+             il totale è ancora 0/parziale). Pencil → rivedi/correggi. ── */}
+      {!turnoInCorso && haOreOggi ? (
+        <button
+          type="button"
+          onClick={() => setPanoramicaOpen(true)}
+          className="w-full rounded-2xl border border-primary/15 bg-gradient-to-br from-primary/10 via-primary/[0.06] to-transparent p-4 text-left shadow-soft transition-transform active:scale-[0.99]"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">
+              Riepilogo di oggi
             </p>
+            <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              <PenLine className="h-3 w-3" aria-hidden="true" />
+              Controlla
+            </span>
           </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {righe.map((riga, idx) => (
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(
+              [
+                { label: 'Lavoro', val: totLavoro, tone: 'text-foreground' },
+                { label: 'Viaggio', val: totViaggio, tone: 'text-sky-600' },
+              ] as const
+            ).map(({ label, val, tone }) => (
               <div
-                key={`${riga.commessa_id ?? riga.cantiere_id}-${idx}`}
-                className="rounded-xl border border-border bg-card p-3 shadow-soft"
+                key={label}
+                className="rounded-xl border border-border/60 bg-background/70 px-2.5 py-2 text-center"
               >
-                {/* Etichetta target */}
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    {riga.cantiere_id && (
-                      <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                        Cantiere
-                      </span>
-                    )}
-                    <p className="text-sm font-semibold leading-tight text-foreground truncate">
-                      {titoloCase(riga.target_label)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Inputs ore (sola lettura: derivati dalle timbrature) */}
-                <div className="grid grid-cols-3 gap-2">
-                  <OreInput
-                    label="Ordinarie"
-                    value={riga.ore_ordinarie}
-                    onChange={() => {}}
-                    disabled
-                  />
-                  <OreInput
-                    label="Straord."
-                    value={riga.ore_straordinarie}
-                    onChange={() => {}}
-                    disabled
-                  />
-                  <OreInput
-                    label="Viaggio"
-                    value={riga.ore_viaggio}
-                    onChange={() => {}}
-                    disabled
-                  />
-                </div>
-
-                {/* Nota riga (sola lettura) */}
-                {riga.note && (
-                  <p className="mt-1.5 text-xs text-muted-foreground">{riga.note}</p>
-                )}
+                <span className={`block font-mono text-2xl font-bold leading-none tabular-nums ${tone}`}>
+                  {fmtOre(val)}
+                </span>
+                <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                  {label}
+                </span>
               </div>
             ))}
           </div>
-        )}
-
-      </section>
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            Giornata chiusa, calcolata dalle tue timbrature. Controlla che sia tutto giusto: tocca per
+            rivedere o correggere ore e pausa.
+          </p>
+        </button>
+      ) : null}
 
       {/* ── Inserimento manuale (solo se mancano le timbrature) ── */}
       {(mostraPicker || puoiManuale) && (
@@ -622,6 +559,13 @@ export function OreClient({
         cantieri={cantieriDisponibili}
         sedi={sediDisponibili}
         mezzi={mezziDisponibili}
+      />
+
+      {/* Panoramica/correzione della giornata di oggi (pencil sul riepilogo) */}
+      <ModificaGiornataDialog
+        open={panoramicaOpen}
+        data={rapportino.data}
+        onClose={() => setPanoramicaOpen(false)}
       />
     </div>
   );

@@ -11,7 +11,8 @@ import { precompilaMioRapportino, mioStoricoRapportini } from '@/app/_actions/ka
 import { OreClient } from './_components/ore-client';
 import { StoricoOre } from './_components/storico-ore';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
-import { TurnoAttivoCard } from '../_components/turno-attivo-card';
+import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
+import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
 
 export const metadata: Metadata = {
   title: 'Le mie ore di oggi',
@@ -131,6 +132,12 @@ export default async function MobileOrePage() {
   ]);
   const storico = storicoRes.ok ? storicoRes.giorni : [];
 
+  // Se c'è un turno aperto, la stessa card azioni della home/scheda cantiere
+  // (pausa pranzo + fine turno), con header tappabile verso il cantiere.
+  const azioni = turno
+    ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, turno.cantiereId)
+    : null;
+
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
       <header className="pt-2">
@@ -142,15 +149,22 @@ export default async function MobileOrePage() {
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
 
-      {turno && (
-        <TurnoAttivoCard
+      {turno && azioni ? (
+        <TurnoAzioniCantiere
           cantiereId={turno.cantiereId}
           cantiereNome={turno.cantiereNome}
+          cantiereHref={`/mobile/kantiere/cantieri/${turno.cantiereId}`}
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
+          pausaOggiFatta={azioni.pausaOggiFatta}
+          sedi={azioni.sedi}
+          mezzi={azioni.mezzi}
+          sedeDefaultId={azioni.sedeDefaultId}
+          sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
+          sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
         />
-      )}
+      ) : null}
 
       <OreClient
         rapportino={res.rapportino}
@@ -158,6 +172,7 @@ export default async function MobileOrePage() {
         cantieriDisponibili={cantieriDisponibili}
         sediDisponibili={sediDisponibili}
         mezziDisponibili={mezziDisponibili}
+        turnoInCorso={!!turno}
       />
 
       <StoricoOre giorni={storico} />

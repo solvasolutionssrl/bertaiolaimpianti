@@ -5,11 +5,11 @@ import { QrCode, Clock, MapPin, HardHat } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { leggiSogliaAutoSpegnimentoPausa } from '@/app/_lib/kantiere-config';
 
 import { guardMobile } from '../_lib/guard';
 import { mioTurnoAttivo } from './_lib/turno-attivo';
-import { TurnoPausaHome } from './_components/turno-pausa-home';
+import { caricaTurnoAzioniContesto } from './_lib/turno-azioni-contesto';
+import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
 
 export const metadata: Metadata = {
   title: 'Kantiere',
@@ -47,11 +47,12 @@ export default async function KantiereHomePage() {
     .maybeSingle();
   const me = (meRow as { id: string; nome: string; cognome: string } | null) ?? null;
 
-  // Turno aperto del dipendente (per il tasto pausa pranzo diretto in home).
+  // Turno aperto del dipendente → in home la card azioni completa (pausa pranzo
+  // + fine turno), con lo stesso contesto della scheda cantiere.
   const turno = me ? await mioTurnoAttivo() : null;
-  // Soglia auto-spegnimento pausa (per il countdown della card in pausa).
-  const sogliaAutoSpegnimentoPausaOre =
-    turno && turno.inPausa ? await leggiSogliaAutoSpegnimentoPausa(supabase, ctx.tenantId) : 1.5;
+  const azioni = turno
+    ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, turno.cantiereId)
+    : null;
 
   // Ultima timbratura di oggi → stato corrente (dentro/fuori)
   let ultima: { tipo: 'ingresso' | 'uscita'; ts: string } | null = null;
@@ -96,15 +97,22 @@ export default async function KantiereHomePage() {
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
 
-      {/* Turno aperto → card con pausa pranzo diretta; altrimenti stato di oggi */}
-      {turno ? (
-        <TurnoPausaHome
+      {/* Turno aperto → card azioni completa (pausa + fine turno); altrimenti stato di oggi */}
+      {turno && azioni ? (
+        <TurnoAzioniCantiere
+          prominente
           cantiereId={turno.cantiereId}
           cantiereNome={turno.cantiereNome}
+          cantiereHref={`/mobile/kantiere/cantieri/${turno.cantiereId}`}
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
-          sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
+          pausaOggiFatta={azioni.pausaOggiFatta}
+          sedi={azioni.sedi}
+          mezzi={azioni.mezzi}
+          sedeDefaultId={azioni.sedeDefaultId}
+          sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
+          sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
         />
       ) : me ? (
         <div

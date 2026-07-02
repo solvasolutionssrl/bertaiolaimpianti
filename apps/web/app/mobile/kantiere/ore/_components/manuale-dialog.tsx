@@ -294,8 +294,9 @@ export function ManualeDialog({
   const [isPending, startTransition] = useTransition();
 
   const [cantiereId, setCantiereId] = useState<string>(cantieri[0]?.id ?? '');
-  const [oreOrdinarie, setOreOrdinarie] = useState<number>(0);
-  const [oreStraordinarie, setOreStraordinarie] = useState<number>(0);
+  // Un solo campo "ore di lavoro": lo split ordinario/straordinario lo fa
+  // l'ufficio in fase di ricalcolo, non il tecnico.
+  const [oreLavoro, setOreLavoro] = useState<number>(0);
   const [andata, setAndata] = useState<TrattaState>(() => trattaIniziale(sedi));
   const [ritorno, setRitorno] = useState<TrattaState>(() => trattaIniziale(sedi));
   const [errore, setErrore] = useState<string | null>(null);
@@ -342,8 +343,7 @@ export function ManualeDialog({
 
   function resetForm() {
     setCantiereId(cantieri[0]?.id ?? '');
-    setOreOrdinarie(0);
-    setOreStraordinarie(0);
+    setOreLavoro(0);
     setAndata(trattaIniziale(sedi));
     setRitorno(trattaIniziale(sedi));
     setErrore(null);
@@ -448,8 +448,8 @@ export function ManualeDialog({
       const res = await registraOreManuali({
         data,
         cantiereId,
-        ore_ordinarie: oreOrdinarie,
-        ore_straordinarie: oreStraordinarie,
+        ore_ordinarie: oreLavoro,
+        ore_straordinarie: 0,
         viaggi,
       });
 
@@ -496,43 +496,25 @@ export function ManualeDialog({
             </div>
           </div>
 
-          {/* Ore */}
+          {/* Ore di lavoro — un solo campo, lo split lo fa l'ufficio */}
           <div className="space-y-1.5">
-            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Ore di lavoro
+            <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Ore di lavoro <span className="text-destructive">*</span>
+            </label>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={24}
+              step={0.5}
+              value={oreLavoro}
+              onChange={(e) => { setOreLavoro(clampOre(parseFloat(e.target.value))); setErrore(null); }}
+              disabled={isPending}
+              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-center font-mono text-base tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+            />
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Indica le ore di lavoro totali. Ordinario e straordinario li calcola l&apos;ufficio.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-0.5">
-                <label className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                  Ordinarie
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.5}
-                  value={oreOrdinarie}
-                  onChange={(e) => { setOreOrdinarie(clampOre(parseFloat(e.target.value))); setErrore(null); }}
-                  disabled={isPending}
-                  className="w-full rounded-md border border-border bg-background px-2 py-2 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-                />
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <label className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-                  Straordinarie
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.5}
-                  value={oreStraordinarie}
-                  onChange={(e) => { setOreStraordinarie(clampOre(parseFloat(e.target.value))); setErrore(null); }}
-                  disabled={isPending}
-                  className="w-full rounded-md border border-border bg-background px-2 py-2 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-                />
-              </div>
-            </div>
           </div>
 
           {/* Viaggi */}
