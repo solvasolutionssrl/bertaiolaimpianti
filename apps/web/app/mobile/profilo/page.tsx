@@ -1,11 +1,9 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { ShieldCheck, Receipt, ChevronRight } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { Avatar, AvatarFallback } from '@kommessa/ui';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
-import { CATEGORIA_META } from '@/app/_components/spese/categoria';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../_lib/guard';
@@ -13,32 +11,12 @@ import { InstallPromptHint } from '../_components/install-prompt-hint';
 import { LogoutButton } from './logout-button';
 import { PushToggle } from './push-toggle';
 import { PreferenzeNotifiche, type PrefRow } from './preferenze-notifiche';
-import { NuovaSpesa } from '../kantiere/spese/_components/nuova-spesa';
+import { SpesePanoramica } from '../kantiere/spese/_components/spese-panoramica';
+import type { SpesaRiga } from '../kantiere/spese/_components/spese-client';
 
 export const metadata: Metadata = {
   title: 'Profilo',
 };
-
-type SpesaMini = {
-  id: string;
-  esercente: string | null;
-  categoria: CategoriaSpesa;
-  importo: number | null;
-  valuta: string | null;
-  data: string | null;
-};
-
-function fmtData(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' }).format(d);
-}
-
-function fmtImporto(n: number | null): string {
-  if (n == null) return '—';
-  return n.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default async function ProfiloPage() {
   const ctx = await guardMobile();
@@ -97,11 +75,13 @@ export default async function ProfiloPage() {
     } | null;
   }
 
-  // Panoramica spese: solo Kantiere + admin/office con profilo dipendente (per
-  // registrare a proprio nome). Ultime 2 + opzioni cantiere per l'aggiunta.
+  // Panoramica spese: solo Kantiere + admin/office con profilo dipendente. Ultime
+  // 3 con campi COMPLETI (per aprire il dettaglio direttamente dal profilo) +
+  // opzioni/nomi cantiere.
   let mioDip: string | null = null;
-  let ultimeSpese: SpesaMini[] = [];
+  let ultimeSpese: SpesaRiga[] = [];
   let cantieriOpts: { id: string; nome: string }[] = [];
+  const cantieriNomiSpese: Record<string, string> = {};
   if (isKantiere && isManager) {
     const { data: dipRow } = await supabase
       .from('dipendenti' as never)
@@ -114,11 +94,13 @@ export default async function ProfiloPage() {
       const [speseRes, cantRes] = await Promise.all([
         supabase
           .from('spese' as never)
-          .select('id, ragione_sociale, categoria, importo_totale, valuta, data_scontrino, created_at')
+          .select(
+            'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone',
+          )
           .eq('tenant_id', ctx.tenantId)
           .eq('dipendente_id', mioDip)
           .order('created_at', { ascending: false })
-          .limit(2),
+          .limit(3),
         supabase
           .from('cantieri' as never)
           .select('id, nome, codice')
@@ -127,15 +109,31 @@ export default async function ProfiloPage() {
       ]);
       ultimeSpese = ((speseRes.data as any[] | null) ?? []).map((r) => ({
         id: r.id,
-        esercente: r.ragione_sociale ?? null,
+        cantiereId: r.cantiere_id,
         categoria: r.categoria as CategoriaSpesa,
-        importo: r.importo_totale,
+        ragioneSociale: r.ragione_sociale,
+        importoTotale: r.importo_totale,
+        importoIva: r.importo_iva,
+        imponibile: r.imponibile,
         valuta: r.valuta,
-        data: r.data_scontrino ?? r.created_at ?? null,
+        dataScontrino: r.data_scontrino,
+        metodoPagamento: (r.metodo_pagamento as 'contanti' | 'carta' | 'altro' | null) ?? null,
+        note: r.note,
+        createdAt: r.created_at,
+        hasThumb: !!r.r2_thumb_key,
+        hasFile: !!r.r2_key,
+        fotoMime: r.foto_mime,
+        numeroPersone: r.numero_persone ?? 1,
       }));
-      cantieriOpts = ((cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? []).map(
-        (c) => ({ id: c.id, nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere' }),
-      );
+      const cantRows =
+        (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
+      cantieriOpts = cantRows.map((c) => ({
+        id: c.id,
+        nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere',
+      }));
+      for (const c of cantRows) {
+        cantieriNomiSpese[c.id] = c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere';
+      }
     }
   }
 
@@ -164,58 +162,16 @@ export default async function ProfiloPage() {
         </div>
       </header>
 
-      {/* Panoramica spese (Kantiere, admin/office con profilo dipendente):
-          ultime 2 + aggiungi + vedi tutte. L'admin non ha una tab Spese dedicata. */}
+      {/* Area personale → panoramica spese (Kantiere admin/office): ultime 3 come
+          card cliccabili che aprono DIRETTAMENTE il dettaglio + aggiungi + tutte. */}
       {isKantiere && isManager && mioDip ? (
-        <section className="rounded-xl border border-border bg-card p-4 shadow-soft">
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
-              <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
-              Le tue spese
-            </p>
-            <Link
-              href="/mobile/kantiere/spese"
-              className="flex items-center gap-0.5 text-xs font-medium text-primary active:opacity-70"
-            >
-              Vedi tutte
-              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
-          </div>
-
-          {ultimeSpese.length > 0 ? (
-            <ul className="mt-3 space-y-1.5">
-              {ultimeSpese.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2 text-sm"
-                >
-                  <span className="min-w-0 truncate">
-                    <span className="font-medium">
-                      {s.esercente || CATEGORIA_META[s.categoria]?.label || 'Spesa'}
-                    </span>
-                    {fmtData(s.data) ? (
-                      <span className="ml-1.5 text-xs text-muted-foreground">{fmtData(s.data)}</span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums">
-                    {fmtImporto(s.importo)} {s.valuta || 'EUR'}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm text-muted-foreground">Nessuna spesa registrata.</p>
-          )}
-
-          <div className="mt-3">
-            <NuovaSpesa
-              adminMode
-              cantieri={cantieriOpts}
-              dipendenteId={mioDip}
-              triggerVariant="quick"
-            />
-          </div>
-        </section>
+        <SpesePanoramica
+          spese={ultimeSpese}
+          cantieriNomi={cantieriNomiSpese}
+          canEdit={isManager}
+          cantieri={cantieriOpts}
+          dipendenteId={mioDip}
+        />
       ) : null}
 
       <section className="rounded-lg border bg-card p-4 text-sm">

@@ -18,7 +18,7 @@ export function NotificheBell({ unreadCount = 0 }: { unreadCount?: number }) {
       aria-label={
         unreadCount > 0 ? `Notifiche, ${unreadCount} non lette` : 'Notifiche'
       }
-      className="fixed right-3 z-30 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/90 text-foreground shadow-soft backdrop-blur active:scale-95 transition-transform"
+      className="hide-on-sheet fixed right-3 z-30 inline-flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/90 text-foreground shadow-soft backdrop-blur active:scale-95 transition-transform"
       style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
     >
       <Bell className="h-5 w-5" aria-hidden="true" />

@@ -25,6 +25,7 @@ import {
   cronologiaSpesa,
   type VersioneSpesa,
 } from '@/app/_actions/kantiere-spese';
+import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
 import type { SpesaRiga } from './spese-client';
 
 type Metodo = 'contanti' | 'carta' | 'altro';
@@ -122,6 +123,9 @@ export function SpesaDettaglio({
   const [numeroPersone, setNumeroPersone] = React.useState(1);
   const [cantiereId, setCantiereId] = React.useState('');
   const [note, setNote] = React.useState('');
+
+  // Nasconde campanella + pill "＋ Spesa" della shell mentre il dettaglio è aperto.
+  useSheetOpen(!!spesa);
 
   React.useEffect(() => {
     if (!spesa) return;

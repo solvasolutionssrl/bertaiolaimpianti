@@ -255,6 +255,13 @@
       0 8px 18px -6px hsl(220 45% 22% / 0.17);
   }
 
+  /* Elementi fissi in alto della shell Kantiere (campanella + pill "＋ Spesa"):
+     nascosti mentre è aperto un foglio full-screen (nuova ricevuta / dettaglio),
+     così non coprono la X di chiusura. Flag `data-sheet-open` gestito in JS. */
+  html[data-sheet-open] .hide-on-sheet {
+    display: none !important;
+  }
+
   /* ===== Animations ===== */
   @keyframes fade-up {
     from { opacity: 0; transform: translateY(6px); }

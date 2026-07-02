@@ -21,6 +21,7 @@ import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
 import { creaSpesa, creaSpesaOffice } from '@/app/_actions/kantiere-spese';
 import { compressImage } from '@/app/office/commesse/nuova/_lib/compress-image';
+import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
 
 /**
  * Nuova ricevuta (PWA Kantiere).
@@ -239,6 +240,9 @@ export function NuovaSpesa({
   // cantiere scelto (solo adminMode): '' = "Da assegnare".
   const [cantiereId, setCantiereId] = React.useState('');
 
+  // Nasconde campanella + pill "＋ Spesa" della shell mentre il foglio è aperto.
+  useSheetOpen(aperto);
+
   const fotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const allegaInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -448,7 +452,7 @@ export function NuovaSpesa({
           type="button"
           onClick={() => setAperto(true)}
           aria-label="Aggiungi spesa"
-          className="fixed z-30 inline-flex h-10 items-center gap-1.5 rounded-full border border-primary/30 bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-soft active:scale-95 transition-transform"
+          className="hide-on-sheet fixed z-30 inline-flex h-10 items-center gap-1.5 rounded-full border border-primary/30 bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-soft active:scale-95 transition-transform"
           style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)', right: '3.6rem' }}
         >
           <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
