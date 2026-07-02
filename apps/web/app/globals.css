@@ -282,10 +282,19 @@
     0%   { transform: scale(0.6); opacity: 0.55; }
     100% { transform: scale(2.4); opacity: 0; }
   }
-  .animate-success-ring { animation: success-ring 0.75s ease-out forwards; }
+  /* `both` fill: il 2° anello ha un `animation-delay` e senza `both` lampeggerebbe
+     a piena scala prima di partire. */
+  .animate-success-ring { animation: success-ring 0.75s ease-out both; }
+  @keyframes success-glow {
+    0%   { opacity: 0; transform: scale(0.8); }
+    35%  { opacity: 0.55; }
+    100% { opacity: 0; transform: scale(1.5); }
+  }
+  .animate-success-glow { animation: success-glow 0.85s ease-out both; }
   @media (prefers-reduced-motion: reduce) {
     .animate-success-pop { animation: none; }
     .animate-success-ring { animation: none; opacity: 0; }
+    .animate-success-glow { animation: none; opacity: 0; }
   }
   .stagger > * {
     animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;

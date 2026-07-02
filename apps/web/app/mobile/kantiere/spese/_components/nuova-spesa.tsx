@@ -669,10 +669,9 @@ export function NuovaSpesa({
                   />
                 </div>
               </div>
-              {/* Data più larga di Pagamento: il datetime-local iOS ha bisogno
-                  di più spazio orizzontale (il max-width globale evita comunque
-                  qualsiasi sfondamento). */}
-              <div className="grid grid-cols-[1fr_1.3fr] gap-2">
+              {/* Pagamento e Data 50/50 come la riga Totale/IVA sopra: la Data usa
+                  un campo custom troncabile, quindi ci sta anche a metà larghezza. */}
+              <div className="grid grid-cols-2 gap-2">
                 <div className="min-w-0">
                   <label
                     htmlFor="spesa-metodo"
@@ -707,9 +706,9 @@ export function NuovaSpesa({
                   <div className="relative mt-1">
                     <div
                       aria-hidden="true"
-                      className="pointer-events-none flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-2 text-base"
+                      className="pointer-events-none flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-2 text-base"
                     >
-                      <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <Calendar className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       {dataLocal ? (
                         <span className="min-w-0 truncate">{fmtDataInput(dataLocal)}</span>
                       ) : (
@@ -860,11 +859,22 @@ export function NuovaSpesa({
             {/* Conferma "premium": il check fa un pop morbido, un anello verde si
                 espande dietro, poi il testo sale in dissolvenza. */}
             <span className="relative flex h-16 w-16 items-center justify-center">
+              {/* glow morbido dietro */}
+              <span
+                aria-hidden="true"
+                className="animate-success-glow absolute inset-[-45%] rounded-full bg-emerald-400/30 blur-xl"
+              />
+              {/* due anelli che si espandono (il secondo in leggero ritardo) */}
               <span
                 aria-hidden="true"
                 className="animate-success-ring absolute inset-0 rounded-full bg-emerald-400/40"
               />
-              <span className="animate-success-pop relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <span
+                aria-hidden="true"
+                className="animate-success-ring absolute inset-0 rounded-full border-2 border-emerald-500/50 [animation-delay:0.16s]"
+              />
+              {/* check con pop + ombra emerald per profondità */}
+              <span className="animate-success-pop relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 shadow-[0_8px_24px_-6px_rgba(16,185,129,0.5)]">
                 <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
               </span>
             </span>
