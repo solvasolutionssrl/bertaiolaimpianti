@@ -26,3 +26,16 @@ export async function segnaNotificaLetta(id: string): Promise<{ ok: boolean }> {
 
   return { ok: !error };
 }
+
+/** Marca TUTTE le notifiche non lette dell'utente come lette (campanella → 0). */
+export async function segnaTutteLette(): Promise<{ ok: boolean }> {
+  const ctx = await requireTenantContext();
+  const supabase = createServerSupabase();
+  const { error } = await supabase
+    .from('notifiche')
+    .update({ read_at: new Date().toISOString() })
+    .eq('user_id', ctx.userId)
+    .is('read_at', null);
+
+  return { ok: !error };
+}

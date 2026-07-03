@@ -97,7 +97,7 @@ export function BottomNavShell({
       { id: 'overview', label: 'Dashboard', icon: LayoutDashboard, href: '/mobile' },
       { id: 'commesse', label: 'Commesse', icon: Briefcase, href: '/mobile/commesse' },
       { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
-      { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+      { id: 'notifiche', label: 'Notifiche', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
       { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
     ];
   } else {
@@ -106,7 +106,7 @@ export function BottomNavShell({
       { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
       { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
       { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
-      { id: 'notifiche', label: 'Attività', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
+      { id: 'notifiche', label: 'Notifiche', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
       { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
     ];
   }
