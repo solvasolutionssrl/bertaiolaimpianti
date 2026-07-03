@@ -553,7 +553,7 @@ export function CantiereDetailClient({
               </span>
             ) : null}
             <StatoCantiereBadge stato={cantiere.stato} />
-            {cantiere.indirizzoDaVerificare ? (
+            {form.indirizzoDaVerificare ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                 <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                 Indirizzo da verificare
