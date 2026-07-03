@@ -277,9 +277,11 @@ export function CantiereDetailClient({
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [saveOk, setSaveOk] = React.useState(false);
 
-  // Indirizzo: si mostra la card stato; "Correggi" apre l'autocomplete per
-  // scegliere+linkare l'indirizzo giusto (che smarca "da verificare").
+  // Indirizzo: si mostra la card stato; "Correggi" apre il box arancione con
+  // l'autocomplete per scegliere+linkare l'indirizzo giusto (smarca "da
+  // verificare"). `correzioneOk` = lampo verde prima di richiudere il box.
   const [indirizzoEditing, setIndirizzoEditing] = React.useState(false);
+  const [correzioneOk, setCorrezioneOk] = React.useState(false);
 
   // Sede di partenza: dropdown fra le sedi esistenti + dialog "crea sede".
   const [sediList, setSediList] = React.useState<SedeOption[]>(sedi);
@@ -346,7 +348,8 @@ export function CantiereDetailClient({
     });
   }
 
-  // Indirizzo scelto dall'autocomplete → linka + smarca "da verificare".
+  // Indirizzo scelto dall'autocomplete (solo con coordinate) → linka + smarca
+  // "da verificare", lampo verde, poi chiude il box.
   function selezionaIndirizzo(r: { label: string; lat: number | null; lng: number | null }) {
     setForm((f) => ({
       ...f,
@@ -355,8 +358,12 @@ export function CantiereDetailClient({
       indirizzoLng: r.lng,
       indirizzoDaVerificare: false,
     }));
-    setIndirizzoEditing(false);
     setSaveOk(false);
+    setCorrezioneOk(true);
+    setTimeout(() => {
+      setIndirizzoEditing(false);
+      setCorrezioneOk(false);
+    }, 1100);
   }
 
   // Sede scelta dal dropdown.
@@ -637,41 +644,85 @@ export function CantiereDetailClient({
                 />
               </div>
 
-              {/* Indirizzo — tutta larghezza, con card stato (verificato / da verificare) a dx */}
+              {/* Indirizzo — tutta larghezza. In correzione il box si evidenzia in
+                  arancione con la spiegazione e non si chiude finché non è ok;
+                  alla scelta di un indirizzo valido → lampo verde poi si chiude. */}
               <div className="space-y-1">
-                <Label>Indirizzo cantiere</Label>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                  <div className="min-w-0 flex-1">
-                    {indirizzoEditing || !form.indirizzo ? (
-                      <AddressAutocomplete
-                        id="indirizzo"
-                        value={form.indirizzo}
-                        onChange={(label) => {
-                          setForm((f) => ({ ...f, indirizzo: label }));
-                          setSaveOk(false);
-                        }}
-                        onSelect={(r) => selezionaIndirizzo(r)}
-                        placeholder="Cerca e scegli l&apos;indirizzo giusto..."
-                      />
+                <Label htmlFor="indirizzo">Indirizzo cantiere</Label>
+                {indirizzoEditing ? (
+                  <div
+                    className={
+                      'rounded-lg border-2 p-3 transition-colors duration-300 ' +
+                      (correzioneOk
+                        ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30'
+                        : 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30')
+                    }
+                  >
+                    {correzioneOk ? (
+                      <p className="flex items-center gap-2 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                        <Check className="h-5 w-5" aria-hidden="true" />
+                        Indirizzo verificato!
+                      </p>
                     ) : (
-                      <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm">
-                        <span className="truncate">{form.indirizzo}</span>
+                      <>
+                        <p className="mb-2 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>
+                            Questo indirizzo è <strong>da verificare</strong>. Cerca qui sotto
+                            quello corretto e <strong>selezionalo dai suggerimenti</strong>: il
+                            riquadro si chiude da solo quando è a posto.
+                          </span>
+                        </p>
+                        <AddressAutocomplete
+                          id="indirizzo"
+                          value={form.indirizzo}
+                          onChange={(label) => {
+                            setForm((f) => ({
+                              ...f,
+                              indirizzo: label,
+                              indirizzoLat: null,
+                              indirizzoLng: null,
+                            }));
+                            setSaveOk(false);
+                          }}
+                          onSelect={(r) => {
+                            if (r.lat != null && r.lng != null) selezionaIndirizzo(r);
+                          }}
+                          placeholder="Cerca l&apos;indirizzo giusto..."
+                        />
                         <button
                           type="button"
-                          onClick={() => setIndirizzoEditing(true)}
-                          className="shrink-0 text-xs font-medium text-primary hover:underline"
+                          onClick={() => setIndirizzoEditing(false)}
+                          className="mt-2 text-xs text-muted-foreground hover:underline"
                         >
-                          Cambia
+                          Annulla
                         </button>
-                      </div>
+                      </>
                     )}
                   </div>
-                  <AddressStatus
-                    verificato={!form.indirizzoDaVerificare && form.indirizzoLat != null}
-                    indirizzo={form.indirizzo}
-                    onCorreggi={() => setIndirizzoEditing(true)}
-                  />
-                </div>
+                ) : (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <div className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                      <span className="truncate">
+                        {form.indirizzo || (
+                          <span className="text-muted-foreground">Nessun indirizzo</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIndirizzoEditing(true)}
+                        className="shrink-0 text-xs font-medium text-primary hover:underline"
+                      >
+                        Cambia
+                      </button>
+                    </div>
+                    <AddressStatus
+                      verificato={!form.indirizzoDaVerificare && form.indirizzoLat != null}
+                      indirizzo={form.indirizzo}
+                      onCorreggi={() => setIndirizzoEditing(true)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Stato · Commessa · Sede di partenza */}
