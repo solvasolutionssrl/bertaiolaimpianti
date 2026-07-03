@@ -236,6 +236,7 @@ const AggiornaCantSchema = z.object({
   sedePartenzaLng: z.number().optional().nullable(),
   commessaId: z.string().uuid().optional().nullable(),
   stato: z.enum(['attivo', 'sospeso', 'chiuso']).optional(),
+  indirizzoDaVerificare: z.boolean().optional(),
   note: z.string().max(2000).optional().nullable(),
 });
 
@@ -259,6 +260,8 @@ export async function aggiornaCantiere(input: unknown): Promise<OkResult> {
   if ('sedePartenzaLng' in parsed.data) patch['sede_partenza_lng'] = parsed.data.sedePartenzaLng ?? null;
   if ('commessaId' in parsed.data) patch['commessa_id'] = parsed.data.commessaId ?? null;
   if (parsed.data.stato !== undefined) patch['stato'] = parsed.data.stato;
+  if ('indirizzoDaVerificare' in parsed.data)
+    patch['indirizzo_da_verificare'] = parsed.data.indirizzoDaVerificare ?? false;
   if ('note' in parsed.data) patch['note'] = parsed.data.note ?? null;
 
   if (Object.keys(patch).length === 0) return { ok: true };

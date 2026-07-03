@@ -416,6 +416,17 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     (r) => r.sede_id,
   );
 
+  // Sedi del tenant per il dropdown "Sede di partenza" della scheda anagrafica.
+  const { data: sediRaw } = await supabase
+    .from('sedi' as never)
+    .select('id, nome, lat, lng')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('attivo', true)
+    .order('nome');
+  const sediOptions = (
+    (sediRaw ?? []) as { id: string; nome: string | null; lat: number | null; lng: number | null }[]
+  ).map((s) => ({ id: s.id, nome: s.nome ?? 'Sede', lat: s.lat, lng: s.lng }));
+
   return (
     <div className="w-full space-y-6">
       <CantiereDetailClient
@@ -451,6 +462,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
         }
         printHref={`/office/kantiere/cantieri/${params.id}/stampa`}
         commesse={commesse}
+        sedi={sediOptions}
         commessaCollegata={commessaCollegata}
         anomalie={anomalie}
         chiInCantiere={chiInCantiere}

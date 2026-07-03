@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  Check,
   ChevronLeft,
   Clock,
   Crown,
@@ -12,7 +13,9 @@ import {
   History,
   Loader2,
   MapPin,
+  Navigation,
   Car,
+  Plus,
   Printer,
   QrCode,
   RefreshCw,
@@ -43,6 +46,7 @@ import {
   rigeneraQrCantiere,
   impostaSquadraCantiere,
 } from '../../../../_actions/cantieri';
+import { creaSede } from '../../../../_actions/kantiere-sedi';
 import { ChiInCantiere, SezioneHeader, type PresenteRow } from './chi-in-cantiere';
 import { StoricoPresenze, type StoricoData } from './storico-presenze';
 
@@ -83,6 +87,13 @@ interface CommessaOption {
   titolo: string;
 }
 
+interface SedeOption {
+  id: string;
+  nome: string;
+  lat: number | null;
+  lng: number | null;
+}
+
 interface QrInfo {
   token: string;
   createdAt: string;
@@ -103,6 +114,7 @@ interface Props {
   qr: QrInfo | null;
   printHref: string;
   commesse: CommessaOption[];
+  sedi: SedeOption[];
   commessaCollegata: string | null;
   anomalie: AnomaliaRow[];
   chiInCantiere: PresenteRow[];
@@ -127,6 +139,51 @@ function StatoCantiereBadge({ stato }: { stato: 'attivo' | 'sospeso' | 'chiuso' 
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${s.cls}`}>
       {s.label}
     </span>
+  );
+}
+
+// ── Stato indirizzo (verificato / da verificare) ────────────────────────────
+
+function AddressStatus({
+  verificato,
+  indirizzo,
+  onCorreggi,
+}: {
+  verificato: boolean;
+  indirizzo: string;
+  onCorreggi: () => void;
+}) {
+  const mapsHref = indirizzo
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(indirizzo)}`
+    : null;
+  if (verificato) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 sm:w-48">
+        <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="flex-1">Indirizzo verificato</span>
+        {mapsHref ? (
+          <a
+            href={mapsHref}
+            target="_blank"
+            rel="noreferrer"
+            title="Apri in Maps"
+            className="shrink-0 rounded p-0.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+          >
+            <Navigation className="h-4 w-4" aria-hidden="true" />
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onCorreggi}
+      className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-left text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-900/40 sm:w-48"
+    >
+      <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="flex-1">Da verificare — correggi</span>
+    </button>
   );
 }
 
@@ -193,6 +250,7 @@ export function CantiereDetailClient({
   qr: qrInit,
   printHref,
   commesse,
+  sedi,
   commessaCollegata,
   anomalie,
   chiInCantiere,
@@ -212,11 +270,29 @@ export function CantiereDetailClient({
     sedePartenzaLng: cantiere.sedePartenzaLng,
     commessaId: cantiere.commessaId ?? '',
     stato: cantiere.stato,
+    indirizzoDaVerificare: cantiere.indirizzoDaVerificare,
     note: cantiere.note ?? '',
   });
   const [savePending, startSave] = React.useTransition();
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [saveOk, setSaveOk] = React.useState(false);
+
+  // Indirizzo: si mostra la card stato; "Correggi" apre l'autocomplete per
+  // scegliere+linkare l'indirizzo giusto (che smarca "da verificare").
+  const [indirizzoEditing, setIndirizzoEditing] = React.useState(false);
+
+  // Sede di partenza: dropdown fra le sedi esistenti + dialog "crea sede".
+  const [sediList, setSediList] = React.useState<SedeOption[]>(sedi);
+  const [sedeDialogOpen, setSedeDialogOpen] = React.useState(false);
+  const [sedeForm, setSedeForm] = React.useState({
+    nome: '',
+    tipo: 'sede_principale' as 'sede_principale' | 'sede_secondaria' | 'hotel' | 'altro',
+    indirizzo: '',
+    lat: null as number | null,
+    lng: null as number | null,
+  });
+  const [sedePending, startSede] = React.useTransition();
+  const [sedeError, setSedeError] = React.useState<string | null>(null);
 
   // ── Squadra state ──
   const [squadra, setSquadra] = React.useState(squadraInit);
@@ -258,6 +334,7 @@ export function CantiereDetailClient({
         sedePartenzaLng: form.sedePartenzaLng,
         commessaId: form.commessaId || null,
         stato: form.stato,
+        indirizzoDaVerificare: form.indirizzoDaVerificare,
         note: form.note || null,
       });
       if (!res.ok) {
@@ -266,6 +343,71 @@ export function CantiereDetailClient({
       }
       setSaveOk(true);
       router.refresh();
+    });
+  }
+
+  // Indirizzo scelto dall'autocomplete → linka + smarca "da verificare".
+  function selezionaIndirizzo(r: { label: string; lat: number | null; lng: number | null }) {
+    setForm((f) => ({
+      ...f,
+      indirizzo: r.label,
+      indirizzoLat: r.lat,
+      indirizzoLng: r.lng,
+      indirizzoDaVerificare: false,
+    }));
+    setIndirizzoEditing(false);
+    setSaveOk(false);
+  }
+
+  // Sede scelta dal dropdown.
+  function selezionaSede(id: string) {
+    if (id === '__crea__') {
+      setSedeForm({ nome: '', tipo: 'sede_principale', indirizzo: '', lat: null, lng: null });
+      setSedeError(null);
+      setSedeDialogOpen(true);
+      return;
+    }
+    if (id === '') {
+      setForm((f) => ({ ...f, sedePartenza: '', sedePartenzaLat: null, sedePartenzaLng: null }));
+      setSaveOk(false);
+      return;
+    }
+    const s = sediList.find((x) => x.id === id);
+    if (!s) return;
+    setForm((f) => ({ ...f, sedePartenza: s.nome, sedePartenzaLat: s.lat, sedePartenzaLng: s.lng }));
+    setSaveOk(false);
+  }
+
+  function handleCreaSede(e: React.FormEvent) {
+    e.preventDefault();
+    setSedeError(null);
+    startSede(async () => {
+      const res = await creaSede({
+        nome: sedeForm.nome,
+        tipo: sedeForm.tipo,
+        indirizzo: sedeForm.indirizzo || undefined,
+        lat: sedeForm.lat,
+        lng: sedeForm.lng,
+      });
+      if (!res.ok) {
+        setSedeError(res.error);
+        return;
+      }
+      const nuova: SedeOption = {
+        id: res.id,
+        nome: sedeForm.nome,
+        lat: sedeForm.lat,
+        lng: sedeForm.lng,
+      };
+      setSediList((list) => [...list, nuova].sort((a, b) => a.nome.localeCompare(b.nome)));
+      setForm((f) => ({
+        ...f,
+        sedePartenza: nuova.nome,
+        sedePartenzaLat: nuova.lat,
+        sedePartenzaLng: nuova.lng,
+      }));
+      setSedeDialogOpen(false);
+      setSaveOk(false);
     });
   }
 
@@ -481,20 +623,59 @@ export function CantiereDetailClient({
               />
             }
           >
-            <form onSubmit={handleSave} className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="nome">Nome *</Label>
-                  <Input
-                    id="nome"
-                    name="nome"
-                    value={form.nome}
-                    onChange={handleChange}
-                    required
-                    placeholder="Es. Villa Rossi"
+            <form onSubmit={handleSave} className="space-y-4">
+              {/* Nome — tutta larghezza */}
+              <div className="space-y-1">
+                <Label htmlFor="nome">Nome *</Label>
+                <Input
+                  id="nome"
+                  name="nome"
+                  value={form.nome}
+                  onChange={handleChange}
+                  required
+                  placeholder="Es. Villa Rossi"
+                />
+              </div>
+
+              {/* Indirizzo — tutta larghezza, con card stato (verificato / da verificare) a dx */}
+              <div className="space-y-1">
+                <Label>Indirizzo cantiere</Label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                  <div className="min-w-0 flex-1">
+                    {indirizzoEditing || !form.indirizzo ? (
+                      <AddressAutocomplete
+                        id="indirizzo"
+                        value={form.indirizzo}
+                        onChange={(label) => {
+                          setForm((f) => ({ ...f, indirizzo: label }));
+                          setSaveOk(false);
+                        }}
+                        onSelect={(r) => selezionaIndirizzo(r)}
+                        placeholder="Cerca e scegli l&apos;indirizzo giusto..."
+                      />
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                        <span className="truncate">{form.indirizzo}</span>
+                        <button
+                          type="button"
+                          onClick={() => setIndirizzoEditing(true)}
+                          className="shrink-0 text-xs font-medium text-primary hover:underline"
+                        >
+                          Cambia
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <AddressStatus
+                    verificato={!form.indirizzoDaVerificare && form.indirizzoLat != null}
+                    indirizzo={form.indirizzo}
+                    onCorreggi={() => setIndirizzoEditing(true)}
                   />
                 </div>
+              </div>
 
+              {/* Stato · Commessa · Sede di partenza */}
+              <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label htmlFor="stato">Stato</Label>
                   <select
@@ -511,29 +692,7 @@ export function CantiereDetailClient({
                 </div>
 
                 <div className="space-y-1">
-                  <Label htmlFor="indirizzo">Indirizzo cantiere</Label>
-                  <AddressAutocomplete
-                    id="indirizzo"
-                    value={form.indirizzo}
-                    onChange={(label) => {
-                      setForm((f) => ({ ...f, indirizzo: label }));
-                      setSaveOk(false);
-                    }}
-                    onSelect={(r) => {
-                      setForm((f) => ({
-                        ...f,
-                        indirizzo: r.label,
-                        indirizzoLat: r.lat,
-                        indirizzoLng: r.lng,
-                      }));
-                      setSaveOk(false);
-                    }}
-                    placeholder="Via Roma 12, Torino"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="commessaId">Commessa collegata</Label>
+                  <Label htmlFor="commessaId">Commessa allegata</Label>
                   <select
                     id="commessaId"
                     name="commessaId"
@@ -549,42 +708,30 @@ export function CantiereDetailClient({
                     ))}
                   </select>
                   {commessaCollegata && !form.commessaId && (
-                    <p className="text-xs text-muted-foreground">Era collegata a: {commessaCollegata}</p>
+                    <p className="text-xs text-muted-foreground">Era: {commessaCollegata}</p>
                   )}
                 </div>
-              </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="sedePartenza">
-                  Sede di partenza principale{' '}
-                  <span className="text-xs font-normal text-muted-foreground">(facoltativa)</span>
-                </Label>
-                <AddressAutocomplete
-                  id="sedePartenza"
-                  value={form.sedePartenza}
-                  onChange={(label) => {
-                    setForm((f) => ({ ...f, sedePartenza: label }));
-                    setSaveOk(false);
-                  }}
-                  onSelect={(r) => {
-                    setForm((f) => ({
-                      ...f,
-                      sedePartenza: r.label,
-                      sedePartenzaLat: r.lat,
-                      sedePartenzaLng: r.lng,
-                    }));
-                    setSaveOk(false);
-                  }}
-                  placeholder="Cerca un indirizzo (es. sede aziendale)"
-                />
-                <p className="rounded-md border border-border bg-muted/40 px-2.5 py-2 text-xs leading-relaxed text-muted-foreground">
-                  Scegli un indirizzo dai suggerimenti (così viene geolocalizzato):
-                  al salvataggio viene aggiunto all&apos;<strong className="font-medium text-foreground">anagrafica Sedi</strong>{' '}
-                  e impostato come <strong className="font-medium text-foreground">sede predefinita</strong> dell&apos;azienda
-                  (la partenza proposta ai tecnici alla timbratura). Puoi lasciarlo vuoto e
-                  gestire tutto dall&apos;anagrafica, oppure aggiungere qui sotto le sedi
-                  specifiche di questo cantiere (es. hotel della zona).
-                </p>
+                <div className="space-y-1">
+                  <Label htmlFor="sede">Sede di partenza</Label>
+                  <select
+                    id="sede"
+                    value={sediList.find((s) => s.nome === form.sedePartenza)?.id ?? ''}
+                    onChange={(e) => selezionaSede(e.target.value)}
+                    className={SELECT_CLS}
+                  >
+                    <option value="">Nessuna</option>
+                    {sediList.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nome}
+                      </option>
+                    ))}
+                    <option value="__crea__">+ Crea nuova sede…</option>
+                  </select>
+                  {form.sedePartenza && !sediList.some((s) => s.nome === form.sedePartenza) ? (
+                    <p className="text-xs text-muted-foreground">Attuale: {form.sedePartenza}</p>
+                  ) : null}
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -626,6 +773,79 @@ export function CantiereDetailClient({
               </div>
             </form>
           </Sezione>
+
+          {/* Dialog: crea nuova sede (come dalla tab Sedi) */}
+          <Dialog
+            open={sedeDialogOpen}
+            onOpenChange={(o) => {
+              if (!o && !sedePending) setSedeDialogOpen(false);
+            }}
+          >
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Nuova sede</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreaSede} className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="sedeNome">Nome *</Label>
+                  <Input
+                    id="sedeNome"
+                    value={sedeForm.nome}
+                    onChange={(e) => setSedeForm((s) => ({ ...s, nome: e.target.value }))}
+                    required
+                    placeholder="Es. Magazzino Valeggio"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="sedeTipo">Tipo</Label>
+                  <select
+                    id="sedeTipo"
+                    value={sedeForm.tipo}
+                    onChange={(e) =>
+                      setSedeForm((s) => ({ ...s, tipo: e.target.value as typeof s.tipo }))
+                    }
+                    className={SELECT_CLS}
+                  >
+                    <option value="sede_principale">Sede principale</option>
+                    <option value="sede_secondaria">Sede secondaria</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="altro">Altro</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="sedeIndirizzo">Indirizzo</Label>
+                  <AddressAutocomplete
+                    id="sedeIndirizzo"
+                    value={sedeForm.indirizzo}
+                    onChange={(label) => setSedeForm((s) => ({ ...s, indirizzo: label }))}
+                    onSelect={(r) =>
+                      setSedeForm((s) => ({ ...s, indirizzo: r.label, lat: r.lat, lng: r.lng }))
+                    }
+                    placeholder="Cerca un indirizzo (geolocalizzato)"
+                  />
+                </div>
+                {sedeError ? <p className="text-xs text-destructive">{sedeError}</p> : null}
+                <DialogFooter className="gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSedeDialogOpen(false)}
+                    disabled={sedePending}
+                  >
+                    Annulla
+                  </Button>
+                  <Button type="submit" disabled={sedePending || !sedeForm.nome.trim()}>
+                    {sedePending ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    Crea sede
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           {/* Chi c'è in cantiere ora */}
           <Sezione
