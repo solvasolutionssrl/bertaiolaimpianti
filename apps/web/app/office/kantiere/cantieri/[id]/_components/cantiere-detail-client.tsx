@@ -276,6 +276,9 @@ export function CantiereDetailClient({
   const [savePending, startSave] = React.useTransition();
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [saveOk, setSaveOk] = React.useState(false);
+  // Auto-save: snapshot dell'ultimo stato salvato → evita il save al mount e i
+  // re-save inutili (es. apri/chiudi la correzione indirizzo senza cambi).
+  const lastSaved = React.useRef(JSON.stringify(form));
 
   // Indirizzo: si mostra la card stato; "Correggi" apre il box arancione con
   // l'autocomplete per scegliere+linkare l'indirizzo giusto (smarca "da
@@ -320,25 +323,32 @@ export function CantiereDetailClient({
     setSaveOk(false);
   }
 
+  function buildPayload() {
+    return {
+      id: cantiere.id,
+      nome: form.nome,
+      indirizzo: form.indirizzo || null,
+      indirizzoLat: form.indirizzoLat,
+      indirizzoLng: form.indirizzoLng,
+      sedePartenza: form.sedePartenza || null,
+      sedePartenzaLat: form.sedePartenzaLat,
+      sedePartenzaLng: form.sedePartenzaLng,
+      commessaId: form.commessaId || null,
+      stato: form.stato,
+      indirizzoDaVerificare: form.indirizzoDaVerificare,
+      note: form.note || null,
+    };
+  }
+
+  // Salva manuale (immediato + refresh). Con l'auto-save è ridondante ma resta
+  // come "salva ora".
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    lastSaved.current = JSON.stringify(form); // così l'auto-save pendente non ri-salva
     setSaveError(null);
     setSaveOk(false);
     startSave(async () => {
-      const res = await aggiornaCantiere({
-        id: cantiere.id,
-        nome: form.nome,
-        indirizzo: form.indirizzo || null,
-        indirizzoLat: form.indirizzoLat,
-        indirizzoLng: form.indirizzoLng,
-        sedePartenza: form.sedePartenza || null,
-        sedePartenzaLat: form.sedePartenzaLat,
-        sedePartenzaLng: form.sedePartenzaLng,
-        commessaId: form.commessaId || null,
-        stato: form.stato,
-        indirizzoDaVerificare: form.indirizzoDaVerificare,
-        note: form.note || null,
-      });
+      const res = await aggiornaCantiere(buildPayload());
       if (!res.ok) {
         setSaveError(res.error);
         return;
@@ -347,6 +357,31 @@ export function CantiereDetailClient({
       router.refresh();
     });
   }
+
+  // Auto-save: ~0,9s dopo l'ultima modifica. Salta mentre correggi l'indirizzo
+  // (aspetta che tu scelga/chiuda) e col nome vuoto (obbligatorio). Niente
+  // refresh (lo stato del form è già a schermo).
+  React.useEffect(() => {
+    if (indirizzoEditing || !form.nome.trim()) return;
+    const snapshot = JSON.stringify(form);
+    if (snapshot === lastSaved.current) return;
+    const t = setTimeout(() => {
+      if (snapshot === lastSaved.current) return; // già salvato (es. Salva manuale)
+      lastSaved.current = snapshot;
+      setSaveError(null);
+      startSave(async () => {
+        const res = await aggiornaCantiere(buildPayload());
+        if (!res.ok) {
+          setSaveError(res.error);
+          lastSaved.current = ''; // permette il ritentativo alla prossima modifica
+          return;
+        }
+        setSaveOk(true);
+      });
+    }, 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, indirizzoEditing]);
 
   // Indirizzo scelto dall'autocomplete (solo con coordinate) → linka + smarca
   // "da verificare", lampo verde, poi chiude il box.
@@ -798,12 +833,11 @@ export function CantiereDetailClient({
                 />
               </div>
 
-              {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
-              {saveOk ? (
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">Salvato.</p>
+              {saveError ? (
+                <p className="text-right text-xs text-destructive">{saveError}</p>
               ) : null}
 
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-end justify-between gap-3 pt-1">
                 <Button
                   type="button"
                   variant="ghost"
@@ -815,12 +849,22 @@ export function CantiereDetailClient({
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
                   Elimina cantiere
                 </Button>
-                <Button type="submit" size="sm" disabled={savePending}>
-                  {savePending ? (
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  ) : null}
-                  {savePending ? 'Salvo...' : 'Salva'}
-                </Button>
+                <div className="flex flex-col items-end gap-1">
+                  {/* stato salvataggio: SOPRA il tasto Salva */}
+                  <span className="h-4 text-xs font-medium" aria-live="polite">
+                    {savePending ? (
+                      <span className="text-muted-foreground">Salvataggio…</span>
+                    ) : saveOk ? (
+                      <span className="text-emerald-600 dark:text-emerald-400">Salvato ✓</span>
+                    ) : null}
+                  </span>
+                  <Button type="submit" size="sm" disabled={savePending}>
+                    {savePending ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : null}
+                    Salva
+                  </Button>
+                </div>
               </div>
             </form>
           </Sezione>
