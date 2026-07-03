@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
+import { leggiRoutingProvider } from '@/app/_lib/kantiere-config';
 
 /**
  * POST /api/geocode/autocomplete
@@ -157,10 +159,43 @@ async function queryNominatim(q: string): Promise<GeocodeSuggestion[]> {
   return out;
 }
 
+// ── Google Geocoding (chiave di piattaforma GOOGLE_MAPS_API_KEY) ──
+// Usato SOLO per i tenant col provider 'google' (stesso toggle del routing:
+// tab "Viaggio" del super admin). Restituisce lo stesso shape {label,lat,lng}.
+
+interface GoogleGeocodeResult {
+  formatted_address?: string;
+  geometry?: { location?: { lat?: number; lng?: number } };
+}
+
+async function queryGoogle(q: string, key: string): Promise<GeocodeSuggestion[]> {
+  const url =
+    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}` +
+    `&region=it&language=it&key=${key}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+  if (!res.ok) throw new Error(`Google HTTP ${res.status}`);
+
+  const json = (await res.json()) as { status?: string; results?: GoogleGeocodeResult[] };
+  if (json.status && json.status !== 'OK' && json.status !== 'ZERO_RESULTS') {
+    throw new Error(`Google status ${json.status}`);
+  }
+  const results = Array.isArray(json.results) ? json.results : [];
+
+  const out: GeocodeSuggestion[] = [];
+  for (const r of results.slice(0, LIMIT)) {
+    const loc = r.geometry?.location;
+    const label = r.formatted_address;
+    if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number' || !label) continue;
+    out.push({ label, lat: loc.lat, lng: loc.lng });
+  }
+  return out;
+}
+
 export async function POST(req: Request) {
   // Endpoint interno office: solo utenti autenticati nel tenant.
+  let ctx;
   try {
-    await requireTenantContext();
+    ctx = await requireTenantContext();
   } catch {
     return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
   }
@@ -179,6 +214,29 @@ export async function POST(req: Request) {
   const query = parsed.data.query.trim();
   if (query.length < MIN_QUERY_LEN) {
     return NextResponse.json({ suggestions: [] }, { status: 200 });
+  }
+
+  // 0. Google (se il tenant usa il provider 'google' e la chiave è presente).
+  //    Stesso toggle per-tenant del routing (tab "Viaggio"): così indirizzi,
+  //    tempo e km di un tenant sono coerenti. Fail-soft → fallback ai free.
+  const googleKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
+  if (googleKey) {
+    let useGoogle = false;
+    try {
+      useGoogle = (await leggiRoutingProvider(createServerSupabase(), ctx.tenantId)) === 'google';
+    } catch {
+      useGoogle = false;
+    }
+    if (useGoogle) {
+      try {
+        const g = await queryGoogle(query, googleKey);
+        if (g.length > 0) {
+          return NextResponse.json({ suggestions: g }, { status: 200 });
+        }
+      } catch (err) {
+        console.error('[geocode] Google error, fallback free:', err);
+      }
+    }
   }
 
   // 1. Photon primario
