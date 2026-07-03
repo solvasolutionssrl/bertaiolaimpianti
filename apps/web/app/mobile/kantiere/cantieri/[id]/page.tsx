@@ -274,12 +274,6 @@ export default async function CantiereMobileDetailPage({
             </span>
           ) : null}
           <span>{STATO_LABEL[c.stato] ?? c.stato}</span>
-          {c.indirizzo_da_verificare ? (
-            <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-500">
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-              da verificare
-            </span>
-          ) : null}
         </p>
         {c.cliente_nome ? (
           <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
@@ -319,6 +313,12 @@ export default async function CantiereMobileDetailPage({
             Indirizzo
           </p>
           <p className="mt-1 text-sm">{c.indirizzo}</p>
+          {c.indirizzo_da_verificare ? (
+            <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+              Indirizzo da verificare
+            </p>
+          ) : null}
           {indirizzoMaps ? (
             <a
               href={indirizzoMaps}

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight, Search, MapPin, User, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Search, MapPin, User } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import {
@@ -146,12 +146,6 @@ export function CantieriBrowser({
                       <span className="inline-flex min-w-0 items-center gap-0.5">
                         <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
                         <span className="truncate">{c.indirizzo}</span>
-                      </span>
-                    ) : null}
-                    {c.indirizzo_da_verificare ? (
-                      <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-500">
-                        <AlertTriangle className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-                        da verificare
                       </span>
                     ) : null}
                     <span>{STATO_LABEL[c.stato] ?? c.stato}</span>

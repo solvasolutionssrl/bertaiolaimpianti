@@ -246,11 +246,6 @@ export function CantieriClient({ rows, commesse }: Props) {
                           <div className="font-mono text-xs font-medium text-foreground">
                             {codiceCantiereMostrato(row)}
                           </div>
-                          {row.codice_commessa && row.codice ? (
-                            <div className="font-mono text-[10px] text-muted-foreground/50">
-                              {row.codice}
-                            </div>
-                          ) : null}
                         </td>
                         <td className="px-3 py-2 font-semibold">{row.nome}</td>
                         <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">

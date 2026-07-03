@@ -122,7 +122,10 @@ export default async function CruscottoKantierePage({
 
   const [dipRes, cantRes, timbRes] = await Promise.all([
     supabase.from('dipendenti' as never).select('id, nome, cognome, user_id').eq('tenant_id', ctx.tenantId),
-    supabase.from('cantieri' as never).select('id, nome, codice').eq('tenant_id', ctx.tenantId),
+    supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice, codice_commessa')
+      .eq('tenant_id', ctx.tenantId),
     supabase
       .from('timbrature' as never)
       .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da, auto_chiusa')
@@ -133,11 +136,27 @@ export default async function CruscottoKantierePage({
   ]);
 
   const dipendenti = (dipRes.data as { id: string; nome: string; cognome: string; user_id: string | null }[] | null) ?? [];
-  const cantieri = (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
+  const cantieri =
+    (cantRes.data as {
+      id: string;
+      nome: string | null;
+      codice: string | null;
+      codice_commessa: string | null;
+    }[] | null) ?? [];
   const timbRows = (timbRes.data as TimbRow[] | null) ?? [];
 
   const dipMap = new Map(dipendenti.map((d) => [d.id, titoloCase(`${d.nome} ${d.cognome}`)]));
-  const cantMap = new Map(cantieri.map((c) => [c.id, titoloCase(c.nome || c.codice || '')]));
+  const cantLabel = (c: {
+    nome: string | null;
+    codice: string | null;
+    codice_commessa: string | null;
+  }) => {
+    const nome = titoloCase(c.nome || '') || c.codice_commessa || c.codice || '';
+    return c.codice_commessa && nome && nome !== c.codice_commessa
+      ? `${nome} · ${c.codice_commessa}`
+      : nome;
+  };
+  const cantMap = new Map(cantieri.map((c) => [c.id, cantLabel(c)]));
 
   // Profilo dipendente dell'admin (per registrare spese a proprio nome) +
   // opzioni cantiere per il picker admin.
