@@ -285,6 +285,15 @@ export function CantiereDetailClient({
   // verificare"). `correzioneOk` = lampo verde prima di richiudere il box.
   const [indirizzoEditing, setIndirizzoEditing] = React.useState(false);
   const [correzioneOk, setCorrezioneOk] = React.useState(false);
+  // Stato indirizzo PRIMA della correzione → per ripristinarlo su "Annulla"
+  // (così mentre scrivi non si salva nulla di parziale: si salva solo quando
+  // scegli un indirizzo valido/verificato).
+  const indirizzoPreEdit = React.useRef<{
+    indirizzo: string;
+    indirizzoLat: number | null;
+    indirizzoLng: number | null;
+    indirizzoDaVerificare: boolean;
+  } | null>(null);
 
   // Sede di partenza: dropdown fra le sedi esistenti + dialog "crea sede".
   const [sediList, setSediList] = React.useState<SedeOption[]>(sedi);
@@ -399,6 +408,25 @@ export function CantiereDetailClient({
       setIndirizzoEditing(false);
       setCorrezioneOk(false);
     }, 1100);
+  }
+
+  // Apre la correzione indirizzo salvando lo stato attuale (per l'eventuale
+  // "Annulla"). Mentre il box è aperto l'auto-save è sospeso.
+  function apriCorrezioneIndirizzo() {
+    indirizzoPreEdit.current = {
+      indirizzo: form.indirizzo,
+      indirizzoLat: form.indirizzoLat,
+      indirizzoLng: form.indirizzoLng,
+      indirizzoDaVerificare: form.indirizzoDaVerificare,
+    };
+    setIndirizzoEditing(true);
+  }
+
+  // Annulla → ripristina l'indirizzo di partenza (niente salvataggio parziale).
+  function annullaCorrezioneIndirizzo() {
+    const p = indirizzoPreEdit.current;
+    if (p) setForm((f) => ({ ...f, ...p }));
+    setIndirizzoEditing(false);
   }
 
   // Sede scelta dal dropdown.
@@ -727,7 +755,7 @@ export function CantiereDetailClient({
                         />
                         <button
                           type="button"
-                          onClick={() => setIndirizzoEditing(false)}
+                          onClick={annullaCorrezioneIndirizzo}
                           className="mt-2 text-xs text-muted-foreground hover:underline"
                         >
                           Annulla
@@ -745,7 +773,7 @@ export function CantiereDetailClient({
                       </span>
                       <button
                         type="button"
-                        onClick={() => setIndirizzoEditing(true)}
+                        onClick={apriCorrezioneIndirizzo}
                         className="shrink-0 text-xs font-medium text-primary hover:underline"
                       >
                         Cambia
@@ -754,7 +782,7 @@ export function CantiereDetailClient({
                     <AddressStatus
                       verificato={!form.indirizzoDaVerificare && form.indirizzoLat != null}
                       indirizzo={form.indirizzo}
-                      onCorreggi={() => setIndirizzoEditing(true)}
+                      onCorreggi={apriCorrezioneIndirizzo}
                     />
                   </div>
                 )}
