@@ -6,6 +6,10 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { guardMobile } from '../../_lib/guard';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
+import {
+  vedeTuttiICantieri,
+  cantieriVisibiliTecnicoIds,
+} from '../_lib/visibilita-tecnico';
 import { CantieriBrowser, type CantiereItem } from './_components/cantieri-browser';
 
 export const metadata: Metadata = {
@@ -28,7 +32,14 @@ export default async function CantieriMobilePage() {
     mioTurnoAttivo(),
   ]);
 
-  const cantieri = (cantieriRes.data as CantiereItem[] | null) ?? [];
+  const cantieriTutti = (cantieriRes.data as CantiereItem[] | null) ?? [];
+  // Gate temporaneo (weekend): i tecnici vedono solo i cantieri timbrabili
+  // (QR attivo → oggi solo Monfalcone). Admin/office vedono tutto.
+  let cantieri = cantieriTutti;
+  if (!vedeTuttiICantieri(ctx.role)) {
+    const visibili = await cantieriVisibiliTecnicoIds(ctx.tenantId);
+    cantieri = cantieriTutti.filter((c) => visibili.has(c.id));
+  }
 
   // Se c'è un turno aperto, la card in cima diventa la card azioni completa
   // (pausa pranzo + fine turno), come nella home e nella tab Ore.

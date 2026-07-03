@@ -9,6 +9,10 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { guardMobile } from '../_lib/guard';
 import { mioTurnoAttivo } from './_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from './_lib/turno-azioni-contesto';
+import {
+  vedeTuttiICantieri,
+  cantieriVisibiliTecnicoIds,
+} from './_lib/visibilita-tecnico';
 import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
 
 export const metadata: Metadata = {
@@ -71,16 +75,25 @@ export default async function KantiereHomePage() {
       null;
   }
 
-  // Cantieri attivi recenti (lettura, max 4)
-  const { data: cantieriRaw } = await supabase
-    .from('cantieri' as never)
-    .select('id, nome, codice')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('stato', 'attivo')
-    .order('nome', { ascending: true })
-    .limit(4);
-  const cantieri =
-    (cantieriRaw as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
+  // Cantieri attivi recenti (lettura, max 4). Gate temporaneo (weekend): i
+  // tecnici vedono solo i cantieri timbrabili (QR attivo → oggi Monfalcone);
+  // admin/office vedono tutto.
+  const vedeTutto = vedeTuttiICantieri(ctx.role);
+  const visibiliIds = vedeTutto ? null : [...(await cantieriVisibiliTecnicoIds(ctx.tenantId))];
+  let cantieri: { id: string; nome: string | null; codice: string | null }[] = [];
+  if (vedeTutto || (visibiliIds && visibiliIds.length > 0)) {
+    let query = supabase
+      .from('cantieri' as never)
+      .select('id, nome, codice')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('stato', 'attivo');
+    if (visibiliIds) query = query.in('id', visibiliIds);
+    const { data: cantieriRaw } = await query
+      .order('nome', { ascending: true })
+      .limit(4);
+    cantieri =
+      (cantieriRaw as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
+  }
 
   const dentro = ultima?.tipo === 'ingresso';
 
