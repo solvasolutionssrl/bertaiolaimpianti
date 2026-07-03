@@ -35,6 +35,7 @@ import { useConfirm } from '@/app/_components/confirm-provider';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
 import { fmtData, fmtDataOra } from '@/app/office/_lib/format';
+import { categoriaLabel, categoriaTono } from '@/app/_lib/cantiere-categoria';
 import {
   aggiornaCantiere,
   eliminaCantiere,
@@ -50,8 +51,12 @@ import { StoricoPresenze, type StoricoData } from './storico-presenze';
 interface CantiereProp {
   id: string;
   codice: string;
+  codiceCommessa: string | null;
   nome: string;
+  clienteNome: string | null;
   indirizzo: string | null;
+  categoria: string | null;
+  indirizzoDaVerificare: boolean;
   indirizzoLat: number | null;
   indirizzoLng: number | null;
   sedePartenza: string | null;
@@ -384,10 +389,27 @@ export function CantiereDetailClient({
           <LiveRefresh intervalMs={60000} className="ml-auto" />
         </div>
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-xl font-semibold">{cantiere.nome}</h1>
-            <span className="font-mono text-xs text-muted-foreground">{cantiere.codice}</span>
+            {cantiere.codiceCommessa || cantiere.codice ? (
+              <span className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-xs font-semibold text-primary">
+                {cantiere.codiceCommessa?.trim() || cantiere.codice}
+              </span>
+            ) : null}
+            {cantiere.categoria ? (
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${categoriaTono(cantiere.categoria)}`}
+              >
+                {categoriaLabel(cantiere.categoria)}
+              </span>
+            ) : null}
             <StatoCantiereBadge stato={cantiere.stato} />
+            {cantiere.indirizzoDaVerificare ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                Indirizzo da verificare
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {qr ? (
@@ -404,6 +426,11 @@ export function CantiereDetailClient({
             </Button>
           </div>
         </div>
+        {cantiere.clienteNome ? (
+          <p className="text-sm text-muted-foreground">
+            Cliente: <span className="font-medium text-foreground">{cantiere.clienteNome}</span>
+          </p>
+        ) : null}
       </div>
 
       {/* ── KPI strip (periodo storico) ── */}

@@ -1,12 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, MapPin, Navigation, Users } from 'lucide-react';
+import { ArrowLeft, MapPin, Navigation, Users, User, AlertTriangle } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import {
+  codiceCantiereMostrato,
+  categoriaLabel,
+  categoriaTono,
+} from '@/app/_lib/cantiere-categoria';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 
 import { guardMobile } from '../../../_lib/guard';
@@ -44,7 +49,9 @@ export default async function CantiereMobileDetailPage({
 
   const { data: cRaw } = await supabase
     .from('cantieri' as never)
-    .select('id, codice, nome, indirizzo, sede_partenza, stato, note')
+    .select(
+      'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, sede_partenza, stato, note',
+    )
     .eq('tenant_id', ctx.tenantId)
     .eq('id', params.id)
     .maybeSingle();
@@ -54,8 +61,12 @@ export default async function CantiereMobileDetailPage({
       | {
           id: string;
           codice: string | null;
+          codice_commessa: string | null;
           nome: string | null;
+          cliente_nome: string | null;
           indirizzo: string | null;
+          categoria: string | null;
+          indirizzo_da_verificare: boolean | null;
           sede_partenza: string | null;
           stato: string;
           note: string | null;
@@ -247,12 +258,35 @@ export default async function CantiereMobileDetailPage({
 
       <header className="pt-1">
         <h1 className="text-xl font-semibold tracking-tight">
-          {titoloCase(c.nome ?? '') || c.codice || 'Cantiere'}
+          {titoloCase(c.nome ?? '') || codiceCantiereMostrato(c) || 'Cantiere'}
         </h1>
-        <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {c.codice ? <span className="font-mono">{c.codice}</span> : null}
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {codiceCantiereMostrato(c) ? (
+            <span className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono font-semibold text-primary">
+              {codiceCantiereMostrato(c)}
+            </span>
+          ) : null}
+          {c.categoria ? (
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${categoriaTono(c.categoria)}`}
+            >
+              {categoriaLabel(c.categoria)}
+            </span>
+          ) : null}
           <span>{STATO_LABEL[c.stato] ?? c.stato}</span>
+          {c.indirizzo_da_verificare ? (
+            <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-500">
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+              da verificare
+            </span>
+          ) : null}
         </p>
+        {c.cliente_nome ? (
+          <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-foreground">
+            <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {titoloCase(c.cliente_nome)}
+          </p>
+        ) : null}
         {isManager ? <LiveRefresh className="mt-2" /> : null}
       </header>
 

@@ -5,6 +5,7 @@ import { QrCode, Clock, MapPin, HardHat } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 
 import { guardMobile } from '../_lib/guard';
 import { mioTurnoAttivo } from './_lib/turno-attivo';
@@ -80,19 +81,24 @@ export default async function KantiereHomePage() {
   // admin/office vedono tutto.
   const vedeTutto = vedeTuttiICantieri(ctx.role);
   const visibiliIds = vedeTutto ? null : [...(await cantieriVisibiliTecnicoIds(ctx.tenantId))];
-  let cantieri: { id: string; nome: string | null; codice: string | null }[] = [];
+  type CantiereMini = {
+    id: string;
+    nome: string | null;
+    codice: string | null;
+    codice_commessa: string | null;
+  };
+  let cantieri: CantiereMini[] = [];
   if (vedeTutto || (visibiliIds && visibiliIds.length > 0)) {
     let query = supabase
       .from('cantieri' as never)
-      .select('id, nome, codice')
+      .select('id, nome, codice, codice_commessa')
       .eq('tenant_id', ctx.tenantId)
       .eq('stato', 'attivo');
     if (visibiliIds) query = query.in('id', visibiliIds);
     const { data: cantieriRaw } = await query
       .order('nome', { ascending: true })
       .limit(4);
-    cantieri =
-      (cantieriRaw as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
+    cantieri = (cantieriRaw as CantiereMini[] | null) ?? [];
   }
 
   const dentro = ultima?.tipo === 'ingresso';
@@ -210,11 +216,11 @@ export default async function KantiereHomePage() {
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">
-                    {titoloCase(c.nome ?? '') || c.codice || 'Cantiere'}
+                    {titoloCase(c.nome ?? '') || codiceCantiereMostrato(c) || 'Cantiere'}
                   </span>
-                  {c.codice ? (
+                  {codiceCantiereMostrato(c) ? (
                     <span className="block font-mono text-[11px] text-muted-foreground">
-                      {c.codice}
+                      {codiceCantiereMostrato(c)}
                     </span>
                   ) : null}
                 </span>

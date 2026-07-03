@@ -8,8 +8,12 @@ export const dynamic = 'force-dynamic';
 export interface CantiereRow {
   id: string;
   codice: string;
+  codice_commessa: string | null;
   nome: string;
+  cliente_nome: string | null;
   indirizzo: string | null;
+  categoria: string | null;
+  indirizzo_da_verificare: boolean;
   stato: 'attivo' | 'sospeso' | 'chiuso';
   commessaTitolo: string | null;
   nPersone: number;
@@ -28,15 +32,21 @@ export default async function CantieriPage() {
   // 1. Carica tutti i cantieri del tenant
   const { data: cantieriRaw } = await supabase
     .from('cantieri' as never)
-    .select('id, codice, nome, indirizzo, stato, commessa_id')
+    .select(
+      'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato, commessa_id',
+    )
     .eq('tenant_id', ctx.tenantId)
     .order('codice');
 
   const cantieri = (cantieriRaw ?? []) as {
     id: string;
     codice: string;
+    codice_commessa: string | null;
     nome: string;
+    cliente_nome: string | null;
     indirizzo: string | null;
+    categoria: string | null;
+    indirizzo_da_verificare: boolean | null;
     stato: 'attivo' | 'sospeso' | 'chiuso';
     commessa_id: string | null;
   }[];
@@ -127,8 +137,12 @@ export default async function CantieriPage() {
   const rows: CantiereRow[] = cantieri.map((c) => ({
     id: c.id,
     codice: c.codice,
+    codice_commessa: c.codice_commessa,
     nome: c.nome,
+    cliente_nome: c.cliente_nome,
     indirizzo: c.indirizzo,
+    categoria: c.categoria,
+    indirizzo_da_verificare: Boolean(c.indirizzo_da_verificare),
     stato: c.stato,
     commessaTitolo: c.commessa_id ? (commessaTitoliMap[c.commessa_id] ?? null) : null,
     nPersone: personeCounts[c.id] ?? 0,

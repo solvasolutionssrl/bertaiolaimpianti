@@ -25,7 +25,9 @@ export default async function CantieriMobilePage() {
   const [cantieriRes, turno] = await Promise.all([
     supabase
       .from('cantieri' as never)
-      .select('id, codice, nome, indirizzo, stato')
+      .select(
+        'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato',
+      )
       .eq('tenant_id', ctx.tenantId)
       .order('stato', { ascending: true })
       .order('nome', { ascending: true }),

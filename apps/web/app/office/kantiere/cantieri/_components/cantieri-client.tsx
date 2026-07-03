@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Loader2, Plus } from 'lucide-react';
+import { ChevronRight, Loader2, Plus, Search, AlertTriangle } from 'lucide-react';
 import {
   Button,
   Card,
@@ -18,6 +18,12 @@ import {
 } from '@kommessa/ui';
 import { useAlert } from '@/app/_components/confirm-provider';
 import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
+import {
+  codiceCantiereMostrato,
+  categoriaLabel,
+  categoriaTono,
+} from '@/app/_lib/cantiere-categoria';
+import { CategoriaChips } from '@/app/_components/cantiere-categoria-chips';
 import { creaCantiere } from '../../../_actions/cantieri';
 import type { CantiereRow, CommessaOption } from '../page';
 
@@ -89,6 +95,31 @@ export function CantieriClient({ rows, commesse }: Props) {
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
 
+  // Ricerca + filtro tipologia
+  const [q, setQ] = React.useState('');
+  const [cat, setCat] = React.useState<string | null>(null);
+
+  const categorie = React.useMemo(
+    () =>
+      [...new Set(rows.map((r) => r.categoria).filter(Boolean) as string[])].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [rows],
+  );
+
+  const filtered = React.useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (cat && r.categoria !== cat) return false;
+      if (!needle) return true;
+      return [r.nome, r.codice_commessa, r.codice, r.cliente_nome, r.indirizzo]
+        .filter(Boolean)
+        .some((v) => (v as string).toLowerCase().includes(needle));
+    });
+  }, [rows, q, cat]);
+
+  const filtroAttivo = q.trim() !== '' || cat !== null;
+
   function openNew() {
     setForm(EMPTY_FORM);
     setErrorMsg(null);
@@ -139,17 +170,41 @@ export function CantieriClient({ rows, commesse }: Props) {
   return (
     <>
       {/* Toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {rows.length === 0
             ? 'Nessun cantiere registrato.'
-            : `${rows.length} cantier${rows.length === 1 ? 'e' : 'i'} · ${nAttivi} attiv${nAttivi === 1 ? 'o' : 'i'}`}
+            : filtroAttivo
+              ? `${filtered.length} risultat${filtered.length === 1 ? 'o' : 'i'} su ${rows.length}`
+              : `${rows.length} cantier${rows.length === 1 ? 'e' : 'i'} · ${nAttivi} attiv${nAttivi === 1 ? 'o' : 'i'}`}
         </p>
         <Button size="sm" onClick={openNew}>
           <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
           Nuovo cantiere
         </Button>
       </div>
+
+      {/* Ricerca + filtro tipologia */}
+      {rows.length > 0 ? (
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-xs">
+            <Search
+              className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Cerca codice, nome, cliente, indirizzo..."
+              aria-label="Cerca cantiere"
+              className="pl-8"
+            />
+          </div>
+          {categorie.length > 0 ? (
+            <CategoriaChips categorie={categorie} selected={cat} onSelect={setCat} />
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Table */}
       {rows.length > 0 ? (
@@ -161,65 +216,103 @@ export function CantieriClient({ rows, commesse }: Props) {
                   <tr>
                     <th className="w-28 px-3 py-2 font-medium">Codice</th>
                     <th className="px-3 py-2 font-medium">Nome</th>
+                    <th className="px-3 py-2 font-medium">Cliente</th>
+                    <th className="px-3 py-2 font-medium">Tipologia</th>
                     <th className="px-3 py-2 font-medium">Indirizzo</th>
                     <th className="w-28 px-3 py-2 font-medium">Stato</th>
-                    <th className="px-3 py-2 font-medium">Commessa</th>
                     <th className="w-20 px-3 py-2 font-medium">Persone</th>
                     <th className="w-16 px-3 py-2 font-medium">QR</th>
                     <th className="w-24 px-3 py-2" aria-label="Azioni" />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="group cursor-pointer border-b border-border transition-colors hover:bg-muted/40"
-                      onClick={() => router.push(`/office/kantiere/cantieri/${row.id}`)}
-                    >
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                        {row.codice}
-                      </td>
-                      <td className="px-3 py-2 font-semibold">{row.nome}</td>
-                      <td className="max-w-[200px] truncate px-3 py-2 text-muted-foreground">
-                        {row.indirizzo ?? <span className="text-muted-foreground/50">·</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        <StatoBadge stato={row.stato} />
-                      </td>
-                      <td className="max-w-[180px] truncate px-3 py-2 text-muted-foreground">
-                        {row.commessaTitolo ?? <span className="text-muted-foreground/50">·</span>}
-                      </td>
-                      <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                        {row.nPersone > 0 ? (
-                          <span className="font-medium text-foreground">{row.nPersone}</span>
-                        ) : (
-                          '0'
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.haQr ? (
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Sì
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground/50">·</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Button
-                          size="sm"
-                          asChild
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Link href={`/office/kantiere/cantieri/${row.id}`}>
-                            Apri
-                            <ChevronRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
-                          </Link>
-                        </Button>
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="px-3 py-10 text-center text-sm text-muted-foreground"
+                      >
+                        Nessun cantiere trovato con questi filtri.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filtered.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="group cursor-pointer border-b border-border transition-colors hover:bg-muted/40"
+                        onClick={() => router.push(`/office/kantiere/cantieri/${row.id}`)}
+                      >
+                        <td className="px-3 py-2">
+                          <div className="font-mono text-xs font-medium text-foreground">
+                            {codiceCantiereMostrato(row)}
+                          </div>
+                          {row.codice_commessa && row.codice ? (
+                            <div className="font-mono text-[10px] text-muted-foreground/50">
+                              {row.codice}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 font-semibold">{row.nome}</td>
+                        <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">
+                          {row.cliente_nome ?? <span className="text-muted-foreground/50">·</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          {row.categoria ? (
+                            <span
+                              className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-medium ${categoriaTono(row.categoria)}`}
+                            >
+                              {categoriaLabel(row.categoria)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/50">·</span>
+                          )}
+                        </td>
+                        <td className="max-w-[220px] px-3 py-2 text-muted-foreground">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate">
+                              {row.indirizzo ?? (
+                                <span className="text-muted-foreground/50">Indirizzo mancante</span>
+                              )}
+                            </span>
+                            {row.indirizzo_da_verificare ? (
+                              <AlertTriangle
+                                className="h-3.5 w-3.5 shrink-0 text-amber-500"
+                                aria-label="Da verificare"
+                              />
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <StatoBadge stato={row.stato} />
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                          {row.nPersone > 0 ? (
+                            <span className="font-medium text-foreground">{row.nPersone}</span>
+                          ) : (
+                            '0'
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {row.haQr ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                              Sì
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground/50">·</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button size="sm" asChild onClick={(e) => e.stopPropagation()}>
+                            <Link href={`/office/kantiere/cantieri/${row.id}`}>
+                              Apri
+                              <ChevronRight className="ml-1 h-3.5 w-3.5" aria-hidden="true" />
+                            </Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
