@@ -16,6 +16,7 @@ import {
   type ViaggioRitornoMezzo,
   type ViaggioRitornoConfirm,
 } from '@/app/_components/viaggio-ritorno-dialog';
+import { CambiaCantiereButton } from './cambia-cantiere';
 
 export interface TurnoAzioniCantiereProps {
   cantiereId: string;
@@ -290,6 +291,11 @@ export function TurnoAzioniCantiere({
             Avvia pausa pranzo
           </button>
         )}
+
+        {/* Cambia cantiere: chiude il segmento corrente e ne apre uno nuovo
+            (ore divise dai timestamp, km al cantiere di destinazione). Non in
+            pausa: prima si riprende il turno. */}
+        {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} /> : null}
 
         {/* La pausa pranzo dichiarata + il viaggio di ritorno vivono ora nel
             dialog "Termina turno" (apre su tap del pulsante qui sotto). */}

@@ -11,6 +11,7 @@ import {
   categoriaTono,
 } from '@/app/_lib/cantiere-categoria';
 import { TurnoAzioniCantiere } from '../../_components/turno-azioni-cantiere';
+import { IniziaTurnoButton } from '../../_components/inizia-turno';
 import type { TurnoAttivoMio } from '../../_lib/turno-attivo';
 import type { TurnoAzioniContesto } from '../../_lib/turno-azioni-contesto';
 import { CategoriaDropdown } from './categoria-dropdown';
@@ -37,10 +38,13 @@ export function CantieriBrowser({
   cantieri,
   turno,
   azioni,
+  puoAvviareTurno = false,
 }: {
   cantieri: CantiereItem[];
   turno: TurnoAttivoMio | null;
   azioni: TurnoAzioniContesto | null;
+  /** true se l'utente ha un profilo dipendente → può avviare un turno manuale. */
+  puoAvviareTurno?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<string | null>(null);
@@ -83,6 +87,10 @@ export function CantieriBrowser({
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
         />
+      ) : puoAvviareTurno ? (
+        /* Nessun turno aperto → avvio manuale (senza QR): sceglie un cantiere
+           qualsiasi e timbra l'ingresso. Il picker carica tutti i cantieri. */
+        <IniziaTurnoButton />
       ) : null}
 
       {/* Ricerca (75%) + filtro tipologia (25%), inline, stessa altezza */}

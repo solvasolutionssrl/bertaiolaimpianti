@@ -88,21 +88,31 @@ export default async function MobileOrePage() {
     titolo: risolviTitoloCommessa(c) || c.codice_interno || c.id,
   }));
 
-  // Carica cantieri attivi per il picker "Aggiungi riga"
+  // Carica cantieri attivi per il picker "Aggiungi riga" e per il dialog ore a
+  // mano (ricerca per codice/cliente/nome/indirizzo → campi arricchiti).
   const { data: cantieriRaw } = await supabase
     .from('cantieri' as never)
-    .select('id, nome, codice')
+    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria')
     .eq('tenant_id', ctx.tenantId)
-    .eq('stato', 'attivo')
+    .in('stato', ['attivo', 'sospeso'])
     .order('nome', { ascending: true });
 
   const cantieriDisponibili = ((cantieriRaw as Array<{
     id: string;
-    nome: string | null;
     codice: string | null;
+    codice_commessa: string | null;
+    nome: string | null;
+    cliente_nome: string | null;
+    indirizzo: string | null;
+    categoria: string | null;
   }>) ?? []).map((c) => ({
     id: c.id,
-    nome: c.nome || c.codice || c.id,
+    codice: c.codice,
+    codice_commessa: c.codice_commessa,
+    nome: c.nome,
+    cliente_nome: c.cliente_nome,
+    indirizzo: c.indirizzo,
+    categoria: c.categoria,
   }));
 
   // Sedi + mezzi per il flusso viaggio dell'inserimento manuale

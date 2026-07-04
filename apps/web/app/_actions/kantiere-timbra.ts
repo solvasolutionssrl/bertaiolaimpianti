@@ -12,7 +12,9 @@ import {
 } from '@kommessa/api/kantiere-ore';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
-import { leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
+import { leggiSogliaPausaPranzoOre, leggiRoutingProvider } from '@/app/_lib/kantiere-config';
+import { getRoutingProvider } from '@/app/_lib/routing';
+import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import {
   ViaggioSchema,
@@ -547,4 +549,282 @@ export async function timbraManuale(input: unknown): Promise<Result> {
   } as never);
   if (error) return { ok: false, error: error.message };
   return { ok: true, tipo: parsed.data.tipo, pausa: false, ts: parsed.data.ts };
+}
+
+// ── 4) turno manuale self: avvio senza QR + cambio cantiere ─────────────────
+// Il tecnico avvia un turno scegliendo un cantiere qualsiasi (senza QR) e, se
+// durante la giornata si sposta, "cambia cantiere": chiude il segmento corrente
+// e ne apre uno nuovo (ore giuste dai timestamp reali). I km A→B sono attribuiti
+// al cantiere di DESTINAZIONE come tratta manuale (durata 0 = niente ore-viaggio,
+// solo km), senza toccare lo schema. Le timbrature restano la verità: il
+// rapportino si ricalcola da sé.
+
+/** true se il dipendente ha almeno un turno aperto oggi (qualsiasi target). */
+async function turnoApertoQualsiasi(
+  supabase: ReturnType<typeof createServerSupabase>,
+  dipendenteId: string,
+): Promise<boolean> {
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const { data } = await supabase
+    .from('timbrature' as never)
+    .select('cantiere_id, commessa_id, tipo, ts, pausa')
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: true });
+  const rows =
+    (data as {
+      cantiere_id: string | null;
+      commessa_id: string | null;
+      tipo: 'ingresso' | 'uscita';
+      pausa: boolean | null;
+    }[] | null) ?? [];
+  const aperti = new Set<string>();
+  for (const t of rows) {
+    const key = t.cantiere_id ? `k:${t.cantiere_id}` : t.commessa_id ? `c:${t.commessa_id}` : null;
+    if (!key) continue;
+    if (t.tipo === 'ingresso') aperti.add(key);
+    else if (t.pausa) {
+      // uscita di pausa: il turno resta APERTO (in pausa)
+    } else aperti.delete(key); // uscita di fine turno
+  }
+  return aperti.size > 0;
+}
+
+/**
+ * Attribuisce i km del tragitto cantiere→cantiere (dello switch) al cantiere di
+ * DESTINAZIONE, come tratta di viaggio MANUALE (timbratura_id null, sede null,
+ * `durata_confermata_min = 0` così NON conta ore di viaggio: contano solo i km).
+ * Best-effort: se mancano le coordinate (cantieri "privati") o il provider non
+ * risponde, non scrive nulla (niente km, come richiesto). Non deve mai bloccare.
+ */
+async function attribuisciKmSwitch(
+  supabase: ReturnType<typeof createServerSupabase>,
+  opts: {
+    tenantId: string;
+    dipendenteId: string;
+    daCantiereId: string;
+    aCantiereId: string;
+    data: string;
+  },
+): Promise<void> {
+  try {
+    const { data: rows } = await supabase
+      .from('cantieri' as never)
+      .select('id, indirizzo_lat, indirizzo_lng')
+      .in('id', [opts.daCantiereId, opts.aCantiereId])
+      .eq('tenant_id', opts.tenantId);
+    const cc =
+      (rows as { id: string; indirizzo_lat: number | null; indirizzo_lng: number | null }[] | null) ??
+      [];
+    const a = cc.find((r) => r.id === opts.daCantiereId);
+    const b = cc.find((r) => r.id === opts.aCantiereId);
+    if (!a?.indirizzo_lat || !a?.indirizzo_lng || !b?.indirizzo_lat || !b?.indirizzo_lng) return;
+
+    const choice = await leggiRoutingProvider(supabase, opts.tenantId);
+    const provider = getRoutingProvider({ provider: choice });
+    const stima = await provider.stima(
+      { lat: Number(a.indirizzo_lat), lng: Number(a.indirizzo_lng) },
+      { lat: Number(b.indirizzo_lat), lng: Number(b.indirizzo_lng) },
+    );
+    if (!stima) return;
+
+    await supabase.from('timbratura_viaggio' as never).insert({
+      tenant_id: opts.tenantId,
+      timbratura_id: null,
+      dipendente_id: opts.dipendenteId,
+      cantiere_id: opts.aCantiereId,
+      data: opts.data,
+      direzione: 'andata',
+      sede_id: null,
+      durata_stimata_min: null,
+      // 0 = non conta ore di viaggio (l'utente ha scelto di ignorare i tempi):
+      // qui interessa solo la distanza.
+      durata_confermata_min: 0,
+      distanza_km: stima.km,
+      autista: false,
+      mezzo_id: null,
+    } as never);
+  } catch {
+    // best-effort: mai bloccare lo switch per i km
+  }
+}
+
+const AvviaTurnoSchema = z.object({ cantiereId: z.string().uuid() });
+
+/** Avvia un turno sul cantiere scelto (senza QR). Origine 'manuale'. */
+export async function avviaTurnoMio(input: unknown): Promise<Result> {
+  const parsed = AvviaTurnoSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  // Un solo turno aperto per volta.
+  if (await turnoApertoQualsiasi(supabase, me.id)) {
+    return { ok: false, error: 'TURNO_GIA_APERTO' };
+  }
+
+  // Il cantiere deve appartenere al tenant.
+  const { data: cant } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .eq('id', parsed.data.cantiereId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+
+  const ts = new Date().toISOString();
+  const { error } = await supabase.from('timbrature' as never).insert({
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    cantiere_id: parsed.data.cantiereId,
+    commessa_id: null,
+    tipo: 'ingresso',
+    pausa: false,
+    origine: 'manuale',
+    ts,
+    creato_da: ctx.userId,
+  } as never);
+  if (error) return { ok: false, error: error.message };
+
+  try {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ts)));
+  } catch {
+    // best-effort
+  }
+  return { ok: true, tipo: 'ingresso', pausa: false, ts };
+}
+
+const CambiaCantiereSchema = z.object({
+  daCantiereId: z.string().uuid(),
+  aCantiereId: z.string().uuid(),
+});
+
+/**
+ * Cambia cantiere a turno aperto: chiude il turno sul cantiere corrente e ne
+ * apre uno nuovo sul cantiere scelto, ORA. Le ore per segmento escono dai
+ * timestamp reali (ricalcolo automatico). I km del tragitto vanno alla
+ * destinazione (best-effort). Richiede il turno "al lavoro" (non in pausa).
+ */
+export async function cambiaCantiereMio(input: unknown): Promise<Result> {
+  const parsed = CambiaCantiereSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  if (parsed.data.daCantiereId === parsed.data.aCantiereId) {
+    return { ok: false, error: 'STESSO_CANTIERE' };
+  }
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  // Il turno sul cantiere di partenza deve essere aperto e AL LAVORO.
+  const eventi = await eventiOggi(supabase, me.id, {
+    tipo: 'cantiere',
+    id: parsed.data.daCantiereId,
+  });
+  const info = statoTurno(eventi);
+  if (info.stato === 'idle') return { ok: false, error: 'NESSUN_TURNO_APERTO' };
+  if (info.stato === 'pausa') return { ok: false, error: 'IN_PAUSA' };
+
+  // Il cantiere di destinazione deve appartenere al tenant.
+  const { data: dest } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .eq('id', parsed.data.aCantiereId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  if (!dest) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+
+  // Timestamp: uscita (fine A) → ingresso (inizio B), strettamente dopo
+  // l'ultima timbratura e nel giorno corrente.
+  const ultima = eventi[eventi.length - 1];
+  const lastMs = ultima ? Date.parse(ultima.ts) : 0;
+  const baseMs = Math.max(Date.now(), lastMs + 2000);
+  const uscitaTs = new Date(baseMs).toISOString();
+  const ingressoTs = new Date(baseMs + 1000).toISOString();
+  if (romeDay(new Date(ingressoTs)) !== romeDay(new Date())) {
+    return { ok: false, error: 'ORA_NON_VALIDA' };
+  }
+
+  // Chiude A.
+  const { error: errUscita } = await supabase.from('timbrature' as never).insert({
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    cantiere_id: parsed.data.daCantiereId,
+    commessa_id: null,
+    tipo: 'uscita',
+    pausa: false,
+    origine: 'manuale',
+    ts: uscitaTs,
+    creato_da: ctx.userId,
+  } as never);
+  if (errUscita) return { ok: false, error: errUscita.message };
+
+  // Apre B. Se fallisce, riapre A (compensazione) togliendo l'uscita.
+  const { error: errIngresso } = await supabase.from('timbrature' as never).insert({
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    cantiere_id: parsed.data.aCantiereId,
+    commessa_id: null,
+    tipo: 'ingresso',
+    pausa: false,
+    origine: 'manuale',
+    ts: ingressoTs,
+    creato_da: ctx.userId,
+  } as never);
+  if (errIngresso) {
+    await supabase
+      .from('timbrature' as never)
+      .delete()
+      .eq('dipendente_id', me.id)
+      .eq('cantiere_id', parsed.data.daCantiereId)
+      .eq('tipo', 'uscita')
+      .eq('ts', uscitaTs);
+    return { ok: false, error: errIngresso.message };
+  }
+
+  // Km A→B alla destinazione (best-effort, non blocca).
+  await attribuisciKmSwitch(supabase, {
+    tenantId: ctx.tenantId,
+    dipendenteId: me.id,
+    daCantiereId: parsed.data.daCantiereId,
+    aCantiereId: parsed.data.aCantiereId,
+    data: romeDay(new Date(ingressoTs)),
+  });
+
+  try {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ingressoTs)));
+  } catch {
+    // best-effort
+  }
+  return { ok: true, tipo: 'ingresso', pausa: false, ts: ingressoTs };
+}
+
+/**
+ * Elenco cantieri per i picker di avvio/cambio turno (tutti i cantieri operativi
+ * del tenant: il tecnico può avviare un turno su qualsiasi cantiere). Ordinati
+ * per nome. Sola lettura, gated dal modulo.
+ */
+export async function elencoCantieriTurno(): Promise<
+  { ok: true; cantieri: PickerCantiere[] } | { ok: false; error: string }
+> {
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+  const supabase = createServerSupabase();
+  const { data } = await supabase
+    .from('cantieri' as never)
+    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria')
+    .eq('tenant_id', ctx.tenantId)
+    .in('stato', ['attivo', 'sospeso'])
+    .order('nome', { ascending: true });
+  return { ok: true, cantieri: (data as PickerCantiere[] | null) ?? [] };
 }

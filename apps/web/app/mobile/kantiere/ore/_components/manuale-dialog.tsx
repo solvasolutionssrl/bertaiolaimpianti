@@ -11,13 +11,9 @@ import {
   DialogTitle,
 } from '@kommessa/ui';
 import { registraOreManuali } from '@/app/_actions/kantiere-rapportino';
+import { CantierePicker, type PickerCantiere } from '../../_components/cantiere-picker';
 
 // ── tipi ────────────────────────────────────────────────────────────────────
-
-interface Cantiere {
-  id: string;
-  nome: string;
-}
 
 interface Sede {
   id: string;
@@ -35,7 +31,7 @@ export interface ManualeDialogProps {
   open: boolean;
   onClose: () => void;
   data: string;
-  cantieri: Cantiere[];
+  cantieri: PickerCantiere[];
   sedi: Sede[];
   mezzi: Mezzo[];
 }
@@ -293,7 +289,9 @@ export function ManualeDialog({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [cantiereId, setCantiereId] = useState<string>(cantieri[0]?.id ?? '');
+  // Nessun cantiere pre-selezionato: con molti cantieri sceglierne uno a caso
+  // sarebbe fuorviante. L'utente lo sceglie dal picker (Registra lo richiede).
+  const [cantiereId, setCantiereId] = useState<string>('');
   // Un solo campo "ore di lavoro": lo split ordinario/straordinario lo fa
   // l'ufficio in fase di ricalcolo, non il tecnico.
   const [oreLavoro, setOreLavoro] = useState<number>(0);
@@ -342,7 +340,7 @@ export function ManualeDialog({
   );
 
   function resetForm() {
-    setCantiereId(cantieri[0]?.id ?? '');
+    setCantiereId('');
     setOreLavoro(0);
     setAndata(trattaIniziale(sedi));
     setRitorno(trattaIniziale(sedi));
@@ -470,30 +468,19 @@ export function ManualeDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-1">
-          {/* Cantiere */}
+          {/* Cantiere — picker con ricerca (niente più lista che si apre da
+              sola all'apertura del dialog: si apre solo al tap). */}
           <div className="space-y-1.5">
             <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               Cantiere <span className="text-destructive">*</span>
             </label>
-            <div className="relative">
-              <select
-                value={cantiereId}
-                onChange={(e) => handleCantiereChange(e.target.value)}
-                disabled={isPending}
-                className="w-full appearance-none rounded-md border border-border bg-background py-2.5 pl-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-              >
-                {cantieri.length === 0 && (
-                  <option value="">Nessun cantiere disponibile</option>
-                )}
-                {cantieri.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nome}</option>
-                ))}
-              </select>
-              <ChevronDown
-                className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
+            <CantierePicker
+              cantieri={cantieri}
+              value={cantiereId || null}
+              onChange={handleCantiereChange}
+              placeholder={cantieri.length === 0 ? 'Nessun cantiere disponibile' : 'Scegli cantiere'}
+              disabled={isPending || cantieri.length === 0}
+            />
           </div>
 
           {/* Ore di lavoro — un solo campo, lo split lo fa l'ufficio */}

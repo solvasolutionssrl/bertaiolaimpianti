@@ -22,7 +22,7 @@ export default async function CantieriMobilePage() {
   const ctx = await guardMobile();
   const supabase = createServerSupabase();
 
-  const [cantieriRes, turno] = await Promise.all([
+  const [cantieriRes, turno, meRes] = await Promise.all([
     supabase
       .from('cantieri' as never)
       .select(
@@ -32,7 +32,17 @@ export default async function CantieriMobilePage() {
       .order('stato', { ascending: true })
       .order('nome', { ascending: true }),
     mioTurnoAttivo(),
+    supabase
+      .from('dipendenti' as never)
+      .select('id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('user_id', ctx.userId)
+      .maybeSingle(),
   ]);
+
+  // "Inizia turno" (avvio manuale senza QR) solo se l'utente ha un profilo
+  // dipendente: vale per tecnici e per admin/office che lavorano in cantiere.
+  const puoAvviareTurno = !!(meRes.data as { id: string } | null);
 
   const cantieriTutti = (cantieriRes.data as CantiereItem[] | null) ?? [];
   // Gate temporaneo (weekend): i tecnici vedono solo i cantieri timbrabili
@@ -64,7 +74,12 @@ export default async function CantieriMobilePage() {
         </p>
       </header>
 
-      <CantieriBrowser cantieri={cantieri} turno={turno} azioni={azioni} />
+      <CantieriBrowser
+        cantieri={cantieri}
+        turno={turno}
+        azioni={azioni}
+        puoAvviareTurno={puoAvviareTurno}
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   cantieriVisibiliTecnicoIds,
 } from './_lib/visibilita-tecnico';
 import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
+import { IniziaTurnoButton } from './_components/inizia-turno';
 
 export const metadata: Metadata = {
   title: 'Kantiere',
@@ -164,6 +165,10 @@ export default async function KantiereHomePage() {
           consultare cantieri e ore.
         </div>
       )}
+
+      {/* Avvio turno manuale (senza QR): scegli un cantiere qualsiasi. Compare
+          quando c'è un profilo dipendente e nessun turno è aperto. */}
+      {!turno && me ? <IniziaTurnoButton prominente /> : null}
 
       {/* Azioni rapide — tap target grandi */}
       <div className="grid grid-cols-2 gap-3">

@@ -13,6 +13,7 @@ import {
 } from '@/app/_actions/kantiere-rapportino';
 import { ManualeDialog } from './manuale-dialog';
 import { ModificaGiornataDialog } from './modifica-giornata-dialog';
+import type { PickerCantiere } from '../../_components/cantiere-picker';
 
 // ── tipi ────────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,7 @@ type RapportinoProps = {
 interface OreClientProps {
   rapportino: RapportinoProps;
   commesseDisponibili: { id: string; titolo: string }[];
-  cantieriDisponibili: { id: string; nome: string }[];
+  cantieriDisponibili: PickerCantiere[];
   sediDisponibili: { id: string; nome: string; tipo: string }[];
   mezziDisponibili: { id: string; targa: string; modello: string | null }[];
   /** true se c'è un turno aperto: il totale di oggi è ancora 0/parziale, quindi
@@ -269,7 +270,7 @@ export function OreClient({
     } else {
       const c = cantieriDisponibili.find((x) => x.id === decoded.id);
       if (!c) return;
-      label = c.nome;
+      label = c.nome ?? '';
     }
 
     setRighe((prev) => [
@@ -474,7 +475,7 @@ export function OreClient({
                       <optgroup label="Cantieri">
                         {cantieriLiberi.map((c) => (
                           <option key={c.id} value={encodePickerValue('cantiere', c.id)}>
-                            {c.nome}
+                            {titoloCase(c.nome ?? '') || c.id}
                           </option>
                         ))}
                       </optgroup>
