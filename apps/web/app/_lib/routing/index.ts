@@ -131,7 +131,13 @@ function createGoogleProvider(apiKey: string): RoutingProvider {
           }),
           signal: AbortSignal.timeout(6000),
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          // Log dell'errore Google (senza chiave: è nell'header) per diagnosi
+          // in prod: "Routes API not enabled", "PERMISSION_DENIED", referrer, ecc.
+          const errBody = await res.text().catch(() => '');
+          console.error('[routing] Google Routes HTTP', res.status, errBody.slice(0, 300));
+          return null;
+        }
         const json = (await res.json()) as {
           routes?: { duration?: string; distanceMeters?: number }[];
         };

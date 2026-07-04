@@ -190,7 +190,7 @@ export function CantiereSearchSheet({
   onClose: () => void;
   footer?: React.ReactNode;
 }) {
-  const sheetRef = useRef<HTMLDivElement>(null);
+  const [kbH, setKbH] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -201,28 +201,25 @@ export function CantiereSearchSheet({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  // Tastiera: aggancia l'altezza del foglio alla visualViewport, così quando la
-  // tastiera sale il foglio si RESTRINGE all'area visibile e il footer (tastone
-  // "Avvia turno") resta SOPRA la tastiera, comodo da premere. Fuori dalla
-  // tastiera vv.height == viewport → altezza piena (come h-[100dvh]).
+  // Tastiera: misura la sua altezza dalla visualViewport e la riempie con uno
+  // SPAZIATORE bianco in fondo al foglio. Così il footer (tastone "Avvia turno")
+  // resta sopra la tastiera E l'area tra tasto e tastiera (e dietro le tastiere
+  // semi-trasparenti) è BIANCA — non mostra più la lista.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setKbH(0);
+      return;
+    }
     const vv = window.visualViewport;
     if (!vv) return;
-    const apply = () => {
-      const el = sheetRef.current;
-      if (el) el.style.height = `${vv.height}px`;
-    };
+    const apply = () =>
+      setKbH(Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)));
     apply();
-    const t = setTimeout(apply, 60); // il Portal monta dopo il primo effect
     vv.addEventListener('resize', apply);
     vv.addEventListener('scroll', apply);
     return () => {
-      clearTimeout(t);
       vv.removeEventListener('resize', apply);
       vv.removeEventListener('scroll', apply);
-      const el = sheetRef.current;
-      if (el) el.style.height = '';
     };
   }, [open]);
 
@@ -231,8 +228,7 @@ export function CantiereSearchSheet({
   return (
     <Portal>
       <div
-        ref={sheetRef}
-        className="fixed inset-x-0 top-0 z-[80] flex h-[100dvh] flex-col overflow-hidden bg-background"
+        className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-background"
         role="dialog"
         aria-modal="true"
       >
@@ -258,10 +254,13 @@ export function CantiereSearchSheet({
         </div>
 
         {footer ? (
-          <div className="shrink-0 border-t border-border bg-background px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)]">
+          <div className="shrink-0 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {footer}
           </div>
         ) : null}
+        {/* Spaziatore = altezza tastiera: bianco sotto il footer, così tra tasto
+            e tastiera (e dietro le tastiere trasparenti) non compare la lista. */}
+        <div aria-hidden className="shrink-0 bg-background" style={{ height: kbH }} />
       </div>
     </Portal>
   );

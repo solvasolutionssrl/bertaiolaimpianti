@@ -23,6 +23,9 @@ import type { ViaggioTratta } from '@/app/office/kantiere/rapportini/_components
 
 import { guardMobile } from '../../_lib/guard';
 import { statoDaEventi, type EventoOggi } from '../_lib/presenze';
+import { mioTurnoAttivo } from '../_lib/turno-attivo';
+import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
+import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
 import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
 import { NuovaSpesa } from '../spese/_components/nuova-spesa';
 
@@ -164,6 +167,14 @@ export default async function CruscottoKantierePage({
   const cantieriOpts = cantieri
     .map((c) => ({ id: c.id, nome: titoloCase(c.nome || c.codice || 'Cantiere') }))
     .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  // Turno attivo dell'admin/office (se timbra anche lui): in cima al cruscotto
+  // la stessa card verde "Turno in corso" delle sue Ore — promemoria + accesso
+  // rapido a pausa/cambio/fine turno. Null se non ha un turno aperto.
+  const mioTurno = await mioTurnoAttivo();
+  const mioTurnoAzioni = mioTurno
+    ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, mioTurno.cantiereId)
+    : null;
 
   // Nomi di chi ha inserito le timbrature (per "Inserita a mano · da …").
   const creatoNomeMap = new Map<string, string>();
@@ -317,6 +328,25 @@ export default async function CruscottoKantierePage({
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Panoramica cantieri</h1>
         {isOggi ? <LiveRefresh className="mt-2" /> : null}
       </header>
+
+      {/* Turno attivo dell'admin/office: stessa card delle sue Ore (pausa,
+          cambio cantiere, fine turno), come promemoria in cima al cruscotto. */}
+      {mioTurno && mioTurnoAzioni ? (
+        <TurnoAzioniCantiere
+          cantiereId={mioTurno.cantiereId}
+          cantiereNome={mioTurno.cantiereNome}
+          cantiereHref={`/mobile/kantiere/cantieri/${mioTurno.cantiereId}`}
+          inizioTs={mioTurno.inizioTs}
+          inPausa={mioTurno.inPausa}
+          inizioPausaTs={mioTurno.inizioPausaTs}
+          pausaOggiFatta={mioTurnoAzioni.pausaOggiFatta}
+          sedi={mioTurnoAzioni.sedi}
+          mezzi={mioTurnoAzioni.mezzi}
+          sedeDefaultId={mioTurnoAzioni.sedeDefaultId}
+          sogliaPausaPranzoOre={mioTurnoAzioni.sogliaPausaPranzoOre}
+          sogliaAutoSpegnimentoPausaOre={mioTurnoAzioni.sogliaAutoSpegnimentoPausaOre}
+        />
+      ) : null}
 
       {/* Navigatore giorno */}
       <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-2 py-1.5 shadow-soft">
