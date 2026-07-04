@@ -462,7 +462,12 @@ export function ManualeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="overflow-x-hidden">
+      {/* grid-cols-[minmax(0,1fr)]: il DialogContent è `display:grid` e i grid
+          item hanno `min-width:auto` (= min-content). Un contenuto nowrap
+          (titoli cantiere `truncate`) forza il track oltre la larghezza del
+          dialog → tutto si allarga e scrolla in orizzontale. `minmax(0,1fr)`
+          azzera il minimo del track. + overflow-x-hidden come rete. */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] overflow-x-hidden">
 
         <DialogHeader>
           <DialogTitle>Aggiungi ore a mano</DialogTitle>
@@ -470,8 +475,9 @@ export function ManualeDialog({
 
         <div className="space-y-4 pt-1">
           {/* Cantiere — picker con ricerca (niente più lista che si apre da
-              sola all'apertura del dialog: si apre solo al tap). */}
-          <div className="space-y-1.5">
+              sola all'apertura del dialog: si apre solo al tap). min-w-0: grid
+              item, così il track non cresce sul contenuto nowrap del dropdown. */}
+          <div className="min-w-0 space-y-1.5">
             <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               Cantiere <span className="text-destructive">*</span>
             </label>
