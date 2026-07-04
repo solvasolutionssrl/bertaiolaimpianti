@@ -190,6 +190,8 @@ export function CantiereSearchSheet({
   onClose: () => void;
   footer?: React.ReactNode;
 }) {
+  const sheetRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -199,12 +201,38 @@ export function CantiereSearchSheet({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // Tastiera: aggancia l'altezza del foglio alla visualViewport, così quando la
+  // tastiera sale il foglio si RESTRINGE all'area visibile e il footer (tastone
+  // "Avvia turno") resta SOPRA la tastiera, comodo da premere. Fuori dalla
+  // tastiera vv.height == viewport → altezza piena (come h-[100dvh]).
+  useEffect(() => {
+    if (!open) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const apply = () => {
+      const el = sheetRef.current;
+      if (el) el.style.height = `${vv.height}px`;
+    };
+    apply();
+    const t = setTimeout(apply, 60); // il Portal monta dopo il primo effect
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      clearTimeout(t);
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      const el = sheetRef.current;
+      if (el) el.style.height = '';
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <Portal>
       <div
-        className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-background"
+        ref={sheetRef}
+        className="fixed inset-x-0 top-0 z-[80] flex h-[100dvh] flex-col overflow-hidden bg-background"
         role="dialog"
         aria-modal="true"
       >
@@ -221,11 +249,16 @@ export function CantiereSearchSheet({
         </header>
 
         <div className="min-h-0 flex-1">
-          <CantiereSearchList cantieri={cantieri} selectedId={selectedId} onPick={onPick} />
+          <CantiereSearchList
+            cantieri={cantieri}
+            selectedId={selectedId}
+            onPick={onPick}
+            autoFocus={false}
+          />
         </div>
 
         {footer ? (
-          <div className="shrink-0 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="shrink-0 border-t border-border bg-background px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)]">
             {footer}
           </div>
         ) : null}

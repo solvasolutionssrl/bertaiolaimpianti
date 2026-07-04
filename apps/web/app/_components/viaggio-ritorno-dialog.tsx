@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Utensils, X } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
@@ -143,6 +144,12 @@ export function ViaggioRitornoDialog({
   const [pausaFatta, setPausaFatta] = useState(false);
   const [pausaMin, setPausaMin] = useState<30 | 45 | 60>(30);
 
+  // Portal su body: dentro la shell mobile un `fixed` resta intrappolato nello
+  // stacking context e finisce SOTTO la bottom-nav. Su body compete al livello
+  // radice → sta davvero sopra tutto (z-[70]).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const modificato = stimaMin != null && confermMin !== stimaMin;
   const giustObbligatoria = modificato;
 
@@ -227,10 +234,10 @@ export function ViaggioRitornoDialog({
     });
   }
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex flex-col justify-end" role="dialog" aria-modal="true">
       {/* overlay */}
       <button
         type="button"
@@ -449,6 +456,7 @@ export function ViaggioRitornoDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
