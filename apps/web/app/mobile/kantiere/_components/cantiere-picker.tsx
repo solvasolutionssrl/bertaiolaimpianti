@@ -249,7 +249,7 @@ export function CantierePicker({
   }, [open]);
 
   return (
-    <div ref={wrapRef} className="w-full min-w-0">
+    <div ref={wrapRef} className="relative w-full min-w-0">
       <button
         type="button"
         onClick={() => !disabled && setOpen((v) => !v)}
@@ -278,9 +278,11 @@ export function CantierePicker({
         />
       </button>
 
-      {/* Dropdown IN-FLOW ad altezza DEFINITA (non max-h): serve a flex-1+scroll. */}
+      {/* Dropdown ASSOLUTO: si sovrappone ai campi sotto (non allunga il dialog).
+          Altezza DEFINITA (~4 card poi scorre) — non max-h, che romperebbe il
+          flex-1+scroll interno. z-30 per stare sopra i campi seguenti. */}
       {open ? (
-        <div className="mt-1.5 h-[42vh] w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 h-72 w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
           <CantiereSearchList
             cantieri={cantieri}
             selectedId={value}
