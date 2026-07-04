@@ -145,14 +145,18 @@ export function IniziaTurnoButton({
                 type="button"
                 onClick={avvia}
                 disabled={!selectedId || pending}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-base font-semibold text-white shadow-soft transition-all active:scale-[0.99] hover:bg-emerald-700 disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-semibold text-white shadow-soft transition-all active:scale-[0.99] hover:bg-emerald-700 disabled:opacity-50"
               >
                 {pending ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
                 ) : (
-                  <Play className="h-5 w-5" strokeWidth={2} />
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20">
+                    <Play className="h-3.5 w-3.5" strokeWidth={2.75} fill="currentColor" />
+                  </span>
                 )}
-                {selezionato ? `Avvia turno su ${nomeSel}` : 'Scegli un cantiere'}
+                <span className="truncate">
+                  {selezionato ? `Avvia turno su ${nomeSel}` : 'Scegli un cantiere'}
+                </span>
               </button>
             )}
           </div>

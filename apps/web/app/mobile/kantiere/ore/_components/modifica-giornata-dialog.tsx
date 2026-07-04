@@ -137,7 +137,7 @@ function StepperHM({
       <span className="w-14 shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </span>
-      <div className={`flex min-w-0 flex-1 items-center gap-1 rounded-lg border p-1 ${box}`}>
+      <div className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border p-1 ${box}`}>
         <button
           type="button"
           onClick={() => nudge(-15)}
@@ -147,7 +147,7 @@ function StepperHM({
         >
           −
         </button>
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-1">
           <input
             type="number"
             inputMode="numeric"
@@ -261,12 +261,13 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
-        // Altezza CAPATA a schermo (mai sbordare) + colonne min-w-0. Con tanti
-        // cantieri il corpo scrolla (min-h-0 sul body), il footer "Salva" resta
-        // fisso in fondo. Non cresce a caso: si ferma al bordo e scorre.
-        className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-1rem)] grid-cols-[minmax(0,1fr)] flex-col gap-0 overflow-x-hidden p-0 sm:max-w-[520px]"
+        // Altezza CAPATA all'AREA VISIBILE (sottrae le safe-area: con
+        // viewport-fit=cover, 100dvh include status bar e home-indicator → un
+        // dialog centrato ci sborderebbe sopra/sotto). Header/body/footer con
+        // shrink-0/min-h-0 → il corpo scrolla, i bordi non crescono mai.
+        className="flex max-h-[calc(100dvh-env(safe-area-inset-top,0px)-env(safe-area-inset-bottom,0px)-2rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[520px]"
       >
-        <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
+        <DialogHeader className="shrink-0 border-b border-border px-4 py-3 sm:px-6">
           <DialogTitle>Modifica giornata</DialogTitle>
           <p className="text-xs capitalize text-muted-foreground">{fmtGiorno(data)}</p>
         </DialogHeader>
@@ -396,8 +397,8 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
           )}
         </div>
 
-        {/* Footer sticky con azione primaria */}
-        <div className="sticky bottom-0 flex flex-col gap-2 border-t border-border bg-background px-4 py-3 sm:flex-row-reverse sm:px-6">
+        {/* Footer fisso in fondo (shrink-0), safe-area aware */}
+        <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row-reverse sm:px-6">
           <Button
             type="button"
             onClick={handleSalva}

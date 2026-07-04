@@ -58,13 +58,18 @@ export function CantieriBrowser({
   );
 
   const filtrati = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    // Ricerca a TOKEN cross-campo (come il picker): ogni parola deve comparire
+    // nel "pagliaio" di tutti i campi uniti → "fincantieri monf" trova
+    // "Fincantieri … Monfalcone" anche con le parole in campi diversi.
+    const tokens = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return cantieri.filter((c) => {
       if (cat && c.categoria !== cat) return false;
-      if (!needle) return true;
-      return [c.nome, c.codice_commessa, c.codice, c.cliente_nome, c.indirizzo]
+      if (tokens.length === 0) return true;
+      const hay = [c.nome, c.codice_commessa, c.codice, c.cliente_nome, c.indirizzo, c.categoria]
         .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(needle));
+        .join(' ')
+        .toLowerCase();
+      return tokens.every((t) => hay.includes(t));
     });
   }, [q, cat, cantieri]);
 
