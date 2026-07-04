@@ -98,6 +98,23 @@ La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semp
 - **Landing mobile role-based nel MIDDLEWARE, non nel render.** `/mobile` → `/mobile/kantiere/cruscotto` (admin/office) o `/cantieri` (tecnici) è un **redirect HTTP** in `middleware.ts` (`resolveMobileLanding` in `packages/api/src/server.ts`), scoped al solo `/mobile`, fail-soft. ⚠️ NON rimettere il `redirect()` dentro `mobile/page.tsx` (resta lì solo come fallback): un `redirect()` in un Server Component sotto `<Suspense>` innesca il **bug Next.js #63121 → React #310 transitorio** (schermata "Errore critico" all'avvio a freddo, visibile SOLO sui tenant kantiere perché solo loro rediregono). Vedi memoria `project-pwa-chunk-reload`.
 - **Fluidità PWA**: ogni rotta mobile `force-dynamic` deve avere un `loading.tsx` skeleton (helper `apps/web/app/mobile/_components/skeletons.tsx`) → al tap tab compare subito lo skeleton invece di restare fermi. Transizione pagina in `apps/web/app/mobile/template.tsx` (`animate-page-in`, fill-mode **`backwards`** per non lasciare transform residui che romperebbero elementi `position:fixed`). Mai `Date.now()`/`new Date()` in `useState(initializer)` o direttamente nel render di un client component SSRato (mismatch di hydration): seed deterministico da una prop, poi tempo reale in `useEffect`.
 
+#### Turno manuale (no QR) + multi-cantiere + pattern UI mobile (lug 2026)
+
+**Funzioni** (gated kantiere → Bertaiola-safe): **avvio turno senza QR** (scegli un cantiere qualsiasi), **cambia cantiere** live (chiude A/apre B → ore dai timestamp reali + km A→B alla destinazione via provider tenant, tratta manuale `durata=0`), **picker cantiere** riusabile (`mobile/kantiere/_components/cantiere-picker.tsx`), **"Abitazione privata"** a fine turno (0 km/0 tempo), card turno prop **`compatto`** (CTA orizzontali 33/33/33, usata sul cruscotto office), **"Cantieri di oggi"** in tab Ore (mini-tabella), **"Modifica giornata"** con ore **editabili** (input tap-and-type + −/+ 15min). Azioni in `_actions/kantiere-timbra.ts` (`avviaTurnoMio`, `cambiaCantiereMio`, `elencoCantieriTurno`).
+
+**Conteggio ore (regola ferrea)**: `ricomputaRapportinoAuto` **ri-deriva SEMPRE le righe dalle timbrature** (cancella + ricostruisce). Quindi lo split ore/cantiere "regge" solo se fatto di **segmenti timbrati reali** → è ciò che produce lo **switch live**. Uno split retroattivo ("cosa hai fatto oggi") dovrà **sintetizzare segmenti additivi** tra ingresso e uscita, non scrivere `rapportino_righe` (verrebbero sovrascritte).
+
+**Ricerca cantieri = a TOKEN cross-campo** (usata sia nel picker sia nella tab Cantieri): `q.trim().toLowerCase().split(/\s+/)` e **ogni token** deve comparire in `[nome, codice_commessa, codice, cliente_nome, indirizzo, categoria].join(' ')` → "fincantieri monf" trova "Fincantieri … Monfalcone" anche con le parole in campi diversi. Non usare più il match single-field.
+
+**Gotcha UI mobile (dialog/dropdown/foglio) — imparati risolvendo bug reali** (verificati riproducendo in Chrome headless):
+- **Overflow orizzontale "form gigante"**: un `DialogContent` `display:grid` ha grid item con `min-width:auto` (= min-content); un titolo `truncate` (nowrap) allarga il *track* della griglia → tutto sborda. Fix: `min-w-0` sul grid item (+ eventualmente `grid-cols-[minmax(0,1fr)]`), `overflow-x-hidden`, `min-w-0` su tutta la catena, testi troncati.
+- **Scroll che non ingaggia / dialog che cresce**: a `flex-1 overflow-y-auto` serve un antenato ad **altezza definita** e **`min-h-0`** sul figlio flex. Struttura header (`shrink-0`) · body (`min-h-0 flex-1 overflow-y-auto`) · footer (`shrink-0`).
+- **Dialog che sborda su/sotto**: con `viewport-fit=cover`, `100dvh` include status bar e home-indicator → il `max-h` deve **sottrarre `env(safe-area-inset-top/bottom)`**.
+- **Zoom iOS all'apertura**: input con font < 16px → WebKit zooma la pagina. Globals già forza 16px sui form field; per input custom usare `text-base`.
+- **Elemento nascosto sotto la bottom-nav**: un `fixed` dentro la shell resta intrappolato nello stacking context → **`createPortal` su body + z alto** (pattern `Portal`, `mobile/_components/portal.tsx`).
+- **Tastiera che copre i tasti**: aggancia alla **`visualViewport`** (spaziatore bianco = altezza tastiera, oppure restringi il foglio).
+- **Dropdown dentro un dialog Radix**: usare un **overlay assoluto in-flow** (NON un Portal: Radix lo tratterebbe come "fuori" → chiude il dialog / ruba il focus).
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione
