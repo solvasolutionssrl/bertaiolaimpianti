@@ -96,9 +96,16 @@ function messaggioErrore(code: string): string {
   }
 }
 
-// ── stepper ore H:MM (−/+ 15 min) ────────────────────────────────────────────
-// Compatto: due per riga (Lavoro · Viaggio). Sensibilità 15 min (scelta di
-// prodotto). Display sola lettura; l'ufficio corregge al minuto se serve.
+function clampInt(v: string, min: number, max: number): number {
+  const n = parseInt(v, 10);
+  if (Number.isNaN(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+// ── stepper ore editabile (tap e scrivi + −/+ 15 min) ────────────────────────
+// Due per riga (Lavoro · Viaggio). I numeri sono INPUT (si scrivono a mano →
+// qualsiasi valore, es. da 0:32); i tasti −/+ nudge di 15 min. Label "h"/"min"
+// così è chiaro cosa sono i numeri.
 
 function StepperHM({
   label,
@@ -121,28 +128,57 @@ function StepperHM({
     onChange(Math.floor(t / 60), t % 60);
   };
   const box = tone === 'travel' ? 'border-sky-200 bg-sky-50/70' : 'border-border bg-muted/40';
+  const inputCls =
+    'w-9 rounded border border-border bg-background px-0.5 py-1 text-center font-mono text-sm font-semibold tabular-nums text-foreground focus:border-primary focus:outline-none disabled:opacity-50';
+  const btnCls =
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-lg font-semibold text-foreground active:scale-95 disabled:opacity-40';
   return (
-    <div className="min-w-0 space-y-1">
-      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
-      <div className={`flex items-center gap-1 rounded-lg border p-1 ${box}`}>
+    <div className="flex items-center gap-2">
+      <span className="w-14 shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {label}
+      </span>
+      <div className={`flex min-w-0 flex-1 items-center gap-1 rounded-lg border p-1 ${box}`}>
         <button
           type="button"
           onClick={() => nudge(-15)}
           disabled={disabled || total <= 0}
           aria-label={`${label} meno 15 minuti`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-lg font-semibold text-foreground active:scale-95 disabled:opacity-40"
+          className={btnCls}
         >
           −
         </button>
-        <span className="min-w-0 flex-1 text-center font-mono text-sm font-bold tabular-nums text-foreground">
-          {h}:{String(m).padStart(2, '0')}
-        </span>
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-1">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={23}
+            value={h}
+            onChange={(e) => onChange(clampInt(e.target.value, 0, 23), m)}
+            disabled={disabled}
+            aria-label={`${label} ore`}
+            className={inputCls}
+          />
+          <span className="text-[11px] font-semibold text-muted-foreground">h</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={59}
+            value={String(m).padStart(2, '0')}
+            onChange={(e) => onChange(h, clampInt(e.target.value, 0, 59))}
+            disabled={disabled}
+            aria-label={`${label} minuti`}
+            className={inputCls}
+          />
+          <span className="text-[11px] font-semibold text-muted-foreground">min</span>
+        </div>
         <button
           type="button"
           onClick={() => nudge(15)}
           disabled={disabled}
           aria-label={`${label} più 15 minuti`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-lg font-semibold text-foreground active:scale-95 disabled:opacity-40"
+          className={btnCls}
         >
           +
         </button>
@@ -265,7 +301,7 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                       <p className="truncate text-[13px] font-semibold text-foreground">
                         {r.target_label || 'Cantiere'}
                       </p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="mt-2 space-y-1.5">
                         <StepperHM
                           label="Lavoro"
                           tone="work"

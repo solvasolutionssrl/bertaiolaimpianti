@@ -409,23 +409,35 @@ export function OreClient({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Cantieri di oggi: riepilogo compatto se ha cambiato cantiere ── */}
+      {/* ── Cantieri di oggi: mini-tabella (nome in grassetto + Lavoro/Viaggio) ── */}
       {cantieriOggi.length >= 2 ? (
         <section className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Cantieri di oggi
           </p>
-          <ul className="mt-2 space-y-1.5">
+          <div className="mt-2 overflow-hidden rounded-lg border border-border">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 border-b border-border bg-muted/40 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>Commessa</span>
+              <span className="text-right">Lavoro</span>
+              <span className="text-right">Viaggio</span>
+            </div>
             {cantieriOggi.map((c) => (
-              <li key={c.key} className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-sm text-foreground">{titoloCase(c.label)}</span>
-                <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
-                  {fmtOre(c.lavoro)}
-                  {c.viaggio > 0 ? <span className="text-sky-600"> · {fmtOre(c.viaggio)} vg</span> : null}
+              <div
+                key={c.key}
+                className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 border-b border-border/50 px-3 py-2 last:border-0"
+              >
+                <span className="min-w-0 truncate text-[13px] font-semibold text-foreground">
+                  {titoloCase(c.label)}
                 </span>
-              </li>
+                <span className="text-right font-mono text-xs tabular-nums text-foreground">
+                  {fmtOre(c.lavoro)}
+                </span>
+                <span className="text-right font-mono text-xs tabular-nums text-sky-600">
+                  {fmtOre(c.viaggio)}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         </section>
       ) : null}
 
