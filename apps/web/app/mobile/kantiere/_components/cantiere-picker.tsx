@@ -93,7 +93,9 @@ export function CantiereSearchList({
             onChange={(e) => setQ(e.target.value)}
             placeholder="Cerca per codice, cliente, nome, indirizzo..."
             aria-label="Cerca cantiere"
-            className="h-12 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 shadow-soft focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            // font 16px OBBLIGATORIO: sotto i 16px iOS zooma la pagina al focus
+            // (dialog gigante). `text-base` = 16px → niente auto-zoom.
+            className="h-12 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-base text-foreground placeholder:text-muted-foreground/60 shadow-soft focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
         {q.trim() ? (
@@ -298,10 +300,11 @@ export function CantierePicker({
       </button>
 
       {open ? (
-        <div className="mt-1.5 flex max-h-[55vh] min-h-[12rem] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+        <div className="mt-1.5 flex max-h-[50vh] min-h-[11rem] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-lg">
           <CantiereSearchList
             cantieri={cantieri}
             selectedId={value}
+            autoFocus={false}
             onPick={(id) => {
               onChange(id);
               setOpen(false);
