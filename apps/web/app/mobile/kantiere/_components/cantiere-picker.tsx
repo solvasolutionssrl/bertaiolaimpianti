@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Search, ChevronDown, MapPin, User, Check, X } from 'lucide-react';
+import { Search, ChevronDown, Check, X } from 'lucide-react';
 
 import { Portal } from '@/app/mobile/_components/portal';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -13,18 +13,20 @@ import {
 
 /**
  * Pacchetto ricerca cantiere riusabile ovunque serva SCEGLIERE un cantiere
- * (dialog ore a mano, avvio turno, cambio cantiere). Due esportazioni:
+ * (dialog ore a mano, avvio turno, cambio cantiere). Tre esportazioni:
  *
  *  - `CantiereSearchList` — casella di ricerca + lista filtrata (codice cliente,
- *    codice interno, nome, cliente, indirizzo — come la tab Cantieri). Presentazionale:
- *    chiama `onPick(id)`. Riusata da tutti i fogli.
- *  - `CantierePicker` — controllo da FORM: un pulsante-trigger (nessun autofocus,
- *    quindi niente lista che si apre da sola) che apre un FOGLIO full-screen (Portal
- *    su body) con la `CantiereSearchList`. Sostituisce le vecchie `<select>`.
+ *    codice interno, nome, cliente, indirizzo). Card COMPATTE (2 righe, font
+ *    piccolo) così ne stanno di più del solito. Presentazionale: `onPick(id)`.
+ *  - `CantiereSearchSheet` — foglio full-screen in Portal (flussi standalone).
+ *  - `CantierePicker` — controllo da FORM: bottone-trigger + pannello dropdown
+ *    INLINE (dentro il dialog: niente Portal annidato che Radix chiuderebbe).
  *
- * NB sul bug focus (iPhone): la vecchia `<select>` era il primo elemento focusabile
- * del dialog → Radix la focalizzava all'apertura, spalancando la lista. Qui il primo
- * focusabile è un semplice BOTTONE: la ricerca (con tastiera) si apre solo al tap.
+ * REGOLE ANTI-OVERFLOW (il bug del "form gigante"): la lista scrolla SOLO in
+ * verticale (`overflow-y-auto overflow-x-hidden`); tutta la catena ha `min-w-0`
+ * e i testi troncano → nessuna card più larga del contenitore. L'altezza del
+ * pannello è DEFINITA (`h-...`, non `max-h`) perché a `flex-1 overflow` serve un
+ * antenato con altezza definita.
  */
 
 export interface PickerCantiere {
@@ -44,7 +46,7 @@ function matchCantiere(c: PickerCantiere, needle: string): boolean {
     .some((v) => (v as string).toLowerCase().includes(needle));
 }
 
-// ── lista di ricerca (condivisa) ─────────────────────────────────────────────
+// ── lista di ricerca (condivisa) — card COMPATTE ─────────────────────────────
 
 export function CantiereSearchList({
   cantieri,
@@ -62,8 +64,6 @@ export function CantiereSearchList({
   const [q, setQ] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Il focus va dato SOLO qui dentro (foglio aperto da un tap dell'utente),
-  // mai da un dialog che si apre: così la tastiera compare quando serve.
   useEffect(() => {
     if (autoFocus) {
       const t = setTimeout(() => inputRef.current?.focus(), 60);
@@ -77,12 +77,12 @@ export function CantiereSearchList({
   }, [q, cantieri]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* Ricerca */}
-      <div className="px-4 pb-2 pt-1">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      {/* Ricerca (font 16px = niente auto-zoom iOS) */}
+      <div className="shrink-0 px-3 pb-2 pt-1">
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <input
@@ -91,79 +91,60 @@ export function CantiereSearchList({
             inputMode="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Cerca per codice, cliente, nome, indirizzo..."
+            placeholder="Cerca codice, cliente, nome..."
             aria-label="Cerca cantiere"
-            // font 16px OBBLIGATORIO: sotto i 16px iOS zooma la pagina al focus
-            // (dialog gigante). `text-base` = 16px → niente auto-zoom.
-            className="h-12 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-base text-foreground placeholder:text-muted-foreground/60 shadow-soft focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="h-11 w-full min-w-0 rounded-lg border border-border bg-background pl-8 pr-2.5 text-base text-foreground placeholder:text-muted-foreground/60 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        {q.trim() ? (
-          <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
-            {filtrati.length} {filtrati.length === 1 ? 'risultato' : 'risultati'}
-          </p>
-        ) : null}
       </div>
 
-      {/* Lista */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      {/* Lista: scroll SOLO verticale (x bloccato) */}
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pb-3">
         {filtrati.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border bg-muted/20 p-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
             {q.trim() ? 'Nessun cantiere trovato.' : emptyLabel}
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="space-y-1.5">
             {filtrati.map((c) => {
               const codice = codiceCantiereMostrato(c);
               const attivo = selectedId === c.id;
               return (
-                <li key={c.id}>
+                <li key={c.id} className="min-w-0">
                   <button
                     type="button"
                     onClick={() => onPick(c.id)}
                     className={[
-                      'flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left shadow-soft transition-transform active:scale-[0.99]',
+                      'flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors',
                       attivo
                         ? 'border-primary bg-primary/5'
-                        : 'border-border bg-card hover:bg-muted/40',
+                        : 'border-border bg-card active:bg-muted/50',
                     ].join(' ')}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
+                    <span className="min-w-0 flex-1 overflow-hidden">
+                      <span className="block truncate text-[13px] font-medium leading-tight text-foreground">
                         {titoloCase(c.nome ?? '') || codice || 'Cantiere'}
                       </span>
-                      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                      <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+                        {codice ? (
+                          <span className="shrink-0 font-mono font-semibold text-primary">{codice}</span>
+                        ) : null}
                         {c.cliente_nome ? (
-                          <span className="inline-flex min-w-0 items-center gap-0.5">
-                            <User className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-                            <span className="truncate">{titoloCase(c.cliente_nome)}</span>
+                          <span className="min-w-0 truncate">
+                            {codice ? '· ' : ''}
+                            {titoloCase(c.cliente_nome)}
                           </span>
                         ) : null}
                         {c.categoria ? (
                           <span
-                            className={`rounded-full border px-1.5 py-px text-[10px] font-medium ${categoriaTono(c.categoria)}`}
+                            className={`shrink-0 rounded-full border px-1 py-px text-[9px] font-medium ${categoriaTono(c.categoria)}`}
                           >
                             {categoriaLabel(c.categoria)}
                           </span>
                         ) : null}
-                        {c.indirizzo ? (
-                          <span className="inline-flex min-w-0 items-center gap-0.5">
-                            <MapPin className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-                            <span className="truncate">{c.indirizzo}</span>
-                          </span>
-                        ) : null}
                       </span>
                     </span>
-                    <span className="flex shrink-0 flex-col items-end gap-1.5">
-                      {codice ? (
-                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-primary">
-                          {codice}
-                        </span>
-                      ) : null}
-                      {attivo ? (
-                        <Check className="h-4 w-4 text-primary" aria-hidden="true" />
-                      ) : null}
-                    </span>
+                    {attivo ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" /> : null}
                   </button>
                 </li>
               );
@@ -192,7 +173,6 @@ export function CantiereSearchSheet({
   selectedId?: string | null;
   onPick: (id: string) => void;
   onClose: () => void;
-  /** Barra azioni sticky in fondo (es. "Avvia turno su X"). */
   footer?: React.ReactNode;
 }) {
   useEffect(() => {
@@ -208,9 +188,12 @@ export function CantiereSearchSheet({
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-[80] flex flex-col bg-background" role="dialog" aria-modal="true">
-        {/* Header */}
-        <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur">
+      <div
+        className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-background"
+        role="dialog"
+        aria-modal="true"
+      >
+        <header className="flex shrink-0 items-center gap-2 border-b border-border bg-background px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <button
             type="button"
             onClick={onClose}
@@ -219,13 +202,15 @@ export function CantiereSearchSheet({
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
-          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+          <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">{title}</h2>
         </header>
 
-        <CantiereSearchList cantieri={cantieri} selectedId={selectedId} onPick={onPick} />
+        <div className="min-h-0 flex-1">
+          <CantiereSearchList cantieri={cantieri} selectedId={selectedId} onPick={onPick} />
+        </div>
 
         {footer ? (
-          <div className="sticky bottom-0 border-t border-border bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
+          <div className="shrink-0 border-t border-border bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {footer}
           </div>
         ) : null}
@@ -234,12 +219,7 @@ export function CantiereSearchSheet({
   );
 }
 
-// ── controllo da FORM (trigger + combobox INLINE) ────────────────────────────
-// NB: inline (non Portal) di proposito. Il picker è usato ANCHE dentro un Radix
-// Dialog (dialog "ore a mano"): un foglio in Portal starebbe FUORI dal dialog →
-// Radix lo chiuderebbe al tap e ruberebbe il focus alla ricerca. Inline sta
-// dentro lo scope del dialog → nessun conflitto. I flussi standalone
-// (Inizia/Cambia turno) usano invece `CantiereSearchSheet` (nessun dialog padre).
+// ── controllo da FORM (trigger + dropdown INLINE) ────────────────────────────
 
 export function CantierePicker({
   cantieri,
@@ -259,7 +239,6 @@ export function CantierePicker({
   const selected = value ? cantieri.find((c) => c.id === value) ?? null : null;
   const codice = selected ? codiceCantiereMostrato(selected) : null;
 
-  // Chiudi al click fuori (dentro il dialog: document mousedown funziona).
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -270,14 +249,14 @@ export function CantierePicker({
   }, [open]);
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="w-full min-w-0">
       <button
         type="button"
         onClick={() => !disabled && setOpen((v) => !v)}
         disabled={disabled}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/40 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/40 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
       >
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1 overflow-hidden">
           {selected ? (
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate font-medium text-foreground">
@@ -290,7 +269,7 @@ export function CantierePicker({
               ) : null}
             </span>
           ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
+            <span className="truncate text-muted-foreground">{placeholder}</span>
           )}
         </span>
         <ChevronDown
@@ -299,8 +278,9 @@ export function CantierePicker({
         />
       </button>
 
+      {/* Dropdown IN-FLOW ad altezza DEFINITA (non max-h): serve a flex-1+scroll. */}
       {open ? (
-        <div className="mt-1.5 flex max-h-[50vh] min-h-[11rem] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+        <div className="mt-1.5 h-[42vh] w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
           <CantiereSearchList
             cantieri={cantieri}
             selectedId={value}

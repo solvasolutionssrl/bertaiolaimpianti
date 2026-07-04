@@ -462,7 +462,8 @@ export function ManualeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent>
+      <DialogContent className="overflow-x-hidden">
+
         <DialogHeader>
           <DialogTitle>Aggiungi ore a mano</DialogTitle>
         </DialogHeader>
