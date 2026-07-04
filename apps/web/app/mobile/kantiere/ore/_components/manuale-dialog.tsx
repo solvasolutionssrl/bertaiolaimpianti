@@ -462,59 +462,66 @@ export function ManualeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      {/* grid-cols-[minmax(0,1fr)]: il DialogContent è `display:grid` e i grid
-          item hanno `min-width:auto` (= min-content). Un contenuto nowrap
-          (titoli cantiere `truncate`) forza il track oltre la larghezza del
-          dialog → tutto si allarga e scrolla in orizzontale. `minmax(0,1fr)`
-          azzera il minimo del track. + overflow-x-hidden come rete. */}
-      <DialogContent className="grid-cols-[minmax(0,1fr)] overflow-x-hidden">
+      {/* Modulo strutturato: header · contenuto (unico blocco scrollabile, così
+          il dropdown assoluto del picker non viene tagliato) · footer coi tasti
+          in basso (mt-auto). `min-h` = modulo più alto e arioso. flex (non grid)
+          → niente crescita da min-content; overflow-x-hidden come rete. */}
+      <DialogContent className="flex min-h-[64vh] flex-col gap-3 overflow-x-hidden">
 
-        <DialogHeader>
+        <DialogHeader className="shrink-0 pr-8 text-left">
           <DialogTitle>Aggiungi ore a mano</DialogTitle>
+          <p className="text-xs text-muted-foreground">
+            Giornata senza timbrature: scegli il cantiere e indica le ore.
+          </p>
         </DialogHeader>
 
-        <div className="space-y-4 pt-1">
-          {/* Cantiere — picker con ricerca (niente più lista che si apre da
-              sola all'apertura del dialog: si apre solo al tap). min-w-0: grid
-              item, così il track non cresce sul contenuto nowrap del dropdown. */}
-          <div className="min-w-0 space-y-1.5">
-            <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Cantiere <span className="text-destructive">*</span>
-            </label>
-            <CantierePicker
-              cantieri={cantieri}
-              value={cantiereId || null}
-              onChange={handleCantiereChange}
-              placeholder={cantieri.length === 0 ? 'Nessun cantiere disponibile' : 'Scegli cantiere'}
-              disabled={isPending || cantieri.length === 0}
-            />
-          </div>
-
-          {/* Ore di lavoro — un solo campo, lo split lo fa l'ufficio */}
-          <div className="space-y-1.5">
-            <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-              Ore di lavoro <span className="text-destructive">*</span>
-            </label>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={0}
-              max={24}
-              step={0.5}
-              value={oreLavoro}
-              onChange={(e) => { setOreLavoro(clampOre(parseFloat(e.target.value))); setErrore(null); }}
-              disabled={isPending}
-              className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-center font-mono text-base tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-            />
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Indica le ore di lavoro totali. Ordinario e straordinario li calcola l&apos;ufficio.
+        <div className="min-w-0 space-y-3">
+          {/* Gruppo GIORNATA: Cantiere + Ore */}
+          <div className="min-w-0 space-y-3 rounded-xl border border-border bg-muted/25 p-3">
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
+              Giornata
             </p>
+
+            {/* Cantiere — picker con ricerca (si apre solo al tap). */}
+            <div className="min-w-0 space-y-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Cantiere <span className="text-destructive">*</span>
+              </label>
+              <CantierePicker
+                cantieri={cantieri}
+                value={cantiereId || null}
+                onChange={handleCantiereChange}
+                placeholder={cantieri.length === 0 ? 'Nessun cantiere disponibile' : 'Scegli cantiere'}
+                disabled={isPending || cantieri.length === 0}
+              />
+            </div>
+
+            {/* Ore di lavoro — un solo campo, lo split lo fa l'ufficio */}
+            <div className="space-y-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Ore di lavoro <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={24}
+                step={0.5}
+                value={oreLavoro}
+                onChange={(e) => { setOreLavoro(clampOre(parseFloat(e.target.value))); setErrore(null); }}
+                disabled={isPending}
+                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-center font-mono text-base tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+              />
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Ore di lavoro totali. Ordinario e straordinario li calcola l&apos;ufficio.
+              </p>
+            </div>
           </div>
 
           {/* Viaggi */}
           {sedi.length > 0 && (
             <div className="space-y-2">
-              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                 Viaggio (opzionale)
               </p>
               <TrattaSection
@@ -544,27 +551,28 @@ export function ManualeDialog({
               {errore}
             </p>
           )}
+        </div>
 
-          {/* Bottoni */}
-          <div className="flex flex-col gap-2 pt-1">
-            <Button
-              type="button"
-              onClick={handleRegistra}
-              disabled={isPending || cantieri.length === 0}
-              className="w-full"
-            >
-              {isPending ? 'Registrazione...' : 'Registra'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isPending}
-              className="w-full"
-            >
-              Annulla
-            </Button>
-          </div>
+        {/* Footer coi tasti in basso (mt-auto spinge in fondo quando il
+            contenuto è corto). */}
+        <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+          <Button
+            type="button"
+            onClick={handleRegistra}
+            disabled={isPending || cantieri.length === 0}
+            className="w-full"
+          >
+            {isPending ? 'Registrazione...' : 'Registra'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleClose}
+            disabled={isPending}
+            className="w-full"
+          >
+            Annulla
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

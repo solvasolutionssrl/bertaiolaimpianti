@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Search, ChevronDown, Check, X } from 'lucide-react';
+import { Search, ChevronDown, Check, X, MapPin } from 'lucide-react';
 
 import { Portal } from '@/app/mobile/_components/portal';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -39,11 +39,20 @@ export interface PickerCantiere {
   categoria: string | null;
 }
 
+/**
+ * Ricerca a TOKEN cross-campo: la query si spezza in parole e OGNI parola deve
+ * comparire nel "pagliaio" (tutti i campi uniti). Così "fincantieri mon" trova
+ * "Fincantieri Monfalcone" anche se le due parole stanno in campi diversi
+ * (es. cliente + nome/indirizzo). `needle` è già trim+lowercase.
+ */
 function matchCantiere(c: PickerCantiere, needle: string): boolean {
   if (!needle) return true;
-  return [c.nome, c.codice_commessa, c.codice, c.cliente_nome, c.indirizzo]
+  const hay = [c.nome, c.codice_commessa, c.codice, c.cliente_nome, c.indirizzo, c.categoria]
     .filter(Boolean)
-    .some((v) => (v as string).toLowerCase().includes(needle));
+    .join(' ')
+    .toLowerCase();
+  const tokens = needle.split(/\s+/).filter(Boolean);
+  return tokens.every((t) => hay.includes(t));
 }
 
 // ── lista di ricerca (condivisa) — card COMPATTE ─────────────────────────────
@@ -115,7 +124,7 @@ export function CantiereSearchList({
                     type="button"
                     onClick={() => onPick(c.id)}
                     className={[
-                      'flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors',
+                      'flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors',
                       attivo
                         ? 'border-primary bg-primary/5'
                         : 'border-border bg-card active:bg-muted/50',
@@ -125,7 +134,7 @@ export function CantiereSearchList({
                       <span className="block truncate text-[13px] font-medium leading-tight text-foreground">
                         {titoloCase(c.nome ?? '') || codice || 'Cantiere'}
                       </span>
-                      <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+                      <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
                         {codice ? (
                           <span className="shrink-0 font-mono font-semibold text-primary">{codice}</span>
                         ) : null}
@@ -143,6 +152,12 @@ export function CantiereSearchList({
                           </span>
                         ) : null}
                       </span>
+                      {c.indirizzo ? (
+                        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-muted-foreground/90">
+                          <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          <span className="min-w-0 truncate">{c.indirizzo}</span>
+                        </span>
+                      ) : null}
                     </span>
                     {attivo ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" /> : null}
                   </button>
@@ -279,10 +294,12 @@ export function CantierePicker({
       </button>
 
       {/* Dropdown ASSOLUTO: si sovrappone ai campi sotto (non allunga il dialog).
-          Altezza DEFINITA (~4 card poi scorre) — non max-h, che romperebbe il
-          flex-1+scroll interno. z-30 per stare sopra i campi seguenti. */}
+          Altezza DEFINITA (~4 card con indirizzo, poi scorre) — non max-h, che
+          romperebbe il flex-1+scroll interno. z-30 sopra i campi seguenti.
+          Sfondo azzurrino (non bianco) → si capisce che è un dropdown e stacca
+          dal modulo; le card bianche dentro risaltano. */}
       {open ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 h-72 w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 h-[24rem] w-full min-w-0 overflow-hidden rounded-xl border border-sky-200 bg-sky-50 shadow-xl dark:border-sky-800 dark:bg-sky-950/50">
           <CantiereSearchList
             cantieri={cantieri}
             selectedId={value}
