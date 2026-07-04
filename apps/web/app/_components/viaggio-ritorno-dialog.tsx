@@ -2,8 +2,11 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Car, Loader2, Utensils, X } from 'lucide-react';
+import { MapPin, Car, Loader2, Utensils, X, Home } from 'lucide-react';
 import { Button } from '@kommessa/ui';
+
+/** Sentinel: "rientro a casa" → nessun viaggio di lavoro (0 km, 0 tempo). */
+const CASA_ID = '__casa__';
 
 // ─── tipi ─────────────────────────────────────────────────────────────────────
 
@@ -150,7 +153,8 @@ export function ViaggioRitornoDialog({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const modificato = stimaMin != null && confermMin !== stimaMin;
+  const casa = sedeId === CASA_ID;
+  const modificato = !casa && stimaMin != null && confermMin !== stimaMin;
   const giustObbligatoria = modificato;
 
   async function calcolaStima(targetSedeId: string) {
@@ -184,6 +188,15 @@ export function ViaggioRitornoDialog({
   function selezionaSede(id: string) {
     setSedeId(id);
     setGiustificazione('');
+    setErrLocale(null);
+    if (id === CASA_ID) {
+      // Rientro a casa: nessun viaggio di lavoro → 0 km, 0 tempo, niente stima.
+      setStimaMin(null);
+      setStimaKm(null);
+      setConfermMin(0);
+      setStimaLoading(false);
+      return;
+    }
     void calcolaStima(id);
   }
 
@@ -199,9 +212,10 @@ export function ViaggioRitornoDialog({
 
   function handleConferma() {
     setErrLocale(null);
-    if (usaViaggio) {
+    // Casa = nessun viaggio: si salta ogni validazione viaggio.
+    if (usaViaggio && !casa) {
       if (!sedeId) {
-        setErrLocale('Seleziona la sede di partenza.');
+        setErrLocale('Seleziona dove vai adesso.');
         return;
       }
       if (confermMin <= 0) {
@@ -216,17 +230,18 @@ export function ViaggioRitornoDialog({
     startTransition(async () => {
       setErroreMsg(null);
       const res = await onConfirm({
-        viaggio: usaViaggio
-          ? {
-              sedeId,
-              durataStimataMin: stimaMin,
-              durataConfermataMin: confermMin,
-              giustificazione: giustificazione.trim() || undefined,
-              autista,
-              mezzoId: autista ? mezzoId || null : null,
-              distanzaKm: stimaKm,
-            }
-          : null,
+        viaggio:
+          usaViaggio && !casa
+            ? {
+                sedeId,
+                durataStimataMin: stimaMin,
+                durataConfermataMin: confermMin,
+                giustificazione: giustificazione.trim() || undefined,
+                autista,
+                mezzoId: autista ? mezzoId || null : null,
+                distanzaKm: stimaKm,
+              }
+            : null,
         pausaPranzoMin: pausaPrompt && pausaFatta ? pausaMin : undefined,
       });
       if (res.ok) onOpenChange(false);
@@ -296,9 +311,34 @@ export function ViaggioRitornoDialog({
                       </span>
                     </button>
                   ))}
+                  {/* Rientro a casa: sempre disponibile → 0 km, 0 tempo. */}
+                  <button
+                    type="button"
+                    onClick={() => selezionaSede(CASA_ID)}
+                    className={[
+                      'flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
+                      casa
+                        ? 'border-primary bg-primary/5 font-medium text-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:bg-muted/40',
+                    ].join(' ')}
+                  >
+                    <span className="inline-flex min-w-0 items-center gap-2">
+                      <Home className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                      <span className="truncate">Abitazione privata</span>
+                    </span>
+                    <span className="ml-2 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      no viaggio
+                    </span>
+                  </button>
                 </div>
               </div>
 
+              {casa ? (
+                <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                  Rientro a casa: nessun km né tempo di viaggio da registrare.
+                </p>
+              ) : (
+                <>
               <div className="space-y-2 rounded-lg bg-muted/40 p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -392,6 +432,8 @@ export function ViaggioRitornoDialog({
                   </p>
                 )}
               </div>
+                </>
+              )}
             </>
           )}
 

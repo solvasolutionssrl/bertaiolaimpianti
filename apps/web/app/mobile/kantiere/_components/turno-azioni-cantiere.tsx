@@ -44,6 +44,8 @@ export interface TurnoAzioniCantiereProps {
   cantiereHref?: string;
   /** Card più grande e in evidenza (usata sulla home Kantiere). */
   prominente?: boolean;
+  /** Versione compatta: azioni in orizzontale 33/33/33 (usata sul cruscotto office). */
+  compatto?: boolean;
 }
 
 function ora(ts: string): string {
@@ -114,6 +116,7 @@ export function TurnoAzioniCantiere({
   cantiereNome,
   cantiereHref,
   prominente = false,
+  compatto = false,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   // Seed deterministico (inizio turno) per evitare il mismatch di hydration;
@@ -269,6 +272,45 @@ export function TurnoAzioniCantiere({
         </p>
       ) : null}
 
+      {compatto ? (
+        <div className="mt-3 space-y-2">
+          {/* CTA orizzontali 33/33/33 (o 50/50 in pausa) */}
+          <div className={`grid gap-2 ${inPausa ? 'grid-cols-2' : 'grid-cols-3'}`}>
+            {inPausa ? (
+              <button
+                type="button"
+                onClick={() => esegui(() => riprendiTurnoMio({ cantiereId }))}
+                disabled={pending}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-emerald-500 bg-emerald-600 px-1 py-2.5 text-xs font-semibold text-white active:scale-[0.97] disabled:opacity-60"
+              >
+                {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" strokeWidth={2} />}
+                Riprendi
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => esegui(() => pausaPranzoMia({ cantiereId }))}
+                disabled={pending}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-amber-300 bg-amber-100 px-1 py-2.5 text-xs font-semibold text-amber-900 active:scale-[0.97] disabled:opacity-60"
+              >
+                {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Utensils className="h-5 w-5" strokeWidth={2} />}
+                Pausa
+              </button>
+            )}
+            {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} compatto /> : null}
+            <button
+              type="button"
+              onClick={() => apriTermina(undefined)}
+              disabled={pending}
+              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-background px-1 py-2.5 text-xs font-semibold text-foreground active:scale-[0.97] hover:bg-muted disabled:opacity-60"
+            >
+              <LogOut className="h-5 w-5" strokeWidth={2} />
+              Fine turno
+            </button>
+          </div>
+          {err && <p className="text-xs text-destructive">{err}</p>}
+        </div>
+      ) : (
       <div className="mt-3 space-y-2">
         {inPausa ? (
           <button
@@ -350,6 +392,7 @@ export function TurnoAzioniCantiere({
 
         {err && <p className="text-xs text-destructive">{err}</p>}
       </div>
+      )}
 
       <ViaggioRitornoDialog
         open={dialogOpen}

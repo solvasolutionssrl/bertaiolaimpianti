@@ -383,6 +383,18 @@ export function OreClient({
   const totLavoro = totOrdinarie + totStraordinarie;
   const haOreOggi = totLavoro + totViaggio > 0;
 
+  // Riepilogo compatto "cantieri di oggi": se durante la giornata ha lavorato su
+  // più cantieri (cambio cantiere), mostra cosa ha fatto — sola lettura, utile
+  // anche a turno aperto (riflette i segmenti già chiusi), non solo "turno aperto".
+  const cantieriOggi = righe
+    .filter((r) => r.cantiere_id || r.commessa_id)
+    .map((r) => ({
+      key: r.cantiere_id ?? r.commessa_id ?? r.target_label,
+      label: r.target_label,
+      lavoro: r.ore_ordinarie + r.ore_straordinarie,
+      viaggio: r.ore_viaggio,
+    }));
+
   // Le ore si calcolano e si approvano da sole dalle timbrature: la vista del
   // tecnico è di sola lettura. L'eventuale correzione di un'anomalia la fa
   // l'ufficio. Resta disponibile solo l'inserimento manuale completo per le
@@ -397,6 +409,26 @@ export function OreClient({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* ── Cantieri di oggi: riepilogo compatto se ha cambiato cantiere ── */}
+      {cantieriOggi.length >= 2 ? (
+        <section className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Cantieri di oggi
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {cantieriOggi.map((c) => (
+              <li key={c.key} className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-sm text-foreground">{titoloCase(c.label)}</span>
+                <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                  {fmtOre(c.lavoro)}
+                  {c.viaggio > 0 ? <span className="text-sky-600"> · {fmtOre(c.viaggio)} vg</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* ── Panoramica di oggi: compare solo a turno finito (con turno in corso
              il totale è ancora 0/parziale). Pencil → rivedi/correggi. ── */}
       {!turnoInCorso && haOreOggi ? (

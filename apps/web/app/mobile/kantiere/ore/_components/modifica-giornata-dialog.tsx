@@ -96,59 +96,59 @@ function messaggioErrore(code: string): string {
   }
 }
 
-// ── input ore H:MM ────────────────────────────────────────────────────────────
+// ── stepper ore H:MM (−/+ 15 min) ────────────────────────────────────────────
+// Compatto: due per riga (Lavoro · Viaggio). Sensibilità 15 min (scelta di
+// prodotto). Display sola lettura; l'ufficio corregge al minuto se serve.
 
-function OreHM({
+function StepperHM({
   label,
+  tone,
   h,
   m,
   disabled,
   onChange,
 }: {
   label: string;
+  tone: 'work' | 'travel';
   h: number;
   m: number;
   disabled: boolean;
   onChange: (h: number, m: number) => void;
 }) {
+  const total = h * 60 + m;
+  const nudge = (delta: number) => {
+    const t = Math.max(0, Math.min(23 * 60 + 59, total + delta));
+    onChange(Math.floor(t / 60), t % 60);
+  };
+  const box = tone === 'travel' ? 'border-sky-200 bg-sky-50/70' : 'border-border bg-muted/40';
   return (
-    <div className="space-y-1">
-      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </p>
-      <div className="flex items-center gap-1.5">
-        <input
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={23}
-          value={h}
-          onChange={(e) => onChange(clampInt(e.target.value, 0, 23), m)}
+    <div className="min-w-0 space-y-1">
+      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <div className={`flex items-center gap-1 rounded-lg border p-1 ${box}`}>
+        <button
+          type="button"
+          onClick={() => nudge(-15)}
+          disabled={disabled || total <= 0}
+          aria-label={`${label} meno 15 minuti`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-lg font-semibold text-foreground active:scale-95 disabled:opacity-40"
+        >
+          −
+        </button>
+        <span className="min-w-0 flex-1 text-center font-mono text-sm font-bold tabular-nums text-foreground">
+          {h}:{String(m).padStart(2, '0')}
+        </span>
+        <button
+          type="button"
+          onClick={() => nudge(15)}
           disabled={disabled}
-          aria-label={`${label} ore`}
-          className="w-full rounded-md border border-border bg-background px-2 py-2 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-        />
-        <span className="text-sm font-semibold text-muted-foreground">:</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          min={0}
-          max={59}
-          value={String(m).padStart(2, '0')}
-          onChange={(e) => onChange(h, clampInt(e.target.value, 0, 59))}
-          disabled={disabled}
-          aria-label={`${label} minuti`}
-          className="w-full rounded-md border border-border bg-background px-2 py-2 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-        />
+          aria-label={`${label} più 15 minuti`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-lg font-semibold text-foreground active:scale-95 disabled:opacity-40"
+        >
+          +
+        </button>
       </div>
     </div>
   );
-}
-
-function clampInt(v: string, min: number, max: number): number {
-  const n = parseInt(v, 10);
-  if (isNaN(n)) return min;
-  return Math.max(min, Math.min(max, n));
 }
 
 // ── componente principale ─────────────────────────────────────────────────────
@@ -225,17 +225,19 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
-        // Foglio quasi full-screen su mobile, modale centrato su desktop.
-        // Il footer "Salva" resta sticky in fondo al contenitore scrollabile.
-        className="flex max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 p-0 sm:max-w-[560px]"
+        // Altezza CAPATA a schermo (mai sbordare) + colonne min-w-0. Con tanti
+        // cantieri il corpo scrolla (min-h-0 sul body), il footer "Salva" resta
+        // fisso in fondo. Non cresce a caso: si ferma al bordo e scorre.
+        className="flex max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-1rem)] grid-cols-[minmax(0,1fr)] flex-col gap-0 overflow-x-hidden p-0 sm:max-w-[520px]"
       >
         <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
           <DialogTitle>Modifica giornata</DialogTitle>
           <p className="text-xs capitalize text-muted-foreground">{fmtGiorno(data)}</p>
         </DialogHeader>
 
-        {/* Body scrollabile */}
-        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+        {/* Body scrollabile (min-h-0 = il flex-1 può restringersi e scrollare
+            invece di far sbordare il dialog). */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6">
           {loading ? (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" /> Caricamento...
@@ -253,29 +255,28 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                   Nessuna ora registrata per questa giornata.
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
+                  {/* Un cantiere = una riga: Lavoro · Viaggio inline con −/+ */}
                   {righe.map((r, idx) => (
                     <div
                       key={r.cantiere_id ?? r.commessa_id ?? idx}
-                      className="space-y-2.5 rounded-xl border border-border bg-card p-3 shadow-soft"
+                      className="min-w-0 rounded-xl border border-border bg-card p-2.5 shadow-soft"
                     >
-                      <p className="truncate text-sm font-semibold text-foreground">
+                      <p className="truncate text-[13px] font-semibold text-foreground">
                         {r.target_label || 'Cantiere'}
                       </p>
-                      {/* Ore lavoro — riquadro neutro */}
-                      <div className="rounded-lg border border-border bg-muted/40 p-2.5">
-                        <OreHM
-                          label="Ore lavoro"
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <StepperHM
+                          label="Lavoro"
+                          tone="work"
                           h={r.lavoroH}
                           m={r.lavoroM}
                           disabled={isPending || !modificabile}
                           onChange={(h, m) => patchRiga(idx, { lavoroH: h, lavoroM: m })}
                         />
-                      </div>
-                      {/* Ore viaggio — riquadro azzurrino, staccato dal lavoro */}
-                      <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-2.5">
-                        <OreHM
-                          label="Ore viaggio"
+                        <StepperHM
+                          label="Viaggio"
+                          tone="travel"
                           h={r.viaggioH}
                           m={r.viaggioM}
                           disabled={isPending || !modificabile}

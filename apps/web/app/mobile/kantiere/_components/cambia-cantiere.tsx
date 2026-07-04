@@ -35,7 +35,14 @@ function messaggioErrore(code: string): string {
  * Mostrato nella card "Turno in corso". Carica i cantieri al primo tap ed
  * esclude quello corrente dalla lista.
  */
-export function CambiaCantiereButton({ cantiereId }: { cantiereId: string }) {
+export function CambiaCantiereButton({
+  cantiereId,
+  compatto = false,
+}: {
+  cantiereId: string;
+  /** true = pulsante compatto verticale (per la card turno "compatta"). */
+  compatto?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(null);
@@ -84,14 +91,25 @@ export function CambiaCantiereButton({ cantiereId }: { cantiereId: string }) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={apri}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-base font-semibold text-foreground transition-all active:scale-[0.99] hover:bg-muted"
-      >
-        <ArrowLeftRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
-        Cambia cantiere
-      </button>
+      {compatto ? (
+        <button
+          type="button"
+          onClick={apri}
+          className="flex h-full w-full flex-col items-center justify-center gap-1 rounded-xl border border-border bg-background px-1 py-2.5 text-xs font-semibold text-foreground transition-all active:scale-[0.97] hover:bg-muted"
+        >
+          <ArrowLeftRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          Cambia
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={apri}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-3 text-base font-semibold text-foreground transition-all active:scale-[0.99] hover:bg-muted"
+        >
+          <ArrowLeftRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+          Cambia cantiere
+        </button>
+      )}
 
       <CantiereSearchSheet
         open={open}

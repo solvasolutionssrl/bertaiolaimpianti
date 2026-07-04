@@ -333,6 +333,7 @@ export default async function CruscottoKantierePage({
           cambio cantiere, fine turno), come promemoria in cima al cruscotto. */}
       {mioTurno && mioTurnoAzioni ? (
         <TurnoAzioniCantiere
+          compatto
           cantiereId={mioTurno.cantiereId}
           cantiereNome={mioTurno.cantiereNome}
           cantiereHref={`/mobile/kantiere/cantieri/${mioTurno.cantiereId}`}
