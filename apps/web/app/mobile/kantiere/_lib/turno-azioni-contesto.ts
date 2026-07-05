@@ -15,6 +15,8 @@ export interface TurnoAzioniContesto {
   sogliaPausaPranzoOre: number;
   sogliaAutoSpegnimentoPausaOre: number;
   pausaOggiFatta: boolean;
+  /** true se oggi c'è UN SOLO evento (l'ingresso aperto) → split proponibile. */
+  giornataPulita: boolean;
 }
 
 /**
@@ -80,20 +82,32 @@ export async function caricaTurnoAzioniContesto(
     (mezziRes.data as { id: string; targa: string; modello: string | null }[] | null) ?? []
   ).map((m) => ({ id: m.id, targa: m.targa, modello: m.modello }));
 
-  // Oggi risulta già una pausa timbrata su questo cantiere dal dipendente?
+  // Oggi risulta già una pausa timbrata su questo cantiere? + giornata pulita
+  // (un solo evento oggi = l'ingresso aperto) → lo split è proponibile.
   let pausaOggiFatta = false;
+  let giornataPulita = false;
   const dipId = (meRes.data as { id: string } | null)?.id;
   if (dipId) {
     const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
-    const { data: evRows } = await supabase
-      .from('timbrature' as never)
-      .select('pausa')
-      .eq('tenant_id', tenantId)
-      .eq('dipendente_id', dipId)
-      .eq('cantiere_id', cantiereId)
-      .gte('ts', fromIso)
-      .lt('ts', toIso);
+    const [{ data: evRows }, { count }] = await Promise.all([
+      supabase
+        .from('timbrature' as never)
+        .select('pausa')
+        .eq('tenant_id', tenantId)
+        .eq('dipendente_id', dipId)
+        .eq('cantiere_id', cantiereId)
+        .gte('ts', fromIso)
+        .lt('ts', toIso),
+      supabase
+        .from('timbrature' as never)
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .eq('dipendente_id', dipId)
+        .gte('ts', fromIso)
+        .lt('ts', toIso),
+    ]);
     pausaOggiFatta = ((evRows as { pausa: boolean | null }[] | null) ?? []).some((e) => e.pausa);
+    giornataPulita = (count ?? 0) === 1;
   }
 
   return {
@@ -103,5 +117,6 @@ export async function caricaTurnoAzioniContesto(
     sogliaPausaPranzoOre,
     sogliaAutoSpegnimentoPausaOre,
     pausaOggiFatta,
+    giornataPulita,
   };
 }

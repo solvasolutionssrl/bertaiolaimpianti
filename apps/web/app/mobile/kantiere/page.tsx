@@ -133,6 +133,7 @@ export default async function KantiereHomePage() {
           sedeDefaultId={azioni.sedeDefaultId}
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
+          giornataPulita={azioni.giornataPulita}
         />
       ) : me ? (
         <div

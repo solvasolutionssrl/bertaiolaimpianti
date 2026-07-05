@@ -9,13 +9,16 @@ import {
   pausaPranzoMia,
   riprendiTurnoMio,
   terminaTurnoMio,
+  elencoCantieriTurno,
 } from '@/app/_actions/kantiere-timbra';
 import {
   ViaggioRitornoDialog,
   type ViaggioRitornoSede,
   type ViaggioRitornoMezzo,
   type ViaggioRitornoConfirm,
+  type SplitContesto,
 } from '@/app/_components/viaggio-ritorno-dialog';
+import type { PickerCantiere } from './cantiere-picker';
 import { CambiaCantiereButton } from './cambia-cantiere';
 
 export interface TurnoAzioniCantiereProps {
@@ -38,6 +41,8 @@ export interface TurnoAzioniCantiereProps {
   sogliaPausaPranzoOre?: number;
   /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
   sogliaAutoSpegnimentoPausaOre?: number;
+  /** true se oggi c'è un solo evento (ingresso) → offri lo split "cosa hai fatto oggi". */
+  giornataPulita?: boolean;
   /** Nome del cantiere: se presente, l'header diventa un link alla scheda. */
   cantiereNome?: string;
   /** Href della scheda cantiere: rende l'header tappabile (home / tab Ore). */
@@ -117,6 +122,7 @@ export function TurnoAzioniCantiere({
   cantiereHref,
   prominente = false,
   compatto = false,
+  giornataPulita = false,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   // Seed deterministico (inizio turno) per evitare il mismatch di hydration;
@@ -130,6 +136,8 @@ export function TurnoAzioniCantiere({
   const [tsScelto, setTsScelto] = useState<string | undefined>(undefined);
   const [cambiaOra, setCambiaOra] = useState(false);
   const [oraSel, setOraSel] = useState(oraLocaleNow());
+  // Cantieri per lo split "cosa hai fatto oggi" (caricati lazy all'apertura).
+  const [splitCantieri, setSplitCantieri] = useState<PickerCantiere[] | null>(null);
 
   const durataTurnoMin = Math.max(0, Math.floor((now - Date.parse(inizioTs)) / 60000));
   // Prompt pausa: turno al lavoro (non in pausa), senza pausa oggi, oltre soglia.
@@ -180,11 +188,19 @@ export function TurnoAzioniCantiere({
   /** Apre il dialog viaggio+pausa, ricordando l'eventuale ora di fine scelta. */
   function apriTermina(ts?: string) {
     setErr(null);
-    setTsScelto(ts);
+    // Snapshot della chiusura (sempre concreta): il netto dello split lato UI e
+    // lato server usa lo STESSO ts, così la somma combacia.
+    setTsScelto(ts ?? new Date().toISOString());
     setDialogOpen(true);
+    // Split: carica i cantieri (solo se giornata pulita) se non già presenti.
+    if (giornataPulita && splitCantieri == null) {
+      void elencoCantieriTurno().then((r) => {
+        if (r.ok) setSplitCantieri(r.cantieri);
+      });
+    }
   }
 
-  /** Conferma dal dialog: registra viaggio + pausa + ora scelta sul server. */
+  /** Conferma dal dialog: registra viaggio + pausa + split + ora scelta. */
   async function confermaTermina(
     payload: ViaggioRitornoConfirm,
   ): Promise<{ ok: boolean; error?: string }> {
@@ -193,6 +209,7 @@ export function TurnoAzioniCantiere({
       ts: tsScelto,
       viaggio: payload.viaggio ?? undefined,
       pausaPranzoMin: payload.pausaPranzoMin,
+      split: payload.split,
     });
     if (res.ok) {
       setCambiaOra(false);
@@ -402,6 +419,16 @@ export function TurnoAzioniCantiere({
         sedeDefaultId={sedeDefaultId}
         mezzi={mezzi}
         pausaPrompt={promptPausa ? { durataMin: durataTurnoMin } : null}
+        splitContesto={
+          giornataPulita && tsScelto
+            ? ({
+                closeIso: tsScelto,
+                inizioIso: inizioTs,
+                cantiereCorrente: { id: cantiereId, nome: cantiereNome ?? 'Cantiere' },
+                cantieri: splitCantieri ?? [],
+              } satisfies SplitContesto)
+            : null
+        }
         onConfirm={confermaTermina}
       />
     </div>

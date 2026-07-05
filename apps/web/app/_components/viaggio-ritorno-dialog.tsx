@@ -2,8 +2,13 @@
 
 import { useEffect, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Car, Loader2, Utensils, X, Home } from 'lucide-react';
+import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
 import { Button } from '@kommessa/ui';
+import {
+  CantiereSearchSheet,
+  type PickerCantiere,
+} from '@/app/mobile/kantiere/_components/cantiere-picker';
+import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 /** Sentinel: "rientro a casa" → nessun viaggio di lavoro (0 km, 0 tempo). */
 const CASA_ID = '__casa__';
@@ -36,6 +41,17 @@ export interface ViaggioRitornoPayload {
 export interface ViaggioRitornoConfirm {
   viaggio: ViaggioRitornoPayload | null;
   pausaPranzoMin?: 30 | 45 | 60;
+  /** Split "cosa hai fatto oggi": ore per cantiere (somma = netto). */
+  split?: { cantiereId: string; minuti: number }[];
+}
+
+/** Contesto per lo split "cosa hai fatto oggi" (solo giornata pulita, self). */
+export interface SplitContesto {
+  /** Chiusura (snapshot ISO) e inizio turno → netto = (chiusura-inizio)-pausa. */
+  closeIso: string;
+  inizioIso: string;
+  cantiereCorrente: { id: string; nome: string };
+  cantieri: PickerCantiere[];
 }
 
 export interface ViaggioRitornoDialogProps {
@@ -49,6 +65,8 @@ export interface ViaggioRitornoDialogProps {
   pausaPrompt: { durataMin: number } | null;
   /** Titolo opzionale (es. wizard caposquadra "Rientro 2 di 4 · Mario Rossi"). */
   intestazione?: string;
+  /** Se presente, offre lo split "cosa hai fatto oggi" (solo self, giornata pulita). */
+  splitContesto?: SplitContesto | null;
   onConfirm: (
     payload: ViaggioRitornoConfirm,
   ) => Promise<{ ok: boolean; error?: string }>;
@@ -82,6 +100,77 @@ function tipoSedeLabel(tipo: string): string {
   }
 }
 
+/** minuti → "H:MM". */
+function fmtHM(min: number): string {
+  const m = Math.max(0, Math.round(min));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/** Stepper minuti compatto: input H:MM editabile + −/+ 15 (per lo split). */
+function MinutiStepper({
+  minuti,
+  disabled,
+  onChange,
+}: {
+  minuti: number;
+  disabled?: boolean;
+  onChange: (m: number) => void;
+}) {
+  const h = Math.floor(minuti / 60);
+  const m = minuti % 60;
+  const set = (nh: number, nm: number) => onChange(Math.max(0, Math.min(23 * 60 + 59, nh * 60 + nm)));
+  const inputCls =
+    'w-9 rounded border border-border bg-background px-0.5 py-1 text-center font-mono text-sm font-semibold tabular-nums focus:border-primary focus:outline-none disabled:opacity-50';
+  const btnCls =
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground active:scale-95 disabled:opacity-40';
+  return (
+    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+      <button
+        type="button"
+        disabled={disabled || minuti <= 0}
+        onClick={() => onChange(Math.max(0, minuti - 15))}
+        className={btnCls}
+        aria-label="Meno 15 minuti"
+      >
+        <Minus className="h-4 w-4" />
+      </button>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={23}
+        value={h}
+        disabled={disabled}
+        onChange={(e) => set(parseInt(e.target.value, 10) || 0, m)}
+        aria-label="ore"
+        className={inputCls}
+      />
+      <span className="text-[11px] font-semibold text-muted-foreground">h</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={59}
+        value={String(m).padStart(2, '0')}
+        disabled={disabled}
+        onChange={(e) => set(h, Math.min(59, parseInt(e.target.value, 10) || 0))}
+        aria-label="minuti"
+        className={inputCls}
+      />
+      <span className="text-[11px] font-semibold text-muted-foreground">min</span>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(minuti + 15)}
+        className={btnCls}
+        aria-label="Più 15 minuti"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 // ─── mappa errori ───────────────────────────────────────────────────────────────
 
 function messaggioErrore(code: string): string {
@@ -99,6 +188,15 @@ function messaggioErrore(code: string): string {
       return "L'ora deve essere di oggi e dopo l'ultima timbratura.";
     case 'NESSUN_TURNO_APERTO':
       return 'Nessun turno aperto.';
+    case 'SPLIT_NON_APPLICABILE':
+      return 'La giornata non è più divisibile (è cambiata nel frattempo). Ricarica la pagina.';
+    case 'SPLIT_SOMMA':
+    case 'SPLIT_NETTO':
+      return 'Le ore dei cantieri non tornano col totale della giornata. Ricontrolla.';
+    case 'SPLIT_PRIMO_CANTIERE':
+      return 'Errore nella divisione. Ricarica la pagina e riprova.';
+    case 'CANTIERE_NON_VALIDO':
+      return 'Un cantiere selezionato non è valido. Riprova.';
     default:
       return 'Operazione non riuscita. Riprova.';
   }
@@ -125,6 +223,7 @@ export function ViaggioRitornoDialog({
   mezzi,
   pausaPrompt,
   intestazione,
+  splitContesto,
   onConfirm,
 }: ViaggioRitornoDialogProps) {
   const usaViaggio = sedi.length > 0;
@@ -132,6 +231,11 @@ export function ViaggioRitornoDialog({
   const [isPending, startTransition] = useTransition();
   const [erroreMsg, setErroreMsg] = useState<string | null>(null);
   const [errLocale, setErrLocale] = useState<string | null>(null);
+
+  // Split "cosa hai fatto oggi" (solo se splitContesto presente).
+  const [dividi, setDividi] = useState(false);
+  const [righeSplit, setRigheSplit] = useState<{ cantiereId: string; nome: string; minuti: number }[]>([]);
+  const [pickerSplitOpen, setPickerSplitOpen] = useState(false);
 
   // Viaggio
   const [sedeId, setSedeId] = useState<string>(sedeDefaultId ?? sedi[0]?.id ?? '');
@@ -206,6 +310,53 @@ export function ViaggioRitornoDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Split: init all'apertura (reset scelta + prima riga = cantiere corrente).
+  useEffect(() => {
+    if (open && splitContesto) {
+      setDividi(false);
+      setPickerSplitOpen(false);
+      setRigheSplit([
+        {
+          cantiereId: splitContesto.cantiereCorrente.id,
+          nome: splitContesto.cantiereCorrente.nome,
+          minuti: 0,
+        },
+      ]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Netto disponibile per lo split = (chiusura - inizio) - pausa dichiarata.
+  const grossSplitMin = splitContesto
+    ? Math.max(0, Math.round((Date.parse(splitContesto.closeIso) - Date.parse(splitContesto.inizioIso)) / 60000))
+    : 0;
+  const pausaEffettivaMin = pausaPrompt && pausaFatta ? pausaMin : 0;
+  const nettoSplitMin = grossSplitMin - pausaEffettivaMin;
+  const assegnatoSplit = righeSplit.reduce((a, r) => a + r.minuti, 0);
+  const restanoSplit = nettoSplitMin - assegnatoSplit;
+  const cantieriSplitDisponibili = splitContesto
+    ? splitContesto.cantieri.filter((c) => !righeSplit.some((r) => r.cantiereId === c.id))
+    : [];
+
+  function aggiornaRigaSplit(idx: number, minuti: number) {
+    setRigheSplit((prev) => prev.map((r, i) => (i === idx ? { ...r, minuti } : r)));
+    setErrLocale(null);
+  }
+  function rimuoviRigaSplit(idx: number) {
+    setRigheSplit((prev) => prev.filter((_, i) => i !== idx));
+    setErrLocale(null);
+  }
+  function aggiungiCantiereSplit(id: string) {
+    const c = splitContesto?.cantieri.find((x) => x.id === id);
+    setPickerSplitOpen(false);
+    if (!c) return;
+    const nome = titoloCase(c.nome ?? '') || c.codice_commessa || c.codice || 'Cantiere';
+    setRigheSplit((prev) =>
+      prev.some((r) => r.cantiereId === id) ? prev : [...prev, { cantiereId: id, nome, minuti: 0 }],
+    );
+    setErrLocale(null);
+  }
+
   function step(delta: number) {
     setConfermMin((m) => Math.max(0, m + delta));
   }
@@ -227,6 +378,25 @@ export function ViaggioRitornoDialog({
         return;
       }
     }
+    // Split: se "dividi", la somma deve fare esattamente il netto.
+    if (splitContesto && dividi) {
+      if (righeSplit.length < 2) {
+        setErrLocale('Aggiungi un altro cantiere o scegli "Solo qui".');
+        return;
+      }
+      if (righeSplit.some((r) => r.minuti <= 0)) {
+        setErrLocale('Ogni cantiere deve avere delle ore.');
+        return;
+      }
+      if (restanoSplit !== 0) {
+        setErrLocale(
+          restanoSplit > 0
+            ? `Restano ${fmtHM(restanoSplit)} da assegnare.`
+            : `Hai assegnato ${fmtHM(-restanoSplit)} di troppo.`,
+        );
+        return;
+      }
+    }
     startTransition(async () => {
       setErroreMsg(null);
       const res = await onConfirm({
@@ -243,6 +413,10 @@ export function ViaggioRitornoDialog({
               }
             : null,
         pausaPranzoMin: pausaPrompt && pausaFatta ? pausaMin : undefined,
+        split:
+          splitContesto && dividi
+            ? righeSplit.map((r) => ({ cantiereId: r.cantiereId, minuti: r.minuti }))
+            : undefined,
       });
       if (res.ok) onOpenChange(false);
       else setErroreMsg(messaggioErrore(res.error ?? ''));
@@ -484,6 +658,87 @@ export function ViaggioRitornoDialog({
             </div>
           ) : null}
 
+          {/* Split "cosa hai fatto oggi" — solo self, giornata pulita */}
+          {splitContesto ? (
+            <div className="space-y-2.5 rounded-xl border border-primary/20 bg-primary/[0.05] p-3">
+              <p className="text-sm font-semibold text-foreground">Cosa hai fatto oggi?</p>
+              <p className="text-xs text-muted-foreground">
+                Hai <strong className="text-foreground">{fmtHM(nettoSplitMin)}</strong> netti da
+                assegnare.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDividi(false)}
+                  className={[
+                    'rounded-lg border px-2 py-2 text-sm font-semibold transition-colors',
+                    !dividi
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background text-muted-foreground',
+                  ].join(' ')}
+                >
+                  Solo qui
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDividi(true)}
+                  className={[
+                    'rounded-lg border px-2 py-2 text-sm font-semibold transition-colors',
+                    dividi
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background text-muted-foreground',
+                  ].join(' ')}
+                >
+                  Più cantieri
+                </button>
+              </div>
+              {dividi ? (
+                <div className="space-y-2 pt-0.5">
+                  {righeSplit.map((r, i) => (
+                    <div key={r.cantiereId} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{r.nome}</span>
+                      <MinutiStepper
+                        minuti={r.minuti}
+                        disabled={isPending}
+                        onChange={(m) => aggiornaRigaSplit(i, m)}
+                      />
+                      {i > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => rimuoviRigaSplit(i)}
+                          aria-label="Rimuovi cantiere"
+                          className="shrink-0 text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <span className="w-4 shrink-0" aria-hidden />
+                      )}
+                    </div>
+                  ))}
+                  {cantieriSplitDisponibili.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setPickerSplitOpen(true)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border py-2 text-sm font-medium text-muted-foreground hover:bg-muted/40"
+                    >
+                      <Plus className="h-4 w-4" /> Aggiungi cantiere
+                    </button>
+                  ) : null}
+                  <p
+                    className={`text-center text-xs font-semibold ${restanoSplit === 0 ? 'text-emerald-600' : 'text-amber-600'}`}
+                  >
+                    {restanoSplit === 0
+                      ? 'Tutto assegnato ✓'
+                      : restanoSplit > 0
+                        ? `Restano ${fmtHM(restanoSplit)} da assegnare`
+                        : `${fmtHM(-restanoSplit)} di troppo`}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {errLocale && <p className="text-sm text-destructive">{errLocale}</p>}
           {erroreMsg && <p className="text-sm text-destructive">{erroreMsg}</p>}
 
@@ -498,6 +753,15 @@ export function ViaggioRitornoDialog({
           </Button>
         </div>
       </div>
+
+      {/* Foglio ricerca per aggiungere un cantiere allo split (Portal, sopra). */}
+      <CantiereSearchSheet
+        open={pickerSplitOpen}
+        title="Aggiungi cantiere"
+        cantieri={cantieriSplitDisponibili}
+        onPick={aggiungiCantiereSplit}
+        onClose={() => setPickerSplitOpen(false)}
+      />
     </div>,
     document.body,
   );

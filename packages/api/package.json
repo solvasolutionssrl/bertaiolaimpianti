@@ -15,6 +15,7 @@
     "./kantiere": "./src/kantiere.ts",
     "./kantiere-qr": "./src/kantiere-qr.ts",
     "./kantiere-ore": "./src/kantiere-ore.ts",
+    "./kantiere-split": "./src/kantiere-split.ts",
     "./kantiere-report": "./src/kantiere-report.ts",
     "./kantiere-costi": "./src/kantiere-costi.ts",
     "./spese": "./src/spese.ts",

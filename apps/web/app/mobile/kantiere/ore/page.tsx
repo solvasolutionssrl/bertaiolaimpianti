@@ -173,6 +173,7 @@ export default async function MobileOrePage() {
           sedeDefaultId={azioni.sedeDefaultId}
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
+          giornataPulita={azioni.giornataPulita}
         />
       ) : null}
 

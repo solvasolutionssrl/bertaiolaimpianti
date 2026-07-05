@@ -10,6 +10,7 @@ import {
   statoTurno,
   type StatoTurno,
 } from '@kommessa/api/kantiere-ore';
+import { calcolaSegmentiSplit } from '@kommessa/api/kantiere-split';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { leggiSogliaPausaPranzoOre, leggiRoutingProvider } from '@/app/_lib/kantiere-config';
@@ -22,6 +23,7 @@ import {
   inserisciViaggioRow,
   inserisciPausaDichiarata,
   inizioSeEleggibilePausa,
+  type ViaggioInput,
 } from './_lib/viaggio-timbra';
 
 /** Azione esplicita scelta dal tecnico quando il turno è già attivo. */
@@ -332,6 +334,16 @@ const TerminaTurnoSchema = z.object({
   pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
   /** Viaggio di RITORNO (chiusura da app): sede, stima, autista, mezzo, km. */
   viaggio: ViaggioSchema.optional(),
+  /**
+   * Split "cosa hai fatto oggi": ore per cantiere (somma = netto). Presente
+   * solo se il tecnico DIVIDE la giornata tra più cantieri alla chiusura. Il
+   * primo cantiere è quello del turno. Min 2 (con 1 solo non è uno split).
+   */
+  split: z
+    .array(z.object({ cantiereId: z.string().uuid(), minuti: z.number().int().nonnegative() }))
+    .min(2)
+    .max(12)
+    .optional(),
 });
 
 export async function terminaTurnoMio(input: unknown): Promise<Result> {
@@ -365,6 +377,22 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   if (viaggio) {
     const v = await validaViaggio(supabase, viaggio);
     if (!v.ok) return { ok: false, error: v.error };
+  }
+
+  // ── SPLIT "cosa hai fatto oggi": più cantieri dichiarati alla chiusura ──
+  //    Sintetizza i segmenti timbrati (il ricalcolo deriva le ore da lì).
+  //    Solo a turno "al lavoro" e giornata pulita (un solo ingresso, nessun
+  //    altro evento). La pausa dichiarata è inclusa nei segmenti.
+  const split = parsed.data.split;
+  if (split && split.length >= 2 && info.stato === 'lavoro' && info.ingressoAperto) {
+    return terminaConSplit(supabase, ctx.tenantId, ctx.userId, me.id, {
+      cantiereId: parsed.data.cantiereId,
+      ts,
+      ingressoIso: info.ingressoAperto,
+      pausaMin: parsed.data.pausaPranzoMin ?? 0,
+      split,
+      viaggio,
+    });
   }
 
   // Pausa pranzo dichiarata (ripiego): inserita prima dell'uscita di fine così
@@ -428,6 +456,117 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
     // best-effort
   }
   return { ok: true, tipo: 'uscita', pausa: false, ts };
+}
+
+// Chiusura turno CON split "cosa hai fatto oggi": sintetizza i segmenti timbrati
+// (via `calcolaSegmentiSplit`, logica pura unit-testata) così il ricalcolo deriva
+// le righe per cantiere. Additivo su giornata pulita; nessun delete distruttivo.
+async function terminaConSplit(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  userId: string,
+  dipendenteId: string,
+  opts: {
+    cantiereId: string;
+    ts: string;
+    ingressoIso: string;
+    pausaMin: number;
+    split: { cantiereId: string; minuti: number }[];
+    viaggio: ViaggioInput | null;
+  },
+): Promise<Result> {
+  // 1. Giornata pulita: un solo evento oggi (l'ingresso aperto). Niente split su
+  //    giornate con pause/uscite/switch già timbrati.
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const { count } = await supabase
+    .from('timbrature' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  if ((count ?? 0) !== 1) return { ok: false, error: 'SPLIT_NON_APPLICABILE' };
+
+  // 2. Il primo cantiere dello split è quello del turno (ingresso reale).
+  if (opts.split[0]?.cantiereId !== opts.cantiereId) {
+    return { ok: false, error: 'SPLIT_PRIMO_CANTIERE' };
+  }
+
+  // 3. Tutti i cantieri appartengono al tenant.
+  const ids = [...new Set(opts.split.map((s) => s.cantiereId))];
+  const { data: ccRows } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .in('id', ids)
+    .eq('tenant_id', tenantId);
+  if (((ccRows as { id: string }[] | null)?.length ?? 0) !== ids.length) {
+    return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+  }
+
+  // 4. Sintesi segmenti (pura, unit-testata).
+  const calc = calcolaSegmentiSplit({
+    ingressoMs: Date.parse(opts.ingressoIso),
+    uscitaMs: Date.parse(opts.ts),
+    pausaMin: opts.pausaMin,
+    segmenti: opts.split,
+  });
+  if (!calc.ok) {
+    return { ok: false, error: calc.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
+  }
+  if (calc.eventi.length === 0) return { ok: false, error: 'SPLIT_NON_APPLICABILE' };
+
+  // 5. Inserisce gli eventi sintetici (origine 'manuale'). L'ultima uscita a
+  //    parte per collegarci il viaggio di ritorno.
+  const base = {
+    tenant_id: tenantId,
+    dipendente_id: dipendenteId,
+    commessa_id: null as string | null,
+    origine: 'manuale',
+    creato_da: userId,
+  };
+  const eventi = calc.eventi;
+  const last = eventi[eventi.length - 1]!;
+  const prima = eventi.slice(0, -1);
+  if (prima.length > 0) {
+    const { error } = await supabase.from('timbrature' as never).insert(
+      prima.map((e) => ({
+        ...base,
+        cantiere_id: e.cantiereId,
+        tipo: e.tipo,
+        pausa: e.pausa,
+        ts: new Date(e.ms).toISOString(),
+      })) as never,
+    );
+    if (error) return { ok: false, error: error.message };
+  }
+  const uscitaIso = new Date(last.ms).toISOString();
+  const { data: lastRow, error: eLast } = await supabase
+    .from('timbrature' as never)
+    .insert({ ...base, cantiere_id: last.cantiereId, tipo: 'uscita', pausa: false, ts: uscitaIso } as never)
+    .select('id')
+    .single();
+  if (eLast) return { ok: false, error: eLast.message };
+
+  // 6. Viaggio di ritorno sull'ultima uscita (best-effort: non annulla lo split).
+  if (opts.viaggio) {
+    await inserisciViaggioRow(supabase, {
+      tenantId,
+      dipendenteId,
+      cantiereId: last.cantiereId,
+      timbraturaId: (lastRow as { id: string }).id,
+      ts: uscitaIso,
+      tipo: 'uscita',
+      viaggio: opts.viaggio,
+    });
+  }
+
+  // 7. Ricalcolo: deriva le righe per cantiere dai segmenti.
+  try {
+    await ricomputaRapportinoAuto(supabase, tenantId, dipendenteId, romeDay(new Date(opts.ts)));
+  } catch {
+    // best-effort
+  }
+  return { ok: true, tipo: 'uscita', pausa: false, ts: opts.ts };
 }
 
 // ── 1c) pausa/ripresa dal banner o dalla scheda cantiere (self, senza QR) ──

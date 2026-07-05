@@ -91,6 +91,7 @@ export function CantieriBrowser({
           sedeDefaultId={azioni.sedeDefaultId}
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
+          giornataPulita={azioni.giornataPulita}
         />
       ) : puoAvviareTurno ? (
         /* Nessun turno aperto → avvio manuale (senza QR): sceglie un cantiere

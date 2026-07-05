@@ -346,6 +346,7 @@ export default async function CruscottoKantierePage({
           sedeDefaultId={mioTurnoAzioni.sedeDefaultId}
           sogliaPausaPranzoOre={mioTurnoAzioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={mioTurnoAzioni.sogliaAutoSpegnimentoPausaOre}
+          giornataPulita={mioTurnoAzioni.giornataPulita}
         />
       ) : null}
 

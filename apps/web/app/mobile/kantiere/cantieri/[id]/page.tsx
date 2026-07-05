@@ -296,6 +296,7 @@ export default async function CantiereMobileDetailPage({
           sedeDefaultId={azioni.sedeDefaultId}
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
+          giornataPulita={azioni.giornataPulita}
         />
       ) : null}
 
