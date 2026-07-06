@@ -52,6 +52,8 @@ export type ViaggioTratta = {
   km: number;
   minuti: number;
   autista: boolean;
+  /** Cantiere di partenza (switch cantiere→cantiere) → mostra "A → B". */
+  daCantiere?: string | null;
 };
 
 export type RigaCommessa = {
@@ -257,7 +259,8 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
             </p>
             <ul className="space-y-1">
               {riga.viaggi.map((v, i) => {
-                const da = v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere';
+                // Switch cantiere→cantiere: origine = cantiere di partenza.
+                const da = v.daCantiere || (v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere');
                 const a = v.direzione === 'andata' ? v.cantiere || 'cantiere' : v.sede;
                 return (
                   <li

@@ -305,12 +305,13 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     direzione: 'andata' | 'ritorno';
     sede_id: string | null;
     cantiere_id: string | null;
+    da_cantiere_id: string | null;
     distanza_km: number | null;
     durata_confermata_min: number | null;
     autista: boolean | null;
   };
   const VIAGGIO_COLS =
-    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, distanza_km, durata_confermata_min, autista';
+    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, da_cantiere_id, distanza_km, durata_confermata_min, autista';
   const timbIdToKey = new Map<string, string>();
   for (const t of timbratureData) timbIdToKey.set(t.id, `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`);
   const viaggioRows: ViaggioRow[] = [];
@@ -367,6 +368,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       direzione: v.direzione === 'ritorno' ? 'ritorno' : 'andata',
       sede: v.sede_id ? sediNomeMap.get(v.sede_id) ?? 'Sede' : 'Sede',
       cantiere: v.cantiere_id ? cantieriNomeMap.get(v.cantiere_id) ?? '' : '',
+      daCantiere: v.da_cantiere_id ? cantieriNomeMap.get(v.da_cantiere_id) ?? null : null,
       km,
       minuti: Number(v.durata_confermata_min) || 0,
       autista: !!v.autista,

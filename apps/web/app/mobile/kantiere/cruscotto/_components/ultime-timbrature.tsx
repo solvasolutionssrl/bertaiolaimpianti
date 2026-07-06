@@ -102,7 +102,8 @@ export function PresenzeGiorno({ persone }: { persone: PersonaGiorno[] }) {
                     </p>
                     <ul className="space-y-1">
                       {p.viaggi.map((v, i) => {
-                        const da = v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere';
+                        // Switch cantiere→cantiere: origine = cantiere di partenza.
+                        const da = v.daCantiere || (v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere');
                         const a = v.direzione === 'andata' ? v.cantiere || 'cantiere' : v.sede;
                         return (
                           <li

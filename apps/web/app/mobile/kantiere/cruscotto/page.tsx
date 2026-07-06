@@ -52,6 +52,7 @@ type ViaggioRow = {
   direzione: 'andata' | 'ritorno';
   sede_id: string | null;
   cantiere_id: string | null;
+  da_cantiere_id: string | null;
   distanza_km: number | null;
   durata_confermata_min: number | null;
   autista: boolean | null;
@@ -190,7 +191,7 @@ export default async function CruscottoKantierePage({
   const timbIdToDip = new Map<string, string>();
   for (const t of timbRows) if (t.dipendente_id) timbIdToDip.set(t.id, t.dipendente_id);
   const VIAGGIO_COLS =
-    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, distanza_km, durata_confermata_min, autista';
+    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, da_cantiere_id, distanza_km, durata_confermata_min, autista';
   const dipIds = dipendenti.map((d) => d.id);
   const viaggioRows: ViaggioRow[] = [];
   if (timbRows.length > 0) {
@@ -226,6 +227,7 @@ export default async function CruscottoKantierePage({
       direzione: v.direzione === 'ritorno' ? 'ritorno' : 'andata',
       sede: v.sede_id ? sediNomeMap.get(v.sede_id) ?? 'Sede' : 'Sede',
       cantiere: v.cantiere_id ? cantMap.get(v.cantiere_id) ?? '' : '',
+      daCantiere: v.da_cantiere_id ? cantMap.get(v.da_cantiere_id) ?? null : null,
       km: Number(v.distanza_km) || 0,
       minuti: Number(v.durata_confermata_min) || 0,
       autista: !!v.autista,

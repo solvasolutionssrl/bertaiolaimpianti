@@ -777,6 +777,8 @@ async function attribuisciKmSwitch(
       timbratura_id: null,
       dipendente_id: opts.dipendenteId,
       cantiere_id: opts.aCantiereId,
+      // Cantiere di PARTENZA → la UI mostra "A → B" invece di "Sede → B".
+      da_cantiere_id: opts.daCantiereId,
       data: opts.data,
       direzione: 'andata',
       sede_id: null,
