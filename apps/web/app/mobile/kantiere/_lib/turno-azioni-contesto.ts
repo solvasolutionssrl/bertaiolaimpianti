@@ -6,6 +6,7 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 import {
   leggiSogliaPausaPranzoOre,
   leggiSogliaAutoSpegnimentoPausa,
+  leggiImpostazioniTurno,
 } from '@/app/_lib/kantiere-config';
 
 export interface TurnoAzioniContesto {
@@ -17,6 +18,12 @@ export interface TurnoAzioniContesto {
   pausaOggiFatta: boolean;
   /** true se oggi c'è UN SOLO evento (l'ingresso aperto) → split proponibile. */
   giornataPulita: boolean;
+  /** Split "cosa hai fatto oggi" attivo (impostazione ufficio). */
+  splitAttivo: boolean;
+  /** Tolleranza (min) sulla somma dello split. */
+  tolleranzaChiusuraMin: number;
+  /** Passo (min) degli stepper ore. */
+  passoMinuti: number;
 }
 
 /**
@@ -37,9 +44,10 @@ export async function caricaTurnoAzioniContesto(
 ): Promise<TurnoAzioniContesto> {
   const supabase = createServerSupabase();
 
-  const [sogliaPausaPranzoOre, sogliaAutoSpegnimentoPausaOre] = await Promise.all([
+  const [sogliaPausaPranzoOre, sogliaAutoSpegnimentoPausaOre, impostazioniTurno] = await Promise.all([
     leggiSogliaPausaPranzoOre(supabase, tenantId),
     leggiSogliaAutoSpegnimentoPausa(supabase, tenantId),
+    leggiImpostazioniTurno(supabase, tenantId),
   ]);
 
   const [sediRes, assocRes, mezziRes, meRes] = await Promise.all([
@@ -118,5 +126,8 @@ export async function caricaTurnoAzioniContesto(
     sogliaAutoSpegnimentoPausaOre,
     pausaOggiFatta,
     giornataPulita,
+    splitAttivo: impostazioniTurno.splitAttivo,
+    tolleranzaChiusuraMin: impostazioniTurno.tolleranzaChiusuraMin,
+    passoMinuti: impostazioniTurno.passoMinuti,
   };
 }

@@ -174,6 +174,9 @@ export default async function MobileOrePage() {
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
           giornataPulita={azioni.giornataPulita}
+          splitAttivo={azioni.splitAttivo}
+          tolleranzaChiusuraMin={azioni.tolleranzaChiusuraMin}
+          passoMinuti={azioni.passoMinuti}
         />
       ) : null}
 

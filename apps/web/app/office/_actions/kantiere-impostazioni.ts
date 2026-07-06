@@ -45,6 +45,19 @@ const schema = z.object({
   sogliaAutoSpegnimentoPausaOre: z.number().min(0.5).max(8).optional(),
   // Kontabilità: modulo attivo per il tenant. Default true.
   kontabilitaAttiva: z.boolean().optional(),
+  // ── Turni & calcoli (gestione ufficio) ──
+  // Tolleranza (min) sulla somma dello split di fine turno. Default 5.
+  tolleranzaChiusuraMin: z.number().int().min(0).max(30).optional(),
+  // Split "cosa hai fatto oggi" alla chiusura. Default true.
+  splitFineTurnoAttivo: z.boolean().optional(),
+  // Km del tragitto sul cambio cantiere (switch). Default false (opt-in).
+  kmSwitchAttivo: z.boolean().optional(),
+  // Passo (min) dei +/- degli stepper ore. 5/10/15/30. Default 15.
+  passoMinutiStepper: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(30)]).optional(),
+  // Avvio turno su qualsiasi cantiere (tecnici). Default true.
+  avvioTurnoLibero: z.boolean().optional(),
+  // Registrazione giornata senza timbrature (caso 4). Default true.
+  registraGiornataAttivo: z.boolean().optional(),
 });
 
 export async function salvaImpostazioniKantiere(input: unknown): Promise<Result> {
@@ -99,6 +112,25 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   }
   if (parsed.data.kontabilitaAttiva !== undefined) {
     newConfig['kontabilita_attiva'] = parsed.data.kontabilitaAttiva;
+  }
+  // Turni & calcoli
+  if (parsed.data.tolleranzaChiusuraMin !== undefined) {
+    newConfig['tolleranza_chiusura_min'] = parsed.data.tolleranzaChiusuraMin;
+  }
+  if (parsed.data.splitFineTurnoAttivo !== undefined) {
+    newConfig['split_fine_turno_attivo'] = parsed.data.splitFineTurnoAttivo;
+  }
+  if (parsed.data.kmSwitchAttivo !== undefined) {
+    newConfig['km_switch_attivo'] = parsed.data.kmSwitchAttivo;
+  }
+  if (parsed.data.passoMinutiStepper !== undefined) {
+    newConfig['passo_minuti_stepper'] = parsed.data.passoMinutiStepper;
+  }
+  if (parsed.data.avvioTurnoLibero !== undefined) {
+    newConfig['avvio_turno_libero'] = parsed.data.avvioTurnoLibero;
+  }
+  if (parsed.data.registraGiornataAttivo !== undefined) {
+    newConfig['registra_giornata_attivo'] = parsed.data.registraGiornataAttivo;
   }
 
   const { error: updateError } = await supabase

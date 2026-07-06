@@ -106,6 +106,49 @@ export async function leggiRoutingProvider(
   return config['routing_provider'] === 'google' ? 'google' : 'free';
 }
 
+export type ImpostazioniTurno = {
+  /** Tolleranza (min) sulla somma dello split di fine turno. Default 5. */
+  tolleranzaChiusuraMin: number;
+  /** Split "cosa hai fatto oggi" attivo. Default true. */
+  splitAttivo: boolean;
+  /** Km del tragitto sul cambio cantiere (switch). Default false (opt-in). */
+  kmSwitchAttivo: boolean;
+  /** Passo (min) dei +/- degli stepper ore (5/10/15/30). Default 15. */
+  passoMinuti: number;
+  /** I tecnici possono avviare un turno su QUALSIASI cantiere. Default true. */
+  avvioLibero: boolean;
+  /** Registrazione di una giornata senza timbrature (caso 4). Default true. */
+  registraGiornataAttivo: boolean;
+};
+
+const PASSI_MINUTI = [5, 10, 15, 30];
+
+/**
+ * Impostazioni per il flusso turni (chiusura, split, km, stepper, avvio libero).
+ * Gestite dall'ufficio (Impostazioni Kantiere). Una sola lettura del config.
+ */
+export async function leggiImpostazioniTurno(
+  supabase: Supa,
+  tenantId: string,
+): Promise<ImpostazioniTurno> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  const passo = toInt(config['passo_minuti_stepper'], 15);
+  return {
+    tolleranzaChiusuraMin: Math.min(30, toInt(config['tolleranza_chiusura_min'], 5)),
+    splitAttivo: config['split_fine_turno_attivo'] === false ? false : true,
+    kmSwitchAttivo: config['km_switch_attivo'] === true,
+    passoMinuti: PASSI_MINUTI.includes(passo) ? passo : 15,
+    avvioLibero: config['avvio_turno_libero'] === false ? false : true,
+    registraGiornataAttivo: config['registra_giornata_attivo'] === false ? false : true,
+  };
+}
+
 export type PolicyRapportini = {
   /** Auto-approvazione delle giornate "pulite" (turno chiuso, entro soglia). Default true. */
   autoApprova: boolean;

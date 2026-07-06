@@ -8,6 +8,7 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 
 import { guardMobile } from '../_lib/guard';
+import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
 import { mioTurnoAttivo } from './_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from './_lib/turno-azioni-contesto';
 import {
@@ -77,10 +78,10 @@ export default async function KantiereHomePage() {
       null;
   }
 
-  // Cantieri attivi recenti (lettura, max 4). Gate temporaneo (weekend): i
-  // tecnici vedono solo i cantieri timbrabili (QR attivo → oggi Monfalcone);
-  // admin/office vedono tutto.
-  const vedeTutto = vedeTuttiICantieri(ctx.role);
+  // Cantieri attivi recenti (lettura, max 4). Visibilità: "avvio libero" attivo
+  // (default) → tecnici vedono tutto; altrimenti solo i timbrabili (QR attivo).
+  const { avvioLibero } = await leggiImpostazioniTurno(supabase, ctx.tenantId);
+  const vedeTutto = vedeTuttiICantieri(ctx.role) || avvioLibero;
   const visibiliIds = vedeTutto ? null : [...(await cantieriVisibiliTecnicoIds(ctx.tenantId))];
   type CantiereMini = {
     id: string;
@@ -134,6 +135,9 @@ export default async function KantiereHomePage() {
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
           giornataPulita={azioni.giornataPulita}
+          splitAttivo={azioni.splitAttivo}
+          tolleranzaChiusuraMin={azioni.tolleranzaChiusuraMin}
+          passoMinuti={azioni.passoMinuti}
         />
       ) : me ? (
         <div

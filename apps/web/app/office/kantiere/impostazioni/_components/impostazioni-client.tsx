@@ -8,6 +8,7 @@ import {
   MapPin,
   Calculator,
   KeyRound,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button, Input, Label, cn } from '@kommessa/ui';
 import { salvaImpostazioniKantiere } from '../../../_actions/kantiere-impostazioni';
@@ -35,6 +36,13 @@ interface Props {
   sogliaPausaPranzoOre: number;
   sogliaAutoSpegnimentoPausaOre: number;
   kontabilitaAttiva: boolean;
+  // Turni & calcoli
+  tolleranzaChiusuraMin: number;
+  splitFineTurnoAttivo: boolean;
+  kmSwitchAttivo: boolean;
+  passoMinutiStepper: number;
+  avvioTurnoLibero: boolean;
+  registraGiornataAttivo: boolean;
   codiceAzienda: string | null;
 }
 
@@ -54,10 +62,11 @@ function oreLabel(h: number): string {
   return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
-type SezioneId = 'ore' | 'approvazione' | 'anomalie' | 'cantieri' | 'kontabilita';
+type SezioneId = 'ore' | 'turni' | 'approvazione' | 'anomalie' | 'cantieri' | 'kontabilita';
 
 const SEZIONI: { id: SezioneId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'ore', label: 'Ore e calcolo', icon: Clock },
+  { id: 'turni', label: 'Turni & calcoli', icon: SlidersHorizontal },
   { id: 'approvazione', label: 'Approvazione presenze', icon: CheckCircle2 },
   { id: 'anomalie', label: 'Anomalie da segnalare', icon: AlertTriangle },
   { id: 'cantieri', label: 'Cantieri', icon: MapPin },
@@ -134,6 +143,12 @@ export function ImpostazioniClient({
   sogliaPausaPranzoOre,
   sogliaAutoSpegnimentoPausaOre,
   kontabilitaAttiva,
+  tolleranzaChiusuraMin,
+  splitFineTurnoAttivo,
+  kmSwitchAttivo,
+  passoMinutiStepper,
+  avvioTurnoLibero,
+  registraGiornataAttivo,
   codiceAzienda,
 }: Props) {
   const askConfirm = useConfirm();
@@ -149,6 +164,13 @@ export function ImpostazioniClient({
   const [sogliaPausa, setSogliaPausa] = React.useState<number>(sogliaPausaPranzoOre);
   const [sogliaAutoPausa, setSogliaAutoPausa] = React.useState<number>(sogliaAutoSpegnimentoPausaOre);
   const [kontabilita, setKontabilita] = React.useState<boolean>(kontabilitaAttiva);
+  // Turni & calcoli
+  const [tolleranza, setTolleranza] = React.useState<number>(tolleranzaChiusuraMin);
+  const [splitAttivo, setSplitAttivo] = React.useState<boolean>(splitFineTurnoAttivo);
+  const [kmSwitch, setKmSwitch] = React.useState<boolean>(kmSwitchAttivo);
+  const [passoMin, setPassoMin] = React.useState<number>(passoMinutiStepper);
+  const [avvioLibero, setAvvioLibero] = React.useState<boolean>(avvioTurnoLibero);
+  const [registraGiornata, setRegistraGiornata] = React.useState<boolean>(registraGiornataAttivo);
   const [esito, setEsito] = React.useState<{ ok: true } | { ok: false; error: string } | null>(null);
   const [isPending, startTransition] = React.useTransition();
 
@@ -171,6 +193,12 @@ export function ImpostazioniClient({
         sogliaPausaPranzoOre: sogliaPausa,
         sogliaAutoSpegnimentoPausaOre: sogliaAutoPausa,
         kontabilitaAttiva: kontabilita,
+        tolleranzaChiusuraMin: tolleranza,
+        splitFineTurnoAttivo: splitAttivo,
+        kmSwitchAttivo: kmSwitch,
+        passoMinutiStepper: passoMin as 5 | 10 | 15 | 30,
+        avvioTurnoLibero: avvioLibero,
+        registraGiornataAttivo: registraGiornata,
       });
       setEsito(result);
     });
@@ -328,6 +356,110 @@ export function ImpostazioniClient({
                     solo per arrotondare già i turni futuri.
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {sezione === 'turni' && (
+            <div className="space-y-5">
+              <SezioneHeader
+                icon={SlidersHorizontal}
+                title="Turni & calcoli"
+                description="Come i tecnici avviano e chiudono i turni e come si calcolano le ore alla chiusura."
+              />
+
+              <div className="space-y-1.5">
+                <Label htmlFor="tolleranza">Tolleranza chiusura (min)</Label>
+                <Input
+                  id="tolleranza"
+                  type="number"
+                  min={0}
+                  max={30}
+                  step={1}
+                  value={tolleranza}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (!isNaN(v)) setTolleranza(Math.min(30, Math.max(0, v)));
+                  }}
+                  className="w-32"
+                />
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Quando si dividono le ore tra più cantieri, se la somma è entro questi minuti dal
+                  totale si salva lo stesso (l&apos;ultimo cantiere assorbe il piccolo resto). Evita
+                  di dover pareggiare i minuti dispari, es. un turno di 7:03. <strong>Default 5.</strong>
+                </p>
+              </div>
+
+              <div className="space-y-1.5 border-t border-border pt-4">
+                <Label htmlFor="passo">Passo dei tasti +/- (min)</Label>
+                <select
+                  id="passo"
+                  value={passoMin}
+                  onChange={(e) => setPassoMin(parseInt(e.target.value, 10))}
+                  className="w-32 rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  {[5, 10, 15, 30].map((p) => (
+                    <option key={p} value={p}>
+                      {p} min
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  Di quanti minuti aumentano o diminuiscono i tasti +/- quando si inseriscono le ore.
+                  <strong> Default 15.</strong>
+                </p>
+              </div>
+
+              <div className="space-y-4 border-t border-border pt-4">
+                <ToggleRow
+                  id="split-attivo"
+                  checked={splitAttivo}
+                  onChange={() => setSplitAttivo((v) => !v)}
+                  title="Split «cosa hai fatto oggi» alla chiusura"
+                  description={
+                    <>
+                      Alla chiusura manuale del turno il tecnico può dividere le ore tra più
+                      cantieri. Se disattivi, la chiusura resta su un solo cantiere.
+                    </>
+                  }
+                />
+                <ToggleRow
+                  id="avvio-libero"
+                  checked={avvioLibero}
+                  onChange={() => setAvvioLibero((v) => !v)}
+                  title="Avvio turno su qualsiasi cantiere"
+                  description={
+                    <>
+                      I tecnici vedono e possono avviare un turno su <strong>tutti</strong> i
+                      cantieri. Se disattivi, vedono solo quelli con un QR attivo.
+                    </>
+                  }
+                />
+                <ToggleRow
+                  id="km-switch"
+                  checked={kmSwitch}
+                  onChange={() => setKmSwitch((v) => !v)}
+                  title="Km del tragitto tra cantieri (cambio cantiere)"
+                  description={
+                    <>
+                      Quando un tecnico cambia cantiere durante il turno, calcola i km del tragitto
+                      e li attribuisce al nuovo cantiere. Richiede il provider Google.{' '}
+                      <strong>Default disattivo.</strong>
+                    </>
+                  }
+                />
+                <ToggleRow
+                  id="registra-giornata"
+                  checked={registraGiornata}
+                  onChange={() => setRegistraGiornata((v) => !v)}
+                  title="Registra giornata senza timbrature"
+                  description={
+                    <>
+                      Permette al tecnico di registrare una giornata anche se non ha mai timbrato
+                      (inserendo inizio, fine e cantieri).
+                    </>
+                  }
+                />
               </div>
             </div>
           )}

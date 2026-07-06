@@ -55,6 +55,17 @@ export default async function KantiereSettingsPage() {
   // Kontabilità: default true, opt-out esplicito con kontabilita_attiva: false.
   const kontabilitaAttivaVal = config.kontabilita_attiva === false ? false : true;
 
+  // Turni & calcoli
+  const tolleranzaChiusuraMin =
+    typeof config.tolleranza_chiusura_min === 'number' ? config.tolleranza_chiusura_min : 5;
+  const splitFineTurnoAttivo = config.split_fine_turno_attivo === false ? false : true;
+  const kmSwitchAttivo = config.km_switch_attivo === true;
+  const passoMinutiStepper = [5, 10, 15, 30].includes(config.passo_minuti_stepper as number)
+    ? (config.passo_minuti_stepper as number)
+    : 15;
+  const avvioTurnoLibero = config.avvio_turno_libero === false ? false : true;
+  const registraGiornataAttivo = config.registra_giornata_attivo === false ? false : true;
+
   const { data: tRow } = await supabase
     .from('tenants' as never)
     .select('codice_azienda')
@@ -81,6 +92,12 @@ export default async function KantiereSettingsPage() {
         sogliaPausaPranzoOre={sogliaPausaPranzoOre}
         sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
         kontabilitaAttiva={kontabilitaAttivaVal}
+        tolleranzaChiusuraMin={tolleranzaChiusuraMin}
+        splitFineTurnoAttivo={splitFineTurnoAttivo}
+        kmSwitchAttivo={kmSwitchAttivo}
+        passoMinutiStepper={passoMinutiStepper}
+        avvioTurnoLibero={avvioTurnoLibero}
+        registraGiornataAttivo={registraGiornataAttivo}
         codiceAzienda={codiceAzienda}
       />
     </div>

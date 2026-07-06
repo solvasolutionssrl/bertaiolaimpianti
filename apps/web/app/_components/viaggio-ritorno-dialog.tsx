@@ -52,6 +52,11 @@ export interface SplitContesto {
   inizioIso: string;
   cantiereCorrente: { id: string; nome: string };
   cantieri: PickerCantiere[];
+  /** Tolleranza (min) sulla somma: se |restano| ≤ tolleranza si salva (l'ultimo
+   *  cantiere assorbe il piccolo resto), così i minuti dispari non bloccano. */
+  tolleranzaMin: number;
+  /** Passo (min) dei +/- dello stepper. */
+  passoMinuti: number;
 }
 
 export interface ViaggioRitornoDialogProps {
@@ -106,13 +111,15 @@ function fmtHM(min: number): string {
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
 }
 
-/** Stepper minuti compatto: input H:MM editabile + −/+ 15 (per lo split). */
+/** Stepper minuti compatto: input H:MM editabile + −/+ passo (per lo split). */
 function MinutiStepper({
   minuti,
+  passo = 15,
   disabled,
   onChange,
 }: {
   minuti: number;
+  passo?: number;
   disabled?: boolean;
   onChange: (m: number) => void;
 }) {
@@ -128,9 +135,9 @@ function MinutiStepper({
       <button
         type="button"
         disabled={disabled || minuti <= 0}
-        onClick={() => onChange(Math.max(0, minuti - 15))}
+        onClick={() => onChange(Math.max(0, minuti - passo))}
         className={btnCls}
-        aria-label="Meno 15 minuti"
+        aria-label={`Meno ${passo} minuti`}
       >
         <Minus className="h-4 w-4" />
       </button>
@@ -161,9 +168,9 @@ function MinutiStepper({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => onChange(minuti + 15)}
+        onClick={() => onChange(minuti + passo)}
         className={btnCls}
-        aria-label="Più 15 minuti"
+        aria-label={`Più ${passo} minuti`}
       >
         <Plus className="h-4 w-4" />
       </button>
@@ -334,6 +341,9 @@ export function ViaggioRitornoDialog({
   const nettoSplitMin = grossSplitMin - pausaEffettivaMin;
   const assegnatoSplit = righeSplit.reduce((a, r) => a + r.minuti, 0);
   const restanoSplit = nettoSplitMin - assegnatoSplit;
+  // Tolleranza: entro N min si salva (l'ultimo cantiere assorbe il resto).
+  const tolleranzaSplit = splitContesto?.tolleranzaMin ?? 0;
+  const entroTolleranza = Math.abs(restanoSplit) <= tolleranzaSplit;
   const cantieriSplitDisponibili = splitContesto
     ? splitContesto.cantieri.filter((c) => !righeSplit.some((r) => r.cantiereId === c.id))
     : [];
@@ -388,7 +398,7 @@ export function ViaggioRitornoDialog({
         setErrLocale('Ogni cantiere deve avere delle ore.');
         return;
       }
-      if (restanoSplit !== 0) {
+      if (!entroTolleranza) {
         setErrLocale(
           restanoSplit > 0
             ? `Restano ${fmtHM(restanoSplit)} da assegnare.`
@@ -699,6 +709,7 @@ export function ViaggioRitornoDialog({
                       <span className="min-w-0 flex-1 truncate text-sm text-foreground">{r.nome}</span>
                       <MinutiStepper
                         minuti={r.minuti}
+                        passo={splitContesto.passoMinuti}
                         disabled={isPending}
                         onChange={(m) => aggiornaRigaSplit(i, m)}
                       />
@@ -726,10 +737,12 @@ export function ViaggioRitornoDialog({
                     </button>
                   ) : null}
                   <p
-                    className={`text-center text-xs font-semibold ${restanoSplit === 0 ? 'text-emerald-600' : 'text-amber-600'}`}
+                    className={`text-center text-xs font-semibold ${entroTolleranza ? 'text-emerald-600' : 'text-amber-600'}`}
                   >
-                    {restanoSplit === 0
-                      ? 'Tutto assegnato ✓'
+                    {entroTolleranza
+                      ? restanoSplit === 0
+                        ? 'Tutto assegnato ✓'
+                        : `OK · l'ultimo cantiere aggiusta ${fmtHM(Math.abs(restanoSplit))}`
                       : restanoSplit > 0
                         ? `Restano ${fmtHM(restanoSplit)} da assegnare`
                         : `${fmtHM(-restanoSplit)} di troppo`}

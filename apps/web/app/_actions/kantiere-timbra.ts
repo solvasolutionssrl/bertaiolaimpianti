@@ -13,7 +13,11 @@ import {
 import { calcolaSegmentiSplit } from '@kommessa/api/kantiere-split';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
-import { leggiSogliaPausaPranzoOre, leggiRoutingProvider } from '@/app/_lib/kantiere-config';
+import {
+  leggiSogliaPausaPranzoOre,
+  leggiRoutingProvider,
+  leggiImpostazioniTurno,
+} from '@/app/_lib/kantiere-config';
 import { getRoutingProvider } from '@/app/_lib/routing';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
@@ -930,14 +934,18 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     return { ok: false, error: errIngresso.message };
   }
 
-  // Km A→B alla destinazione (best-effort, non blocca).
-  await attribuisciKmSwitch(supabase, {
-    tenantId: ctx.tenantId,
-    dipendenteId: me.id,
-    daCantiereId: parsed.data.daCantiereId,
-    aCantiereId: parsed.data.aCantiereId,
-    data: romeDay(new Date(ingressoTs)),
-  });
+  // Km A→B alla destinazione (best-effort, non blocca). Opt-in: solo se l'ufficio
+  // ha attivato "km del tragitto tra cantieri".
+  const impTurno = await leggiImpostazioniTurno(supabase, ctx.tenantId);
+  if (impTurno.kmSwitchAttivo) {
+    await attribuisciKmSwitch(supabase, {
+      tenantId: ctx.tenantId,
+      dipendenteId: me.id,
+      daCantiereId: parsed.data.daCantiereId,
+      aCantiereId: parsed.data.aCantiereId,
+      data: romeDay(new Date(ingressoTs)),
+    });
+  }
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ingressoTs)));

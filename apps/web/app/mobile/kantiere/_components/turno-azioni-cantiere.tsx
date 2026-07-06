@@ -43,6 +43,12 @@ export interface TurnoAzioniCantiereProps {
   sogliaAutoSpegnimentoPausaOre?: number;
   /** true se oggi c'è un solo evento (ingresso) → offri lo split "cosa hai fatto oggi". */
   giornataPulita?: boolean;
+  /** Split attivo (impostazione ufficio). Default true. */
+  splitAttivo?: boolean;
+  /** Tolleranza (min) sulla somma dello split. Default 5. */
+  tolleranzaChiusuraMin?: number;
+  /** Passo (min) degli stepper ore. Default 15. */
+  passoMinuti?: number;
   /** Nome del cantiere: se presente, l'header diventa un link alla scheda. */
   cantiereNome?: string;
   /** Href della scheda cantiere: rende l'header tappabile (home / tab Ore). */
@@ -123,6 +129,9 @@ export function TurnoAzioniCantiere({
   prominente = false,
   compatto = false,
   giornataPulita = false,
+  splitAttivo = true,
+  tolleranzaChiusuraMin = 5,
+  passoMinuti = 15,
 }: TurnoAzioniCantiereProps) {
   const router = useRouter();
   // Seed deterministico (inizio turno) per evitare il mismatch di hydration;
@@ -192,8 +201,8 @@ export function TurnoAzioniCantiere({
     // lato server usa lo STESSO ts, così la somma combacia.
     setTsScelto(ts ?? new Date().toISOString());
     setDialogOpen(true);
-    // Split: carica i cantieri (solo se giornata pulita) se non già presenti.
-    if (giornataPulita && splitCantieri == null) {
+    // Split: carica i cantieri (solo se attivo + giornata pulita) se non presenti.
+    if (splitAttivo && giornataPulita && splitCantieri == null) {
       void elencoCantieriTurno().then((r) => {
         if (r.ok) setSplitCantieri(r.cantieri);
       });
@@ -420,12 +429,14 @@ export function TurnoAzioniCantiere({
         mezzi={mezzi}
         pausaPrompt={promptPausa ? { durataMin: durataTurnoMin } : null}
         splitContesto={
-          giornataPulita && tsScelto
+          splitAttivo && giornataPulita && tsScelto
             ? ({
                 closeIso: tsScelto,
                 inizioIso: inizioTs,
                 cantiereCorrente: { id: cantiereId, nome: cantiereNome ?? 'Cantiere' },
                 cantieri: splitCantieri ?? [],
+                tolleranzaMin: tolleranzaChiusuraMin,
+                passoMinuti,
               } satisfies SplitContesto)
             : null
         }

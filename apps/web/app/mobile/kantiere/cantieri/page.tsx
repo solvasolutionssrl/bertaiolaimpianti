@@ -4,6 +4,7 @@ import { MapPin } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../../_lib/guard';
+import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import {
@@ -45,10 +46,13 @@ export default async function CantieriMobilePage() {
   const puoAvviareTurno = !!(meRes.data as { id: string } | null);
 
   const cantieriTutti = (cantieriRes.data as CantiereItem[] | null) ?? [];
-  // Gate temporaneo (weekend): i tecnici vedono solo i cantieri timbrabili
-  // (QR attivo → oggi solo Monfalcone). Admin/office vedono tutto.
+  // Visibilità cantieri per i tecnici: se "avvio libero" è ATTIVO (default) i
+  // tecnici vedono tutti i cantieri; se disattivato, solo quelli timbrabili
+  // (QR attivo). Admin/office vedono sempre tutto. (Sostituisce il gate weekend
+  // con un'impostazione ufficio.)
+  const { avvioLibero } = await leggiImpostazioniTurno(supabase, ctx.tenantId);
   let cantieri = cantieriTutti;
-  if (!vedeTuttiICantieri(ctx.role)) {
+  if (!vedeTuttiICantieri(ctx.role) && !avvioLibero) {
     const visibili = await cantieriVisibiliTecnicoIds(ctx.tenantId);
     cantieri = cantieriTutti.filter((c) => visibili.has(c.id));
   }
