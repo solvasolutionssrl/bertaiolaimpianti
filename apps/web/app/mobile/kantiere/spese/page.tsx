@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 import { Receipt } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { romeDay } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { tenantHasModule } from '@/app/_lib/modules';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 
 import { guardMobile } from '../../_lib/guard';
 import { NuovaSpesa } from './_components/nuova-spesa';
@@ -19,6 +22,11 @@ export const dynamic = 'force-dynamic';
 export default async function SpeseMobilePage() {
   const ctx = await guardMobile();
   const supabase = createServerSupabase();
+
+  // Sotto-modulo Kontabilità: gated dal modulo kantiere + flag per-tenant.
+  if (!(await tenantHasModule('kantiere')) || !(await kontabilitaAttiva(supabase, ctx.tenantId))) {
+    notFound();
+  }
 
   // Profilo dipendente dell'utente (filtro di sicurezza extra oltre l'RLS).
   const { data: dipRow } = await supabase

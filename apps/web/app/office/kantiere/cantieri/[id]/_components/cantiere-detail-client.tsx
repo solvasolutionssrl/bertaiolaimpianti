@@ -62,9 +62,6 @@ interface CantiereProp {
   indirizzoDaVerificare: boolean;
   indirizzoLat: number | null;
   indirizzoLng: number | null;
-  sedePartenza: string | null;
-  sedePartenzaLat: number | null;
-  sedePartenzaLng: number | null;
   commessaId: string | null;
   stato: 'attivo' | 'sospeso' | 'chiuso';
   note: string | null;

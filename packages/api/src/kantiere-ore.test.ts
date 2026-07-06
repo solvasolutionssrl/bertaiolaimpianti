@@ -36,6 +36,12 @@ describe('esitoAutoApprovazione', () => {
     expect(r.autoApprova).toBe(false);
     expect(r.motivo).toBe('nessun_turno');
   });
+  it('giornata ferma in pausa (ingressi==uscite ma inPausa) → aperto, non auto-approva', () => {
+    // ingresso + uscita-pausa: i conteggi tornano ma il turno è aperto.
+    const r = esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 240, sogliaOreMax: 10, inPausa: true });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('aperto');
+  });
   it('soglia non valida → default 10h', () => {
     expect(esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 600, sogliaOreMax: 0 }).autoApprova).toBe(true);
     expect(esitoAutoApprovazione({ ingressi: 1, uscite: 1, minutiLavoratiTotali: 601, sogliaOreMax: 0 }).autoApprova).toBe(false);

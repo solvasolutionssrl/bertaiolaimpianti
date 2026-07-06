@@ -6,6 +6,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 
 /**
  * Server actions per le sedi (luoghi di partenza/arrivo) del modulo Kantiere.
@@ -95,8 +96,14 @@ export async function creaSede(input: unknown): Promise<CreaResult> {
     .single();
 
   if (error) return { ok: false, error: error.message };
+  const nuovaId = (data as { id: string }).id;
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'sede', entityId: nuovaId, action: 'sede.crea',
+    after: { nome: parsed.data.nome, tipo: parsed.data.tipo, indirizzo: parsed.data.indirizzo ?? null },
+  });
   revalidatePath('/office/kantiere/sedi');
-  return { ok: true, id: (data as { id: string }).id };
+  return { ok: true, id: nuovaId };
 }
 
 // ── aggiornaSede ──────────────────────────────────────────────────────────────
@@ -139,6 +146,11 @@ export async function aggiornaSede(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'sede', entityId: parsed.data.id, action: 'sede.modifica',
+    after: { nome: parsed.data.nome, tipo: parsed.data.tipo, attivo: parsed.data.attivo },
+  });
   revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }
@@ -164,6 +176,10 @@ export async function eliminaSede(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'sede', entityId: parsed.data.id, action: 'sede.elimina',
+  });
   revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }
@@ -205,6 +221,10 @@ export async function impostaSedeDefault(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
   if (setErr) return { ok: false, error: `Impostazione default fallita: ${setErr.message}` };
 
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'sede', entityId: parsed.data.id, action: 'sede.predefinita',
+  });
   revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }
@@ -242,6 +262,11 @@ export async function associaSedeCantiere(input: unknown): Promise<OkResult> {
     } as never, { onConflict: 'cantiere_id,sede_id' });
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'cantiere_sede', entityId: parsed.data.cantiereId, action: 'sede.collega',
+    metadata: { cantiereId: parsed.data.cantiereId, sedeId: parsed.data.sedeId },
+  });
   revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }
@@ -265,6 +290,11 @@ export async function dissociaSedeCantiere(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'cantiere_sede', entityId: parsed.data.cantiereId, action: 'sede.scollega',
+    metadata: { cantiereId: parsed.data.cantiereId, sedeId: parsed.data.sedeId },
+  });
   revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }

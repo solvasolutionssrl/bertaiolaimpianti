@@ -806,6 +806,19 @@ export async function aggiungiPausaGiornata(
   const durataTurnoMin = (end - start) / 60000;
   if (minuti >= durataTurnoMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
 
+  // Sostituisce l'eventuale pausa già presente (es. auto-chiusa dal sistema o
+  // dichiarata in uscita): "aggiungi pausa" IMPOSTA la pausa della giornata, non
+  // se ne accumulano due → altrimenti il pranzo verrebbe sottratto due volte.
+  // Stessa logica di `modificaMiaGiornata`.
+  await supabase
+    .from('timbrature' as never)
+    .delete()
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .eq('pausa', true)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+
   // Stessa coppia-pausa centrata della pausa dichiarata in chiusura turno.
   const { uscitaIso, ingressoIso } = coppiaPausaCentrata(primoIngresso.ts, ultimaUscita.ts, minuti);
   const base = {

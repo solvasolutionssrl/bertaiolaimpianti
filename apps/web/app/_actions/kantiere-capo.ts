@@ -28,9 +28,11 @@ import {
 
 type AzioneTimbra = 'inizio' | 'fine' | 'pausa' | 'ripresa';
 
+// `fine` NON ammessa in pausa: chiudere in pausa lascerebbe un'uscita orfana e
+// perderebbe le ore del pomeriggio → il capo deve prima "riprendere" il membro.
 const AZIONI_AMMESSE: Record<AzioneTimbra, StatoTurno[]> = {
   inizio: ['idle'],
-  fine: ['lavoro', 'pausa'],
+  fine: ['lavoro'],
   pausa: ['lavoro'],
   ripresa: ['pausa'],
 };

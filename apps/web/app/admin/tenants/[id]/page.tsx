@@ -29,6 +29,32 @@ import { googleRoutingDisponibile } from '@/app/_lib/routing';
 
 export const dynamic = 'force-dynamic';
 
+// Etichette leggibili per la config Kantiere (sola lettura, tab Viaggio).
+const CONFIG_KANTIERE_LABELS: [string, string][] = [
+  ['soglia_ore_ordinarie', 'Soglia ore ordinarie'],
+  ['anomalia_turno_ore_max', 'Soglia anomalia turno (h)'],
+  ['soglia_pausa_pranzo_ore', 'Promemoria pausa (h)'],
+  ['soglia_auto_spegnimento_pausa_ore', 'Auto-spegnimento pausa (h)'],
+  ['arrotondamento_viaggio_min', 'Arrotondamento viaggio (min)'],
+  ['arrotondamento_ore_min', 'Arrotondamento ore (min)'],
+  ['auto_approva_rapportini', 'Auto-approvazione rapportini'],
+  ['tolleranza_chiusura_min', 'Tolleranza chiusura (min)'],
+  ['split_fine_turno_attivo', 'Split fine turno'],
+  ['km_switch_attivo', 'Km cambio cantiere'],
+  ['passo_minuti_stepper', 'Passo stepper (min)'],
+  ['avvio_turno_libero', 'Avvio turno libero'],
+  ['registra_giornata_attivo', 'Registra giornata da zero'],
+  ['kontabilita_attiva', 'Kontabilità attiva'],
+  ['routing_provider', 'Provider viaggio'],
+];
+
+/** Formatta un valore di config per la vista sola lettura. */
+function fmtConfigKantiere(v: unknown): string {
+  if (v === undefined || v === null) return 'predefinito';
+  if (typeof v === 'boolean') return v ? 'Sì' : 'No';
+  return String(v);
+}
+
 export default async function TenantDetailPage({
   params,
 }: {
@@ -293,12 +319,40 @@ export default async function TenantDetailPage({
         {/* ===== Viaggio (provider stima km/tempo) ===== */}
         {kantiereAttivo ? (
           <TabsContent value="routing">
-            <TabRouting
-              tenantId={tenant.id}
-              tenantNome={tenant.nome}
-              currentProvider={routingProvider}
-              googleKeyConfigured={googleKeyConfigured}
-            />
+            <div className="space-y-5">
+              <TabRouting
+                tenantId={tenant.id}
+                tenantNome={tenant.nome}
+                currentProvider={routingProvider}
+                googleKeyConfigured={googleKeyConfigured}
+              />
+              {/* Config Kantiere sola lettura: il super admin vede le soglie
+                  payroll/operative del tenant senza dover impersonare. */}
+              <Card>
+                <CardContent className="py-6">
+                  <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Config Kantiere · sola lettura
+                  </h2>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    Impostazioni operative del tenant (Turni &amp; calcoli, soglie, arrotondamenti).
+                    Le gestisce l&apos;ufficio del tenant; qui sono visibili per il supporto.
+                  </p>
+                  <dl className="grid grid-cols-1 gap-x-8 gap-y-0 sm:grid-cols-2">
+                    {CONFIG_KANTIERE_LABELS.map(([key, label]) => (
+                      <div
+                        key={key}
+                        className="flex items-center justify-between gap-3 border-b border-border/50 py-1.5 text-sm"
+                      >
+                        <dt className="text-muted-foreground">{label}</dt>
+                        <dd className="font-mono tabular-nums text-foreground">
+                          {fmtConfigKantiere(kantiereConfig[key])}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         ) : null}
 

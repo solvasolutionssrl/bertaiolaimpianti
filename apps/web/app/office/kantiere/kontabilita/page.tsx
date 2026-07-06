@@ -1,6 +1,9 @@
+import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { tenantHasModule } from '@/app/_lib/modules';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { CATEGORIE_SPESA, type CategoriaSpesa } from '@kommessa/api/spese';
 
 import { Filtri, type FiltriValori } from './_components/filtri';
@@ -52,6 +55,12 @@ interface PageProps {
 export default async function KontabilitaPage({ searchParams }: PageProps) {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
+
+  // Sotto-modulo Kontabilità: gated dal modulo kantiere e dal flag per-tenant
+  // (l'ufficio/super admin può spegnerlo). Off → pagina non raggiungibile.
+  if (!(await tenantHasModule('kantiere')) || !(await kontabilitaAttiva(supabase, ctx.tenantId))) {
+    notFound();
+  }
 
   const cantiereFilter = searchParams.cantiere || undefined;
   const dipendenteFilter = searchParams.dipendente || undefined;

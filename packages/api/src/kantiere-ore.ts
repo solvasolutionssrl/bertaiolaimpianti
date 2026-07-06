@@ -227,9 +227,14 @@ export function esitoAutoApprovazione(input: {
   uscite: number;
   minutiLavoratiTotali: number;
   sogliaOreMax: number;
+  /** true se la giornata è ferma in pausa pranzo (ultimo evento = uscita di
+   *  pausa): i conteggi ingressi/uscite tornano, ma il turno è ancora APERTO,
+   *  quindi NON va auto-approvato con le sole ore del mattino. */
+  inPausa?: boolean;
 }): EsitoAutoApprovazione {
-  const { ingressi, uscite, minutiLavoratiTotali, sogliaOreMax } = input;
+  const { ingressi, uscite, minutiLavoratiTotali, sogliaOreMax, inPausa } = input;
   if (ingressi <= 0) return { autoApprova: false, motivo: 'nessun_turno' };
+  if (inPausa) return { autoApprova: false, motivo: 'aperto' };
   if (ingressi !== uscite) return { autoApprova: false, motivo: 'aperto' };
   const soglia = Number.isFinite(sogliaOreMax) && sogliaOreMax > 0 ? sogliaOreMax : SOGLIA_ANOMALIA_TURNO_ORE;
   if (minutiLavoratiTotali > soglia * 60) return { autoApprova: false, motivo: 'oltre_soglia' };

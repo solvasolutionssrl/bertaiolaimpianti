@@ -218,7 +218,7 @@ export async function ricomputaRapportinoAuto(
   const { fromIso, toIso } = romeDayBoundsUtc(data);
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('id, commessa_id, cantiere_id, tipo, ts')
+    .select('id, commessa_id, cantiere_id, tipo, ts, pausa')
     .eq('tenant_id', tenantId)
     .eq('dipendente_id', dipendenteId)
     .gte('ts', fromIso)
@@ -230,16 +230,22 @@ export async function ricomputaRapportinoAuto(
     cantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
+    pausa: boolean | null;
   }[]) ?? [];
 
-  // 3b. Le timbrature sono la verità: se ci sono, il rapportino le riflette
-  //     SEMPRE (anche se in passato era stato toccato a mano: lo rimettiamo
-  //     "auto"). Se NON ci sono timbrature, NON sovrascriviamo un eventuale
-  //     inserimento manuale (es. fallback "non ho timbrato").
-  if (timbrature.length === 0) {
+  // 3b. Override manuale: se le ore sono state corrette a mano
+  //     (auto_compilato=false) quella correzione VINCE e non viene sovrascritta
+  //     dal ricalcolo — anche su una giornata CON timbrature (altrimenti la
+  //     "Modifica giornata" del tecnico/ufficio sparirebbe alla prima
+  //     riapertura). La pausa, essendo una timbratura, continua a riflettersi.
+  //     Se NON ci sono timbrature e la colonna è legacy (null) ma esistono righe
+  //     manuali, non sovrascriviamo (fallback "non ho timbrato").
+  {
     const auto = await leggiAutoCompilato(supabase, rapp.id);
     if (auto === false) return rapp;
-    if (auto === null && (await contaRighe(supabase, rapp.id)) > 0) return rapp;
+    if (auto === null && timbrature.length === 0 && (await contaRighe(supabase, rapp.id)) > 0) {
+      return rapp;
+    }
   }
 
   // 4. Minuti lavorati per target + viaggio (da timbrature + tratte manuali).
@@ -314,6 +320,10 @@ export async function ricomputaRapportinoAuto(
   const uscite = timbrature.filter((t) => t.tipo === 'uscita').length;
   let minutiLavoratiTotali = 0;
   for (const m of minutiMap.values()) minutiLavoratiTotali += m;
+  // Giornata ferma in pausa = ultimo evento cronologico è un'uscita di pausa.
+  // In quel caso ingressi/uscite tornano ma il turno è aperto → non auto-approva.
+  const ultimaTimb = timbrature[timbrature.length - 1];
+  const inPausa = !!ultimaTimb && ultimaTimb.tipo === 'uscita' && !!ultimaTimb.pausa;
 
   let nuovoStato = 'bozza';
   let approvatoAt: string | null = null;
@@ -323,6 +333,7 @@ export async function ricomputaRapportinoAuto(
       uscite,
       minutiLavoratiTotali,
       sogliaOreMax: policy.sogliaAnomaliaTurnoOre,
+      inPausa,
     });
     if (esito.autoApprova) {
       nuovoStato = 'approvato';

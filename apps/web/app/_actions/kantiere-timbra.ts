@@ -102,10 +102,12 @@ async function eventiOggi(
   return (data as EventoOggi[] | null) ?? [];
 }
 
-/** Azioni ammesse per stato turno (validazione server contro stato stantio). */
+/** Azioni ammesse per stato turno (validazione server contro stato stantio).
+ *  `fine` NON è ammessa in pausa: chiudere mentre si è in pausa lascerebbe
+ *  un'uscita orfana e perderebbe le ore del pomeriggio → prima si "riprende". */
 const AZIONI_AMMESSE: Record<AzioneTimbra, StatoTurno[]> = {
   inizio: ['idle'],
-  fine: ['lavoro', 'pausa'],
+  fine: ['lavoro'],
   pausa: ['lavoro'],
   ripresa: ['pausa'],
 };
@@ -364,7 +366,15 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   const target = { tipo: 'cantiere' as const, id: parsed.data.cantiereId };
   const eventi = await eventiOggi(supabase, me.id, target);
   const info = statoTurno(eventi);
+  // Doppio-tap / retry: se il turno è appena stato chiuso (ultima uscita non
+  // pausa < 25s fa) è già finito → idempotente, non è un errore.
+  if (eventoRecenteUguale(eventi, 'uscita', false)) {
+    return { ok: true, tipo: 'uscita', pausa: false, ts: eventi[eventi.length - 1]!.ts };
+  }
   if (info.stato === 'idle') return { ok: false, error: 'NESSUN_TURNO_APERTO' };
+  // In pausa non si chiude: lascerebbe un'uscita orfana e perderebbe il
+  // pomeriggio. Il tecnico deve prima "riprendere" (timbra la ripresa reale).
+  if (info.stato === 'pausa') return { ok: false, error: 'RIPRENDI_PRIMA' };
 
   const ts = parsed.data.ts ?? new Date().toISOString();
   // L'ora di fine deve cadere oggi (Europe/Rome) e dopo l'ultima timbratura.
@@ -379,7 +389,15 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   // (pausa o uscita), così un viaggio non valido non lascia una pausa orfana.
   const viaggio = parsed.data.viaggio ?? null;
   if (viaggio) {
-    const v = await validaViaggio(supabase, viaggio, parsed.data.cantiereId);
+    // Con lo split la tratta di ritorno parte dall'ULTIMO cantiere della giornata
+    // (terminaConSplit la scrive con quel cantiere_id): la sede va validata
+    // contro quel cantiere, non contro quello di apertura turno.
+    const split0 = parsed.data.split;
+    const cantiereRitorno =
+      split0 && split0.length >= 2 && info.stato === 'lavoro' && info.ingressoAperto
+        ? split0[split0.length - 1]?.cantiereId ?? parsed.data.cantiereId
+        : parsed.data.cantiereId;
+    const v = await validaViaggio(supabase, viaggio, cantiereRitorno);
     if (!v.ok) return { ok: false, error: v.error };
   }
 
@@ -580,6 +598,25 @@ async function terminaConSplit(
 
 const TurnoCantiereSchema = z.object({ cantiereId: z.string().uuid() });
 
+/** Doppio-tap / retry di rete: se l'ULTIMA timbratura odierna è già identica
+ *  (stesso tipo + flag pausa) e recentissima (< finestra), NON si re-inserisce →
+ *  si ritorna idempotente. Rete di robustezza per le azioni self/cambio che non
+ *  hanno il vincolo DB (specchio del `recente()` del flusso QR). */
+function eventoRecenteUguale(
+  eventi: { tipo: 'ingresso' | 'uscita'; ts: string; pausa?: boolean | null }[],
+  tipo: 'ingresso' | 'uscita',
+  pausa: boolean,
+  windowMs = 25000,
+): boolean {
+  const ultima = eventi[eventi.length - 1];
+  if (!ultima) return false;
+  return (
+    ultima.tipo === tipo &&
+    Boolean(ultima.pausa) === pausa &&
+    Date.now() - Date.parse(ultima.ts) < windowMs
+  );
+}
+
 async function cambiaStatoTurnoMio(
   input: unknown,
   azione: 'pausa' | 'ripresa',
@@ -602,6 +639,11 @@ async function cambiaStatoTurnoMio(
   }
 
   const { tipo, pausa } = azioneATimbra(azione);
+  // Doppio-tap / retry: se l'ultimo evento è già questa stessa azione < 25s fa,
+  // non re-inserire (idempotente).
+  if (eventoRecenteUguale(eventi, tipo, pausa)) {
+    return { ok: true, tipo, pausa, ts: eventi[eventi.length - 1]!.ts };
+  }
   const ts = new Date().toISOString();
   const { error } = await supabase.from('timbrature' as never).insert({
     tenant_id: ctx.tenantId,
@@ -808,6 +850,21 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
   const supabase = createServerSupabase();
   const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
   if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  // Doppio-tap / retry: se ho appena aperto QUESTO cantiere (< 25s), è già
+  // avviato → idempotente (evita il doppio ingresso che romperebbe l'auto-approvazione).
+  const eventiCantiere = await eventiOggi(supabase, me.id, {
+    tipo: 'cantiere',
+    id: parsed.data.cantiereId,
+  });
+  if (eventoRecenteUguale(eventiCantiere, 'ingresso', false)) {
+    return {
+      ok: true,
+      tipo: 'ingresso',
+      pausa: false,
+      ts: eventiCantiere[eventiCantiere.length - 1]!.ts,
+    };
+  }
 
   // Un solo turno aperto per volta.
   if (await turnoApertoQualsiasi(supabase, me.id)) {

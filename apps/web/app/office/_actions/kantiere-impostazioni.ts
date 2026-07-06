@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -140,6 +141,15 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
     .eq('module_code', 'kantiere');
 
   if (updateError) return { ok: false, error: updateError.message };
+
+  // Traccia la modifica delle impostazioni (soglie payroll, arrotondamenti…):
+  // prima/dopo dell'intero config → visibile in /admin/audit.
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'tenant_module', entityId: ctx.tenantId,
+    action: 'kantiere.impostazioni.update',
+    before: existingConfig, after: newConfig,
+  });
 
   revalidatePath('/office/impostazioni/kantiere');
   revalidatePath('/office/kantiere/impostazioni');

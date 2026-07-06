@@ -125,6 +125,20 @@ La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semp
 - **Tastiera che copre i tasti**: aggancia alla **`visualViewport`** (spaziatore bianco = altezza tastiera, oppure restringi il foglio).
 - **Dropdown dentro un dialog Radix**: usare un **overlay assoluto in-flow** (NON un Portal: Radix lo tratterebbe come "fuori" → chiude il dialog / ruba il focus).
 
+#### Audit Kantiere + correzioni payroll/sicurezza/log (06/07/2026)
+
+Audit completo (5 investigatori paralleli + verifiche live Supabase) e correzioni. Regole/decisioni che ne derivano — **non reintrodurre i bug**:
+
+- **Fine turno in pausa = VIETATO**: chiudere un turno mentre si è in **pausa** lascerebbe un'uscita orfana e perderebbe le ore del pomeriggio. `AZIONI_AMMESSE.fine = ['lavoro']` (QR + capo), `terminaTurnoMio` rifiuta lo stato `pausa` (`RIPRENDI_PRIMA`), e la card `TurnoAzioniCantiere` in pausa mostra **solo "Riprendi"** (niente "Fine turno"). Prima si riprende (timbra la ripresa reale), poi si chiude.
+- **Auto-approvazione pausa-aware**: `esitoAutoApprovazione` accetta `inPausa` → una giornata ferma in pausa (ultimo evento = uscita di pausa) NON si auto-approva con le sole ore del mattino. `ricomputaRapportinoAuto` calcola `inPausa` (serve la colonna `pausa` nella query timbrature).
+- **Override manuale vince sempre**: in `ricomputaRapportinoAuto` il guard `auto_compilato=false` è onorato **anche con timbrature presenti** (prima solo se `length===0`) → la "Modifica giornata" del tecnico/ufficio non viene più cancellata dal ricalcolo.
+- **Dedupe doppio-tap**: `avviaTurnoMio`/`terminaTurnoMio`/`cambiaStatoTurnoMio` usano `eventoRecenteUguale` (25s) → ritornano idempotente invece di creare doppioni che bloccherebbero l'auto-approvazione.
+- **Log strutturato Kantiere**: helper condiviso **`auditTenant`** (`_actions/_lib/audit.ts`, best-effort) su `audit_events` per sede (crea/modifica/elimina/collega/scollega/predefinita), cantiere (crea/modifica/elimina), impostazioni Kantiere (before/after) e **spesa elimina**. Visibile in `/admin/audit`. **Da usare per ogni nuova mutazione Kantiere.**
+- **Kontabilità gated davvero**: `kontabilita_attiva=false` ora fa `notFound()` sulla pagina office (`kantiere/kontabilita`) e mobile (`kantiere/spese`) via `kontabilitaAttiva()`.
+- **Super admin**: tab **Viaggio** di `/admin/tenants/[id]` mostra la **config Kantiere in sola lettura** (soglie payroll/operative) — supporto senza impersonare.
+- **Spese hardening**: `eliminaSpesa` con guard ruolo + scope tenant; `aggiornaSpesa` valida il cantiere del tenant prima di riassegnarlo; split fine turno valida la sede sul cantiere **finale**.
+- **⏳ RLS presenze (migration `20260706120000`, NON applicata)**: vincola la scrittura di `timbrature/rapportini/rapportino_righe/rapportino_versioni/timbratura_viaggio` al **proprio `dipendente_id`** (o capo della squadra, via `sono_capo_di()`); office resta tenant-wide. **Applicare in staging/con test prima del cloud** (una policy errata rompe la timbratura del caposquadra — che è un `tecnico`).
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione

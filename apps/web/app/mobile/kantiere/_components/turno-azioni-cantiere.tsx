@@ -103,6 +103,8 @@ function messaggioErrore(code: string): string {
       return "L'ora deve essere di oggi e dopo l'ultima timbratura.";
     case 'NESSUN_TURNO_APERTO':
       return 'Nessun turno aperto.';
+    case 'RIPRENDI_PRIMA':
+      return 'Sei in pausa: riprendi il turno prima di chiuderlo.';
     default:
       return 'Operazione non riuscita. Riprova.';
   }
@@ -300,17 +302,18 @@ export function TurnoAzioniCantiere({
 
       {compatto ? (
         <div className="mt-3 space-y-2">
-          {/* CTA orizzontali 33/33/33 (o 50/50 in pausa) */}
-          <div className={`grid gap-2 ${inPausa ? 'grid-cols-2' : 'grid-cols-3'}`}>
+          {/* In pausa: unica azione "Riprendi" (chiudere in pausa perderebbe il
+              pomeriggio). Al lavoro: 33/33/33 Pausa · Cambia · Fine. */}
+          <div className={`grid gap-2 ${inPausa ? 'grid-cols-1' : 'grid-cols-3'}`}>
             {inPausa ? (
               <button
                 type="button"
                 onClick={() => esegui(() => riprendiTurnoMio({ cantiereId }))}
                 disabled={pending}
-                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-emerald-500 bg-emerald-600 px-1 py-2.5 text-xs font-semibold text-white active:scale-[0.97] disabled:opacity-60"
+                className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-600 px-1 py-2.5 text-sm font-semibold text-white active:scale-[0.97] disabled:opacity-60"
               >
                 {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" strokeWidth={2} />}
-                Riprendi
+                Riprendi turno
               </button>
             ) : (
               <button
@@ -324,15 +327,17 @@ export function TurnoAzioniCantiere({
               </button>
             )}
             {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} compatto /> : null}
-            <button
-              type="button"
-              onClick={() => apriTermina(undefined)}
-              disabled={pending}
-              className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-background px-1 py-2.5 text-xs font-semibold text-foreground active:scale-[0.97] hover:bg-muted disabled:opacity-60"
-            >
-              <LogOut className="h-5 w-5" strokeWidth={2} />
-              Fine turno
-            </button>
+            {!inPausa ? (
+              <button
+                type="button"
+                onClick={() => apriTermina(undefined)}
+                disabled={pending}
+                className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-background px-1 py-2.5 text-xs font-semibold text-foreground active:scale-[0.97] hover:bg-muted disabled:opacity-60"
+              >
+                <LogOut className="h-5 w-5" strokeWidth={2} />
+                Fine turno
+              </button>
+            ) : null}
           </div>
           {err && <p className="text-xs text-destructive">{err}</p>}
         </div>
@@ -365,9 +370,9 @@ export function TurnoAzioniCantiere({
             pausa: prima si riprende il turno. */}
         {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} /> : null}
 
-        {/* La pausa pranzo dichiarata + il viaggio di ritorno vivono ora nel
-            dialog "Termina turno" (apre su tap del pulsante qui sotto). */}
-        {!cambiaOra ? (
+        {/* La pausa pranzo dichiarata + il viaggio di ritorno vivono nel dialog
+            "Termina turno". In pausa non si chiude: prima "Riprendi turno". */}
+        {!inPausa && (!cambiaOra ? (
           <div className="flex flex-col gap-2">
             <button
               type="button"
@@ -414,7 +419,7 @@ export function TurnoAzioniCantiere({
               Annulla
             </button>
           </div>
-        )}
+        ))}
 
         {err && <p className="text-xs text-destructive">{err}</p>}
       </div>

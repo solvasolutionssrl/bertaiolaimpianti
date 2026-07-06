@@ -14,6 +14,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 import { mioTurnoAttivo } from '@/app/mobile/kantiere/_lib/turno-attivo';
 import {
   buildSnapshotSpesa,
@@ -346,7 +347,6 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
 
   const patch: Record<string, unknown> = {};
   if (d.categoria !== undefined) patch.categoria = normalizzaCategoria(d.categoria);
-  if (d.cantiereId !== undefined) patch.cantiere_id = d.cantiereId;
   if (d.ragioneSociale !== undefined) patch.ragione_sociale = d.ragioneSociale;
   if (d.note !== undefined) patch.note = d.note;
   if (d.metodoPagamento !== undefined) patch.metodo_pagamento = d.metodoPagamento;
@@ -359,15 +359,20 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
     const iva = d.importoIva !== undefined ? d.importoIva : prevRow.importo_iva ?? null;
     patch.imponibile = calcolaImponibile(tot, iva);
   }
-  // riassegnando il cantiere, riallinea la commessa derivata
+  // Riassegnando il cantiere: prima si VALIDA che appartenga al tenant (lettura
+  // RLS-scoped → null se di un altro tenant), poi si scrive cantiere_id + la
+  // commessa derivata. Evita di puntare la spesa al cantiere di un altro tenant.
   if (d.cantiereId) {
     const { data: cant } = await supabase
       .from('cantieri' as never)
       .select('commessa_id')
       .eq('id', d.cantiereId)
       .maybeSingle();
-    patch.commessa_id = (cant as { commessa_id: string | null } | null)?.commessa_id ?? null;
+    if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+    patch.cantiere_id = d.cantiereId;
+    patch.commessa_id = (cant as { commessa_id: string | null }).commessa_id ?? null;
   } else if (d.cantiereId === null) {
+    patch.cantiere_id = null;
     patch.commessa_id = null;
   }
 
@@ -414,10 +419,25 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
 
 export async function eliminaSpesa(id: string): Promise<Risultato> {
   if (!z.string().uuid().safeParse(id).success) return { ok: false, error: 'ID_NON_VALIDO' };
-  await requireTenantContext();
+  // Guard coerente con le altre azioni spese (prima si affidava solo a RLS →
+  // un tecnico riceveva un finto ok senza cancellare nulla). Scoping tenant
+  // esplicito sulla delete (difesa in profondità oltre a RLS).
+  const ctx = await requireTenantContext();
+  if (!['owner', 'admin', 'office'].includes(ctx.role)) {
+    return { ok: false, error: 'NON_AUTORIZZATO' };
+  }
   const supabase = createServerSupabase();
-  const { error } = await supabase.from('spese' as never).delete().eq('id', id);
+  const { error } = await supabase
+    .from('spese' as never)
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+  // Azione distruttiva → traccia (prima non lasciava alcun log).
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'spesa', entityId: id, action: 'spesa.elimina',
+  });
   revalidatePath('/office/kantiere/kontabilita');
   revalidatePath('/mobile/kantiere/spese');
   return { ok: true };

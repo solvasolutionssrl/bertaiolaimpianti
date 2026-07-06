@@ -4,17 +4,16 @@ import { createServerSupabase } from '@kommessa/api/server';
 import type { AppRole } from '@kommessa/api';
 
 /**
- * GATE TEMPORANEO (dal 03/07/2026 — da RIMUOVERE/rimpiazzare nel weekend).
+ * Visibilità cantieri per i tecnici — ramo "avvio turno NON libero".
  *
- * Dopo l'import massivo dei cantieri FPM (190 righe), i **tecnici** devono
- * vedere SOLO i cantieri "timbrabili" (con QR cantiere attivo) — oggi il solo
- * Monfalcone — così l'elenco dei 190 non li invade prima che la nuova modalità
- * (ricerca / assegnazione) sia pronta. **Admin e office vedono TUTTO** (ok
- * durante la costruzione).
+ * È l'implementazione del caso `avvio_turno_libero = off` (impostazione ufficio
+ * "Turni & calcoli", reader `leggiImpostazioniTurno`): quando **off**, i tecnici
+ * vedono SOLO i cantieri "timbrabili" (con QR cantiere attivo); quando **on**
+ * (default) vedono TUTTI i cantieri e questo helper non viene usato. **Admin e
+ * office vedono sempre TUTTO.**
  *
- * A regime il cliente vuole che i tecnici vedano tutti i cantieri: questo gate
- * va sostituito da ricerca/assegnazione. Vedi memoria
- * `project-cantieri-fpm-popolamento`.
+ * Storia: nato come gate temporaneo dopo l'import dei 190 cantieri FPM (03/07),
+ * ora è governato dall'impostazione. Vedi `project-kantiere-turno-manuale-multicantiere`.
  *
  * Gated `kantiere` → nessun impatto su Bertaiola.
  */

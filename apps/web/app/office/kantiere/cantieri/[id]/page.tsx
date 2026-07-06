@@ -37,7 +37,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   const { data: cantiereRaw } = await supabase
     .from('cantieri' as never)
     .select(
-      'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, indirizzo_lat, indirizzo_lng, sede_partenza, sede_partenza_lat, sede_partenza_lng, commessa_id, stato, note',
+      'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, indirizzo_lat, indirizzo_lng, commessa_id, stato, note',
     )
     .eq('id', params.id)
     .eq('tenant_id', ctx.tenantId)
@@ -56,9 +56,6 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     indirizzo_da_verificare: boolean | null;
     indirizzo_lat: number | null;
     indirizzo_lng: number | null;
-    sede_partenza: string | null;
-    sede_partenza_lat: number | null;
-    sede_partenza_lng: number | null;
     commessa_id: string | null;
     stato: 'attivo' | 'sospeso' | 'chiuso';
     note: string | null;
@@ -432,9 +429,6 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
           indirizzoDaVerificare: Boolean(cantiere.indirizzo_da_verificare),
           indirizzoLat: cantiere.indirizzo_lat,
           indirizzoLng: cantiere.indirizzo_lng,
-          sedePartenza: cantiere.sede_partenza,
-          sedePartenzaLat: cantiere.sede_partenza_lat,
-          sedePartenzaLng: cantiere.sede_partenza_lng,
           commessaId: cantiere.commessa_id,
           stato: cantiere.stato,
           note: cantiere.note,

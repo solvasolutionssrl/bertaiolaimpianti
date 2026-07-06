@@ -8,6 +8,7 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import { prossimoCodiceCantiere } from '@kommessa/api/kantiere';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 
 /**
  * Server actions per la gestione dei Cantieri (CRUD + squadra + QR cantiere).
@@ -218,6 +219,11 @@ export async function creaCantiere(input: unknown): Promise<CreaCantResult> {
     parsed.data.sedePartenzaLng ?? null,
   );
 
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'cantiere', entityId: row.id, action: 'cantiere.crea',
+    after: { codice: row.codice, nome: parsed.data.nome },
+  });
   revalidatePath('/office/kantiere/cantieri');
   revalidatePath('/office/kantiere/sedi');
   return { ok: true, id: row.id, codice: row.codice };
@@ -231,9 +237,6 @@ const AggiornaCantSchema = z.object({
   indirizzo: z.string().max(300).optional().nullable(),
   indirizzoLat: z.number().optional().nullable(),
   indirizzoLng: z.number().optional().nullable(),
-  sedePartenza: z.string().max(300).optional().nullable(),
-  sedePartenzaLat: z.number().optional().nullable(),
-  sedePartenzaLng: z.number().optional().nullable(),
   commessaId: z.string().uuid().optional().nullable(),
   stato: z.enum(['attivo', 'sospeso', 'chiuso']).optional(),
   indirizzoDaVerificare: z.boolean().optional(),
@@ -255,9 +258,6 @@ export async function aggiornaCantiere(input: unknown): Promise<OkResult> {
   if ('indirizzo' in parsed.data) patch['indirizzo'] = parsed.data.indirizzo ?? null;
   if ('indirizzoLat' in parsed.data) patch['indirizzo_lat'] = parsed.data.indirizzoLat ?? null;
   if ('indirizzoLng' in parsed.data) patch['indirizzo_lng'] = parsed.data.indirizzoLng ?? null;
-  if ('sedePartenza' in parsed.data) patch['sede_partenza'] = parsed.data.sedePartenza ?? null;
-  if ('sedePartenzaLat' in parsed.data) patch['sede_partenza_lat'] = parsed.data.sedePartenzaLat ?? null;
-  if ('sedePartenzaLng' in parsed.data) patch['sede_partenza_lng'] = parsed.data.sedePartenzaLng ?? null;
   if ('commessaId' in parsed.data) patch['commessa_id'] = parsed.data.commessaId ?? null;
   if (parsed.data.stato !== undefined) patch['stato'] = parsed.data.stato;
   if ('indirizzoDaVerificare' in parsed.data)
@@ -274,22 +274,13 @@ export async function aggiornaCantiere(input: unknown): Promise<OkResult> {
 
   if (error) return { ok: false, error: error.message };
 
-  // Se è stata aggiornata la sede di partenza con coordinate, sincronizza
-  // l'anagrafica Sedi (crea/aggiorna + default + associazione al cantiere).
-  if ('sedePartenza' in parsed.data) {
-    await sincronizzaSedeDefaultDaCantiere(
-      supabase,
-      ctx.tenantId,
-      parsed.data.id,
-      parsed.data.sedePartenza ?? null,
-      parsed.data.sedePartenzaLat ?? null,
-      parsed.data.sedePartenzaLng ?? null,
-    );
-  }
-
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'cantiere', entityId: parsed.data.id, action: 'cantiere.modifica',
+    after: patch,
+  });
   revalidatePath('/office/kantiere/cantieri');
   revalidatePath(`/office/kantiere/cantieri/${parsed.data.id}`);
-  revalidatePath('/office/kantiere/sedi');
   return { ok: true };
 }
 
@@ -311,6 +302,10 @@ export async function eliminaCantiere(input: unknown): Promise<OkResult> {
 
   if (error) return { ok: false, error: error.message };
 
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
+    entityType: 'cantiere', entityId: parsed.data.id, action: 'cantiere.elimina',
+  });
   revalidatePath('/office/kantiere/cantieri');
   return { ok: true };
 }

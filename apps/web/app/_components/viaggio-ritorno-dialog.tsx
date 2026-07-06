@@ -195,6 +195,8 @@ function messaggioErrore(code: string): string {
       return "L'ora deve essere di oggi e dopo l'ultima timbratura.";
     case 'NESSUN_TURNO_APERTO':
       return 'Nessun turno aperto.';
+    case 'RIPRENDI_PRIMA':
+      return 'Sei in pausa: riprendi il turno prima di chiuderlo.';
     case 'SPLIT_NON_APPLICABILE':
       return 'La giornata non è più divisibile (è cambiata nel frattempo). Ricarica la pagina.';
     case 'SPLIT_SOMMA':
