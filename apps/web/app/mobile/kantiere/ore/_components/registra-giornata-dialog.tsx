@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Minus, X, Loader2, CalendarClock, Coffee, CheckCircle2 } from 'lucide-react';
+import { Plus, Minus, X, Loader2, CalendarClock, Coffee, Clock, MapPin, CheckCircle2 } from 'lucide-react';
 
 import { Portal } from '@/app/mobile/_components/portal';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -54,6 +54,10 @@ const PAUSE_CHIPS: { min: number; label: string }[] = [
   { min: 60, label: '1 h' },
 ];
 
+// Colori dei segmenti della barra panoramica: uno per cantiere (ciclici).
+// Categorici e sobri → si distinguono i cantieri senza diventare un semaforo.
+const SEG_COLORS = ['bg-primary', 'bg-emerald-500', 'bg-sky-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500'];
+
 function StepperMin({
   minuti,
   passo,
@@ -84,6 +88,49 @@ function StepperMin({
       <button type="button" disabled={disabled} onClick={() => onChange(minuti + passo)} className={btnCls} aria-label={`Più ${passo} minuti`}>
         <Plus className="h-4 w-4" />
       </button>
+    </div>
+  );
+}
+
+/**
+ * Campo ora robusto su iOS: display formattato + <input type=time> nativo
+ * INVISIBILE sopra. iOS disegna il time alla larghezza intrinseca ignorando
+ * width (resta inline-flex) → sforerebbe la colonna. Così la larghezza la
+ * decide il display, e il picker nativo si apre comunque al tap.
+ */
+function TimeField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <label className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{label}</label>
+      <div className="relative">
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2 py-2.5 text-base font-semibold tabular-nums ${
+            disabled ? 'opacity-50' : 'text-foreground'
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="min-w-0 truncate">{value}</span>
+        </div>
+        <input
+          type="time"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          aria-label={label}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+        />
+      </div>
     </div>
   );
 }
@@ -136,6 +183,10 @@ export function RegistraGiornataDialog({
   const restano = nettoMin - assegnato;
   const entroTolleranza = Math.abs(restano) <= tolleranzaMin;
   const disponibili = (cantieri ?? []).filter((c) => !righe.some((r) => r.cantiereId === c.id));
+  // Panoramica compatta (footer): denominatore della barra = il piu grande fra
+  // netto e assegnato, così la barra non sfora mai anche se metti ore di troppo.
+  const baseBarra = Math.max(nettoMin, assegnato, 1);
+  const pausaLabel = PAUSE_CHIPS.find((p) => p.min === pausaMin)?.label ?? `${pausaMin} min`;
 
   function aggiungi(id: string) {
     const c = (cantieri ?? []).find((x) => x.id === id);
@@ -190,9 +241,6 @@ export function RegistraGiornataDialog({
 
   if (!open) return null;
 
-  const inputTimeCls =
-    'w-full min-w-0 rounded-lg border border-border bg-background px-3 py-2.5 text-center text-base font-semibold tabular-nums focus:border-primary focus:outline-none';
-
   return (
     <Portal>
       <div className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-background" role="dialog" aria-modal="true">
@@ -238,16 +286,11 @@ export function RegistraGiornataDialog({
                   </span>
                 </div>
 
-                {/* Inizio / Fine — due colonne larghe (niente più 3-in-fila stretto) */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="space-y-1">
-                    <label className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Inizio</label>
-                    <input type="time" value={inizio} onChange={(e) => setInizio(e.target.value)} disabled={pending} className={inputTimeCls} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Fine</label>
-                    <input type="time" value={fine} onChange={(e) => setFine(e.target.value)} disabled={pending} className={inputTimeCls} />
-                  </div>
+                {/* Inizio / Fine — 2 colonne 50/50 (min-w-0 sui grid item, così il
+                    time nativo iOS non allarga la traccia) via TimeField. */}
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2.5">
+                  <TimeField label="Inizio" value={inizio} onChange={setInizio} disabled={pending} />
+                  <TimeField label="Fine" value={fine} onChange={setFine} disabled={pending} />
                 </div>
 
                 {/* Pausa — dentro la stessa card (chip robusti, niente overflow) */}
@@ -285,7 +328,7 @@ export function RegistraGiornataDialog({
                 </p>
 
                 {righe.map((r, i) => (
-                  <section key={r.cantiereId} className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+                  <section key={r.cantiereId} className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -329,17 +372,6 @@ export function RegistraGiornataDialog({
                   </button>
                 ) : null}
 
-                {righe.length > 0 ? (
-                  <p className={`text-center text-xs font-semibold ${entroTolleranza ? 'text-emerald-600' : 'text-amber-600'}`}>
-                    {entroTolleranza
-                      ? restano === 0
-                        ? `Tutto assegnato ✓ (netti ${fmtHM(nettoMin)})`
-                        : `OK · l'ultimo cantiere aggiusta ${fmtHM(Math.abs(restano))}`
-                      : restano > 0
-                        ? `Restano ${fmtHM(restano)} da assegnare (netti ${fmtHM(nettoMin)})`
-                        : `${fmtHM(-restano)} di troppo`}
-                  </p>
-                ) : null}
               </div>
 
               {errore ? (
@@ -347,8 +379,54 @@ export function RegistraGiornataDialog({
               ) : null}
             </div>
 
-            {/* ── Footer sticky: tastone VERDE ──────────────────────────────── */}
-            <div className="shrink-0 border-t border-border px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {/* ── Footer sticky: panoramica compatta + tastone VERDE ─────────── */}
+            <div className="shrink-0 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
+              {/* Panoramica: sempre sopra il tasto, così con tanti cantieri vedi
+                  a colpo d'occhio a che punto sei senza scrollare la lista. */}
+              <div className="mb-3 space-y-2 rounded-xl border border-border bg-muted/25 p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                    {fmtHM(assegnato)}
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">di {fmtHM(Math.max(0, nettoMin))}</span>
+                  </span>
+                  {righe.length === 0 || assegnato === 0 ? (
+                    <span className="text-xs font-semibold text-muted-foreground">Assegna le ore</span>
+                  ) : entroTolleranza ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Completa
+                    </span>
+                  ) : restano > 0 ? (
+                    <span className="text-xs font-semibold text-amber-600">Restano {fmtHM(restano)}</span>
+                  ) : (
+                    <span className="text-xs font-semibold text-amber-600">{fmtHM(-restano)} di troppo</span>
+                  )}
+                </div>
+
+                {/* Barra a segmenti: un colore per cantiere → riempimento + quanti sono */}
+                <div className="flex h-2.5 w-full items-stretch gap-0.5 overflow-hidden rounded-full bg-muted">
+                  {righe.map((r, i) =>
+                    r.minuti > 0 ? (
+                      <div
+                        key={r.cantiereId}
+                        className={SEG_COLORS[i % SEG_COLORS.length] ?? 'bg-primary'}
+                        style={{ width: `${(r.minuti / baseBarra) * 100}%` }}
+                      />
+                    ) : null,
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-3 w-3" aria-hidden="true" />
+                    {righe.length} {righe.length === 1 ? 'cantiere' : 'cantieri'}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Coffee className="h-3 w-3" aria-hidden="true" />
+                    {pausaMin > 0 ? `Pausa ${pausaLabel}` : 'Senza pausa'}
+                  </span>
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={salva}
