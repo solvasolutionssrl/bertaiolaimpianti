@@ -167,13 +167,44 @@ export async function chiudiPausaScadutaSePresente(
 }
 
 /**
+ * Verifica che una sede sia AMMESSA come partenza/arrivo per un dato cantiere:
+ * o è la sede predefinita del tenant (proposta ovunque) oppure è esplicitamente
+ * associata a quel cantiere (`cantiere_sede`). È la stessa regola che filtra le
+ * sedi in tutte le UI (QR, app, capo): le sedi collegate ad ALTRI cantieri (es.
+ * un hotel di un cantiere diverso) non sono ammesse. Letture RLS-scoped.
+ */
+export async function sedeAmmessaPerCantiere(
+  supabase: Supa,
+  sedeId: string,
+  cantiereId: string,
+): Promise<boolean> {
+  const { data: sede } = await supabase
+    .from('sedi' as never)
+    .select('id, is_default')
+    .eq('id', sedeId)
+    .maybeSingle();
+  if (!sede) return false;
+  if ((sede as { is_default: boolean }).is_default) return true;
+  const { data: assoc } = await supabase
+    .from('cantiere_sede' as never)
+    .select('sede_id')
+    .eq('cantiere_id', cantiereId)
+    .eq('sede_id', sedeId)
+    .maybeSingle();
+  return Boolean(assoc);
+}
+
+/**
  * Valida un payload viaggio: giustificazione se la stima è stata corretta,
  * sede e (se autista) mezzo devono appartenere al tenant (la lettura RLS-scoped
- * torna null altrimenti). Da chiamare PRIMA di inserire la timbratura.
+ * torna null altrimenti). Se `cantiereId` è fornito, la sede deve anche essere
+ * AMMESSA per quel cantiere (predefinita o associata) — difesa lato dati contro
+ * una sede di un altro cantiere. Da chiamare PRIMA di inserire la timbratura.
  */
 export async function validaViaggio(
   supabase: Supa,
   viaggio: ViaggioInput,
+  cantiereId?: string | null,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const modificato =
     viaggio.durataStimataMin != null &&
@@ -187,6 +218,9 @@ export async function validaViaggio(
     .eq('id', viaggio.sedeId)
     .maybeSingle();
   if (!sedeOk) return { ok: false, error: 'SEDE_NON_VALIDA' };
+  if (cantiereId && !(await sedeAmmessaPerCantiere(supabase, viaggio.sedeId, cantiereId))) {
+    return { ok: false, error: 'SEDE_NON_VALIDA' };
+  }
   if (viaggio.autista && viaggio.mezzoId) {
     const { data: mezzoOk } = await supabase
       .from('mezzi' as never)

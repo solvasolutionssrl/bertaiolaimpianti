@@ -21,6 +21,9 @@ export interface CantiereLite {
   id: string;
   nome: string;
   codice: string | null;
+  /** Codice cliente/commessa (visibile e cercabile). */
+  codice_commessa: string | null;
+  cliente_nome: string | null;
 }
 
 export default async function SediPage() {
@@ -37,7 +40,7 @@ export default async function SediPage() {
       .order('nome'),
     supabase
       .from('cantieri' as never)
-      .select('id, nome, codice, stato')
+      .select('id, nome, codice, codice_commessa, cliente_nome, stato')
       .eq('tenant_id', ctx.tenantId)
       .order('nome'),
     supabase
@@ -49,10 +52,23 @@ export default async function SediPage() {
   const sedi: SedeRow[] = (sediRes.data ?? []) as SedeRow[];
 
   const cantieri: CantiereLite[] = (
-    (cantieriRes.data as { id: string; nome: string; codice: string | null; stato: string }[] | null) ?? []
+    (cantieriRes.data as {
+      id: string;
+      nome: string;
+      codice: string | null;
+      codice_commessa: string | null;
+      cliente_nome: string | null;
+      stato: string;
+    }[] | null) ?? []
   )
     .filter((c) => c.stato !== 'chiuso')
-    .map((c) => ({ id: c.id, nome: c.nome, codice: c.codice }));
+    .map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      codice: c.codice,
+      codice_commessa: c.codice_commessa,
+      cliente_nome: c.cliente_nome,
+    }));
 
   // Mappa sede_id → array di cantiere_id collegati.
   const legamiPerSede: Record<string, string[]> = {};

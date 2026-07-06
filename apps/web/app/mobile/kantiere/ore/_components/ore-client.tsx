@@ -41,7 +41,9 @@ interface OreClientProps {
   rapportino: RapportinoProps;
   commesseDisponibili: { id: string; titolo: string }[];
   cantieriDisponibili: PickerCantiere[];
-  sediDisponibili: { id: string; nome: string; tipo: string }[];
+  sediDisponibili: { id: string; nome: string; tipo: string; isDefault: boolean }[];
+  /** cantiere_id → sede_id[] associate (oltre alla predefinita). */
+  sediPerCantiere: Record<string, string[]>;
   mezziDisponibili: { id: string; targa: string; modello: string | null }[];
   /** true se c'è un turno aperto: il totale di oggi è ancora 0/parziale, quindi
    *  la panoramica compare solo a turno finito. */
@@ -167,6 +169,7 @@ export function OreClient({
   commesseDisponibili,
   cantieriDisponibili,
   sediDisponibili,
+  sediPerCantiere,
   mezziDisponibili,
   turnoInCorso,
   registraGiornataAttivo,
@@ -633,6 +636,7 @@ export function OreClient({
         data={rapportino.data}
         cantieri={cantieriDisponibili}
         sedi={sediDisponibili}
+        sediPerCantiere={sediPerCantiere}
         mezzi={mezziDisponibili}
       />
 

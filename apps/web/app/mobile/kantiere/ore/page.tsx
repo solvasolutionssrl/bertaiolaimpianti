@@ -116,16 +116,29 @@ export default async function MobileOrePage() {
     categoria: c.categoria,
   }));
 
-  // Sedi + mezzi per il flusso viaggio dell'inserimento manuale
-  const { data: sediRaw } = await supabase
-    .from('sedi' as never)
-    .select('id, nome, tipo')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('attivo', true)
-    .order('nome', { ascending: true });
-  const sediDisponibili = ((sediRaw as Array<{ id: string; nome: string; tipo: string }>) ?? []).map(
-    (s) => ({ id: s.id, nome: s.nome, tipo: s.tipo }),
-  );
+  // Sedi + associazioni + mezzi per il flusso viaggio dell'inserimento manuale.
+  // Le sedi arrivano TUTTE (col flag is_default), ma il dialog mostra solo quelle
+  // AMMESSE per il cantiere scelto (predefinita + associate) → mai sedi di altri
+  // cantieri. La mappa cantiere→sedi guida il filtro lato client.
+  const [{ data: sediRaw }, { data: assocRaw }] = await Promise.all([
+    supabase
+      .from('sedi' as never)
+      .select('id, nome, tipo, is_default')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('attivo', true)
+      .order('nome', { ascending: true }),
+    supabase
+      .from('cantiere_sede' as never)
+      .select('cantiere_id, sede_id')
+      .eq('tenant_id', ctx.tenantId),
+  ]);
+  const sediDisponibili = (
+    (sediRaw as Array<{ id: string; nome: string; tipo: string; is_default: boolean }>) ?? []
+  ).map((s) => ({ id: s.id, nome: s.nome, tipo: s.tipo, isDefault: s.is_default }));
+  const sediPerCantiere: Record<string, string[]> = {};
+  for (const a of (assocRaw as Array<{ cantiere_id: string; sede_id: string }> | null) ?? []) {
+    (sediPerCantiere[a.cantiere_id] ??= []).push(a.sede_id);
+  }
 
   const { data: mezziRaw } = await supabase
     .from('mezzi' as never)
@@ -187,6 +200,7 @@ export default async function MobileOrePage() {
         commesseDisponibili={commesseDisponibili}
         cantieriDisponibili={cantieriDisponibili}
         sediDisponibili={sediDisponibili}
+        sediPerCantiere={sediPerCantiere}
         mezziDisponibili={mezziDisponibili}
         turnoInCorso={!!turno}
         registraGiornataAttivo={impTurno.registraGiornataAttivo}

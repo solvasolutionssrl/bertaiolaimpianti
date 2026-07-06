@@ -10,12 +10,15 @@ import { leggiRoutingProvider } from '@/app/_lib/kantiere-config';
  * Body: { query: string }
  * Returns: { suggestions: { label: string; lat: number; lng: number }[] }
  *
- * Geocoding indirizzi per i form Cantieri (modulo Kantiere). Predispone il
- * calcolo tragitto futuro (OSRM) salvando lat/lng accanto al testo.
+ * Geocoding indirizzi per i form Cantieri e Sedi (modulo Kantiere). Salva
+ * lat/lng accanto al testo per il calcolo tragitto (km/tempo).
  *
- * Provider:
- *  1. Photon (OSM) — `https://photon.komoot.io/api` (GeoJSON, no API key,
- *     no User-Agent obbligatorio). Primario.
+ * Provider (in ordine di priorità):
+ *  0. Google Geocoding — SOLO se il tenant usa il provider 'google' (stesso
+ *     toggle del routing, tab "Viaggio" del super admin) e la chiave di
+ *     piattaforma `GOOGLE_MAPS_API_KEY` è presente. Così indirizzi, tempo e km
+ *     di un tenant restano coerenti. Fail-soft → ripiega sui provider free.
+ *  1. Photon (OSM) — `https://photon.komoot.io/api` (GeoJSON, no API key).
  *  2. Nominatim (OSM) — fallback se Photon fallisce o non torna risultati.
  *     Richiede `User-Agent` per policy d'uso OSM.
  *

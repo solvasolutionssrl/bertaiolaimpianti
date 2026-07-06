@@ -241,7 +241,7 @@ export async function timbra(input: unknown): Promise<Result> {
       ? parsed.data.viaggio
       : null;
   if (viaggio) {
-    const v = await validaViaggio(supabase, viaggio);
+    const v = await validaViaggio(supabase, viaggio, target.id);
     if (!v.ok) return { ok: false, error: v.error };
   }
 
@@ -379,7 +379,7 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
   // (pausa o uscita), così un viaggio non valido non lascia una pausa orfana.
   const viaggio = parsed.data.viaggio ?? null;
   if (viaggio) {
-    const v = await validaViaggio(supabase, viaggio);
+    const v = await validaViaggio(supabase, viaggio, parsed.data.cantiereId);
     if (!v.ok) return { ok: false, error: v.error };
   }
 

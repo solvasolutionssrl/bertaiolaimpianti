@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useCallback } from 'react';
+import { useState, useTransition, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Car, ChevronDown, Loader2, MapPin } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -19,6 +19,7 @@ interface Sede {
   id: string;
   nome: string;
   tipo: string;
+  isDefault: boolean;
 }
 
 interface Mezzo {
@@ -33,6 +34,9 @@ export interface ManualeDialogProps {
   data: string;
   cantieri: PickerCantiere[];
   sedi: Sede[];
+  /** cantiere_id → sede_id[] associate: il flusso viaggio mostra solo le sedi
+   *  AMMESSE per il cantiere scelto (predefinita + associate), mai di altri. */
+  sediPerCantiere: Record<string, string[]>;
   mezzi: Mezzo[];
 }
 
@@ -48,10 +52,11 @@ interface TrattaState {
   distanzaKm: number | null;
 }
 
-function trattaIniziale(sedi: Sede[]): TrattaState {
+function trattaIniziale(): TrattaState {
   return {
+    // La sede si sceglie DOPO il cantiere (le sedi ammesse dipendono da esso).
     attiva: false,
-    sedeId: sedi[0]?.id ?? '',
+    sedeId: '',
     minuti: 0,
     autista: false,
     mezzoId: '',
@@ -284,6 +289,7 @@ export function ManualeDialog({
   data,
   cantieri,
   sedi,
+  sediPerCantiere,
   mezzi,
 }: ManualeDialogProps) {
   const router = useRouter();
@@ -295,9 +301,17 @@ export function ManualeDialog({
   // Un solo campo "ore di lavoro": lo split ordinario/straordinario lo fa
   // l'ufficio in fase di ricalcolo, non il tecnico.
   const [oreLavoro, setOreLavoro] = useState<number>(0);
-  const [andata, setAndata] = useState<TrattaState>(() => trattaIniziale(sedi));
-  const [ritorno, setRitorno] = useState<TrattaState>(() => trattaIniziale(sedi));
+  const [andata, setAndata] = useState<TrattaState>(() => trattaIniziale());
+  const [ritorno, setRitorno] = useState<TrattaState>(() => trattaIniziale());
   const [errore, setErrore] = useState<string | null>(null);
+
+  // Sedi AMMESSE per il cantiere scelto: la predefinita (sempre) + quelle
+  // associate a quel cantiere. Mai le sedi collegate ad altri cantieri.
+  const sediVisibili = useMemo(() => {
+    if (!cantiereId) return [] as Sede[];
+    const assoc = new Set(sediPerCantiere[cantiereId] ?? []);
+    return sedi.filter((s) => s.isDefault || assoc.has(s.id));
+  }, [cantiereId, sedi, sediPerCantiere]);
 
   // stima loading separati per non inquinare TrattaState con stato UI transiente
   const [stimaLoadingAndata, setStimaLoadingAndata] = useState(false);
@@ -342,8 +356,8 @@ export function ManualeDialog({
   function resetForm() {
     setCantiereId('');
     setOreLavoro(0);
-    setAndata(trattaIniziale(sedi));
-    setRitorno(trattaIniziale(sedi));
+    setAndata(trattaIniziale());
+    setRitorno(trattaIniziale());
     setErrore(null);
     setStimaLoadingAndata(false);
     setStimaLoadingRitorno(false);
@@ -359,17 +373,34 @@ export function ManualeDialog({
     return isNaN(n) ? 0 : Math.max(0, Math.min(24, n));
   }
 
-  /** Gestisce cambio cantiere: ricalcola stima per le tratte con sede impostata. */
+  /** Gestisce cambio cantiere: le sedi ammesse cambiano, quindi azzera la sede
+   *  scelta nelle tratte se non è più valida per il nuovo cantiere (evita di
+   *  tenere una sede di un altro cantiere) e ricalcola la stima se ancora ok. */
   function handleCantiereChange(cId: string) {
     setCantiereId(cId);
     setErrore(null);
-    if (!cId) return;
-    if (andata.attiva && andata.sedeId) {
-      void calcolaStima(andata.sedeId, cId, 'andata', setAndata, setStimaLoadingAndata);
+    if (!cId) {
+      setAndata((p) => ({ ...p, sedeId: '', minuti: 0, distanzaKm: null }));
+      setRitorno((p) => ({ ...p, sedeId: '', minuti: 0, distanzaKm: null }));
+      return;
     }
-    if (ritorno.attiva && ritorno.sedeId) {
-      void calcolaStima(ritorno.sedeId, cId, 'ritorno', setRitorno, setStimaLoadingRitorno);
-    }
+    const ammesse = new Set(
+      sedi.filter((s) => s.isDefault || (sediPerCantiere[cId] ?? []).includes(s.id)).map((s) => s.id),
+    );
+    const risolvi = (
+      tratta: TrattaState,
+      set: (fn: (prev: TrattaState) => TrattaState) => void,
+      setLoading: (v: boolean) => void,
+      dir: 'andata' | 'ritorno',
+    ) => {
+      if (tratta.sedeId && ammesse.has(tratta.sedeId)) {
+        if (tratta.attiva) void calcolaStima(tratta.sedeId, cId, dir, set, setLoading);
+      } else {
+        set((p) => ({ ...p, sedeId: '', minuti: 0, distanzaKm: null }));
+      }
+    };
+    risolvi(andata, setAndata, setStimaLoadingAndata, 'andata');
+    risolvi(ritorno, setRitorno, setStimaLoadingRitorno, 'ritorno');
   }
 
   /** Gestisce patch andata: se cambia sedeId e cantiere e` gia` selezionato, ricalcola stima. */
@@ -518,8 +549,8 @@ export function ManualeDialog({
             </div>
           </div>
 
-          {/* Viaggi */}
-          {sedi.length > 0 && (
+          {/* Viaggi — le sedi dipendono dal cantiere: compaiono dopo la scelta */}
+          {cantiereId && sediVisibili.length > 0 ? (
             <div className="space-y-2">
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                 Viaggio (opzionale)
@@ -527,7 +558,7 @@ export function ManualeDialog({
               <TrattaSection
                 label="Viaggio di andata"
                 tratta={andata}
-                sedi={sedi}
+                sedi={sediVisibili}
                 mezzi={mezzi}
                 disabled={isPending}
                 stimaLoading={stimaLoadingAndata}
@@ -536,14 +567,14 @@ export function ManualeDialog({
               <TrattaSection
                 label="Viaggio di ritorno"
                 tratta={ritorno}
-                sedi={sedi}
+                sedi={sediVisibili}
                 mezzi={mezzi}
                 disabled={isPending}
                 stimaLoading={stimaLoadingRitorno}
                 onChange={handleRitornoChange}
               />
             </div>
-          )}
+          ) : null}
 
           {/* Errore */}
           {errore && (

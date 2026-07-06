@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin, Plus, Star } from 'lucide-react';
 import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
+import { CantieriCollegatiSelect } from './cantieri-collegati-select';
 import type { SedeRow, CantiereLite } from '../page';
 import {
   creaSede,
@@ -289,25 +290,11 @@ export function SediClient({ sedi, cantieri, legamiPerSede }: Props) {
                   Collega ai cantieri{' '}
                   <span className="font-normal text-muted-foreground/70">(facoltativo)</span>
                 </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {cantieri.map((c) => {
-                    const sel = cantieriSel.has(c.id);
-                    return (
-                      <button
-                        type="button"
-                        key={c.id}
-                        onClick={() => toggleCantiereSel(c.id)}
-                        className={
-                          sel
-                            ? 'rounded-full border border-primary bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary'
-                            : 'rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted'
-                        }
-                      >
-                        {c.nome}
-                      </button>
-                    );
-                  })}
-                </div>
+                <CantieriCollegatiSelect
+                  cantieri={cantieri}
+                  selectedIds={[...cantieriSel]}
+                  onToggle={(id) => toggleCantiereSel(id)}
+                />
               </div>
             )}
 
@@ -551,8 +538,6 @@ function SedeEditRow({ sede, cantieri, legami, onToggleLegame, onSaved, onCancel
     }
   }
 
-  const legamiSet = new Set(legami);
-
   return (
     <tr className="bg-muted/20">
       <td className="px-3 py-3" colSpan={6}>
@@ -604,27 +589,13 @@ function SedeEditRow({ sede, cantieri, legami, onToggleLegame, onSaved, onCancel
             <div className="flex flex-col gap-1.5 sm:col-span-2">
               <label className="text-xs font-medium text-muted-foreground">
                 Cantieri collegati{' '}
-                <span className="font-normal text-muted-foreground/70">(clicca per attivare/disattivare)</span>
+                <span className="font-normal text-muted-foreground/70">(cerca e clicca per collegare/scollegare)</span>
               </label>
-              <div className="flex flex-wrap gap-1.5">
-                {cantieri.map((c) => {
-                  const on = legamiSet.has(c.id);
-                  return (
-                    <button
-                      type="button"
-                      key={c.id}
-                      onClick={() => onToggleLegame(sede.id, c.id, on)}
-                      className={
-                        on
-                          ? 'rounded-full border border-primary bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary'
-                          : 'rounded-full border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted'
-                      }
-                    >
-                      {c.nome}
-                    </button>
-                  );
-                })}
-              </div>
+              <CantieriCollegatiSelect
+                cantieri={cantieri}
+                selectedIds={legami}
+                onToggle={(id, on) => onToggleLegame(sede.id, id, on)}
+              />
             </div>
           )}
           {sede.is_default && (

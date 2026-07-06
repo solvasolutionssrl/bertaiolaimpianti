@@ -122,7 +122,7 @@ async function applicaAzione(
   // Solo in chiusura turno ('fine'): pausa dichiarata + viaggio di ritorno.
   const viaggio = azione === 'fine' && opts?.viaggio ? opts.viaggio : null;
   if (viaggio) {
-    const v = await validaViaggio(supabase, viaggio);
+    const v = await validaViaggio(supabase, viaggio, cantiereId);
     if (!v.ok) return { toccato: false, error: v.error };
   }
   if (azione === 'fine' && opts?.pausaPranzoMin) {

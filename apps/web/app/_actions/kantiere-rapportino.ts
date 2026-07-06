@@ -9,7 +9,7 @@ import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
-import { inserisciPausaDichiarata } from './_lib/viaggio-timbra';
+import { inserisciPausaDichiarata, sedeAmmessaPerCantiere } from './_lib/viaggio-timbra';
 
 // Stati in cui il tecnico può ancora modificare il proprio rapportino
 // (fino all'approvazione dell'ufficio; dopo, lo tocca solo l'ufficio).
@@ -494,12 +494,11 @@ export async function registraOreManuali(
   if (!cantOk) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
 
   for (const v of viaggi) {
-    const { data: sedeOk } = await supabase
-      .from('sedi' as never)
-      .select('id')
-      .eq('id', v.sedeId)
-      .maybeSingle();
-    if (!sedeOk) return { ok: false, error: 'SEDE_NON_VALIDA' };
+    // Sede AMMESSA per il cantiere: predefinita o associata (non una sede di un
+    // altro cantiere). Stessa regola delle UI e di `validaViaggio`.
+    if (!(await sedeAmmessaPerCantiere(supabase, v.sedeId, cantiereId))) {
+      return { ok: false, error: 'SEDE_NON_VALIDA' };
+    }
     if (v.autista && v.mezzoId) {
       const { data: mezzoOk } = await supabase
         .from('mezzi' as never)
