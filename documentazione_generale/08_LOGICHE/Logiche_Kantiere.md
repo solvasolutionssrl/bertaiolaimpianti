@@ -1,6 +1,6 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.0
+**Versione**: 1.1
 **Stato**: Attivo (in produzione)
 **Ultimo aggiornamento**: 06/07/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
@@ -161,6 +161,15 @@ Tutte in `tenant_modules.config` (per-tenant). Le principali:
 | **Inserimento manuale ore** | Ore + eventuale viaggio con sede/mezzo | Sede filtrata per cantiere (§4). |
 
 Il netto giornata = `(chiusura − inizio) − pausa`. La pausa dichiarata è una **coppia di timbrature centrata** nel turno (così il calcolo ore la sottrae con la logica pausa esistente).
+
+### PWA — sezione "Non hai timbrato?" (tab Ore)
+
+Quando la giornata è senza timbrature, la tab Ore offre **due strumenti distinti** (non sono la stessa cosa lato dati — non vanno fusi alla leggera):
+
+- **Registra giornata** (azione **primaria**) — dichiari **inizio / fine / pausa** e distribuisci le ore su **uno o più cantieri**. Il server **sintetizza le timbrature reali** (`registraGiornataDaZero` → `calcolaSegmentiSplit`) e il rapportino si ricalcola da quelle. Vincolo: **solo oggi** e **giornata vuota**, con `registra_giornata_attivo` on. UI: card **"La giornata"** dominante (orari + pausa a chip), una **card per cantiere** col **colore abbinato** al proprio segmento nella **barra panoramica** in fondo (sempre visibile: ore assegnate/nette, esito Completa/Restano/di troppo, riempimento per cantiere).
+- **Ore su un cantiere, con viaggio** (azione **secondaria**) — aggiungi ore + **viaggio andata/ritorno** (sede/mezzo/km) a **un solo cantiere**; scrive direttamente `rapportino_righe` + `timbratura_viaggio` (`registraOreManuali`). Funziona anche su **giorni passati** o su una giornata già parziale.
+
+**Quale usare**: se devi tracciare il **viaggio** o correggere un **giorno passato** → il secondo; se devi solo **dichiarare la giornata intera** (una o più commesse) → il primo.
 
 ---
 
