@@ -194,7 +194,7 @@ export default async function MobileOrePage() {
         passoMinuti={impTurno.passoMinuti}
       />
 
-      <StoricoOre giorni={storico} />
+      <StoricoOre giorni={storico} passo={impTurno.passoMinuti} />
     </div>
   );
 }

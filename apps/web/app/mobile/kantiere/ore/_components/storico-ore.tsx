@@ -52,7 +52,7 @@ function giorniModificabili(): Set<string> {
  * Le giornate di oggi + i 3 giorni precedenti sono TAPPABILI e aprono il dialog
  * di modifica; le più vecchie restano in sola lettura.
  */
-export function StoricoOre({ giorni }: { giorni: GiornoStorico[] }) {
+export function StoricoOre({ giorni, passo = 15 }: { giorni: GiornoStorico[]; passo?: number }) {
   const editabili = useMemo(() => giorniModificabili(), []);
   const [selezionata, setSelezionata] = useState<string | null>(null);
 
@@ -135,6 +135,7 @@ export function StoricoOre({ giorni }: { giorni: GiornoStorico[] }) {
         <ModificaGiornataDialog
           open
           data={selezionata}
+          passo={passo}
           onClose={() => setSelezionata(null)}
         />
       ) : null}

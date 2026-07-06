@@ -648,6 +648,7 @@ export function OreClient({
       <ModificaGiornataDialog
         open={panoramicaOpen}
         data={rapportino.data}
+        passo={passoMinuti}
         onClose={() => setPanoramicaOpen(false)}
       />
     </div>

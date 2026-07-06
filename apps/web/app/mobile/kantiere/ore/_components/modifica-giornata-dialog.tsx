@@ -23,6 +23,8 @@ export interface ModificaGiornataDialogProps {
   onClose: () => void;
   /** Giornata da modificare, 'YYYY-MM-DD' (Europe/Rome). */
   data: string;
+  /** Passo (min) dei +/- degli stepper (impostazione ufficio). Default 15. */
+  passo?: number;
 }
 
 // ── stato riga editabile (ore in H + MM) ─────────────────────────────────────
@@ -112,6 +114,7 @@ function StepperHM({
   tone,
   h,
   m,
+  passo = 15,
   disabled,
   onChange,
 }: {
@@ -119,6 +122,7 @@ function StepperHM({
   tone: 'work' | 'travel';
   h: number;
   m: number;
+  passo?: number;
   disabled: boolean;
   onChange: (h: number, m: number) => void;
 }) {
@@ -140,9 +144,9 @@ function StepperHM({
       <div className={`flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border p-1 ${box}`}>
         <button
           type="button"
-          onClick={() => nudge(-15)}
+          onClick={() => nudge(-passo)}
           disabled={disabled || total <= 0}
-          aria-label={`${label} meno 15 minuti`}
+          aria-label={`${label} meno ${passo} minuti`}
           className={btnCls}
         >
           −
@@ -175,9 +179,9 @@ function StepperHM({
         </div>
         <button
           type="button"
-          onClick={() => nudge(15)}
+          onClick={() => nudge(passo)}
           disabled={disabled}
-          aria-label={`${label} più 15 minuti`}
+          aria-label={`${label} più ${passo} minuti`}
           className={btnCls}
         >
           +
@@ -189,7 +193,7 @@ function StepperHM({
 
 // ── componente principale ─────────────────────────────────────────────────────
 
-export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornataDialogProps) {
+export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: ModificaGiornataDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -308,6 +312,7 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                           tone="work"
                           h={r.lavoroH}
                           m={r.lavoroM}
+                          passo={passo}
                           disabled={isPending || !modificabile}
                           onChange={(h, m) => patchRiga(idx, { lavoroH: h, lavoroM: m })}
                         />
@@ -316,6 +321,7 @@ export function ModificaGiornataDialog({ open, onClose, data }: ModificaGiornata
                           tone="travel"
                           h={r.viaggioH}
                           m={r.viaggioM}
+                          passo={passo}
                           disabled={isPending || !modificabile}
                           onChange={(h, m) => patchRiga(idx, { viaggioH: h, viaggioM: m })}
                         />
