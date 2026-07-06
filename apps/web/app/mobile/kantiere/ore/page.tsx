@@ -7,6 +7,7 @@ import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 import { guardMobile } from '../../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
 import { precompilaMioRapportino, mioStoricoRapportini } from '@/app/_actions/kantiere-rapportino';
 import { OreClient } from './_components/ore-client';
 import { StoricoOre } from './_components/storico-ore';
@@ -136,9 +137,10 @@ export default async function MobileOrePage() {
     (m) => ({ id: m.id, targa: m.targa, modello: m.modello }),
   );
 
-  const [turno, storicoRes] = await Promise.all([
+  const [turno, storicoRes, impTurno] = await Promise.all([
     mioTurnoAttivo(),
     mioStoricoRapportini({}),
+    leggiImpostazioniTurno(supabase, ctx.tenantId),
   ]);
   const storico = storicoRes.ok ? storicoRes.giorni : [];
 
@@ -187,6 +189,9 @@ export default async function MobileOrePage() {
         sediDisponibili={sediDisponibili}
         mezziDisponibili={mezziDisponibili}
         turnoInCorso={!!turno}
+        registraGiornataAttivo={impTurno.registraGiornataAttivo}
+        tolleranzaChiusuraMin={impTurno.tolleranzaChiusuraMin}
+        passoMinuti={impTurno.passoMinuti}
       />
 
       <StoricoOre giorni={storico} />

@@ -977,3 +977,102 @@ export async function elencoCantieriTurno(): Promise<
     .order('nome', { ascending: true });
   return { ok: true, cantieri: (data as PickerCantiere[] | null) ?? [] };
 }
+
+// ── 5) caso 4: registra l'intera giornata SENZA timbrature ──────────────────
+// Il tecnico non ha mai timbrato: dichiara inizio/fine + cantieri/ore. Si
+// sintetizza la giornata (ingresso reale + segmenti via calcolaSegmentiSplit)
+// così il ricalcolo deriva le righe. Solo su GIORNATA VUOTA (0 eventi oggi).
+const RegistraGiornataSchema = z.object({
+  inizioIso: z.string().datetime(),
+  fineIso: z.string().datetime(),
+  pausaMin: z.number().int().min(0).max(600).optional(),
+  split: z
+    .array(z.object({ cantiereId: z.string().uuid(), minuti: z.number().int().nonnegative() }))
+    .min(1)
+    .max(12),
+});
+
+export async function registraGiornataDaZero(input: unknown): Promise<Result> {
+  const parsed = RegistraGiornataSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const imp = await leggiImpostazioniTurno(supabase, ctx.tenantId);
+  if (!imp.registraGiornataAttivo) return { ok: false, error: 'REGISTRA_OFF' };
+
+  const { inizioIso, fineIso } = parsed.data;
+  const pausaMin = parsed.data.pausaMin ?? 0;
+  // Inizio/fine dello stesso giorno (Europe/Rome), fine dopo inizio.
+  const oggi = romeDay(new Date());
+  if (romeDay(new Date(inizioIso)) !== oggi || romeDay(new Date(fineIso)) !== oggi) {
+    return { ok: false, error: 'ORA_NON_VALIDA' };
+  }
+  if (Date.parse(fineIso) <= Date.parse(inizioIso)) return { ok: false, error: 'ORA_NON_VALIDA' };
+
+  // Giornata VUOTA: nessuna timbratura oggi (altrimenti si userebbe lo split).
+  const { fromIso, toIso } = romeDayBoundsUtc(oggi);
+  const { count } = await supabase
+    .from('timbrature' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  if ((count ?? 0) !== 0) return { ok: false, error: 'GIORNATA_NON_VUOTA' };
+
+  // Cantieri del tenant.
+  const ids = [...new Set(parsed.data.split.map((s) => s.cantiereId))];
+  const { data: ccRows } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .in('id', ids)
+    .eq('tenant_id', ctx.tenantId);
+  if (((ccRows as { id: string }[] | null)?.length ?? 0) !== ids.length) {
+    return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+  }
+
+  // Sintesi segmenti (calc.eventi ESCLUDE l'ingresso iniziale → lo prependo).
+  const calc = calcolaSegmentiSplit({
+    ingressoMs: Date.parse(inizioIso),
+    uscitaMs: Date.parse(fineIso),
+    pausaMin,
+    segmenti: parsed.data.split,
+  });
+  if (!calc.ok) {
+    return { ok: false, error: calc.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
+  }
+
+  const base = {
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    commessa_id: null as string | null,
+    origine: 'manuale',
+    creato_da: ctx.userId,
+  };
+  const primoCantiere = parsed.data.split[0]!.cantiereId;
+  const rows = [
+    { ...base, cantiere_id: primoCantiere, tipo: 'ingresso', pausa: false, ts: inizioIso },
+    ...calc.eventi.map((e) => ({
+      ...base,
+      cantiere_id: e.cantiereId,
+      tipo: e.tipo,
+      pausa: e.pausa,
+      ts: new Date(e.ms).toISOString(),
+    })),
+  ];
+  const { error } = await supabase.from('timbrature' as never).insert(rows as never);
+  if (error) return { ok: false, error: error.message };
+
+  try {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, oggi);
+  } catch {
+    // best-effort
+  }
+  return { ok: true, tipo: 'uscita', pausa: false, ts: fineIso };
+}

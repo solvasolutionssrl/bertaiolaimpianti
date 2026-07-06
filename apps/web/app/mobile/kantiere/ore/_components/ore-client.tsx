@@ -13,6 +13,7 @@ import {
 } from '@/app/_actions/kantiere-rapportino';
 import { ManualeDialog } from './manuale-dialog';
 import { ModificaGiornataDialog } from './modifica-giornata-dialog';
+import { RegistraGiornataDialog } from './registra-giornata-dialog';
 import type { PickerCantiere } from '../../_components/cantiere-picker';
 
 // ── tipi ────────────────────────────────────────────────────────────────────
@@ -45,6 +46,12 @@ interface OreClientProps {
   /** true se c'è un turno aperto: il totale di oggi è ancora 0/parziale, quindi
    *  la panoramica compare solo a turno finito. */
   turnoInCorso: boolean;
+  /** Registra giornata senza timbrature attiva (impostazione ufficio). */
+  registraGiornataAttivo: boolean;
+  /** Tolleranza (min) sulla somma. */
+  tolleranzaChiusuraMin: number;
+  /** Passo (min) degli stepper. */
+  passoMinuti: number;
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -162,6 +169,9 @@ export function OreClient({
   sediDisponibili,
   mezziDisponibili,
   turnoInCorso,
+  registraGiornataAttivo,
+  tolleranzaChiusuraMin,
+  passoMinuti,
 }: OreClientProps) {
   const router = useRouter();
   const askConfirm = useConfirm();
@@ -177,8 +187,9 @@ export function OreClient({
   // picker target (valore encodato "c:<uuid>" o "k:<uuid>")
   const [pickerTarget, setPickerTarget] = useState('');
 
-  // dialog inserimento manuale
+  // dialog inserimento manuale + registra giornata (caso 4)
   const [manualeOpen, setManualeOpen] = useState(false);
+  const [registraOpen, setRegistraOpen] = useState(false);
   // dialog panoramica/correzione della giornata di oggi (pencil sul totale)
   const [panoramicaOpen, setPanoramicaOpen] = useState(false);
 
@@ -572,6 +583,25 @@ export function OreClient({
                   </span>
                 </span>
               </button>
+              {registraGiornataAttivo && !turnoInCorso ? (
+                <button
+                  type="button"
+                  onClick={() => setRegistraOpen(true)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left transition-colors hover:bg-muted/40 active:scale-[0.99]"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <PenLine className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-foreground">
+                      Registra giornata (più cantieri)
+                    </span>
+                    <span className="block text-xs leading-snug text-muted-foreground">
+                      Inizio, fine e le ore divise tra i cantieri.
+                    </span>
+                  </span>
+                </button>
+              ) : null}
             </>
           )}
         </section>
@@ -604,6 +634,14 @@ export function OreClient({
         cantieri={cantieriDisponibili}
         sedi={sediDisponibili}
         mezzi={mezziDisponibili}
+      />
+
+      {/* Caso 4: registra una giornata senza timbrature (più cantieri). */}
+      <RegistraGiornataDialog
+        open={registraOpen}
+        onClose={() => setRegistraOpen(false)}
+        tolleranzaMin={tolleranzaChiusuraMin}
+        passoMinuti={passoMinuti}
       />
 
       {/* Panoramica/correzione della giornata di oggi (pencil sul riepilogo) */}
