@@ -9,7 +9,6 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
-import { CantiereSediPanel } from '@/app/office/kantiere/sedi/_components/cantiere-sedi-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -393,13 +392,15 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     giorno: r.giorno,
   }));
 
-  // Sedi del tenant + sedi già associate a questo cantiere (per il pannello).
+  // Sedi del tenant (con flag predefinita) + sedi collegate a questo cantiere,
+  // per la card "Sedi di partenza" della scheda.
   const [sediTenantRes, sediAssocRes] = await Promise.all([
     supabase
       .from('sedi' as never)
-      .select('id, nome, tipo')
+      .select('id, nome, tipo, is_default')
       .eq('tenant_id', ctx.tenantId)
       .eq('attivo', true)
+      .order('is_default', { ascending: false })
       .order('nome'),
     supabase
       .from('cantiere_sede' as never)
@@ -411,21 +412,11 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     id: string;
     nome: string;
     tipo: 'sede_principale' | 'sede_secondaria' | 'hotel' | 'altro';
+    is_default: boolean;
   }[] | null) ?? []);
   const sediAssociate = ((sediAssocRes.data as { sede_id: string }[] | null) ?? []).map(
     (r) => r.sede_id,
   );
-
-  // Sedi del tenant per il dropdown "Sede di partenza" della scheda anagrafica.
-  const { data: sediRaw } = await supabase
-    .from('sedi' as never)
-    .select('id, nome, lat, lng')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('attivo', true)
-    .order('nome');
-  const sediOptions = (
-    (sediRaw ?? []) as { id: string; nome: string | null; lat: number | null; lng: number | null }[]
-  ).map((s) => ({ id: s.id, nome: s.nome ?? 'Sede', lat: s.lat, lng: s.lng }));
 
   return (
     <div className="w-full space-y-6">
@@ -462,7 +453,8 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
         }
         printHref={`/office/kantiere/cantieri/${params.id}/stampa`}
         commesse={commesse}
-        sedi={sediOptions}
+        sediTenant={sediTenant}
+        sediAssociate={sediAssociate}
         commessaCollegata={commessaCollegata}
         anomalie={anomalie}
         chiInCantiere={chiInCantiere}
@@ -472,12 +464,6 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
           totali: storicoTotali,
           trend: trendGiornaliero,
         }}
-      />
-
-      <CantiereSediPanel
-        cantiereId={cantiere.id}
-        sediTenant={sediTenant}
-        sediAssociate={sediAssociate}
       />
     </div>
   );
