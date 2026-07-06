@@ -54,9 +54,22 @@ const PAUSE_CHIPS: { min: number; label: string }[] = [
   { min: 60, label: '1 h' },
 ];
 
-// Colori dei segmenti della barra panoramica: uno per cantiere (ciclici).
-// Categorici e sobri → si distinguono i cantieri senza diventare un semaforo.
-const SEG_COLORS = ['bg-primary', 'bg-emerald-500', 'bg-sky-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500'];
+// Palette "corporate" per cantiere (ciclica): lo STESSO colore tinge il
+// segmento nella barra panoramica E il bordo/sfondino della card, così
+// colleghi a colpo d'occhio "questo cantiere = questa fetta di giornata".
+// Classi come stringhe letterali → il JIT di Tailwind le include.
+const CANTIERE_COLORS = [
+  { bar: 'bg-primary', border: 'border-l-primary', tint: 'bg-primary/[0.045]' },
+  { bar: 'bg-teal-500', border: 'border-l-teal-500', tint: 'bg-teal-500/[0.06]' },
+  { bar: 'bg-indigo-500', border: 'border-l-indigo-500', tint: 'bg-indigo-500/[0.06]' },
+  { bar: 'bg-amber-500', border: 'border-l-amber-500', tint: 'bg-amber-500/[0.07]' },
+  { bar: 'bg-sky-500', border: 'border-l-sky-500', tint: 'bg-sky-500/[0.06]' },
+  { bar: 'bg-rose-500', border: 'border-l-rose-500', tint: 'bg-rose-500/[0.06]' },
+];
+
+function coloreCantiere(i: number) {
+  return CANTIERE_COLORS[i % CANTIERE_COLORS.length] ?? CANTIERE_COLORS[0]!;
+}
 
 function StepperMin({
   minuti,
@@ -328,7 +341,10 @@ export function RegistraGiornataDialog({
                 </p>
 
                 {righe.map((r, i) => (
-                  <section key={r.cantiereId} className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]">
+                  <section
+                    key={r.cantiereId}
+                    className={`space-y-2.5 rounded-2xl border border-border border-l-4 ${coloreCantiere(i).border} ${coloreCantiere(i).tint} p-3.5 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]`}
+                  >
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -380,10 +396,10 @@ export function RegistraGiornataDialog({
             </div>
 
             {/* ── Footer sticky: panoramica compatta + tastone VERDE ─────────── */}
-            <div className="shrink-0 border-t border-border bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
+            <div className="shrink-0 border-t border-emerald-600/15 bg-emerald-50 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
               {/* Panoramica: sempre sopra il tasto, così con tanti cantieri vedi
                   a colpo d'occhio a che punto sei senza scrollare la lista. */}
-              <div className="mb-3 space-y-2 rounded-xl border border-border bg-muted/25 p-3">
+              <div className="mb-3 space-y-2 rounded-xl border border-border bg-card p-3 shadow-[0_6px_18px_-5px_rgba(20,40,90,0.28)]">
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-semibold tabular-nums text-foreground">
                     {fmtHM(assegnato)}
@@ -408,7 +424,7 @@ export function RegistraGiornataDialog({
                     r.minuti > 0 ? (
                       <div
                         key={r.cantiereId}
-                        className={SEG_COLORS[i % SEG_COLORS.length] ?? 'bg-primary'}
+                        className={coloreCantiere(i).bar}
                         style={{ width: `${(r.minuti / baseBarra) * 100}%` }}
                       />
                     ) : null,
