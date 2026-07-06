@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { Clock } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 import { guardMobile } from '../../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
@@ -66,28 +65,7 @@ export default async function MobileOrePage() {
     );
   }
 
-  // Carica commesse disponibili per il picker "Aggiungi riga"
   const supabase = createServerSupabase();
-  const { data: commesseRaw } = await supabase
-    .from('commesse' as never)
-    .select(
-      'id, codice_interno, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella',
-    )
-    .eq('tenant_id', ctx.tenantId)
-    .in('stato', ['aperta', 'in_corso', 'collaudo'])
-    .order('created_at', { ascending: false });
-
-  const commesseDisponibili = ((commesseRaw as Array<{
-    id: string;
-    codice_interno: string | null;
-    descrizione_ai_finale: string | null;
-    descrizione_ai_proposta: string | null;
-    note_iniziali: string | null;
-    nome_cartella: string | null;
-  }>) ?? []).map((c) => ({
-    id: c.id,
-    titolo: risolviTitoloCommessa(c) || c.codice_interno || c.id,
-  }));
 
   // Carica cantieri attivi per il picker "Aggiungi riga" e per il dialog ore a
   // mano (ricerca per codice/cliente/nome/indirizzo → campi arricchiti).
@@ -197,7 +175,6 @@ export default async function MobileOrePage() {
 
       <OreClient
         rapportino={res.rapportino}
-        commesseDisponibili={commesseDisponibili}
         cantieriDisponibili={cantieriDisponibili}
         sediDisponibili={sediDisponibili}
         sediPerCantiere={sediPerCantiere}

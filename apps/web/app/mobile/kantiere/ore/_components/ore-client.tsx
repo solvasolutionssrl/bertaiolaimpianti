@@ -2,8 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, ChevronDown, PenLine, Clock } from 'lucide-react';
-import { Button } from '@kommessa/ui';
+import { PenLine, Clock, CalendarClock } from 'lucide-react';
 
 import { useConfirm } from '@/app/_components/confirm-provider';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -39,7 +38,6 @@ type RapportinoProps = {
 
 interface OreClientProps {
   rapportino: RapportinoProps;
-  commesseDisponibili: { id: string; titolo: string }[];
   cantieriDisponibili: PickerCantiere[];
   sediDisponibili: { id: string; nome: string; tipo: string; isDefault: boolean }[];
   /** cantiere_id → sede_id[] associate (oltre alla predefinita). */
@@ -83,18 +81,6 @@ function rigaFromPayload(r: RigaRapportino): RigaEditable {
   };
 }
 
-// ── helper: codifica/decodifica valore option del picker ─────────────────────
-// formato: "c:<uuid>" = commessa, "k:<uuid>" = cantiere
-
-function encodePickerValue(tipo: 'commessa' | 'cantiere', id: string): string {
-  return tipo === 'commessa' ? `c:${id}` : `k:${id}`;
-}
-
-function decodePickerValue(val: string): { tipo: 'commessa' | 'cantiere'; id: string } | null {
-  if (val.startsWith('c:')) return { tipo: 'commessa', id: val.slice(2) };
-  if (val.startsWith('k:')) return { tipo: 'cantiere', id: val.slice(2) };
-  return null;
-}
 
 // ── helper ore ───────────────────────────────────────────────────────────────
 
@@ -166,7 +152,6 @@ function StatoBadge({ stato }: { stato: string }) {
 
 export function OreClient({
   rapportino,
-  commesseDisponibili,
   cantieriDisponibili,
   sediDisponibili,
   sediPerCantiere,
@@ -186,9 +171,6 @@ export function OreClient({
   const [note, setNote] = useState(rapportino.note ?? '');
   const [errore, setErrore] = useState<string | null>(null);
   const [successo, setSuccesso] = useState<string | null>(null);
-
-  // picker target (valore encodato "c:<uuid>" o "k:<uuid>")
-  const [pickerTarget, setPickerTarget] = useState('');
 
   // dialog inserimento manuale + registra giornata (caso 4)
   const [manualeOpen, setManualeOpen] = useState(false);
@@ -255,54 +237,6 @@ export function OreClient({
     setRighe(rapportino.righe.map(rigaFromPayload));
     setNote(rapportino.note ?? '');
     clearDraft();
-  }
-
-  // Chiavi gia usate nelle righe correnti
-  const targetUsati = new Set<string>(
-    righe.flatMap((r) => {
-      if (r.commessa_id) return [`c:${r.commessa_id}`];
-      if (r.cantiere_id) return [`k:${r.cantiere_id}`];
-      return [];
-    }),
-  );
-
-  const commesseLibere = commesseDisponibili.filter((c) => !targetUsati.has(`c:${c.id}`));
-  const cantieriLiberi = cantieriDisponibili.filter((c) => !targetUsati.has(`k:${c.id}`));
-
-  const haTargetLiberi = commesseLibere.length > 0 || cantieriLiberi.length > 0;
-
-  function aggiungiRiga() {
-    const decoded = decodePickerValue(pickerTarget);
-    if (!decoded) return;
-    dirtyRef.current = true;
-
-    let label = '';
-    if (decoded.tipo === 'commessa') {
-      const c = commesseDisponibili.find((x) => x.id === decoded.id);
-      if (!c) return;
-      label = c.titolo;
-    } else {
-      const c = cantieriDisponibili.find((x) => x.id === decoded.id);
-      if (!c) return;
-      label = c.nome ?? '';
-    }
-
-    setRighe((prev) => [
-      ...prev,
-      {
-        id: undefined,
-        commessa_id: decoded.tipo === 'commessa' ? decoded.id : null,
-        cantiere_id: decoded.tipo === 'cantiere' ? decoded.id : null,
-        target_label: label,
-        ore_ordinarie: 0,
-        ore_straordinarie: 0,
-        ore_viaggio: 0,
-        note: '',
-      },
-    ]);
-    setPickerTarget('');
-    setErrore(null);
-    setSuccesso(null);
   }
 
   function rimuoviRiga(idx: number) {
@@ -414,7 +348,6 @@ export function OreClient({
   // l'ufficio. Resta disponibile solo l'inserimento manuale completo per le
   // giornate senza timbratura (es. QR non scansionato).
   const puoiManuale = isEditabile && cantieriDisponibili.length > 0;
-  const mostraPicker = false;
   // Giornata passata ancora in bozza = "da verificare": il giorno è rimasto
   // aperto o le ore sono oltre soglia, quindi è in carico all'ufficio. Per il
   // tecnico è solo un'informazione, non un'azione. (Oggi è normale che sia
@@ -499,114 +432,58 @@ export function OreClient({
         </button>
       ) : null}
 
-      {/* ── Inserimento manuale (solo se mancano le timbrature) ── */}
-      {(mostraPicker || puoiManuale) && (
-        <section className="space-y-3 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
+      {/* ── Nessuna timbratura: registra la giornata o inserisci a mano ── */}
+      {puoiManuale && (
+        <section className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Non hai timbrato?
           </p>
 
-          {mostraPicker && (
-            <div className="space-y-1.5">
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                Scegli un cantiere o una commessa, poi compila le ore nella voce.
-              </p>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <select
-                    value={pickerTarget}
-                    onChange={(e) => setPickerTarget(e.target.value)}
-                    disabled={isPending}
-                    className="w-full appearance-none rounded-md border border-border bg-background py-2.5 pl-3 pr-8 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-                  >
-                    <option value="">Scegli commessa o cantiere...</option>
-                    {commesseLibere.length > 0 && (
-                      <optgroup label="Commesse">
-                        {commesseLibere.map((c) => (
-                          <option key={c.id} value={encodePickerValue('commessa', c.id)}>
-                            {titoloCase(c.titolo)}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {cantieriLiberi.length > 0 && (
-                      <optgroup label="Cantieri">
-                        {cantieriLiberi.map((c) => (
-                          <option key={c.id} value={encodePickerValue('cantiere', c.id)}>
-                            {titoloCase(c.nome ?? '') || c.id}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                  <ChevronDown
-                    className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={aggiungiRiga}
-                  disabled={!pickerTarget || isPending}
-                  aria-label="Aggiungi voce"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
+          {/* Primario: registra l'intera giornata (uno o più cantieri) */}
+          {registraGiornataAttivo && !turnoInCorso ? (
+            <button
+              type="button"
+              onClick={() => setRegistraOpen(true)}
+              className="flex w-full items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] px-3 py-3 text-left transition-colors hover:bg-primary/10 active:scale-[0.99]"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+                <CalendarClock className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">Registra giornata</span>
+                <span className="block text-xs leading-snug text-muted-foreground">
+                  Inizio, fine, pausa e le ore su uno o più cantieri.
+                </span>
+              </span>
+            </button>
+          ) : null}
 
-          {puoiManuale && (
-            <>
-              {mostraPicker && (
-                <div className="flex items-center gap-2">
-                  <span className="h-px flex-1 bg-border" />
-                  <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground/70">
-                    oppure
-                  </span>
-                  <span className="h-px flex-1 bg-border" />
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setManualeOpen(true)}
-                className="flex w-full items-center gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] px-3 py-3 text-left transition-colors hover:bg-primary/10 active:scale-[0.99]"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <PenLine className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-foreground">
-                    Inserimento completo
-                  </span>
-                  <span className="block text-xs leading-snug text-muted-foreground">
-                    Ore di lavoro e viaggio andata/ritorno, con sede e mezzo.
-                  </span>
-                </span>
-              </button>
-              {registraGiornataAttivo && !turnoInCorso ? (
-                <button
-                  type="button"
-                  onClick={() => setRegistraOpen(true)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-left transition-colors hover:bg-muted/40 active:scale-[0.99]"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <PenLine className="h-4 w-4" aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold text-foreground">
-                      Registra giornata (più cantieri)
-                    </span>
-                    <span className="block text-xs leading-snug text-muted-foreground">
-                      Inizio, fine e le ore divise tra i cantieri.
-                    </span>
-                  </span>
-                </button>
-              ) : null}
-            </>
-          )}
+          {/* Secondario: un cantiere alla volta, con il viaggio (o per un giorno passato) */}
+          <button
+            type="button"
+            onClick={() => setManualeOpen(true)}
+            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors active:scale-[0.99] ${
+              registraGiornataAttivo && !turnoInCorso
+                ? 'border-border bg-card hover:bg-muted/40'
+                : 'border-primary/25 bg-primary/[0.06] hover:bg-primary/10'
+            }`}
+          >
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                registraGiornataAttivo && !turnoInCorso
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-primary/12 text-primary'
+              }`}
+            >
+              <PenLine className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-foreground">Ore su un cantiere, con viaggio</span>
+              <span className="block text-xs leading-snug text-muted-foreground">
+                Un cantiere alla volta, con andata e ritorno, sede e mezzo. Va bene anche per un giorno passato.
+              </span>
+            </span>
+          </button>
         </section>
       )}
 
