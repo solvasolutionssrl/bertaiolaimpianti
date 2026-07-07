@@ -1,11 +1,18 @@
 import Link from 'next/link';
-import { Timer, LogIn, LogOut, MapPin, ArrowLeft } from 'lucide-react';
+import { Timer, LogIn, LogOut, MapPin, ArrowLeft, Route } from 'lucide-react';
 import { Badge, Card, CardContent } from '@kommessa/ui';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { romeDay } from '@kommessa/api/rome-time';
 import { requirePlatformAdmin } from '../../_lib/guard';
 import { SectionHeader } from '../../../_components/section-header';
 import { FiltriTimbrature } from './_components/filtri-timbrature';
+
+/** min → "H:MM" (tempo di viaggio registrato). */
+function hm(min: number): string {
+  const t = Math.max(0, Math.round(min));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+}
 
 export const metadata = { title: 'Platform · Timbrature Kantiere' };
 export const dynamic = 'force-dynamic';
@@ -39,6 +46,19 @@ const ORIGINE_STILE: Record<string, string> = {
   cronometro: 'border-border text-muted-foreground',
 };
 
+// Trasferimento cantiere→cantiere registrato (da_cantiere_id valorizzato): km +
+// tempo stimato SEMPRE tracciati, indipendenti dal toggle di conteggio per-tenant.
+type TransRow = {
+  id: string;
+  tenant_id: string;
+  dipendente_id: string | null;
+  data: string | null;
+  cantiere_id: string | null;
+  da_cantiere_id: string | null;
+  distanza_km: number | null;
+  durata_stimata_min: number | null;
+};
+
 export default async function TimbratureAdminPage({
   searchParams,
 }: {
@@ -64,18 +84,45 @@ export default async function TimbratureAdminPage({
   if (tenant) q = q.eq('tenant_id', tenant);
   if (origine) q = q.eq('origine', origine);
 
-  const [{ data: timbRaw }, { data: tenantsRaw }] = await Promise.all([
+  // Trasferimenti cantiere→cantiere registrati nel periodo (da_cantiere_id valorizzato).
+  const sinceGiorno = romeDay(new Date(sinceIso));
+  let tq = sb
+    .from('timbratura_viaggio' as never)
+    .select(
+      'id, tenant_id, dipendente_id, data, cantiere_id, da_cantiere_id, distanza_km, durata_stimata_min',
+    )
+    .not('da_cantiere_id', 'is', null)
+    .gte('data', sinceGiorno)
+    .order('data', { ascending: false })
+    .limit(300);
+  if (tenant) tq = tq.eq('tenant_id', tenant);
+
+  const [{ data: timbRaw }, { data: tenantsRaw }, { data: transRaw }] = await Promise.all([
     q as unknown as Promise<{ data: TimbRow[] | null }>,
     sb.from('tenants').select('id, nome').order('nome'),
+    tq as unknown as Promise<{ data: TransRow[] | null }>,
   ]);
 
   const rows = (timbRaw as TimbRow[] | null) ?? [];
+  const transRows = (transRaw as TransRow[] | null) ?? [];
   const tenants = (tenantsRaw as { id: string; nome: string }[] | null) ?? [];
   const tenantMap = new Map(tenants.map((t) => [t.id, t.nome]));
 
-  // Batch lookups
-  const dipIds = [...new Set(rows.map((r) => r.dipendente_id).filter(Boolean))] as string[];
-  const cantIds = [...new Set(rows.map((r) => r.cantiere_id).filter(Boolean))] as string[];
+  // Batch lookups (dipendenti + cantieri: unione timbrature + trasferimenti)
+  const dipIds = [
+    ...new Set(
+      [...rows.map((r) => r.dipendente_id), ...transRows.map((t) => t.dipendente_id)].filter(Boolean),
+    ),
+  ] as string[];
+  const cantIds = [
+    ...new Set(
+      [
+        ...rows.map((r) => r.cantiere_id),
+        ...transRows.map((t) => t.cantiere_id),
+        ...transRows.map((t) => t.da_cantiere_id),
+      ].filter(Boolean),
+    ),
+  ] as string[];
   const userIds = [...new Set(rows.map((r) => r.creato_da).filter(Boolean))] as string[];
   const timbIds = rows.map((r) => r.id);
 
@@ -251,8 +298,84 @@ export default async function TimbratureAdminPage({
         </CardContent>
       </Card>
 
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <Route className="h-4 w-4 text-primary" aria-hidden="true" />
+            Trasferimenti tra cantieri (registrati)
+          </h2>
+          {transRows.length > 0 ? (
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {transRows.reduce((a, t) => a + (Number(t.distanza_km) || 0), 0).toFixed(1)} km ·{' '}
+              {hm(transRows.reduce((a, t) => a + (Number(t.durata_stimata_min) || 0), 0))} totali
+            </span>
+          ) : null}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Km e tempo dei tragitti cantiere→cantiere, <strong>sempre tracciati</strong> a
+          prescindere dal toggle di conteggio del tenant. Il tempo è stimato (non pagato) finché
+          non attiviamo il conteggio.
+        </p>
+        <Card>
+          <CardContent className="p-0">
+            {transRows.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                Nessun trasferimento cantiere→cantiere nel periodo/filtri selezionati.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/40 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2.5 font-medium">Giorno</th>
+                      <th className="px-3 py-2.5 font-medium">Dipendente</th>
+                      <th className="px-3 py-2.5 font-medium">Tenant</th>
+                      <th className="px-3 py-2.5 font-medium">Tragitto</th>
+                      <th className="px-3 py-2.5 font-medium">Km</th>
+                      <th className="px-3 py-2.5 font-medium">Tempo stimato</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {transRows.map((t) => (
+                      <tr key={t.id} className="transition-colors hover:bg-muted/20">
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs tabular-nums text-muted-foreground">
+                          {t.data ? t.data.split('-').reverse().join('/') : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 font-medium tracking-tight">
+                          {dipMap.get(t.dipendente_id ?? '') ?? '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-muted-foreground">
+                          {tenantMap.get(t.tenant_id) ?? t.tenant_id}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex items-center gap-1.5 text-xs">
+                            <span className="max-w-[140px] truncate text-muted-foreground">
+                              {t.da_cantiere_id ? cantMap.get(t.da_cantiere_id) ?? '—' : '—'}
+                            </span>
+                            <span className="text-muted-foreground">→</span>
+                            <span className="max-w-[140px] truncate font-medium">
+                              {t.cantiere_id ? cantMap.get(t.cantiere_id) ?? '—' : '—'}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs tabular-nums">
+                          {t.distanza_km != null ? `${Number(t.distanza_km).toFixed(1)} km` : '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs tabular-nums text-muted-foreground">
+                          {t.durata_stimata_min != null ? hm(Number(t.durata_stimata_min)) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <p className="text-right font-mono text-[11px] text-muted-foreground">
-        {rows.length} righe{rows.length === 300 ? ' (cap 300)' : ''} ·{' '}
+        {rows.length} righe{rows.length === 300 ? ' (cap 300)' : ''} · {transRows.length} trasferimenti ·{' '}
         {new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}
       </p>
     </div>

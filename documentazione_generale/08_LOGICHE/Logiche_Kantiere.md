@@ -1,8 +1,8 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.1
+**Versione**: 1.2
 **Stato**: Attivo (in produzione)
-**Ultimo aggiornamento**: 06/07/2026
+**Ultimo aggiornamento**: 07/07/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
 
 > **A cosa serve questo file.** Non è un manuale d'uso: è il registro delle **regole e delle scelte operative** già implementate (arrotondamenti, soglie, quando si caricano i km, come si collegano sedi e cantieri, quali impostazioni gestisce l'ufficio). Serve come base per una futura sezione **Help** nell'office e come contesto per un **agente AI interno**.
@@ -43,7 +43,7 @@ I km si registrano su una **tratta di viaggio** (`timbratura_viaggio`), non sull
 **Quando si caricano:**
 
 1. **Viaggio andata / ritorno** con scelta della **sede** di partenza/arrivo → km e tempo dalla **stima del provider** (vedi §5).
-2. **Cambio cantiere live (A → B)**: chiudendo A e aprendo B, si registra la tratta **A → B** con i **km alla destinazione** (colonna `da_cantiere_id` = cantiere di partenza). Attivo solo se `km_switch_attivo` è ON.
+2. **Trasferimenti cantiere → cantiere** (tra un cantiere e l'altro nella stessa giornata): vedi **§3.1** — sempre registrati.
 3. **Fine turno verso "Abitazione privata"**: opzione sempre disponibile → **0 km, 0 tempo** (nessuna tratta di lavoro da rimborsare).
 
 **Dettagli:**
@@ -51,6 +51,21 @@ I km si registrano su una **tratta di viaggio** (`timbratura_viaggio`), non sull
 - I km della stima sono **definitivi**: il tecnico non li corregge a mano (può correggere solo il **tempo**, con giustificazione se scosta dalla stima).
 - Il flag **autista** sulla tratta distingue chi **guidava** (rilevante per i rimborsi km) dal passeggero.
 - Il tempo di viaggio, ad oggi, **non** viene conteggiato nelle ore di lavoro: si tracciano **km + tempo** a parte (display sempre in `H:MM`).
+
+### 3.1 Trasferimenti cantiere → cantiere (km + tempo)
+
+Chi in una giornata lavora su **più cantieri** percorre dei tragitti **da un cantiere all'altro** (A → B). Questi tragitti vengono **sempre calcolati e registrati** (indirizzo A → indirizzo B, via provider del tenant, §5): **km + tempo stimato**, su una riga `timbratura_viaggio` con `da_cantiere_id` = cantiere di partenza, `cantiere_id` = cantiere di **destinazione** (i **km si caricano sulla destinazione B**), `timbratura_id` null, `direzione='andata'`.
+
+Copre i **tre** flussi multi-cantiere: **cambio cantiere live**, **split "cosa hai fatto oggi"** a fine turno, **registra giornata** da zero. Le tratte si derivano dall'ordine dei cantieri con la funzione pura testata `trasferimentiDaSegmenti` (ogni cambio di cantiere = un tragitto). Best-effort: se a un cantiere manca l'indirizzo (niente coordinate), quella tratta si salta senza bloccare.
+
+**Due livelli, distinti apposta:**
+
+- **Registrazione — SEMPRE attiva** (anche a feature spenta): km + tempo salvati e **visibili al super admin** in `/admin/kantiere/timbrature` (sezione "Trasferimenti tra cantieri", cross-tenant, sempre mostrata). Il tempo è salvato in `durata_stimata_min`.
+- **Conteggio — toggle per-tenant** `km_switch_attivo` ("Conteggia i trasferimenti tra cantieri" in Impostazioni Kantiere → Turni & calcoli), **default OFF (opt-in)**. Se **ON**, i km entrano anche nei **totali del cantiere di destinazione** lato tenant (report, scheda cantiere, cruscotto). Se **OFF**, le tratte restano registrate ma **non compaiono** nelle aggregazioni/liste del tenant (i numeri operativi del tenant non cambiano) — solo il super admin le vede.
+
+**Il tempo NON entra (ancora) nelle ore pagate.** Sulle righe di trasferimento `durata_confermata_min = 0`: così il tempo è **registrato** ma **non** conteggiato nelle ore. ⚠️ **Da definire col cliente** (segnato nei promemoria): alla futura attivazione il **tempo di viaggio totale della giornata** aiuterà a completare la barra ore del tecnico (es. `8:00` + `0:45` di viaggio), ma **se e come** conti come lavoro dipende dal giorno (feriale/festivo) e dagli **straordinari**. Il punto di aggancio è `viaggioManualePerTarget` in `ricomputa-rapportino.ts` (commento `SEAM ATTIVAZIONE FUTURA`).
+
+> **Stato per tenant**: **FPM Impianti → OFF** (registra ma non conteggia). Da attivare quando avremo definito la regola ore col cliente.
 
 ---
 
@@ -108,7 +123,7 @@ Tutte in `tenant_modules.config` (per-tenant). Le principali:
 | `tolleranza_chiusura_min` | 5 | Tolleranza sulla somma dello split (§2). |
 | `split_fine_turno_attivo` | on | Abilita "cosa hai fatto oggi" (dividi le ore tra più cantieri a fine turno). |
 | `avvio_turno_libero` | on | **on**: i tecnici vedono **tutti** i cantieri e possono iniziare un turno senza QR. **off**: solo i cantieri con QR attivo (sostituisce il vecchio "gate weekend"). |
-| `km_switch_attivo` | off | Abilita il calcolo km nel cambio cantiere live A→B. |
+| `km_switch_attivo` | off | **Conteggia i trasferimenti tra cantieri**: i km/tempo A→B sono **sempre registrati** (§3.1); se on entrano anche nei totali del cantiere di destinazione lato tenant. |
 | `passo_minuti_stepper` | 15 | Passo dei tasti +/- di tutti gli stepper ore (split, modifica giornata, storico, registra giornata). |
 | `registra_giornata_attivo` | on | Abilita la "registra giornata da zero" (giornata senza timbrature). |
 

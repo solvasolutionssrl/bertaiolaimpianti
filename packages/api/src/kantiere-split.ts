@@ -121,3 +121,38 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
 
   return { ok: true, eventi, nettoMin: netMin };
 }
+
+/** Tratta di trasferimento cantiere→cantiere (partenza `da`, arrivo `a`). */
+export interface TrasferimentoPair {
+  da: string;
+  a: string;
+}
+
+/**
+ * Ricava le tratte di TRASFERIMENTO cantiere→cantiere dall'ordine dei segmenti
+ * dichiarati (stesso input di `calcolaSegmentiSplit`). Ogni cambio di cantiere
+ * nella sequenza reale è un tragitto da percorrere → una coppia {da, a}.
+ *
+ * Rispecchia il filtro dei segmenti a 0 minuti di `calcolaSegmentiSplit`
+ * (l'ultimo assorbe sempre il resto → è sempre "visitato"; gli altri a 0 minuti
+ * si saltano perché nessuna timbratura li tocca) e collassa i cantieri
+ * consecutivi identici (nessun tragitto verso sé stessi). Pura e deterministica:
+ * unit-testata. Serve a REGISTRARE i km+tempo dei trasferimenti; NON incide sul
+ * conteggio ore (che deriva sempre dalle timbrature).
+ */
+export function trasferimentiDaSegmenti(segmenti: SegmentoSplit[]): TrasferimentoPair[] {
+  if (segmenti.length === 0) return [];
+  const lastIdx = segmenti.length - 1;
+  // Un segmento è "visitato" se ha minuti > 0, oppure è l'ultimo (assorbe il resto).
+  const visitati = segmenti.filter((s, i) => Math.round(s.minuti) > 0 || i === lastIdx);
+  // Collassa i cantieri consecutivi identici.
+  const ordine: string[] = [];
+  for (const s of visitati) {
+    if (ordine[ordine.length - 1] !== s.cantiereId) ordine.push(s.cantiereId);
+  }
+  const pairs: TrasferimentoPair[] = [];
+  for (let i = 1; i < ordine.length; i++) {
+    pairs.push({ da: ordine[i - 1]!, a: ordine[i]! });
+  }
+  return pairs;
+}

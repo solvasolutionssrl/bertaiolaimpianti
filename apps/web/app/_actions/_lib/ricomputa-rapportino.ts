@@ -102,7 +102,17 @@ async function viaggioPerTarget(
   return minutiViaggioPerTarget(viaggi);
 }
 
-/** Tratte manuali (timbratura_id null) per cantiere+data → viaggio per target. */
+/** Tratte manuali (timbratura_id null) per cantiere+data → viaggio per target.
+ *
+ * NB (trasferimenti cantiere→cantiere): anche le tratte di TRASFERIMENTO
+ * (da_cantiere_id valorizzato) vivono qui con timbratura_id null, ma hanno
+ * `durata_confermata_min = 0` → contribuiscono 0 alle ore di viaggio pagate.
+ * È voluto: il tempo dei trasferimenti è REGISTRATO in `durata_stimata_min`
+ * (visibile al super admin) ma NON entra nelle ore finché non lo attiviamo.
+ * ⚠️ SEAM ATTIVAZIONE FUTURA: quando decideremo che il tempo di viaggio conta
+ * nelle ore (logica da definire col cliente: dipende da giorno/straordinari), è
+ * QUI che si leggerà `durata_stimata_min` dei trasferimenti, gated dal toggle
+ * per-tenant `km_switch_attivo`. Vedi doc Logiche_Kantiere e promemoria. */
 async function viaggioManualePerTarget(
   supabase: Supa,
   tenantId: string,

@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import {
   codiceCantiereMostrato,
   categoriaLabel,
@@ -139,17 +140,22 @@ export default async function CantiereMobileDetailPage({
 
     // ── Km di oggi su questo cantiere (timbratura_viaggio) ──
     const oggiData = romeDay(new Date());
+    const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
     const { data: viaggiOggiRows } = await supabase
       .from('timbratura_viaggio' as never)
-      .select('distanza_km, autista')
+      .select('distanza_km, autista, da_cantiere_id')
       .eq('tenant_id', ctx.tenantId)
       .eq('cantiere_id', c.id)
       .eq('data', oggiData);
     const viaggiOggi =
-      (viaggiOggiRows as { distanza_km: number | null; autista: boolean | null }[] | null) ?? [];
+      (viaggiOggiRows as
+        | { distanza_km: number | null; autista: boolean | null; da_cantiere_id: string | null }[]
+        | null) ?? [];
     let kmGuidatiOggi = 0;
     let kmPercorsiOggi = 0;
     for (const v of viaggiOggi) {
+      // Trasferimento cantiere→cantiere: nei km del cantiere solo se conteggiato.
+      if (!trasferimentiConteggiati && v.da_cantiere_id != null) continue;
       const km = Number(v.distanza_km ?? 0);
       if (!Number.isFinite(km) || km <= 0) continue;
       kmPercorsiOggi += km;

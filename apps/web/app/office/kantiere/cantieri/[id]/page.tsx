@@ -8,6 +8,7 @@ import { statoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
 
 export const dynamic = 'force-dynamic';
@@ -229,17 +230,22 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // (da timbratura_viaggio, cantiere_id + data popolati). `percorsi` = tutti i km,
   // `guidati` = solo quando era l'autista.
   const kmPerDip = new Map<string, { percorsi: number; guidati: number }>();
+  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
   const { data: viaRaw } = (await supabase
     .from('timbratura_viaggio' as never)
-    .select('dipendente_id, distanza_km, autista')
+    .select('dipendente_id, distanza_km, autista, da_cantiere_id')
     .eq('tenant_id', ctx.tenantId)
     .eq('cantiere_id', params.id)
     .gte('data', dataDa)
     .limit(10000)) as {
-    data: { dipendente_id: string; distanza_km: number | null; autista: boolean | null }[] | null;
+    data:
+      | { dipendente_id: string; distanza_km: number | null; autista: boolean | null; da_cantiere_id: string | null }[]
+      | null;
   };
   for (const v of viaRaw ?? []) {
     if (!v.dipendente_id) continue;
+    // Trasferimento cantiere→cantiere: nei km del cantiere solo se il tenant li conteggia.
+    if (!trasferimentiConteggiati && v.da_cantiere_id != null) continue;
     const km = Number(v.distanza_km) || 0;
     const cur = kmPerDip.get(v.dipendente_id) ?? { percorsi: 0, guidati: 0 };
     cur.percorsi += km;

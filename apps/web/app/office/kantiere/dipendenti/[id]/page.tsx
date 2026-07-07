@@ -3,6 +3,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
@@ -207,7 +208,7 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   // ── 5. Viaggi (timbratura_viaggio) ultimi ~90 giorni ──────────────────────
   const { data: viaggiRaw } = (await supabase
     .from('timbratura_viaggio' as never)
-    .select('data, direzione, distanza_km, durata_confermata_min, autista, mezzo_id')
+    .select('data, direzione, distanza_km, durata_confermata_min, autista, mezzo_id, da_cantiere_id')
     .eq('dipendente_id', params.id)
     .eq('tenant_id', ctx.tenantId)
     .gte('data', tsToGiornoRome(from90))
@@ -220,10 +221,15 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
           durata_confermata_min: number | null;
           autista: boolean | null;
           mezzo_id: string | null;
+          da_cantiere_id: string | null;
         }[]
       | null;
   };
-  const viaggi = viaggiRaw ?? [];
+  // Trasferimenti cantiere→cantiere: nel profilo dipendente solo se il tenant li conteggia.
+  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
+  const viaggi = (viaggiRaw ?? []).filter(
+    (v) => trasferimentiConteggiati || v.da_cantiere_id == null,
+  );
 
   // (a) Mezzi guidati (autista = true, mezzo_id valorizzato)
   const mezzoAggMap = new Map<string, { viaggi: number; km: number }>();

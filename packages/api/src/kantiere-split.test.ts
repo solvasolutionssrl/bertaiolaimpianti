@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { calcolaSegmentiSplit, nettoMinuti, type CalcolaSplitInput } from './kantiere-split';
+import {
+  calcolaSegmentiSplit,
+  nettoMinuti,
+  trasferimentiDaSegmenti,
+  type CalcolaSplitInput,
+} from './kantiere-split';
 import { minutiPerCommessa, type Timbratura } from './kantiere-ore';
 
 const T0 = Date.parse('2026-07-05T08:00:00.000Z');
@@ -131,5 +136,69 @@ describe('calcolaSegmentiSplit', () => {
       ingressoMs: T0, uscitaMs: T0, pausaMin: 0, segmenti: [{ cantiereId: 'A', minuti: 0 }],
     });
     expect(res.ok).toBe(false);
+  });
+});
+
+describe('trasferimentiDaSegmenti', () => {
+  it('3 cantieri distinti → 2 tratte in sequenza', () => {
+    expect(
+      trasferimentiDaSegmenti([
+        { cantiereId: 'A', minuti: 120 },
+        { cantiereId: 'B', minuti: 180 },
+        { cantiereId: 'C', minuti: 180 },
+      ]),
+    ).toEqual([
+      { da: 'A', a: 'B' },
+      { da: 'B', a: 'C' },
+    ]);
+  });
+
+  it('un solo cantiere → nessuna tratta', () => {
+    expect(trasferimentiDaSegmenti([{ cantiereId: 'A', minuti: 480 }])).toEqual([]);
+  });
+
+  it('nessun segmento → nessuna tratta', () => {
+    expect(trasferimentiDaSegmenti([])).toEqual([]);
+  });
+
+  it('cantieri consecutivi identici → collassati, nessun tragitto verso sé stessi', () => {
+    expect(
+      trasferimentiDaSegmenti([
+        { cantiereId: 'A', minuti: 120 },
+        { cantiereId: 'A', minuti: 360 },
+      ]),
+    ).toEqual([]);
+  });
+
+  it('segmento intermedio a 0 minuti → saltato (tratta diretta A→C)', () => {
+    expect(
+      trasferimentiDaSegmenti([
+        { cantiereId: 'A', minuti: 120 },
+        { cantiereId: 'B', minuti: 0 },
+        { cantiereId: 'C', minuti: 360 },
+      ]),
+    ).toEqual([{ da: 'A', a: 'C' }]);
+  });
+
+  it('ultimo segmento a 0 dichiarati (assorbe il resto) → resta visitato', () => {
+    expect(
+      trasferimentiDaSegmenti([
+        { cantiereId: 'A', minuti: 240 },
+        { cantiereId: 'B', minuti: 0 },
+      ]),
+    ).toEqual([{ da: 'A', a: 'B' }]);
+  });
+
+  it('ritorno su un cantiere già visitato → tratta reale (A→B→A)', () => {
+    expect(
+      trasferimentiDaSegmenti([
+        { cantiereId: 'A', minuti: 120 },
+        { cantiereId: 'B', minuti: 120 },
+        { cantiereId: 'A', minuti: 240 },
+      ]),
+    ).toEqual([
+      { da: 'A', a: 'B' },
+      { da: 'B', a: 'A' },
+    ]);
   });
 });

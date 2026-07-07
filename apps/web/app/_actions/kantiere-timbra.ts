@@ -10,7 +10,7 @@ import {
   statoTurno,
   type StatoTurno,
 } from '@kommessa/api/kantiere-ore';
-import { calcolaSegmentiSplit } from '@kommessa/api/kantiere-split';
+import { calcolaSegmentiSplit, trasferimentiDaSegmenti } from '@kommessa/api/kantiere-split';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
@@ -582,6 +582,15 @@ async function terminaConSplit(
     });
   }
 
+  // 6b. Trasferimenti cantiere→cantiere della giornata: km + tempo (best-effort,
+  //     sempre registrati; conteggio lato tenant gated dal toggle).
+  await registraTrasferimentiCantiere(supabase, {
+    tenantId,
+    dipendenteId,
+    data: romeDay(new Date(opts.ts)),
+    pairs: trasferimentiDaSegmenti(opts.split),
+  });
+
   // 7. Ricalcolo: deriva le righe per cantiere dai segmenti.
   try {
     await ricomputaRapportinoAuto(supabase, tenantId, dipendenteId, romeDay(new Date(opts.ts)));
@@ -777,63 +786,78 @@ async function turnoApertoQualsiasi(
 }
 
 /**
- * Attribuisce i km del tragitto cantiere→cantiere (dello switch) al cantiere di
- * DESTINAZIONE, come tratta di viaggio MANUALE (timbratura_id null, sede null,
- * `durata_confermata_min = 0` così NON conta ore di viaggio: contano solo i km).
- * Best-effort: se mancano le coordinate (cantieri "privati") o il provider non
- * risponde, non scrive nulla (niente km, come richiesto). Non deve mai bloccare.
+ * Registra le tratte di TRASFERIMENTO cantiere→cantiere di una giornata (una
+ * riga `timbratura_viaggio` per tratta): km + tempo stimato dal provider del
+ * tenant, attribuiti al cantiere di DESTINAZIONE. `timbratura_id` null (non
+ * legate a un evento di timbratura), `da_cantiere_id` = partenza (la UI mostra
+ * "A → B" invece di "Sede → B"), `direzione='andata'`, `sede_id` null.
+ *
+ * Il TEMPO stimato è salvato in `durata_stimata_min` (registrato, consultabile
+ * dal super admin) mentre `durata_confermata_min = 0`: così il trasferimento NON
+ * entra mai nelle ore pagate. Alla futura attivazione, quel tempo alimenterà il
+ * calcolo delle ore di viaggio della giornata (logica da definire col cliente).
+ *
+ * SEMPRE eseguita: è la fase di REGISTRAZIONE, indipendente dal toggle
+ * per-tenant `km_switch_attivo` che governa solo il CONTEGGIO lato tenant nelle
+ * aggregazioni km. Best-effort: se mancano le coordinate (cantieri senza
+ * indirizzo) o il provider non risponde, salta quella tratta senza mai bloccare.
  */
-async function attribuisciKmSwitch(
+async function registraTrasferimentiCantiere(
   supabase: ReturnType<typeof createServerSupabase>,
   opts: {
     tenantId: string;
     dipendenteId: string;
-    daCantiereId: string;
-    aCantiereId: string;
     data: string;
+    pairs: { da: string; a: string }[];
   },
 ): Promise<void> {
+  if (opts.pairs.length === 0) return;
   try {
+    const ids = [...new Set(opts.pairs.flatMap((p) => [p.da, p.a]))];
     const { data: rows } = await supabase
       .from('cantieri' as never)
       .select('id, indirizzo_lat, indirizzo_lng')
-      .in('id', [opts.daCantiereId, opts.aCantiereId])
+      .in('id', ids)
       .eq('tenant_id', opts.tenantId);
-    const cc =
-      (rows as { id: string; indirizzo_lat: number | null; indirizzo_lng: number | null }[] | null) ??
-      [];
-    const a = cc.find((r) => r.id === opts.daCantiereId);
-    const b = cc.find((r) => r.id === opts.aCantiereId);
-    if (!a?.indirizzo_lat || !a?.indirizzo_lng || !b?.indirizzo_lat || !b?.indirizzo_lng) return;
+    const coord = new Map<string, { lat: number; lng: number }>();
+    for (const r of (rows as
+      | { id: string; indirizzo_lat: number | null; indirizzo_lng: number | null }[]
+      | null) ?? []) {
+      if (r.indirizzo_lat != null && r.indirizzo_lng != null) {
+        coord.set(r.id, { lat: Number(r.indirizzo_lat), lng: Number(r.indirizzo_lng) });
+      }
+    }
 
     const choice = await leggiRoutingProvider(supabase, opts.tenantId);
     const provider = getRoutingProvider({ provider: choice });
-    const stima = await provider.stima(
-      { lat: Number(a.indirizzo_lat), lng: Number(a.indirizzo_lng) },
-      { lat: Number(b.indirizzo_lat), lng: Number(b.indirizzo_lng) },
-    );
-    if (!stima) return;
-
-    await supabase.from('timbratura_viaggio' as never).insert({
-      tenant_id: opts.tenantId,
-      timbratura_id: null,
-      dipendente_id: opts.dipendenteId,
-      cantiere_id: opts.aCantiereId,
-      // Cantiere di PARTENZA → la UI mostra "A → B" invece di "Sede → B".
-      da_cantiere_id: opts.daCantiereId,
-      data: opts.data,
-      direzione: 'andata',
-      sede_id: null,
-      durata_stimata_min: null,
-      // 0 = non conta ore di viaggio (l'utente ha scelto di ignorare i tempi):
-      // qui interessa solo la distanza.
-      durata_confermata_min: 0,
-      distanza_km: stima.km,
-      autista: false,
-      mezzo_id: null,
-    } as never);
+    const inserendi: Record<string, unknown>[] = [];
+    for (const p of opts.pairs) {
+      const a = coord.get(p.da);
+      const b = coord.get(p.a);
+      if (!a || !b) continue; // coordinate mancanti → tratta saltata (best-effort)
+      const stima = await provider.stima(a, b);
+      if (!stima) continue;
+      inserendi.push({
+        tenant_id: opts.tenantId,
+        timbratura_id: null,
+        dipendente_id: opts.dipendenteId,
+        cantiere_id: p.a,
+        da_cantiere_id: p.da,
+        data: opts.data,
+        direzione: 'andata',
+        sede_id: null,
+        durata_stimata_min: Math.round(stima.minuti),
+        durata_confermata_min: 0,
+        distanza_km: stima.km,
+        autista: false,
+        mezzo_id: null,
+      });
+    }
+    if (inserendi.length > 0) {
+      await supabase.from('timbratura_viaggio' as never).insert(inserendi as never);
+    }
   } catch {
-    // best-effort: mai bloccare lo switch per i km
+    // best-effort: mai bloccare il flusso per la registrazione dei trasferimenti
   }
 }
 
@@ -993,18 +1017,15 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     return { ok: false, error: errIngresso.message };
   }
 
-  // Km A→B alla destinazione (best-effort, non blocca). Opt-in: solo se l'ufficio
-  // ha attivato "km del tragitto tra cantieri".
-  const impTurno = await leggiImpostazioniTurno(supabase, ctx.tenantId);
-  if (impTurno.kmSwitchAttivo) {
-    await attribuisciKmSwitch(supabase, {
-      tenantId: ctx.tenantId,
-      dipendenteId: me.id,
-      daCantiereId: parsed.data.daCantiereId,
-      aCantiereId: parsed.data.aCantiereId,
-      data: romeDay(new Date(ingressoTs)),
-    });
-  }
+  // Trasferimento A→B: km + tempo registrati sul cantiere di destinazione
+  // (best-effort, non blocca). SEMPRE registrato; il conteggio lato tenant è
+  // gated dal toggle `km_switch_attivo` nelle aggregazioni km.
+  await registraTrasferimentiCantiere(supabase, {
+    tenantId: ctx.tenantId,
+    dipendenteId: me.id,
+    data: romeDay(new Date(ingressoTs)),
+    pairs: [{ da: parsed.data.daCantiereId, a: parsed.data.aCantiereId }],
+  });
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ingressoTs)));
@@ -1125,6 +1146,15 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   ];
   const { error } = await supabase.from('timbrature' as never).insert(rows as never);
   if (error) return { ok: false, error: error.message };
+
+  // Trasferimenti cantiere→cantiere della giornata: km + tempo (best-effort,
+  // sempre registrati; conteggio lato tenant gated dal toggle).
+  await registraTrasferimentiCantiere(supabase, {
+    tenantId: ctx.tenantId,
+    dipendenteId: me.id,
+    data: oggi,
+    pairs: trasferimentiDaSegmenti(parsed.data.split),
+  });
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, oggi);

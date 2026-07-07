@@ -1,4 +1,5 @@
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { aggregaOre, type RigaAgg } from '@kommessa/api/kantiere-report';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
@@ -111,6 +112,7 @@ type ViaggioRow = {
   distanza_km: number | null;
   durata_confermata_min: number | null;
   autista: boolean | null;
+  da_cantiere_id: string | null;
 };
 
 type MezzoLightRow = {
@@ -150,7 +152,7 @@ export default async function ReportPage({ searchParams }: PageProps) {
   // Carica viaggi nel range (in parallelo)
   const viaggiPromise = (supabase
     .from('timbratura_viaggio' as never)
-    .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min, autista')
+    .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min, autista, da_cantiere_id')
     .eq('tenant_id', ctx.tenantId)
     .gte('data', from)
     .lte('data', to)
@@ -178,7 +180,11 @@ export default async function ReportPage({ searchParams }: PageProps) {
   const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
   // Calcola dipendenti ids dai viaggi per il batch-load (unione con quelli dei rapportini)
-  const viaggi: ViaggioRow[] = viaggiRes.data ?? [];
+  // Trasferimenti cantiere→cantiere: nel report solo se il tenant li conteggia.
+  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
+  const viaggi: ViaggioRow[] = (viaggiRes.data ?? []).filter(
+    (v) => trasferimentiConteggiati || v.da_cantiere_id == null,
+  );
   const viaggiDipIds = [...new Set(viaggi.map((v) => v.dipendente_id))];
   const tuttiDipIds = [...new Set([...dipIds, ...viaggiDipIds])];
 

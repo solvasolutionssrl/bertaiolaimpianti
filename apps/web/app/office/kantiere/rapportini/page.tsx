@@ -4,7 +4,11 @@ import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
-import { leggiPolicyRapportini, leggiSogliaPausaPranzoOre } from '@/app/_lib/kantiere-config';
+import {
+  leggiPolicyRapportini,
+  leggiSogliaPausaPranzoOre,
+  leggiTrasferimentiAttivi,
+} from '@/app/_lib/kantiere-config';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
@@ -322,7 +326,11 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       .in('timbratura_id', timbratureData.map((t) => t.id))) as { data: ViaggioRow[] | null };
     viaggioRows.push(...(data ?? []));
   }
-  if (dipIds.length > 0) {
+  // Righe viaggio senza timbratura = trasferimenti cantiere→cantiere: mostrati
+  // solo se il tenant conteggia i trasferimenti (altrimenti restano registrati
+  // ma non compaiono nelle giornate del tenant, visibili solo al super admin).
+  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
+  if (trasferimentiConteggiati && dipIds.length > 0) {
     const { data } = (await supabase
       .from('timbratura_viaggio' as never)
       .select(VIAGGIO_COLS)

@@ -439,11 +439,13 @@ export function ImpostazioniClient({
                   id="km-switch"
                   checked={kmSwitch}
                   onChange={() => setKmSwitch((v) => !v)}
-                  title="Km del tragitto tra cantieri (cambio cantiere)"
+                  title="Conteggia i trasferimenti tra cantieri"
                   description={
                     <>
-                      Quando un tecnico cambia cantiere durante il turno, calcola i km del tragitto
-                      e li attribuisce al nuovo cantiere. Richiede il provider Google.{' '}
+                      I km e il tempo dei tragitti da un cantiere all&apos;altro (cambio cantiere,
+                      split di fine turno, registra giornata) sono <strong>sempre registrati</strong>.
+                      Se attivi, i km entrano anche nei totali del cantiere di destinazione per
+                      questo tenant. Richiede il provider Google per i tempi reali.{' '}
                       <strong>Default disattivo.</strong>
                     </>
                   }

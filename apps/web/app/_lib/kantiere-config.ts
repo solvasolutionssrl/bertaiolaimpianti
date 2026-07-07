@@ -106,13 +106,31 @@ export async function leggiRoutingProvider(
   return config['routing_provider'] === 'google' ? 'google' : 'free';
 }
 
+/**
+ * Toggle per-tenant "conteggia i trasferimenti tra cantieri" (chiave storica
+ * `km_switch_attivo`). I trasferimenti cantiere→cantiere (km + tempo stimato)
+ * sono SEMPRE registrati e visibili al super admin; questo toggle governa solo
+ * il CONTEGGIO lato tenant: se OFF, le aggregazioni km del tenant escludono le
+ * tratte cantiere→cantiere (i numeri operativi del tenant non cambiano). Alla
+ * futura attivazione entrerà anche il tempo di viaggio nel calcolo ore (logica
+ * da definire col cliente). Default false (opt-in). FPM Impianti: OFF.
+ */
+export async function leggiTrasferimentiAttivi(supabase: Supa, tenantId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  return config['km_switch_attivo'] === true;
+}
+
 export type ImpostazioniTurno = {
   /** Tolleranza (min) sulla somma dello split di fine turno. Default 5. */
   tolleranzaChiusuraMin: number;
   /** Split "cosa hai fatto oggi" attivo. Default true. */
   splitAttivo: boolean;
-  /** Km del tragitto sul cambio cantiere (switch). Default false (opt-in). */
-  kmSwitchAttivo: boolean;
   /** Passo (min) dei +/- degli stepper ore (5/10/15/30). Default 15. */
   passoMinuti: number;
   /** I tecnici possono avviare un turno su QUALSIASI cantiere. Default true. */
@@ -142,7 +160,6 @@ export async function leggiImpostazioniTurno(
   return {
     tolleranzaChiusuraMin: Math.min(30, toInt(config['tolleranza_chiusura_min'], 5)),
     splitAttivo: config['split_fine_turno_attivo'] === false ? false : true,
-    kmSwitchAttivo: config['km_switch_attivo'] === true,
     passoMinuti: PASSI_MINUTI.includes(passo) ? passo : 15,
     avvioLibero: config['avvio_turno_libero'] === false ? false : true,
     registraGiornataAttivo: config['registra_giornata_attivo'] === false ? false : true,

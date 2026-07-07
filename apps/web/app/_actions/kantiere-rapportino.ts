@@ -583,7 +583,9 @@ export async function registraOreManuali(
 
   // Tratte di viaggio manuali (senza timbratura, con cantiere+data).
   // Ripulisci prima le manuali precedenti per (dipendente, cantiere, data) così
-  // un risalvataggio non accumula duplicati.
+  // un risalvataggio non accumula duplicati. `da_cantiere_id IS NULL` così NON
+  // si cancellano i TRASFERIMENTI cantiere→cantiere (che hanno da_cantiere_id
+  // valorizzato e vivono nella stessa tabella): sono un altro tipo di riga.
   await supabase
     .from('timbratura_viaggio' as never)
     .delete()
@@ -591,7 +593,8 @@ export async function registraOreManuali(
     .eq('dipendente_id', me.id)
     .eq('cantiere_id', cantiereId)
     .eq('data', data)
-    .is('timbratura_id', null);
+    .is('timbratura_id', null)
+    .is('da_cantiere_id', null);
 
   for (const v of viaggi) {
     if (v.minuti <= 0) continue;

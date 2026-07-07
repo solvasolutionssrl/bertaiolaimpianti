@@ -139,6 +139,14 @@ Audit completo (5 investigatori paralleli + verifiche live Supabase) e correzion
 - **Spese hardening**: `eliminaSpesa` con guard ruolo + scope tenant; `aggiornaSpesa` valida il cantiere del tenant prima di riassegnarlo; split fine turno valida la sede sul cantiere **finale**.
 - **RLS presenze (migration `20260706120000`, ✅ APPLICATA 06/07)**: la scrittura di `timbrature/rapportini/rapportino_righe/rapportino_versioni/timbratura_viaggio` è vincolata al **proprio `dipendente_id`** (o capo della squadra, via `public.sono_capo_di()` + `public.dipendente_del_utente()`); office/admin/owner restano tenant-wide; service role bypassa. Prima di applicare ho **validato sui dati reali**: caposquadra **non usato** in prod (0 squadre, 0 timbrature `origine='capo'`) e tutti i self-writer hanno `user_id` → superficie reale = solo "il tecnico scrive le proprie righe", che è già così per tutte le 119 timbrature. **Rollback** = ricreare le vecchie `*_tenant_write` FOR ALL `(tenant_id=current_tenant_id() and current_role() in (owner,admin,office,tecnico))`.
 
+#### Trasferimenti cantiere→cantiere (km + tempo) (in prod dal 07/07/2026)
+
+Chi lavora su **più cantieri** in un giorno genera tragitti **A → B**. Regola a **due livelli** (gated kantiere → Bertaiola-safe; **FPM = OFF**):
+
+- **Registrazione SEMPRE attiva** (anche a toggle spento): per ogni tratta consecutiva si calcolano **km + tempo** (provider del tenant) e si scrive una riga `timbratura_viaggio` (`timbratura_id` null, `da_cantiere_id`=A, `cantiere_id`=B → km sulla **destinazione**, `durata_stimata_min`=tempo, **`durata_confermata_min=0`** = non pagato). **Sempre visibile al super admin** (`/admin/kantiere/timbrature` → "Trasferimenti tra cantieri"). Copre i 3 flussi multi-cantiere (switch live, split fine turno, registra-giornata) via `registraTrasferimentiCantiere` + puro testato `trasferimentiDaSegmenti`.
+- **Conteggio = toggle per-tenant** `km_switch_attivo` (rinominato "Conteggia i trasferimenti tra cantieri", default **OFF/opt-in**): se ON i km entrano nei totali del cantiere di destinazione lato tenant; se OFF restano registrati ma **esclusi** dalle aggregazioni del tenant (numeri operativi invariati). Reader `leggiTrasferimentiAttivi`; gate applicato a tutte le somme km lato tenant (mezzi safe: `mezzo_id` null).
+- **Ore pagate NON toccate** (`durata_confermata_min=0`). ⚠️ L'uso del tempo-viaggio nelle ore è **da definire col cliente** (dipende da giorno/straordinari): **SEAM** marcato in `viaggioManualePerTarget` (`_actions/_lib/ricomputa-rapportino.ts`). Vedi doc `documentazione_generale/08_LOGICHE/Logiche_Kantiere.md` §3.1 + memoria `project-trasferimenti-cantiere` / `project-promemoria-operativi` §6 (**da attivare**). Nessuna migration (colonne + config key già esistenti).
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione

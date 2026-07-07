@@ -16,6 +16,7 @@ import {
 import { createServerSupabase } from '@kommessa/api/server';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import type { TimbraturaInput } from '@/app/office/kantiere/_components/timbrature-riepilogo';
@@ -201,7 +202,11 @@ export default async function CruscottoKantierePage({
       .in('timbratura_id', timbRows.map((t) => t.id))) as { data: ViaggioRow[] | null };
     viaggioRows.push(...(data ?? []));
   }
-  if (dipIds.length > 0) {
+  // Righe viaggio senza timbratura = trasferimenti cantiere→cantiere: mostrati
+  // solo se il tenant conteggia i trasferimenti (altrimenti restano registrati e
+  // visibili al solo super admin).
+  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
+  if (trasferimentiConteggiati && dipIds.length > 0) {
     const { data } = (await supabase
       .from('timbratura_viaggio' as never)
       .select(VIAGGIO_COLS)

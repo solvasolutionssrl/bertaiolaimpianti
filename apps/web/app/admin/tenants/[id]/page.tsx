@@ -40,7 +40,7 @@ const CONFIG_KANTIERE_LABELS: [string, string][] = [
   ['auto_approva_rapportini', 'Auto-approvazione rapportini'],
   ['tolleranza_chiusura_min', 'Tolleranza chiusura (min)'],
   ['split_fine_turno_attivo', 'Split fine turno'],
-  ['km_switch_attivo', 'Km cambio cantiere'],
+  ['km_switch_attivo', 'Conteggia trasferimenti tra cantieri'],
   ['passo_minuti_stepper', 'Passo stepper (min)'],
   ['avvio_turno_libero', 'Avvio turno libero'],
   ['registra_giornata_attivo', 'Registra giornata da zero'],
