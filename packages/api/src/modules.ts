@@ -1,17 +1,24 @@
 /**
  * Moduli applicativi attivabili per tenant.
  *
- * - `base`   : il prodotto attuale (commesse, foto, ticketing, ecc.).
- *              Sempre attivo per ogni tenant — NON ha una riga in tabella.
- * - `kantiere`: Tesserino Digitale (dipendenti, squadre, presenze/ore, QR).
- *              Opzionale: attivo solo se esiste una riga `attivo=true`.
+ * - `base`       : il prodotto attuale (commesse, foto, ticketing, ecc.).
+ *                  Sempre attivo per ogni tenant — NON ha una riga in tabella.
+ * - `kantiere`   : Tesserino Digitale (dipendenti, squadre, presenze/ore, QR).
+ *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
+ * - `dipendenti` : Gestione del personale (pianificazione settimanale, ferie e
+ *                  permessi). Sotto-flag in `tenant_modules.config`:
+ *                  `pianificazione_attiva`, `ferie_attiva`.
+ *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
  */
-export type ModuleCode = 'base' | 'kantiere';
+export type ModuleCode = 'base' | 'kantiere' | 'dipendenti';
 
-export const MODULE_CODES: ModuleCode[] = ['base', 'kantiere'];
+export const MODULE_CODES: ModuleCode[] = ['base', 'kantiere', 'dipendenti'];
 
 /** Moduli che richiedono una riga esplicita in `tenant_modules` per attivarsi. */
-export const OPTIONAL_MODULE_CODES: Exclude<ModuleCode, 'base'>[] = ['kantiere'];
+export const OPTIONAL_MODULE_CODES: Exclude<ModuleCode, 'base'>[] = [
+  'kantiere',
+  'dipendenti',
+];
 
 export interface TenantModuleRow {
   module_code: string;

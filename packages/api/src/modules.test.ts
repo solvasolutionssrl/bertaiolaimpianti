@@ -28,7 +28,13 @@ describe('isModuleActive', () => {
     ).toBe(false);
   });
 
-  it('MODULE_CODES contiene base e kantiere', () => {
-    expect(MODULE_CODES).toEqual(['base', 'kantiere']);
+  it('dipendenti è attivo se esiste una riga attiva', () => {
+    expect(
+      isModuleActive([{ module_code: 'dipendenti', attivo: true }], 'dipendenti'),
+    ).toBe(true);
+  });
+
+  it('MODULE_CODES contiene base, kantiere e dipendenti', () => {
+    expect(MODULE_CODES).toEqual(['base', 'kantiere', 'dipendenti']);
   });
 });

@@ -814,7 +814,7 @@ export async function creaUtenteTenant(input: {
 
 const TENANT_MODULE_SCHEMA = z.object({
   tenantId: z.string().uuid(),
-  moduleCode: z.enum(['kantiere']),
+  moduleCode: z.enum(['kantiere', 'dipendenti']),
   attivo: z.boolean(),
 });
 
@@ -824,7 +824,7 @@ const TENANT_MODULE_SCHEMA = z.object({
  */
 export async function aggiornaModuloTenant(input: {
   tenantId: string;
-  moduleCode: 'kantiere';
+  moduleCode: 'kantiere' | 'dipendenti';
   attivo: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();
@@ -859,8 +859,9 @@ export async function aggiornaModuloTenant(input: {
 
   // Cascata anti-stato-rotto: se spengo Kantiere mentre l'esperienza mobile è
   // 'kantiere' o 'full', riporto app_mode a 'kommessa' (altrimenti la PWA punta
-  // a una shell senza modulo → utenti bloccati).
-  if (!parsed.data.attivo) {
+  // a una shell senza modulo → utenti bloccati). Vale SOLO per kantiere:
+  // 'dipendenti' non tocca la shell mobile.
+  if (!parsed.data.attivo && parsed.data.moduleCode === 'kantiere') {
     const { data: t } = await supabase
       .from('tenants')
       .select('app_mode')
@@ -895,6 +896,72 @@ export async function aggiornaModuloTenant(input: {
     action: 'tenant.module.update',
     before: { module_code: parsed.data.moduleCode, attivo: previousAttivo },
     after: { module_code: parsed.data.moduleCode, attivo: parsed.data.attivo },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------
+// Sotto-flag del modulo Dipendenti (pianificazione / ferie)
+// ---------------------------------------------------------------------
+
+const DIPENDENTI_FLAG_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  key: z.enum(['pianificazione_attiva', 'ferie_attiva']),
+  value: z.boolean(),
+});
+
+/**
+ * Accende/spegne un sotto-flag del modulo Dipendenti, salvato in
+ * `tenant_modules.config` (merge non distruttivo). Richiede la riga del modulo
+ * `dipendenti` presente. Default (assenza chiave) = attivo.
+ */
+export async function aggiornaFlagDipendenti(input: {
+  tenantId: string;
+  key: 'pianificazione_attiva' | 'ferie_attiva';
+  value: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = DIPENDENTI_FLAG_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: row } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'dipendenti')
+    .maybeSingle();
+  if (!row) {
+    return { ok: false, error: 'Modulo Dipendenti non attivo per questo tenant.' };
+  }
+
+  const existing = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const previous = existing[parsed.data.key] ?? null;
+  const newConfig: Record<string, unknown> = {
+    ...existing,
+    [parsed.data.key]: parsed.data.value,
+  };
+
+  const { error } = await supabase
+    .from('tenant_modules' as never)
+    .update({ config: newConfig } as never)
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'dipendenti');
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.dipendenti_flag.update',
+    before: { [parsed.data.key]: previous },
+    after: { [parsed.data.key]: parsed.data.value },
   });
 
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);

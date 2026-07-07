@@ -8,6 +8,7 @@ import { registraEventoAccesso } from '@/app/_actions/auth-events';
 import {
   Boxes,
   Briefcase,
+  CalendarDays,
   Coins,
   HardHat,
   LayoutDashboard,
@@ -28,6 +29,8 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
+  /** Modulo Dipendenti attivo → voci Pianificazione/Permessi in sezione Azienda/Personale. */
+  hasDipendenti?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
   appMode?: 'kommessa' | 'kantiere' | 'full';
   children: React.ReactNode;
@@ -263,6 +266,43 @@ function buildNav(
 }
 
 /**
+ * Inietta le voci del modulo Dipendenti (Pianificazione, e in futuro Permessi/
+ * Gruppi) nella sezione "Azienda". Se il tenant non ha una sezione Azienda
+ * (tenant senza kantiere), crea una sezione "Personale" a sé. No-op se il
+ * modulo è spento. Le voci-sezione sono literal freschi a ogni `buildNav`,
+ * quindi la mutazione qui è sicura (nessuna condivisione tra render).
+ */
+function injectDipendenti(
+  nav: OfficeNavItem[],
+  hasDipendenti?: boolean,
+): OfficeNavItem[] {
+  if (!hasDipendenti) return nav;
+  const pianificazione: OfficeNavItem = {
+    id: 'pianificazione',
+    label: 'Pianificazione',
+    href: '/office/personale/pianificazione',
+    icon: CalendarDays,
+  };
+  const azienda = nav.find((n) => n.id === 'sec-azienda');
+  if (azienda) {
+    azienda.children = [...(azienda.children ?? []), pianificazione];
+    return nav;
+  }
+  return [
+    ...nav,
+    {
+      id: 'sec-personale',
+      label: 'Personale',
+      href: '#',
+      icon: Users,
+      variant: 'section',
+      defaultOpen: true,
+      children: [pianificazione],
+    },
+  ];
+}
+
+/**
  * Deriva l'id della voce nav attiva dal pathname corrente. Logica:
  *  - match esatto su `href` ha priorità
  *  - altrimenti il primo `href` (non `/`) che è prefisso del pathname
@@ -294,12 +334,13 @@ export function OfficeShellClient({
   activeNavId,
   notificationCount,
   hasKantiere,
+  hasDipendenti,
   appMode,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const nav = buildNav(hasKantiere, appMode);
+  const nav = injectDipendenti(buildNav(hasKantiere, appMode), hasDipendenti);
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);

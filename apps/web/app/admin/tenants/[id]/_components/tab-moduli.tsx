@@ -8,6 +8,7 @@ import {
   aggiornaModuloTenant,
   aggiornaAppModeTenant,
   aggiornaCodiceAzienda,
+  aggiornaFlagDipendenti,
 } from '../../../_actions/tenants';
 import { useAlert } from '@/app/_components/confirm-provider';
 
@@ -34,11 +35,17 @@ const APP_MODE_OPZIONI: { value: AppMode; label: string; descrizione: string }[]
 export function TabModuli({
   tenantId,
   kantiereAttivo,
+  dipendentiAttivo,
+  pianificazioneAttiva,
+  ferieAttiva,
   appMode: appModeIniziale,
   codiceAzienda: codiceIniziale,
 }: {
   tenantId: string;
   kantiereAttivo: boolean;
+  dipendentiAttivo: boolean;
+  pianificazioneAttiva: boolean;
+  ferieAttiva: boolean;
   appMode: AppMode;
   codiceAzienda: string;
 }) {
@@ -47,6 +54,48 @@ export function TabModuli({
   const [pending, start] = React.useTransition();
   const [attivo, setAttivo] = React.useState(kantiereAttivo);
   const dirty = attivo !== kantiereAttivo;
+
+  // Modulo Dipendenti (salvataggio immediato, come app_mode).
+  const [dip, setDip] = React.useState(dipendentiAttivo);
+  const [pian, setPian] = React.useState(pianificazioneAttiva);
+  const [ferie, setFerie] = React.useState(ferieAttiva);
+  const [pendingDip, startDip] = React.useTransition();
+
+  const toggleDip = (next: boolean) => {
+    const prev = dip;
+    setDip(next);
+    startDip(async () => {
+      const res = await aggiornaModuloTenant({
+        tenantId,
+        moduleCode: 'dipendenti',
+        attivo: next,
+      });
+      if (!res.ok) {
+        setDip(prev);
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const toggleFlag = (
+    key: 'pianificazione_attiva' | 'ferie_attiva',
+    next: boolean,
+  ) => {
+    const setter = key === 'pianificazione_attiva' ? setPian : setFerie;
+    const prev = key === 'pianificazione_attiva' ? pian : ferie;
+    setter(next);
+    startDip(async () => {
+      const res = await aggiornaFlagDipendenti({ tenantId, key, value: next });
+      if (!res.ok) {
+        setter(prev);
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   const [appMode, setAppMode] = React.useState<AppMode>(appModeIniziale);
   const [pendingMode, startMode] = React.useTransition();
@@ -129,6 +178,55 @@ export function TabModuli({
               {attivo ? 'Attivo' : 'Spento'}
             </span>
           </label>
+        </div>
+
+        {/* dipendenti: toggle + sotto-flag */}
+        <div className="space-y-3 rounded-lg border border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Dipendenti — Gestione personale</p>
+              <p className="text-[11px] text-muted-foreground">
+                Pianificazione settimanale, ferie e permessi. Additivo, non tocca
+                l&apos;esperienza mobile.
+              </p>
+            </div>
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={dip}
+                onChange={(e) => toggleDip(e.target.checked)}
+                disabled={pendingDip}
+              />
+              <span className="text-xs text-muted-foreground">
+                {dip ? 'Attivo' : 'Spento'}
+              </span>
+            </label>
+          </div>
+          {dip ? (
+            <div className="grid gap-2 border-t border-border/60 pt-3 sm:grid-cols-2">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={pian}
+                  onChange={(e) => toggleFlag('pianificazione_attiva', e.target.checked)}
+                  disabled={pendingDip}
+                />
+                <span className="text-xs">Pianificazione settimanale</span>
+              </label>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={ferie}
+                  onChange={(e) => toggleFlag('ferie_attiva', e.target.checked)}
+                  disabled={pendingDip}
+                />
+                <span className="text-xs">Ferie e permessi</span>
+              </label>
+            </div>
+          ) : null}
         </div>
 
         {/* Codice azienda (login a 3 campi) */}
