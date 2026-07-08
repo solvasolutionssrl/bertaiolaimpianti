@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   CalendarClock,
   CalendarDays,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -572,8 +573,14 @@ function BloccoDialog({
                           setF((s) => ({ ...s, luogo: r.label, luogoLat: r.lat, luogoLng: r.lng }))
                         }
                         placeholder="Cerca indirizzo…"
-                        className="h-9 bg-background shadow-none"
+                        className="h-9 bg-background pr-8 shadow-none"
+                        linked={f.luogoLat != null && f.luogoLng != null}
                       />
+                      {f.luogoLat != null && f.luogoLng != null ? (
+                        <span className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                          <CheckCircle2 className="h-3 w-3" /> Collegato a Maps
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 </Sezione>
