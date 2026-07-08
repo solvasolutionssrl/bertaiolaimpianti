@@ -3,8 +3,11 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
 import { addGiorni } from '@kommessa/api/pianificazione';
-import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
-import { leggiConfigDipendenti } from '../../../_lib/dipendenti-config';
+import {
+  leggiConfigDipendenti,
+  leggiLabelTipi,
+  labelTipoConMappa,
+} from '../../../_lib/dipendenti-config';
 import { AnalisiClient, type LatestRow, type SerieMese } from './_components/analisi-client';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +19,7 @@ export default async function AnalisiPage() {
   const supabase = createServerSupabase();
   const cfg = await leggiConfigDipendenti(supabase, ctx.tenantId);
   if (!cfg.ferieAttiva) notFound();
+  const labelMap = await leggiLabelTipi(supabase, ctx.tenantId);
 
   const oggi = romeDay(new Date());
   const anno = oggi.slice(0, 4);
@@ -86,7 +90,7 @@ export default async function AnalisiPage() {
   const perTipoMap = new Map<string, number>();
   for (const r of rich) perTipoMap.set(r.tipo, (perTipoMap.get(r.tipo) ?? 0) + 1);
   const perTipo = [...perTipoMap.entries()]
-    .map(([tipo, valore]) => ({ nome: labelTipoPermesso(tipo), valore }))
+    .map(([tipo, valore]) => ({ nome: labelTipoConMappa(tipo, labelMap), valore }))
     .sort((a, b) => b.valore - a.valore)
     .slice(0, 8);
 
@@ -114,7 +118,7 @@ export default async function AnalisiPage() {
     .slice(0, 10)
     .map((r) => ({
       dipendenteNome: dipMap.get(r.dipendente_id)?.nome ?? 'Dipendente',
-      tipoLabel: labelTipoPermesso(r.tipo),
+      tipoLabel: labelTipoConMappa(r.tipo, labelMap),
       dataInizio: r.data_inizio,
       dataFine: r.data_fine,
       tuttoIlGiorno: r.tutto_il_giorno,
@@ -124,7 +128,7 @@ export default async function AnalisiPage() {
   const latest: LatestRow[] = rich.slice(0, 6).map((r) => ({
     id: r.id,
     dipendenteNome: dipMap.get(r.dipendente_id)?.nome ?? 'Dipendente',
-    tipoLabel: labelTipoPermesso(r.tipo),
+    tipoLabel: labelTipoConMappa(r.tipo, labelMap),
     dataInizio: r.data_inizio,
     dataFine: r.data_fine,
     tuttoIlGiorno: r.tutto_il_giorno,

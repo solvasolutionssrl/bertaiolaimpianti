@@ -1,9 +1,13 @@
 import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
-import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
 import { romeDay } from '@kommessa/api/rome-time';
-import { leggiConfigDipendenti, leggiTipiPermessoAttivi } from '../../../_lib/dipendenti-config';
+import {
+  leggiConfigDipendenti,
+  leggiTipiRichiedibili,
+  leggiLabelTipi,
+  labelTipoConMappa,
+} from '../../../_lib/dipendenti-config';
 import { PermessiClient, type RichiestaRow, type DipOpt } from './_components/permessi-client';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +36,10 @@ export default async function PermessiPage() {
     supabase.from('gruppi_approvazione' as never).select('id, nome').eq('tenant_id', ctx.tenantId),
   ]);
 
-  const tipiAttivi = await leggiTipiPermessoAttivi(supabase, ctx.tenantId);
+  const [tipiOpzioni, labelMap] = await Promise.all([
+    leggiTipiRichiedibili(supabase, ctx.tenantId),
+    leggiLabelTipi(supabase, ctx.tenantId),
+  ]);
 
   const dipRows = (dipRes.data ?? []) as unknown as {
     id: string;
@@ -79,7 +86,7 @@ export default async function PermessiPage() {
     id: r.id,
     dipendenteNome: dipMap.get(r.dipendente_id) ?? 'Dipendente',
     tipo: r.tipo,
-    tipoLabel: labelTipoPermesso(r.tipo),
+    tipoLabel: labelTipoConMappa(r.tipo, labelMap),
     dataInizio: r.data_inizio,
     dataFine: r.data_fine,
     tuttoIlGiorno: r.tutto_il_giorno,
@@ -99,7 +106,7 @@ export default async function PermessiPage() {
     <PermessiClient
       richieste={richieste}
       dipendenti={dipendentiOpts}
-      tipiAttivi={tipiAttivi}
+      tipiOpzioni={tipiOpzioni}
       mioDip={mioDip}
       oggiISO={romeDay(new Date())}
     />

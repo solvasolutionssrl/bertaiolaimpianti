@@ -12,13 +12,27 @@ import {
   CalendarDays,
   Inbox,
 } from 'lucide-react';
-import { PERMESSO_TIPI, LABEL_STATO_PERMESSO, tipoPermesso } from '@kommessa/api/permessi-tipi';
+import { LABEL_STATO_PERMESSO } from '@kommessa/api/permessi-tipi';
 import { Portal } from '@/app/mobile/_components/portal';
 import { useAlert } from '@/app/_components/confirm-provider';
 import { MobileBackButton } from '@/app/mobile/_components/mobile-back-button';
 import { richiediPermesso, decidiPermesso, annullaRichiesta } from '@/app/office/_actions/ferie-permessi';
 
 type Stato = 'in_attesa' | 'approvato' | 'rifiutato' | 'modifica_richiesta';
+
+interface TipoOpt {
+  codice: string;
+  label: string;
+  unita: 'giorni' | 'ore' | 'entrambi';
+  oreDefault?: number | null;
+}
+
+function addOre(hhmm: string, ore: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  let tot = (h ?? 0) * 60 + (m ?? 0) + Math.round(ore * 60);
+  if (tot > 23 * 60 + 59) tot = 23 * 60 + 59;
+  return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
+}
 
 export interface MiaRichiesta {
   id: string;
@@ -76,14 +90,14 @@ const STATO_STYLE: Record<Stato, string> = {
 export function PermessiMobileClient({
   mioDip,
   oggiISO,
-  tipiAttivi,
+  tipiOpzioni,
   mieRichieste,
   daApprovare,
   puoApprovare,
 }: {
   mioDip: string | null;
   oggiISO: string;
-  tipiAttivi: string[];
+  tipiOpzioni: TipoOpt[];
   mieRichieste: MiaRichiesta[];
   daApprovare: DaApprovare[];
   puoApprovare: boolean;
@@ -144,7 +158,7 @@ export function PermessiMobileClient({
         <RichiestaSheet
           dipendenteId={mioDip}
           oggiISO={oggiISO}
-          tipiAttivi={tipiAttivi}
+          tipiOpzioni={tipiOpzioni}
           onClose={() => setFormOpen(false)}
         />
       ) : null}
@@ -242,21 +256,18 @@ function DaApprovareCard({ r }: { r: DaApprovare }) {
 function RichiestaSheet({
   dipendenteId,
   oggiISO,
-  tipiAttivi,
+  tipiOpzioni,
   onClose,
 }: {
   dipendenteId: string;
   oggiISO: string;
-  tipiAttivi: string[];
+  tipiOpzioni: TipoOpt[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const alert = useAlert();
   const [pending, start] = React.useTransition();
-  const tipiDisponibili = React.useMemo(
-    () => PERMESSO_TIPI.filter((t) => tipiAttivi.includes(t.codice)),
-    [tipiAttivi],
-  );
+  const tipiDisponibili = tipiOpzioni;
   const [tipo, setTipo] = React.useState(tipiDisponibili[0]?.codice ?? 'ferie');
   const [tuttoIlGiorno, setTuttoIlGiorno] = React.useState(true);
   const [dataInizio, setDataInizio] = React.useState(oggiISO);
@@ -267,9 +278,16 @@ function RichiestaSheet({
 
   const onTipo = (codice: string) => {
     setTipo(codice);
-    const u = tipoPermesso(codice)?.unita;
-    if (u === 'ore') setTuttoIlGiorno(false);
-    else if (u === 'giorni') setTuttoIlGiorno(true);
+    const t = tipiDisponibili.find((x) => x.codice === codice);
+    if (t?.unita === 'ore') {
+      setTuttoIlGiorno(false);
+      if (t.oreDefault) {
+        setOraInizio('08:00');
+        setOraFine(addOre('08:00', t.oreDefault));
+      }
+    } else if (t?.unita === 'giorni') {
+      setTuttoIlGiorno(true);
+    }
   };
 
   const invia = () => {

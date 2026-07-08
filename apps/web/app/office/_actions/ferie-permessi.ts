@@ -262,13 +262,123 @@ export async function aggiornaTipiPermessoAttivi(input: unknown): Promise<Ok> {
 }
 
 // =====================================================================
+// TIPI PERMESSO PERSONALIZZATI (creati dall'ufficio)
+// =====================================================================
+
+function slugCustom(label: string): string {
+  const base = label
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40);
+  return 'custom_' + (base || 'tipo');
+}
+
+const TipoCustomSchema = z.object({
+  label: z.string().trim().min(2, 'Nome troppo corto').max(60),
+  unita: z.enum(['giorni', 'ore', 'entrambi']),
+  oreDefault: z.number().min(0.5).max(24).nullable().optional(),
+});
+
+/** Crea un tipo di permesso personalizzato del tenant (config). */
+export async function creaTipoPermessoCustom(input: unknown): Promise<Ok> {
+  const parsed = TipoCustomSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+  const svc = createServiceSupabase();
+  const { data: row } = await svc
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'dipendenti')
+    .maybeSingle();
+  if (!row) return { ok: false, error: 'Modulo Dipendenti non attivo' };
+  const existing = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const list = Array.isArray(existing['permesso_tipi_custom'])
+    ? (existing['permesso_tipi_custom'] as { codice?: string }[])
+    : [];
+  // codice univoco
+  let codice = slugCustom(parsed.data.label);
+  const usati = new Set(list.map((t) => t.codice));
+  if (usati.has(codice)) {
+    let n = 2;
+    while (usati.has(`${codice}_${n}`)) n++;
+    codice = `${codice}_${n}`;
+  }
+  const nuovo = {
+    codice,
+    label: parsed.data.label,
+    unita: parsed.data.unita,
+    oreDefault: parsed.data.unita === 'ore' ? parsed.data.oreDefault ?? null : null,
+  };
+  const newConfig = { ...existing, permesso_tipi_custom: [...list, nuovo] };
+  const { error } = await svc
+    .from('tenant_modules' as never)
+    .update({ config: newConfig } as never)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'dipendenti');
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(PATH_TIPI);
+  revalidatePath('/office/impostazioni/personale');
+  revalidatePath('/mobile/permessi');
+  return { ok: true };
+}
+
+/** Elimina un tipo di permesso personalizzato. */
+export async function eliminaTipoPermessoCustom(codice: string): Promise<Ok> {
+  if (!codice || typeof codice !== 'string') return { ok: false, error: 'Codice non valido' };
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+  const svc = createServiceSupabase();
+  const { data: row } = await svc
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'dipendenti')
+    .maybeSingle();
+  if (!row) return { ok: false, error: 'Modulo Dipendenti non attivo' };
+  const existing = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const list = Array.isArray(existing['permesso_tipi_custom'])
+    ? (existing['permesso_tipi_custom'] as { codice?: string }[])
+    : [];
+  const newConfig = {
+    ...existing,
+    permesso_tipi_custom: list.filter((t) => t.codice !== codice),
+  };
+  const { error } = await svc
+    .from('tenant_modules' as never)
+    .update({ config: newConfig } as never)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'dipendenti');
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(PATH_TIPI);
+  revalidatePath('/office/impostazioni/personale');
+  revalidatePath('/mobile/permessi');
+  return { ok: true };
+}
+
+// =====================================================================
 // RICHIESTE
 // =====================================================================
 
 const RichiestaSchema = z
   .object({
     dipendenteId: z.string().uuid(),
-    tipo: z.enum(CODICI_PERMESSO as [string, ...string[]]),
+    // Accetta built-in e tipi personalizzati (slug); la UI offre solo tipi validi.
+    tipo: z.string().trim().min(1).max(60),
     dataInizio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     dataFine: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     tuttoIlGiorno: z.boolean().default(true),

@@ -26,13 +26,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@kommessa/ui';
-import { LABEL_STATO_PERMESSO, PERMESSO_TIPI, tipoPermesso } from '@kommessa/api/permessi-tipi';
+import { LABEL_STATO_PERMESSO } from '@kommessa/api/permessi-tipi';
 import { useAlert } from '@/app/_components/confirm-provider';
 import { decidiPermesso, richiediPermesso } from '@/app/office/_actions/ferie-permessi';
 
 export interface DipOpt {
   id: string;
   nome: string;
+}
+export interface TipoOpt {
+  codice: string;
+  label: string;
+  unita: 'giorni' | 'ore' | 'entrambi';
+  oreDefault?: number | null;
 }
 
 type Stato = 'in_attesa' | 'approvato' | 'rifiutato' | 'modifica_richiesta';
@@ -65,6 +71,12 @@ function fmtData(iso: string): string {
     timeZone: 'Europe/Rome',
   });
 }
+function addOre(hhmm: string, ore: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  let tot = (h ?? 0) * 60 + (m ?? 0) + Math.round(ore * 60);
+  if (tot > 23 * 60 + 59) tot = 23 * 60 + 59;
+  return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
+}
 function fmtQuando(r: RichiestaRow): string {
   if (!r.tuttoIlGiorno && r.oraInizio && r.oraFine)
     return `${fmtData(r.dataInizio)} · ${r.oraInizio}-${r.oraFine}`;
@@ -88,13 +100,13 @@ const FILTRI: { value: 'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'; label:
 export function PermessiClient({
   richieste,
   dipendenti,
-  tipiAttivi,
+  tipiOpzioni,
   mioDip,
   oggiISO,
 }: {
   richieste: RichiestaRow[];
   dipendenti: DipOpt[];
-  tipiAttivi: string[];
+  tipiOpzioni: TipoOpt[];
   mioDip: string | null;
   oggiISO: string;
 }) {
@@ -192,7 +204,7 @@ export function PermessiClient({
       {nuovaOpen ? (
         <NuovaRichiestaDialog
           dipendenti={dipendenti}
-          tipiAttivi={tipiAttivi}
+          tipiOpzioni={tipiOpzioni}
           mioDip={mioDip}
           oggiISO={oggiISO}
           onClose={() => setNuovaOpen(false)}
@@ -204,13 +216,13 @@ export function PermessiClient({
 
 function NuovaRichiestaDialog({
   dipendenti,
-  tipiAttivi,
+  tipiOpzioni,
   mioDip,
   oggiISO,
   onClose,
 }: {
   dipendenti: DipOpt[];
-  tipiAttivi: string[];
+  tipiOpzioni: TipoOpt[];
   mioDip: string | null;
   oggiISO: string;
   onClose: () => void;
@@ -218,10 +230,7 @@ function NuovaRichiestaDialog({
   const router = useRouter();
   const alert = useAlert();
   const [pending, start] = React.useTransition();
-  const tipiDisponibili = React.useMemo(
-    () => PERMESSO_TIPI.filter((t) => tipiAttivi.includes(t.codice)),
-    [tipiAttivi],
-  );
+  const tipiDisponibili = tipiOpzioni;
   const [dipendenteId, setDipendenteId] = React.useState<string>(mioDip ?? dipendenti[0]?.id ?? '');
   const [cercaDip, setCercaDip] = React.useState('');
   const [tipo, setTipo] = React.useState(tipiDisponibili[0]?.codice ?? 'ferie');
@@ -240,9 +249,16 @@ function NuovaRichiestaDialog({
 
   const onTipo = (codice: string) => {
     setTipo(codice);
-    const u = tipoPermesso(codice)?.unita;
-    if (u === 'ore') setTuttoIlGiorno(false);
-    else if (u === 'giorni') setTuttoIlGiorno(true);
+    const t = tipiDisponibili.find((x) => x.codice === codice);
+    if (t?.unita === 'ore') {
+      setTuttoIlGiorno(false);
+      if (t.oreDefault) {
+        setOraInizio('08:00');
+        setOraFine(addOre('08:00', t.oreDefault));
+      }
+    } else if (t?.unita === 'giorni') {
+      setTuttoIlGiorno(true);
+    }
   };
 
   const invia = () => {

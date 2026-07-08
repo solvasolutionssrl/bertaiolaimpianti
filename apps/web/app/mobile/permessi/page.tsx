@@ -2,12 +2,16 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
 import { romeDay } from '@kommessa/api/rome-time';
 
 import { guardMobile } from '../_lib/guard';
 import { tenantHasModule } from '../../_lib/modules';
-import { leggiConfigDipendenti, leggiTipiPermessoAttivi } from '../../_lib/dipendenti-config';
+import {
+  leggiConfigDipendenti,
+  leggiTipiRichiedibili,
+  leggiLabelTipi,
+  labelTipoConMappa,
+} from '../../_lib/dipendenti-config';
 import { PermessiMobileClient, type MiaRichiesta, type DaApprovare } from './_components/permessi-mobile-client';
 
 export const metadata: Metadata = { title: 'Ferie e permessi' };
@@ -61,6 +65,8 @@ export default async function PermessiMobilePage() {
     ]),
   );
 
+  const labelMap = await leggiLabelTipi(supabase, ctx.tenantId);
+
   const fmt = (r: {
     tipo: string;
     data_inizio: string;
@@ -69,7 +75,7 @@ export default async function PermessiMobilePage() {
     ora_inizio: string | null;
     ora_fine: string | null;
   }) => ({
-    tipoLabel: labelTipoPermesso(r.tipo),
+    tipoLabel: labelTipoConMappa(r.tipo, labelMap),
     dataInizio: r.data_inizio,
     dataFine: r.data_fine,
     tuttoIlGiorno: r.tutto_il_giorno,
@@ -121,13 +127,13 @@ export default async function PermessiMobilePage() {
     (meRes.data as { puo_approvare_permessi?: boolean } | null)?.puo_approvare_permessi === true ||
     daApprovare.length > 0;
 
-  const tipiAttivi = await leggiTipiPermessoAttivi(supabase, ctx.tenantId);
+  const tipiOpzioni = await leggiTipiRichiedibili(supabase, ctx.tenantId);
 
   return (
     <PermessiMobileClient
       mioDip={mioDip}
       oggiISO={romeDay(new Date())}
-      tipiAttivi={tipiAttivi}
+      tipiOpzioni={tipiOpzioni}
       mieRichieste={mieRichieste}
       daApprovare={daApprovare}
       puoApprovare={puoApprovare}
