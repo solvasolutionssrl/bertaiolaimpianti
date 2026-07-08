@@ -16,6 +16,8 @@ interface Props {
   onSelect: (r: { label: string; lat: number | null; lng: number | null }) => void;
   placeholder?: string;
   id?: string;
+  /** Classi extra sull'input (per uniformarlo agli input nativi circostanti). */
+  className?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export function AddressAutocomplete({
   onSelect,
   placeholder,
   id,
+  className,
 }: Props) {
   const [suggestions, setSuggestions] = React.useState<Suggestion[]>([]);
   const [open, setOpen] = React.useState(false);
@@ -137,6 +140,7 @@ export function AddressAutocomplete({
         <Input
           id={id}
           type="text"
+          className={className}
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
