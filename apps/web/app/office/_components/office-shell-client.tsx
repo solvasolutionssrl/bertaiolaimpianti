@@ -6,6 +6,7 @@ import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/u
 import { createBrowserSupabase } from '@kommessa/api/client';
 import { registraEventoAccesso } from '@/app/_actions/auth-events';
 import {
+  BarChart3,
   Boxes,
   Briefcase,
   CalendarCheck,
@@ -15,7 +16,6 @@ import {
   LayoutDashboard,
   MapPin,
   ReceiptText,
-  Scale,
   Sparkles,
   Timer,
   Truck,
@@ -32,9 +32,11 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
+  /** Modulo Dipendenti attivo → sezione Personale (Dipendenti, ...). */
+  hasDipendenti?: boolean;
   /** Modulo Dipendenti · sotto-flag Pianificazione attivo → voce Pianificazione. */
   hasPianificazione?: boolean;
-  /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Tipi. */
+  /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Analisi. */
   hasFerie?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
   appMode?: 'kommessa' | 'kantiere' | 'full';
@@ -145,7 +147,6 @@ function buildNav(
         defaultOpen: true,
         children: [
           { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
-          { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
           { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
           { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
         ],
@@ -277,11 +278,17 @@ function buildNav(
  * modulo è spento. Le voci-sezione sono literal freschi a ogni `buildNav`,
  * quindi la mutazione qui è sicura (nessuna condivisione tra render).
  */
-function injectDipendenti(
+function injectPersonale(
   nav: OfficeNavItem[],
-  opts: { hasPianificazione?: boolean; hasFerie?: boolean },
+  opts: { hasDipendenti?: boolean; hasPianificazione?: boolean; hasFerie?: boolean },
 ): OfficeNavItem[] {
+  // Sezione "Personale" (allo stesso livello di Azienda) con tutte le voci
+  // legate ai dipendenti. Tipi e normativa NON è qui: è sottopagina di Ferie
+  // e permessi.
   const voci: OfficeNavItem[] = [];
+  if (opts.hasDipendenti) {
+    voci.push({ id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' });
+  }
   if (opts.hasPianificazione) {
     voci.push({
       id: 'pianificazione',
@@ -293,35 +300,30 @@ function injectDipendenti(
   if (opts.hasFerie) {
     voci.push(
       { id: 'permessi', label: 'Ferie e permessi', href: '/office/personale/permessi', icon: CalendarCheck },
-      { id: 'gruppi', label: 'Gruppi e approvatori', href: '/office/personale/gruppi', icon: UsersRound },
-      { id: 'tipi-permesso', label: 'Tipi e normativa', href: '/office/personale/tipi-permesso', icon: Scale },
+      { id: 'gruppi', label: 'Gruppi lavoro', href: '/office/personale/gruppi', icon: UsersRound },
+      { id: 'analisi', label: 'Analisi', href: '/office/personale/analisi', icon: BarChart3 },
     );
   }
   if (voci.length === 0) return nav;
 
-  const azienda = nav.find((n) => n.id === 'sec-azienda');
-  if (azienda) {
-    // Ordine: Sedi, Dipendenti, [Pianificazione, Ferie…], Parco mezzi, Clienti
-    // → le voci Personale vanno PRIMA di "Parco mezzi".
-    const kids = [...(azienda.children ?? [])];
-    const idx = kids.findIndex((c) => c.id === 'mezzi');
-    if (idx >= 0) kids.splice(idx, 0, ...voci);
-    else kids.push(...voci);
-    azienda.children = kids;
-    return nav;
+  const sezione: OfficeNavItem = {
+    id: 'sec-personale',
+    label: 'Personale',
+    href: '#',
+    icon: Users,
+    variant: 'section',
+    defaultOpen: true,
+    children: voci,
+  };
+
+  // Inserisci subito DOPO la sezione Azienda (se c'è), altrimenti in coda.
+  const idx = nav.findIndex((n) => n.id === 'sec-azienda');
+  if (idx >= 0) {
+    const out = [...nav];
+    out.splice(idx + 1, 0, sezione);
+    return out;
   }
-  return [
-    ...nav,
-    {
-      id: 'sec-personale',
-      label: 'Personale',
-      href: '#',
-      icon: Users,
-      variant: 'section',
-      defaultOpen: true,
-      children: voci,
-    },
-  ];
+  return [...nav, sezione];
 }
 
 /**
@@ -356,6 +358,7 @@ export function OfficeShellClient({
   activeNavId,
   notificationCount,
   hasKantiere,
+  hasDipendenti,
   hasPianificazione,
   hasFerie,
   appMode,
@@ -363,7 +366,8 @@ export function OfficeShellClient({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const nav = injectDipendenti(buildNav(hasKantiere, appMode), {
+  const nav = injectPersonale(buildNav(hasKantiere, appMode), {
+    hasDipendenti,
     hasPianificazione,
     hasFerie,
   });

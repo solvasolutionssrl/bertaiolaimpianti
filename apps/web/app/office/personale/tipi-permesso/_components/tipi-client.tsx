@@ -1,0 +1,150 @@
+'use client';
+
+import * as React from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowLeft, ExternalLink, Scale, Clock, CalendarDays, FileCheck2, Loader2 } from 'lucide-react';
+import { Card, CardContent, Badge } from '@kommessa/ui';
+import {
+  PERMESSO_TIPI,
+  RETRIBUITO_LABEL,
+  UNITA_LABEL,
+  type Retribuito,
+} from '@kommessa/api/permessi-tipi';
+import { useAlert } from '@/app/_components/confirm-provider';
+import { aggiornaTipiPermessoAttivi } from '@/app/office/_actions/ferie-permessi';
+
+function tonoRetribuito(r: Retribuito): string {
+  if (r === 'no') return 'border-slate-200 bg-slate-50 text-slate-600';
+  if (r === 'parziale') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+}
+
+export function TipiClient({ attivi, canManage }: { attivi: string[]; canManage: boolean }) {
+  const router = useRouter();
+  const alert = useAlert();
+  const [pending, start] = React.useTransition();
+  const [set, setSet] = React.useState<Set<string>>(new Set(attivi));
+
+  const toggle = (codice: string) => {
+    const next = new Set(set);
+    if (next.has(codice)) next.delete(codice);
+    else next.add(codice);
+    setSet(next);
+    start(async () => {
+      const res = await aggiornaTipiPermessoAttivi({ codici: [...next] });
+      if (!res.ok) {
+        setSet(set); // rollback
+        await alert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Link
+          href="/office/personale/permessi"
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Ferie e permessi
+        </Link>
+      </div>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+            <Scale className="h-5 w-5 text-primary" />
+            Tipi di permesso e normativa
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Catalogo dei permessi con riferimento normativo consultabile.
+            {canManage
+              ? ' Attiva/disattiva quali tipi possono richiedere i dipendenti.'
+              : ''}{' '}
+            I valori di monte-ore variano per contratto/livello: sono indicativi.
+          </p>
+        </div>
+        {canManage ? (
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground">
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {set.size} tipi attivi
+          </span>
+        ) : null}
+      </header>
+
+      <Card>
+        <CardContent className="divide-y divide-border p-0">
+          {PERMESSO_TIPI.map((t) => {
+            const on = set.has(t.codice);
+            return (
+              <div
+                key={t.codice}
+                className={
+                  'flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ' +
+                  (on ? '' : 'opacity-60')
+                }
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-semibold">{t.label}</span>
+                    <Badge
+                      variant="outline"
+                      className="gap-1 border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600"
+                    >
+                      {t.unita === 'ore' ? <Clock className="h-3 w-3" /> : <CalendarDays className="h-3 w-3" />}
+                      {UNITA_LABEL[t.unita]}
+                    </Badge>
+                    <Badge variant="outline" className={'text-[10px] font-medium ' + tonoRetribuito(t.retribuito)}>
+                      {RETRIBUITO_LABEL[t.retribuito]}
+                    </Badge>
+                    {t.richiedeGiustificativo ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-sky-200 bg-sky-50 text-[10px] font-medium text-sky-700"
+                      >
+                        <FileCheck2 className="h-3 w-3" /> Giustificativo
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t.descrizione} <span className="text-foreground/60">· {t.riferimento}</span>
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <a
+                    href={t.fonte}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted/40"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Consulta riferimento
+                  </a>
+                  {canManage ? (
+                    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4"
+                        checked={on}
+                        disabled={pending}
+                        onChange={() => toggle(t.codice)}
+                      />
+                      <span className="text-muted-foreground">Ai dipendenti</span>
+                    </label>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">
+        Fonti verificabili (INPS, INAIL, guide CCNL). Documentazione completa in{' '}
+        <span className="font-mono">documentazione_generale/08_LOGICHE/Permessi_Ferie_Normativa_IT.md</span>.
+        Catalogo estendibile (append-only) con tipi opzionali.
+      </p>
+    </div>
+  );
+}

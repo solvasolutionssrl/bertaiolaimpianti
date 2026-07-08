@@ -3,16 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  CalendarCheck,
-  Check,
-  X,
-  RotateCcw,
-  Loader2,
-  Scale,
-  Clock,
-  CalendarDays,
-} from 'lucide-react';
+import { CalendarCheck, Check, X, RotateCcw, Loader2, Scale, Clock, CalendarDays } from 'lucide-react';
 import {
   Button,
   Card,
@@ -55,17 +46,13 @@ function fmtData(iso: string): string {
   return new Date(Date.UTC(Y!, M! - 1, D!)).toLocaleDateString('it-IT', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
     timeZone: 'Europe/Rome',
   });
 }
 function fmtQuando(r: RichiestaRow): string {
-  if (!r.tuttoIlGiorno && r.oraInizio && r.oraFine) {
+  if (!r.tuttoIlGiorno && r.oraInizio && r.oraFine)
     return `${fmtData(r.dataInizio)} · ${r.oraInizio}-${r.oraFine}`;
-  }
-  return r.dataInizio === r.dataFine
-    ? fmtData(r.dataInizio)
-    : `${fmtData(r.dataInizio)} → ${fmtData(r.dataFine)}`;
+  return r.dataInizio === r.dataFine ? fmtData(r.dataInizio) : `${fmtData(r.dataInizio)} → ${fmtData(r.dataFine)}`;
 }
 
 const STATO_STYLE: Record<Stato, string> = {
@@ -83,9 +70,7 @@ const FILTRI: { value: 'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'; label:
 ];
 
 export function PermessiClient({ richieste }: { richieste: RichiestaRow[] }) {
-  const [filtro, setFiltro] = React.useState<'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'>(
-    'in_attesa',
-  );
+  const [filtro, setFiltro] = React.useState<'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'>('in_attesa');
   const [decisione, setDecisione] = React.useState<{ r: RichiestaRow; esito: Stato } | null>(null);
 
   const conteggi = React.useMemo(() => {
@@ -142,9 +127,7 @@ export function PermessiClient({ richieste }: { richieste: RichiestaRow[] }) {
               onClick={() => setFiltro(f.value)}
               className={
                 'rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ' +
-                (filtro === f.value
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:bg-muted/40')
+                (filtro === f.value ? 'border-primary bg-primary/5 text-primary' : 'border-border hover:bg-muted/40')
               }
             >
               {f.label}
@@ -159,105 +142,81 @@ export function PermessiClient({ richieste }: { richieste: RichiestaRow[] }) {
           Nessuna richiesta {filtro === 'in_attesa' ? 'da approvare' : 'in questa vista'}.
         </p>
       ) : (
-        <div className="grid gap-3">
-          {filtrate.map((r) => (
-            <RichiestaCard key={r.id} r={r} onDecidi={(esito) => setDecisione({ r, esito })} />
-          ))}
-        </div>
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            {filtrate.map((r) => (
+              <RichiestaRiga key={r.id} r={r} onDecidi={(esito) => setDecisione({ r, esito })} />
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {decisione ? (
-        <DecisioneDialog
-          r={decisione.r}
-          esito={decisione.esito}
-          onClose={() => setDecisione(null)}
-        />
+        <DecisioneDialog r={decisione.r} esito={decisione.esito} onClose={() => setDecisione(null)} />
       ) : null}
     </div>
   );
 }
 
-function RichiestaCard({
-  r,
-  onDecidi,
-}: {
-  r: RichiestaRow;
-  onDecidi: (esito: Stato) => void;
-}) {
+function RichiestaRiga({ r, onDecidi }: { r: RichiestaRow; onDecidi: (esito: Stato) => void }) {
   const attesa = r.stato === 'in_attesa' || r.stato === 'modifica_richiesta';
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold">{r.dipendenteNome}</span>
-            <Badge variant="outline" className="border-slate-200 bg-slate-50 text-[11px] text-slate-700">
-              {r.tipoLabel}
-            </Badge>
-            <Badge variant="outline" className={'text-[11px] ' + STATO_STYLE[r.stato]}>
-              {LABEL_STATO_PERMESSO[r.stato] ?? r.stato}
-            </Badge>
-          </div>
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            {r.tuttoIlGiorno ? (
-              <CalendarDays className="h-3.5 w-3.5" />
-            ) : (
-              <Clock className="h-3.5 w-3.5" />
-            )}
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="truncate text-sm font-semibold">{r.dipendenteNome}</span>
+          <Badge variant="outline" className="border-slate-200 bg-slate-50 text-[10px] text-slate-700">
+            {r.tipoLabel}
+          </Badge>
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            {r.tuttoIlGiorno ? <CalendarDays className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
             {fmtQuando(r)}
-          </p>
-          {r.motivo ? <p className="text-sm text-foreground/80">{r.motivo}</p> : null}
-          <p className="text-[11px] text-muted-foreground">
-            {r.gruppoNome ? `Gruppo ${r.gruppoNome}` : 'Senza gruppo'}
-            {r.approverNome ? ` · Approvatore ${r.approverNome}` : ''}
-            {r.decisoNome ? ` · Deciso da ${r.decisoNome}` : ''}
-            {r.decisioneNota ? ` · «${r.decisioneNota}»` : ''}
-          </p>
+          </span>
         </div>
-        {attesa ? (
-          <div className="flex shrink-0 gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onDecidi('approvato')}
-              className="bg-emerald-600 text-white hover:bg-emerald-700"
-            >
-              <Check className="h-4 w-4" /> Approva
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => onDecidi('modifica_richiesta')}
-              title="Chiedi una modifica"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => onDecidi('rifiutato')}
-              className="border-rose-300 text-rose-600 hover:bg-rose-50"
-            >
-              <X className="h-4 w-4" /> Rifiuta
-            </Button>
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {r.gruppoNome ? r.gruppoNome : 'Senza gruppo'}
+          {r.motivo ? ` · ${r.motivo}` : ''}
+          {r.decisoNome ? ` · ${LABEL_STATO_PERMESSO[r.stato]} da ${r.decisoNome}` : ''}
+          {r.decisioneNota ? ` · «${r.decisioneNota}»` : ''}
+        </p>
+      </div>
+      {attesa ? (
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onDecidi('approvato')}
+            title="Approva"
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            <Check className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecidi('modifica_richiesta')}
+            title="Chiedi modifica"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted/40"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecidi('rifiutato')}
+            title="Rifiuta"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-rose-300 text-rose-600 hover:bg-rose-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <Badge variant="outline" className={'shrink-0 text-[10px] ' + STATO_STYLE[r.stato]}>
+          {LABEL_STATO_PERMESSO[r.stato] ?? r.stato}
+        </Badge>
+      )}
+    </div>
   );
 }
 
-function DecisioneDialog({
-  r,
-  esito,
-  onClose,
-}: {
-  r: RichiestaRow;
-  esito: Stato;
-  onClose: () => void;
-}) {
+function DecisioneDialog({ r, esito, onClose }: { r: RichiestaRow; esito: Stato; onClose: () => void }) {
   const router = useRouter();
   const alert = useAlert();
   const [nota, setNota] = React.useState('');
@@ -304,11 +263,7 @@ function DecisioneDialog({
               value={nota}
               onChange={(e) => setNota(e.target.value)}
               rows={2}
-              placeholder={
-                esito === 'modifica_richiesta'
-                  ? 'Cosa deve correggere il dipendente…'
-                  : 'Motivazione…'
-              }
+              placeholder={esito === 'modifica_richiesta' ? 'Cosa deve correggere il dipendente…' : 'Motivazione…'}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
             />
           </label>

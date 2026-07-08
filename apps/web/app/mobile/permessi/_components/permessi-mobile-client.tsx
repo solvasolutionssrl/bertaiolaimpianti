@@ -76,12 +76,14 @@ const STATO_STYLE: Record<Stato, string> = {
 export function PermessiMobileClient({
   mioDip,
   oggiISO,
+  tipiAttivi,
   mieRichieste,
   daApprovare,
   puoApprovare,
 }: {
   mioDip: string | null;
   oggiISO: string;
+  tipiAttivi: string[];
   mieRichieste: MiaRichiesta[];
   daApprovare: DaApprovare[];
   puoApprovare: boolean;
@@ -142,6 +144,7 @@ export function PermessiMobileClient({
         <RichiestaSheet
           dipendenteId={mioDip}
           oggiISO={oggiISO}
+          tipiAttivi={tipiAttivi}
           onClose={() => setFormOpen(false)}
         />
       ) : null}
@@ -239,16 +242,22 @@ function DaApprovareCard({ r }: { r: DaApprovare }) {
 function RichiestaSheet({
   dipendenteId,
   oggiISO,
+  tipiAttivi,
   onClose,
 }: {
   dipendenteId: string;
   oggiISO: string;
+  tipiAttivi: string[];
   onClose: () => void;
 }) {
   const router = useRouter();
   const alert = useAlert();
   const [pending, start] = React.useTransition();
-  const [tipo, setTipo] = React.useState('ferie');
+  const tipiDisponibili = React.useMemo(
+    () => PERMESSO_TIPI.filter((t) => tipiAttivi.includes(t.codice)),
+    [tipiAttivi],
+  );
+  const [tipo, setTipo] = React.useState(tipiDisponibili[0]?.codice ?? 'ferie');
   const [tuttoIlGiorno, setTuttoIlGiorno] = React.useState(true);
   const [dataInizio, setDataInizio] = React.useState(oggiISO);
   const [dataFine, setDataFine] = React.useState(oggiISO);
@@ -308,7 +317,7 @@ function RichiestaSheet({
               onChange={(e) => onTipo(e.target.value)}
               className="h-11 w-full rounded-lg border border-input bg-background px-3 text-base focus:border-primary focus:outline-none"
             >
-              {PERMESSO_TIPI.map((t) => (
+              {tipiDisponibili.map((t) => (
                 <option key={t.codice} value={t.codice}>
                   {t.label}
                 </option>

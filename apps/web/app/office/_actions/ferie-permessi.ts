@@ -23,6 +23,19 @@ import { inviaPushAUtente } from '@/lib/push';
 const OFFICE = new Set<AppRole>(['admin', 'office']);
 const PATH_PERMESSI = '/office/personale/permessi';
 const PATH_GRUPPI = '/office/personale/gruppi';
+const PATH_TIPI = '/office/personale/tipi-permesso';
+
+/** Palette colori per i gruppi lavoro (allineata al brand/accenti office). */
+export const PALETTE_GRUPPI = [
+  '#1340A6',
+  '#0D9488',
+  '#7C3AED',
+  '#D97706',
+  '#DB2777',
+  '#059669',
+  '#0284C7',
+  '#DC2626',
+];
 
 type Ok = { ok: true } | { ok: false; error: string };
 
@@ -41,6 +54,7 @@ async function requireFerieContext() {
 const GruppoSchema = z.object({
   nome: z.string().trim().min(1, 'Nome obbligatorio').max(120),
   approverUserId: z.string().uuid().nullable().optional(),
+  colore: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
   note: z.string().trim().max(1000).nullable().optional(),
 });
 
@@ -55,10 +69,20 @@ export async function creaGruppo(input: unknown): Promise<Ok> {
   }
   if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
   const svc = createServiceSupabase();
+  // Colore: quello passato o il prossimo della palette (per numero di gruppi).
+  let colore = parsed.data.colore ?? null;
+  if (!colore) {
+    const { count } = await svc
+      .from('gruppi_approvazione' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', ctx.tenantId);
+    colore = PALETTE_GRUPPI[(count ?? 0) % PALETTE_GRUPPI.length] ?? PALETTE_GRUPPI[0]!;
+  }
   const { error } = await svc.from('gruppi_approvazione' as never).insert({
     tenant_id: ctx.tenantId,
     nome: parsed.data.nome,
     approver_user_id: parsed.data.approverUserId ?? null,
+    colore,
     note: parsed.data.note ?? null,
   } as never);
   if (error) return { ok: false, error: error.message };
@@ -90,6 +114,7 @@ export async function aggiornaGruppo(input: unknown): Promise<Ok> {
   const patch: Record<string, unknown> = {};
   if (parsed.data.nome !== undefined) patch.nome = parsed.data.nome;
   if (parsed.data.approverUserId !== undefined) patch.approver_user_id = parsed.data.approverUserId;
+  if (parsed.data.colore !== undefined) patch.colore = parsed.data.colore;
   if (parsed.data.note !== undefined) patch.note = parsed.data.note;
   const { error } = await svc
     .from('gruppi_approvazione' as never)
@@ -204,6 +229,46 @@ export async function toggleApprovatore(input: unknown): Promise<Ok> {
     after: { puo_approvare_permessi: parsed.data.value },
   });
   revalidatePath(PATH_GRUPPI);
+  return { ok: true };
+}
+
+// =====================================================================
+// TIPI PERMESSO ATTIVI (quali mostrare ai dipendenti)
+// =====================================================================
+
+const TipiAttiviSchema = z.object({
+  codici: z.array(z.enum(CODICI_PERMESSO as [string, ...string[]])).max(50),
+});
+
+/** Imposta i tipi di permesso mostrati ai dipendenti (config del modulo). */
+export async function aggiornaTipiPermessoAttivi(input: unknown): Promise<Ok> {
+  const parsed = TipiAttiviSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+  const svc = createServiceSupabase();
+  const { data: row } = await svc
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'dipendenti')
+    .maybeSingle();
+  if (!row) return { ok: false, error: 'Modulo Dipendenti non attivo' };
+  const existing = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const newConfig = { ...existing, permesso_tipi_attivi: parsed.data.codici };
+  const { error } = await svc
+    .from('tenant_modules' as never)
+    .update({ config: newConfig } as never)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('module_code', 'dipendenti');
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(PATH_TIPI);
+  revalidatePath('/mobile/permessi');
   return { ok: true };
 }
 

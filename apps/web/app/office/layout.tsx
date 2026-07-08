@@ -149,6 +149,7 @@ export default async function OfficeLayout({
         user={user}
         notificationCount={notificationCount}
         hasKantiere={hasKantiere}
+        hasDipendenti={hasDipendenti}
         hasPianificazione={hasPianificazione}
         hasFerie={hasFerie}
         appMode={appMode}

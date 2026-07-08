@@ -11,6 +11,7 @@ import {
   Search,
   Loader2,
   Pencil,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   Button,
@@ -30,12 +31,14 @@ import {
   eliminaGruppo,
   impostaMembriGruppo,
   toggleApprovatore,
+  PALETTE_GRUPPI,
 } from '@/app/office/_actions/ferie-permessi';
 
 export interface GruppoRow {
   id: string;
   nome: string;
   approverUserId: string | null;
+  colore: string | null;
   note: string | null;
   membri: string[];
 }
@@ -55,6 +58,7 @@ export interface UtenteRow {
 function nomeDip(d: DipRow): string {
   return `${d.cognome} ${d.nome}`.trim();
 }
+const GREY = '#64748b';
 
 export function GruppiClient({
   gruppi,
@@ -69,6 +73,8 @@ export function GruppiClient({
   const alert = useAlert();
   const [pending, start] = React.useTransition();
   const [nuovoNome, setNuovoNome] = React.useState('');
+  const [nuovoColore, setNuovoColore] = React.useState(PALETTE_GRUPPI[0]!);
+  const [cercaAppr, setCercaAppr] = React.useState('');
   const [membriDialog, setMembriDialog] = React.useState<GruppoRow | null>(null);
 
   const refresh = () => router.refresh();
@@ -85,146 +91,183 @@ export function GruppiClient({
   );
   const senzaGruppo = dipendenti.filter((d) => !dipGruppo.has(d.id));
 
+  const utentiFiltrati = React.useMemo(() => {
+    const q = cercaAppr.trim().toLowerCase();
+    if (!q) return utenti;
+    return utenti.filter((u) => `${u.nome} ${u.role}`.toLowerCase().includes(q));
+  }, [utenti, cercaAppr]);
+
   const onNuovo = () => {
     if (!nuovoNome.trim()) return;
     start(async () => {
-      const res = await creaGruppo({ nome: nuovoNome.trim() });
+      const res = await creaGruppo({ nome: nuovoNome.trim(), colore: nuovoColore });
       if (!res.ok) {
         await alert({ title: 'Errore', body: res.error });
         return;
       }
+      await alert({
+        title: 'Gruppo creato',
+        body: 'Il gruppo è pronto ma non contiene ancora dipendenti. Assegna i membri dalla card qui sotto.',
+      });
       setNuovoNome('');
       refresh();
     });
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <header>
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <UsersRound className="h-5 w-5 text-primary" />
-          Gruppi e approvatori
+          Gruppi lavoro
         </h1>
         <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Ogni dipendente appartiene a un gruppo, e ogni gruppo ha un approvatore che gestisce le
-          richieste di ferie e permessi dei suoi membri. Prima concedi la capacità di approvare,
-          poi crea i gruppi e assegna i membri.
+          Ogni dipendente appartiene a un gruppo (reparto), e ogni gruppo ha un approvatore per le
+          richieste di ferie e permessi. I gruppi filtrano anche i tecnici nella pianificazione.
         </p>
       </header>
 
-      {/* Approvatori */}
-      <Card>
-        <CardContent className="py-4">
-          <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            <ShieldCheck className="h-4 w-4" /> Chi può approvare
-          </h2>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Attiva la capacità &laquo;approva permessi&raquo; per gli utenti che gestiranno le
-            richieste (office o tecnici). Gli admin possono sempre approvare.
-          </p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {utenti.map((u) => {
-              const isAdmin = u.role === 'admin';
-              return (
-                <label
-                  key={u.id}
-                  className={
-                    'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ' +
-                    (u.puoApprovare || isAdmin ? 'border-emerald-200 bg-emerald-50/40' : 'border-border')
-                  }
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{u.nome}</span>
-                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                      {u.role}
+      {/* Due colonne: chi può approvare · nuovo gruppo */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Chi può approvare (ricercabile, compatto) */}
+        <Card>
+          <CardContent className="py-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                <ShieldCheck className="h-4 w-4" /> Chi può approvare
+              </h2>
+              <span className="text-[11px] text-muted-foreground">{approvatori.length} abilitati</span>
+            </div>
+            <div className="relative mb-2">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={cercaAppr}
+                onChange={(e) => setCercaAppr(e.target.value)}
+                placeholder="Cerca utente…"
+                className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+              />
+            </div>
+            <div className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border">
+              {utentiFiltrati.map((u) => {
+                const isAdmin = u.role === 'admin';
+                return (
+                  <label
+                    key={u.id}
+                    className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-muted/40"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm">{u.nome}</span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {u.role}
+                      </span>
                     </span>
-                  </span>
-                  {isAdmin ? (
-                    <Badge variant="secondary" className="shrink-0 text-[10px]">
-                      Sempre
-                    </Badge>
-                  ) : (
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 shrink-0"
-                      checked={u.puoApprovare}
-                      disabled={pending}
-                      onChange={(e) => {
-                        const value = e.target.checked;
-                        start(async () => {
-                          const res = await toggleApprovatore({ userId: u.id, value });
-                          if (!res.ok) await alert({ title: 'Errore', body: res.error });
-                          refresh();
-                        });
-                      }}
-                    />
-                  )}
-                </label>
-              );
-            })}
+                    {isAdmin ? (
+                      <Badge variant="secondary" className="shrink-0 text-[10px]">
+                        Sempre
+                      </Badge>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0"
+                        checked={u.puoApprovare}
+                        disabled={pending}
+                        onChange={(e) => {
+                          const value = e.target.checked;
+                          start(async () => {
+                            const res = await toggleApprovatore({ userId: u.id, value });
+                            if (!res.ok) await alert({ title: 'Errore', body: res.error });
+                            refresh();
+                          });
+                        }}
+                      />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Nuovo gruppo */}
+        <Card>
+          <CardContent className="space-y-3 py-4">
+            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              <Plus className="h-4 w-4" /> Nuovo gruppo
+            </h2>
+            <label className="block text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">Nome</span>
+              <input
+                value={nuovoNome}
+                onChange={(e) => setNuovoNome(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onNuovo()}
+                placeholder="es. Elettricisti"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+              />
+            </label>
+            <div className="text-sm">
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">Colore</span>
+              <div className="flex flex-wrap gap-1.5">
+                {PALETTE_GRUPPI.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setNuovoColore(c)}
+                    aria-label={c}
+                    className={
+                      'h-7 w-7 rounded-full ring-offset-2 transition ' +
+                      (nuovoColore === c ? 'ring-2 ring-foreground/40' : '')
+                    }
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Puoi creare anche un gruppo vuoto e assegnare i membri dopo.
+            </p>
+            <Button type="button" onClick={onNuovo} disabled={pending || !nuovoNome.trim()}>
+              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Crea gruppo
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Gruppi esistenti (colorati) */}
+      <div>
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          Gruppi ({gruppi.length})
+        </h2>
+        {gruppi.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+            Nessun gruppo. Creane uno qui sopra.
+          </p>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {gruppi.map((g) => (
+              <GruppoCard
+                key={g.id}
+                gruppo={g}
+                approvatori={approvatori}
+                dipMap={dipMap}
+                onGestisciMembri={() => setMembriDialog(g)}
+                onSaved={refresh}
+              />
+            ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Nuovo gruppo */}
-      <Card>
-        <CardContent className="flex flex-wrap items-end gap-2 py-4">
-          <label className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">Nuovo gruppo</span>
-            <input
-              value={nuovoNome}
-              onChange={(e) => setNuovoNome(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onNuovo()}
-              placeholder="es. Officina"
-              className="h-9 w-64 rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-            />
-          </label>
-          <Button type="button" onClick={onNuovo} disabled={pending || !nuovoNome.trim()}>
-            <Plus className="h-4 w-4" /> Crea gruppo
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Gruppi */}
-      {gruppi.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          Nessun gruppo. Creane uno per iniziare (es. Officina, Cantiere, Manutenzione).
-        </p>
-      ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {gruppi.map((g) => (
-            <GruppoCard
-              key={g.id}
-              gruppo={g}
-              approvatori={approvatori}
-              dipMap={dipMap}
-              onGestisciMembri={() => setMembriDialog(g)}
-              onSaved={refresh}
-            />
-          ))}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Dipendenti senza gruppo */}
       {senzaGruppo.length > 0 ? (
         <Card className="border-amber-200 bg-amber-50/40">
-          <CardContent className="py-4">
-            <h2 className="mb-1 text-sm font-semibold text-amber-800">
-              {senzaGruppo.length} dipendenti senza gruppo
-            </h2>
-            <p className="mb-2 text-xs text-amber-700">
+          <CardContent className="py-3">
+            <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-amber-800">
+              <AlertTriangle className="h-4 w-4" /> {senzaGruppo.length} dipendenti senza gruppo
+            </p>
+            <p className="text-xs text-amber-700">
               Le loro richieste non hanno un approvatore finché non li assegni a un gruppo.
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {senzaGruppo.map((d) => (
-                <span
-                  key={d.id}
-                  className="rounded-md border border-amber-200 bg-white px-2 py-1 text-xs"
-                >
-                  {nomeDip(d)}
-                </span>
-              ))}
-            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -260,6 +303,15 @@ function GruppoCard({
   const [pending, start] = React.useTransition();
   const [editNome, setEditNome] = React.useState(false);
   const [nome, setNome] = React.useState(gruppo.nome);
+  const [palOpen, setPalOpen] = React.useState(false);
+  const colore = gruppo.colore ?? GREY;
+
+  const patch = (p: Record<string, unknown>) =>
+    start(async () => {
+      const res = await aggiornaGruppo({ id: gruppo.id, ...p });
+      if (!res.ok) await alert({ title: 'Errore', body: res.error });
+      onSaved();
+    });
 
   const salvaNome = () => {
     if (nome.trim() === gruppo.nome || !nome.trim()) {
@@ -267,20 +319,8 @@ function GruppoCard({
       setNome(gruppo.nome);
       return;
     }
-    start(async () => {
-      const res = await aggiornaGruppo({ id: gruppo.id, nome: nome.trim() });
-      if (!res.ok) await alert({ title: 'Errore', body: res.error });
-      setEditNome(false);
-      onSaved();
-    });
-  };
-
-  const cambiaApprovatore = (value: string) => {
-    start(async () => {
-      const res = await aggiornaGruppo({ id: gruppo.id, approverUserId: value || null });
-      if (!res.ok) await alert({ title: 'Errore', body: res.error });
-      onSaved();
-    });
+    patch({ nome: nome.trim() });
+    setEditNome(false);
   };
 
   const onElimina = async () => {
@@ -306,28 +346,38 @@ function GruppoCard({
     .map((d) => `${(d as DipRow).cognome} ${(d as DipRow).nome}`);
 
   return (
-    <Card>
-      <CardContent className="space-y-3 py-4">
+    <Card className="overflow-hidden">
+      <div className="h-1" style={{ backgroundColor: colore }} />
+      <CardContent className="space-y-2.5 py-3">
         <div className="flex items-start justify-between gap-2">
-          {editNome ? (
-            <input
-              autoFocus
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              onBlur={salvaNome}
-              onKeyDown={(e) => e.key === 'Enter' && salvaNome()}
-              className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-sm font-semibold focus:border-primary focus:outline-none"
-            />
-          ) : (
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => setEditNome(true)}
-              className="group flex items-center gap-1.5 text-left"
-            >
-              <span className="text-base font-semibold tracking-tight">{gruppo.nome}</span>
-              <Pencil className="h-3 w-3 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-            </button>
-          )}
+              onClick={() => setPalOpen((v) => !v)}
+              className="h-4 w-4 shrink-0 rounded-full ring-1 ring-black/10"
+              style={{ backgroundColor: colore }}
+              aria-label="Cambia colore"
+            />
+            {editNome ? (
+              <input
+                autoFocus
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                onBlur={salvaNome}
+                onKeyDown={(e) => e.key === 'Enter' && salvaNome()}
+                className="h-7 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm font-semibold focus:border-primary focus:outline-none"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setEditNome(true)}
+                className="group flex min-w-0 items-center gap-1.5 text-left"
+              >
+                <span className="truncate text-base font-semibold tracking-tight">{gruppo.nome}</span>
+                <Pencil className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onElimina}
@@ -339,51 +389,66 @@ function GruppoCard({
           </button>
         </div>
 
-        <label className="block text-sm">
-          <span className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <ShieldCheck className="h-3 w-3" /> Approvatore
-          </span>
-          <select
-            value={gruppo.approverUserId ?? ''}
-            onChange={(e) => cambiaApprovatore(e.target.value)}
-            disabled={pending}
-            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="">Nessuno (gestisce l&apos;ufficio)</option>
-            {approvatori.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nome}
-              </option>
+        {palOpen ? (
+          <div className="flex flex-wrap gap-1.5">
+            {PALETTE_GRUPPI.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  patch({ colore: c });
+                  setPalOpen(false);
+                }}
+                className="h-6 w-6 rounded-full ring-1 ring-black/10"
+                style={{ backgroundColor: c }}
+                aria-label={c}
+              />
             ))}
-          </select>
-        </label>
-
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              <Users className="h-3 w-3" /> {gruppo.membri.length} membri
-            </span>
-            <Button type="button" size="sm" variant="outline" onClick={onGestisciMembri}>
-              Gestisci membri
-            </Button>
           </div>
-          {membriNomi.length > 0 ? (
-            <div className="flex flex-wrap gap-1">
-              {membriNomi.slice(0, 8).map((n, i) => (
-                <span key={i} className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px]">
-                  {n}
-                </span>
+        ) : null}
+
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+          <label className="block text-sm">
+            <span className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+              <ShieldCheck className="h-3 w-3" /> Approvatore
+            </span>
+            <select
+              value={gruppo.approverUserId ?? ''}
+              onChange={(e) => patch({ approverUserId: e.target.value || null })}
+              disabled={pending}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm focus:border-primary focus:outline-none"
+            >
+              <option value="">Nessuno (gestisce l&apos;ufficio)</option>
+              {approvatori.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                </option>
               ))}
-              {membriNomi.length > 8 ? (
-                <span className="px-1 py-0.5 text-[11px] text-muted-foreground">
-                  +{membriNomi.length - 8}
-                </span>
-              ) : null}
-            </div>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">Nessun membro.</p>
-          )}
+            </select>
+          </label>
+          <Button type="button" size="sm" variant="outline" onClick={onGestisciMembri}>
+            <Users className="h-4 w-4" /> {gruppo.membri.length} membri
+          </Button>
         </div>
+
+        {membriNomi.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {membriNomi.slice(0, 6).map((n, i) => (
+              <span key={i} className="rounded bg-muted/60 px-1.5 py-0.5 text-[11px]">
+                {n}
+              </span>
+            ))}
+            {membriNomi.length > 6 ? (
+              <span className="px-1 py-0.5 text-[11px] text-muted-foreground">
+                +{membriNomi.length - 6}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <p className="flex items-center gap-1 text-[11px] text-amber-600">
+            <AlertTriangle className="h-3 w-3" /> Nessun dipendente: assegna i membri.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

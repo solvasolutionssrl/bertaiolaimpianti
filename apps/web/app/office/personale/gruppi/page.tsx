@@ -15,7 +15,7 @@ export default async function GruppiPage() {
   const [gruppiRes, membriRes, dipRes, usersRes] = await Promise.all([
     supabase
       .from('gruppi_approvazione' as never)
-      .select('id, nome, approver_user_id, note')
+      .select('id, nome, approver_user_id, colore, note')
       .eq('tenant_id', ctx.tenantId)
       .order('nome'),
     supabase
@@ -50,12 +50,14 @@ export default async function GruppiPage() {
       id: string;
       nome: string;
       approver_user_id: string | null;
+      colore: string | null;
       note: string | null;
     }[]
   ).map((g) => ({
     id: g.id,
     nome: g.nome,
     approverUserId: g.approver_user_id,
+    colore: g.colore,
     note: g.note,
     membri: perGruppo.get(g.id) ?? [],
   }));
