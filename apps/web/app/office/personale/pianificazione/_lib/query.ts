@@ -5,14 +5,18 @@ import { normalizzaOra, type Fascia } from '@kommessa/api/pianificazione';
 
 type Supa = ReturnType<typeof createServerSupabase>;
 
+export type TipoBlocco = 'cantiere' | 'evento' | 'formazione';
+
 export interface BloccoView {
   id: string;
   data: string; // 'YYYY-MM-DD'
-  tipo: 'cantiere' | 'evento';
+  tipo: TipoBlocco;
   cantiereId: string | null;
   cantiereNome: string | null;
   titolo: string | null;
   luogo: string | null;
+  luogoLat: number | null;
+  luogoLng: number | null;
   fascia: Fascia;
   oraInizio: string; // 'HH:MM'
   oraFine: string; // 'HH:MM'
@@ -36,7 +40,7 @@ export async function caricaBlocchiRange(
   const { data } = await supabase
     .from('pianificazione_blocchi' as never)
     .select(
-      'id, data, tipo, cantiere_id, titolo, luogo, fascia, ora_inizio, ora_fine, note, stato, ' +
+      'id, data, tipo, cantiere_id, titolo, luogo, luogo_lat, luogo_lng, fascia, ora_inizio, ora_fine, note, stato, ' +
         'membri:pianificazione_membri(dipendente_id), ' +
         'mezzi:pianificazione_blocco_mezzi(mezzo_id), ' +
         'cantiere:cantieri(nome)',
@@ -49,10 +53,12 @@ export async function caricaBlocchiRange(
   const rows = (data ?? []) as unknown as Array<{
     id: string;
     data: string;
-    tipo: 'cantiere' | 'evento';
+    tipo: TipoBlocco;
     cantiere_id: string | null;
     titolo: string | null;
     luogo: string | null;
+    luogo_lat: number | null;
+    luogo_lng: number | null;
     fascia: Fascia;
     ora_inizio: string;
     ora_fine: string;
@@ -71,6 +77,8 @@ export async function caricaBlocchiRange(
     cantiereNome: r.cantiere?.nome ?? null,
     titolo: r.titolo ?? null,
     luogo: r.luogo ?? null,
+    luogoLat: r.luogo_lat ?? null,
+    luogoLng: r.luogo_lng ?? null,
     fascia: r.fascia,
     oraInizio: normalizzaOra(r.ora_inizio) ?? '08:00',
     oraFine: normalizzaOra(r.ora_fine) ?? '17:00',

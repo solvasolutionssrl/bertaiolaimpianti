@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  CalendarClock,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -10,11 +11,14 @@ import {
   GraduationCap,
   HardHat,
   Loader2,
+  MapPin,
   Plus,
   Search,
   Send,
+  StickyNote,
   Trash2,
   Truck,
+  Users,
   X,
 } from 'lucide-react';
 import {
@@ -35,7 +39,8 @@ import {
   type VoceOccupazione,
 } from '@kommessa/api/pianificazione';
 import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
-import type { BloccoView } from '../_lib/query';
+import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
+import type { BloccoView, TipoBlocco } from '../_lib/query';
 import {
   creaBlocco,
   aggiornaBlocco,
@@ -67,15 +72,37 @@ export interface MezzoRow {
 
 const PATH = '/office/personale/pianificazione';
 
-/** Hue deterministico da un id (per il colore-cantiere dei chip). */
+// Filtro per gruppo/reparto: UI predisposta, non ancora funzionale (i
+// dipendenti non hanno un `gruppo`). Da collegare quando arriveranno i gruppi.
+// Vedi documentazione_generale/08_LOGICHE/Dipendenti_Possibili_Aggiunte.md.
+const GRUPPI_PLACEHOLDER = [
+  { value: 'tutti', label: 'Tutti i gruppi' },
+  { value: 'officina', label: 'Officina' },
+  { value: 'cantiere', label: 'Cantiere' },
+  { value: 'manutenzione', label: 'Manutenzione' },
+];
+
+/** Hue deterministico da un id (colore-cantiere dei chip). */
 function hue(id: string): number {
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 360;
   return h;
 }
+/** Hue per tipo: cantiere = per-id; evento = teal; formazione = viola. */
+function hueTipo(b: { tipo: TipoBlocco; cantiereId: string | null; id: string }): number {
+  if (b.tipo === 'evento') return 168;
+  if (b.tipo === 'formazione') return 275;
+  return hue(b.cantiereId ?? b.id);
+}
 
 function nomeDip(d: DipRow): string {
   return `${d.cognome} ${d.nome}`.trim();
+}
+function tipoMezzoLabel(t: string): string {
+  return t === 'autocarro' ? 'Autocarro' : t === 'autovettura' ? 'Autovettura' : 'Mezzo';
+}
+function nomeMezzo(m: MezzoRow): string {
+  return m.modello?.trim() || tipoMezzoLabel(m.tipo);
 }
 
 function fmtGiornoLungo(iso: string): string {
@@ -87,11 +114,62 @@ function fmtGiornoLungo(iso: string): string {
   });
 }
 
+const TIPO_META: Record<
+  TipoBlocco,
+  { label: string; icon: typeof HardHat; sel: string }
+> = {
+  cantiere: { label: 'Cantiere', icon: HardHat, sel: 'border-sky-400 bg-sky-50 text-sky-700' },
+  evento: { label: 'Evento', icon: CalendarClock, sel: 'border-teal-400 bg-teal-50 text-teal-700' },
+  formazione: {
+    label: 'Formazione',
+    icon: GraduationCap,
+    sel: 'border-violet-400 bg-violet-50 text-violet-700',
+  },
+};
+
+// ── Pannello di sezione (struttura + tinta leggera) ──────────────────
+
+const TINTE = {
+  comune: 'border-slate-200 bg-slate-50',
+  cantiere: 'border-sky-200 bg-sky-50/50',
+  evento: 'border-teal-200 bg-teal-50/50',
+  note: 'border-slate-200 bg-slate-50/70',
+  mezzi: 'border-amber-200 bg-amber-50/40',
+  dipendenti: 'border-emerald-200 bg-emerald-50/40',
+} as const;
+
+function Sezione({
+  icon: Icon,
+  title,
+  tinta,
+  right,
+  children,
+}: {
+  icon: typeof HardHat;
+  title: string;
+  tinta: keyof typeof TINTE;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={'min-w-0 rounded-lg border p-3 ' + TINTE[tinta]}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <Icon className="h-3.5 w-3.5" />
+          {title}
+        </span>
+        {right}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ── Form dialog ──────────────────────────────────────────────────────
 
 interface FormState {
   id?: string;
-  tipo: 'cantiere' | 'evento';
+  tipo: TipoBlocco;
   data: string;
   fascia: Fascia;
   oraInizio: string;
@@ -99,6 +177,8 @@ interface FormState {
   cantiereId: string | null;
   titolo: string;
   luogo: string;
+  luogoLat: number | null;
+  luogoLng: number | null;
   dipendentiIds: string[];
   mezziIds: string[];
   note: string;
@@ -114,6 +194,8 @@ function formVuoto(data: string, dipId?: string): FormState {
     cantiereId: null,
     titolo: '',
     luogo: '',
+    luogoLat: null,
+    luogoLng: null,
     dipendentiIds: dipId ? [dipId] : [],
     mezziIds: [],
     note: '',
@@ -131,6 +213,8 @@ function formDaBlocco(b: BloccoView): FormState {
     cantiereId: b.cantiereId,
     titolo: b.titolo ?? '',
     luogo: b.luogo ?? '',
+    luogoLat: b.luogoLat,
+    luogoLng: b.luogoLng,
     dipendentiIds: [...b.membri],
     mezziIds: [...b.mezzi],
     note: b.note ?? '',
@@ -138,6 +222,7 @@ function formDaBlocco(b: BloccoView): FormState {
 }
 
 const FASCE: Fascia[] = ['giornata', 'mattina', 'pomeriggio', 'custom'];
+const TIPI: TipoBlocco[] = ['cantiere', 'evento', 'formazione'];
 
 function BloccoDialog({
   form,
@@ -205,6 +290,7 @@ function BloccoDialog({
   }, [dipendenti, cercaDip]);
 
   const cantScelto = cantieri.find((c) => c.id === f.cantiereId) ?? null;
+  const isCantiere = f.tipo === 'cantiere';
 
   const salva = (forza: boolean) => {
     setConflitti([]);
@@ -216,9 +302,11 @@ function BloccoDialog({
         fascia: f.fascia,
         oraInizio: f.fascia === 'custom' ? f.oraInizio : null,
         oraFine: f.fascia === 'custom' ? f.oraFine : null,
-        cantiereId: f.tipo === 'cantiere' ? f.cantiereId : null,
-        titolo: f.tipo === 'evento' ? f.titolo : null,
-        luogo: f.tipo === 'evento' ? f.luogo : null,
+        cantiereId: isCantiere ? f.cantiereId : null,
+        titolo: isCantiere ? null : f.titolo,
+        luogo: isCantiere ? null : f.luogo,
+        luogoLat: isCantiere ? null : f.luogoLat,
+        luogoLng: isCantiere ? null : f.luogoLng,
         dipendentiIds: f.dipendentiIds,
         mezziIds: f.mezziIds,
         note: f.note,
@@ -262,264 +350,302 @@ function BloccoDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[92vh] w-full max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-[1040px]">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Modifica blocco' : 'Nuovo blocco'}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Tipo */}
-          <div className="grid grid-cols-2 gap-2">
-            {(['cantiere', 'evento'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => set('tipo', t)}
-                className={
-                  'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ' +
-                  (f.tipo === t
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-border hover:bg-muted/40')
-                }
-              >
-                {t === 'cantiere' ? (
-                  <HardHat className="h-4 w-4" />
-                ) : (
-                  <GraduationCap className="h-4 w-4" />
-                )}
-                {t === 'cantiere' ? 'Cantiere' : 'Evento / formazione'}
-              </button>
-            ))}
+        <div className="min-w-0 space-y-3">
+          {/* Tipo: cantiere / evento / formazione */}
+          <div className="grid grid-cols-3 gap-2">
+            {TIPI.map((t) => {
+              const meta = TIPO_META[t];
+              const Icon = meta.icon;
+              const on = f.tipo === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => set('tipo', t)}
+                  className={
+                    'flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ' +
+                    (on ? meta.sel : 'border-border hover:bg-muted/40 text-foreground')
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  {meta.label}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Giorno + fascia */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-muted-foreground">Giorno</span>
-              <input
-                type="date"
-                value={f.data}
-                onChange={(e) => set('data', e.target.value)}
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-              />
-            </label>
-            <div className="text-sm">
-              <span className="mb-1 block font-medium text-muted-foreground">Fascia</span>
-              <div className="flex flex-wrap gap-1.5">
-                {FASCE.map((fascia) => (
-                  <button
-                    key={fascia}
-                    type="button"
-                    onClick={() => set('fascia', fascia)}
-                    className={
-                      'rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ' +
-                      (f.fascia === fascia
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border hover:bg-muted/40')
-                    }
-                  >
-                    {LABEL_FASCIA[fascia]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {f.fascia === 'custom' ? (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-muted-foreground">Dalle</span>
-                <input
-                  type="time"
-                  value={f.oraInizio}
-                  onChange={(e) => set('oraInizio', e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-muted-foreground">Alle</span>
-                <input
-                  type="time"
-                  value={f.oraFine}
-                  onChange={(e) => set('oraFine', e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-                />
-              </label>
-            </div>
-          ) : null}
-
-          {/* Target: cantiere o evento */}
-          {f.tipo === 'cantiere' ? (
-            <div className="text-sm">
-              <span className="mb-1 block font-medium text-muted-foreground">Cantiere</span>
-              {cantScelto ? (
-                <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
-                  <span className="min-w-0 truncate">
-                    <span className="font-medium">{cantScelto.nome}</span>
-                    {cantScelto.clienteNome ? (
-                      <span className="text-muted-foreground"> · {cantScelto.clienteNome}</span>
-                    ) : null}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => set('cantiereId', null)}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="relative mb-1">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      value={cercaCant}
-                      onChange={(e) => setCercaCant(e.target.value)}
-                      placeholder="Cerca cantiere, codice, cliente…"
-                      className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
-                    />
-                  </div>
-                  <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-border p-1">
-                    {cantFiltrati.length === 0 ? (
-                      <p className="px-2 py-3 text-center text-xs text-muted-foreground">
-                        Nessun cantiere
-                      </p>
-                    ) : (
-                      cantFiltrati.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            set('cantiereId', c.id);
-                            setCercaCant('');
-                          }}
-                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted/50"
-                        >
-                          <span className="min-w-0 truncate">{c.nome}</span>
-                          {c.clienteNome ? (
-                            <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
-                              {c.clienteNome}
-                            </span>
-                          ) : null}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
+          {/* Comune: giorno + fascia */}
+          <Sezione icon={CalendarDays} title="Quando" tinta="comune">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                <span className="mb-1 block font-medium text-muted-foreground">Titolo</span>
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Giorno</span>
                 <input
-                  value={f.titolo}
-                  onChange={(e) => set('titolo', e.target.value)}
-                  placeholder="es. Formazione antincendio"
+                  type="date"
+                  value={f.data}
+                  onChange={(e) => set('data', e.target.value)}
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
                 />
               </label>
-              <label className="block text-sm">
-                <span className="mb-1 block font-medium text-muted-foreground">Luogo</span>
-                <input
-                  value={f.luogo}
-                  onChange={(e) => set('luogo', e.target.value)}
-                  placeholder="es. Sede, aula 2"
-                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-                />
-              </label>
-            </div>
-          )}
-
-          {/* Dipendenti */}
-          <div className="text-sm">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="font-medium text-muted-foreground">
-                Dipendenti ({f.dipendentiIds.length})
-              </span>
-            </div>
-            <div className="relative mb-1">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={cercaDip}
-                onChange={(e) => setCercaDip(e.target.value)}
-                placeholder="Cerca persona…"
-                className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
-              />
-            </div>
-            <div className="max-h-44 space-y-0.5 overflow-y-auto rounded-md border border-border p-1">
-              {dipFiltrati.map((d) => {
-                const on = f.dipendentiIds.includes(d.id);
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => toggleDip(d.id)}
-                    className={
-                      'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ' +
-                      (on ? 'bg-primary/10' : 'hover:bg-muted/50')
-                    }
-                  >
-                    <span
-                      className={
-                        'flex h-4 w-4 shrink-0 items-center justify-center rounded border ' +
-                        (on ? 'border-primary bg-primary text-primary-foreground' : 'border-input')
-                      }
-                    >
-                      {on ? '✓' : ''}
-                    </span>
-                    <span className="min-w-0 truncate">{nomeDip(d)}</span>
-                    {d.mansione ? (
-                      <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
-                        {d.mansione}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mezzi */}
-          {mezzi.length > 0 ? (
-            <div className="text-sm">
-              <span className="mb-1 block font-medium text-muted-foreground">
-                Mezzi ({f.mezziIds.length})
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {mezzi.map((m) => {
-                  const on = f.mezziIds.includes(m.id);
-                  return (
+              <div className="text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Fascia</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {FASCE.map((fascia) => (
                     <button
-                      key={m.id}
+                      key={fascia}
                       type="button"
-                      onClick={() => toggleMezzo(m.id)}
+                      onClick={() => set('fascia', fascia)}
                       className={
-                        'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ' +
-                        (on
+                        'rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ' +
+                        (f.fascia === fascia
                           ? 'border-primary bg-primary/5 text-primary'
                           : 'border-border hover:bg-muted/40')
                       }
                     >
-                      <Truck className="h-3.5 w-3.5" />
-                      {m.targa}
+                      {LABEL_FASCIA[fascia]}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             </div>
-          ) : null}
+            {f.fascia === 'custom' ? (
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Dalle</span>
+                  <input
+                    type="time"
+                    value={f.oraInizio}
+                    onChange={(e) => set('oraInizio', e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Alle</span>
+                  <input
+                    type="time"
+                    value={f.oraFine}
+                    onChange={(e) => set('oraFine', e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                  />
+                </label>
+              </div>
+            ) : null}
+          </Sezione>
 
-          {/* Note */}
-          <label className="block text-sm">
-            <span className="mb-1 block font-medium text-muted-foreground">Note</span>
-            <textarea
-              value={f.note}
-              onChange={(e) => set('note', e.target.value)}
-              rows={2}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
-            />
-          </label>
+          {/* Due colonne: sinistra (66%) contenuto · destra (33%) dipendenti */}
+          <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-3">
+            <div className="min-w-0 space-y-3 lg:col-span-2">
+              {isCantiere ? (
+                <Sezione icon={HardHat} title="Cantiere" tinta="cantiere">
+                  {cantScelto ? (
+                    <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-sky-300 bg-white px-3 py-2">
+                      <span className="min-w-0 truncate text-sm">
+                        <span className="font-medium">{cantScelto.nome}</span>
+                        {cantScelto.clienteNome ? (
+                          <span className="text-muted-foreground"> · {cantScelto.clienteNome}</span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => set('cantiereId', null)}
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative mb-1">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          value={cercaCant}
+                          onChange={(e) => setCercaCant(e.target.value)}
+                          placeholder="Cerca cantiere, codice, cliente…"
+                          className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+                      <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-border bg-white p-1">
+                        {cantFiltrati.length === 0 ? (
+                          <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                            Nessun cantiere
+                          </p>
+                        ) : (
+                          cantFiltrati.map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => {
+                                set('cantiereId', c.id);
+                                setCercaCant('');
+                              }}
+                              className="flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-muted/50"
+                            >
+                              <span className="min-w-0 flex-1 truncate">{c.nome}</span>
+                              {c.clienteNome ? (
+                                <span className="min-w-0 shrink truncate text-right text-xs text-muted-foreground">
+                                  {c.clienteNome}
+                                </span>
+                              ) : null}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </>
+                  )}
+                </Sezione>
+              ) : (
+                <Sezione
+                  icon={f.tipo === 'formazione' ? GraduationCap : CalendarClock}
+                  title={f.tipo === 'formazione' ? 'Formazione' : 'Evento'}
+                  tinta="evento"
+                >
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="block min-w-0 text-sm">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                        Titolo
+                      </span>
+                      <input
+                        value={f.titolo}
+                        onChange={(e) => set('titolo', e.target.value)}
+                        placeholder={
+                          f.tipo === 'formazione' ? 'es. Formazione antincendio' : 'es. Riunione cantieri'
+                        }
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <div className="block min-w-0 text-sm">
+                      <span className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                        <MapPin className="h-3 w-3" /> Luogo
+                      </span>
+                      <AddressAutocomplete
+                        value={f.luogo}
+                        onChange={(label) => set('luogo', label)}
+                        onSelect={(r) =>
+                          setF((s) => ({ ...s, luogo: r.label, luogoLat: r.lat, luogoLng: r.lng }))
+                        }
+                        placeholder="Cerca indirizzo…"
+                      />
+                    </div>
+                  </div>
+                </Sezione>
+              )}
+
+              {/* Mezzi */}
+              <Sezione
+                icon={Truck}
+                title="Mezzi"
+                tinta="mezzi"
+                right={
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {f.mezziIds.length} selezionati
+                  </span>
+                }
+              >
+                {mezzi.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nessun mezzo disponibile.</p>
+                ) : (
+                  <div className="flex max-h-36 flex-wrap gap-1.5 overflow-y-auto">
+                    {mezzi.map((m) => {
+                      const on = f.mezziIds.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => toggleMezzo(m.id)}
+                          className={
+                            'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-left transition-colors ' +
+                            (on
+                              ? 'border-amber-400 bg-amber-100/70 text-amber-800'
+                              : 'border-border bg-white hover:bg-muted/40')
+                          }
+                        >
+                          <Truck className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex flex-col leading-tight">
+                            <span className="text-xs font-medium">{nomeMezzo(m)}</span>
+                            <span className="text-[10px] tabular-nums text-muted-foreground">
+                              {m.targa}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </Sezione>
+
+              {/* Note */}
+              <Sezione icon={StickyNote} title="Note" tinta="note">
+                <textarea
+                  value={f.note}
+                  onChange={(e) => set('note', e.target.value)}
+                  rows={2}
+                  placeholder="Indicazioni per la squadra…"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                />
+              </Sezione>
+            </div>
+
+            {/* Colonna destra: dipendenti */}
+            <div className="min-w-0">
+              <Sezione
+                icon={Users}
+                title="Dipendenti"
+                tinta="dipendenti"
+                right={
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                    {f.dipendentiIds.length}
+                  </span>
+                }
+              >
+                <div className="relative mb-1">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={cercaDip}
+                    onChange={(e) => setCercaDip(e.target.value)}
+                    placeholder="Cerca persona…"
+                    className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+                  />
+                </div>
+                <div className="max-h-[19rem] space-y-0.5 overflow-y-auto rounded-md border border-border bg-white p-1">
+                  {dipFiltrati.map((d) => {
+                    const on = f.dipendentiIds.includes(d.id);
+                    return (
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => toggleDip(d.id)}
+                        className={
+                          'flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm ' +
+                          (on ? 'bg-emerald-50' : 'hover:bg-muted/50')
+                        }
+                      >
+                        <span
+                          className={
+                            'flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ' +
+                            (on
+                              ? 'border-emerald-500 bg-emerald-500 text-white'
+                              : 'border-input')
+                          }
+                        >
+                          {on ? '✓' : ''}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{nomeDip(d)}</span>
+                        {d.mansione ? (
+                          <span className="min-w-0 shrink truncate text-right text-[11px] text-muted-foreground">
+                            {d.mansione}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Sezione>
+            </div>
+          </div>
 
           {/* Conflitti */}
           {conflitti.length > 0 ? (
@@ -534,7 +660,7 @@ function BloccoDialog({
           ) : null}
         </div>
 
-        <DialogFooter className="mt-2 flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+        <DialogFooter className="mt-1 flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           {isEdit ? (
             <Button
               type="button"
@@ -579,8 +705,9 @@ function Chip({
   conflitto: boolean;
   onClick: () => void;
 }) {
-  const h = b.tipo === 'evento' ? 275 : hue(b.cantiereId ?? b.id);
+  const h = hueTipo(b);
   const label = b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
+  const Icon = b.tipo === 'formazione' ? GraduationCap : b.tipo === 'evento' ? CalendarClock : null;
   return (
     <button
       type="button"
@@ -597,9 +724,7 @@ function Chip({
         borderLeft: `3px solid hsl(${h} 60% 45%)`,
       }}
     >
-      {b.tipo === 'evento' ? (
-        <GraduationCap className="h-3 w-3 shrink-0" />
-      ) : null}
+      {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       <span className="shrink-0 tabular-nums opacity-70">
         {b.fascia === 'mattina' ? 'M' : b.fascia === 'pomeriggio' ? 'P' : b.oraInizio}
@@ -634,10 +759,10 @@ export function PianificazioneClient({
   const [dialog, setDialog] = React.useState<FormState | null>(null);
   const [cerca, setCerca] = React.useState('');
   const [soloTurni, setSoloTurni] = React.useState(false);
+  const [gruppo, setGruppo] = React.useState('tutti'); // filtro gruppo: predisposto, non ancora attivo
 
   const giorni = React.useMemo(() => giorniSettimana(lunediISO), [lunediISO]);
 
-  // Indice blocchi per (dip|giorno) e set conflitti.
   const { perCella, conflittoSet } = React.useMemo(() => {
     const perCella = new Map<string, BloccoView[]>();
     const voci: VoceOccupazione[] = [];
@@ -780,6 +905,24 @@ export function PianificazioneClient({
             className="h-9 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
           />
         </div>
+        {/* Filtro gruppo/reparto: predisposto (non ancora funzionale). */}
+        <div className="flex items-center gap-1.5">
+          <select
+            value={gruppo}
+            onChange={(e) => setGruppo(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground focus:border-primary focus:outline-none"
+            title="Filtro per gruppo/reparto (in arrivo)"
+          >
+            {GRUPPI_PLACEHOLDER.map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            in arrivo
+          </span>
+        </div>
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -855,7 +998,7 @@ export function PianificazioneClient({
                           (weekend ? 'bg-muted/20' : '')
                         }
                       >
-                        <div className="flex min-h-[3rem] flex-col gap-1">
+                        <div className="flex min-h-[4rem] flex-col gap-1">
                           {cella.map((b) => (
                             <Chip
                               key={b.id}
@@ -867,10 +1010,11 @@ export function PianificazioneClient({
                           <button
                             type="button"
                             onClick={() => setDialog(formVuoto(g, d.id))}
-                            className="flex items-center justify-center rounded border border-dashed border-transparent py-1 text-muted-foreground opacity-0 transition hover:border-border hover:bg-muted/40 group-hover:opacity-100"
-                            aria-label="Aggiungi"
+                            className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 text-muted-foreground/40 transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                            style={{ minHeight: cella.length ? '1.75rem' : '3.5rem' }}
+                            aria-label="Aggiungi assegnazione"
                           >
-                            <Plus className="h-3.5 w-3.5" />
+                            <Plus className="h-4 w-4" />
                           </button>
                         </div>
                       </td>

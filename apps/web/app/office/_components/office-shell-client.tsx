@@ -139,9 +139,9 @@ function buildNav(
         variant: 'section',
         defaultOpen: true,
         children: [
+          { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
           { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
           { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
-          { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
           { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
         ],
       },
@@ -285,7 +285,13 @@ function injectDipendenti(
   };
   const azienda = nav.find((n) => n.id === 'sec-azienda');
   if (azienda) {
-    azienda.children = [...(azienda.children ?? []), pianificazione];
+    // Pianificazione va PRIMA di Clienti (ordine: Sedi, Dipendenti, Mezzi,
+    // Pianificazione, Clienti).
+    const kids = [...(azienda.children ?? [])];
+    const idx = kids.findIndex((c) => c.id === 'clienti');
+    if (idx >= 0) kids.splice(idx, 0, pianificazione);
+    else kids.push(pianificazione);
+    azienda.children = kids;
     return nav;
   }
   return [

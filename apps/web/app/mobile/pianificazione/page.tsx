@@ -1,7 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { CalendarDays, ChevronLeft, ChevronRight, GraduationCap, HardHat, Truck } from 'lucide-react';
+import {
+  CalendarClock,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  GraduationCap,
+  HardHat,
+  Truck,
+} from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
@@ -141,14 +149,16 @@ export default async function MiaSettimanaPage({
                         .map((d) => dipMap.get(d))
                         .filter(Boolean);
                       const targhe = b.mezzi.map((m) => mezziMap.get(m)).filter(Boolean);
+                      const Icona =
+                        b.tipo === 'formazione'
+                          ? GraduationCap
+                          : b.tipo === 'evento'
+                            ? CalendarClock
+                            : HardHat;
                       return (
                         <div key={b.id} className="rounded-lg bg-muted/40 p-2.5">
                           <div className="flex items-center gap-2">
-                            {b.tipo === 'evento' ? (
-                              <GraduationCap className="h-4 w-4 shrink-0 text-primary" />
-                            ) : (
-                              <HardHat className="h-4 w-4 shrink-0 text-primary" />
-                            )}
+                            <Icona className="h-4 w-4 shrink-0 text-primary" />
                             <span className="min-w-0 flex-1 truncate text-sm font-medium">{nome}</span>
                             <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                               {b.oraInizio}-{b.oraFine}
@@ -156,7 +166,7 @@ export default async function MiaSettimanaPage({
                           </div>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[11px] text-muted-foreground">
                             <span>{LABEL_FASCIA[b.fascia]}</span>
-                            {b.tipo === 'evento' && b.luogo ? <span>{b.luogo}</span> : null}
+                            {b.tipo !== 'cantiere' && b.luogo ? <span>{b.luogo}</span> : null}
                             {targhe.length > 0 ? (
                               <span className="inline-flex items-center gap-1">
                                 <Truck className="h-3 w-3" /> {targhe.join(', ')}

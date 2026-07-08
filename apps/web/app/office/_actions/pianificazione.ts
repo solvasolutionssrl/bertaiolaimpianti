@@ -138,7 +138,7 @@ async function nomiMezzi(
 // ── Schema comune ────────────────────────────────────────────────────
 
 const BloccoSchema = z.object({
-  tipo: z.enum(['cantiere', 'evento']),
+  tipo: z.enum(['cantiere', 'evento', 'formazione']),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data non valida'),
   fascia: z.enum(['giornata', 'mattina', 'pomeriggio', 'custom']),
   oraInizio: z.string().optional().nullable(),
@@ -146,6 +146,8 @@ const BloccoSchema = z.object({
   cantiereId: z.string().uuid().optional().nullable(),
   titolo: z.string().trim().max(160).optional().nullable(),
   luogo: z.string().trim().max(200).optional().nullable(),
+  luogoLat: z.number().optional().nullable(),
+  luogoLng: z.number().optional().nullable(),
   dipendentiIds: z.array(z.string().uuid()).default([]),
   mezziIds: z.array(z.string().uuid()).default([]),
   note: z.string().trim().max(1000).optional().nullable(),
@@ -173,8 +175,8 @@ function risolviOrari(input: {
 
 function validaTarget(input: BloccoInput): string | null {
   if (input.tipo === 'cantiere' && !input.cantiereId) return 'Scegli un cantiere';
-  if (input.tipo === 'evento' && !(input.titolo && input.titolo.trim()))
-    return 'Dai un titolo all’evento';
+  if (input.tipo !== 'cantiere' && !(input.titolo && input.titolo.trim()))
+    return input.tipo === 'formazione' ? 'Dai un titolo alla formazione' : 'Dai un titolo all’evento';
   return null;
 }
 
@@ -223,8 +225,10 @@ export async function creaBlocco(input: unknown): Promise<SalvaResult> {
       data: data.data,
       tipo: data.tipo,
       cantiere_id: data.tipo === 'cantiere' ? data.cantiereId : null,
-      titolo: data.tipo === 'evento' ? data.titolo?.trim() : null,
-      luogo: data.tipo === 'evento' ? data.luogo?.trim() ?? null : null,
+      titolo: data.tipo !== 'cantiere' ? data.titolo?.trim() : null,
+      luogo: data.tipo !== 'cantiere' ? data.luogo?.trim() ?? null : null,
+      luogo_lat: data.tipo !== 'cantiere' ? data.luogoLat ?? null : null,
+      luogo_lng: data.tipo !== 'cantiere' ? data.luogoLng ?? null : null,
       fascia: data.fascia,
       ora_inizio: orari.inizio,
       ora_fine: orari.fine,
@@ -324,8 +328,10 @@ export async function aggiornaBlocco(input: unknown): Promise<SalvaResult> {
       data: data.data,
       tipo: data.tipo,
       cantiere_id: data.tipo === 'cantiere' ? data.cantiereId : null,
-      titolo: data.tipo === 'evento' ? data.titolo?.trim() : null,
-      luogo: data.tipo === 'evento' ? data.luogo?.trim() ?? null : null,
+      titolo: data.tipo !== 'cantiere' ? data.titolo?.trim() : null,
+      luogo: data.tipo !== 'cantiere' ? data.luogo?.trim() ?? null : null,
+      luogo_lat: data.tipo !== 'cantiere' ? data.luogoLat ?? null : null,
+      luogo_lng: data.tipo !== 'cantiere' ? data.luogoLng ?? null : null,
       fascia: data.fascia,
       ora_inizio: orari.inizio,
       ora_fine: orari.fine,
