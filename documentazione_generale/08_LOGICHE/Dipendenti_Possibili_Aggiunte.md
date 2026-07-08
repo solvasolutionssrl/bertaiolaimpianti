@@ -12,7 +12,7 @@ Idee che maturano durante lo sviluppo del modulo Dipendenti (pianificazione + fe
 - Cruscotto carico persone (chi è sotto/sovra-allocato nella settimana).
 
 ## Pianificazione
-- **⭐ Filtro per gruppo/reparto** (Officina, Cantiere, Manutenzione, ecc.): la UI è **già predisposta** nella toolbar della pianificazione (select "gruppo" con badge "in arrivo"), ma **non ancora funzionale** perché i dipendenti non hanno ancora un campo `gruppo`. Da collegare quando arrivano i gruppi (probabile riuso dei `gruppi_approvazione` della fase Ferie o un campo/relazione `dipendente.gruppo` dedicato). Vedi `PianificazioneClient` (stato `gruppo`, costante `GRUPPI_PLACEHOLDER`).
+- ✅ **Filtro per gruppo/reparto** — COLLEGATO (08/07): la toolbar e il dialog dipendenti filtrano per **gruppo lavoro reale** (via `gruppo_membri`). I gruppi sono gli stessi `gruppi_approvazione` (reparto = gruppo di approvazione), con `colore`.
 - **Drag & drop** delle assegnazioni tra celle; vista mensile.
 - **Settimana-tipo / template** ricorrenti; ripetizione di un blocco su più giorni.
 - Notifiche mirate al singolo ritocco (oltre alla "Pubblica settimana").
