@@ -285,10 +285,10 @@ function injectDipendenti(
   };
   const azienda = nav.find((n) => n.id === 'sec-azienda');
   if (azienda) {
-    // Pianificazione va PRIMA di Clienti (ordine: Sedi, Dipendenti, Mezzi,
-    // Pianificazione, Clienti).
+    // Ordine: Sedi, Dipendenti, Pianificazione, Parco mezzi, Clienti
+    // → Pianificazione va PRIMA di "Parco mezzi".
     const kids = [...(azienda.children ?? [])];
-    const idx = kids.findIndex((c) => c.id === 'clienti');
+    const idx = kids.findIndex((c) => c.id === 'mezzi');
     if (idx >= 0) kids.splice(idx, 0, pianificazione);
     else kids.push(pianificazione);
     azienda.children = kids;
