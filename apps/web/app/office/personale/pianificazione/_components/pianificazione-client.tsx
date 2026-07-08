@@ -135,6 +135,17 @@ const TIPO_META: Record<
   },
 };
 
+/** Accenti della colonna dipendenti, coordinati (leggeri) al tipo scelto. */
+const TIPO_ACCENT: Record<TipoBlocco, { badge: string; chk: string; rowOn: string }> = {
+  cantiere: { badge: 'bg-sky-100 text-sky-700', chk: 'border-sky-500 bg-sky-500', rowOn: 'bg-sky-50' },
+  evento: { badge: 'bg-teal-100 text-teal-700', chk: 'border-teal-500 bg-teal-500', rowOn: 'bg-teal-50' },
+  formazione: {
+    badge: 'bg-violet-100 text-violet-700',
+    chk: 'border-violet-500 bg-violet-500',
+    rowOn: 'bg-violet-50',
+  },
+};
+
 // ── Pannello di sezione (struttura + tinta leggera) ──────────────────
 
 const TINTE = {
@@ -255,6 +266,7 @@ function BloccoDialog({
   const [cercaCant, setCercaCant] = React.useState('');
   const [cercaDip, setCercaDip] = React.useState('');
   const [cercaMezzo, setCercaMezzo] = React.useState('');
+  const [gruppoDip, setGruppoDip] = React.useState('tutti'); // filtro gruppi: predisposto, non ancora attivo
   const isEdit = !!f.id;
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
@@ -310,6 +322,7 @@ function BloccoDialog({
 
   const cantScelto = cantieri.find((c) => c.id === f.cantiereId) ?? null;
   const isCantiere = f.tipo === 'cantiere';
+  const accent = TIPO_ACCENT[f.tipo];
 
   const salva = (forza: boolean) => {
     setConflitti([]);
@@ -375,7 +388,7 @@ function BloccoDialog({
         </DialogHeader>
 
         <div className="min-w-0 space-y-3">
-          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start lg:gap-5">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch lg:gap-6">
             {/* SINISTRA (2/3): tipo + quando + target + mezzi + note */}
             <div className="min-w-0 space-y-3 lg:col-span-2">
               {/* Tipo: scelta tra cantiere / evento / formazione */}
@@ -630,20 +643,21 @@ function BloccoDialog({
               </Sezione>
             </div>
 
-            {/* DESTRA (1/3): dipendenti, staccata (bordo evidente), altezza
-                contenuta → se ci sono molte persone si scorre nella lista. */}
-            <div className="min-w-0">
-              <div className="flex flex-col rounded-lg border-2 border-emerald-300 bg-emerald-50/50 p-3 shadow-sm">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Users className="h-3.5 w-3.5" />
-                    Dipendenti
-                  </span>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                    {f.dipendentiIds.length}
-                  </span>
-                </div>
-                <div className="relative mb-1.5">
+            {/* DESTRA: dipendenti. Titolo = label fissa (come "Scegli il tipo"),
+                separata da una riga verticale grigia, accenti coordinati al tipo
+                scelto, lista alta fino in fondo a Note (scroll interno). */}
+            <div className="flex min-w-0 flex-col lg:border-l lg:border-slate-200 lg:pl-6">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Users className="h-3.5 w-3.5" />
+                  Dipendenti
+                </span>
+                <span className={'rounded-full px-2 py-0.5 text-[11px] font-semibold ' + accent.badge}>
+                  {f.dipendentiIds.length}
+                </span>
+              </div>
+              <div className="mb-1.5 flex items-center gap-1.5">
+                <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <input
                     value={cercaDip}
@@ -652,7 +666,22 @@ function BloccoDialog({
                     className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
                   />
                 </div>
-                <div className="max-h-[26rem] space-y-0.5 overflow-y-auto rounded-md border border-border bg-white p-1">
+                {/* Filtro gruppo/reparto: predisposto (non ancora funzionale). */}
+                <select
+                  value={gruppoDip}
+                  onChange={(e) => setGruppoDip(e.target.value)}
+                  title="Filtro per gruppo/reparto (in arrivo)"
+                  className="h-9 max-w-[7rem] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs text-muted-foreground focus:border-primary focus:outline-none"
+                >
+                  {GRUPPI_PLACEHOLDER.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative min-h-[16rem] flex-1">
+                <div className="absolute inset-0 space-y-0.5 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-sm">
                   {dipFiltrati.map((d) => {
                     const on = f.dipendentiIds.includes(d.id);
                     return (
@@ -662,13 +691,13 @@ function BloccoDialog({
                         onClick={() => toggleDip(d.id)}
                         className={
                           'flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm ' +
-                          (on ? 'bg-emerald-50' : 'hover:bg-muted/50')
+                          (on ? accent.rowOn : 'hover:bg-muted/50')
                         }
                       >
                         <span
                           className={
                             'flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[10px] ' +
-                            (on ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-input')
+                            (on ? accent.chk + ' text-white' : 'border-input')
                           }
                         >
                           {on ? '✓' : ''}
