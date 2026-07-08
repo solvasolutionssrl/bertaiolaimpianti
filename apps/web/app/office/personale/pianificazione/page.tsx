@@ -22,7 +22,7 @@ export default async function PianificazionePage({
     lunRaw && /^\d{4}-\d{2}-\d{2}$/.test(lunRaw) ? lunediDellaSettimana(lunRaw) : oggiLunedi;
   const domenica = addGiorni(lunedi, 6);
 
-  const [dipRes, cantRes, mezziRes, blocchi, assenze] = await Promise.all([
+  const [dipRes, cantRes, mezziRes, blocchi, assenze, gruppiRes, membriRes] = await Promise.all([
     supabase
       .from('dipendenti' as never)
       .select('id, nome, cognome, mansione, a_turni, stato_attivo')
@@ -43,7 +43,29 @@ export default async function PianificazionePage({
       .order('targa'),
     caricaBlocchiRange(supabase, ctx.tenantId, lunedi, domenica),
     caricaAssenze(supabase, ctx.tenantId, lunedi, domenica),
+    supabase
+      .from('gruppi_approvazione' as never)
+      .select('id, nome, colore')
+      .eq('tenant_id', ctx.tenantId)
+      .order('nome'),
+    supabase
+      .from('gruppo_membri' as never)
+      .select('gruppo_id, dipendente_id')
+      .eq('tenant_id', ctx.tenantId),
   ]);
+
+  const gruppi = ((gruppiRes.data ?? []) as unknown as {
+    id: string;
+    nome: string;
+    colore: string | null;
+  }[]).map((g) => ({ id: g.id, nome: g.nome, colore: g.colore }));
+  const dipGruppo: Record<string, string> = {};
+  for (const m of (membriRes.data ?? []) as unknown as {
+    gruppo_id: string;
+    dipendente_id: string;
+  }[]) {
+    dipGruppo[m.dipendente_id] = m.gruppo_id;
+  }
 
   const dipendenti: DipRow[] = ((dipRes.data ?? []) as unknown as Array<{
     id: string;
@@ -90,6 +112,8 @@ export default async function PianificazionePage({
       mezzi={mezzi}
       blocchi={blocchi}
       assenze={assenze}
+      gruppi={gruppi}
+      dipGruppo={dipGruppo}
     />
   );
 }

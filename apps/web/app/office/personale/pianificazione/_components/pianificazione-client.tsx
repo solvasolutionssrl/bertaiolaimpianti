@@ -74,15 +74,12 @@ export interface MezzoRow {
 
 const PATH = '/office/personale/pianificazione';
 
-// Filtro per gruppo/reparto: UI predisposta, non ancora funzionale (i
-// dipendenti non hanno un `gruppo`). Da collegare quando arriveranno i gruppi.
-// Vedi documentazione_generale/08_LOGICHE/Dipendenti_Possibili_Aggiunte.md.
-const GRUPPI_PLACEHOLDER = [
-  { value: 'tutti', label: 'Tutti i gruppi' },
-  { value: 'officina', label: 'Officina' },
-  { value: 'cantiere', label: 'Cantiere' },
-  { value: 'manutenzione', label: 'Manutenzione' },
-];
+/** Gruppo lavoro (reparto) per il filtro dipendenti. */
+export interface GruppoLite {
+  id: string;
+  nome: string;
+  colore: string | null;
+}
 
 /** Hue deterministico da un id (colore-cantiere dei chip). */
 function hue(id: string): number {
@@ -251,6 +248,8 @@ function BloccoDialog({
   cantieri,
   dipendenti,
   mezzi,
+  gruppi,
+  dipGruppo,
   onSaved,
 }: {
   form: FormState;
@@ -258,6 +257,8 @@ function BloccoDialog({
   cantieri: CantRow[];
   dipendenti: DipRow[];
   mezzi: MezzoRow[];
+  gruppi: GruppoLite[];
+  dipGruppo: Record<string, string>;
   onSaved: () => void;
 }) {
   const alert = useAlert();
@@ -307,12 +308,12 @@ function BloccoDialog({
   }, [cantieri, cercaCant]);
 
   const dipFiltrati = React.useMemo(() => {
+    let out = dipendenti;
+    if (gruppoDip !== 'tutti') out = out.filter((d) => dipGruppo[d.id] === gruppoDip);
     const q = cercaDip.trim().toLowerCase();
-    if (!q) return dipendenti;
-    return dipendenti.filter((d) =>
-      `${nomeDip(d)} ${d.mansione ?? ''}`.toLowerCase().includes(q),
-    );
-  }, [dipendenti, cercaDip]);
+    if (q) out = out.filter((d) => `${nomeDip(d)} ${d.mansione ?? ''}`.toLowerCase().includes(q));
+    return out;
+  }, [dipendenti, cercaDip, gruppoDip, dipGruppo]);
 
   const mezziFiltrati = React.useMemo(() => {
     const q = cercaMezzo.trim().toLowerCase();
@@ -682,19 +683,21 @@ function BloccoDialog({
                     className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
                   />
                 </div>
-                {/* Filtro gruppo/reparto: predisposto (non ancora funzionale). */}
-                <select
-                  value={gruppoDip}
-                  onChange={(e) => setGruppoDip(e.target.value)}
-                  title="Filtro per gruppo/reparto (in arrivo)"
-                  className="h-9 max-w-[7rem] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs text-muted-foreground focus:border-primary focus:outline-none"
-                >
-                  {GRUPPI_PLACEHOLDER.map((g) => (
-                    <option key={g.value} value={g.value}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
+                {gruppi.length > 0 ? (
+                  <select
+                    value={gruppoDip}
+                    onChange={(e) => setGruppoDip(e.target.value)}
+                    title="Filtra per gruppo lavoro"
+                    className="h-9 max-w-[8rem] shrink-0 rounded-md border border-input bg-background px-1.5 text-xs text-muted-foreground focus:border-primary focus:outline-none"
+                  >
+                    <option value="tutti">Tutti i gruppi</option>
+                    {gruppi.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.nome}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
               </div>
               <div className="relative min-h-[16rem] flex-1">
                 <div className="absolute inset-0 space-y-0.5 overflow-y-auto rounded-md border border-slate-200 bg-white p-1 shadow-sm">
@@ -829,6 +832,8 @@ export function PianificazioneClient({
   mezzi,
   blocchi,
   assenze,
+  gruppi,
+  dipGruppo,
 }: {
   lunediISO: string;
   oggiLunediISO: string;
@@ -838,6 +843,8 @@ export function PianificazioneClient({
   mezzi: MezzoRow[];
   blocchi: BloccoView[];
   assenze: AssenzaView[];
+  gruppi: GruppoLite[];
+  dipGruppo: Record<string, string>;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -846,7 +853,7 @@ export function PianificazioneClient({
   const [dialog, setDialog] = React.useState<FormState | null>(null);
   const [cerca, setCerca] = React.useState('');
   const [soloTurni, setSoloTurni] = React.useState(false);
-  const [gruppo, setGruppo] = React.useState('tutti'); // filtro gruppo: predisposto, non ancora attivo
+  const [gruppo, setGruppo] = React.useState('tutti'); // filtro gruppo lavoro (reparto)
 
   const giorni = React.useMemo(() => giorniSettimana(lunediISO), [lunediISO]);
 
@@ -890,10 +897,11 @@ export function PianificazioneClient({
   const dipFiltrati = React.useMemo(() => {
     let out = dipendenti;
     if (soloTurni) out = out.filter((d) => d.aTurni);
+    if (gruppo !== 'tutti') out = out.filter((d) => dipGruppo[d.id] === gruppo);
     const q = cerca.trim().toLowerCase();
     if (q) out = out.filter((d) => `${nomeDip(d)} ${d.mansione ?? ''}`.toLowerCase().includes(q));
     return out;
-  }, [dipendenti, soloTurni, cerca]);
+  }, [dipendenti, soloTurni, cerca, gruppo, dipGruppo]);
 
   const bozze = blocchi.filter((b) => b.stato === 'bozza').length;
 
@@ -1008,24 +1016,22 @@ export function PianificazioneClient({
             className="h-9 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
           />
         </div>
-        {/* Filtro gruppo/reparto: predisposto (non ancora funzionale). */}
-        <div className="flex items-center gap-1.5">
+        {/* Filtro gruppo lavoro (reparto) */}
+        {gruppi.length > 0 ? (
           <select
             value={gruppo}
             onChange={(e) => setGruppo(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm text-muted-foreground focus:border-primary focus:outline-none"
-            title="Filtro per gruppo/reparto (in arrivo)"
+            className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:border-primary focus:outline-none"
+            title="Filtra per gruppo lavoro"
           >
-            {GRUPPI_PLACEHOLDER.map((g) => (
-              <option key={g.value} value={g.value}>
-                {g.label}
+            <option value="tutti">Tutti i gruppi</option>
+            {gruppi.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.nome}
               </option>
             ))}
           </select>
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            in arrivo
-          </span>
-        </div>
+        ) : null}
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -1168,6 +1174,8 @@ export function PianificazioneClient({
           cantieri={cantieri}
           dipendenti={dipendenti}
           mezzi={mezzi}
+          gruppi={gruppi}
+          dipGruppo={dipGruppo}
           onSaved={refresh}
         />
       ) : null}
