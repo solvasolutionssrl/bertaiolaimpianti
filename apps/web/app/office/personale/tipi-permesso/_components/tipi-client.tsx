@@ -141,9 +141,7 @@ export function TipiClient({ attivi, canManage }: { attivi: string[]; canManage:
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Fonti verificabili (INPS, INAIL, guide CCNL). Documentazione completa in{' '}
-        <span className="font-mono">documentazione_generale/08_LOGICHE/Permessi_Ferie_Normativa_IT.md</span>.
-        Catalogo estendibile (append-only) con tipi opzionali.
+        Fonti verificabili (INPS, INAIL, guide CCNL). Catalogo estendibile con tipi opzionali.
       </p>
     </div>
   );

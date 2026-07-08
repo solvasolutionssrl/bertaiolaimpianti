@@ -11,6 +11,7 @@ import { CODICI_PERMESSO, tipoPermesso } from '@kommessa/api/permessi-tipi';
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
+import { PALETTE_GRUPPI } from '@/app/_lib/palette-gruppi';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 import { inviaPushAUtente } from '@/lib/push';
 
@@ -24,18 +25,6 @@ const OFFICE = new Set<AppRole>(['admin', 'office']);
 const PATH_PERMESSI = '/office/personale/permessi';
 const PATH_GRUPPI = '/office/personale/gruppi';
 const PATH_TIPI = '/office/personale/tipi-permesso';
-
-/** Palette colori per i gruppi lavoro (allineata al brand/accenti office). */
-export const PALETTE_GRUPPI = [
-  '#1340A6',
-  '#0D9488',
-  '#7C3AED',
-  '#D97706',
-  '#DB2777',
-  '#059669',
-  '#0284C7',
-  '#DC2626',
-];
 
 type Ok = { ok: true } | { ok: false; error: string };
 

@@ -31,8 +31,8 @@ import {
   eliminaGruppo,
   impostaMembriGruppo,
   toggleApprovatore,
-  PALETTE_GRUPPI,
 } from '@/app/office/_actions/ferie-permessi';
+import { PALETTE_GRUPPI } from '@/app/_lib/palette-gruppi';
 
 export interface GruppoRow {
   id: string;
