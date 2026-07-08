@@ -568,8 +568,15 @@ function BloccoDialog({
                       />
                     </label>
                     <div className="block min-w-0 text-sm">
-                      <span className="mb-1 flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                        <MapPin className="h-3 w-3" /> Luogo
+                      <span className="mb-1 flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" /> Luogo
+                        </span>
+                        {f.luogoLat != null && f.luogoLng != null ? (
+                          <span className="flex items-center gap-1 font-medium text-emerald-600">
+                            <CheckCircle2 className="h-3 w-3" /> Collegato a Maps
+                          </span>
+                        ) : null}
                       </span>
                       <AddressAutocomplete
                         value={f.luogo}
@@ -581,11 +588,6 @@ function BloccoDialog({
                         className="h-9 bg-background pr-8 shadow-none"
                         linked={f.luogoLat != null && f.luogoLng != null}
                       />
-                      {f.luogoLat != null && f.luogoLng != null ? (
-                        <span className="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                          <CheckCircle2 className="h-3 w-3" /> Collegato a Maps
-                        </span>
-                      ) : null}
                     </div>
                   </div>
                   {quandoFields}
