@@ -420,64 +420,8 @@ function BloccoDialog({
                 </div>
               </div>
 
-              {/* Quando: giorno + fascia */}
-              <Sezione icon={CalendarDays} title="Quando" tinta="comune">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm">
-                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Giorno</span>
-                    <input
-                      type="date"
-                      value={f.data}
-                      onChange={(e) => set('data', e.target.value)}
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-                    />
-                  </label>
-                  <div className="text-sm">
-                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Fascia</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {FASCE.map((fascia) => (
-                        <button
-                          key={fascia}
-                          type="button"
-                          onClick={() => set('fascia', fascia)}
-                          className={
-                            'rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ' +
-                            (f.fascia === fascia
-                              ? 'border-primary bg-primary/5 text-primary'
-                              : 'border-border hover:bg-muted/40')
-                          }
-                        >
-                          {LABEL_FASCIA[fascia]}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {f.fascia === 'custom' ? (
-                  <div className="mt-2 grid grid-cols-2 gap-3">
-                    <label className="block text-sm">
-                      <span className="mb-1 block text-xs font-medium text-muted-foreground">Dalle</span>
-                      <input
-                        type="time"
-                        value={f.oraInizio}
-                        onChange={(e) => set('oraInizio', e.target.value)}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-                      />
-                    </label>
-                    <label className="block text-sm">
-                      <span className="mb-1 block text-xs font-medium text-muted-foreground">Alle</span>
-                      <input
-                        type="time"
-                        value={f.oraFine}
-                        onChange={(e) => set('oraFine', e.target.value)}
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-                      />
-                    </label>
-                  </div>
-                ) : null}
-              </Sezione>
-
-              {/* Cantiere o Evento/Formazione */}
+              {/* Cantiere o Evento/Formazione (il "cosa" — sopra il "quando":
+                  il titolo/target conta più della data). */}
               {isCantiere ? (
                 <Sezione icon={HardHat} title="Cantiere" tinta="cantiere">
                   {cantScelto ? (
@@ -559,7 +503,7 @@ function BloccoDialog({
                         placeholder={
                           f.tipo === 'formazione' ? 'es. Formazione antincendio' : 'es. Riunione cantieri'
                         }
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold focus:border-primary focus:outline-none"
                       />
                     </label>
                     <div className="block min-w-0 text-sm">
@@ -585,6 +529,63 @@ function BloccoDialog({
                   </div>
                 </Sezione>
               )}
+
+              {/* Quando: giorno + fascia (sotto il "cosa") */}
+              <Sezione icon={CalendarDays} title="Quando" tinta="comune">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Giorno</span>
+                    <input
+                      type="date"
+                      value={f.data}
+                      onChange={(e) => set('data', e.target.value)}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <div className="text-sm">
+                    <span className="mb-1 block text-xs font-medium text-muted-foreground">Fascia</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FASCE.map((fascia) => (
+                        <button
+                          key={fascia}
+                          type="button"
+                          onClick={() => set('fascia', fascia)}
+                          className={
+                            'rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ' +
+                            (f.fascia === fascia
+                              ? 'border-primary bg-primary/5 text-primary'
+                              : 'border-border hover:bg-muted/40')
+                          }
+                        >
+                          {LABEL_FASCIA[fascia]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                {f.fascia === 'custom' ? (
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground">Dalle</span>
+                      <input
+                        type="time"
+                        value={f.oraInizio}
+                        onChange={(e) => set('oraInizio', e.target.value)}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground">Alle</span>
+                      <input
+                        type="time"
+                        value={f.oraFine}
+                        onChange={(e) => set('oraFine', e.target.value)}
+                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+              </Sezione>
 
               {/* Mezzi: ricerca + card compatte */}
               <Sezione
