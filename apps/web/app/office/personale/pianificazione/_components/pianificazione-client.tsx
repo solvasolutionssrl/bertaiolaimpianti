@@ -494,7 +494,7 @@ function BloccoDialog({
                 >
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="block min-w-0 text-sm">
-                      <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                      <span className="mb-1 block text-xs font-semibold text-foreground">
                         Titolo
                       </span>
                       <input
