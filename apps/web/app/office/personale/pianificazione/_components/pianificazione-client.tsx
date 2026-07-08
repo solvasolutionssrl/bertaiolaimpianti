@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   CalendarClock,
   CalendarDays,
+  CalendarOff,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -41,7 +42,7 @@ import {
 } from '@kommessa/api/pianificazione';
 import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
-import type { BloccoView, TipoBlocco } from '../_lib/query';
+import type { BloccoView, TipoBlocco, AssenzaView } from '../_lib/query';
 import {
   creaBlocco,
   aggiornaBlocco,
@@ -827,6 +828,7 @@ export function PianificazioneClient({
   cantieri,
   mezzi,
   blocchi,
+  assenze,
 }: {
   lunediISO: string;
   oggiLunediISO: string;
@@ -835,6 +837,7 @@ export function PianificazioneClient({
   cantieri: CantRow[];
   mezzi: MezzoRow[];
   blocchi: BloccoView[];
+  assenze: AssenzaView[];
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -847,8 +850,9 @@ export function PianificazioneClient({
 
   const giorni = React.useMemo(() => giorniSettimana(lunediISO), [lunediISO]);
 
-  const { perCella, conflittoSet } = React.useMemo(() => {
+  const { perCella, conflittoSet, assenzePerCella } = React.useMemo(() => {
     const perCella = new Map<string, BloccoView[]>();
+    const assenzePerCella = new Map<string, AssenzaView[]>();
     const voci: VoceOccupazione[] = [];
     for (const b of blocchi) {
       for (const d of b.membri) {
@@ -859,14 +863,29 @@ export function PianificazioneClient({
         voci.push({ entita: d, data: b.data, inizio: b.oraInizio, fine: b.oraFine, refId: b.id });
       }
     }
+    // Le assenze approvate occupano la cella → i blocchi sovrapposti diventano
+    // in conflitto (rosso).
+    for (const a of assenze) {
+      const k = `${a.dipendenteId}|${a.data}`;
+      const arr = assenzePerCella.get(k);
+      if (arr) arr.push(a);
+      else assenzePerCella.set(k, [a]);
+      voci.push({
+        entita: a.dipendenteId,
+        data: a.data,
+        inizio: a.tuttoIlGiorno ? '00:00' : a.oraInizio ?? '00:00',
+        fine: a.tuttoIlGiorno ? '23:59' : a.oraFine ?? '23:59',
+        refId: `assenza:${a.dipendenteId}:${a.data}`,
+      });
+    }
     const conflitti = rilevaConflitti(voci);
     const conflittoSet = new Set<string>();
     for (const c of conflitti) {
       conflittoSet.add(`${c.entita}|${c.data}|${c.a}`);
       conflittoSet.add(`${c.entita}|${c.data}|${c.b}`);
     }
-    return { perCella, conflittoSet };
-  }, [blocchi]);
+    return { perCella, conflittoSet, assenzePerCella };
+  }, [blocchi, assenze]);
 
   const dipFiltrati = React.useMemo(() => {
     let out = dipendenti;
@@ -1101,6 +1120,18 @@ export function PianificazioneClient({
                           }
                         >
                           <div className="flex min-h-[2.75rem] flex-col gap-1">
+                            {(assenzePerCella.get(`${d.id}|${g}`) ?? []).map((a, ai) => (
+                              <span
+                                key={'a' + ai}
+                                title={`Assente: ${a.tipoLabel}`}
+                                className="flex items-center gap-1 rounded bg-rose-100 px-1.5 py-1 text-[11px] font-medium leading-tight text-rose-700"
+                              >
+                                <CalendarOff className="h-3 w-3 shrink-0" />
+                                <span className="min-w-0 flex-1 truncate">
+                                  {a.tuttoIlGiorno ? a.tipoLabel : `${a.tipoLabel} ${a.oraInizio}`}
+                                </span>
+                              </span>
+                            ))}
                             {cella.map((b) => (
                               <Chip
                                 key={b.id}

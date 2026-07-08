@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
 import { tenantHasModule } from '../_lib/modules';
+import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { ImpersonationBanner } from './_components/impersonation-banner';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
@@ -105,6 +106,10 @@ export default async function OfficeLayout({
   const notificationCount = notifRes.count ?? 0;
   const hasKantiere = await tenantHasModule('kantiere');
   const hasDipendenti = await tenantHasModule('dipendenti');
+  // Sotto-flag del modulo Dipendenti (gating fine delle voci nav).
+  const dipCfg = hasDipendenti ? await leggiConfigDipendenti(supabase, ctx.tenantId) : null;
+  const hasPianificazione = hasDipendenti && (dipCfg?.pianificazioneAttiva ?? true);
+  const hasFerie = hasDipendenti && (dipCfg?.ferieAttiva ?? true);
   // Esperienza app del tenant. Default 'kommessa' = comportamento attuale
   // (Bertaiola invariata). 'kantiere' → office puro-Kantiere (nulla di commessa).
   const rawAppMode = (tenantRow?.app_mode as string | null | undefined) ?? null;
@@ -144,7 +149,8 @@ export default async function OfficeLayout({
         user={user}
         notificationCount={notificationCount}
         hasKantiere={hasKantiere}
-        hasDipendenti={hasDipendenti}
+        hasPianificazione={hasPianificazione}
+        hasFerie={hasFerie}
         appMode={appMode}
       >
         {isPlatformAdmin && !isImpersonating ? <PlatformAdminPill /> : null}

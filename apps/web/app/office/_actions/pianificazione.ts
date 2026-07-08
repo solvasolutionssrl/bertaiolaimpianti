@@ -10,12 +10,14 @@ import type { AppRole } from '@kommessa/api';
 import {
   risolviFascia,
   normalizzaOra,
+  intervalliSovrapposti,
   sovrapposizioniPerCandidato,
   giorniSettimana,
   addGiorni,
   type Fascia,
   type VoceOccupazione,
 } from '@kommessa/api/pianificazione';
+import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
@@ -135,6 +137,49 @@ async function nomiMezzi(
   return new Map(rows.map((r) => [r.id, [r.targa, r.modello].filter(Boolean).join(' ')]));
 }
 
+/**
+ * Dipendenti con ferie/permesso APPROVATO che si sovrappone al giorno/orario del
+ * blocco → non assegnabili (blocco HARD). Ritorna i nomi (con tipo) in conflitto.
+ */
+async function assenzeInConflitto(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  data: string,
+  dipendentiIds: string[],
+  inizio: string,
+  fine: string,
+): Promise<string[]> {
+  if (dipendentiIds.length === 0) return [];
+  const { data: rows } = await supabase
+    .from('permesso_richieste' as never)
+    .select('dipendente_id, tutto_il_giorno, ora_inizio, ora_fine, tipo')
+    .eq('tenant_id', tenantId)
+    .eq('stato', 'approvato')
+    .lte('data_inizio', data)
+    .gte('data_fine', data)
+    .in('dipendente_id', dipendentiIds);
+  const list = (rows ?? []) as unknown as {
+    dipendente_id: string;
+    tutto_il_giorno: boolean;
+    ora_inizio: string | null;
+    ora_fine: string | null;
+    tipo: string;
+  }[];
+  if (list.length === 0) return [];
+  const nomi = await nomiDipendenti(supabase, tenantId);
+  const out: string[] = [];
+  for (const r of list) {
+    let overlap = r.tutto_il_giorno;
+    if (!overlap && r.ora_inizio && r.ora_fine) {
+      const ai = normalizzaOra(r.ora_inizio);
+      const af = normalizzaOra(r.ora_fine);
+      if (ai && af) overlap = intervalliSovrapposti(inizio, fine, ai, af);
+    }
+    if (overlap) out.push(`${nomi.get(r.dipendente_id) ?? 'Dipendente'} (${labelTipoPermesso(r.tipo)})`);
+  }
+  return out;
+}
+
 // ── Schema comune ────────────────────────────────────────────────────
 
 const BloccoSchema = z.object({
@@ -200,6 +245,22 @@ export async function creaBlocco(input: unknown): Promise<SalvaResult> {
   const orari = risolviOrari(data);
   if ('errore' in orari) return { ok: false, error: orari.errore };
   if (data.dipendentiIds.length === 0) return { ok: false, error: 'Seleziona almeno un dipendente' };
+
+  // Blocco HARD: chi è in ferie/permesso approvato quel giorno non è assegnabile.
+  const assenti = await assenzeInConflitto(
+    supabase,
+    ctx.tenantId,
+    data.data,
+    data.dipendentiIds,
+    orari.inizio,
+    orari.fine,
+  );
+  if (assenti.length > 0) {
+    return {
+      ok: false,
+      error: `Non assegnabile: in ferie o permesso quel giorno · ${assenti.join(', ')}`,
+    };
+  }
 
   // Conflitti soft (persona/mezzo già occupati nello stesso giorno).
   if (!data.forza) {
@@ -305,6 +366,22 @@ export async function aggiornaBlocco(input: unknown): Promise<SalvaResult> {
   const orari = risolviOrari(data);
   if ('errore' in orari) return { ok: false, error: orari.errore };
   if (data.dipendentiIds.length === 0) return { ok: false, error: 'Seleziona almeno un dipendente' };
+
+  // Blocco HARD: chi è in ferie/permesso approvato quel giorno non è assegnabile.
+  const assenti = await assenzeInConflitto(
+    supabase,
+    ctx.tenantId,
+    data.data,
+    data.dipendentiIds,
+    orari.inizio,
+    orari.fine,
+  );
+  if (assenti.length > 0) {
+    return {
+      ok: false,
+      error: `Non assegnabile: in ferie o permesso quel giorno · ${assenti.join(', ')}`,
+    };
+  }
 
   if (!data.forza) {
     const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, data.data, data.data);

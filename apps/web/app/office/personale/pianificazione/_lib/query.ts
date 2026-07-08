@@ -1,9 +1,69 @@
 import 'server-only';
 
 import type { createServerSupabase } from '@kommessa/api/server';
-import { normalizzaOra, type Fascia } from '@kommessa/api/pianificazione';
+import { normalizzaOra, addGiorni, type Fascia } from '@kommessa/api/pianificazione';
+import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
 
 type Supa = ReturnType<typeof createServerSupabase>;
+
+/** Assenza approvata proiettata su un singolo giorno (per i conflitti/indicatori). */
+export interface AssenzaView {
+  dipendenteId: string;
+  data: string; // 'YYYY-MM-DD'
+  tuttoIlGiorno: boolean;
+  oraInizio: string | null; // 'HH:MM'
+  oraFine: string | null;
+  tipoLabel: string;
+}
+
+/**
+ * Ferie/permessi APPROVATI che intersecano il range, espansi per giorno. Usato
+ * dalla pianificazione per bloccare/segnalare l'assegnazione di chi è assente.
+ */
+export async function caricaAssenze(
+  supabase: Supa,
+  tenantId: string,
+  dataFrom: string,
+  dataTo: string,
+): Promise<AssenzaView[]> {
+  const { data } = await supabase
+    .from('permesso_richieste' as never)
+    .select('dipendente_id, tipo, data_inizio, data_fine, tutto_il_giorno, ora_inizio, ora_fine')
+    .eq('tenant_id', tenantId)
+    .eq('stato', 'approvato')
+    .lte('data_inizio', dataTo)
+    .gte('data_fine', dataFrom);
+
+  const rows = (data ?? []) as unknown as Array<{
+    dipendente_id: string;
+    tipo: string;
+    data_inizio: string;
+    data_fine: string;
+    tutto_il_giorno: boolean;
+    ora_inizio: string | null;
+    ora_fine: string | null;
+  }>;
+
+  const out: AssenzaView[] = [];
+  for (const r of rows) {
+    let d = r.data_inizio < dataFrom ? dataFrom : r.data_inizio;
+    const end = r.data_fine > dataTo ? dataTo : r.data_fine;
+    let guard = 0;
+    while (d <= end && guard < 400) {
+      out.push({
+        dipendenteId: r.dipendente_id,
+        data: d,
+        tuttoIlGiorno: r.tutto_il_giorno,
+        oraInizio: normalizzaOra(r.ora_inizio),
+        oraFine: normalizzaOra(r.ora_fine),
+        tipoLabel: labelTipoPermesso(r.tipo),
+      });
+      d = addGiorni(d, 1);
+      guard++;
+    }
+  }
+  return out;
+}
 
 export type TipoBlocco = 'cantiere' | 'evento' | 'formazione';
 

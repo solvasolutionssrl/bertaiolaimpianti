@@ -8,16 +8,19 @@ import { registraEventoAccesso } from '@/app/_actions/auth-events';
 import {
   Boxes,
   Briefcase,
+  CalendarCheck,
   CalendarDays,
   Coins,
   HardHat,
   LayoutDashboard,
   MapPin,
   ReceiptText,
+  Scale,
   Sparkles,
   Timer,
   Truck,
   Users,
+  UsersRound,
 } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
@@ -29,8 +32,10 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
-  /** Modulo Dipendenti attivo → voci Pianificazione/Permessi in sezione Azienda/Personale. */
-  hasDipendenti?: boolean;
+  /** Modulo Dipendenti · sotto-flag Pianificazione attivo → voce Pianificazione. */
+  hasPianificazione?: boolean;
+  /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Tipi. */
+  hasFerie?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
   appMode?: 'kommessa' | 'kantiere' | 'full';
   children: React.ReactNode;
@@ -274,23 +279,34 @@ function buildNav(
  */
 function injectDipendenti(
   nav: OfficeNavItem[],
-  hasDipendenti?: boolean,
+  opts: { hasPianificazione?: boolean; hasFerie?: boolean },
 ): OfficeNavItem[] {
-  if (!hasDipendenti) return nav;
-  const pianificazione: OfficeNavItem = {
-    id: 'pianificazione',
-    label: 'Pianificazione',
-    href: '/office/personale/pianificazione',
-    icon: CalendarDays,
-  };
+  const voci: OfficeNavItem[] = [];
+  if (opts.hasPianificazione) {
+    voci.push({
+      id: 'pianificazione',
+      label: 'Pianificazione',
+      href: '/office/personale/pianificazione',
+      icon: CalendarDays,
+    });
+  }
+  if (opts.hasFerie) {
+    voci.push(
+      { id: 'permessi', label: 'Ferie e permessi', href: '/office/personale/permessi', icon: CalendarCheck },
+      { id: 'gruppi', label: 'Gruppi e approvatori', href: '/office/personale/gruppi', icon: UsersRound },
+      { id: 'tipi-permesso', label: 'Tipi e normativa', href: '/office/personale/tipi-permesso', icon: Scale },
+    );
+  }
+  if (voci.length === 0) return nav;
+
   const azienda = nav.find((n) => n.id === 'sec-azienda');
   if (azienda) {
-    // Ordine: Sedi, Dipendenti, Pianificazione, Parco mezzi, Clienti
-    // → Pianificazione va PRIMA di "Parco mezzi".
+    // Ordine: Sedi, Dipendenti, [Pianificazione, Ferie…], Parco mezzi, Clienti
+    // → le voci Personale vanno PRIMA di "Parco mezzi".
     const kids = [...(azienda.children ?? [])];
     const idx = kids.findIndex((c) => c.id === 'mezzi');
-    if (idx >= 0) kids.splice(idx, 0, pianificazione);
-    else kids.push(pianificazione);
+    if (idx >= 0) kids.splice(idx, 0, ...voci);
+    else kids.push(...voci);
     azienda.children = kids;
     return nav;
   }
@@ -303,7 +319,7 @@ function injectDipendenti(
       icon: Users,
       variant: 'section',
       defaultOpen: true,
-      children: [pianificazione],
+      children: voci,
     },
   ];
 }
@@ -340,13 +356,17 @@ export function OfficeShellClient({
   activeNavId,
   notificationCount,
   hasKantiere,
-  hasDipendenti,
+  hasPianificazione,
+  hasFerie,
   appMode,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const nav = injectDipendenti(buildNav(hasKantiere, appMode), hasDipendenti);
+  const nav = injectDipendenti(buildNav(hasKantiere, appMode), {
+    hasPianificazione,
+    hasFerie,
+  });
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);

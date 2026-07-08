@@ -2,7 +2,7 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
 import { lunediDellaSettimana, addGiorni } from '@kommessa/api/pianificazione';
-import { caricaBlocchiRange } from './_lib/query';
+import { caricaBlocchiRange, caricaAssenze } from './_lib/query';
 import { PianificazioneClient, type DipRow, type CantRow, type MezzoRow } from './_components/pianificazione-client';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export default async function PianificazionePage({
     lunRaw && /^\d{4}-\d{2}-\d{2}$/.test(lunRaw) ? lunediDellaSettimana(lunRaw) : oggiLunedi;
   const domenica = addGiorni(lunedi, 6);
 
-  const [dipRes, cantRes, mezziRes, blocchi] = await Promise.all([
+  const [dipRes, cantRes, mezziRes, blocchi, assenze] = await Promise.all([
     supabase
       .from('dipendenti' as never)
       .select('id, nome, cognome, mansione, a_turni, stato_attivo')
@@ -42,6 +42,7 @@ export default async function PianificazionePage({
       .eq('attivo', true)
       .order('targa'),
     caricaBlocchiRange(supabase, ctx.tenantId, lunedi, domenica),
+    caricaAssenze(supabase, ctx.tenantId, lunedi, domenica),
   ]);
 
   const dipendenti: DipRow[] = ((dipRes.data ?? []) as unknown as Array<{
@@ -88,6 +89,7 @@ export default async function PianificazionePage({
       cantieri={cantieri}
       mezzi={mezzi}
       blocchi={blocchi}
+      assenze={assenze}
     />
   );
 }
