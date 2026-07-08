@@ -3,7 +3,18 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarCheck, Check, X, RotateCcw, Loader2, Scale, Clock, CalendarDays } from 'lucide-react';
+import {
+  CalendarCheck,
+  Check,
+  X,
+  RotateCcw,
+  Loader2,
+  Scale,
+  Clock,
+  CalendarDays,
+  Plus,
+  Search,
+} from 'lucide-react';
 import {
   Button,
   Card,
@@ -15,9 +26,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@kommessa/ui';
-import { LABEL_STATO_PERMESSO } from '@kommessa/api/permessi-tipi';
+import { LABEL_STATO_PERMESSO, PERMESSO_TIPI, tipoPermesso } from '@kommessa/api/permessi-tipi';
 import { useAlert } from '@/app/_components/confirm-provider';
-import { decidiPermesso } from '@/app/office/_actions/ferie-permessi';
+import { decidiPermesso, richiediPermesso } from '@/app/office/_actions/ferie-permessi';
+
+export interface DipOpt {
+  id: string;
+  nome: string;
+}
 
 type Stato = 'in_attesa' | 'approvato' | 'rifiutato' | 'modifica_richiesta';
 
@@ -69,9 +85,22 @@ const FILTRI: { value: 'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'; label:
   { value: 'tutte', label: 'Tutte' },
 ];
 
-export function PermessiClient({ richieste }: { richieste: RichiestaRow[] }) {
+export function PermessiClient({
+  richieste,
+  dipendenti,
+  tipiAttivi,
+  mioDip,
+  oggiISO,
+}: {
+  richieste: RichiestaRow[];
+  dipendenti: DipOpt[];
+  tipiAttivi: string[];
+  mioDip: string | null;
+  oggiISO: string;
+}) {
   const [filtro, setFiltro] = React.useState<'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'>('in_attesa');
   const [decisione, setDecisione] = React.useState<{ r: RichiestaRow; esito: Stato } | null>(null);
+  const [nuovaOpen, setNuovaOpen] = React.useState(false);
 
   const conteggi = React.useMemo(() => {
     const c = { in_attesa: 0, approvato: 0, rifiutato: 0 };
@@ -102,12 +131,17 @@ export function PermessiClient({ richieste }: { richieste: RichiestaRow[] }) {
             Richieste dei dipendenti da approvare, rifiutare o rimandare.
           </p>
         </div>
-        <Link
-          href="/office/personale/tipi-permesso"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/40"
-        >
-          <Scale className="h-4 w-4" /> Tipi e normativa
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" onClick={() => setNuovaOpen(true)}>
+            <Plus className="h-4 w-4" /> Nuova richiesta
+          </Button>
+          <Link
+            href="/office/personale/tipi-permesso"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/40"
+          >
+            <Scale className="h-4 w-4" /> Tipi e normativa
+          </Link>
+        </div>
       </header>
 
       <div className="flex flex-wrap gap-1.5">
@@ -154,7 +188,239 @@ export function PermessiClient({ richieste }: { richieste: RichiestaRow[] }) {
       {decisione ? (
         <DecisioneDialog r={decisione.r} esito={decisione.esito} onClose={() => setDecisione(null)} />
       ) : null}
+
+      {nuovaOpen ? (
+        <NuovaRichiestaDialog
+          dipendenti={dipendenti}
+          tipiAttivi={tipiAttivi}
+          mioDip={mioDip}
+          oggiISO={oggiISO}
+          onClose={() => setNuovaOpen(false)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function NuovaRichiestaDialog({
+  dipendenti,
+  tipiAttivi,
+  mioDip,
+  oggiISO,
+  onClose,
+}: {
+  dipendenti: DipOpt[];
+  tipiAttivi: string[];
+  mioDip: string | null;
+  oggiISO: string;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const alert = useAlert();
+  const [pending, start] = React.useTransition();
+  const tipiDisponibili = React.useMemo(
+    () => PERMESSO_TIPI.filter((t) => tipiAttivi.includes(t.codice)),
+    [tipiAttivi],
+  );
+  const [dipendenteId, setDipendenteId] = React.useState<string>(mioDip ?? dipendenti[0]?.id ?? '');
+  const [cercaDip, setCercaDip] = React.useState('');
+  const [tipo, setTipo] = React.useState(tipiDisponibili[0]?.codice ?? 'ferie');
+  const [tuttoIlGiorno, setTuttoIlGiorno] = React.useState(true);
+  const [dataInizio, setDataInizio] = React.useState(oggiISO);
+  const [dataFine, setDataFine] = React.useState(oggiISO);
+  const [oraInizio, setOraInizio] = React.useState('08:00');
+  const [oraFine, setOraFine] = React.useState('12:00');
+  const [motivo, setMotivo] = React.useState('');
+
+  const dipFiltrati = React.useMemo(() => {
+    const q = cercaDip.trim().toLowerCase();
+    if (!q) return dipendenti;
+    return dipendenti.filter((d) => d.nome.toLowerCase().includes(q));
+  }, [dipendenti, cercaDip]);
+
+  const onTipo = (codice: string) => {
+    setTipo(codice);
+    const u = tipoPermesso(codice)?.unita;
+    if (u === 'ore') setTuttoIlGiorno(false);
+    else if (u === 'giorni') setTuttoIlGiorno(true);
+  };
+
+  const invia = () => {
+    if (!dipendenteId) {
+      void alert({ title: 'Manca il dipendente', body: 'Scegli per chi è la richiesta.' });
+      return;
+    }
+    start(async () => {
+      const res = await richiediPermesso({
+        dipendenteId,
+        tipo,
+        dataInizio,
+        dataFine: tuttoIlGiorno ? dataFine : dataInizio,
+        tuttoIlGiorno,
+        oraInizio: tuttoIlGiorno ? null : oraInizio,
+        oraFine: tuttoIlGiorno ? null : oraFine,
+        motivo: motivo.trim() || null,
+      });
+      if (!res.ok) {
+        await alert({ title: 'Non creata', body: res.error });
+        return;
+      }
+      onClose();
+      router.refresh();
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Nuova richiesta</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Dipendente */}
+          <div className="text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Per chi</span>
+            <div className="relative mb-1">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={cercaDip}
+                onChange={(e) => setCercaDip(e.target.value)}
+                placeholder="Cerca dipendente…"
+                className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+              />
+            </div>
+            <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-border p-1">
+              {dipFiltrati.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setDipendenteId(d.id)}
+                  className={
+                    'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ' +
+                    (dipendenteId === d.id ? 'bg-primary/10 font-medium' : 'hover:bg-muted/50')
+                  }
+                >
+                  <span className="min-w-0 flex-1 truncate">{d.nome}</span>
+                  {mioDip === d.id ? (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">tu</span>
+                  ) : null}
+                  {dipendenteId === d.id ? <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tipo */}
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Tipo</span>
+            <select
+              value={tipo}
+              onChange={(e) => onTipo(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+            >
+              {tipiDisponibili.map((t) => (
+                <option key={t.codice} value={t.codice}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+            <span className="font-medium">Tutto il giorno</span>
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={tuttoIlGiorno}
+              onChange={(e) => setTuttoIlGiorno(e.target.checked)}
+            />
+          </label>
+
+          {tuttoIlGiorno ? (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Dal</span>
+                <input
+                  type="date"
+                  value={dataInizio}
+                  onChange={(e) => {
+                    setDataInizio(e.target.value);
+                    if (e.target.value > dataFine) setDataFine(e.target.value);
+                  }}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Al</span>
+                <input
+                  type="date"
+                  value={dataFine}
+                  min={dataInizio}
+                  onChange={(e) => setDataFine(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="block text-sm">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">Giorno</span>
+                <input
+                  type="date"
+                  value={dataInizio}
+                  onChange={(e) => setDataInizio(e.target.value)}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Dalle</span>
+                  <input
+                    type="time"
+                    value={oraInizio}
+                    onChange={(e) => setOraInizio(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Alle</span>
+                  <input
+                    type="time"
+                    value={oraFine}
+                    onChange={(e) => setOraFine(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Motivo (facoltativo)</span>
+            <textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
+            />
+          </label>
+
+          <p className="rounded-md border border-sky-200 bg-sky-50/50 px-3 py-2 text-[11px] text-sky-700">
+            La richiesta resta <b>da approvare</b>: passa dal normale flusso di approvazione anche se
+            la crei tu.
+          </p>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+            Annulla
+          </Button>
+          <Button type="button" onClick={invia} disabled={pending}>
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Crea richiesta
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

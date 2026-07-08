@@ -2,8 +2,9 @@ import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
-import { leggiConfigDipendenti } from '../../../_lib/dipendenti-config';
-import { PermessiClient, type RichiestaRow } from './_components/permessi-client';
+import { romeDay } from '@kommessa/api/rome-time';
+import { leggiConfigDipendenti, leggiTipiPermessoAttivi } from '../../../_lib/dipendenti-config';
+import { PermessiClient, type RichiestaRow, type DipOpt } from './_components/permessi-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,17 +23,29 @@ export default async function PermessiPage() {
       .eq('tenant_id', ctx.tenantId)
       .order('created_at', { ascending: false })
       .limit(300),
-    supabase.from('dipendenti' as never).select('id, nome, cognome').eq('tenant_id', ctx.tenantId),
+    supabase
+      .from('dipendenti' as never)
+      .select('id, nome, cognome, stato_attivo, user_id')
+      .eq('tenant_id', ctx.tenantId)
+      .order('cognome'),
     supabase.from('users').select('id, display_name').eq('tenant_id', ctx.tenantId),
     supabase.from('gruppi_approvazione' as never).select('id, nome').eq('tenant_id', ctx.tenantId),
   ]);
 
-  const dipMap = new Map(
-    ((dipRes.data ?? []) as unknown as { id: string; nome: string; cognome: string }[]).map((d) => [
-      d.id,
-      `${d.cognome} ${d.nome}`.trim(),
-    ]),
-  );
+  const tipiAttivi = await leggiTipiPermessoAttivi(supabase, ctx.tenantId);
+
+  const dipRows = (dipRes.data ?? []) as unknown as {
+    id: string;
+    nome: string;
+    cognome: string;
+    stato_attivo: boolean;
+    user_id: string | null;
+  }[];
+  const dipMap = new Map(dipRows.map((d) => [d.id, `${d.cognome} ${d.nome}`.trim()]));
+  const dipendentiOpts: DipOpt[] = dipRows
+    .filter((d) => d.stato_attivo)
+    .map((d) => ({ id: d.id, nome: `${d.cognome} ${d.nome}`.trim() }));
+  const mioDip = dipRows.find((d) => d.user_id === ctx.userId)?.id ?? null;
   const userMap = new Map(
     ((usersRes.data ?? []) as unknown as { id: string; display_name: string | null }[]).map((u) => [
       u.id,
@@ -82,5 +95,13 @@ export default async function PermessiPage() {
     createdAt: r.created_at,
   }));
 
-  return <PermessiClient richieste={richieste} />;
+  return (
+    <PermessiClient
+      richieste={richieste}
+      dipendenti={dipendentiOpts}
+      tipiAttivi={tipiAttivi}
+      mioDip={mioDip}
+      oggiISO={romeDay(new Date())}
+    />
+  );
 }

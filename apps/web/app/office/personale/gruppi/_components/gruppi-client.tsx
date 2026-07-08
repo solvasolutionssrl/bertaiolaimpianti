@@ -75,6 +75,7 @@ export function GruppiClient({
   const [nuovoNome, setNuovoNome] = React.useState('');
   const [nuovoColore, setNuovoColore] = React.useState(PALETTE_GRUPPI[0]!);
   const [cercaAppr, setCercaAppr] = React.useState('');
+  const [cercaGruppo, setCercaGruppo] = React.useState('');
   const [membriDialog, setMembriDialog] = React.useState<GruppoRow | null>(null);
 
   const refresh = () => router.refresh();
@@ -96,6 +97,12 @@ export function GruppiClient({
     if (!q) return utenti;
     return utenti.filter((u) => `${u.nome} ${u.role}`.toLowerCase().includes(q));
   }, [utenti, cercaAppr]);
+
+  const gruppiFiltrati = React.useMemo(() => {
+    const q = cercaGruppo.trim().toLowerCase();
+    if (!q) return gruppi;
+    return gruppi.filter((g) => g.nome.toLowerCase().includes(q));
+  }, [gruppi, cercaGruppo]);
 
   const onNuovo = () => {
     if (!nuovoNome.trim()) return;
@@ -127,150 +134,167 @@ export function GruppiClient({
         </p>
       </header>
 
-      {/* Due colonne: chi può approvare · nuovo gruppo */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Chi può approvare (ricercabile, compatto) */}
-        <Card>
-          <CardContent className="py-4">
-            <div className="mb-2 flex items-center justify-between">
+      <div className="grid gap-4 lg:grid-cols-5 lg:items-start">
+        {/* SINISTRA (60%): nuovo gruppo (sopra) + chi può approvare (sotto) */}
+        <div className="space-y-4 lg:col-span-3">
+          {/* Nuovo gruppo */}
+          <Card>
+            <CardContent className="space-y-3 py-4">
               <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                <ShieldCheck className="h-4 w-4" /> Chi può approvare
+                <Plus className="h-4 w-4" /> Nuovo gruppo
               </h2>
-              <span className="text-[11px] text-muted-foreground">{approvatori.length} abilitati</span>
-            </div>
-            <div className="relative mb-2">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                value={cercaAppr}
-                onChange={(e) => setCercaAppr(e.target.value)}
-                placeholder="Cerca utente…"
-                className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
-              />
-            </div>
-            <div className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border">
-              {utentiFiltrati.map((u) => {
-                const isAdmin = u.role === 'admin';
-                return (
-                  <label
-                    key={u.id}
-                    className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 hover:bg-muted/40"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm">{u.nome}</span>
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {u.role}
-                      </span>
-                    </span>
-                    {isAdmin ? (
-                      <Badge variant="secondary" className="shrink-0 text-[10px]">
-                        Sempre
-                      </Badge>
-                    ) : (
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 shrink-0"
-                        checked={u.puoApprovare}
-                        disabled={pending}
-                        onChange={(e) => {
-                          const value = e.target.checked;
-                          start(async () => {
-                            const res = await toggleApprovatore({ userId: u.id, value });
-                            if (!res.ok) await alert({ title: 'Errore', body: res.error });
-                            refresh();
-                          });
-                        }}
-                      />
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Nuovo gruppo */}
-        <Card>
-          <CardContent className="space-y-3 py-4">
-            <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-              <Plus className="h-4 w-4" /> Nuovo gruppo
-            </h2>
-            <label className="block text-sm">
-              <span className="mb-1 block text-xs font-medium text-muted-foreground">Nome</span>
-              <input
-                value={nuovoNome}
-                onChange={(e) => setNuovoNome(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onNuovo()}
-                placeholder="es. Elettricisti"
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
-              />
-            </label>
-            <div className="text-sm">
-              <span className="mb-1 block text-xs font-medium text-muted-foreground">Colore</span>
-              <div className="flex flex-wrap gap-1.5">
-                {PALETTE_GRUPPI.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setNuovoColore(c)}
-                    aria-label={c}
-                    className={
-                      'h-7 w-7 rounded-full ring-offset-2 transition ' +
-                      (nuovoColore === c ? 'ring-2 ring-foreground/40' : '')
-                    }
-                    style={{ backgroundColor: c }}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Nome</span>
+                  <input
+                    value={nuovoNome}
+                    onChange={(e) => setNuovoNome(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && onNuovo()}
+                    placeholder="es. Elettricisti"
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
                   />
-                ))}
+                </label>
+                <div className="text-sm">
+                  <span className="mb-1 block text-xs font-medium text-muted-foreground">Colore</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PALETTE_GRUPPI.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setNuovoColore(c)}
+                        aria-label={c}
+                        className={
+                          'h-6 w-6 rounded-full ring-offset-2 transition ' +
+                          (nuovoColore === c ? 'ring-2 ring-foreground/40' : '')
+                        }
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Puoi creare anche un gruppo vuoto e assegnare i membri dopo.
-            </p>
-            <Button type="button" onClick={onNuovo} disabled={pending || !nuovoNome.trim()}>
-              {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Crea gruppo
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Puoi creare un gruppo vuoto e assegnare i membri dopo.
+                </p>
+                <Button type="button" onClick={onNuovo} disabled={pending || !nuovoNome.trim()}>
+                  {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  Crea gruppo
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Gruppi esistenti (colorati) */}
-      <div>
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Gruppi ({gruppi.length})
-        </h2>
-        {gruppi.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-            Nessun gruppo. Creane uno qui sopra.
-          </p>
-        ) : (
-          <div className="grid gap-3 lg:grid-cols-2">
-            {gruppi.map((g) => (
-              <GruppoCard
-                key={g.id}
-                gruppo={g}
-                approvatori={approvatori}
-                dipMap={dipMap}
-                onGestisciMembri={() => setMembriDialog(g)}
-                onSaved={refresh}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          {/* Chi può approvare (compatto) */}
+          <Card>
+            <CardContent className="py-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  <ShieldCheck className="h-4 w-4" /> Chi può approvare
+                </h2>
+                <div className="relative w-40">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={cercaAppr}
+                    onChange={(e) => setCercaAppr(e.target.value)}
+                    placeholder="Cerca…"
+                    className="h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:border-primary focus:outline-none"
+                  />
+                </div>
+              </div>
+              <div className="max-h-52 divide-y divide-border/60 overflow-y-auto rounded-md border border-border">
+                {utentiFiltrati.map((u) => {
+                  const isAdmin = u.role === 'admin';
+                  return (
+                    <label
+                      key={u.id}
+                      className="flex cursor-pointer items-center justify-between gap-2 px-2.5 py-1.5 hover:bg-muted/40"
+                    >
+                      <span className="flex min-w-0 items-baseline gap-1.5">
+                        <span className="truncate text-sm">{u.nome}</span>
+                        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {u.role}
+                        </span>
+                      </span>
+                      {isAdmin ? (
+                        <Badge variant="secondary" className="shrink-0 text-[10px]">
+                          Sempre
+                        </Badge>
+                      ) : (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 shrink-0"
+                          checked={u.puoApprovare}
+                          disabled={pending}
+                          onChange={(e) => {
+                            const value = e.target.checked;
+                            start(async () => {
+                              const res = await toggleApprovatore({ userId: u.id, value });
+                              if (!res.ok) await alert({ title: 'Errore', body: res.error });
+                              refresh();
+                            });
+                          }}
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Attiva la capacità per office o tecnici. Gli admin approvano sempre.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Dipendenti senza gruppo */}
-      {senzaGruppo.length > 0 ? (
-        <Card className="border-amber-200 bg-amber-50/40">
-          <CardContent className="py-3">
-            <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-amber-800">
-              <AlertTriangle className="h-4 w-4" /> {senzaGruppo.length} dipendenti senza gruppo
-            </p>
-            <p className="text-xs text-amber-700">
-              Le loro richieste non hanno un approvatore finché non li assegni a un gruppo.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+        {/* DESTRA (40%): gruppi esistenti con ricerca */}
+        <div className="lg:col-span-2">
+          <Card>
+            <CardContent className="py-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  Gruppi ({gruppi.length})
+                </h2>
+              </div>
+              <div className="relative mb-2">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={cercaGruppo}
+                  onChange={(e) => setCercaGruppo(e.target.value)}
+                  placeholder="Cerca gruppo…"
+                  className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+                />
+              </div>
+              {gruppi.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                  Nessun gruppo. Creane uno a sinistra.
+                </p>
+              ) : gruppiFiltrati.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">Nessun gruppo trovato.</p>
+              ) : (
+                <div className="max-h-[68vh] space-y-2.5 overflow-y-auto pr-1">
+                  {gruppiFiltrati.map((g) => (
+                    <GruppoCard
+                      key={g.id}
+                      gruppo={g}
+                      approvatori={approvatori}
+                      dipMap={dipMap}
+                      onGestisciMembri={() => setMembriDialog(g)}
+                      onSaved={refresh}
+                    />
+                  ))}
+                </div>
+              )}
+              {senzaGruppo.length > 0 ? (
+                <p className="mt-2 flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50/50 px-2.5 py-1.5 text-[11px] text-amber-700">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> {senzaGruppo.length} dipendenti senza
+                  gruppo: le loro richieste non hanno un approvatore.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       {membriDialog ? (
         <MembriDialog
