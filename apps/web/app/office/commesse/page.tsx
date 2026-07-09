@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { createServerSupabase } from '@kommessa/api/server';
 import { Button, Input } from '@kommessa/ui';
-import { Briefcase, FolderPlus, Plus, Search } from 'lucide-react';
+import { Briefcase, FolderPlus, LayoutList, Plus, Search } from 'lucide-react';
 import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';
 import { BozzeDaCompletare } from '../../_components/bozze-da-completare';
@@ -124,12 +124,20 @@ export default async function CommessePage({
         description="Filtra per stato, anno o responsabile. Clicca una riga per aprire il dettaglio."
         icon={<Briefcase />}
         actions={
-          <Button asChild>
-            <Link href="/office/commesse/nuova">
-              <Plus className="h-4 w-4" />
-              Nuova commessa
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link href="/office/commesse/panoramica">
+                <LayoutList className="h-4 w-4" />
+                Panoramica
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/office/commesse/nuova">
+                <Plus className="h-4 w-4" />
+                Nuova commessa
+              </Link>
+            </Button>
+          </>
         }
       />
 
