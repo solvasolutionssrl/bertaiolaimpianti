@@ -109,7 +109,7 @@ function BoardHeader({ totale }: { totale: number }) {
             Da fare · to-do
           </p>
           <h2 className="text-lg font-semibold leading-tight tracking-tight">
-            Cose da gestire
+            Elementi da gestire
           </h2>
         </div>
       </div>
