@@ -25,7 +25,9 @@ type Result = { ok: true; id?: string } | { ok: false; error: string };
 async function guard() {
   const ctx = await requireTenantContext();
   if (!['admin', 'office'].includes(ctx.role)) throw new Error('FORBIDDEN');
-  if (!(await tenantHasModule('kantiere'))) throw new Error('MODULO_OFF');
+  if (!(await tenantHasModule('kantiere')) && !(await tenantHasModule('dipendenti'))) {
+    throw new Error('MODULO_OFF');
+  }
   return ctx;
 }
 

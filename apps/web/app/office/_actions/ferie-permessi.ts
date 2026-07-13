@@ -398,6 +398,9 @@ export async function richiediPermesso(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
   const ctx = await requireTenantContext();
   if (!(await tenantHasModule('dipendenti'))) return { ok: false, error: 'Modulo non attivo' };
+  if (!(await leggiConfigDipendenti(createServerSupabase(), ctx.tenantId)).ferieAttiva) {
+    return { ok: false, error: 'Ferie e permessi non attivi' };
+  }
 
   const svc = createServiceSupabase();
   const d = parsed.data;
@@ -504,6 +507,9 @@ export async function decidiPermesso(
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
   const ctx = await requireTenantContext();
   if (!(await tenantHasModule('dipendenti'))) return { ok: false, error: 'Modulo non attivo' };
+  if (!(await leggiConfigDipendenti(createServerSupabase(), ctx.tenantId)).ferieAttiva) {
+    return { ok: false, error: 'Ferie e permessi non attivi' };
+  }
   const svc = createServiceSupabase();
 
   const { data: rich } = await svc
@@ -581,6 +587,9 @@ export async function annullaRichiesta(id: string): Promise<Ok> {
   if (!z.string().uuid().safeParse(id).success) return { ok: false, error: 'ID non valido' };
   const ctx = await requireTenantContext();
   if (!(await tenantHasModule('dipendenti'))) return { ok: false, error: 'Modulo non attivo' };
+  if (!(await leggiConfigDipendenti(createServerSupabase(), ctx.tenantId)).ferieAttiva) {
+    return { ok: false, error: 'Ferie e permessi non attivi' };
+  }
   const svc = createServiceSupabase();
   const { data: rich } = await svc
     .from('permesso_richieste' as never)
