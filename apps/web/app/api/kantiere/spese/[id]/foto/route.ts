@@ -8,6 +8,9 @@ import {
   getR2ProviderFromTenantConfig,
 } from '@kommessa/integrations/storage';
 
+import { tenantHasModule } from '@/app/_lib/modules';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
+
 /**
  * Serve la foto di una spesa: 302 verso un signed GET R2 (5 min TTL).
  * `?size=thumb` usa la miniatura se presente, altrimenti il full-size.
@@ -23,6 +26,13 @@ export async function GET(
     ctx = await requireTenantContext();
   } catch {
     return Response.json({ error: 'Non autenticato' }, { status: 401 });
+  }
+  // Gate modulo + sotto-flag kontabilità (coerente con le altre route spese/*).
+  if (!(await tenantHasModule('kantiere'))) {
+    return Response.json({ error: 'Modulo non attivo' }, { status: 404 });
+  }
+  if (!(await kontabilitaAttiva(createServiceSupabase(), ctx.tenantId))) {
+    return Response.json({ error: 'Kontabilità non attiva' }, { status: 404 });
   }
 
   const supabase = createServerSupabase();

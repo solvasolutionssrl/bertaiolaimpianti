@@ -309,6 +309,16 @@ export async function bulkAssegnaResponsabile(
     const parsed = bulkAssegnaResponsabileSchema.parse({ ids, userId });
     const supabase = createServerSupabase();
 
+    // Il nuovo responsabile deve appartenere al tenant del chiamante (la RLS su
+    // users già scopa per tenant; check esplicito per chiarezza/difesa).
+    const { data: respUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', parsed.userId)
+      .eq('tenant_id', ctx.tenantId)
+      .maybeSingle();
+    if (!respUser) return { ok: false, error: 'Utente non valido per questo spazio di lavoro.' };
+
     // Leggi codici delle commesse PRIMA dell'update così abbiamo info
     // ricche per la notifica al nuovo responsabile
     const { data: commesseInfo } = await supabase

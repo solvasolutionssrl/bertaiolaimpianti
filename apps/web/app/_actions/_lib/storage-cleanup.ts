@@ -38,7 +38,8 @@ export async function cleanupAllegatoFiles(opts: {
   const { data: refs } = await service
     .from('file_refs')
     .select('id, path, r2_key, tenant_id')
-    .in('id', opts.fileRefIds);
+    .in('id', opts.fileRefIds)
+    .eq('tenant_id', opts.tenantId);
 
   const safeRefs = (refs ?? []) as Array<{
     id: string;
@@ -100,6 +101,7 @@ export async function cleanupAllegatoFiles(opts: {
   const { error: delErr, count } = await service
     .from('file_refs')
     .delete({ count: 'exact' })
+    .eq('tenant_id', opts.tenantId)
     .in(
       'id',
       safeRefs.map((r) => r.id),

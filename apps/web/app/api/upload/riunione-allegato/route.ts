@@ -101,6 +101,9 @@ export async function POST(request: NextRequest) {
   if (!com || !com.cloud_folder_path) {
     return Response.json({ error: 'Commessa o cartella non disponibile' }, { status: 404 });
   }
+  if (com.tenant_id !== ctx.tenantId) {
+    return Response.json({ error: 'Commessa di un altro tenant' }, { status: 403 });
+  }
 
   // 4. Body file
   const form = await request.formData().catch(() => null);
