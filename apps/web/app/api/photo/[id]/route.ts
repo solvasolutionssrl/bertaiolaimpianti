@@ -8,6 +8,8 @@ import {
   getR2ProviderFromTenantConfig,
 } from '@kommessa/integrations/storage';
 
+import { canAccessFile } from '../../../_lib/file-authz';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -29,8 +31,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  let ctx;
   try {
-    await requireTenantContext();
+    ctx = await requireTenantContext();
   } catch {
     return new Response('Non autenticato', { status: 401 });
   }
@@ -45,7 +48,7 @@ export async function GET(
   // RLS garantisce che l'utente possa leggere solo i file_refs del proprio tenant
   const { data: refRaw } = await supabase
     .from('file_refs')
-    .select('path, mime, tenant_id, r2_thumb_key')
+    .select('path, mime, tenant_id, r2_thumb_key, commessa_id')
     .eq('id', params.id)
     .single();
   // Cast: r2_thumb_key è introdotta dalla migration 20260528010000,
@@ -55,11 +58,19 @@ export async function GET(
     mime: string | null;
     tenant_id: string;
     r2_thumb_key: string | null;
+    commessa_id: string | null;
   } | null;
 
   if (!ref?.path) return new Response('Non trovato', { status: 404 });
   if (ref.mime?.startsWith('video/')) {
     return new Response('Video non supportato come proxy', { status: 400 });
+  }
+
+  // Autorizzazione per-ruolo/per-cartella: la RLS su file_refs è tenant-wide,
+  // quindi qui blocchiamo i clienti del portale e i tecnici non assegnati/
+  // fuori-ACL. Vale sia per il thumb sia per il full-size.
+  if (!(await canAccessFile(ctx, { commessaId: ref.commessa_id, path: ref.path }))) {
+    return new Response('Non autorizzato', { status: 403 });
   }
 
   // ----- Modalità thumb: redirect a signed GET R2 (se disponibile) ---------

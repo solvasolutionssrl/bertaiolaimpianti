@@ -8,11 +8,7 @@ import {
   type StorageProviderName,
 } from '@kommessa/integrations/storage';
 
-import {
-  canView,
-  loadFolderAclMap,
-  stripCommessaRoot,
-} from '../../../_lib/folder-acl';
+import { canAccessFile } from '../../../_lib/file-authz';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -51,45 +47,24 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'path required' }, { status: 400 });
   }
 
-  // ─── ACL CHECK ─────────────────────────────────────────────────────
-  // Schema path atteso: <01_X>/<nome_cartella>/<rest...>
-  // Trova la commessa via nome_cartella, poi verifica il ruolo sul path relativo.
+  // ─── AUTORIZZAZIONE ────────────────────────────────────────────────
+  // Risolvi la commessa dal path (schema <01_X>/<nome_cartella>/<rest...>).
+  let commessaId: string | null = null;
   const pathSegments = safePath.split('/');
   if (pathSegments.length >= 2 && /^[0-9]{2}_/.test(pathSegments[0]!)) {
-    const nomeCartella = pathSegments[1]!;
     const sb = createServerSupabase();
     const { data: commessa } = await sb
       .from('commesse')
-      .select('id, tenant_id')
-      .eq('nome_cartella', nomeCartella)
+      .select('id')
+      .eq('nome_cartella', pathSegments[1]!)
       .eq('tenant_id', ctx.tenantId)
       .maybeSingle();
-
-    if (commessa?.id) {
-      // Tecnico: deve essere assegnato alla commessa
-      if (ctx.role === 'tecnico') {
-        const { data: assign } = await sb
-          .from('commessa_tecnici')
-          .select('commessa_id')
-          .eq('commessa_id', commessa.id)
-          .eq('user_id', ctx.userId)
-          .maybeSingle();
-        if (!assign) {
-          return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-        }
-      }
-
-      // Folder ACL
-      const aclMap = await loadFolderAclMap(ctx.tenantId, commessa.id);
-      const relPath = stripCommessaRoot(safePath);
-      // Estrai SOLO la cartella, non il filename, per il check
-      const folderPath = relPath.includes('/')
-        ? relPath.split('/').slice(0, -1).join('/')
-        : '';
-      if (folderPath && !canView(ctx.role, folderPath, aclMap)) {
-        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-      }
-    }
+    commessaId = commessa?.id ?? null;
+  }
+  // strictNoCommessa: un path che NON risolve a una commessa del tenant è
+  // servibile solo ad admin/office (mai path arbitrari del share a tecnico/cliente).
+  if (!(await canAccessFile(ctx, { commessaId, path: safePath, strictNoCommessa: true }))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   // Risolvi config storage del tenant via service role

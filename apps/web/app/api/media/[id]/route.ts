@@ -8,11 +8,7 @@ import {
   getR2ProviderFromTenantConfig,
 } from '@kommessa/integrations/storage';
 
-import {
-  canView,
-  loadFolderAclMap,
-  stripCommessaRoot,
-} from '../../../_lib/folder-acl';
+import { canAccessFile } from '../../../_lib/file-authz';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -70,31 +66,9 @@ export async function GET(
     return new Response('Media non disponibile', { status: 409 });
   }
 
-  // ─── ACL CHECK ───────────────────────────────────────────────────────
-  if (ref.commessa_id) {
-    if (ctx.role === 'tecnico') {
-      // Tecnico vede solo media di commesse a cui è assegnato
-      const { data: assign } = await supabase
-        .from('commessa_tecnici')
-        .select('commessa_id')
-        .eq('commessa_id', ref.commessa_id)
-        .eq('user_id', ctx.userId)
-        .maybeSingle();
-      if (!assign) {
-        return new Response('Forbidden', { status: 403 });
-      }
-    }
-    // Folder ACL: deriva folder dal path file_refs.path
-    if (ref.path) {
-      const aclMap = await loadFolderAclMap(ctx.tenantId, ref.commessa_id);
-      const relPath = stripCommessaRoot(ref.path);
-      const folderPath = relPath.includes('/')
-        ? relPath.split('/').slice(0, -1).join('/')
-        : '';
-      if (folderPath && !canView(ctx.role, folderPath, aclMap)) {
-        return new Response('Forbidden', { status: 403 });
-      }
-    }
+  // ─── AUTORIZZAZIONE per-ruolo/per-cartella (RLS file_refs è tenant-wide) ──
+  if (!(await canAccessFile(ctx, { commessaId: ref.commessa_id, path: ref.path }))) {
+    return new Response('Forbidden', { status: 403 });
   }
 
   // R2 provider (tenant config con fallback env)
