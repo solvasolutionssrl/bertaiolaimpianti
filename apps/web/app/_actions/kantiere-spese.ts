@@ -14,6 +14,8 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
+import { chiaviSpeseValide } from '@/app/api/kantiere/spese/_lib/r2-spese';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 import { mioTurnoAttivo } from '@/app/mobile/kantiere/_lib/turno-attivo';
 import {
@@ -124,6 +126,14 @@ export async function creaSpesa(input: z.input<typeof CreaSchema>): Promise<Risu
 
   const ctx = await requireTenantContext();
   if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+  // La foto (r2_key/thumb) deve stare nel namespace spese di QUESTO tenant:
+  // impedisce di salvare una spesa che punta a file di un altro tenant.
+  if (!(await chiaviSpeseValide(ctx.tenantId, [d.r2Key, d.r2ThumbKey]))) {
+    return { ok: false, error: 'CHIAVE_NON_VALIDA' };
+  }
+  if (!(await kontabilitaAttiva(createServiceSupabase(), ctx.tenantId))) {
+    return { ok: false, error: 'KONTABILITA_ASSENTE' };
+  }
 
   const supabase = createServerSupabase();
   const { data: dipRow } = await supabase
@@ -235,6 +245,12 @@ export async function creaSpesaOffice(
     return { ok: false, error: 'NON_AUTORIZZATO' };
   }
   if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+  if (!(await chiaviSpeseValide(ctx.tenantId, [d.r2Key, d.r2ThumbKey]))) {
+    return { ok: false, error: 'CHIAVE_NON_VALIDA' };
+  }
+  if (!(await kontabilitaAttiva(createServiceSupabase(), ctx.tenantId))) {
+    return { ok: false, error: 'KONTABILITA_ASSENTE' };
+  }
 
   const service = createServiceSupabase();
 

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { isKantiereOnly } from '@/app/_lib/app-mode';
 import type { AppRole, Json } from '@kommessa/api';
 import { getStorageProvider } from '@kommessa/integrations/storage';
 
@@ -98,6 +99,10 @@ export async function creaCommessa(
   }
   if (!RUOLI_AMMESSI.has(ctx.role)) {
     return { ok: false, error: 'Permessi insufficienti per creare una commessa.' };
+  }
+  // Un tenant puro-Kantiere non ha il mondo commesse: blocca la chiamata diretta.
+  if (await isKantiereOnly()) {
+    return { ok: false, error: 'Le commesse non sono disponibili in questo spazio di lavoro.' };
   }
 
   // 2) Validazione input

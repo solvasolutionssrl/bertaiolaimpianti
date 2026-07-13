@@ -9,6 +9,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 
 export type R2SpeseCtx = {
   tenantId: string;
@@ -44,6 +45,9 @@ export async function r2SpeseContext(): Promise<R2SpeseCtx | R2SpeseErr> {
     return { error: 'MODULO_ASSENTE', status: 404 };
   }
   const service = createServiceSupabase();
+  if (!(await kontabilitaAttiva(service, ctx.tenantId))) {
+    return { error: 'KONTABILITA_ASSENTE', status: 404 };
+  }
   const { data: t } = await service
     .from('tenants')
     .select('r2_config, slug')
@@ -61,4 +65,26 @@ export async function r2SpeseContext(): Promise<R2SpeseCtx | R2SpeseErr> {
 export function dentroBase(keyOrPrefix: string, base: string): boolean {
   if (keyOrPrefix.includes('..')) return false;
   return keyOrPrefix.startsWith(base);
+}
+
+/**
+ * Verifica che le chiavi R2 fornite dal client (r2_key / r2_thumb_key delle
+ * spese) stiano nel namespace spese del tenant `tenants/<slug>/kantiere/spese/`.
+ * Impedisce di salvare una spesa che punta a `tenants/<altro-tenant>/...` e poi
+ * rileggerne l'immagine via signed URL sullo stesso bucket R2 condiviso.
+ * Usa lo stesso `tenants.slug` con cui la route /scan genera le chiavi.
+ */
+export async function chiaviSpeseValide(
+  tenantId: string,
+  keys: (string | null | undefined)[],
+): Promise<boolean> {
+  const service = createServiceSupabase();
+  const { data: t } = await service
+    .from('tenants')
+    .select('slug')
+    .eq('id', tenantId)
+    .maybeSingle();
+  const slug = (t?.slug as string | undefined) ?? tenantId;
+  const base = `tenants/${slug}/kantiere/spese/`;
+  return keys.every((k) => k == null || k === '' || dentroBase(k, base));
 }

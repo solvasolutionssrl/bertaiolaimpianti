@@ -18,6 +18,7 @@ import {
 } from '@kommessa/api/spese';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import {
   chatCompletion,
   getVisionModel,
@@ -75,6 +76,10 @@ export async function POST(request: NextRequest) {
   }
   if (!(await tenantHasModule('kantiere'))) {
     return Response.json({ ok: false, code: 'MODULO_ASSENTE' }, { status: 404 });
+  }
+  // Sotto-flag kontabilità: se spento, niente scan AI (evita costo OpenAI).
+  if (!(await kontabilitaAttiva(createServiceSupabase(), ctx.tenantId))) {
+    return Response.json({ ok: false, code: 'KONTABILITA_ASSENTE' }, { status: 404 });
   }
 
   // 2. File dalla form

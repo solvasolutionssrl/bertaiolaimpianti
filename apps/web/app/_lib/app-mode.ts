@@ -28,3 +28,13 @@ export const getAppModeCached = cache(async (): Promise<AppMode> => {
   const raw = (data as { app_mode?: string | null } | null)?.app_mode ?? null;
   return raw === 'kantiere' || raw === 'full' ? raw : 'kommessa';
 });
+
+/**
+ * True se il tenant è puro-Kantiere (`app_mode = 'kantiere'`), cioè senza il
+ * mondo commesse. Da usare nelle server action commesse per bloccare
+ * l'invocazione diretta da un tenant Kantiere: il gate delle PAGINE non
+ * protegge la chiamata diretta all'azione. I tenant `kommessa`/`full` → false.
+ */
+export async function isKantiereOnly(): Promise<boolean> {
+  return (await getAppModeCached()) === 'kantiere';
+}

@@ -5,6 +5,7 @@ import { waitUntil } from '@vercel/functions';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { isKantiereOnly } from '@/app/_lib/app-mode';
 import {
   buildR2Key,
   getR2ProviderFromEnv,
@@ -74,6 +75,9 @@ export async function finalizzaBozza(
     ctx = await requireTenantContext();
   } catch {
     return { ok: false, error: 'Sessione non valida. Effettua nuovamente il login.' };
+  }
+  if (await isKantiereOnly()) {
+    return { ok: false, error: 'Le commesse non sono disponibili in questo spazio di lavoro.' };
   }
 
   const supabase = createServerSupabase();
