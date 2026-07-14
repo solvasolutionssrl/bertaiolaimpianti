@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Clock,
   Receipt,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 
@@ -23,6 +24,7 @@ import {
   aggiornaSpesa,
   eliminaSpesa,
   cronologiaSpesa,
+  rianalizzaSpesa,
   type VersioneSpesa,
 } from '@/app/_actions/kantiere-spese';
 import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
@@ -108,6 +110,7 @@ export function SpesaDettaglio({
 }) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
+  const [rianPending, startRian] = React.useTransition();
   const [errMsg, setErrMsg] = React.useState<string | null>(null);
   const [fotoGrande, setFotoGrande] = React.useState(false);
   const [confermaElimina, setConfermaElimina] = React.useState(false);
@@ -220,6 +223,21 @@ export function SpesaDettaglio({
 
   if (!spesa) return null;
   const cantiereNome = spesa.cantiereId ? cantieriNomi[spesa.cantiereId] : null;
+  const spesaId = spesa.id;
+  const inElab = spesa.stato === 'in_elaborazione';
+  const daVerificare = spesa.stato === 'bozza';
+
+  const rianalizza = () => {
+    startRian(async () => {
+      const res = await rianalizzaSpesa(spesaId);
+      if (res.ok) {
+        router.refresh();
+        onClose();
+      } else {
+        setErrMsg('Non è stato possibile riavviare l’analisi. Riprova.');
+      }
+    });
+  };
 
   return (
     <>
@@ -269,6 +287,47 @@ export function SpesaDettaglio({
                 )}
                 <span className="text-xs text-muted-foreground">Tocca per vedere la ricevuta</span>
               </button>
+            ) : null}
+
+            {/* Stato analisi cloud (in elaborazione / da verificare) + recovery */}
+            {inElab || daVerificare ? (
+              <div
+                className={
+                  'flex items-center gap-2.5 rounded-xl border p-3 ' +
+                  (inElab
+                    ? 'border-primary/25 bg-primary/[0.06]'
+                    : 'border-amber-200 bg-amber-50')
+                }
+              >
+                {inElab ? (
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" aria-hidden="true" />
+                ) : (
+                  <RefreshCw className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className={'text-sm font-semibold ' + (inElab ? 'text-primary' : 'text-amber-800')}>
+                    {inElab ? 'Analisi in corso in cloud' : 'Da verificare'}
+                  </p>
+                  <p className={'text-xs ' + (inElab ? 'text-muted-foreground' : 'text-amber-700')}>
+                    {inElab
+                      ? 'I dati vengono compilati in automatico. Torna tra poco.'
+                      : 'L’analisi non ha letto tutto: controlla o riprova.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={rianalizza}
+                  disabled={rianPending}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-semibold text-foreground active:scale-95 transition disabled:opacity-60"
+                >
+                  {rianPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  Rianalizza
+                </button>
+              </div>
             ) : null}
 
             {/* Panoramica costi */}
@@ -627,7 +686,7 @@ export function SpesaDettaglio({
               <Trash2 className="h-6 w-6" aria-hidden="true" />
             </span>
             <p className="text-center text-base font-semibold text-foreground">Eliminare questa spesa?</p>
-            <p className="mt-1 text-center text-sm text-muted-foreground">L'operazione non è reversibile.</p>
+            <p className="mt-1 text-center text-sm text-muted-foreground">L’operazione non è reversibile.</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
               <Button
                 type="button"

@@ -37,10 +37,12 @@ function dataRel(iso: string | null): string {
 const STATO_STILE: Record<string, string> = {
   confermata: 'border-success/30 text-success',
   bozza: 'border-amber-400/40 text-amber-600',
+  in_elaborazione: 'border-primary/30 text-primary',
 };
 const STATO_LABEL: Record<string, string> = {
   confermata: 'Confermata',
   bozza: 'Bozza',
+  in_elaborazione: 'In elaborazione',
 };
 
 type SpesaRow = {

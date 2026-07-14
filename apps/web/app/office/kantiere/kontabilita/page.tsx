@@ -33,6 +33,7 @@ type SpesaRow = {
   foto_mime: string | null;
   r2_key: string | null;
   numero_persone: number | null;
+  stato: string | null;
 };
 
 type DipendenteRow = { id: string; nome: string; cognome: string };
@@ -72,7 +73,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   let query = supabase
     .from('spese' as never)
     .select(
-      'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key, numero_persone',
+      'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key, numero_persone, stato',
     )
     .eq('tenant_id', ctx.tenantId)
     .limit(1000);
@@ -168,6 +169,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
     fotoMime: s.foto_mime,
     hasFile: !!s.r2_key,
     numeroPersone: s.numero_persone ?? 1,
+    stato: (s.stato as SpesaRiga['stato']) ?? null,
   }));
 
   const filtri: FiltriValori = {

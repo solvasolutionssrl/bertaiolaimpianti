@@ -36,6 +36,8 @@ export type SpesaRiga = {
   fotoMime: string | null;
   hasFile: boolean;
   numeroPersone: number;
+  /** 'in_elaborazione' = analisi AI in cloud in corso; 'bozza' = da verificare. */
+  stato?: 'bozza' | 'confermata' | 'in_elaborazione' | null;
 };
 
 export type CantiereOption = { id: string; nome: string };
@@ -166,15 +168,24 @@ export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId
                 >
                   {/* Costo + IVA + persone */}
                   <td className="whitespace-nowrap px-3 py-1.5 align-middle">
-                    <span className="tabular-nums font-semibold text-foreground">
-                      {fmtValuta(s.importoTotale, s.valuta)}
-                    </span>
-                    <PersoneBadge numero={s.numeroPersone} className="ml-2 align-middle" />
-                    {typeof s.importoIva === 'number' && Number.isFinite(s.importoIva) ? (
-                      <span className="ml-2 tabular-nums text-xs text-muted-foreground">
-                        IVA {fmtValuta(s.importoIva, s.valuta)}
+                    {s.stato === 'in_elaborazione' ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.06] px-2 py-0.5 text-xs font-medium text-primary">
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                        In elaborazione
                       </span>
-                    ) : null}
+                    ) : (
+                      <>
+                        <span className="tabular-nums font-semibold text-foreground">
+                          {fmtValuta(s.importoTotale, s.valuta)}
+                        </span>
+                        <PersoneBadge numero={s.numeroPersone} className="ml-2 align-middle" />
+                        {typeof s.importoIva === 'number' && Number.isFinite(s.importoIva) ? (
+                          <span className="ml-2 tabular-nums text-xs text-muted-foreground">
+                            IVA {fmtValuta(s.importoIva, s.valuta)}
+                          </span>
+                        ) : null}
+                      </>
+                    )}
                   </td>
 
                   {/* Data */}

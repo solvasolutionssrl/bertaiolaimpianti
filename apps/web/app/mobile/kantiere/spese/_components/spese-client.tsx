@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Receipt, ChevronRight } from 'lucide-react';
+import { Receipt, ChevronRight, Loader2 } from 'lucide-react';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { CATEGORIA_META } from '@/app/_components/spese/categoria';
@@ -25,6 +25,8 @@ export type SpesaRiga = {
   hasFile: boolean;
   fotoMime: string | null;
   numeroPersone: number;
+  /** 'in_elaborazione' = foto caricata, AI in cloud; 'bozza' = da verificare. */
+  stato?: 'bozza' | 'confermata' | 'in_elaborazione' | null;
 };
 
 function formatImporto(importo: number | null, valuta: string | null): string {
@@ -149,6 +151,7 @@ export function SpeseClient({
               const meta = CATEGORIA_META[s.categoria];
               const cantiereNome = s.cantiereId ? cantieriNomi[s.cantiereId] : null;
               const data = formatData(s.dataScontrino ?? s.createdAt);
+              const inElab = s.stato === 'in_elaborazione';
               return (
                 <li
                   key={s.id}
@@ -173,10 +176,15 @@ export function SpeseClient({
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {s.ragioneSociale || 'Spesa'}
+                      {s.ragioneSociale || (inElab ? 'Ricevuta caricata' : 'Spesa')}
                     </p>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {meta ? (
+                      {inElab ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.06] px-2 py-0.5 text-[11px] font-medium text-primary">
+                          <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                          In elaborazione…
+                        </span>
+                      ) : meta ? (
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.badge}`}
                         >
@@ -193,11 +201,17 @@ export function SpeseClient({
                   <div className="flex shrink-0 items-center gap-1.5">
                     <div className="text-right">
                       <p className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatImporto(s.importoTotale, s.valuta)}
+                        {inElab && s.importoTotale == null ? (
+                          <span className="text-xs font-medium text-muted-foreground">In analisi</span>
+                        ) : (
+                          formatImporto(s.importoTotale, s.valuta)
+                        )}
                       </p>
-                      <div className="mt-1 flex justify-end">
-                        <PersoneBadge numero={s.numeroPersone} />
-                      </div>
+                      {!inElab ? (
+                        <div className="mt-1 flex justify-end">
+                          <PersoneBadge numero={s.numeroPersone} />
+                        </div>
+                      ) : null}
                     </div>
                     <ChevronRight
                       className="h-4 w-4 shrink-0 text-muted-foreground/50"

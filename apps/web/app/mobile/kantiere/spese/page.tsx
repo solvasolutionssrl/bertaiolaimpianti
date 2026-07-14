@@ -12,6 +12,8 @@ import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { guardMobile } from '../../_lib/guard';
 import { NuovaSpesa } from './_components/nuova-spesa';
 import { SpeseClient, type SpesaRiga } from './_components/spese-client';
+import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
+import { mioTurnoAttivo } from '../_lib/turno-attivo';
 
 export const metadata: Metadata = {
   title: 'Le mie spese',
@@ -37,20 +39,19 @@ export default async function SpeseMobilePage() {
     .maybeSingle();
   const dipId = (dipRow as { id: string } | null)?.id ?? null;
 
-  // Admin/office non timbrano → aggiungono spese scegliendo il cantiere
-  // (creaSpesaOffice). Caricare le opzioni cantiere solo per loro.
   const isManager = ctx.role === 'admin' || ctx.role === 'office';
-  let cantieriOpts: { id: string; nome: string }[] = [];
-  if (isManager) {
-    const { data } = await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .eq('tenant_id', ctx.tenantId)
-      .order('nome', { ascending: true });
-    cantieriOpts = ((data as { id: string; nome: string | null; codice: string | null }[] | null) ?? []).map(
-      (c) => ({ id: c.id, nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere' }),
-    );
-  }
+
+  // Nuovo flusso: prima si sceglie il cantiere (ricerca) → serve la lista picker
+  // a TUTTI. Se c'è un turno aperto, lo si preseleziona. `cantieriOpts` (formato
+  // semplice) alimenta il picker di modifica del dettaglio (solo manager).
+  const [cantieriPicker, turno] = await Promise.all([
+    elencoCantieriPicker(ctx.tenantId),
+    mioTurnoAttivo(),
+  ]);
+  const cantieriOpts = cantieriPicker.map((c) => ({
+    id: c.id,
+    nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere',
+  }));
 
   let spese: SpesaRiga[] = [];
   const cantieriNomi: Record<string, string> = {};
@@ -59,7 +60,7 @@ export default async function SpeseMobilePage() {
     const { data: rows } = await supabase
       .from('spese' as never)
       .select(
-        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone',
+        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone, stato',
       )
       .eq('tenant_id', ctx.tenantId)
       .eq('dipendente_id', dipId)
@@ -83,6 +84,7 @@ export default async function SpeseMobilePage() {
             r2_key: string | null;
             foto_mime: string | null;
             numero_persone: number | null;
+            stato: string | null;
           }[]
         | null) ?? [];
 
@@ -103,6 +105,7 @@ export default async function SpeseMobilePage() {
       hasFile: !!r.r2_key,
       fotoMime: r.foto_mime,
       numeroPersone: r.numero_persone ?? 1,
+      stato: (r.stato as SpesaRiga['stato']) ?? null,
     }));
 
     // Risolvi i nomi dei cantieri referenziati.
@@ -147,7 +150,11 @@ export default async function SpeseMobilePage() {
           nome. Chiedi in ufficio di collegarti.
         </p>
       ) : (
-        <NuovaSpesa adminMode={isManager} cantieri={cantieriOpts} dipendenteId={dipId} />
+        <NuovaSpesa
+          cantieri={cantieriPicker}
+          turnoCantiereId={turno?.cantiereId ?? null}
+          turnoCantiereNome={turno?.cantiereNome ?? null}
+        />
       )}
 
       <SpeseClient

@@ -29,6 +29,7 @@ import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
 import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
 import { NuovaSpesa } from '../spese/_components/nuova-spesa';
+import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
 
 export const metadata: Metadata = { title: 'Cruscotto Kantiere' };
 export const dynamic = 'force-dynamic';
@@ -163,12 +164,8 @@ export default async function CruscottoKantierePage({
   };
   const cantMap = new Map(cantieri.map((c) => [c.id, cantLabel(c)]));
 
-  // Profilo dipendente dell'admin (per registrare spese a proprio nome) +
-  // opzioni cantiere per il picker admin.
+  // Profilo dipendente dell'admin (per registrare spese a proprio nome).
   const mioDip = dipendenti.find((d) => d.user_id === ctx.userId)?.id ?? null;
-  const cantieriOpts = cantieri
-    .map((c) => ({ id: c.id, nome: titoloCase(c.nome || c.codice || 'Cantiere') }))
-    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   // Turno attivo dell'admin/office (se timbra anche lui): in cima al cruscotto
   // la stessa card verde "Turno in corso" delle sue Ore — promemoria + accesso
@@ -177,6 +174,10 @@ export default async function CruscottoKantierePage({
   const mioTurnoAzioni = mioTurno
     ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, mioTurno.cantiereId)
     : null;
+
+  // Lista cantieri (formato picker) per la nuova spesa — solo se ha un profilo
+  // dipendente (altrimenti la pill non compare).
+  const cantieriPicker = mioDip ? await elencoCantieriPicker(ctx.tenantId) : [];
 
   // Nomi di chi ha inserito le timbrature (per "Inserita a mano · da …").
   const creatoNomeMap = new Map<string, string>();
@@ -426,9 +427,9 @@ export default async function CruscottoKantierePage({
       {mioDip ? (
         <div className="grid grid-cols-2 gap-3 pt-1">
           <NuovaSpesa
-            adminMode
-            cantieri={cantieriOpts}
-            dipendenteId={mioDip}
+            cantieri={cantieriPicker}
+            turnoCantiereId={mioTurno?.cantiereId ?? null}
+            turnoCantiereNome={mioTurno?.cantiereNome ?? null}
             triggerVariant="quick"
           />
           <Link

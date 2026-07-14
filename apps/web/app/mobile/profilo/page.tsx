@@ -13,6 +13,9 @@ import { PushToggle } from './push-toggle';
 import { PreferenzeNotifiche, type PrefRow } from './preferenze-notifiche';
 import { SpesePanoramica } from '../kantiere/spese/_components/spese-panoramica';
 import type { SpesaRiga } from '../kantiere/spese/_components/spese-client';
+import { elencoCantieriPicker } from '../kantiere/_lib/cantieri-picker-data';
+import { mioTurnoAttivo } from '../kantiere/_lib/turno-attivo';
+import type { PickerCantiere } from '../kantiere/_components/cantiere-picker';
 
 export const metadata: Metadata = {
   title: 'Profilo',
@@ -81,6 +84,9 @@ export default async function ProfiloPage() {
   let mioDip: string | null = null;
   let ultimeSpese: SpesaRiga[] = [];
   let cantieriOpts: { id: string; nome: string }[] = [];
+  let cantieriPicker: PickerCantiere[] = [];
+  let turnoCantiereId: string | null = null;
+  let turnoCantiereNome: string | null = null;
   const cantieriNomiSpese: Record<string, string> = {};
   if (isKantiere && isManager) {
     const { data: dipRow } = await supabase
@@ -91,21 +97,18 @@ export default async function ProfiloPage() {
       .maybeSingle();
     mioDip = (dipRow as { id: string } | null)?.id ?? null;
     if (mioDip) {
-      const [speseRes, cantRes] = await Promise.all([
+      const [speseRes, cantieri, turno] = await Promise.all([
         supabase
           .from('spese' as never)
           .select(
-            'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone',
+            'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone, stato',
           )
           .eq('tenant_id', ctx.tenantId)
           .eq('dipendente_id', mioDip)
           .order('created_at', { ascending: false })
           .limit(3),
-        supabase
-          .from('cantieri' as never)
-          .select('id, nome, codice')
-          .eq('tenant_id', ctx.tenantId)
-          .order('nome', { ascending: true }),
+        elencoCantieriPicker(ctx.tenantId),
+        mioTurnoAttivo(),
       ]);
       ultimeSpese = ((speseRes.data as any[] | null) ?? []).map((r) => ({
         id: r.id,
@@ -124,14 +127,16 @@ export default async function ProfiloPage() {
         hasFile: !!r.r2_key,
         fotoMime: r.foto_mime,
         numeroPersone: r.numero_persone ?? 1,
+        stato: (r.stato as SpesaRiga['stato']) ?? null,
       }));
-      const cantRows =
-        (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [];
-      cantieriOpts = cantRows.map((c) => ({
+      cantieriPicker = cantieri;
+      turnoCantiereId = turno?.cantiereId ?? null;
+      turnoCantiereNome = turno?.cantiereNome ?? null;
+      cantieriOpts = cantieri.map((c) => ({
         id: c.id,
         nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere',
       }));
-      for (const c of cantRows) {
+      for (const c of cantieri) {
         cantieriNomiSpese[c.id] = c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere';
       }
     }
@@ -170,6 +175,9 @@ export default async function ProfiloPage() {
           cantieriNomi={cantieriNomiSpese}
           canEdit={isManager}
           cantieri={cantieriOpts}
+          cantieriPicker={cantieriPicker}
+          turnoCantiereId={turnoCantiereId}
+          turnoCantiereNome={turnoCantiereNome}
           dipendenteId={mioDip}
         />
       ) : null}

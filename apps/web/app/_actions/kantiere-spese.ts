@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { waitUntil } from '@vercel/functions';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
@@ -16,6 +17,7 @@ import {
 import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { chiaviSpeseValide } from '@/app/api/kantiere/spese/_lib/r2-spese';
+import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 import { mioTurnoAttivo } from '@/app/mobile/kantiere/_lib/turno-attivo';
 import {
@@ -456,6 +458,58 @@ export async function eliminaSpesa(id: string): Promise<Risultato> {
   });
   revalidatePath('/office/kantiere/kontabilita');
   revalidatePath('/mobile/kantiere/spese');
+  return { ok: true };
+}
+
+/**
+ * Ri-lancia l'analisi AII di una spesa (recovery per righe rimaste in
+ * 'in_elaborazione' se il task in background è morto, o per ri-leggere una
+ * ricevuta finita in 'bozza'). Permesso: office/admin/owner oppure il proprietario
+ * della spesa. Rimette lo stato a 'in_elaborazione' e processa in background.
+ */
+export async function rianalizzaSpesa(id: string): Promise<Risultato> {
+  if (!z.string().uuid().safeParse(id).success) return { ok: false, error: 'ID_NON_VALIDO' };
+  const ctx = await requireTenantContext();
+  if (!(await tenantHasModule('kantiere'))) return { ok: false, error: 'MODULO_ASSENTE' };
+
+  const service = createServiceSupabase();
+  const { data: row } = await service
+    .from('spese' as never)
+    .select('id, tenant_id, dipendente_id, r2_key')
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  const spesa = row as { id: string; dipendente_id: string; r2_key: string | null } | null;
+  if (!spesa) return { ok: false, error: 'NON_TROVATA' };
+  if (!spesa.r2_key) return { ok: false, error: 'FOTO_ASSENTE' };
+
+  const manager = ['owner', 'admin', 'office'].includes(ctx.role);
+  if (!manager) {
+    // Un tecnico può rianalizzare solo le PROPRIE spese.
+    const { data: mio } = await service
+      .from('dipendenti' as never)
+      .select('id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('user_id', ctx.userId)
+      .maybeSingle();
+    const mioDip = (mio as { id: string } | null)?.id;
+    if (!mioDip || mioDip !== spesa.dipendente_id) return { ok: false, error: 'NON_AUTORIZZATO' };
+  }
+
+  await service
+    .from('spese' as never)
+    .update({ stato: 'in_elaborazione', analisi_errore: null } as never)
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId);
+
+  waitUntil(
+    processSpesaAI({ tenantId: ctx.tenantId, spesaId: id }).catch(() => {
+      /* resta in elaborazione → riprovabile */
+    }),
+  );
+
+  revalidatePath('/mobile/kantiere/spese');
+  revalidatePath('/office/kantiere/kontabilita');
   return { ok: true };
 }
 

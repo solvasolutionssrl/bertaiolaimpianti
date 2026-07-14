@@ -5,9 +5,12 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { guardMobile } from '../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { getAppModeCached } from '@/app/_lib/app-mode';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { NotificheBell } from './_components/notifiche-bell';
 import { NuovaSpesa } from './spese/_components/nuova-spesa';
-import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { elencoCantieriPicker } from './_lib/cantieri-picker-data';
+import { mioTurnoAttivo } from './_lib/turno-attivo';
+import type { PickerCantiere } from './_components/cantiere-picker';
 
 /**
  * Layout della shell Kantiere mobile.
@@ -47,37 +50,38 @@ export default async function KantiereMobileLayout({
 
   // Admin/office con profilo dipendente: pill "＋ Spesa" fissa accanto alla
   // campanella → aggiunta spesa (con scelta cantiere) da QUALUNQUE pagina.
+  // Mostrata solo se il modulo Kontabilità è attivo.
   const isManager = ctx.role === 'admin' || ctx.role === 'office';
   let mioDip: string | null = null;
-  let cantieriOpts: { id: string; nome: string }[] = [];
-  if (isManager) {
-    const [dipRes, cantRes] = await Promise.all([
+  let cantieriPicker: PickerCantiere[] = [];
+  let turnoCantiereId: string | null = null;
+  let turnoCantiereNome: string | null = null;
+  const kontab = isManager ? await kontabilitaAttiva(supa, ctx.tenantId) : false;
+  if (isManager && kontab) {
+    const [dipRes, cantieri, turno] = await Promise.all([
       supa
         .from('dipendenti' as never)
         .select('id')
         .eq('tenant_id', ctx.tenantId)
         .eq('user_id', ctx.userId)
         .maybeSingle(),
-      supa
-        .from('cantieri' as never)
-        .select('id, nome, codice')
-        .eq('tenant_id', ctx.tenantId)
-        .order('nome', { ascending: true }),
+      elencoCantieriPicker(ctx.tenantId),
+      mioTurnoAttivo(),
     ]);
     mioDip = (dipRes.data as { id: string } | null)?.id ?? null;
-    cantieriOpts = ((cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? []).map(
-      (c) => ({ id: c.id, nome: c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere' }),
-    );
+    cantieriPicker = cantieri;
+    turnoCantiereId = turno?.cantiereId ?? null;
+    turnoCantiereNome = turno?.cantiereNome ?? null;
   }
 
   return (
     <>
       <NotificheBell unreadCount={unreadCount} />
-      {isManager && mioDip ? (
+      {isManager && kontab && mioDip ? (
         <NuovaSpesa
-          adminMode
-          cantieri={cantieriOpts}
-          dipendenteId={mioDip}
+          cantieri={cantieriPicker}
+          turnoCantiereId={turnoCantiereId}
+          turnoCantiereNome={turnoCantiereNome}
           triggerVariant="fab-top"
         />
       ) : null}

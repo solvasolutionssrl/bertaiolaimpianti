@@ -8,6 +8,7 @@ import { CATEGORIA_META } from '@/app/_components/spese/categoria';
 import { NuovaSpesa } from './nuova-spesa';
 import { SpesaDettaglio } from './spesa-dettaglio';
 import type { SpesaRiga } from './spese-client';
+import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 
 function fmtImporto(n: number | null, valuta: string | null): string {
   if (n == null) return '—';
@@ -40,12 +41,20 @@ export function SpesePanoramica({
   cantieriNomi,
   canEdit,
   cantieri,
+  cantieriPicker,
+  turnoCantiereId = null,
+  turnoCantiereNome = null,
   dipendenteId,
 }: {
   spese: SpesaRiga[];
   cantieriNomi: Record<string, string>;
   canEdit: boolean;
+  /** formato semplice per il picker di modifica del dettaglio */
   cantieri: { id: string; nome: string }[];
+  /** formato ricerca per la nuova spesa (cantiere prima della foto) */
+  cantieriPicker: PickerCantiere[];
+  turnoCantiereId?: string | null;
+  turnoCantiereNome?: string | null;
   dipendenteId: string | null;
 }) {
   const [sel, setSel] = React.useState<SpesaRiga | null>(null);
@@ -109,9 +118,9 @@ export function SpesePanoramica({
       {dipendenteId ? (
         <div className="mt-3">
           <NuovaSpesa
-            adminMode
-            cantieri={cantieri}
-            dipendenteId={dipendenteId}
+            cantieri={cantieriPicker}
+            turnoCantiereId={turnoCantiereId}
+            turnoCantiereNome={turnoCantiereNome}
             triggerVariant="quick"
           />
         </div>

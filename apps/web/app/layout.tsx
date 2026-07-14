@@ -44,10 +44,12 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
-  // maximumScale: 5 + userScalable: true → permette zoom accessibility
-  // (utenti con vista debole). Lighthouse a11y richiede questo per WCAG 2.1.
-  maximumScale: 5,
-  userScalable: true,
+  // Zoom DISABILITATO su tutte le superfici (mobile + office + portal, tutti i
+  // tenant). Scelta di prodotto per l'uso in cantiere: un pinch-zoom accidentale
+  // costringerebbe l'utente a "tornare indietro" col telefono sporco/guanti →
+  // in cantiere è un problema. Trade-off di accessibilità accettato dal cliente.
+  maximumScale: 1,
+  userScalable: false,
   // Estende il layout sotto il notch su iPhone PWA in standalone
   viewportFit: 'cover',
 };
