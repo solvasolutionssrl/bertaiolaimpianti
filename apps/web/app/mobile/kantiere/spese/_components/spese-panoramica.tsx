@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Receipt, ChevronRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Receipt, ChevronRight, Loader2 } from 'lucide-react';
 
 import { CATEGORIA_META } from '@/app/_components/spese/categoria';
 import { NuovaSpesa } from './nuova-spesa';
@@ -58,6 +59,17 @@ export function SpesePanoramica({
   dipendenteId: string | null;
 }) {
   const [sel, setSel] = React.useState<SpesaRiga | null>(null);
+  const router = useRouter();
+
+  // Se c'è almeno una spesa "in elaborazione" (foto caricata, AI ancora in
+  // corso), aggiorna la pagina ogni 30s: chi resta a guardare vede la spesa
+  // completarsi da sola senza dover ricaricare. Si ferma quando non ce ne sono più.
+  const inElabCount = spese.filter((s) => s.stato === 'in_elaborazione').length;
+  React.useEffect(() => {
+    if (inElabCount === 0) return;
+    const t = setInterval(() => router.refresh(), 30000);
+    return () => clearInterval(t);
+  }, [inElabCount, router]);
 
   return (
     <section className="rounded-xl border border-border bg-card p-4 shadow-soft">
@@ -77,39 +89,68 @@ export function SpesePanoramica({
 
       {spese.length > 0 ? (
         <ul className="mt-3 space-y-2">
-          {spese.map((s) => (
-            <li
-              key={s.id}
-              onClick={() => setSel(s)}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-background p-2.5 transition-transform active:scale-[0.99]"
-            >
-              <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-                {s.hasThumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={`/api/kantiere/spese/${s.id}/foto?size=thumb`}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
+          {spese.map((s) => {
+            const inElab = s.stato === 'in_elaborazione';
+            return (
+              <li
+                key={s.id}
+                onClick={() => setSel(s)}
+                className={
+                  'flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 transition-transform active:scale-[0.99] ' +
+                  (inElab ? 'border-primary/25 bg-primary/[0.05]' : 'border-border bg-background')
+                }
+              >
+                <div
+                  className={
+                    'h-11 w-11 shrink-0 overflow-hidden rounded-lg border bg-muted/40 ' +
+                    (inElab ? 'border-primary/25' : 'border-border')
+                  }
+                >
+                  {s.hasThumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/kantiere/spese/${s.id}/foto?size=thumb`}
+                      alt=""
+                      className={'h-full w-full object-cover ' + (inElab ? 'opacity-70' : '')}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-muted-foreground">
+                      <Receipt className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  {inElab ? (
+                    <>
+                      <p className="truncate text-sm font-semibold text-primary">In elaborazione…</p>
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                        Analisi in corso
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {s.ragioneSociale || CATEGORIA_META[s.categoria]?.label || 'Spesa'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {fmtData(s.dataScontrino ?? s.createdAt)}
+                      </p>
+                    </>
+                  )}
+                </div>
+                {inElab ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center text-muted-foreground">
-                    <Receipt className="h-4 w-4" aria-hidden="true" />
+                  <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                    {fmtImporto(s.importoTotale, s.valuta)}
                   </span>
                 )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {s.ragioneSociale || CATEGORIA_META[s.categoria]?.label || 'Spesa'}
-                </p>
-                <p className="text-xs text-muted-foreground">{fmtData(s.dataScontrino ?? s.createdAt)}</p>
-              </div>
-              <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
-                {fmtImporto(s.importoTotale, s.valuta)}
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden="true" />
-            </li>
-          ))}
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden="true" />
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">Nessuna spesa registrata.</p>

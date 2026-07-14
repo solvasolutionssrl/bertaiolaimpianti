@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { Receipt, ChevronRight, Loader2 } from 'lucide-react';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
@@ -124,6 +125,16 @@ export function SpeseClient({
   yesterdayKey: string;
 }) {
   const [dettaglio, setDettaglio] = React.useState<SpesaRiga | null>(null);
+  const router = useRouter();
+
+  // Auto-refresh ogni 30s finché una spesa è "in elaborazione": chi resta a
+  // guardare vede la ricevuta compilarsi da sola. Si ferma quando non ce ne sono.
+  const inElabCount = spese.filter((s) => s.stato === 'in_elaborazione').length;
+  React.useEffect(() => {
+    if (inElabCount === 0) return;
+    const t = setInterval(() => router.refresh(), 30000);
+    return () => clearInterval(t);
+  }, [inElabCount, router]);
 
   if (spese.length === 0) {
     return (

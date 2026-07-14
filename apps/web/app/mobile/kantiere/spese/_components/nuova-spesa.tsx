@@ -13,6 +13,7 @@ import {
   Cloud,
   MapPin,
   ChevronLeft,
+  ArrowRight,
   X,
 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -309,7 +310,9 @@ export function NuovaSpesa({
             </div>
           )}
 
-          {/* footer: continua (con nome cantiere) + assegna dopo */}
+          {/* footer: "Continua" (freccia sempre visibile, nome cantiere troncato)
+              + assegna dopo. "Continua" e la freccia non si spostano mai: per i
+              nomi lunghi tronca SOLO il nome, così l'azione resta leggibile. */}
           <div className="shrink-0 border-t border-border px-4 pb-3 pt-2">
             <Button
               type="button"
@@ -318,7 +321,21 @@ export function NuovaSpesa({
               disabled={!cantiereId}
               onClick={() => setFase('foto')}
             >
-              {cantiereId ? `Continua · ${nomeCantiereScelto ?? 'Cantiere'}` : 'Scegli un cantiere'}
+              {cantiereId ? (
+                <span className="flex w-full items-center gap-1.5">
+                  <span className="shrink-0">Continua</span>
+                  {nomeCantiereScelto ? (
+                    <span className="min-w-0 flex-1 truncate text-left text-sm font-normal text-primary-foreground/85">
+                      · {nomeCantiereScelto}
+                    </span>
+                  ) : (
+                    <span className="flex-1" />
+                  )}
+                  <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+                </span>
+              ) : (
+                'Scegli un cantiere'
+              )}
             </Button>
             <button
               type="button"
