@@ -342,12 +342,14 @@ function OfficeShell({
   );
 
   return (
-    <div className={cn('flex min-h-screen flex-col bg-background', className)}>
-      {/* Sticky top: righetta brand + header INSIEME in un solo contenitore
-          sticky. Prima la righetta era fuori dallo sticky → scrollando scorreva
-          via e l'header (sticky top-0) saliva di 2px, lasciando una lineetta
-          grigia sotto. Ora restano agganciati a top:0 senza gap. */}
-      <div className="sticky top-0 z-30 shrink-0">
+    // App-shell ad altezza fissa: la shell occupa la viewport (h-screen) e NON
+    // scrolla; scrolla SOLO <main>. Così header e sidebar restano ancorati e la
+    // sidebar (con footer "Powered by SOLVA") non scorre mai via — robusto anche
+    // con `overflow-x: hidden` su html/body (che rompe `position: sticky`).
+    <div className={cn('flex h-screen flex-col overflow-hidden bg-background', className)}>
+      {/* Header (righetta brand + header) come figlio flex shrink-0 in cima:
+          resta fisso perché la colonna non scrolla (scrolla solo <main>). */}
+      <div className="z-30 shrink-0">
         <div aria-hidden="true" className="border-brand-line h-[2px] w-full" />
 
         {/* ===================== Header ===================== */}
@@ -479,11 +481,13 @@ function OfficeShell({
         </header>
       </div>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 min-h-0">
         {/* ===================== Sidebar (desktop) — cobalt-tinted ===================== */}
+        {/* h-full: riempie la riga (già alta viewport-header). Non serve più sticky:
+            è la shell a non scrollare, solo <main> scrolla. */}
         <aside
           className={cn(
-            'sticky top-[4.125rem] hidden h-[calc(100vh-4.125rem)] shrink-0 flex-col justify-between border-r border-border transition-[width] duration-200 md:flex md:shadow-[3px_0_16px_-8px_hsl(220_40%_30%/0.14)]',
+            'hidden h-full shrink-0 flex-col justify-between border-r border-border transition-[width] duration-200 md:flex md:shadow-[3px_0_16px_-8px_hsl(220_40%_30%/0.14)]',
             sidebarOpen ? 'w-64' : 'md:w-[72px]',
           )}
           style={{
@@ -491,7 +495,7 @@ function OfficeShell({
               'linear-gradient(180deg, hsl(220 60% 91%) 0%, hsl(220 52% 92%) 60%, hsl(28 78% 92%) 100%)',
           }}
         >
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {sidebarOpen ? (
               <div className="px-5 pb-3 pt-5">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -594,7 +598,7 @@ function OfficeShell({
                   Navigazione
                 </p>
               </div>
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto min-h-0">
                 {renderNav({ forceLabel: true })}
               </div>
               <div className="border-t border-border bg-muted/30 px-4 py-3">
@@ -615,8 +619,8 @@ function OfficeShell({
           </div>
         ) : null}
 
-        {/* ===================== Main ===================== */}
-        <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+        {/* ===================== Main (UNICA area che scrolla) ===================== */}
+        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas">
           <div className="mx-auto w-full max-w-[1760px] flex-1 px-4 py-5 md:px-7 md:py-6">
             {children}
           </div>
