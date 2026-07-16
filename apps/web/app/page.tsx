@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { HeroParallax } from './_components/hero-parallax';
 import {
+  MarketingNav,
+  MarketingFooter,
+  SectionHeading,
+} from './_components/marketing/chrome';
+import {
   ArrowRight,
   Mic,
   Camera,
@@ -19,22 +24,27 @@ import {
   MapPin,
   ListChecks,
   User,
+  ScanLine,
+  LifeBuoy,
+  Users,
+  QrCode,
+  Clock,
+  Receipt,
+  Route,
+  Radio,
 } from 'lucide-react';
 
 export const metadata = {
-  title: 'Kommessa · gestione commesse cantiere',
+  title: 'Kommessa · gestione commesse e cantiere',
   description:
-    'Sopralluogo vocale, foto/video dal cantiere, sync cloud, annotazioni e report. La suite SOLVA per impiantisti.',
+    'Sopralluogo vocale, foto/video dal cantiere, sync cloud, annotazioni e report. Con il modulo Kantiere: presenze col QR, ore, viaggi e note spese. La suite SOLVA per impiantisti.',
 };
 
 export default function RootPage() {
   return (
     <main className="relative isolate min-h-screen bg-aurora-brand pt-3">
       <div className="absolute inset-0 -z-10 bg-grid-radial opacity-[0.55]" aria-hidden />
-      {/* Fascia colorata al bordo top: riempie la striscia bianca tra il filo
-          brand e il mesh. Tinta brand blu↘pesca PIENA su tutta la larghezza
-          (niente stop quasi-bianco al centro), con una banda solida subito
-          sotto il filo che poi sfuma nel mesh. */}
+      {/* Fascia colorata al bordo top */}
       <div
         aria-hidden
         className="absolute inset-x-0 top-0 -z-10 h-40"
@@ -47,110 +57,28 @@ export default function RootPage() {
       />
       <HeroParallax />
 
-      {/* Filo brand sottile, inchiodato in cima alla viewport (resta su allo scroll) */}
-      <div
-        aria-hidden
-        className="border-brand-line fixed inset-x-0 top-0 z-50 h-[3px]"
-      />
+      {/* Filo brand sottile inchiodato in cima */}
+      <div aria-hidden className="border-brand-line fixed inset-x-0 top-0 z-50 h-[3px]" />
 
-      <SiteNav />
+      <MarketingNav active="commesse" />
 
       <Hero />
-
       <HeroShowcase />
-
       <TrustBar />
-
       <ComeFunziona />
-
       <Funzionalita />
-
       <PerChi />
-
+      <KantiereTeaser />
       <Architettura />
-
       <FinalCta />
 
-      <SiteFooter />
+      <MarketingFooter />
     </main>
   );
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  NAV                                                                     */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function SiteNav() {
-  return (
-    <nav className="sticky top-3 z-40 mx-3 flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-5 py-3 shadow-soft backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-background/55 sm:mx-auto sm:px-6">
-      <Link href="/" className="flex items-center gap-2.5">
-        <BrandMark />
-        <span className="flex flex-col leading-none">
-          <span className="text-base font-semibold tracking-tight">Kommessa</span>
-          <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-            suite SOLVA
-          </span>
-        </span>
-      </Link>
-
-      <div className="hidden items-center gap-7 text-sm md:flex">
-        <a
-          href="#come-funziona"
-          className="text-foreground/70 transition hover:text-foreground"
-        >
-          Come funziona
-        </a>
-        <a
-          href="#funzionalita"
-          className="text-foreground/70 transition hover:text-foreground"
-        >
-          Funzionalità
-        </a>
-        <a
-          href="#per-chi"
-          className="text-foreground/70 transition hover:text-foreground"
-        >
-          Per chi
-        </a>
-        <a
-          href="#architettura"
-          className="text-foreground/70 transition hover:text-foreground"
-        >
-          Garanzie
-        </a>
-      </div>
-
-      <Link
-        href="/login"
-        prefetch
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95"
-      >
-        Accedi
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
-    </nav>
-  );
-}
-
-function BrandMark() {
-  return (
-    <span
-      aria-hidden="true"
-      className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-lg shadow-glow-brand"
-      style={{
-        background:
-          'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--primary)) 55%, hsl(var(--accent)) 100%)',
-      }}
-    >
-      <span className="font-mono text-base font-bold tracking-tighter text-white">
-        K
-      </span>
-    </span>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  HERO                                                                    */
+/*  HERO                                                                     */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function Hero() {
@@ -178,9 +106,9 @@ function Hero() {
         className="mx-auto mt-6 max-w-2xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg animate-fade-up"
         style={{ animationDelay: '120ms' }}
       >
-        Dal sopralluogo dettato a voce alla consegna del report, in
-        un&apos;unica app. Ticket, fasi, foto da cantiere, documenti annotati.
-        Tutto sincronizzato in cloud, tutto pronto per l&apos;ufficio.
+        Dal sopralluogo dettato a voce alla consegna del report, in un&apos;unica
+        app. Ticket, fasi, foto da cantiere, documenti annotati. Tutto
+        sincronizzato in cloud, tutto pronto per l&apos;ufficio.
       </p>
 
       <div
@@ -224,7 +152,6 @@ function HeroShowcase() {
       aria-label="Esempio: dal dettato vocale alla commessa pronta"
     >
       <div className="relative animate-float-soft">
-        {/* alone brand dietro al pannello */}
         <div
           aria-hidden
           className="absolute -inset-4 -z-10 rounded-[2rem] bg-gradient-to-tr from-primary/10 via-transparent to-accent/15 blur-2xl"
@@ -270,8 +197,8 @@ function HeroShowcase() {
               </p>
 
               <p className="mt-3 rounded-xl rounded-tl-sm bg-muted/60 px-4 py-3 text-sm leading-relaxed text-foreground/90">
-                «Sopralluogo da Rossi, bagno al primo piano, rifacimento
-                impianto idrico, materiale da ordinare, tre giorni di lavoro.»
+                «Sopralluogo da Rossi, bagno al primo piano, rifacimento impianto
+                idrico, materiale da ordinare, tre giorni di lavoro.»
               </p>
             </div>
 
@@ -338,7 +265,7 @@ function HeroShowcase() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  TRUST BAR (loghi + claim sintetici)                                     */
+/*  TRUST BAR                                                                */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function TrustBar() {
@@ -363,7 +290,7 @@ function TrustBar() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  COME FUNZIONA — 4 step                                                  */
+/*  COME FUNZIONA — 4 step                                                   */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function ComeFunziona() {
@@ -406,10 +333,7 @@ function ComeFunziona() {
             key={n}
             className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 shadow-soft-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-soft-lg"
           >
-            <span
-              aria-hidden="true"
-              className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/60"
-            >
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/60">
               {n}
             </span>
             <div className="mt-3 inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary-soft text-primary">
@@ -417,10 +341,7 @@ function ComeFunziona() {
             </div>
             <h3 className="mt-4 text-base font-semibold tracking-tight">{title}</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
-            <span
-              aria-hidden="true"
-              className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-accent/0 transition group-hover:bg-accent/10"
-            />
+            <span className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-accent/0 transition group-hover:bg-accent/10" />
           </div>
         ))}
       </div>
@@ -429,41 +350,20 @@ function ComeFunziona() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  FUNZIONALITÀ — grid 6                                                   */
+/*  FUNZIONALITÀ — grid 9 (aggiornata)                                       */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function Funzionalita() {
   const items = [
-    {
-      icon: Mic,
-      title: 'Voce → commessa pronta',
-      body: 'Detti due frasi, l\'app capisce cliente, lavori, indirizzo. Tu confermi e parti.',
-    },
-    {
-      icon: CloudUpload,
-      title: 'Sync con il cloud aziendale',
-      body: 'Foto e video appaiono nel vostro cloud d\'ufficio entro un minuto, dove i ragazzi li cercano già.',
-    },
-    {
-      icon: Folder,
-      title: 'Cartelle senza pensieri',
-      body: 'Struttura creata in automatico per ogni commessa: foto per fase, documenti, materiali, chiusura.',
-    },
-    {
-      icon: PenLine,
-      title: 'Annota le foto in app',
-      body: 'Frecce, cerchi, evidenziatore e note direttamente sopra alle foto. Funziona con la penna iPad.',
-    },
-    {
-      icon: ImageIcon,
-      title: 'Galleria e PDF integrati',
-      body: 'Foto e video si aprono dentro l\'app con swipe. I PDF si scorrono pagina dopo pagina come un libro.',
-    },
-    {
-      icon: FileText,
-      title: 'Report con un click',
-      body: 'PDF di chiusura cantiere con foto, fasi e documenti. Pronto da inviare al cliente o all\'archivio.',
-    },
+    { icon: Mic, title: 'Voce → commessa pronta', body: 'Detti due frasi, l\'app capisce cliente, lavori, indirizzo. Tu confermi e parti.' },
+    { icon: CloudUpload, title: 'Sync con il cloud aziendale', body: 'Foto e video appaiono nel vostro cloud d\'ufficio entro un minuto, dove i ragazzi li cercano già.' },
+    { icon: Folder, title: 'Cartelle senza pensieri', body: 'Struttura creata in automatico per ogni commessa: foto per fase, documenti, materiali, chiusura.' },
+    { icon: PenLine, title: 'Annota le foto in app', body: 'Frecce, cerchi, evidenziatore e note sopra alle foto. Funziona con la penna dell\'iPad.' },
+    { icon: Sparkles, title: 'Riunioni con verbale AI', body: 'Registri la riunione di cantiere, l\'AI ne fa un verbale con decisioni e cose da fare.' },
+    { icon: ScanLine, title: 'Scansione documenti', body: 'Inquadri un documento e lo trasformi in PDF multipagina, pulito e già in cartella.' },
+    { icon: ImageIcon, title: 'Galleria e PDF integrati', body: 'Foto e video si aprono nell\'app con swipe. I PDF si sfogliano pagina dopo pagina.' },
+    { icon: LifeBuoy, title: 'Ticket e assistenza', body: 'Le richieste dei clienti diventano ticket, e da lì una commessa, senza perdere niente.' },
+    { icon: FileText, title: 'Report con un click', body: 'PDF di chiusura cantiere con foto, fasi e documenti. Pronto da inviare o archiviare.' },
   ];
   return (
     <section
@@ -485,7 +385,7 @@ function Funzionalita() {
         <SectionHeading
           eyebrow="Funzionalità"
           title="Tutto ciò che serve in cantiere, niente di più"
-          subtitle="Scelte fatte: dialogo con la voce, upload che reggono la rete debole, annotazioni reali, sync con quello che già usate."
+          subtitle="Dialogo con la voce, upload che reggono la rete debole, annotazioni reali, verbali AI e sync con quello che già usate."
         />
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map(({ icon: Icon, title, body }) => (
@@ -509,7 +409,7 @@ function Funzionalita() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  PER CHI                                                                 */
+/*  PER CHI                                                                  */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function PerChi() {
@@ -518,14 +418,14 @@ function PerChi() {
       icon: Building2,
       label: 'Ufficio',
       title: 'Visione completa, audit incluso',
-      body: 'Dashboard cross-tenant, tickets, report PDF, ricerca full-text, gestione utenti e quote.',
+      body: 'Dashboard, ticket, report PDF, ricerca full-text, gestione utenti e quote. Tutto tracciato.',
       tag: 'Web desktop',
     },
     {
       icon: HardHat,
       label: 'Capo cantiere',
       title: 'Apre la commessa in 30 secondi',
-      body: 'Voice intake, briefing iniziale come "verità sacrosanta", lista commesse ordinata sempre.',
+      body: 'Dettatura vocale, briefing iniziale come "verità sacrosanta", lista commesse sempre in ordine.',
       tag: 'PWA mobile',
     },
     {
@@ -537,45 +437,159 @@ function PerChi() {
     },
   ];
   return (
-    <section
-      id="per-chi"
-      className="relative"
-    >
+    <section id="per-chi" className="relative">
       <div className="mx-auto max-w-6xl px-6 py-20">
-      <SectionHeading
-        eyebrow="Per chi"
-        title="Tre ruoli, una sola fonte di verità"
-        subtitle="Stesso DB, stessa cartella, viste diverse. Niente sincronizzazioni manuali tra ufficio e cantiere."
-      />
-      <div className="mt-12 grid gap-4 md:grid-cols-3">
-        {profili.map(({ icon: Icon, label, title, body, tag }) => (
-          <div
-            key={label}
-            className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-soft-md transition hover:-translate-y-0.5 hover:shadow-soft-lg"
-          >
-            <div className="flex items-center justify-between">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <Icon className="h-5 w-5" />
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                {tag}
-              </span>
+        <SectionHeading
+          eyebrow="Per chi"
+          title="Tre ruoli, una sola fonte di verità"
+          subtitle="Stesso DB, stessa cartella, viste diverse. Niente sincronizzazioni manuali tra ufficio e cantiere."
+        />
+        <div className="mt-12 grid gap-4 md:grid-cols-3">
+          {profili.map(({ icon: Icon, label, title, body, tag }) => (
+            <div
+              key={label}
+              className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-soft-md transition hover:-translate-y-0.5 hover:shadow-soft-lg"
+            >
+              <div className="flex items-center justify-between">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                  <Icon className="h-5 w-5" />
+                </span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {tag}
+                </span>
+              </div>
+              <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-primary">{label}</p>
+              <h3 className="mt-1 text-lg font-semibold tracking-tight">{title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
             </div>
-            <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-primary">
-              {label}
-            </p>
-            <h3 className="mt-1 text-lg font-semibold tracking-tight">{title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  ARCHITETTURA — strip tech                                               */
+/*  KANTIERE TEASER — ponte verso /kantiere                                  */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+function KantiereTeaser() {
+  const pills = [
+    { icon: QrCode, label: 'Presenze col QR' },
+    { icon: Clock, label: 'Ore automatiche' },
+    { icon: Route, label: 'Viaggi e km' },
+    { icon: Receipt, label: 'Note spese AI' },
+    { icon: ListChecks, label: 'Pianificazione e personale' },
+  ];
+  return (
+    <section className="mx-auto max-w-6xl px-6 py-8">
+      <div
+        className="relative isolate overflow-hidden rounded-3xl border border-accent/30 p-8 shadow-soft-lg sm:p-10"
+        style={{ background: 'linear-gradient(135deg, hsl(28 100% 96%), hsl(32 28% 99%) 45%, hsl(220 90% 97%))' }}
+      >
+        <div
+          aria-hidden
+          style={{ background: 'radial-gradient(circle at 50% 50%, hsl(24 95% 58% / 0.16), transparent 70%)' }}
+          className="absolute -right-16 -top-16 -z-10 h-72 w-72 rounded-full blur-3xl"
+        />
+        <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          {/* copy */}
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent-soft-foreground">
+              <HardHat className="h-3.5 w-3.5" />
+              Pacchetto aggiuntivo
+            </span>
+            <h2 className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
+              Hai anche i cantieri da gestire?{' '}
+              <span className="text-brand-grad">Aggiungi Kantiere.</span>
+            </h2>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+              Presenze col QR, ore e straordinari calcolati da soli, viaggi e km,
+              mezzi, note spese con l&apos;AI, pianificazione e personale. Il
+              cantiere digitale, sullo stesso account delle commesse.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {pills.map(({ icon: Icon, label }) => (
+                <span
+                  key={label}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-3 py-1.5 text-xs font-medium text-foreground shadow-soft backdrop-blur"
+                >
+                  <Icon className="h-3.5 w-3.5 text-primary" />
+                  {label}
+                </span>
+              ))}
+            </div>
+            <Link
+              href="/kantiere"
+              className="group mt-6 inline-flex h-12 items-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95"
+            >
+              Scopri Kantiere
+              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+
+          {/* mini preview presenze (CSS-only) */}
+          <div className="relative">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card/90 shadow-soft-lg backdrop-blur">
+              <div className="flex items-center gap-2 border-b border-border/70 bg-muted/40 px-4 py-2.5">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Kantiere · presenze
+                </span>
+                <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-destructive/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-destructive">
+                  <span className="relative inline-flex h-1.5 w-1.5">
+                    <span className="absolute inset-0 animate-ping rounded-full bg-destructive/60" />
+                    <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
+                  </span>
+                  Live
+                </span>
+              </div>
+              <ul className="divide-y divide-border/60">
+                {[
+                  { n: 'Marco R.', c: 'Cantiere Belvedere', s: true },
+                  { n: 'Luca F.', c: 'Polo Logistico Est', s: true },
+                  { n: 'Simone T.', c: 'in viaggio · Scuola Manzoni', s: false },
+                ].map((p, i) => (
+                  <li key={p.n} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft font-mono text-[10px] font-bold text-primary">
+                      {p.n.split(/[\s.]+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join('')}
+                      {p.s && (
+                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-success animate-heartbeat" />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">{p.n}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{p.c}</span>
+                    </span>
+                    {p.s ? (
+                      <span className="flex h-4 items-end gap-0.5" aria-hidden>
+                        {[0.5, 0.85, 0.4, 0.7].map((h, j) => (
+                          <span
+                            key={j}
+                            className="w-0.5 rounded-full bg-success/50 animate-wave"
+                            style={{ height: `${Math.round(h * 15)}px`, animationDelay: `${(i * 4 + j) * 80}ms` }}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      <Route className="h-4 w-4 text-primary" />
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center gap-1.5 border-t border-border/70 bg-muted/30 px-4 py-2 text-[11px] text-muted-foreground">
+                <Radio className="h-3 w-3 text-primary" />
+                aggiornamento automatico
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  ARCHITETTURA — strip tech                                                */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function Architettura() {
@@ -593,7 +607,6 @@ function Architettura() {
       style={{ background: 'linear-gradient(180deg, hsl(221 39% 17%), hsl(223 43% 11%))' }}
       className="dark relative isolate overflow-hidden py-20 text-foreground"
     >
-      {/* atmosfera: parallasse tenue + griglia + filo brand */}
       <HeroParallax tone="dark" />
       <div className="absolute inset-0 -z-10 bg-grid opacity-[0.12]" aria-hidden />
       <div aria-hidden className="border-brand-line absolute inset-x-0 top-0 h-0.5" />
@@ -603,8 +616,8 @@ function Architettura() {
           eyebrow="Garanzie"
           title="Sicurezza, conformità e continuità del dato"
           subtitle="Costruita in Italia, ospitata in Europa. Tutti i dati restano dove devono restare, anche dopo la chiusura della commessa."
+          tone="dark"
         />
-
         <div className="mt-12 grid gap-2.5 sm:grid-cols-2">
           {garanzie.map((g) => (
             <div
@@ -622,7 +635,7 @@ function Architettura() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
-/*  FINAL CTA                                                               */
+/*  FINAL CTA                                                                */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 function FinalCta() {
@@ -636,168 +649,26 @@ function FinalCta() {
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
           Se hai già un account, apri l&apos;applicativo. Altrimenti scrivici per
-          una demo personalizzata sulla tua realtà cantieristica.
+          una demo personalizzata su commesse e cantiere.
         </p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-        <Link
-          href="/login"
-          prefetch
-          className="group inline-flex h-12 items-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95"
-        >
-          Apri l&apos;applicativo
-          <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-        </Link>
-        <a
-          href="https://solva.it"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex h-12 items-center gap-2 rounded-md border border-border bg-card/80 px-6 text-sm font-medium text-foreground backdrop-blur transition hover:bg-card"
-        >
-          Contattaci
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+          <Link
+            href="/login"
+            prefetch
+            className="group inline-flex h-12 items-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95"
+          >
+            Apri l&apos;applicativo
+            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+          </Link>
+          <Link
+            href="/contatti"
+            className="inline-flex h-12 items-center gap-2 rounded-md border border-border bg-card/80 px-6 text-sm font-medium text-foreground backdrop-blur transition hover:bg-card"
+          >
+            Contattaci
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
       </div>
     </section>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  FOOTER                                                                  */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function SiteFooter() {
-  return (
-    <footer className="mt-10 border-t border-border/70 bg-background/40 backdrop-blur">
-      <div className="mx-auto grid max-w-6xl gap-8 px-6 py-12 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="lg:col-span-2">
-          <div className="flex items-center gap-2.5">
-            <BrandMark />
-            <span className="flex flex-col leading-none">
-              <span className="text-base font-semibold tracking-tight">Kommessa</span>
-              <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-                suite SOLVA
-              </span>
-            </span>
-          </div>
-          <p className="mt-4 max-w-sm text-sm leading-relaxed text-muted-foreground">
-            La piattaforma di gestione commesse cantiere per impiantisti.
-            Costruita in Italia, ospitata in Europa, fatta per chi lavora
-            davvero sul campo.
-          </p>
-        </div>
-
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Prodotto
-          </p>
-          <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              <a href="#come-funziona" className="text-foreground/80 hover:text-foreground">
-                Come funziona
-              </a>
-            </li>
-            <li>
-              <a href="#funzionalita" className="text-foreground/80 hover:text-foreground">
-                Funzionalità
-              </a>
-            </li>
-            <li>
-              <a href="#per-chi" className="text-foreground/80 hover:text-foreground">
-                Per chi
-              </a>
-            </li>
-            <li>
-              <a href="#architettura" className="text-foreground/80 hover:text-foreground">
-                Garanzie
-              </a>
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Azienda
-          </p>
-          <ul className="mt-3 space-y-2 text-sm">
-            <li>
-              <a
-                href="https://solva.it"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-foreground/80 hover:text-foreground"
-              >
-                solva.it <ExternalLink className="h-3 w-3" />
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://impiantix.app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-foreground/80 hover:text-foreground"
-              >
-                impiantiX <ExternalLink className="h-3 w-3" />
-              </a>
-            </li>
-            <li>
-              <Link href="/login" className="text-foreground/80 hover:text-foreground">
-                Accedi
-              </Link>
-            </li>
-          </ul>
-        </div>
-      </div>
-
-      <div className="border-t border-border/60">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-2 px-6 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center">
-          <span>
-            © {new Date().getFullYear()} Solva Solutions S.r.l. · Tutti i diritti
-            riservati.
-          </span>
-          <span className="font-mono">
-            powered by{' '}
-            <a
-              href="https://solva.it"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground/80 hover:text-foreground"
-            >
-              SOLVA
-            </a>
-          </span>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  Section heading shared                                                  */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function SectionHeading({
-  eyebrow,
-  title,
-  subtitle,
-}: {
-  eyebrow: string;
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="mx-auto max-w-4xl text-center">
-      <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">
-        {eyebrow}
-      </p>
-      <h2 className="mx-auto mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
-        {title}
-      </h2>
-      {subtitle && (
-        <p className="mx-auto mt-3 max-w-2xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
-          {subtitle}
-        </p>
-      )}
-    </div>
   );
 }

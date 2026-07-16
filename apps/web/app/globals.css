@@ -367,7 +367,36 @@
   }
   .animate-float-soft { animation: float-soft 7s ease-in-out infinite; }
 
+  /* ===== Cantiere: vetrina "presenze live" e simulazioni ===== */
+  /* Linea di scansione verticale (scontrino → estrazione AI) */
+  @keyframes scan-sweep {
+    0%   { top: 4%;  opacity: 0; }
+    12%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { top: 96%; opacity: 0; }
+  }
+  .animate-scan-sweep { animation: scan-sweep 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+  /* Tratteggio in movimento (rotta km cantiere → cantiere) */
+  @keyframes dash-move { to { stroke-dashoffset: -32; } }
+  .animate-dash { stroke-dasharray: 6 7; animation: dash-move 1.1s linear infinite; }
+
+  /* Entrata riga feed timbrature (una alla volta) */
+  @keyframes feed-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-feed-in { animation: feed-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+  /* Battito "presente" (pallino verde che respira) */
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1);    opacity: 0.9; }
+    50%      { transform: scale(1.35); opacity: 1; }
+  }
+  .animate-heartbeat { animation: heartbeat 1.6s ease-in-out infinite; }
+
   @media (prefers-reduced-motion: reduce) {
-    .animate-wave, .animate-float-soft { animation: none; }
+    .animate-wave, .animate-float-soft, .animate-scan-sweep,
+    .animate-dash, .animate-feed-in, .animate-heartbeat { animation: none; }
   }
 }
