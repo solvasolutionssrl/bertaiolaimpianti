@@ -177,6 +177,30 @@
     -webkit-mask-image: radial-gradient(ellipse at 50% 0%, black 25%, transparent 65%);
             mask-image: radial-gradient(ellipse at 50% 0%, black 25%, transparent 65%);
   }
+
+  /* ===== Texture per spezzare i fondi piatti (vetrina) ===== */
+  /* Puntini blu su fondo chiaro */
+  .bg-dots {
+    background-image: radial-gradient(hsl(220 80% 40% / 0.16) 1.1px, transparent 1.3px);
+    background-size: 20px 20px;
+  }
+  /* Puntini arancio su fondo chiaro */
+  .bg-dots-accent {
+    background-image: radial-gradient(hsl(22 92% 54% / 0.18) 1.1px, transparent 1.3px);
+    background-size: 20px 20px;
+  }
+  /* Puntini chiari su fondo scuro (sezioni dark) */
+  .bg-dots-dark {
+    background-image: radial-gradient(hsl(0 0% 100% / 0.10) 1.1px, transparent 1.3px);
+    background-size: 22px 22px;
+  }
+  /* Griglia tecnica chiara su fondo scuro (blueprint) */
+  .bg-grid-dark {
+    background-image:
+      linear-gradient(to right, hsl(0 0% 100% / 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(0 0% 100% / 0.06) 1px, transparent 1px);
+    background-size: 42px 42px;
+  }
   .bg-aurora-brand {
     background:
       radial-gradient(900px 500px at 15% -10%, hsl(220 80% 92%) 0%, transparent 55%),

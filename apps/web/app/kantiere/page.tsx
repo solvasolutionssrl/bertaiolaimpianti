@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { ReactNode, CSSProperties } from 'react';
 import {
   ArrowRight,
   QrCode,
@@ -8,7 +9,6 @@ import {
   Truck,
   Receipt,
   CalendarDays,
-  Users,
   ShieldCheck,
   BadgeCheck,
   FileCheck,
@@ -24,10 +24,12 @@ import {
   Palmtree,
   Building2,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { MarketingShell, SectionHeading } from '../_components/marketing/chrome';
 import { PresenzeLive } from './_components/presenze-live';
 import { AppTimbrature } from './_components/app-timbrature';
+import { QrIngresso } from './_components/qr-ingresso';
 import {
   NotaSpeseAI,
   AnalisiCosti,
@@ -39,57 +41,181 @@ import {
 export const metadata = {
   title: 'Kantiere · presenze, cantieri e note spese · suite SOLVA',
   description:
-    'Il modulo cantiere di Kommessa: timbrature col QR, presenze in tempo reale, rapportino automatico, viaggi e km, mezzi, note spese con AI e sync col tuo gestionale.',
+    'Il modulo cantiere di Kommessa: il tecnico timbra col QR sulla porta del cantiere, e ore, viaggi, mezzi e note spese si compilano da soli. L’ufficio vede tutto in tempo reale.',
 };
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  Primitive di sezione: fondi alternati + texture per dare ritmo           */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+type Tone = 'aurora' | 'paper' | 'blue' | 'peach' | 'ink';
+type Tex = 'dots' | 'dotsAccent' | 'grid' | 'dotsDark' | 'gridDark';
+
+const TONE: Record<Tone, { style?: CSSProperties; extra?: string; border?: string; dark?: boolean }> = {
+  aurora: { extra: 'bg-aurora-brand' },
+  paper: { style: { background: 'linear-gradient(180deg, hsl(32 28% 98%), hsl(30 22% 96%))' } },
+  blue: {
+    style: { background: 'linear-gradient(160deg, hsl(220 42% 93%), hsl(214 44% 96%) 55%, hsl(220 36% 92%))' },
+    border: 'border-y border-primary/10',
+  },
+  peach: {
+    style: { background: 'linear-gradient(160deg, hsl(28 62% 95%), hsl(32 40% 97%) 52%, hsl(24 55% 93%))' },
+    border: 'border-y border-accent/15',
+  },
+  ink: {
+    style: { background: 'linear-gradient(180deg, hsl(221 45% 13%), hsl(223 48% 9%))' },
+    border: 'border-y border-white/10',
+    dark: true,
+  },
+};
+
+const TEX: Record<Tex, string> = {
+  dots: 'bg-dots opacity-70',
+  dotsAccent: 'bg-dots-accent opacity-70',
+  grid: 'bg-grid opacity-60',
+  dotsDark: 'bg-dots-dark',
+  gridDark: 'bg-grid-dark',
+};
+
+function Section({
+  tone = 'paper',
+  texture,
+  id,
+  children,
+  narrow,
+}: {
+  tone?: Tone;
+  texture?: Tex;
+  id?: string;
+  children: ReactNode;
+  narrow?: boolean;
+}) {
+  const cfg = TONE[tone];
+  return (
+    <section
+      id={id}
+      className={`relative isolate overflow-hidden ${cfg.dark ? 'dark ' : ''}${cfg.extra ?? ''} ${cfg.border ?? ''}`}
+      style={cfg.style}
+    >
+      {texture ? (
+        <div aria-hidden className={`pointer-events-none absolute inset-0 -z-10 ${TEX[texture]}`} />
+      ) : null}
+      {cfg.dark ? (
+        <>
+          <div
+            aria-hidden
+            style={{ background: 'radial-gradient(circle at 30% 30%, hsl(218 92% 55% / 0.22), transparent 60%)' }}
+            className="absolute -left-24 -top-24 -z-10 h-96 w-96 rounded-full blur-3xl"
+          />
+          <div
+            aria-hidden
+            style={{ background: 'radial-gradient(circle at 60% 40%, hsl(24 95% 55% / 0.16), transparent 60%)' }}
+            className="absolute -bottom-16 -right-16 -z-10 h-80 w-80 rounded-full blur-3xl"
+          />
+        </>
+      ) : null}
+      <div className={`mx-auto ${narrow ? 'max-w-4xl' : 'max-w-6xl'} px-6 py-20 md:py-24`}>{children}</div>
+    </section>
+  );
+}
+
+function Split({ reverse, media, children }: { reverse?: boolean; media: ReactNode; children: ReactNode }) {
+  return (
+    <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
+      <div className={reverse ? 'lg:order-2' : ''}>{children}</div>
+      <div className={reverse ? 'lg:order-1' : ''}>{media}</div>
+    </div>
+  );
+}
+
+function Copy({
+  eyebrow,
+  title,
+  body,
+  bullets,
+  tone = 'light',
+  children,
+}: {
+  eyebrow: string;
+  title: ReactNode;
+  body: string;
+  bullets?: string[];
+  tone?: 'light' | 'dark';
+  children?: ReactNode;
+}) {
+  return (
+    <div>
+      <p className={`font-mono text-[11px] uppercase tracking-[0.18em] ${tone === 'dark' ? 'text-accent' : 'text-primary'}`}>
+        {eyebrow}
+      </p>
+      <h2 className="mt-2 text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
+      <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground sm:text-base">{body}</p>
+      {bullets ? (
+        <ul className="mt-5 space-y-2.5">
+          {bullets.map((b) => (
+            <li key={b} className="flex items-start gap-2.5 text-sm text-foreground/90">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
 
 export default function KantierePage() {
   return (
     <MarketingShell active="cantiere">
       <Hero />
-      <PresenzeSection />
-      <TrustStrip />
-      <ComeFunziona />
-      <BadgeCantiere />
-      <Kontabilita />
+      <ComeFunzionaQr />
+      <Presenze />
+      <OreRapportino />
       <ViaggiMezzi />
-      <PianificazionePersonale />
-      <Funzionalita />
+      <Kontabilita />
+      <Pianificazione />
+      <TuttoIncluso />
+      <BadgeCantiere />
       <Bundle />
       <FinalCta />
     </MarketingShell>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  HERO                                                                     */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ── HERO ─────────────────────────────────────────────────────────────── */
 
 function Hero() {
+  const trust = [
+    { icon: QrCode, label: 'Timbratura col QR di cantiere' },
+    { icon: Radio, label: 'Presenze in tempo reale' },
+    { icon: Clock, label: 'Ore e straordinari automatici' },
+    { icon: ShieldCheck, label: 'Dati in Europa, conforme GDPR' },
+  ];
   return (
-    <section className="mx-auto max-w-4xl px-6 pb-10 pt-16 text-center sm:pt-24">
+    <section className="mx-auto max-w-4xl px-6 pb-14 pt-16 text-center sm:pt-24">
       <div className="animate-fade-up">
         <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent-soft-foreground">
           <HardHat className="h-3.5 w-3.5" />
           Pacchetto aggiuntivo · presenze e cantiere
         </span>
       </div>
-
       <h1
         className="mt-7 text-balance text-5xl font-semibold tracking-tighter text-foreground sm:text-6xl md:text-[4.7rem] md:leading-[1.02] animate-fade-up"
         style={{ animationDelay: '60ms' }}
       >
         Il cantiere che si <span className="text-brand-grad">racconta da solo.</span>
       </h1>
-
       <p
         className="mx-auto mt-6 max-w-2xl text-balance text-base leading-relaxed text-muted-foreground sm:text-lg animate-fade-up"
         style={{ animationDelay: '120ms' }}
       >
-        Chi c&apos;è, dove, da che ora. Timbrature col QR, ore e straordinari
-        calcolati da soli, viaggi e km, mezzi e note spese: tutto in tempo reale,
-        tutto pronto per l&apos;ufficio.
+        Il tecnico arriva, inquadra il QR affisso alla porta del cantiere e il
+        turno parte. Ore, viaggi e note spese si compilano da soli, e l&apos;ufficio
+        vede tutto in tempo reale.
       </p>
-
       <div
         className="mt-9 flex flex-wrap items-center justify-center gap-3 animate-fade-up"
         style={{ animationDelay: '180ms' }}
@@ -101,46 +227,17 @@ function Hero() {
           Richiedi una demo
           <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
         </Link>
-        <Link
-          href="/"
+        <a
+          href="#come-funziona"
           className="inline-flex h-12 items-center gap-2 rounded-md border border-border bg-card/80 px-6 text-sm font-medium text-foreground backdrop-blur transition hover:bg-card"
         >
-          Torna a Commesse
-        </Link>
+          Guarda come funziona
+        </a>
       </div>
-    </section>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  PRESENZE LIVE (showcase)                                                 */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function PresenzeSection() {
-  return (
-    <section
-      className="mx-auto max-w-5xl px-6 pb-16 animate-fade-up"
-      style={{ animationDelay: '240ms' }}
-      aria-label="Presenze in cantiere in tempo reale"
-    >
-      <PresenzeLive />
-    </section>
-  );
-}
-
-function TrustStrip() {
-  const items = [
-    { icon: QrCode, label: 'Timbratura col QR di cantiere' },
-    { icon: Radio, label: 'Presenze in tempo reale' },
-    { icon: Clock, label: 'Ore e straordinari automatici' },
-    { icon: ShieldCheck, label: 'Posizione verificata · GDPR' },
-  ];
-  return (
-    <section className="mx-auto max-w-6xl px-6 pb-8">
-      <div className="flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-xs text-muted-foreground">
-        {items.map(({ icon: Icon, label }) => (
+      <div className="mt-12 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-xs text-muted-foreground">
+        {trust.map(({ icon: Icon, label }) => (
           <span key={label} className="inline-flex items-center gap-1.5">
-            <Icon className="h-3.5 w-3.5 text-primary/80" aria-hidden="true" />
+            <Icon className="h-3.5 w-3.5 text-primary/80" aria-hidden />
             {label}
           </span>
         ))}
@@ -149,86 +246,229 @@ function TrustStrip() {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  COME FUNZIONA — 4 step                                                   */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ── COME FUNZIONA · IL QR (dark) ─────────────────────────────────────── */
 
-function ComeFunziona() {
+function ComeFunzionaQr() {
   const steps = [
-    {
-      n: '01',
-      icon: QrCode,
-      title: 'Timbra col QR (o dall’app)',
-      body: 'Il tecnico inquadra il QR del cantiere o avvia il turno dall’app. Ingresso, pausa, uscita: un tap.',
-    },
-    {
-      n: '02',
-      icon: Clock,
-      title: 'Ore in automatico',
-      body: 'Le timbrature diventano il rapportino della giornata: ore ordinarie, straordinari e pause. Se torna, si approva da solo.',
-    },
-    {
-      n: '03',
-      icon: Route,
-      title: 'Viaggi, km e mezzi',
-      body: 'Ogni tratta sede/cantiere e cantiere/cantiere calcola km e tempo reali, con autista e mezzo assegnato.',
-    },
-    {
-      n: '04',
-      icon: Receipt,
-      title: 'Note spese e report',
-      body: 'Foto dello scontrino, l’AI compila la spesa e la aggancia al cantiere. Costi e report pronti per l’ufficio.',
-    },
+    { n: '1', t: 'Arrivi in cantiere', d: 'Apri l’app Kantiere sul telefono. Bastano pochi secondi.' },
+    { n: '2', t: 'Inquadri il QR sulla porta', d: 'Un adesivo con il codice è affisso all’ingresso del cantiere.' },
+    { n: '3', t: 'Ingresso registrato', d: 'Il turno parte e l’ora viene segnata. A fine giornata, lo stesso QR per l’uscita.' },
   ];
   return (
-    <section id="come-funziona-cantiere" className="mx-auto max-w-6xl px-6 py-20">
+    <Section tone="ink" texture="gridDark" id="come-funziona">
       <SectionHeading
-        eyebrow="Workflow"
-        title="Dal QR di cantiere al costo del lavoro, senza carta"
-        subtitle="Il tecnico timbra e fotografa. Tutto il resto (ore, viaggi, spese, report) si compila da solo."
+        eyebrow="Come funziona"
+        title="Tutto parte da un QR sulla porta del cantiere"
+        subtitle="Niente tessere da ricordare, niente carta. Il codice è affisso all’ingresso: si inquadra e si è dentro."
+        tone="dark"
       />
-      <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {steps.map(({ n, icon: Icon, title, body }) => (
-          <div
-            key={n}
-            className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 shadow-soft-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-soft-lg"
-          >
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/60">
-              {n}
-            </span>
-            <div className="mt-3 inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary-soft text-primary">
-              <Icon className="h-5 w-5" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold tracking-tight">{title}</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
-            <span className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-accent/0 transition group-hover:bg-accent/10" />
+      <div className="mt-14">
+        <Split media={<QrIngresso />}>
+          <ol className="space-y-5">
+            {steps.map((s) => (
+              <li key={s.n} className="flex gap-4">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent font-mono text-sm font-bold text-accent-foreground shadow-glow-brand">
+                  {s.n}
+                </span>
+                <div>
+                  <p className="text-lg font-semibold tracking-tight text-foreground">{s.t}</p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{s.d}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-7 inline-flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-foreground/90 backdrop-blur">
+            <Radio className="h-4 w-4 shrink-0 text-accent" />
+            E l&apos;ufficio lo vede all&apos;istante, senza chiamare nessuno.
           </div>
-        ))}
+        </Split>
       </div>
-    </section>
+    </Section>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  IL BADGE DI CANTIERE — normativa (copy accurato)                         */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ── PRESENZE LIVE (paper) ────────────────────────────────────────────── */
+
+function Presenze() {
+  return (
+    <Section tone="paper" texture="dots">
+      <SectionHeading
+        eyebrow="In tempo reale"
+        title="Chi c’è, dove, da che ora"
+        subtitle="Appena un tecnico timbra, compare sul cruscotto dell’ufficio. Presenze, cantieri attivi e ore lavorate si aggiornano da soli."
+      />
+      <div className="mx-auto mt-12 max-w-3xl">
+        <PresenzeLive />
+      </div>
+    </Section>
+  );
+}
+
+/* ── ORE E RAPPORTINO (blue, split) ───────────────────────────────────── */
+
+function OreRapportino() {
+  return (
+    <Section tone="blue">
+      <Split media={<AppTimbrature />}>
+        <Copy
+          eyebrow="Ore e rapportino"
+          title="Le ore si calcolano da sole"
+          body="Dalle timbrature nasce il rapportino della giornata: ore ordinarie, straordinari e pause, senza fogli da compilare a mano."
+          bullets={[
+            'Straordinari e pause calcolati in automatico',
+            'Le giornate regolari si approvano da sole',
+            'Ogni correzione dell’ufficio resta tracciata',
+          ]}
+        />
+      </Split>
+    </Section>
+  );
+}
+
+/* ── VIAGGI E MEZZI (paper, split reverse) ────────────────────────────── */
+
+function ViaggiMezzi() {
+  return (
+    <Section tone="paper" texture="grid">
+      <Split reverse media={<PercorsiGiornata />}>
+        <Copy
+          eyebrow="Viaggi e mezzi"
+          title="I chilometri della giornata, senza doverli chiedere"
+          body="Ogni tratta tra la sede e il cantiere, e tra un cantiere e l’altro, calcola distanza e tempo reali. Con autista e mezzo assegnato."
+          bullets={[
+            'Distanza e tempo calcolati con il traffico',
+            'Trasferimenti tra cantieri sempre tracciati',
+            'Un mezzo e un autista per ogni squadra',
+          ]}
+        />
+      </Split>
+      <div className="mt-14">
+        <p className="mb-4 inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
+          <Truck className="h-4 w-4 text-primary" /> Il parco mezzi, sempre aggiornato
+        </p>
+        <MezziStrip />
+      </div>
+    </Section>
+  );
+}
+
+/* ── KONTABILITÀ (peach, split) ───────────────────────────────────────── */
+
+function Kontabilita() {
+  return (
+    <Section tone="peach">
+      <Split media={<NotaSpeseAI />}>
+        <Copy
+          eyebrow="Kontabilità"
+          title="Fotografi lo scontrino, il costo del cantiere si aggiorna"
+          body="L’AI legge la ricevuta, compila la nota spesa e la aggancia al cantiere del turno. L’ufficio vede subito quanto costa ogni lavoro."
+          bullets={[
+            'Fornitore, importo e categoria letti in automatico',
+            'Spesa agganciata al cantiere giusto',
+            'Costo pieno del cantiere, sempre aggiornato',
+          ]}
+        />
+      </Split>
+      <div className="mt-12 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
+        <AnalisiCosti />
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { icon: Wallet, k: 'Costo pieno del cantiere', v: 'Manodopera, materiali e mezzi' },
+            { icon: PieChart, k: 'Analisi per voce', v: 'Dove vanno i soldi' },
+            { icon: Receipt, k: 'Ricevute in ordine', v: 'Archivio con export ZIP' },
+            { icon: FileSpreadsheet, k: 'Export CSV', v: 'Pronto per il gestionale' },
+          ].map(({ icon: Icon, k, v }) => (
+            <div key={k} className="rounded-xl border border-border bg-card p-4 shadow-soft">
+              <Icon className="h-4 w-4 text-primary" />
+              <p className="mt-2 text-[13px] font-semibold tracking-tight">{k}</p>
+              <p className="text-xs text-muted-foreground">{v}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+/* ── PIANIFICAZIONE & PERSONALE (paper, split reverse) ────────────────── */
+
+function Pianificazione() {
+  return (
+    <Section tone="paper" texture="dots">
+      <Split reverse media={<PianificazioneSettimanale />}>
+        <Copy
+          eyebrow="Pianificazione e personale"
+          title="Chi va dove, questa settimana"
+          body="Assegni i tecnici ai cantieri con un colpo d’occhio, e la squadra vede il proprio programma direttamente dall’app."
+          bullets={[
+            'Pianificazione settimanale per ogni tecnico',
+            'Ferie e permessi che bloccano la pianificazione',
+            'Anagrafica dei dipendenti a portata di mano',
+          ]}
+        />
+      </Split>
+    </Section>
+  );
+}
+
+/* ── TUTTO INCLUSO (chip band, paper) ─────────────────────────────────── */
+
+function TuttoIncluso() {
+  const chips = [
+    { icon: QrCode, label: 'QR di cantiere' },
+    { icon: Radio, label: 'Presenze in tempo reale' },
+    { icon: Clock, label: 'Rapportino automatico' },
+    { icon: Route, label: 'Viaggi con km reali' },
+    { icon: Truck, label: 'Mezzi e autisti' },
+    { icon: Receipt, label: 'Note spese con AI' },
+    { icon: PieChart, label: 'Costo del cantiere' },
+    { icon: CalendarDays, label: 'Pianificazione settimanale' },
+    { icon: Palmtree, label: 'Ferie e permessi' },
+    { icon: MapPin, label: 'Trasferimenti tra cantieri' },
+    { icon: Upload, label: 'Import dei cantieri' },
+    { icon: RefreshCw, label: 'Sync col tuo gestionale' },
+  ];
+  return (
+    <Section tone="blue" narrow>
+      <div className="text-center">
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">Tutto incluso</p>
+        <h2 className="mx-auto mt-2 max-w-2xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
+          Dodici cose in meno di cui preoccuparsi
+        </h2>
+      </div>
+      <div className="mt-9 flex flex-wrap justify-center gap-2.5">
+        {chips.map(({ icon: Icon, label }) => (
+          <span
+            key={label}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-3.5 py-2 text-[13px] font-medium text-foreground shadow-soft backdrop-blur"
+          >
+            <Icon className="h-3.5 w-3.5 text-primary" />
+            {label}
+          </span>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+/* ── IL BADGE DI CANTIERE (dark, normativa) ───────────────────────────── */
 
 function BadgeCantiere() {
   const cards = [
     {
       icon: BadgeCheck,
       title: 'Tesserino di riconoscimento',
-      body: 'Ogni tecnico identificato con foto e dati, sempre a portata di controllo: l’obbligo previsto dall’art. 18 del D.Lgs. 81/2008.',
+      body: 'Ogni tecnico identificato con foto e dati, sempre a portata di controllo: l’obbligo dell’art. 18 del D.Lgs. 81/2008.',
     },
     {
       icon: ScanLine,
       title: 'Presenze e ore tracciate',
-      body: 'Chi entra, quando, su quale cantiere: la base documentale per la congruità della manodopera (DM 143/2021) su lavori pubblici e privati.',
+      body: 'Chi entra, quando e su quale cantiere: la base documentale per la congruità della manodopera (DM 143/2021).',
     },
     {
       icon: ShieldCheck,
       title: 'Verso il badge di cantiere',
-      body: 'Presenze automatiche e identificazione anticipano la logica del badge di cantiere introdotto dal DL 159/2025, che entra in uso in modo graduale.',
+      body: 'Presenze automatiche e identificazione anticipano la logica del badge di cantiere introdotto dal DL 159/2025, che sta entrando in uso in modo graduale.',
     },
     {
       icon: FileCheck,
@@ -237,236 +477,45 @@ function BadgeCantiere() {
     },
   ];
   return (
-    <section
-      style={{
-        background:
-          'linear-gradient(160deg, hsl(220 34% 88%), hsl(222 26% 92%) 48%, hsl(26 50% 90%))',
-      }}
-      className="relative isolate overflow-hidden border-y border-primary/15"
-    >
-      <div
-        aria-hidden
-        style={{ background: 'radial-gradient(circle at 50% 50%, hsl(218 92% 60% / 0.2), transparent 70%)' }}
-        className="absolute -left-24 -top-16 -z-10 h-80 w-80 rounded-full blur-3xl"
-      />
-      <div className="mx-auto max-w-6xl px-6 py-20">
-        <SectionHeading
-          eyebrow="Il badge di cantiere"
-          title="La legge chiede di sapere chi c’è in cantiere. Kantiere te lo dà."
-          subtitle="Identificazione, presenze e ore digitali: arrivi pronto agli obblighi di oggi e alla direzione che la normativa sta prendendo."
-        />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {cards.map(({ icon: Icon, title, body }) => (
-            <div
-              key={title}
-              className="rounded-xl border border-border bg-card p-5 shadow-soft-md transition hover:-translate-y-0.5 hover:shadow-soft-lg"
-            >
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                <Icon className="h-5 w-5" />
-              </span>
-              <h3 className="mt-4 text-sm font-semibold tracking-tight">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mx-auto mt-8 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
-          Kantiere è uno strumento gestionale: tiene in ordine i dati (identità,
-          presenze, ore, formazione) utili agli adempimenti, ma non rilascia né
-          sostituisce il tesserino, la patente a crediti o il DURC di congruità.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  KONTABILITÀ                                                              */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function Kontabilita() {
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
+    <Section tone="ink" texture="gridDark">
       <SectionHeading
-        eyebrow="Kontabilità"
-        title="Fotografi lo scontrino, il costo del cantiere si aggiorna"
-        subtitle="Le note spese si compilano da sole con l’AI e si agganciano al cantiere del turno. L’ufficio vede subito quanto costa ogni lavoro."
+        eyebrow="Il badge di cantiere"
+        title="La legge vuole sapere chi c’è in cantiere. Kantiere te lo dice."
+        subtitle="Identificazione, presenze e ore in formato digitale: sei in regola oggi e pronto alla direzione che la normativa sta prendendo."
+        tone="dark"
       />
-      <div className="mt-12 grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:items-start">
-        <div className="animate-float-soft">
-          <NotaSpeseAI />
-        </div>
-        <div className="space-y-5">
-          <AnalisiCosti />
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { icon: Wallet, k: 'Manodopera, materiali, mezzi', v: 'Costo pieno del cantiere' },
-              { icon: PieChart, k: 'Analisi per voce', v: 'Dove vanno i soldi' },
-              { icon: Receipt, k: 'Ricevute organizzate', v: 'Archivio con export ZIP' },
-              { icon: FileSpreadsheet, k: 'Export CSV', v: 'Pronto per il gestionale' },
-            ].map(({ icon: Icon, k, v }) => (
-              <div key={k} className="rounded-xl border border-border bg-card p-4 shadow-soft">
-                <Icon className="h-4 w-4 text-primary" />
-                <p className="mt-2 text-[13px] font-semibold tracking-tight">{k}</p>
-                <p className="text-xs text-muted-foreground">{v}</p>
-              </div>
-            ))}
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map(({ icon: Icon, title, body }) => (
+          <div
+            key={title}
+            className="rounded-xl border border-white/10 bg-white/[0.05] p-5 shadow-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.08]"
+          >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <Icon className="h-5 w-5" />
+            </span>
+            <h3 className="mt-4 text-sm font-semibold tracking-tight text-foreground">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
           </div>
-        </div>
+        ))}
       </div>
-    </section>
+      <p className="mx-auto mt-8 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
+        Kantiere è uno strumento gestionale: tiene in ordine i dati (identità,
+        presenze, ore, formazione) utili agli adempimenti, ma non rilascia né
+        sostituisce il tesserino, la patente a crediti o il DURC di congruità.
+      </p>
+    </Section>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  VIAGGI & MEZZI                                                           */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function ViaggiMezzi() {
-  return (
-    <section
-      className="relative isolate overflow-hidden border-y border-primary/10"
-      style={{ background: 'linear-gradient(180deg, hsl(210 40% 96%), hsl(32 28% 98%))' }}
-    >
-      <div className="mx-auto max-w-6xl px-6 py-20">
-        <SectionHeading
-          eyebrow="Viaggi e mezzi"
-          title="I percorsi della giornata, km e tempi al minuto"
-          subtitle="Ogni tratta sede/cantiere e cantiere/cantiere calcola distanza e durata reali (con il traffico). E dall’app il tecnico vede tutto in diretta."
-        />
-        <div className="mt-12 grid items-center gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <PercorsiGiornata />
-          <AppTimbrature />
-        </div>
-
-        <div className="mt-10">
-          <p className="mb-4 inline-flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Truck className="h-4 w-4 text-primary" /> Il parco mezzi, sempre aggiornato
-          </p>
-          <MezziStrip />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  PIANIFICAZIONE & PERSONALE                                               */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function PianificazionePersonale() {
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
-      <SectionHeading
-        eyebrow="Pianificazione e personale"
-        title="Chi va dove, questa settimana"
-        subtitle="Assegni i tecnici ai cantieri con un colpo d’occhio. Ferie e permessi si vedono subito e bloccano la pianificazione dove serve."
-      />
-      <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-center">
-        <PianificazioneSettimanale />
-        <div className="space-y-3">
-          {[
-            {
-              icon: CalendarDays,
-              title: 'Pianificazione settimanale',
-              body: 'Trascini i tecnici sui cantieri, giorno per giorno. La squadra vede il proprio programma dall’app.',
-            },
-            {
-              icon: Palmtree,
-              title: 'Ferie e permessi',
-              body: 'Richieste, approvazioni e saldo. Chi è in ferie non è pianificabile: niente doppioni.',
-            },
-            {
-              icon: Users,
-              title: 'Anagrafica dipendenti',
-              body: 'Mansioni, contatti, mezzo assegnato e accessi. Una scheda per ogni persona.',
-            },
-          ].map(({ icon: Icon, title, body }) => (
-            <div key={title} className="flex gap-3 rounded-xl border border-border bg-card p-4 shadow-soft">
-              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
-                <Icon className="h-4 w-4" />
-              </span>
-              <div>
-                <p className="text-sm font-semibold tracking-tight">{title}</p>
-                <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  FUNZIONALITÀ — grid completa                                            */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-function Funzionalita() {
-  const items = [
-    { icon: QrCode, title: 'QR di cantiere', body: 'Un QR per ogni cantiere. Il tecnico timbra in un secondo, anche senza connessione stabile.' },
-    { icon: Radio, title: 'Presenze in tempo reale', body: 'Chi è in cantiere, chi in viaggio, chi in pausa. La board dell’ufficio si aggiorna da sola.' },
-    { icon: Clock, title: 'Rapportino automatico', body: 'Ore ordinarie, straordinari e pause dalle timbrature. Le giornate pulite si approvano da sole.' },
-    { icon: Route, title: 'Viaggi con km reali', body: 'Distanza e tempo con il traffico, tratte sede/cantiere e cantiere/cantiere, autista e passeggeri.' },
-    { icon: Truck, title: 'Mezzi e autisti', body: 'Parco veicoli, km per mezzo e assegnazione giornaliera. Sempre chiaro chi guida cosa.' },
-    { icon: Receipt, title: 'Note spese con AI', body: 'Foto dello scontrino, i campi si compilano da soli e la spesa si aggancia al cantiere.' },
-    { icon: PieChart, title: 'Costo del cantiere', body: 'Manodopera, materiali, mezzi e spese in un solo numero, per ogni lavoro.' },
-    { icon: CalendarDays, title: 'Pianificazione settimanale', body: 'Assegni i tecnici ai cantieri con un colpo d’occhio. La squadra vede il programma.' },
-    { icon: Palmtree, title: 'Ferie e permessi', body: 'Richieste e approvazioni, saldo aggiornato, blocco automatico sulla pianificazione.' },
-    { icon: MapPin, title: 'Trasferimenti tra cantieri', body: 'Chi cambia cantiere in giornata genera km e tempo tra un lavoro e l’altro.' },
-    { icon: Upload, title: 'Import dei cantieri', body: 'Carichi la lista dei cantieri e li ritrovi pronti, con codice, cliente e indirizzo.' },
-    { icon: RefreshCw, title: 'Sync col tuo gestionale', body: 'Ore, presenze e costi esportati e sincronizzati con il gestionale che già usi, su misura.' },
-  ];
-  return (
-    <section
-      style={{
-        background:
-          'linear-gradient(160deg, hsl(220 34% 88%), hsl(222 26% 92%) 48%, hsl(26 50% 90%))',
-      }}
-      className="relative isolate overflow-hidden border-y border-primary/15"
-    >
-      <div
-        aria-hidden
-        style={{ background: 'radial-gradient(circle at 50% 50%, hsl(24 95% 58% / 0.16), transparent 70%)' }}
-        className="absolute -right-20 -bottom-10 -z-10 h-72 w-72 rounded-full blur-3xl"
-      />
-      <div className="mx-auto max-w-6xl px-6 py-20">
-        <SectionHeading
-          eyebrow="Tutto il modulo Kantiere"
-          title="Dodici cose in meno di cui preoccuparsi"
-          subtitle="Un unico posto per presenze, ore, viaggi, mezzi, spese e pianificazione. Costruito con gli impiantisti, per gli impiantisti."
-        />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map(({ icon: Icon, title, body }) => (
-            <div
-              key={title}
-              className="rounded-xl border border-border bg-card p-5 shadow-soft-md transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-lg"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary-soft text-primary">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  BUNDLE — Commesse + Kantiere                                             */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ── BUNDLE (paper) ───────────────────────────────────────────────────── */
 
 function Bundle() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-20">
+    <Section tone="paper" texture="dotsAccent">
       <SectionHeading
         eyebrow="La suite completa"
         title="Commesse e Kantiere, un solo account"
-        subtitle="Parti dalla gestione commesse e aggiungi il cantiere quando vuoi. Stessi dati, stesso login, nessuna doppia digitazione."
+        subtitle="Parti dalla gestione commesse e aggiungi il cantiere quando vuoi. Stessi dati, stesso accesso, nessuna doppia digitazione."
       />
       <div className="mt-12 grid gap-4 md:grid-cols-2">
         <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-7 shadow-soft-md">
@@ -479,7 +528,7 @@ function Bundle() {
             automatico, riunioni con verbale AI, report di chiusura.
           </p>
           <ul className="mt-4 space-y-2 text-sm">
-            {['Voce → commessa pronta', 'Sync con il cloud aziendale', 'Report PDF con un click'].map((f) => (
+            {['Voce che diventa commessa', 'Sync con il cloud aziendale', 'Report PDF con un clic'].map((f) => (
               <li key={f} className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success" /> {f}
               </li>
@@ -500,7 +549,7 @@ function Bundle() {
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Presenze col QR, ore e straordinari, viaggi e km, mezzi, note spese
-            con AI, pianificazione e personale. Il cantiere, digitale.
+            con AI, pianificazione e personale. Il cantiere, in digitale.
           </p>
           <ul className="mt-4 space-y-2 text-sm">
             {['Presenze in tempo reale', 'Note spese con AI · Kontabilità', 'Sync col tuo gestionale su misura'].map((f) => (
@@ -514,13 +563,11 @@ function Bundle() {
           </Link>
         </div>
       </div>
-    </section>
+    </Section>
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  FINAL CTA                                                                */
-/* ──────────────────────────────────────────────────────────────────────── */
+/* ── FINAL CTA ────────────────────────────────────────────────────────── */
 
 function FinalCta() {
   return (
@@ -528,8 +575,11 @@ function FinalCta() {
       <div className="relative isolate overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-card to-accent/10 px-6 py-14 text-center shadow-soft-lg sm:py-16">
         <div className="absolute inset-0 -z-10 bg-grid-radial opacity-50" aria-hidden />
         <div aria-hidden className="border-brand-line absolute inset-x-0 top-0 h-1" />
+        <div aria-hidden className="mx-auto mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-glow-brand">
+          <Users className="h-6 w-6" />
+        </div>
         <h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
-          Vuoi vedere Kantiere sul tuo cantiere?
+          Vuoi vederlo sul tuo cantiere?
         </h2>
         <p className="mx-auto mt-3 max-w-xl text-balance text-sm leading-relaxed text-muted-foreground sm:text-base">
           Ti mostriamo presenze, ore, viaggi e note spese con i tuoi cantieri e i

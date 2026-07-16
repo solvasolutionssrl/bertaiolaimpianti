@@ -212,7 +212,7 @@ export function PresenzeLive() {
         {/* footer */}
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
           <Radio className="h-3.5 w-3.5 text-primary" />
-          Timbrature dal QR di cantiere · posizione verificata
+          Ogni ingresso e uscita dal QR di cantiere
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-[11px] font-medium text-success">
             aggiornamento automatico
           </span>

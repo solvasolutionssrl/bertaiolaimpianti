@@ -130,7 +130,7 @@ export function SectionHeading({
       >
         {eyebrow}
       </p>
-      <h2 className="mx-auto mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
+      <h2 className="mx-auto mt-2 max-w-3xl text-pretty text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
         {title}
       </h2>
       {subtitle && (
