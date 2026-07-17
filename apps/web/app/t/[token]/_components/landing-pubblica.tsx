@@ -31,7 +31,10 @@ export function LandingPubblica({
   const sottotitolo = tagline?.trim() || LANDING_TAGLINE_DEFAULT;
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-between bg-gradient-to-b from-slate-50 to-slate-100 px-5 py-8">
+    <div
+      className="flex min-h-dvh flex-col items-center justify-between bg-gradient-to-b from-slate-50 to-slate-100 px-5 pb-8"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 2rem)' }}
+    >
       <div className="w-full max-w-sm">
         {/* Intestazione azienda */}
         <div className="text-center">

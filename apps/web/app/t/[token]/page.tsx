@@ -72,7 +72,10 @@ type DipRow = {
 
 function Schermo({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10">
+    <div
+      className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 pb-10"
+      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 2.5rem)' }}
+    >
       <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-8 shadow-md">
         {children}
       </div>
@@ -415,8 +418,11 @@ export default async function TokenPage({
   return (
     <>
       <div
-        className="flex min-h-dvh items-start justify-center bg-muted/40 px-4 pt-8"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)' }}
+        className="flex min-h-dvh items-start justify-center bg-muted/40 px-4"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 2rem)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)',
+        }}
       >
         <div className="w-full max-w-sm rounded-2xl border border-border bg-background p-8 shadow-md">
           <IconaQr />
