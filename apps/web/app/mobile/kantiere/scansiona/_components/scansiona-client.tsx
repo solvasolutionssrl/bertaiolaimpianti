@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import jsQR from 'jsqr';
+import { readBarcodes, setZXingModuleOverrides } from 'zxing-wasm/reader';
 import {
   Camera,
   Loader2,
@@ -50,6 +51,18 @@ function getBarcodeDetectorCtor(): BarcodeDetectorCtor | null {
 }
 
 type Engine = 'native' | 'jsqr' | null;
+
+// Lettore QR robusto (ZXing-C++ in WebAssembly) per il percorso FOTO su iOS,
+// dove non esiste BarcodeDetector nativo. Molto più tollerante di jsQR su
+// stampe/foto reali (banding di stampa, inchiostro spanto, luce scarsa,
+// prospettiva). La wasm è auto-ospitata in /public/zxing → niente CDN, funziona
+// anche con rete debole in cantiere.
+if (typeof window !== 'undefined') {
+  setZXingModuleOverrides({
+    locateFile: (path: string, prefix: string) =>
+      path.endsWith('.wasm') ? '/zxing/zxing_reader.wasm' : `${prefix}${path}`,
+  });
+}
 
 // ─── estrazione token da un valore scansionato ──────────────────────────────
 // Accetta sia l'URL completo `https://.../t/<token>` sia il solo token.
@@ -210,7 +223,7 @@ export function ScansionaClient() {
       let bitmap: Awaited<ReturnType<typeof fileToBitmap>> | null = null;
       try {
         bitmap = await fileToBitmap(file);
-        const maxLato = 1600; // abbastanza per leggere il QR, leggero per la CPU
+        const maxLato = 2400; // più risoluzione aiuta ZXing su stampe rovinate
         const scala = Math.min(1, maxLato / Math.max(bitmap.width, bitmap.height));
         const w = Math.max(1, Math.round(bitmap.width * scala));
         const h = Math.max(1, Math.round(bitmap.height * scala));
@@ -221,8 +234,26 @@ export function ScansionaClient() {
         if (!c) throw new Error('canvas non disponibile');
         c.drawImage(bitmap.source, 0, 0, w, h);
         const img = c.getImageData(0, 0, w, h);
-        const res = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' });
-        const token = res ? estraiToken(res.data) : null;
+
+        // 1) Lettore robusto ZXing (WASM): legge anche stampe/foto difficili.
+        let token: string | null = null;
+        try {
+          const results = await readBarcodes(img, {
+            formats: ['QRCode'],
+            tryHarder: true,
+            maxNumberOfSymbols: 1,
+          });
+          const testo = results?.[0]?.text;
+          if (testo) token = estraiToken(testo);
+        } catch {
+          // wasm non disponibile (es. offline al primissimo uso) → fallback sotto
+        }
+        // 2) Fallback jsQR se ZXing non ha letto o non è disponibile.
+        if (!token) {
+          const res = jsQR(img.data, w, h, { inversionAttempts: 'attemptBoth' });
+          if (res) token = estraiToken(res.data);
+        }
+
         if (token) {
           setFotoStato('ok');
           vaiAToken(token);
