@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -270,11 +270,20 @@ export function ViaggioRitornoDialog({
   const modificato = !casa && stimaMin != null && confermMin !== stimaMin;
   const giustObbligatoria = modificato;
 
+  // Guardia anti-race: ogni stima incrementa il contatore; una risposta obsoleta
+  // (sede cambiata nel frattempo) viene ignorata → km/tempo non restano di
+  // un'ALTRA sede. Il tempo confermato riparte da 0 a ogni stima, così se la
+  // nuova stima non è disponibile non resta un tempo "ereditato" dalla sede
+  // precedente (che scriverebbe minuti fasulli sulla tratta di ritorno).
+  const reqSeq = useRef(0);
+
   async function calcolaStima(targetSedeId: string) {
     if (!usaViaggio) return;
+    const seq = ++reqSeq.current;
     setStimaLoading(true);
     setStimaMin(null);
     setStimaKm(null);
+    setConfermMin(0);
     try {
       const res = await fetch('/api/routing/stima', {
         method: 'POST',
@@ -282,6 +291,7 @@ export function ViaggioRitornoDialog({
         body: JSON.stringify({ sedeId: targetSedeId, cantiereId, direzione: 'ritorno' }),
       });
       const j = (await res.json()) as { ok: boolean; minuti: number | null; km?: number | null };
+      if (seq !== reqSeq.current) return; // risposta obsoleta: la sede è cambiata
       if (j.ok && typeof j.minuti === 'number') {
         setStimaMin(j.minuti);
         setConfermMin(j.minuti);
@@ -289,12 +299,15 @@ export function ViaggioRitornoDialog({
       } else {
         setStimaMin(null);
         setStimaKm(null);
+        setConfermMin(0);
       }
     } catch {
+      if (seq !== reqSeq.current) return;
       setStimaMin(null);
       setStimaKm(null);
+      setConfermMin(0);
     } finally {
-      setStimaLoading(false);
+      if (seq === reqSeq.current) setStimaLoading(false);
     }
   }
 
@@ -304,6 +317,7 @@ export function ViaggioRitornoDialog({
     setErrLocale(null);
     if (id === CASA_ID) {
       // Rientro a casa: nessun viaggio di lavoro → 0 km, 0 tempo, niente stima.
+      reqSeq.current += 1; // invalida eventuali stime ancora in volo
       setStimaMin(null);
       setStimaKm(null);
       setConfermMin(0);
