@@ -2,15 +2,25 @@
 
 import { useState, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Play, Loader2 } from 'lucide-react';
+import { Play, Loader2, ArrowRight } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
-import { avviaTurnoMio, elencoCantieriTurno } from '@/app/_actions/kantiere-timbra';
+import {
+  avviaTurnoMio,
+  elencoCantieriTurno,
+  opzioniViaggioPartenza,
+} from '@/app/_actions/kantiere-timbra';
+import type {
+  ViaggioRitornoSede,
+  ViaggioRitornoMezzo,
+  ViaggioRitornoPayload,
+} from '@/app/_components/viaggio-ritorno-dialog';
 import {
   CantiereSearchSheet,
   type PickerCantiere,
 } from './cantiere-picker';
+import { PartenzaViaggioSheet } from './partenza-viaggio-sheet';
 
 function messaggioErrore(code: string): string {
   switch (code) {
@@ -18,6 +28,13 @@ function messaggioErrore(code: string): string {
       return 'Hai già un turno aperto. Chiudilo o cambia cantiere.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
+    case 'SEDE_NON_VALIDA':
+      return 'Sede di partenza non valida. Riprova.';
+    case 'GIUSTIFICAZIONE_RICHIESTA':
+      return 'Hai modificato la stima: inserisci una giustificazione.';
+    case 'MEZZO_NON_VALIDA':
+    case 'MEZZO_NON_VALIDO':
+      return 'Mezzo non valido. Riprova.';
     case 'NESSUN_DIPENDENTE':
       return 'Nessun profilo dipendente collegato a questo account.';
     case 'MODULO_OFF':
@@ -29,8 +46,18 @@ function messaggioErrore(code: string): string {
   }
 }
 
+interface OpzioniPartenza {
+  sedi: ViaggioRitornoSede[];
+  sedeDefaultId: string | null;
+  mezzi: ViaggioRitornoMezzo[];
+}
+
 /**
- * Pulsante "Inizia turno" (senza QR) + foglio di ricerca cantiere con conferma.
+ * Pulsante "Inizia turno" (senza QR) → flusso in DUE step:
+ *  1. scegli il cantiere (foglio di ricerca);
+ *  2. "da dove parti?" (Abitazione privata / sede FPM / sedi del cantiere) →
+ *     registra la tratta di andata (km + tempo) come lo scan QR.
+ *
  * Riusabile su home tecnico, lista Cantieri e cruscotto office. Se i `cantieri`
  * non sono passati, li carica al primo tap (`elencoCantieriTurno`).
  *
@@ -45,15 +72,20 @@ export function IniziaTurnoButton({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [fase, setFase] = useState<'cantiere' | 'partenza'>('cantiere');
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(cantieriProp ?? null);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [opzioni, setOpzioni] = useState<OpzioniPartenza | null>(null);
+  const [opzLoading, setOpzLoading] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const apri = useCallback(async () => {
     setErrore(null);
     setSelectedId(null);
+    setFase('cantiere');
+    setOpzioni(null);
     setOpen(true);
     if (cantieri == null) {
       setLoading(true);
@@ -66,17 +98,46 @@ export function IniziaTurnoButton({
 
   const chiudi = useCallback(() => {
     setOpen(false);
+    setFase('cantiere');
     setSelectedId(null);
+    setOpzioni(null);
+    setOpzLoading(false);
     setErrore(null);
   }, []);
 
   const selezionato = selectedId ? (cantieri ?? []).find((c) => c.id === selectedId) ?? null : null;
+  const nomeSel = selezionato
+    ? titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'cantiere'
+    : '';
 
-  function avvia() {
+  // Step 1 → 2: carica le sedi ammesse per il cantiere e mostra "da dove parti?".
+  function continua() {
+    if (!selectedId) return;
+    setErrore(null);
+    setFase('partenza');
+    setOpzioni(null);
+    setOpzLoading(true);
+    void (async () => {
+      const res = await opzioniViaggioPartenza({ cantiereId: selectedId });
+      setOpzLoading(false);
+      if (res.ok) {
+        setOpzioni({ sedi: res.sedi, sedeDefaultId: res.sedeDefaultId, mezzi: res.mezzi });
+      } else {
+        setErrore(messaggioErrore(res.error));
+        setFase('cantiere');
+      }
+    })();
+  }
+
+  // Step 2 → avvio effettivo (viaggio null = "Abitazione privata": 0 km/0 tempo).
+  function avvia(viaggio: ViaggioRitornoPayload | null) {
     if (!selectedId) return;
     setErrore(null);
     startTransition(async () => {
-      const res = await avviaTurnoMio({ cantiereId: selectedId });
+      const res = await avviaTurnoMio({
+        cantiereId: selectedId,
+        viaggio: viaggio ?? undefined,
+      });
       if (res.ok) {
         chiudi();
         router.refresh();
@@ -85,10 +146,6 @@ export function IniziaTurnoButton({
       }
     });
   }
-
-  const nomeSel = selezionato
-    ? titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'cantiere'
-    : '';
 
   return (
     <>
@@ -120,7 +177,7 @@ export function IniziaTurnoButton({
       )}
 
       <CantiereSearchSheet
-        open={open}
+        open={open && fase === 'cantiere'}
         title="Inizia turno — scegli cantiere"
         cantieri={cantieri ?? []}
         selectedId={selectedId}
@@ -143,24 +200,43 @@ export function IniziaTurnoButton({
             ) : (
               <button
                 type="button"
-                onClick={avvia}
+                onClick={continua}
                 disabled={!selectedId || pending}
-                className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-semibold text-white shadow-soft transition-all active:scale-[0.99] hover:bg-emerald-700 disabled:opacity-50"
+                className="flex w-full items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-3.5 text-base font-semibold text-white shadow-soft transition-all active:scale-[0.99] hover:bg-emerald-700 disabled:opacity-50"
               >
-                {pending ? (
-                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" />
+                {selezionato ? (
+                  <>
+                    <span className="shrink-0">Continua</span>
+                    <span className="min-w-0 flex-1 truncate text-left text-sm font-normal text-white/85">
+                      · {nomeSel}
+                    </span>
+                    <ArrowRight className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  </>
                 ) : (
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20">
-                    <Play className="h-3.5 w-3.5" strokeWidth={2.75} fill="currentColor" />
-                  </span>
+                  <span className="w-full text-center">Scegli un cantiere</span>
                 )}
-                <span className="truncate">
-                  {selezionato ? `Avvia turno su ${nomeSel}` : 'Scegli un cantiere'}
-                </span>
               </button>
             )}
           </div>
         }
+      />
+
+      <PartenzaViaggioSheet
+        open={open && fase === 'partenza'}
+        cantiereId={selectedId ?? ''}
+        cantiereNome={nomeSel}
+        loading={opzLoading}
+        sedi={opzioni?.sedi ?? []}
+        sedeDefaultId={opzioni?.sedeDefaultId ?? null}
+        mezzi={opzioni?.mezzi ?? []}
+        pending={pending}
+        errore={errore}
+        onBack={() => {
+          setFase('cantiere');
+          setErrore(null);
+        }}
+        onClose={chiudi}
+        onConfirm={avvia}
       />
     </>
   );

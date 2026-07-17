@@ -20,6 +20,7 @@ import {
 } from '@/app/_lib/kantiere-config';
 import { getRoutingProvider } from '@/app/_lib/routing';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
+import { caricaTurnoAzioniContesto } from '@/app/mobile/kantiere/_lib/turno-azioni-contesto';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import {
   ViaggioSchema,
@@ -861,7 +862,15 @@ async function registraTrasferimentiCantiere(
   }
 }
 
-const AvviaTurnoSchema = z.object({ cantiereId: z.string().uuid() });
+const AvviaTurnoSchema = z.object({
+  cantiereId: z.string().uuid(),
+  /**
+   * Viaggio di ANDATA (partenza da app): sede di partenza, stima, autista,
+   * mezzo, km. Assente quando il tecnico parte da "Abitazione privata" (0 km /
+   * 0 tempo: nessuna tratta di lavoro da rimborsare) → il client invia null.
+   */
+  viaggio: ViaggioSchema.optional(),
+});
 
 /** Avvia un turno sul cantiere scelto (senza QR). Origine 'manuale'. */
 export async function avviaTurnoMio(input: unknown): Promise<Result> {
@@ -904,19 +913,50 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
     .maybeSingle();
   if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
 
+  // Viaggio di andata (partenza): valida PRIMA di scrivere l'ingresso, così una
+  // sede non valida non lascia un turno orfano. La sede è ammessa solo se è la
+  // predefinita del tenant o è associata a QUESTO cantiere (`validaViaggio` con
+  // cantiereId). "Abitazione privata" → viaggio null (nessuna tratta).
+  const viaggio = parsed.data.viaggio ?? null;
+  if (viaggio) {
+    const v = await validaViaggio(supabase, viaggio, parsed.data.cantiereId);
+    if (!v.ok) return { ok: false, error: v.error };
+  }
+
   const ts = new Date().toISOString();
-  const { error } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: me.id,
-    cantiere_id: parsed.data.cantiereId,
-    commessa_id: null,
-    tipo: 'ingresso',
-    pausa: false,
-    origine: 'manuale',
-    ts,
-    creato_da: ctx.userId,
-  } as never);
+  const { data: inserita, error } = await supabase
+    .from('timbrature' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: me.id,
+      cantiere_id: parsed.data.cantiereId,
+      commessa_id: null,
+      tipo: 'ingresso',
+      pausa: false,
+      origine: 'manuale',
+      ts,
+      creato_da: ctx.userId,
+    } as never)
+    .select('id')
+    .single();
   if (error) return { ok: false, error: error.message };
+
+  // Tratta di andata collegata (sede → cantiere). BEST-EFFORT: l'avvio del turno
+  // è la priorità e le ore si derivano dalle timbrature (non dal viaggio), quindi
+  // un raro errore DB sulla tratta NON deve impedire di iniziare a lavorare —
+  // i km si possono aggiungere dall'ufficio. La sede è già stata validata sopra.
+  if (viaggio) {
+    const rv = await inserisciViaggioRow(supabase, {
+      tenantId: ctx.tenantId,
+      dipendenteId: me.id,
+      cantiereId: parsed.data.cantiereId,
+      timbraturaId: (inserita as { id: string }).id,
+      ts,
+      tipo: 'ingresso',
+      viaggio,
+    });
+    void rv; // best-effort: non blocchiamo l'avvio se la tratta non entra.
+  }
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ts)));
@@ -924,6 +964,43 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
     // best-effort
   }
   return { ok: true, tipo: 'ingresso', pausa: false, ts };
+}
+
+const OpzioniPartenzaSchema = z.object({ cantiereId: z.string().uuid() });
+
+/**
+ * Opzioni per lo step "da dove parti?" dell'avvio turno da app: sedi ammesse per
+ * il cantiere scelto (predefinita del tenant + sedi associate, solo attive),
+ * sede predefinita e parco mezzi. Riusa `caricaTurnoAzioniContesto` così la
+ * regola sedi↔cantiere è identica a QR / termina turno. Sola lettura, gated.
+ */
+export async function opzioniViaggioPartenza(input: unknown): Promise<
+  | {
+      ok: true;
+      sedi: { id: string; nome: string; tipo: string }[];
+      sedeDefaultId: string | null;
+      mezzi: { id: string; targa: string; modello: string | null }[];
+    }
+  | { ok: false; error: string }
+> {
+  const parsed = OpzioniPartenzaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  // Difensivo: il cantiere deve appartenere al tenant.
+  const { data: cant } = await supabase
+    .from('cantieri' as never)
+    .select('id')
+    .eq('id', parsed.data.cantiereId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+
+  const az = await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, parsed.data.cantiereId);
+  return { ok: true, sedi: az.sedi, sedeDefaultId: az.sedeDefaultId, mezzi: az.mezzi };
 }
 
 const CambiaCantiereSchema = z.object({
