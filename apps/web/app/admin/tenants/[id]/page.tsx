@@ -117,6 +117,11 @@ export default async function TenantDetailPage({
     string,
     unknown
   >;
+  const dipendentiAttivo = moduli.some(
+    (m) => m.module_code === 'dipendenti' && m.attivo === true,
+  );
+  const dipendentiConfig = (moduli.find((m) => m.module_code === 'dipendenti')?.config ??
+    {}) as Record<string, unknown>;
   const routingProvider: 'free' | 'google' =
     kantiereConfig['routing_provider'] === 'google' ? 'google' : 'free';
   const googleKeyConfigured = googleRoutingDisponibile();
@@ -298,6 +303,9 @@ export default async function TenantDetailPage({
           <TabModuli
             tenantId={tenant.id}
             kantiereAttivo={kantiereAttivo}
+            dipendentiAttivo={dipendentiAttivo}
+            pianificazioneAttiva={dipendentiConfig['pianificazione_attiva'] !== false}
+            ferieAttiva={dipendentiConfig['ferie_attiva'] !== false}
             appMode={
               tenant.app_mode === 'kantiere' || tenant.app_mode === 'full'
                 ? tenant.app_mode

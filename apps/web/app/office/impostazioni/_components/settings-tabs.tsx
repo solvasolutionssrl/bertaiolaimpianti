@@ -10,6 +10,7 @@ interface NavItem {
   href: string;
   superadminOnly?: boolean;
   kantiereOnly?: boolean;
+  ferieOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -18,6 +19,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'preset',   label: 'Preset lavoro',     href: '/office/impostazioni/preset' },
   { id: 'sla',      label: 'SLA',               href: '/office/impostazioni/sla' },
   { id: 'utenti',   label: 'Utenti',            href: '/office/impostazioni/utenti' },
+  { id: 'personale', label: 'Ferie e permessi', href: '/office/impostazioni/personale', ferieOnly: true },
   { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding' },
   { id: 'storage',  label: 'Storage',           href: '/office/impostazioni/storage', superadminOnly: true },
   { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle' },
@@ -27,10 +29,12 @@ const NAV_ITEMS: NavItem[] = [
 export function SettingsTopNav({
   isPlatformAdmin = false,
   hasKantiere = false,
+  hasFerie = false,
   hiddenIds = [],
 }: {
   isPlatformAdmin?: boolean;
   hasKantiere?: boolean;
+  hasFerie?: boolean;
   /** Id di voci nascoste per questo tenant (feature-flag risolti lato server). */
   hiddenIds?: string[];
 }) {
@@ -39,6 +43,7 @@ export function SettingsTopNav({
     (item) =>
       (!item.superadminOnly || isPlatformAdmin) &&
       (!item.kantiereOnly || hasKantiere) &&
+      (!item.ferieOnly || hasFerie) &&
       !hiddenIds.includes(item.id),
   );
 

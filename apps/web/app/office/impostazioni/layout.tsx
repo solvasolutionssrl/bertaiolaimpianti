@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
 import { getAppModeCached } from '@/app/_lib/app-mode';
 import { tenantFeatureEnabled } from '@/app/_lib/tenant-features';
 import { SettingsTopNav } from './_components/settings-tabs';
@@ -22,6 +23,9 @@ export default async function ImpostazioniLayout({
     meta.platform_admin === 'true' ||
     ctx.email.toLowerCase() === 'dev@solva.it';
   const hasKantiere = await tenantHasModule('kantiere');
+  const hasFerie =
+    (await tenantHasModule('dipendenti')) &&
+    (await leggiConfigDipendenti(supabase, ctx.tenantId)).ferieAttiva;
   // Visibilità funzioni "mondo commesse": feature-flag per-tenant (default =
   // app_mode ≠ kantiere), gestibile dal super admin.
   const kommessaWorld = (await getAppModeCached()) !== 'kantiere';
@@ -39,6 +43,7 @@ export default async function ImpostazioniLayout({
       <SettingsTopNav
         isPlatformAdmin={isPlatformAdmin}
         hasKantiere={hasKantiere}
+        hasFerie={hasFerie}
         hiddenIds={hiddenIds}
       />
       <div className="mt-6">{children}</div>

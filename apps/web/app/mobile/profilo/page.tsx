@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import { ShieldCheck, CalendarCheck, ChevronRight } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { Avatar, AvatarFallback } from '@kommessa/ui';
@@ -7,6 +8,8 @@ import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../_lib/guard';
+import { tenantHasModule } from '../../_lib/modules';
+import { leggiConfigDipendenti } from '../../_lib/dipendenti-config';
 import { InstallPromptHint } from '../_components/install-prompt-hint';
 import { LogoutButton } from './logout-button';
 import { PushToggle } from './push-toggle';
@@ -44,6 +47,12 @@ export default async function ProfiloPage() {
   const appMode = tenant?.app_mode ?? null;
   const isKantiere = appMode === 'kantiere' || appMode === 'full';
   const isManager = ctx.role === 'admin' || ctx.role === 'office';
+
+  // Ferie e permessi: se il modulo Dipendenti + sotto-flag ferie sono attivi.
+  const hasDipendenti = await tenantHasModule('dipendenti');
+  const hasFerie = hasDipendenti
+    ? (await leggiConfigDipendenti(supabase, ctx.tenantId)).ferieAttiva
+    : false;
 
   // Preferenze notifiche: solo mondo COMMESSE. In Kantiere le notifiche si
   // gestiscono dalla campanella fissa → niente matrice/quiet-hours (erano di
@@ -166,6 +175,25 @@ export default async function ProfiloPage() {
           </p>
         </div>
       </header>
+
+      {/* Ferie e permessi (modulo Dipendenti): richieste + eventuali approvazioni. */}
+      {hasFerie ? (
+        <Link
+          href="/mobile/permessi"
+          className="flex items-center gap-3 rounded-lg border bg-card p-4 active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <CalendarCheck className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Ferie e permessi</span>
+            <span className="block text-xs text-muted-foreground">
+              Richiedi e vedi lo stato delle tue richieste
+            </span>
+          </span>
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      ) : null}
 
       {/* Area personale → panoramica spese (Kantiere admin/office): ultime 3 come
           card cliccabili che aprono DIRETTAMENTE il dettaglio + aggiungi + tutte. */}

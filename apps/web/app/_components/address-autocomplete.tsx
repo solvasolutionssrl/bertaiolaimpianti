@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, MapPin } from 'lucide-react';
+import { CheckCircle2, Loader2, MapPin } from 'lucide-react';
 import { Input } from '@kommessa/ui';
 
 interface Suggestion {
@@ -16,6 +16,11 @@ interface Props {
   onSelect: (r: { label: string; lat: number | null; lng: number | null }) => void;
   placeholder?: string;
   id?: string;
+  /** Classi extra sull'input (per uniformarlo agli input nativi circostanti). */
+  className?: string;
+  /** True = l'indirizzo ha coordinate valide (è "collegato a Maps"): mostra un
+   *  piccolo check verde. */
+  linked?: boolean;
 }
 
 /**
@@ -42,6 +47,8 @@ export function AddressAutocomplete({
   onSelect,
   placeholder,
   id,
+  className,
+  linked,
 }: Props) {
   const [suggestions, setSuggestions] = React.useState<Suggestion[]>([]);
   const [open, setOpen] = React.useState(false);
@@ -137,6 +144,7 @@ export function AddressAutocomplete({
         <Input
           id={id}
           type="text"
+          className={className}
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
@@ -157,6 +165,11 @@ export function AddressAutocomplete({
           <Loader2
             className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground"
             aria-hidden="true"
+          />
+        ) : linked ? (
+          <CheckCircle2
+            className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600"
+            aria-label="Indirizzo collegato a Maps"
           />
         ) : null}
       </div>

@@ -19,6 +19,8 @@
     "./kantiere-report": "./src/kantiere-report.ts",
     "./kantiere-costi": "./src/kantiere-costi.ts",
     "./spese": "./src/spese.ts",
+    "./pianificazione": "./src/pianificazione.ts",
+    "./permessi-tipi": "./src/permessi-tipi.ts",
     "./rome-time": "./src/rome-time.ts"
   },
   "scripts": {

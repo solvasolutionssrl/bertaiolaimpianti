@@ -6,8 +6,11 @@ import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/u
 import { createBrowserSupabase } from '@kommessa/api/client';
 import { registraEventoAccesso } from '@/app/_actions/auth-events';
 import {
+  BarChart3,
   Boxes,
   Briefcase,
+  CalendarCheck,
+  CalendarDays,
   Coins,
   HardHat,
   LayoutDashboard,
@@ -17,6 +20,7 @@ import {
   Timer,
   Truck,
   Users,
+  UsersRound,
 } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
@@ -28,6 +32,12 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
+  /** Modulo Dipendenti attivo → sezione Personale (Dipendenti, ...). */
+  hasDipendenti?: boolean;
+  /** Modulo Dipendenti · sotto-flag Pianificazione attivo → voce Pianificazione. */
+  hasPianificazione?: boolean;
+  /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Analisi. */
+  hasFerie?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
   appMode?: 'kommessa' | 'kantiere' | 'full';
   children: React.ReactNode;
@@ -136,9 +146,8 @@ function buildNav(
         variant: 'section',
         defaultOpen: true,
         children: [
-          { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
-          { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
           { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
+          { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
           { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
         ],
       },
@@ -263,6 +272,61 @@ function buildNav(
 }
 
 /**
+ * Inietta le voci del modulo Dipendenti (Pianificazione, e in futuro Permessi/
+ * Gruppi) nella sezione "Azienda". Se il tenant non ha una sezione Azienda
+ * (tenant senza kantiere), crea una sezione "Personale" a sé. No-op se il
+ * modulo è spento. Le voci-sezione sono literal freschi a ogni `buildNav`,
+ * quindi la mutazione qui è sicura (nessuna condivisione tra render).
+ */
+function injectPersonale(
+  nav: OfficeNavItem[],
+  opts: { hasDipendenti?: boolean; hasPianificazione?: boolean; hasFerie?: boolean },
+): OfficeNavItem[] {
+  // Sezione "Personale" (allo stesso livello di Azienda) con tutte le voci
+  // legate ai dipendenti. Tipi e normativa NON è qui: è sottopagina di Ferie
+  // e permessi.
+  const voci: OfficeNavItem[] = [];
+  if (opts.hasDipendenti) {
+    voci.push({ id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' });
+  }
+  if (opts.hasPianificazione) {
+    voci.push({
+      id: 'pianificazione',
+      label: 'Pianificazione',
+      href: '/office/personale/pianificazione',
+      icon: CalendarDays,
+    });
+  }
+  if (opts.hasFerie) {
+    voci.push(
+      { id: 'permessi', label: 'Ferie e permessi', href: '/office/personale/permessi', icon: CalendarCheck },
+      { id: 'gruppi', label: 'Gruppi lavoro', href: '/office/personale/gruppi', icon: UsersRound },
+      { id: 'analisi', label: 'Analisi', href: '/office/personale/analisi', icon: BarChart3 },
+    );
+  }
+  if (voci.length === 0) return nav;
+
+  const sezione: OfficeNavItem = {
+    id: 'sec-personale',
+    label: 'Personale',
+    href: '#',
+    icon: Users,
+    variant: 'section',
+    defaultOpen: true,
+    children: voci,
+  };
+
+  // Inserisci subito DOPO la sezione Azienda (se c'è), altrimenti in coda.
+  const idx = nav.findIndex((n) => n.id === 'sec-azienda');
+  if (idx >= 0) {
+    const out = [...nav];
+    out.splice(idx + 1, 0, sezione);
+    return out;
+  }
+  return [...nav, sezione];
+}
+
+/**
  * Deriva l'id della voce nav attiva dal pathname corrente. Logica:
  *  - match esatto su `href` ha priorità
  *  - altrimenti il primo `href` (non `/`) che è prefisso del pathname
@@ -294,12 +358,19 @@ export function OfficeShellClient({
   activeNavId,
   notificationCount,
   hasKantiere,
+  hasDipendenti,
+  hasPianificazione,
+  hasFerie,
   appMode,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const nav = buildNav(hasKantiere, appMode);
+  const nav = injectPersonale(buildNav(hasKantiere, appMode), {
+    hasDipendenti,
+    hasPianificazione,
+    hasFerie,
+  });
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);
