@@ -1550,15 +1550,26 @@ export function PianificazioneClient({
                                 {ghost ? (
                                   <div
                                     className="flex w-full items-center rounded px-1.5 py-1 text-[11px] font-medium leading-tight"
-                                    style={{
-                                      backgroundColor: `hsl(${ghost.hue} 70% 94%)`,
-                                      color: `hsl(${ghost.hue} 60% 28%)`,
-                                      borderLeft: `3px solid hsl(${ghost.hue} 60% 45%)`,
-                                      // trascinamento = anteprima 75% tratteggiata; rilascio = card vera 100%
-                                      outline: ghostSolido ? 'none' : `1px dashed hsl(${ghost.hue} 55% 55%)`,
-                                      opacity: ghostSolido ? 1 : 0.75,
-                                      transition: 'opacity 150ms ease',
-                                    }}
+                                    style={
+                                      ghostSolido
+                                        ? {
+                                            // RILASCIATO → card "vera": piena, accento solido, 100%
+                                            backgroundColor: `hsl(${ghost.hue} 70% 94%)`,
+                                            color: `hsl(${ghost.hue} 60% 28%)`,
+                                            borderLeft: `3px solid hsl(${ghost.hue} 60% 45%)`,
+                                            opacity: 1,
+                                            transition: 'opacity 150ms ease',
+                                          }
+                                        : {
+                                            // MENTRE TRASCINI → anteprima "vuota": cornice tratteggiata,
+                                            // fondo e testo tenui, opacità bassa (chiaramente non ancora reale)
+                                            backgroundColor: `hsl(${ghost.hue} 75% 97%)`,
+                                            color: `hsl(${ghost.hue} 45% 48%)`,
+                                            border: `1px dashed hsl(${ghost.hue} 55% 60%)`,
+                                            opacity: 0.6,
+                                            transition: 'opacity 150ms ease',
+                                          }
+                                    }
                                   >
                                     <span className="min-w-0 flex-1 truncate">{ghost.label}</span>
                                   </div>
