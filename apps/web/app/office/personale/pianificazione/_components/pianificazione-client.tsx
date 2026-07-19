@@ -52,6 +52,7 @@ import {
   creaBlocchiRicorrenti,
   aggiornaBlocco,
   eliminaBlocco,
+  rimuoviMembroBlocco,
   pubblicaSettimana,
   copiaSettimanaPrecedente,
   spostaBlocco,
@@ -222,6 +223,8 @@ interface FormState {
   dipendentiIds: string[];
   mezziIds: string[];
   note: string;
+  /** Persona della RIGA da cui è stato aperto (per "elimina solo per Mario"). */
+  contestoDipId?: string;
 }
 
 function formVuoto(data: string, dipId?: string): FormState {
@@ -242,7 +245,7 @@ function formVuoto(data: string, dipId?: string): FormState {
   };
 }
 
-function formDaBlocco(b: BloccoView): FormState {
+function formDaBlocco(b: BloccoView, contestoDipId?: string): FormState {
   return {
     id: b.id,
     tipo: b.tipo,
@@ -258,6 +261,7 @@ function formDaBlocco(b: BloccoView): FormState {
     dipendentiIds: [...b.membri],
     mezziIds: [...b.mezzi],
     note: b.note ?? '',
+    contestoDipId,
   };
 }
 
@@ -296,6 +300,8 @@ function BloccoDialog({
   const [gruppoDip, setGruppoDip] = React.useState('tutti'); // filtro gruppi: predisposto, non ancora attivo
   // "Ripeti su più giorni" (solo in creazione): giorni EXTRA oltre a f.data.
   const [ripeti, setRipeti] = React.useState<Set<string>>(() => new Set());
+  // Scelta eliminazione per una card di squadra: tutta la squadra o solo la persona.
+  const [confermaSquadra, setConfermaSquadra] = React.useState(false);
   const isEdit = !!f.id;
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
@@ -485,28 +491,19 @@ function BloccoDialog({
     });
   };
 
-  const onElimina = async () => {
-    if (!f.id) return;
-    const membriNomi = f.dipendentiIds
-      .map((id) => dipendenti.find((d) => d.id === id))
-      .filter((d): d is DipRow => !!d)
-      .map((d) => nomeDip(d))
-      .join(', ');
-    const isSquad = f.dipendentiIds.length > 1;
-    if (
-      !(await confirm({
-        title: 'Eliminare questo blocco?',
-        description:
-          (isSquad
-            ? `Riguarda l'intera squadra: ${membriNomi}. `
-            : membriNomi
-              ? `Riguarda ${membriNomi}. `
-              : '') + 'La pianificazione verrà rimossa. Operazione non annullabile.',
-        destructive: true,
-        confirmLabel: 'Elimina',
-      }))
-    )
-      return;
+  const membriNomiDialog = f.dipendentiIds
+    .map((id) => dipendenti.find((d) => d.id === id))
+    .filter((d): d is DipRow => !!d)
+    .map((d) => nomeDip(d))
+    .join(', ');
+  const isSquadDialog = f.dipendentiIds.length > 1;
+  // Persona della riga da cui è stata aperta la card (se è ancora un membro).
+  const contestoDip =
+    f.contestoDipId && f.dipendentiIds.includes(f.contestoDipId)
+      ? dipendenti.find((d) => d.id === f.contestoDipId) ?? null
+      : null;
+
+  const eliminaTutto = () =>
     start(async () => {
       const res = await eliminaBlocco(f.id!);
       if (!res.ok) {
@@ -516,9 +513,43 @@ function BloccoDialog({
       onSaved();
       onClose();
     });
+
+  const eliminaSoloMembro = () => {
+    if (!f.id || !contestoDip) return;
+    start(async () => {
+      const res = await rimuoviMembroBlocco({ bloccoId: f.id!, dipendenteId: contestoDip.id });
+      if (!res.ok) {
+        await alert({ title: 'Errore', body: res.error });
+        return;
+      }
+      onSaved();
+      onClose();
+    });
+  };
+
+  const onElimina = async () => {
+    if (!f.id) return;
+    // Card di SQUADRA aperta da una persona → scelta: tutta la squadra o solo lei.
+    if (isSquadDialog && contestoDip) {
+      setConfermaSquadra(true);
+      return;
+    }
+    if (
+      !(await confirm({
+        title: 'Eliminare questo blocco?',
+        description:
+          (membriNomiDialog ? `Riguarda ${membriNomiDialog}. ` : '') +
+          'La pianificazione verrà rimossa. Operazione non annullabile.',
+        destructive: true,
+        confirmLabel: 'Elimina',
+      }))
+    )
+      return;
+    eliminaTutto();
   };
 
   return (
+    <>
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] w-full max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden sm:max-w-[1160px]">
         <DialogHeader>
@@ -908,6 +939,56 @@ function BloccoDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Card di SQUADRA: scelta "tutta la squadra" (default) vs "solo la persona". */}
+    {confermaSquadra ? (
+      <Dialog open onOpenChange={(o) => !o && setConfermaSquadra(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminare questo blocco?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            È un blocco di <strong>squadra</strong> ({membriNomiDialog}). Vuoi eliminarlo per tutti
+            oppure solo per {contestoDip ? nomeDip(contestoDip) : 'questa persona'}?
+          </p>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setConfermaSquadra(false)}
+              disabled={pending}
+            >
+              Annulla
+            </Button>
+            {contestoDip ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setConfermaSquadra(false);
+                  eliminaSoloMembro();
+                }}
+                disabled={pending}
+              >
+                Elimina solo {nomeDip(contestoDip)}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              onClick={() => {
+                setConfermaSquadra(false);
+                eliminaTutto();
+              }}
+              disabled={pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="h-4 w-4" /> Elimina tutta la squadra
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    ) : null}
+    </>
   );
 }
 
@@ -1579,7 +1660,7 @@ export function PianificazioneClient({
                                     key={b.id}
                                     b={b}
                                     conflitto={conflittoSet.has(`${d.id}|${g}|${b.id}`)}
-                                    onOpen={() => setDialog(formDaBlocco(b))}
+                                    onOpen={() => setDialog(formDaBlocco(b, d.id))}
                                     drag={gridDrag}
                                   />
                                 ))}

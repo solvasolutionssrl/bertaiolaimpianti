@@ -611,6 +611,76 @@ export async function eliminaBlocco(id: string): Promise<{ ok: true } | { ok: fa
   return { ok: true };
 }
 
+// ── rimuoviMembroBlocco ("elimina solo per Mario") ───────────────────
+
+const RimuoviMembroSchema = z.object({
+  bloccoId: z.string().uuid(),
+  dipendenteId: z.string().uuid(),
+});
+
+/**
+ * Toglie UN dipendente da un blocco (la squadra resta). Se era l'ultimo membro,
+ * elimina l'intero blocco (difensivo: la UI offre questa scelta solo per squadre
+ * con ≥2 membri). Alternativa a `eliminaBlocco` (che rimuove tutto).
+ */
+export async function rimuoviMembroBlocco(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = RimuoviMembroSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  let g;
+  try {
+    g = await guard();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const { ctx, supabase } = g;
+
+  const b = await caricaBloccoById(supabase, ctx.tenantId, parsed.data.bloccoId);
+  if (!b) return { ok: false, error: 'Blocco non trovato' };
+  if (!b.membri.includes(parsed.data.dipendenteId)) return { ok: true }; // già non presente
+
+  // Ultimo membro → elimina il blocco intero.
+  if (b.membri.length <= 1) {
+    const { error } = await supabase
+      .from('pianificazione_blocchi' as never)
+      .delete()
+      .eq('id', parsed.data.bloccoId)
+      .eq('tenant_id', ctx.tenantId);
+    if (error) return { ok: false, error: error.message };
+    await auditTenant(supabase, {
+      tenantId: ctx.tenantId,
+      actorUserId: ctx.userId,
+      actorRole: ctx.role,
+      entityType: 'pianificazione_blocco',
+      entityId: parsed.data.bloccoId,
+      action: 'pianificazione.blocco.elimina',
+    });
+    revalidatePath(PATH);
+    return { ok: true };
+  }
+
+  const { error } = await supabase
+    .from('pianificazione_membri' as never)
+    .delete()
+    .eq('blocco_id', parsed.data.bloccoId)
+    .eq('dipendente_id', parsed.data.dipendenteId)
+    .eq('tenant_id', ctx.tenantId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'pianificazione_blocco',
+    entityId: parsed.data.bloccoId,
+    action: 'pianificazione.blocco.rimuovi_membro',
+    after: { dipendente: parsed.data.dipendenteId },
+  });
+  revalidatePath(PATH);
+  return { ok: true };
+}
+
 // ── spostaBlocco (drag & drop su un altro giorno) ────────────────────
 
 const SpostaSchema = z.object({
