@@ -14,6 +14,7 @@ import {
   HardHat,
   Loader2,
   MapPin,
+  MoreHorizontal,
   Plus,
   Save,
   Search,
@@ -59,6 +60,7 @@ import {
 import { ExportMenu } from './export-menu';
 import { GruppoFilter } from './gruppo-filter';
 import { useGridDrag, type GridDrag } from './use-grid-drag';
+import { TIP } from '../_lib/tooltips';
 
 export interface DipRow {
   id: string;
@@ -937,8 +939,8 @@ function Chip({
           onOpen();
         }}
         title={`${label} · ${b.oraInizio}-${b.oraFine}${b.stato === 'bozza' ? ' · bozza' : ''} · ${
-          isSquad ? `squadra di ${b.membri.length}` : 'tecnico singolo'
-        }${drag ? ' · tieni premuto per spostare' : ''}`}
+          isSquad ? TIP.squadra(b.membri.length) : TIP.singolo
+        }${drag ? ` · ${TIP.chipAzioni}` : ''}`}
         className={
           'flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition ' +
           (conflitto ? 'ring-1 ring-destructive ' : '') +
@@ -947,22 +949,25 @@ function Chip({
         style={{
           backgroundColor: `hsl(${h} 70% 94%)`,
           color: `hsl(${h} 60% 28%)`,
-          borderLeft: `3px solid hsl(${h} 60% 45%)`,
+          // squadra = accento sinistro più marcato (card leggermente diversa)
+          borderLeft: `${isSquad ? 4 : 3}px solid hsl(${h} 60% 45%)`,
         }}
       >
         {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        {/* Simbolo squadra (👥N) vs tecnico singolo → l'azione seguirà il blocco. */}
+        {/* Riconoscimento immediato: squadra = pill piena colorata 👥N;
+            tecnico singolo = icona persona tenue. */}
         {isSquad ? (
           <span
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-black/[0.07] px-1 text-[9px] font-bold leading-none"
-            title={`Squadra di ${b.membri.length}`}
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none text-white shadow-sm"
+            style={{ backgroundColor: `hsl(${h} 55% 42%)` }}
+            title={TIP.squadra(b.membri.length)}
           >
             <Users className="h-2.5 w-2.5" />
             {b.membri.length}
           </span>
         ) : (
-          <User className="h-2.5 w-2.5 shrink-0 opacity-40" aria-label="Tecnico singolo" />
+          <User className="h-2.5 w-2.5 shrink-0 opacity-50" aria-label={TIP.singolo} />
         )}
         <span className="shrink-0 tabular-nums opacity-70">
           {b.fascia === 'mattina' ? 'M' : b.fascia === 'pomeriggio' ? 'P' : b.oraInizio}
@@ -972,15 +977,47 @@ function Chip({
         <span
           role="separator"
           aria-label="Estendi il blocco sui giorni successivi"
-          title={
-            isSquad
-              ? 'Trascina per estendere l’intera squadra sui giorni successivi'
-              : 'Trascina per estendere sui giorni successivi'
-          }
+          title={isSquad ? TIP.resizeSquadra : TIP.resizeSingolo}
           onPointerDown={(e) => drag.resizePointerDown(e, dragBlocco, label)}
           className="absolute inset-y-0 right-0 w-2 cursor-ew-resize rounded-r opacity-0 transition group-hover/chip:opacity-100"
           style={{ backgroundColor: `hsl(${h} 60% 45%)`, touchAction: 'none' }}
         />
+      ) : null}
+    </div>
+  );
+}
+
+/** Menu "⋯" per le azioni meno frequenti (Copia precedente, Salva bozza). */
+function MoreMenu({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen((o) => !o)}
+        title={TIP.altreAzioni}
+        aria-label={TIP.altreAzioni}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+      {open ? (
+        <div
+          className="absolute right-0 z-40 mt-1 w-60 overflow-hidden rounded-lg border border-border bg-white py-1 shadow-lg"
+          onClick={() => setOpen(false)}
+        >
+          {children}
+        </div>
       ) : null}
     </div>
   );
@@ -1271,12 +1308,14 @@ export function PianificazioneClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Navigazione settimana */}
           <div className="flex items-center rounded-lg border border-border">
             <button
               type="button"
               onClick={() => vaiA(addGiorni(lunediISO, -7))}
               className="flex h-9 w-9 items-center justify-center rounded-l-lg hover:bg-muted/50"
-              aria-label="Settimana precedente"
+              title={TIP.settimanaPrec}
+              aria-label={TIP.settimanaPrec}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -1284,6 +1323,7 @@ export function PianificazioneClient({
               type="button"
               onClick={() => vaiA(oggiLunediISO)}
               className="h-9 border-x border-border px-3 text-sm font-medium hover:bg-muted/50"
+              title={TIP.oggi}
             >
               Oggi
             </button>
@@ -1291,11 +1331,87 @@ export function PianificazioneClient({
               type="button"
               onClick={() => vaiA(addGiorni(lunediISO, 7))}
               className="flex h-9 w-9 items-center justify-center rounded-r-lg hover:bg-muted/50"
-              aria-label="Settimana successiva"
+              title={TIP.settimanaSucc}
+              aria-label={TIP.settimanaSucc}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+          {/* Azione primaria */}
+          <Button type="button" onClick={onPubblica} disabled={pending || bozze === 0} title={TIP.pubblica}>
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Pubblica
+          </Button>
+        </div>
+      </header>
+
+      {/* Toolbar — a sinistra la VISTA (cosa guardo), a destra le AZIONI */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Vista: Pianificazione ↔ Solo ferie (calendario assenze) */}
+        <div className="inline-flex overflow-hidden rounded-lg border border-border">
+          <button
+            type="button"
+            onClick={() => setVista('piano')}
+            title={TIP.vistaPiano}
+            className={
+              'flex h-9 items-center gap-1.5 px-3 text-sm font-medium transition-colors ' +
+              (vista === 'piano' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50')
+            }
+          >
+            <CalendarDays className="h-4 w-4" /> Pianificazione
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('ferie')}
+            title={TIP.vistaFerie}
+            className={
+              'flex h-9 items-center gap-1.5 border-l border-border px-3 text-sm font-medium transition-colors ' +
+              (vista === 'ferie' ? 'bg-rose-600 text-white' : 'text-muted-foreground hover:bg-muted/50')
+            }
+          >
+            <Umbrella className="h-4 w-4" /> Solo ferie
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={cerca}
+            onChange={(e) => setCerca(e.target.value)}
+            placeholder="Cerca dipendente…"
+            title={TIP.cercaDip}
+            className="h-9 w-52 rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
+          />
+        </div>
+        {/* Filtro gruppo lavoro (reparto) — multi-select, pilota anche l'export */}
+        {gruppi.length > 0 ? (
+          <GruppoFilter gruppi={gruppi} sel={gruppoSel} onChange={setGruppoSel} />
+        ) : null}
+        <label
+          className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-transparent px-1 text-sm text-muted-foreground hover:text-foreground"
+          title={TIP.soloTurni}
+        >
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={soloTurni}
+            onChange={(e) => setSoloTurni(e.target.checked)}
+          />
+          Solo a turni
+        </label>
+
+        {/* Azioni (a destra): primaria d'inserimento + export + overflow */}
+        <div className="ml-auto flex items-center gap-2">
+          {vista === 'piano' ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setDialog(formVuoto(giorni[0]!))}
+              title={TIP.nuovoBlocco}
+            >
+              <Plus className="h-4 w-4" /> Nuovo blocco
+            </Button>
+          ) : null}
           <ExportMenu
             lunediISO={lunediISO}
             giorni={giorni}
@@ -1311,83 +1427,25 @@ export function PianificazioneClient({
             logoUrl={logoUrl}
             brandColor={brandColor}
           />
-          <Button type="button" variant="outline" onClick={onCopia} disabled={pending}>
-            <Copy className="h-4 w-4" /> Copia precedente
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={segnaSalvato}
-            disabled={pending}
-            title="La pianificazione si salva da sola come bozza. Questo conferma il salvataggio."
-          >
-            <Save className="h-4 w-4" /> Salva bozza
-          </Button>
-          <Button type="button" onClick={onPubblica} disabled={pending || bozze === 0}>
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            Pubblica
-          </Button>
+          <MoreMenu>
+            <button
+              type="button"
+              onClick={onCopia}
+              disabled={pending}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50 disabled:opacity-50"
+            >
+              <Copy className="h-4 w-4" /> Copia settimana precedente
+            </button>
+            <button
+              type="button"
+              onClick={segnaSalvato}
+              disabled={pending}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted/50 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" /> Salva bozza
+            </button>
+          </MoreMenu>
         </div>
-      </header>
-
-      {/* Filtri */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Vista: Pianificazione ↔ Solo ferie (calendario assenze) */}
-        <div className="inline-flex overflow-hidden rounded-lg border border-border">
-          <button
-            type="button"
-            onClick={() => setVista('piano')}
-            className={
-              'flex h-9 items-center gap-1.5 px-3 text-sm font-medium transition-colors ' +
-              (vista === 'piano' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50')
-            }
-          >
-            <CalendarDays className="h-4 w-4" /> Pianificazione
-          </button>
-          <button
-            type="button"
-            onClick={() => setVista('ferie')}
-            className={
-              'flex h-9 items-center gap-1.5 border-l border-border px-3 text-sm font-medium transition-colors ' +
-              (vista === 'ferie' ? 'bg-rose-600 text-white' : 'text-muted-foreground hover:bg-muted/50')
-            }
-          >
-            <Umbrella className="h-4 w-4" /> Solo ferie
-          </button>
-        </div>
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={cerca}
-            onChange={(e) => setCerca(e.target.value)}
-            placeholder="Cerca dipendente…"
-            className="h-9 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
-          />
-        </div>
-        {/* Filtro gruppo lavoro (reparto) — multi-select, pilota anche l'export */}
-        {gruppi.length > 0 ? (
-          <GruppoFilter gruppi={gruppi} sel={gruppoSel} onChange={setGruppoSel} />
-        ) : null}
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="h-4 w-4"
-            checked={soloTurni}
-            onChange={(e) => setSoloTurni(e.target.checked)}
-          />
-          Solo a turni
-        </label>
-        {vista === 'piano' ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            onClick={() => setDialog(formVuoto(giorni[0]!))}
-          >
-            <Plus className="h-4 w-4" /> Nuovo blocco
-          </Button>
-        ) : null}
       </div>
 
       {/* Griglia — celle a larghezza fissa (table-fixed), header giorni fisso
@@ -1514,7 +1572,8 @@ export function PianificazioneClient({
                                   onClick={() => setDialog(formVuoto(g, d.id))}
                                   className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 text-muted-foreground/40 transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
                                   style={{ minHeight: cella.length ? '1.5rem' : '2.5rem' }}
-                                  aria-label="Aggiungi assegnazione"
+                                  title={TIP.aggiungiCella}
+                                  aria-label={TIP.aggiungiCella}
                                 >
                                   <Plus className="h-4 w-4" />
                                 </button>

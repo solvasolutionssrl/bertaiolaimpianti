@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Check, ChevronDown, Users } from 'lucide-react';
+import { TIP } from '../_lib/tooltips';
 
 interface GruppoOpt {
   id: string;
@@ -49,7 +50,7 @@ export function GruppoFilter({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        title="Filtra per gruppo lavoro"
+        title={TIP.filtroGruppi}
         className={
           'flex h-9 items-center gap-1.5 rounded-md border bg-background px-2.5 text-sm focus:border-primary focus:outline-none ' +
           (sel.length > 0 ? 'border-primary text-primary' : 'border-input text-muted-foreground')

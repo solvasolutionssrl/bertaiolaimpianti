@@ -12,6 +12,7 @@ import {
   type VocePdf,
   type GiornoPdf,
 } from '../_lib/export-pdf';
+import { TIP } from '../_lib/tooltips';
 
 const SENZA_GRUPPO = '__senza__';
 
@@ -265,7 +266,14 @@ export function ExportMenu({
 
   return (
     <div ref={ref} className="relative">
-      <Button type="button" variant="outline" onClick={() => setOpen((o) => !o)} disabled={busy}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen((o) => !o)}
+        disabled={busy}
+        title={TIP.esportaPdf}
+      >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4" />}
         Esporta PDF
         <ChevronDown className="h-3.5 w-3.5 opacity-70" />

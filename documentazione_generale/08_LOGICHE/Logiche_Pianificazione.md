@@ -18,7 +18,7 @@ Registro di come funziona la Pianificazione e delle scelte prese, a supporto del
 > **Regola ferrea (l'azione segue il blocco)**: allargare (resize) e spostare agiscono **sempre sull'intero blocco**.
 > - Se il blocco è una **squadra** (più persone) → l'azione riguarda **tutta la squadra** (membri + mezzi).
 > - Se il blocco è un **tecnico singolo** → riguarda **solo lui**.
-> Ogni chip mostra un **simbolo**: 👥 + numero = squadra, icona singola = tecnico da solo. Così si capisce a colpo d'occhio cosa toccherà l'azione. (Il dialog "Ripeti su più giorni" è sempre a livello di squadra.)
+> **Riconoscimento immediato squadra vs singolo** su ogni card: **squadra** = pill **piena colorata** (tinta del cantiere, testo bianco) con 👥 + numero, e accento sinistro un filo più marcato; **tecnico singolo** = icona persona **tenue**, senza colore. Scorrendo la griglia le pill colorate saltano all'occhio = squadre. (Il dialog "Ripeti su più giorni" è sempre a livello di squadra.)
 
 > **Regola ferrea (ferie = HARD)**: chi ha ferie/permesso **approvato** che si sovrappone a giorno/orario **non è assegnabile**. Vale in creazione/modifica **e** in ripeti/sposta (server-side, `assenzeInConflitto`). I conflitti "soft" (persona/mezzo già occupato) invece **non bloccano**: avvisano ("Salva comunque") o compaiono come **ring rosso**.
 
@@ -68,3 +68,13 @@ Ogni modifica si **auto-salva** subito come bozza. Una **pill di stato** ("Salva
 - **Dual-addon (commesse + dipendenti insieme, in futuro)**: le funzioni lavorano sulle astrazioni generiche blocco/assenza/gruppo, senza nuovo coupling ad `app_mode` o al mondo kantiere; l'export legge nome tenant e label target dai campi generici. Integrabili senza modifiche.
 - **Audit**: ogni mutazione nuova è tracciata (`pianificazione.blocco.ripeti`, `pianificazione.blocco.sposta`) via `auditTenant`.
 - **Logica pura testata** (`@kommessa/api/pianificazione`): `settimanaISO`, `slugPianificazione` (+ le funzioni preesistenti). 30 test.
+
+## 8. Header/toolbar (gerarchia) e tooltip
+
+Con l'aumentare delle funzioni l'header è stato ordinato su due fasce coerenti:
+- **Fascia 1 — contesto + azione primaria**: titolo + sottotitolo (range settimana · badge bozza · "Salvato"); a destra la **navigazione settimana** (`‹ Oggi ›`) e l'unico bottone **primario "Pubblica"**.
+- **Fascia 2 — toolbar**: a **sinistra** i controlli di *vista* (Pianificazione | Solo ferie · Cerca · Gruppi · Solo a turni); a **destra** le *azioni* (`+ Nuovo blocco`, `Esporta PDF ▾`, e un menu **⋯** che raccoglie le azioni meno frequenti — Copia settimana precedente, Salva bozza).
+- Un solo primario (Pubblica), il resto `outline`/menu → gerarchia chiara.
+
+**Tooltip (`title`)**: presenti su tutti i controlli e i gesti (navigazione, azioni, filtri, "+" cella, card, maniglia di resize). I testi sono **centralizzati** in `apps/web/app/office/personale/pianificazione/_lib/tooltips.ts` (oggetto `TIP`), un unico posto per mantenerli.
+> ⚠️ **Regola**: se si cambia il comportamento di un controllo/gesto, aggiornare il testo in `tooltips.ts` (non nei singoli componenti), così i suggerimenti restano coerenti col funzionamento reale.
