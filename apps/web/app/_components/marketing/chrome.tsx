@@ -59,6 +59,19 @@ export function MarketingShell({
   );
 }
 
+function AccediBtn({ className = '' }: { className?: string }) {
+  return (
+    <Link
+      href="/login"
+      prefetch
+      className={`inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95 ${className}`}
+    >
+      Accedi
+      <ArrowRight className="h-3.5 w-3.5" />
+    </Link>
+  );
+}
+
 export function MarketingNav({ active }: { active?: NavKey }) {
   const links: { key: NavKey; href: string; label: string }[] = [
     { key: 'commesse', href: '/', label: 'Commesse' },
@@ -66,46 +79,42 @@ export function MarketingNav({ active }: { active?: NavKey }) {
     { key: 'contatti', href: '/contatti', label: 'Contatti' },
   ];
   return (
-    <nav className="sticky top-3 z-40 mx-3 flex max-w-5xl items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/70 px-5 py-3 shadow-soft backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-background/55 sm:mx-auto sm:px-6">
-      <Link href="/" className="flex items-center gap-2.5">
-        <BrandMark />
-        <span className="flex flex-col leading-none">
-          <span className="text-base font-semibold tracking-tight">Kommessa</span>
-          <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
-            suite SOLVA
+    <nav className="sticky top-3 z-40 mx-3 flex max-w-5xl flex-col gap-2.5 rounded-2xl border border-border/60 bg-background/70 px-4 py-2.5 shadow-soft backdrop-blur-xl transition-colors supports-[backdrop-filter]:bg-background/55 sm:mx-auto sm:px-6 md:flex-row md:items-center md:justify-between md:gap-3 md:py-3">
+      {/* riga 1 (mobile): brand + Accedi · su desktop solo il brand a sinistra */}
+      <div className="flex items-center justify-between gap-3">
+        <Link href="/" className="flex items-center gap-2.5">
+          <BrandMark />
+          <span className="flex flex-col leading-none">
+            <span className="text-base font-semibold tracking-tight">Kommessa</span>
+            <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+              suite SOLVA
+            </span>
           </span>
-        </span>
-      </Link>
-
-      <div className="hidden items-center gap-7 text-sm md:flex">
-        {links.map((l) => (
-          <Link
-            key={l.key}
-            href={l.href}
-            className={
-              active === l.key
-                ? 'font-medium text-foreground'
-                : 'text-foreground/70 transition hover:text-foreground'
-            }
-          >
-            {l.label}
-            {l.key === 'cantiere' && (
-              <span className="ml-1.5 rounded-full bg-accent-soft px-1.5 py-0.5 align-middle font-mono text-[8px] uppercase tracking-[0.14em] text-accent-soft-foreground">
-                add-on
-              </span>
-            )}
-          </Link>
-        ))}
+        </Link>
+        <AccediBtn className="md:hidden" />
       </div>
 
-      <Link
-        href="/login"
-        prefetch
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95"
-      >
-        Accedi
-        <ArrowRight className="h-3.5 w-3.5" />
-      </Link>
+      {/* link: su mobile chip centrati (raggiungibili!), su desktop testo inline */}
+      <div className="flex items-center justify-center gap-1.5 md:gap-7">
+        {links.map((l) => {
+          const on = active === l.key;
+          return (
+            <Link
+              key={l.key}
+              href={l.href}
+              className={`rounded-full border px-3 py-1 text-[13px] font-medium transition md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-0 md:text-sm ${
+                on
+                  ? 'border-primary/30 bg-primary-soft/60 text-primary md:text-foreground'
+                  : 'border-border/60 bg-background/50 text-foreground/70 hover:text-foreground md:bg-transparent'
+              }`}
+            >
+              {l.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      <AccediBtn className="hidden md:inline-flex" />
     </nav>
   );
 }

@@ -5,6 +5,7 @@ import {
   MarketingFooter,
   SectionHeading,
 } from './_components/marketing/chrome';
+import { Section } from './_components/marketing/sections';
 import {
   ArrowRight,
   Mic,
@@ -321,31 +322,32 @@ function ComeFunziona() {
     },
   ];
   return (
-    <section id="come-funziona" className="mx-auto max-w-6xl px-6 py-20">
+    <Section tone="navy" texture="gridDark" id="come-funziona">
       <SectionHeading
         eyebrow="Workflow"
         title="Dal sopralluogo alla consegna in quattro passi"
         subtitle="Tutto il flusso operativo del cantiere, senza fogli Excel né foto disperse su WhatsApp."
+        tone="dark"
       />
       <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {steps.map(({ n, icon: Icon, title, body }) => (
           <div
             key={n}
-            className="group relative overflow-hidden rounded-xl border border-border bg-card/80 p-5 shadow-soft-md backdrop-blur transition hover:-translate-y-0.5 hover:shadow-soft-lg"
+            className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] p-5 shadow-soft backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/[0.08]"
           >
-            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/60">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground/70">
               {n}
             </span>
-            <div className="mt-3 inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary-soft text-primary">
+            <div className="mt-3 inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Icon className="h-5 w-5" />
             </div>
-            <h3 className="mt-4 text-base font-semibold tracking-tight">{title}</h3>
+            <h3 className="mt-4 text-base font-semibold tracking-tight text-foreground">{title}</h3>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{body}</p>
             <span className="absolute -right-6 -top-6 h-16 w-16 rounded-full bg-accent/0 transition group-hover:bg-accent/10" />
           </div>
         ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -366,45 +368,29 @@ function Funzionalita() {
     { icon: FileText, title: 'Report con un click', body: 'PDF di chiusura cantiere con foto, fasi e documenti. Pronto da inviare o archiviare.' },
   ];
   return (
-    <section
-      id="funzionalita"
-      style={{ background: 'linear-gradient(160deg, hsl(220 34% 88%), hsl(222 26% 92%) 48%, hsl(26 50% 90%))' }}
-      className="relative isolate overflow-hidden border-y border-primary/15"
-    >
-      <div
-        aria-hidden
-        style={{ background: 'radial-gradient(circle at 50% 50%, hsl(218 92% 60% / 0.22), transparent 70%)' }}
-        className="absolute -left-24 -top-16 -z-10 h-80 w-80 rounded-full blur-3xl"
+    <Section tone="mist" texture="dots" id="funzionalita">
+      <SectionHeading
+        eyebrow="Funzionalità"
+        title="Tutto ciò che serve in cantiere, niente di più"
+        subtitle="Dialogo con la voce, upload che reggono la rete debole, annotazioni reali, verbali AI e sync con quello che già usate."
       />
-      <div
-        aria-hidden
-        style={{ background: 'radial-gradient(circle at 50% 50%, hsl(24 95% 58% / 0.18), transparent 70%)' }}
-        className="absolute -right-20 -bottom-10 -z-10 h-72 w-72 rounded-full blur-3xl"
-      />
-      <div className="mx-auto max-w-6xl px-6 py-20">
-        <SectionHeading
-          eyebrow="Funzionalità"
-          title="Tutto ciò che serve in cantiere, niente di più"
-          subtitle="Dialogo con la voce, upload che reggono la rete debole, annotazioni reali, verbali AI e sync con quello che già usate."
-        />
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map(({ icon: Icon, title, body }) => (
-            <div
-              key={title}
-              className="rounded-xl border border-border bg-card p-5 shadow-soft-md transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-lg"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary-soft text-primary">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {items.map(({ icon: Icon, title, body }) => (
+          <div
+            key={title}
+            className="rounded-xl border border-border bg-card p-5 shadow-soft-md transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-lg"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary-soft text-primary">
+                <Icon className="h-4 w-4" />
+              </span>
+              <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
             </div>
-          ))}
-        </div>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{body}</p>
+          </div>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -437,35 +423,33 @@ function PerChi() {
     },
   ];
   return (
-    <section id="per-chi" className="relative">
-      <div className="mx-auto max-w-6xl px-6 py-20">
-        <SectionHeading
-          eyebrow="Per chi"
-          title="Tre ruoli, una sola fonte di verità"
-          subtitle="Stesso DB, stessa cartella, viste diverse. Niente sincronizzazioni manuali tra ufficio e cantiere."
-        />
-        <div className="mt-12 grid gap-4 md:grid-cols-3">
-          {profili.map(({ icon: Icon, label, title, body, tag }) => (
-            <div
-              key={label}
-              className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-soft-md transition hover:-translate-y-0.5 hover:shadow-soft-lg"
-            >
-              <div className="flex items-center justify-between">
-                <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                  <Icon className="h-5 w-5" />
-                </span>
-                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-                  {tag}
-                </span>
-              </div>
-              <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-primary">{label}</p>
-              <h3 className="mt-1 text-lg font-semibold tracking-tight">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+    <Section tone="glow" texture="grid" id="per-chi">
+      <SectionHeading
+        eyebrow="Per chi"
+        title="Tre ruoli, una sola fonte di verità"
+        subtitle="Stesso DB, stessa cartella, viste diverse. Niente sincronizzazioni manuali tra ufficio e cantiere."
+      />
+      <div className="mt-12 grid gap-4 md:grid-cols-3">
+        {profili.map(({ icon: Icon, label, title, body, tag }) => (
+          <div
+            key={label}
+            className="relative overflow-hidden rounded-xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-6 shadow-soft-md transition hover:-translate-y-0.5 hover:shadow-soft-lg"
+          >
+            <div className="flex items-center justify-between">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <Icon className="h-5 w-5" />
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                {tag}
+              </span>
             </div>
-          ))}
-        </div>
+            <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.18em] text-primary">{label}</p>
+            <h3 className="mt-1 text-lg font-semibold tracking-tight">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
+          </div>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -482,7 +466,7 @@ function KantiereTeaser() {
     { icon: ListChecks, label: 'Pianificazione e personale' },
   ];
   return (
-    <section className="mx-auto max-w-6xl px-6 py-8">
+    <Section tone="sand" texture="dotsAccent">
       <div
         className="relative isolate overflow-hidden rounded-3xl border border-accent/30 p-8 shadow-soft-lg sm:p-10"
         style={{ background: 'linear-gradient(135deg, hsl(28 100% 96%), hsl(32 28% 99%) 45%, hsl(220 90% 97%))' }}
@@ -497,16 +481,17 @@ function KantiereTeaser() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent-soft-foreground">
               <HardHat className="h-3.5 w-3.5" />
-              Pacchetto aggiuntivo
+              Modulo aggiuntivo · presenze e cantiere
             </span>
             <h2 className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl">
               Hai anche i cantieri da gestire?{' '}
               <span className="text-brand-grad">Aggiungi Kantiere.</span>
             </h2>
             <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Presenze col QR, ore e straordinari calcolati da soli, viaggi e km,
-              mezzi, note spese con l&apos;AI, pianificazione e personale. Il
-              cantiere digitale, sullo stesso account delle commesse.
+              Presenze col QR sulla porta del cantiere, ore e straordinari
+              calcolati da soli, viaggi e km, mezzi, note spese con l&apos;AI,
+              pianificazione e personale. Il cantiere digitale, sullo stesso
+              account delle commesse.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               {pills.map(({ icon: Icon, label }) => (
@@ -519,13 +504,24 @@ function KantiereTeaser() {
                 </span>
               ))}
             </div>
-            <Link
-              href="/kantiere"
-              className="group mt-6 inline-flex h-12 items-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95"
-            >
-              Scopri Kantiere
-              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-            </Link>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <Link
+                href="/kantiere"
+                className="group inline-flex h-12 items-center gap-2 rounded-md bg-primary px-7 text-sm font-medium text-primary-foreground shadow-glow-brand transition hover:opacity-95 active:translate-y-px"
+              >
+                Scopri il modulo Kantiere
+                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+              </Link>
+              <Link
+                href="/contatti"
+                className="inline-flex h-12 items-center gap-2 rounded-md border border-border bg-card/80 px-6 text-sm font-medium text-foreground backdrop-blur transition hover:bg-card"
+              >
+                Richiedi una demo
+              </Link>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Una pagina dedicata con presenze live, viaggi, note spese e il badge di cantiere.
+            </p>
           </div>
 
           {/* mini preview presenze (CSS-only) */}
@@ -584,7 +580,7 @@ function KantiereTeaser() {
           </div>
         </div>
       </div>
-    </section>
+    </Section>
   );
 }
 
@@ -602,35 +598,25 @@ function Architettura() {
     'Accesso da web e telefono con lo stesso account',
   ];
   return (
-    <section
-      id="architettura"
-      style={{ background: 'linear-gradient(180deg, hsl(221 39% 17%), hsl(223 43% 11%))' }}
-      className="dark relative isolate overflow-hidden py-20 text-foreground"
-    >
-      <HeroParallax tone="dark" />
-      <div className="absolute inset-0 -z-10 bg-grid opacity-[0.12]" aria-hidden />
-      <div aria-hidden className="border-brand-line absolute inset-x-0 top-0 h-0.5" />
-
-      <div className="mx-auto max-w-6xl px-6">
-        <SectionHeading
-          eyebrow="Garanzie"
-          title="Sicurezza, conformità e continuità del dato"
-          subtitle="Costruita in Italia, ospitata in Europa. Tutti i dati restano dove devono restare, anche dopo la chiusura della commessa."
-          tone="dark"
-        />
-        <div className="mt-12 grid gap-2.5 sm:grid-cols-2">
-          {garanzie.map((g) => (
-            <div
-              key={g}
-              className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-3 text-sm shadow-soft backdrop-blur"
-            >
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
-              <span className="text-foreground/90">{g}</span>
-            </div>
-          ))}
-        </div>
+    <Section tone="navy" texture="gridDark" id="architettura">
+      <SectionHeading
+        eyebrow="Garanzie"
+        title="Sicurezza, conformità e continuità del dato"
+        subtitle="Costruita in Italia, ospitata in Europa. Tutti i dati restano dove devono restare, anche dopo la chiusura della commessa."
+        tone="dark"
+      />
+      <div className="mt-12 grid gap-2.5 sm:grid-cols-2">
+        {garanzie.map((g) => (
+          <div
+            key={g}
+            className="flex items-start gap-2.5 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-3 text-sm shadow-soft backdrop-blur"
+          >
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+            <span className="text-foreground/90">{g}</span>
+          </div>
+        ))}
       </div>
-    </section>
+    </Section>
   );
 }
 

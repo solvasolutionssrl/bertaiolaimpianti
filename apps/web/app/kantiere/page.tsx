@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import type { ReactNode, CSSProperties } from 'react';
 import {
   ArrowRight,
   QrCode,
@@ -27,6 +26,7 @@ import {
   Users,
 } from 'lucide-react';
 import { MarketingShell, SectionHeading } from '../_components/marketing/chrome';
+import { Section, Split, Copy } from '../_components/marketing/sections';
 import { PresenzeLive } from './_components/presenze-live';
 import { AppTimbrature } from './_components/app-timbrature';
 import { QrIngresso } from './_components/qr-ingresso';
@@ -44,128 +44,10 @@ export const metadata = {
     'Il modulo cantiere di Kommessa: il tecnico timbra col QR sulla porta del cantiere, e ore, viaggi, mezzi e note spese si compilano da soli. L’ufficio vede tutto in tempo reale.',
 };
 
-/* ──────────────────────────────────────────────────────────────────────── */
-/*  Primitive di sezione: fondi alternati + texture per dare ritmo           */
-/* ──────────────────────────────────────────────────────────────────────── */
-
-type Tone = 'aurora' | 'paper' | 'blue' | 'peach' | 'ink';
-type Tex = 'dots' | 'dotsAccent' | 'grid' | 'dotsDark' | 'gridDark';
-
-const TONE: Record<Tone, { style?: CSSProperties; extra?: string; border?: string; dark?: boolean }> = {
-  aurora: { extra: 'bg-aurora-brand' },
-  paper: { style: { background: 'linear-gradient(180deg, hsl(32 28% 98%), hsl(30 22% 96%))' } },
-  blue: {
-    style: { background: 'linear-gradient(160deg, hsl(220 42% 93%), hsl(214 44% 96%) 55%, hsl(220 36% 92%))' },
-    border: 'border-y border-primary/10',
-  },
-  peach: {
-    style: { background: 'linear-gradient(160deg, hsl(28 62% 95%), hsl(32 40% 97%) 52%, hsl(24 55% 93%))' },
-    border: 'border-y border-accent/15',
-  },
-  ink: {
-    style: { background: 'linear-gradient(180deg, hsl(221 45% 13%), hsl(223 48% 9%))' },
-    border: 'border-y border-white/10',
-    dark: true,
-  },
-};
-
-const TEX: Record<Tex, string> = {
-  dots: 'bg-dots opacity-70',
-  dotsAccent: 'bg-dots-accent opacity-70',
-  grid: 'bg-grid opacity-60',
-  dotsDark: 'bg-dots-dark',
-  gridDark: 'bg-grid-dark',
-};
-
-function Section({
-  tone = 'paper',
-  texture,
-  id,
-  children,
-  narrow,
-}: {
-  tone?: Tone;
-  texture?: Tex;
-  id?: string;
-  children: ReactNode;
-  narrow?: boolean;
-}) {
-  const cfg = TONE[tone];
-  return (
-    <section
-      id={id}
-      className={`relative isolate overflow-hidden ${cfg.dark ? 'dark ' : ''}${cfg.extra ?? ''} ${cfg.border ?? ''}`}
-      style={cfg.style}
-    >
-      {texture ? (
-        <div aria-hidden className={`pointer-events-none absolute inset-0 -z-10 ${TEX[texture]}`} />
-      ) : null}
-      {cfg.dark ? (
-        <>
-          <div
-            aria-hidden
-            style={{ background: 'radial-gradient(circle at 30% 30%, hsl(218 92% 55% / 0.22), transparent 60%)' }}
-            className="absolute -left-24 -top-24 -z-10 h-96 w-96 rounded-full blur-3xl"
-          />
-          <div
-            aria-hidden
-            style={{ background: 'radial-gradient(circle at 60% 40%, hsl(24 95% 55% / 0.16), transparent 60%)' }}
-            className="absolute -bottom-16 -right-16 -z-10 h-80 w-80 rounded-full blur-3xl"
-          />
-        </>
-      ) : null}
-      <div className={`mx-auto ${narrow ? 'max-w-4xl' : 'max-w-6xl'} px-6 py-20 md:py-24`}>{children}</div>
-    </section>
-  );
-}
-
-function Split({ reverse, media, children }: { reverse?: boolean; media: ReactNode; children: ReactNode }) {
-  return (
-    <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
-      <div className={reverse ? 'lg:order-2' : ''}>{children}</div>
-      <div className={reverse ? 'lg:order-1' : ''}>{media}</div>
-    </div>
-  );
-}
-
-function Copy({
-  eyebrow,
-  title,
-  body,
-  bullets,
-  tone = 'light',
-  children,
-}: {
-  eyebrow: string;
-  title: ReactNode;
-  body: string;
-  bullets?: string[];
-  tone?: 'light' | 'dark';
-  children?: ReactNode;
-}) {
-  return (
-    <div>
-      <p className={`font-mono text-[11px] uppercase tracking-[0.18em] ${tone === 'dark' ? 'text-accent' : 'text-primary'}`}>
-        {eyebrow}
-      </p>
-      <h2 className="mt-2 text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>
-      <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground sm:text-base">{body}</p>
-      {bullets ? (
-        <ul className="mt-5 space-y-2.5">
-          {bullets.map((b) => (
-            <li key={b} className="flex items-start gap-2.5 text-sm text-foreground/90">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden />
-              <span>{b}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {children}
-    </div>
-  );
-}
-
-/* ──────────────────────────────────────────────────────────────────────── */
+/* Ritmo dei fondi (periodo 3): navy → tinta chiara → gradient, ripetuto.
+   I render con testo/SVG scuro (presenze, percorsi, analisi) stanno sulle
+   sezioni chiare; i render auto-contenuti (QR sulla porta, telefono) e le
+   sezioni testo/chip stanno sul navy. Primitive in _components/marketing. */
 
 export default function KantierePage() {
   return (
@@ -173,12 +55,12 @@ export default function KantierePage() {
       <Hero />
       <ComeFunzionaQr />
       <Presenze />
-      <OreRapportino />
       <ViaggiMezzi />
+      <OreRapportino />
       <Kontabilita />
       <Pianificazione />
-      <TuttoIncluso />
       <BadgeCantiere />
+      <TuttoIncluso />
       <Bundle />
       <FinalCta />
     </MarketingShell>
@@ -199,7 +81,7 @@ function Hero() {
       <div className="animate-fade-up">
         <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent-soft-foreground">
           <HardHat className="h-3.5 w-3.5" />
-          Pacchetto aggiuntivo · presenze e cantiere
+          Modulo aggiuntivo di Kommessa · presenze e cantiere
         </span>
       </div>
       <h1
@@ -246,7 +128,7 @@ function Hero() {
   );
 }
 
-/* ── COME FUNZIONA · IL QR (dark) ─────────────────────────────────────── */
+/* ── 1 · COME FUNZIONA · IL QR (navy) ─────────────────────────────────── */
 
 function ComeFunzionaQr() {
   const steps = [
@@ -255,7 +137,7 @@ function ComeFunzionaQr() {
     { n: '3', t: 'Ingresso registrato', d: 'Il turno parte e l’ora viene segnata. A fine giornata, lo stesso QR per l’uscita.' },
   ];
   return (
-    <Section tone="ink" texture="gridDark" id="come-funziona">
+    <Section tone="navy" texture="gridDark" id="come-funziona">
       <SectionHeading
         eyebrow="Come funziona"
         title="Tutto parte da un QR sulla porta del cantiere"
@@ -287,11 +169,11 @@ function ComeFunzionaQr() {
   );
 }
 
-/* ── PRESENZE LIVE (paper) ────────────────────────────────────────────── */
+/* ── 2 · PRESENZE LIVE (mist) ─────────────────────────────────────────── */
 
 function Presenze() {
   return (
-    <Section tone="paper" texture="dots">
+    <Section tone="mist" texture="dots">
       <SectionHeading
         eyebrow="In tempo reale"
         title="Chi c’è, dove, da che ora"
@@ -304,32 +186,11 @@ function Presenze() {
   );
 }
 
-/* ── ORE E RAPPORTINO (blue, split) ───────────────────────────────────── */
-
-function OreRapportino() {
-  return (
-    <Section tone="blue">
-      <Split media={<AppTimbrature />}>
-        <Copy
-          eyebrow="Ore e rapportino"
-          title="Le ore si calcolano da sole"
-          body="Dalle timbrature nasce il rapportino della giornata: ore ordinarie, straordinari e pause, senza fogli da compilare a mano."
-          bullets={[
-            'Straordinari e pause calcolati in automatico',
-            'Le giornate regolari si approvano da sole',
-            'Ogni correzione dell’ufficio resta tracciata',
-          ]}
-        />
-      </Split>
-    </Section>
-  );
-}
-
-/* ── VIAGGI E MEZZI (paper, split reverse) ────────────────────────────── */
+/* ── 3 · VIAGGI E MEZZI (glow, split reverse) ─────────────────────────── */
 
 function ViaggiMezzi() {
   return (
-    <Section tone="paper" texture="grid">
+    <Section tone="glow" texture="grid">
       <Split reverse media={<PercorsiGiornata />}>
         <Copy
           eyebrow="Viaggi e mezzi"
@@ -352,11 +213,33 @@ function ViaggiMezzi() {
   );
 }
 
-/* ── KONTABILITÀ (peach, split) ───────────────────────────────────────── */
+/* ── 4 · ORE E RAPPORTINO (navy, split) ───────────────────────────────── */
+
+function OreRapportino() {
+  return (
+    <Section tone="navy" texture="gridDark">
+      <Split media={<AppTimbrature />}>
+        <Copy
+          tone="dark"
+          eyebrow="Ore e rapportino"
+          title="Le ore si calcolano da sole"
+          body="Dalle timbrature nasce il rapportino della giornata: ore ordinarie, straordinari e pause, senza fogli da compilare a mano."
+          bullets={[
+            'Straordinari e pause calcolati in automatico',
+            'Le giornate regolari si approvano da sole',
+            'Ogni correzione dell’ufficio resta tracciata',
+          ]}
+        />
+      </Split>
+    </Section>
+  );
+}
+
+/* ── 5 · KONTABILITÀ (sand, split) ────────────────────────────────────── */
 
 function Kontabilita() {
   return (
-    <Section tone="peach">
+    <Section tone="sand" texture="dotsAccent">
       <Split media={<NotaSpeseAI />}>
         <Copy
           eyebrow="Kontabilità"
@@ -390,11 +273,11 @@ function Kontabilita() {
   );
 }
 
-/* ── PIANIFICAZIONE & PERSONALE (paper, split reverse) ────────────────── */
+/* ── 6 · PIANIFICAZIONE & PERSONALE (glow, split reverse) ─────────────── */
 
 function Pianificazione() {
   return (
-    <Section tone="paper" texture="dots">
+    <Section tone="glow" texture="grid">
       <Split reverse media={<PianificazioneSettimanale />}>
         <Copy
           eyebrow="Pianificazione e personale"
@@ -411,47 +294,7 @@ function Pianificazione() {
   );
 }
 
-/* ── TUTTO INCLUSO (chip band, paper) ─────────────────────────────────── */
-
-function TuttoIncluso() {
-  const chips = [
-    { icon: QrCode, label: 'QR di cantiere' },
-    { icon: Radio, label: 'Presenze in tempo reale' },
-    { icon: Clock, label: 'Rapportino automatico' },
-    { icon: Route, label: 'Viaggi con km reali' },
-    { icon: Truck, label: 'Mezzi e autisti' },
-    { icon: Receipt, label: 'Note spese con AI' },
-    { icon: PieChart, label: 'Costo del cantiere' },
-    { icon: CalendarDays, label: 'Pianificazione settimanale' },
-    { icon: Palmtree, label: 'Ferie e permessi' },
-    { icon: MapPin, label: 'Trasferimenti tra cantieri' },
-    { icon: Upload, label: 'Import dei cantieri' },
-    { icon: RefreshCw, label: 'Sync col tuo gestionale' },
-  ];
-  return (
-    <Section tone="blue" narrow>
-      <div className="text-center">
-        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">Tutto incluso</p>
-        <h2 className="mx-auto mt-2 max-w-2xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
-          Dodici cose in meno di cui preoccuparsi
-        </h2>
-      </div>
-      <div className="mt-9 flex flex-wrap justify-center gap-2.5">
-        {chips.map(({ icon: Icon, label }) => (
-          <span
-            key={label}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-3.5 py-2 text-[13px] font-medium text-foreground shadow-soft backdrop-blur"
-          >
-            <Icon className="h-3.5 w-3.5 text-primary" />
-            {label}
-          </span>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-/* ── IL BADGE DI CANTIERE (dark, normativa) ───────────────────────────── */
+/* ── 7 · IL BADGE DI CANTIERE (navy, normativa) ───────────────────────── */
 
 function BadgeCantiere() {
   const cards = [
@@ -477,7 +320,7 @@ function BadgeCantiere() {
     },
   ];
   return (
-    <Section tone="ink" texture="gridDark">
+    <Section tone="navy" texture="gridDark">
       <SectionHeading
         eyebrow="Il badge di cantiere"
         title="La legge vuole sapere chi c’è in cantiere. Kantiere te lo dice."
@@ -507,11 +350,51 @@ function BadgeCantiere() {
   );
 }
 
-/* ── BUNDLE (paper) ───────────────────────────────────────────────────── */
+/* ── 8 · TUTTO INCLUSO (mist, chip band) ──────────────────────────────── */
+
+function TuttoIncluso() {
+  const chips = [
+    { icon: QrCode, label: 'QR di cantiere' },
+    { icon: Radio, label: 'Presenze in tempo reale' },
+    { icon: Clock, label: 'Rapportino automatico' },
+    { icon: Route, label: 'Viaggi con km reali' },
+    { icon: Truck, label: 'Mezzi e autisti' },
+    { icon: Receipt, label: 'Note spese con AI' },
+    { icon: PieChart, label: 'Costo del cantiere' },
+    { icon: CalendarDays, label: 'Pianificazione settimanale' },
+    { icon: Palmtree, label: 'Ferie e permessi' },
+    { icon: MapPin, label: 'Trasferimenti tra cantieri' },
+    { icon: Upload, label: 'Import dei cantieri' },
+    { icon: RefreshCw, label: 'Sync col tuo gestionale' },
+  ];
+  return (
+    <Section tone="mist" texture="dots" narrow>
+      <div className="text-center">
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">Tutto incluso</p>
+        <h2 className="mx-auto mt-2 max-w-2xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
+          Dodici cose in meno di cui preoccuparsi
+        </h2>
+      </div>
+      <div className="mt-9 flex flex-wrap justify-center gap-2.5">
+        {chips.map(({ icon: Icon, label }) => (
+          <span
+            key={label}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/80 px-3.5 py-2 text-[13px] font-medium text-foreground shadow-soft backdrop-blur"
+          >
+            <Icon className="h-3.5 w-3.5 text-primary" />
+            {label}
+          </span>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+/* ── 9 · BUNDLE (glow) ────────────────────────────────────────────────── */
 
 function Bundle() {
   return (
-    <Section tone="paper" texture="dotsAccent">
+    <Section tone="glow" texture="grid">
       <SectionHeading
         eyebrow="La suite completa"
         title="Commesse e Kantiere, un solo account"
@@ -541,9 +424,9 @@ function Bundle() {
 
         <div className="relative overflow-hidden rounded-2xl border border-accent/40 bg-gradient-to-br from-accent-soft/60 via-card to-primary/5 p-7 shadow-soft-lg">
           <span className="absolute -right-3 -top-3 inline-flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent-foreground shadow-soft-md">
-            <Sparkles className="h-3 w-3" /> Add-on
+            <Sparkles className="h-3 w-3" /> Aggiuntivo
           </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent-soft-foreground">Aggiuntivo</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-accent-soft-foreground">Modulo add-on</span>
           <h3 className="mt-2 flex items-center gap-2 text-xl font-semibold tracking-tight">
             <HardHat className="h-5 w-5 text-accent" /> Kantiere
           </h3>

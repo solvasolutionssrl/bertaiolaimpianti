@@ -10,6 +10,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { MarketingShell } from '../_components/marketing/chrome';
+import { Section } from '../_components/marketing/sections';
 import { ContattiForm } from './_components/contatti-form';
 
 export const metadata = {
@@ -44,7 +45,7 @@ export default function ContattiPage() {
         </p>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-24">
+      <Section tone="mist" texture="dots">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
           {/* colonna info */}
           <div className="space-y-4">
@@ -118,7 +119,7 @@ export default function ContattiPage() {
           {/* form */}
           <ContattiForm />
         </div>
-      </section>
+      </Section>
     </MarketingShell>
   );
 }
