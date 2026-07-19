@@ -6,6 +6,7 @@ import {
   SectionHeading,
 } from './_components/marketing/chrome';
 import { Section } from './_components/marketing/sections';
+import { ValoriStrip, DemoStrip } from './_components/marketing/strips';
 import {
   ArrowRight,
   Mic,
@@ -66,11 +67,18 @@ export default function RootPage() {
       <Hero />
       <HeroShowcase />
       <TrustBar />
-      <ComeFunziona />
-      <Funzionalita />
-      <PerChi />
-      <KantiereTeaser />
-      <Architettura />
+      {/* Ritmo: A(chiaro) · scuro · B(chiaro) · fascia — due chiari mai adiacenti.
+          Fascia grafica prima, fascia demo per ultima. */}
+      <ComeFunziona />   {/* scuro */}
+      <Funzionalita />   {/* A · mist */}
+      <ValoriStrip />    {/* fascia grafica */}
+      <PerChi />         {/* B · glow */}
+      <DemoStrip
+        titolo="Vuoi vederla sul tuo lavoro?"
+        sotto="Commesse e cantiere, una demo su misura senza impegno."
+      />                 {/* fascia demo · ultima */}
+      <KantiereTeaser /> {/* A · sand */}
+      <Architettura />   {/* scuro */}
       <FinalCta />
 
       <MarketingFooter />

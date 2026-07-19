@@ -419,8 +419,18 @@
   }
   .animate-heartbeat { animation: heartbeat 1.6s ease-in-out infinite; }
 
+  /* Marquee orizzontale per le "fasce grafiche" della vetrina (chip che
+     scorrono). Il contenuto è duplicato 2× nel markup → translateX(-50%)
+     chiude il loop senza salti. */
+  @keyframes marquee-x {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .animate-marquee { animation: marquee-x 32s linear infinite; }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-wave, .animate-float-soft, .animate-scan-sweep,
-    .animate-dash, .animate-feed-in, .animate-heartbeat { animation: none; }
+    .animate-dash, .animate-feed-in, .animate-heartbeat,
+    .animate-marquee { animation: none; }
   }
 }

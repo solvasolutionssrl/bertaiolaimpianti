@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { MarketingShell, SectionHeading } from '../_components/marketing/chrome';
 import { Section, Split, Copy } from '../_components/marketing/sections';
+import { MarqueeStrip, ValoriStrip, DemoStrip } from '../_components/marketing/strips';
 import { PresenzeLive } from './_components/presenze-live';
 import { AppTimbrature } from './_components/app-timbrature';
 import { QrIngresso } from './_components/qr-ingresso';
@@ -53,15 +54,20 @@ export default function KantierePage() {
   return (
     <MarketingShell active="cantiere">
       <Hero />
-      <ComeFunzionaQr />
-      <Presenze />
-      <ViaggiMezzi />
-      <OreRapportino />
-      <Kontabilita />
-      <Pianificazione />
-      <BadgeCantiere />
-      <TuttoIncluso />
-      <Bundle />
+      {/* Ritmo: A(chiaro) · scuro · B(chiaro) · fascia — due chiari mai adiacenti.
+          Fasce: grafiche prima (marquee, valori), demo per ultima. */}
+      <ComeFunzionaQr />   {/* scuro */}
+      <Presenze />         {/* A · mist */}
+      <MarqueeStrip />     {/* fascia grafica 1 */}
+      <ViaggiMezzi />      {/* B · glow */}
+      <OreRapportino />    {/* scuro */}
+      <Kontabilita />      {/* A · sand */}
+      <ValoriStrip />      {/* fascia grafica 2 */}
+      <Pianificazione />   {/* B · mist */}
+      <BadgeCantiere />    {/* scuro */}
+      <TuttoIncluso />     {/* A · glow */}
+      <DemoStrip />        {/* fascia demo · ultima */}
+      <Bundle />           {/* B · sand */}
       <FinalCta />
     </MarketingShell>
   );
@@ -277,7 +283,7 @@ function Kontabilita() {
 
 function Pianificazione() {
   return (
-    <Section tone="glow" texture="grid">
+    <Section tone="mist" texture="dots">
       <Split reverse media={<PianificazioneSettimanale />}>
         <Copy
           eyebrow="Pianificazione e personale"
@@ -368,7 +374,7 @@ function TuttoIncluso() {
     { icon: RefreshCw, label: 'Sync col tuo gestionale' },
   ];
   return (
-    <Section tone="mist" texture="dots" narrow>
+    <Section tone="glow" texture="grid" narrow>
       <div className="text-center">
         <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-primary">Tutto incluso</p>
         <h2 className="mx-auto mt-2 max-w-2xl text-pretty text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -394,7 +400,7 @@ function TuttoIncluso() {
 
 function Bundle() {
   return (
-    <Section tone="glow" texture="grid">
+    <Section tone="sand" texture="dotsAccent">
       <SectionHeading
         eyebrow="La suite completa"
         title="Commesse e Kantiere, un solo account"
