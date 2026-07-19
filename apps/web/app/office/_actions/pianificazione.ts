@@ -143,16 +143,17 @@ async function nomiMezzi(
 
 /**
  * Dipendenti con ferie/permesso APPROVATO che si sovrappone al giorno/orario del
- * blocco → non assegnabili (blocco HARD). Ritorna i nomi (con tipo) in conflitto.
+ * blocco. Ritorna id + etichetta ("Nome (tipo)") per ciascuno in conflitto.
+ * Base condivisa di `assenzeInConflitto` (che ne espone solo le etichette).
  */
-async function assenzeInConflitto(
+async function membriAssenti(
   supabase: ReturnType<typeof createServerSupabase>,
   tenantId: string,
   data: string,
   dipendentiIds: string[],
   inizio: string,
   fine: string,
-): Promise<string[]> {
+): Promise<{ id: string; label: string }[]> {
   if (dipendentiIds.length === 0) return [];
   const { data: rows } = await supabase
     .from('permesso_richieste' as never)
@@ -171,7 +172,7 @@ async function assenzeInConflitto(
   }[];
   if (list.length === 0) return [];
   const nomi = await nomiDipendenti(supabase, tenantId);
-  const out: string[] = [];
+  const out: { id: string; label: string }[] = [];
   for (const r of list) {
     let overlap = r.tutto_il_giorno;
     if (!overlap && r.ora_inizio && r.ora_fine) {
@@ -179,9 +180,25 @@ async function assenzeInConflitto(
       const af = normalizzaOra(r.ora_fine);
       if (ai && af) overlap = intervalliSovrapposti(inizio, fine, ai, af);
     }
-    if (overlap) out.push(`${nomi.get(r.dipendente_id) ?? 'Dipendente'} (${labelTipoPermesso(r.tipo)})`);
+    if (overlap)
+      out.push({
+        id: r.dipendente_id,
+        label: `${nomi.get(r.dipendente_id) ?? 'Dipendente'} (${labelTipoPermesso(r.tipo)})`,
+      });
   }
   return out;
+}
+
+/** Come sopra ma solo le etichette (blocco HARD nella creazione/modifica/sposta). */
+async function assenzeInConflitto(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  data: string,
+  dipendentiIds: string[],
+  inizio: string,
+  fine: string,
+): Promise<string[]> {
+  return (await membriAssenti(supabase, tenantId, data, dipendentiIds, inizio, fine)).map((a) => a.label);
 }
 
 // ── Schema comune ────────────────────────────────────────────────────
@@ -696,7 +713,7 @@ const SpostaSchema = z.object({
  */
 export async function spostaBlocco(
   input: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; avvisi: string[] } | { ok: false; error: string }> {
   const parsed = SpostaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
   let g;
@@ -709,29 +726,51 @@ export async function spostaBlocco(
 
   const b = await caricaBloccoById(supabase, ctx.tenantId, parsed.data.id);
   if (!b) return { ok: false, error: 'Blocco non trovato' };
-  if (b.data === parsed.data.nuovaData) return { ok: true }; // no-op
+  if (b.data === parsed.data.nuovaData) return { ok: true, avvisi: [] }; // no-op
 
-  const assenti = await assenzeInConflitto(
-    supabase,
-    ctx.tenantId,
-    parsed.data.nuovaData,
-    b.membri,
-    b.oraInizio,
-    b.oraFine,
-  );
+  const nuova = parsed.data.nuovaData;
+  const assenti = await assenzeInConflitto(supabase, ctx.tenantId, nuova, b.membri, b.oraInizio, b.oraFine);
   if (assenti.length > 0) {
     return {
       ok: false,
-      error: `Non spostabile su ${giornoBreve(parsed.data.nuovaData)}: in ferie o permesso · ${assenti.join(', ')}`,
+      error: `Non spostabile su ${giornoBreve(nuova)}: in ferie o permesso · ${assenti.join(', ')}`,
+    };
+  }
+
+  const nomiDip = await nomiDipendenti(supabase, ctx.tenantId);
+  const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, nuova, nuova);
+
+  // DOPPIONE (stesso cantiere/ora già presente per qualche membro) → rifiuta:
+  // lo spostamento è atomico (tutta la squadra), non si può spostare "solo una parte".
+  const dupNomi = b.membri
+    .filter((m) => esistenti.some((e) => e.id !== b.id && bloccoEquivalente(e, b) && e.membri.includes(m)))
+    .map((m) => nomiDip.get(m) ?? 'Dipendente');
+  if (dupNomi.length > 0) {
+    return {
+      ok: false,
+      error: `Non spostabile su ${giornoBreve(nuova)}: ${dupNomi.join(', ')} già su questo cantiere in quel giorno.`,
     };
   }
 
   const { error } = await supabase
     .from('pianificazione_blocchi' as never)
-    .update({ data: parsed.data.nuovaData } as never)
+    .update({ data: nuova } as never)
     .eq('id', parsed.data.id)
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+
+  // SOVRAPPOSIZIONE cross-cantiere (stesse ore, altro cantiere) → avviso SOFT.
+  const avvisi: string[] = [];
+  for (const m of b.membri) {
+    const sovrap = esistenti.find(
+      (e) =>
+        e.id !== b.id &&
+        !bloccoEquivalente(e, b) &&
+        e.membri.includes(m) &&
+        intervalliSovrapposti(b.oraInizio, b.oraFine, e.oraInizio, e.oraFine),
+    );
+    if (sovrap) avvisi.push(`${nomiDip.get(m) ?? 'Dipendente'} il ${giornoBreve(nuova)}: già su ${etichettaBlocco(sovrap)}`);
+  }
 
   await auditTenant(supabase, {
     tenantId: ctx.tenantId,
@@ -741,11 +780,11 @@ export async function spostaBlocco(
     entityId: parsed.data.id,
     action: 'pianificazione.blocco.sposta',
     before: { data: b.data },
-    after: { data: parsed.data.nuovaData },
+    after: { data: nuova },
   });
 
   revalidatePath(PATH);
-  return { ok: true };
+  return { ok: true, avvisi };
 }
 
 // ── ripetiBlocco (resize: estende su più giorni) ─────────────────────
@@ -755,23 +794,34 @@ const RipetiSchema = z.object({
   date: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(31),
 });
 
-/** True se i due insiemi di id contengono gli stessi elementi. */
-function stessoInsieme(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const s = new Set(a);
-  return b.every((x) => s.has(x));
+/**
+ * Blocco `e` è "equivalente" a `b`: STESSO lavoro (cantiere/evento, fascia, orari)
+ * → mettere la stessa persona su entrambi sarebbe un DOPPIONE. Diverso da una
+ * semplice sovrapposizione (altro cantiere nelle stesse ore).
+ */
+function bloccoEquivalente(e: BloccoView, b: BloccoView): boolean {
+  return (
+    e.tipo === b.tipo &&
+    e.cantiereId === b.cantiereId &&
+    (e.titolo ?? '') === (b.titolo ?? '') &&
+    e.fascia === b.fascia &&
+    e.oraInizio === b.oraInizio &&
+    e.oraFine === b.oraFine
+  );
 }
 
 /**
- * Estende un blocco su più giorni (resize della card). Agisce SEMPRE sull'intero
- * blocco: se è una squadra clona tutti i membri + mezzi, se è un tecnico singolo
- * clona lui. Ferie = saltato; un blocco equivalente già presente quel giorno =
- * saltato (idempotente). I cloni nascono in bozza.
+ * Estende un blocco su più giorni (resize della card). Agisce sull'intero blocco
+ * ma **membro per membro**: chi ha già lo STESSO cantiere/ora quel giorno NON viene
+ * ri-aggiunto (niente doppioni → estende "solo chi manca"); chi è in ferie è saltato.
+ * Se un membro sovrappone un ALTRO cantiere nelle stesse ore → viene aggiunto lo
+ * stesso ma con un avviso SOFT. I cloni nascono in bozza; mezzi solo se squadra
+ * completa (evita doppio uso del mezzo su un clone parziale).
  */
 export async function ripetiBlocco(
   input: unknown,
 ): Promise<
-  | { ok: true; creati: number; saltati: { data: string; motivo: string }[] }
+  | { ok: true; creati: number; saltati: { data: string; motivo: string }[]; avvisi: string[] }
   | { ok: false; error: string }
 > {
   const parsed = RipetiSchema.safeParse(input);
@@ -790,50 +840,79 @@ export async function ripetiBlocco(
   const date = Array.from(new Set(parsed.data.date))
     .filter((d) => d !== b.data)
     .sort();
-  if (date.length === 0) return { ok: true, creati: 0, saltati: [] };
+  if (date.length === 0) return { ok: true, creati: 0, saltati: [], avvisi: [] };
 
-  // Validazione per-giorno in PARALLELO (le tratte non dipendono l'una dall'altra)
-  // → meno round-trip, resize più rapido. dedup: salta se la stessa squadra è già
-  // su un blocco equivalente quel giorno (ridimensionare più volte non duplica).
+  const nomiDip = await nomiDipendenti(supabase, ctx.tenantId);
+  const nome = (m: string) => nomiDip.get(m) ?? 'Dipendente';
+
+  // Classificazione per-giorno / per-membro (in parallelo).
   const valutazioni = await Promise.all(
     date.map(async (giorno) => {
-      const assenti = await assenzeInConflitto(
-        supabase,
-        ctx.tenantId,
-        giorno,
-        b.membri,
-        b.oraInizio,
-        b.oraFine,
-      );
-      if (assenti.length > 0) return { giorno, motivo: `in ferie/permesso: ${assenti.join(', ')}` };
       const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, giorno, giorno);
-      const giaPresente = esistenti.some(
-        (e) =>
-          e.tipo === b.tipo &&
-          e.cantiereId === b.cantiereId &&
-          (e.titolo ?? '') === (b.titolo ?? '') &&
-          e.fascia === b.fascia &&
-          e.oraInizio === b.oraInizio &&
-          e.oraFine === b.oraFine &&
-          stessoInsieme(e.membri, b.membri),
+      const assentiIds = new Set(
+        (await membriAssenti(supabase, ctx.tenantId, giorno, b.membri, b.oraInizio, b.oraFine)).map((a) => a.id),
       );
-      if (giaPresente) return { giorno, motivo: 'già pianificato' };
-      return { giorno, motivo: null as string | null };
+      const daAggiungere: string[] = [];
+      const nomiAssenti: string[] = [];
+      const nomiDup: string[] = [];
+      const avvisiGiorno: string[] = [];
+      for (const m of b.membri) {
+        if (assentiIds.has(m)) {
+          nomiAssenti.push(nome(m));
+          continue;
+        }
+        // doppione = stesso cantiere/ora già presente → NON aggiungo
+        if (esistenti.some((e) => bloccoEquivalente(e, b) && e.membri.includes(m))) {
+          nomiDup.push(nome(m));
+          continue;
+        }
+        daAggiungere.push(m);
+        // sovrapposizione su ALTRO cantiere nelle stesse ore → avviso soft
+        const sovrap = esistenti.find(
+          (e) =>
+            !bloccoEquivalente(e, b) &&
+            e.membri.includes(m) &&
+            intervalliSovrapposti(b.oraInizio, b.oraFine, e.oraInizio, e.oraFine),
+        );
+        if (sovrap) avvisiGiorno.push(`${nome(m)} il ${giornoBreve(giorno)}: già su ${etichettaBlocco(sovrap)}`);
+      }
+      return { giorno, daAggiungere, nomiAssenti, nomiDup, avvisiGiorno };
     }),
   );
-  const saltati = valutazioni
-    .filter((v) => v.motivo)
-    .map((v) => ({ data: v.giorno, motivo: v.motivo as string }));
-  const daCreare = valutazioni.filter((v) => !v.motivo).map((v) => v.giorno);
+
+  const saltati: { data: string; motivo: string }[] = [];
+  const daCreare: { giorno: string; membri: string[]; mezzi: string[] }[] = [];
+  const avvisi: string[] = [];
+  for (const v of valutazioni) {
+    avvisi.push(...v.avvisiGiorno);
+    if (v.daAggiungere.length === 0) {
+      const motivo =
+        v.nomiDup.length && !v.nomiAssenti.length
+          ? 'già pianificato'
+          : v.nomiAssenti.length && !v.nomiDup.length
+            ? `in ferie/permesso: ${v.nomiAssenti.join(', ')}`
+            : 'già pianificato o assenti';
+      saltati.push({ data: v.giorno, motivo });
+      continue;
+    }
+    const completo = v.daAggiungere.length === b.membri.length;
+    daCreare.push({ giorno: v.giorno, membri: v.daAggiungere, mezzi: completo ? b.mezzi : [] });
+    if (v.nomiDup.length || v.nomiAssenti.length) {
+      const chiSaltato = [...v.nomiDup, ...v.nomiAssenti].join(', ');
+      avvisi.push(
+        `${giornoBreve(v.giorno)}: aggiunti solo ${v.daAggiungere.map(nome).join(', ')} (già presenti/assenti: ${chiSaltato})`,
+      );
+    }
+  }
 
   // Inserimenti in parallelo (righe indipendenti).
   const esiti = await Promise.all(
-    daCreare.map(async (giorno) => {
+    daCreare.map(async (dc) => {
       const { data: nuovo, error } = await supabase
         .from('pianificazione_blocchi' as never)
         .insert({
           tenant_id: ctx.tenantId,
-          data: giorno,
+          data: dc.giorno,
           tipo: b.tipo,
           cantiere_id: b.cantiereId,
           titolo: b.titolo,
@@ -851,7 +930,7 @@ export async function ripetiBlocco(
         .single();
       if (error || !nuovo) return false;
       const nuovoId = (nuovo as unknown as { id: string }).id;
-      const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, b.membri, b.mezzi);
+      const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, dc.membri, dc.mezzi);
       if (errFigli) {
         await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
         return false;
@@ -874,7 +953,7 @@ export async function ripetiBlocco(
     revalidatePath(PATH);
   }
 
-  return { ok: true, creati, saltati };
+  return { ok: true, creati, saltati, avvisi };
 }
 
 // ── pubblicaSettimana ────────────────────────────────────────────────

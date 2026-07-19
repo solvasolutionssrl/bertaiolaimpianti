@@ -1285,6 +1285,12 @@ export function PianificazioneClient({
       }
       fineSalvataggio('done');
       refresh();
+      if (res.avvisi.length) {
+        await alert({
+          title: 'Spostato · sovrapposizioni',
+          body: res.avvisi.map((a) => `• ${a}`).join('\n'),
+        });
+      }
     },
     onResize: async (id, date) => {
       const b = blocchi.find((x) => x.id === id);
@@ -1298,24 +1304,23 @@ export function PianificazioneClient({
       fineSalvataggio('done');
       refresh();
       const isSquad = (b?.membri.length ?? 1) > 1;
-      const salt = res.saltati;
-      const saltStr = salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ');
       const giorniLbl = `${res.creati} ${res.creati === 1 ? 'giorno' : 'giorni'}`;
-      if (res.creati === 0) {
-        if (salt.length > 0) await alert({ title: 'Nessun giorno aggiunto', body: `Saltati: ${saltStr}.` });
-        return;
-      }
-      if (isSquad && b) {
-        await alert({
-          title: 'Estensione effettuata',
-          body:
-            `Modifica effettuata per l'intera squadra (${nomiBlocco(b)}) su ${giorniLbl}.` +
-            (salt.length ? ` Saltati: ${saltStr}.` : ''),
-        });
-      } else if (salt.length > 0) {
-        await alert({ title: 'Estensione effettuata', body: `Aggiunto su ${giorniLbl}. Saltati: ${saltStr}.` });
-      }
-      // tecnico singolo, tutto ok → basta la pill "Salvato"
+      const righe: string[] = [];
+      if (res.creati > 0)
+        righe.push(
+          isSquad && b
+            ? `Estesa la squadra (${nomiBlocco(b)}) su ${giorniLbl}.`
+            : `Esteso su ${giorniLbl}.`,
+        );
+      if (res.saltati.length)
+        righe.push(
+          `Saltati: ${res.saltati.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ')}.`,
+        );
+      for (const a of res.avvisi) righe.push(`• ${a}`);
+      // Alert solo se c'è qualcosa da segnalare (saltati / avvisi / squadra);
+      // tecnico singolo pulito → basta la pill "Salvato".
+      const daMostrare = res.saltati.length > 0 || res.avvisi.length > 0 || (isSquad && res.creati > 0);
+      if (daMostrare && righe.length) await alert({ title: 'Estensione', body: righe.join('\n') });
     },
   });
 

@@ -32,7 +32,7 @@ Nel dialog di **creazione** (non in modifica) c'è la sezione **"Ripeti su più 
 
 ## 3. Griglia — resize e drag
 
-- **Resize (estendi)**: passando sopra un chip appare una **maniglia sul bordo destro**. Trascinandola a destra sui giorni successivi si evidenziano le celle coperte (**tutte le righe dei membri** del blocco) e al rilascio l'**intero blocco** viene clonato su quei giorni (bozza). È **solo additivo** (non cancella nulla; per togliere un giorno si elimina il chip). Se la stessa squadra è già su un blocco equivalente quel giorno → **saltato** (ridimensionare più volte non duplica). Action: `ripetiBlocco`.
+- **Resize (estendi)**: passando sopra un chip appare una **maniglia sul bordo destro**. Trascinandola a destra sui giorni successivi si evidenziano le celle coperte e al rilascio il blocco viene clonato su quei giorni (bozza), **membro per membro**: chi ha già lo **stesso cantiere/ora** quel giorno **non** viene ri-aggiunto (estende "solo chi manca" → niente doppioni), chi è in ferie è saltato. È **solo additivo** (per togliere un giorno si elimina il chip). Se un membro sovrappone un **altro** cantiere nelle stesse ore viene aggiunto lo stesso con un **avviso**. Action: `ripetiBlocco`.
 - **Sposta (drag & drop)**: **tieni premuto ~0,7s** sul chip per armare la modalità sposta (compare un "ghost" che segue il cursore e le celle bersaglio si evidenziano), poi trascina su un **altro giorno** → l'**intero blocco** si sposta lì (cambia solo la data; membri/mezzi invariati). Un **click semplice** resta "apri modifica". Action: `spostaBlocco`.
 - **Anteprima a forma di card**: durante resize/sposta, in ogni cella bersaglio (tutte le righe dei membri) compare una **striscia** dello stesso colore/altezza del chip → sembra che la card si allunghi/si sposti. Niente riquadro pieno di cella. Mentre **trascini** la striscia è un'**anteprima "vuota"** — cornice **tratteggiata**, fondo e testo tenui, opacità bassa (chiaramente non ancora reale; l'opacità da sola non bastava perché il fondo della card è quasi bianco); al **rilascio** diventa **piena al 100%** (card "vera", accento solido) con una breve transizione, mentre si salva.
 - **Feedback di salvataggio**: al rilascio l'anteprima **resta** mentre si salva e compare una pill **"Salvataggio in corso…"** (il salvataggio su cloud + refresh può richiedere qualche secondo); a fine → **"Salvato"** e la pill in header lampeggia. La validazione per-giorno del resize è parallelizzata per ridurre i tempi.
@@ -79,3 +79,18 @@ Con l'aumentare delle funzioni l'header è stato ordinato su due fasce coerenti:
 
 **Tooltip (`title`)**: presenti su tutti i controlli e i gesti (navigazione, azioni, filtri, "+" cella, card, maniglia di resize). I testi sono **centralizzati** in `apps/web/app/office/personale/pianificazione/_lib/tooltips.ts` (oggetto `TIP`), un unico posto per mantenerli.
 > ⚠️ **Regola**: se si cambia il comportamento di un controllo/gesto, aggiornare il testo in `tooltips.ts` (non nei singoli componenti), così i suggerimenti restano coerenti col funzionamento reale.
+
+## 9. Conflitti: doppioni vs sovrapposizioni
+
+Due situazioni diverse, gestite diversamente (`bloccoEquivalente` distingue i due casi):
+
+| Caso | Definizione | Trattamento |
+|---|---|---|
+| **Doppione** | stessa persona, **stesso** cantiere/evento, stesso giorno, stesse ore | **impedito** — è un errore puro |
+| **Sovrapposizione** | stessa persona, cantiere **diverso**, stesse ore | **avviso soft** — l'ufficio può volerlo (riorganizza), quindi non blocca |
+| **Ferie/permesso** | persona assente approvata | **blocco HARD** — non assegnabile |
+
+- **Resize** (`ripetiBlocco`): membro per membro — chi è già sullo stesso cantiere/ora quel giorno **non** viene ri-aggiunto (niente doppioni → "estende solo chi manca"); chi sovrappone un altro cantiere è aggiunto **con avviso**; chi è in ferie è saltato. Riepilogo a fine operazione.
+- **Sposta** (`spostaBlocco`): lo spostamento è atomico (tutta la squadra) → se qualcuno finirebbe **doppio** sullo stesso cantiere, **rifiuta** con messaggio; le sovrapposizioni cross-cantiere passano con **avviso**.
+- **Dialog crea/modifica**: già mostrava l'avviso soft "X è già assegnato a …" + "Salva comunque" (sia per doppione sia per sovrapposizione). Invariato.
+- **Cleanup una-tantum**: `scripts/cleanup-pianificazione-duplicati.mjs` (dry-run di default, `--apply` per eseguire) unisce eventuali blocchi equivalenti duplicati nel keeper e cancella gli extra, senza perdere membri.
