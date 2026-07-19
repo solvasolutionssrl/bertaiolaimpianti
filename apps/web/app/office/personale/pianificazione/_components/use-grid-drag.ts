@@ -23,6 +23,7 @@ export interface DragBlocco {
   id: string;
   data: string; // giorno di origine (YYYY-MM-DD)
   membri: string[];
+  hue: number; // tinta del chip → l'anteprima "striscia" usa lo stesso colore
 }
 
 export type DragState =
@@ -38,6 +39,8 @@ export interface GridDrag {
   resizePointerDown: (e: React.PointerEvent, b: DragBlocco, label: string) => void;
   suppressNextClick: () => boolean;
   isCellTarget: (emp: string, date: string) => boolean;
+  /** Anteprima "striscia" (stessa tinta/label del chip) per le celle bersaglio. */
+  cellGhost: (emp: string, date: string) => { hue: number; label: string } | null;
 }
 
 export function useGridDrag(opts: {
@@ -246,5 +249,12 @@ export function useGridDrag(opts: {
     return false;
   };
 
-  return { drag, busy, chipPointerDown, resizePointerDown, suppressNextClick, isCellTarget };
+  const cellGhost = (emp: string, date: string): { hue: number; label: string } | null => {
+    if ((drag.kind === 'moving' || drag.kind === 'resizing') && isCellTarget(emp, date)) {
+      return { hue: drag.b.hue, label: drag.label };
+    }
+    return null;
+  };
+
+  return { drag, busy, chipPointerDown, resizePointerDown, suppressNextClick, isCellTarget, cellGhost };
 }

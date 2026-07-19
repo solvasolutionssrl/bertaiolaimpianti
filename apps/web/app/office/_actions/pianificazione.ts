@@ -722,65 +722,74 @@ export async function ripetiBlocco(
     .sort();
   if (date.length === 0) return { ok: true, creati: 0, saltati: [] };
 
-  const saltati: { data: string; motivo: string }[] = [];
-  const daCreare: string[] = [];
-  for (const giorno of date) {
-    const assenti = await assenzeInConflitto(supabase, ctx.tenantId, giorno, b.membri, b.oraInizio, b.oraFine);
-    if (assenti.length > 0) {
-      saltati.push({ data: giorno, motivo: `in ferie/permesso: ${assenti.join(', ')}` });
-      continue;
-    }
-    // dedup: salta se la stessa squadra è già su un blocco equivalente quel
-    // giorno → ridimensionare più volte non duplica.
-    const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, giorno, giorno);
-    const giaPresente = esistenti.some(
-      (e) =>
-        e.tipo === b.tipo &&
-        e.cantiereId === b.cantiereId &&
-        (e.titolo ?? '') === (b.titolo ?? '') &&
-        e.fascia === b.fascia &&
-        e.oraInizio === b.oraInizio &&
-        e.oraFine === b.oraFine &&
-        stessoInsieme(e.membri, b.membri),
-    );
-    if (giaPresente) {
-      saltati.push({ data: giorno, motivo: 'già pianificato' });
-      continue;
-    }
-    daCreare.push(giorno);
-  }
+  // Validazione per-giorno in PARALLELO (le tratte non dipendono l'una dall'altra)
+  // → meno round-trip, resize più rapido. dedup: salta se la stessa squadra è già
+  // su un blocco equivalente quel giorno (ridimensionare più volte non duplica).
+  const valutazioni = await Promise.all(
+    date.map(async (giorno) => {
+      const assenti = await assenzeInConflitto(
+        supabase,
+        ctx.tenantId,
+        giorno,
+        b.membri,
+        b.oraInizio,
+        b.oraFine,
+      );
+      if (assenti.length > 0) return { giorno, motivo: `in ferie/permesso: ${assenti.join(', ')}` };
+      const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, giorno, giorno);
+      const giaPresente = esistenti.some(
+        (e) =>
+          e.tipo === b.tipo &&
+          e.cantiereId === b.cantiereId &&
+          (e.titolo ?? '') === (b.titolo ?? '') &&
+          e.fascia === b.fascia &&
+          e.oraInizio === b.oraInizio &&
+          e.oraFine === b.oraFine &&
+          stessoInsieme(e.membri, b.membri),
+      );
+      if (giaPresente) return { giorno, motivo: 'già pianificato' };
+      return { giorno, motivo: null as string | null };
+    }),
+  );
+  const saltati = valutazioni
+    .filter((v) => v.motivo)
+    .map((v) => ({ data: v.giorno, motivo: v.motivo as string }));
+  const daCreare = valutazioni.filter((v) => !v.motivo).map((v) => v.giorno);
 
-  let creati = 0;
-  for (const giorno of daCreare) {
-    const { data: nuovo, error } = await supabase
-      .from('pianificazione_blocchi' as never)
-      .insert({
-        tenant_id: ctx.tenantId,
-        data: giorno,
-        tipo: b.tipo,
-        cantiere_id: b.cantiereId,
-        titolo: b.titolo,
-        luogo: b.luogo,
-        luogo_lat: b.luogoLat,
-        luogo_lng: b.luogoLng,
-        fascia: b.fascia,
-        ora_inizio: b.oraInizio,
-        ora_fine: b.oraFine,
-        note: b.note,
-        stato: 'bozza',
-        created_by: ctx.userId,
-      } as never)
-      .select('id')
-      .single();
-    if (error || !nuovo) continue;
-    const nuovoId = (nuovo as unknown as { id: string }).id;
-    const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, b.membri, b.mezzi);
-    if (errFigli) {
-      await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
-      continue;
-    }
-    creati++;
-  }
+  // Inserimenti in parallelo (righe indipendenti).
+  const esiti = await Promise.all(
+    daCreare.map(async (giorno) => {
+      const { data: nuovo, error } = await supabase
+        .from('pianificazione_blocchi' as never)
+        .insert({
+          tenant_id: ctx.tenantId,
+          data: giorno,
+          tipo: b.tipo,
+          cantiere_id: b.cantiereId,
+          titolo: b.titolo,
+          luogo: b.luogo,
+          luogo_lat: b.luogoLat,
+          luogo_lng: b.luogoLng,
+          fascia: b.fascia,
+          ora_inizio: b.oraInizio,
+          ora_fine: b.oraFine,
+          note: b.note,
+          stato: 'bozza',
+          created_by: ctx.userId,
+        } as never)
+        .select('id')
+        .single();
+      if (error || !nuovo) return false;
+      const nuovoId = (nuovo as unknown as { id: string }).id;
+      const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, b.membri, b.mezzi);
+      if (errFigli) {
+        await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
+        return false;
+      }
+      return true;
+    }),
+  );
+  const creati = esiti.filter(Boolean).length;
 
   if (creati > 0) {
     await auditTenant(supabase, {

@@ -106,6 +106,10 @@ function hueTipo(b: { tipo: TipoBlocco; cantiereId: string | null; id: string })
 function nomeDip(d: DipRow): string {
   return `${d.cognome} ${d.nome}`.trim();
 }
+/** Etichetta di un blocco per l'anteprima/chip (nome cantiere o titolo). */
+function labelBlocco(b: BloccoView): string {
+  return b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
+}
 function tipoMezzoLabel(t: string): string {
   return t === 'autocarro' ? 'Autocarro' : t === 'autovettura' ? 'Autovettura' : 'Mezzo';
 }
@@ -922,7 +926,7 @@ function Chip({
   const label = b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
   const Icon = b.tipo === 'formazione' ? GraduationCap : b.tipo === 'evento' ? CalendarClock : null;
   const isSquad = b.membri.length > 1;
-  const dragBlocco = { id: b.id, data: b.data, membri: b.membri };
+  const dragBlocco = { id: b.id, data: b.data, membri: b.membri, hue: h };
   return (
     <div className="group/chip relative">
       <button
@@ -1114,6 +1118,28 @@ export function PianificazioneClient({
     [dipById],
   );
 
+  // Stato di salvataggio del drag (anteprima + pill "Salvataggio…/Salvato").
+  const [salvataggio, setSalvataggio] = React.useState<null | 'saving' | 'done'>(null);
+  const [savingCells, setSavingCells] = React.useState<Set<string>>(() => new Set());
+  const [savingGhost, setSavingGhost] = React.useState<{ hue: number; label: string } | null>(null);
+
+  const avviaSalvataggio = (b: BloccoView, date: string[]) => {
+    const cells = new Set<string>();
+    for (const m of b.membri) for (const dd of date) cells.add(`${m}|${dd}`);
+    setSavingCells(cells);
+    setSavingGhost({ hue: hueTipo(b), label: labelBlocco(b) });
+    setSalvataggio('saving');
+  };
+  const fineSalvataggio = (esito: 'done' | 'error') => {
+    setSalvataggio(esito === 'done' ? 'done' : null);
+    // tieni l'anteprima ancora un attimo così il refresh porta il chip vero senza buco
+    window.setTimeout(() => {
+      setSavingCells(new Set());
+      setSavingGhost(null);
+    }, 700);
+    if (esito === 'done') window.setTimeout(() => setSalvataggio(null), 1600);
+  };
+
   // Drag della griglia: allargare o spostare agisce SEMPRE sull'intero blocco.
   // Se è una squadra → conferma/riepilogo con i nomi; se è un tecnico singolo → fluido.
   const gridDrag = useGridDrag({
@@ -1128,21 +1154,27 @@ export function PianificazioneClient({
         });
         if (!ok) return;
       }
+      if (b) avviaSalvataggio(b, [nuovaData]);
       const res = await spostaBlocco({ id, nuovaData });
       if (!res.ok) {
+        fineSalvataggio('error');
         await alert({ title: 'Spostamento non riuscito', body: res.error });
         return;
       }
+      fineSalvataggio('done');
       refresh();
     },
     onResize: async (id, date) => {
+      const b = blocchi.find((x) => x.id === id);
+      if (b) avviaSalvataggio(b, date);
       const res = await ripetiBlocco({ id, date });
       if (!res.ok) {
+        fineSalvataggio('error');
         await alert({ title: 'Estensione non riuscita', body: res.error });
         return;
       }
+      fineSalvataggio('done');
       refresh();
-      const b = blocchi.find((x) => x.id === id);
       const isSquad = (b?.membri.length ?? 1) > 1;
       const salt = res.saltati;
       const saltStr = salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ');
@@ -1161,7 +1193,7 @@ export function PianificazioneClient({
       } else if (salt.length > 0) {
         await alert({ title: 'Estensione effettuata', body: `Aggiunto su ${giorniLbl}. Saltati: ${saltStr}.` });
       }
-      // tecnico singolo, tutto ok → basta il pill "Salvato"
+      // tecnico singolo, tutto ok → basta la pill "Salvato"
     },
   });
 
@@ -1423,7 +1455,12 @@ export function PianificazioneClient({
                     {giorni.map((g, i) => {
                       const cella = perCella.get(`${d.id}|${g}`) ?? [];
                       const weekend = i >= 5;
-                      const target = vista === 'piano' && gridDrag.isCellTarget(d.id, g);
+                      // Anteprima "striscia" (forma card) durante drag/resize e salvataggio.
+                      const ghost =
+                        vista === 'piano'
+                          ? gridDrag.cellGhost(d.id, g) ??
+                            (savingCells.has(`${d.id}|${g}`) ? savingGhost : null)
+                          : null;
                       return (
                         <td
                           key={g}
@@ -1431,12 +1468,7 @@ export function PianificazioneClient({
                           data-emp={d.id}
                           data-date={g}
                           className={
-                            'border-b border-border/70 p-1 align-top transition-colors ' +
-                            (target
-                              ? 'bg-primary/10 ring-2 ring-inset ring-primary/50 '
-                              : weekend
-                                ? weekendBg
-                                : baseBg)
+                            'border-b border-border/70 p-1 align-top ' + (weekend ? weekendBg : baseBg)
                           }
                         >
                           <div className="flex min-h-[2.75rem] flex-col gap-1">
@@ -1454,6 +1486,20 @@ export function PianificazioneClient({
                             ))}
                             {vista === 'piano' ? (
                               <>
+                                {ghost ? (
+                                  <div
+                                    className="flex w-full animate-pulse items-center rounded px-1.5 py-1 text-[11px] font-medium leading-tight"
+                                    style={{
+                                      backgroundColor: `hsl(${ghost.hue} 70% 94%)`,
+                                      color: `hsl(${ghost.hue} 60% 28%)`,
+                                      borderLeft: `3px solid hsl(${ghost.hue} 60% 45%)`,
+                                      outline: `1px dashed hsl(${ghost.hue} 55% 55%)`,
+                                      opacity: 0.8,
+                                    }}
+                                  >
+                                    <span className="min-w-0 flex-1 truncate">{ghost.label}</span>
+                                  </div>
+                                ) : null}
                                 {cella.map((b) => (
                                   <Chip
                                     key={b.id}
@@ -1493,6 +1539,30 @@ export function PianificazioneClient({
           style={{ left: gridDrag.drag.x, top: gridDrag.drag.y - 10 }}
         >
           Sposta · {gridDrag.drag.label}
+        </div>
+      ) : null}
+
+      {/* Pill di stato salvataggio drag (loading → conferma "Salvato"). */}
+      {salvataggio ? (
+        <div
+          className={
+            'pointer-events-none fixed bottom-6 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium shadow-lg ' +
+            (salvataggio === 'saving'
+              ? 'border-border bg-white text-foreground'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-700')
+          }
+        >
+          {salvataggio === 'saving' ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              Salvataggio in corso…
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-4 w-4" />
+              Salvato
+            </>
+          )}
         </div>
       ) : null}
 
