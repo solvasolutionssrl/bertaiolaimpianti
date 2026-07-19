@@ -22,6 +22,7 @@ import {
   Trash2,
   Truck,
   Umbrella,
+  User,
   Users,
   X,
 } from 'lucide-react';
@@ -480,10 +481,21 @@ function BloccoDialog({
 
   const onElimina = async () => {
     if (!f.id) return;
+    const membriNomi = f.dipendentiIds
+      .map((id) => dipendenti.find((d) => d.id === id))
+      .filter((d): d is DipRow => !!d)
+      .map((d) => nomeDip(d))
+      .join(', ');
+    const isSquad = f.dipendentiIds.length > 1;
     if (
       !(await confirm({
         title: 'Eliminare questo blocco?',
-        description: 'La pianificazione verrà rimossa. Operazione non annullabile.',
+        description:
+          (isSquad
+            ? `Riguarda l'intera squadra: ${membriNomi}. `
+            : membriNomi
+              ? `Riguarda ${membriNomi}. `
+              : '') + 'La pianificazione verrà rimossa. Operazione non annullabile.',
         destructive: true,
         confirmLabel: 'Elimina',
       }))
@@ -900,17 +912,16 @@ function Chip({
   conflitto,
   onOpen,
   drag,
-  rowDipId,
 }: {
   b: BloccoView;
   conflitto: boolean;
   onOpen: () => void;
   drag?: GridDrag;
-  rowDipId: string;
 }) {
   const h = hueTipo(b);
   const label = b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
   const Icon = b.tipo === 'formazione' ? GraduationCap : b.tipo === 'evento' ? CalendarClock : null;
+  const isSquad = b.membri.length > 1;
   const dragBlocco = { id: b.id, data: b.data, membri: b.membri };
   return (
     <div className="group/chip relative">
@@ -921,9 +932,9 @@ function Chip({
           if (drag?.suppressNextClick()) return;
           onOpen();
         }}
-        title={`${label} · ${b.oraInizio}-${b.oraFine}${b.stato === 'bozza' ? ' · bozza' : ''}${
-          drag ? ' · tieni premuto per spostare' : ''
-        }`}
+        title={`${label} · ${b.oraInizio}-${b.oraFine}${b.stato === 'bozza' ? ' · bozza' : ''} · ${
+          isSquad ? `squadra di ${b.membri.length}` : 'tecnico singolo'
+        }${drag ? ' · tieni premuto per spostare' : ''}`}
         className={
           'flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition ' +
           (conflitto ? 'ring-1 ring-destructive ' : '') +
@@ -937,6 +948,18 @@ function Chip({
       >
         {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
         <span className="min-w-0 flex-1 truncate">{label}</span>
+        {/* Simbolo squadra (👥N) vs tecnico singolo → l'azione seguirà il blocco. */}
+        {isSquad ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-black/[0.07] px-1 text-[9px] font-bold leading-none"
+            title={`Squadra di ${b.membri.length}`}
+          >
+            <Users className="h-2.5 w-2.5" />
+            {b.membri.length}
+          </span>
+        ) : (
+          <User className="h-2.5 w-2.5 shrink-0 opacity-40" aria-label="Tecnico singolo" />
+        )}
         <span className="shrink-0 tabular-nums opacity-70">
           {b.fascia === 'mattina' ? 'M' : b.fascia === 'pomeriggio' ? 'P' : b.oraInizio}
         </span>
@@ -944,9 +967,13 @@ function Chip({
       {drag ? (
         <span
           role="separator"
-          aria-label="Estendi questa persona sui giorni successivi"
-          title="Trascina per estendere solo questa persona sui giorni successivi"
-          onPointerDown={(e) => drag.resizePointerDown(e, dragBlocco, label, rowDipId)}
+          aria-label="Estendi il blocco sui giorni successivi"
+          title={
+            isSquad
+              ? 'Trascina per estendere l’intera squadra sui giorni successivi'
+              : 'Trascina per estendere sui giorni successivi'
+          }
+          onPointerDown={(e) => drag.resizePointerDown(e, dragBlocco, label)}
           className="absolute inset-y-0 right-0 w-2 cursor-ew-resize rounded-r opacity-0 transition group-hover/chip:opacity-100"
           style={{ backgroundColor: `hsl(${h} 60% 45%)`, touchAction: 'none' }}
         />
@@ -1082,11 +1109,25 @@ export function PianificazioneClient({
     return m;
   }, [dipendenti]);
 
-  // Drag della griglia: long-press → sposta l'intero blocco su un altro giorno;
-  // resize del bordo → estende SOLO la persona di quella riga sui giorni successivi.
+  const nomiBlocco = React.useCallback(
+    (b: BloccoView) => b.membri.map((m) => dipById.get(m) ?? '—').join(', '),
+    [dipById],
+  );
+
+  // Drag della griglia: allargare o spostare agisce SEMPRE sull'intero blocco.
+  // Se è una squadra → conferma/riepilogo con i nomi; se è un tecnico singolo → fluido.
   const gridDrag = useGridDrag({
     giorni,
     onMove: async (id, nuovaData) => {
+      const b = blocchi.find((x) => x.id === id);
+      if (b && b.membri.length > 1) {
+        const ok = await confirm({
+          title: "Spostare l'intera squadra?",
+          description: `A ${giornoBreveIT(nuovaData)} verranno riprogrammate tutte le persone del blocco: ${nomiBlocco(b)}.`,
+          confirmLabel: 'Sposta la squadra',
+        });
+        if (!ok) return;
+      }
       const res = await spostaBlocco({ id, nuovaData });
       if (!res.ok) {
         await alert({ title: 'Spostamento non riuscito', body: res.error });
@@ -1094,28 +1135,33 @@ export function PianificazioneClient({
       }
       refresh();
     },
-    onResize: async (id, date, personId) => {
-      const res = await ripetiBlocco({ id, date, soloDipendenteId: personId });
+    onResize: async (id, date) => {
+      const res = await ripetiBlocco({ id, date });
       if (!res.ok) {
         await alert({ title: 'Estensione non riuscita', body: res.error });
         return;
       }
       refresh();
-      const nome = dipById.get(personId) ?? 'La persona';
+      const b = blocchi.find((x) => x.id === id);
+      const isSquad = (b?.membri.length ?? 1) > 1;
       const salt = res.saltati;
-      if (res.creati === 0 && salt.length > 0) {
+      const saltStr = salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ');
+      const giorniLbl = `${res.creati} ${res.creati === 1 ? 'giorno' : 'giorni'}`;
+      if (res.creati === 0) {
+        if (salt.length > 0) await alert({ title: 'Nessun giorno aggiunto', body: `Saltati: ${saltStr}.` });
+        return;
+      }
+      if (isSquad && b) {
         await alert({
-          title: 'Nessun giorno aggiunto',
-          body: `${nome}: saltati ${salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ')}.`,
+          title: 'Estensione effettuata',
+          body:
+            `Modifica effettuata per l'intera squadra (${nomiBlocco(b)}) su ${giorniLbl}.` +
+            (salt.length ? ` Saltati: ${saltStr}.` : ''),
         });
       } else if (salt.length > 0) {
-        await alert({
-          title: 'Esteso',
-          body:
-            `${nome} aggiunta su ${res.creati} ${res.creati === 1 ? 'giorno' : 'giorni'}. ` +
-            `Saltati: ${salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ')}.`,
-        });
+        await alert({ title: 'Estensione effettuata', body: `Aggiunto su ${giorniLbl}. Saltati: ${saltStr}.` });
       }
+      // tecnico singolo, tutto ok → basta il pill "Salvato"
     },
   });
 
@@ -1415,7 +1461,6 @@ export function PianificazioneClient({
                                     conflitto={conflittoSet.has(`${d.id}|${g}|${b.id}`)}
                                     onOpen={() => setDialog(formDaBlocco(b))}
                                     drag={gridDrag}
-                                    rowDipId={d.id}
                                   />
                                 ))}
                                 <button

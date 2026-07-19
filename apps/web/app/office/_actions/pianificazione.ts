@@ -683,9 +683,6 @@ export async function spostaBlocco(
 const RipetiSchema = z.object({
   id: z.string().uuid(),
   date: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(31),
-  // Se valorizzato: estende SOLO questa persona (resize di un chip su una riga)
-  // → crea blocchi mono-persona sui giorni. Assente = clona l'intera squadra.
-  soloDipendenteId: z.string().uuid().optional(),
 });
 
 /** True se i due insiemi di id contengono gli stessi elementi. */
@@ -696,13 +693,10 @@ function stessoInsieme(a: string[], b: string[]): boolean {
 }
 
 /**
- * Estende un blocco su più giorni (resize della card).
- *  - `soloDipendenteId` valorizzato → estende **solo quella persona** (blocchi
- *    mono-persona, senza i mezzi della squadra). È il caso del trascinamento del
- *    bordo di un chip su una riga.
- *  - assente → clona l'INTERA squadra + mezzi.
- * Ferie = saltato; se la persona/squadra è già su un blocco equivalente quel
- * giorno = saltato (idempotente). I cloni nascono in bozza.
+ * Estende un blocco su più giorni (resize della card). Agisce SEMPRE sull'intero
+ * blocco: se è una squadra clona tutti i membri + mezzi, se è un tecnico singolo
+ * clona lui. Ferie = saltato; un blocco equivalente già presente quel giorno =
+ * saltato (idempotente). I cloni nascono in bozza.
  */
 export async function ripetiBlocco(
   input: unknown,
@@ -723,13 +717,6 @@ export async function ripetiBlocco(
   const b = await caricaBloccoById(supabase, ctx.tenantId, parsed.data.id);
   if (!b) return { ok: false, error: 'Blocco non trovato' };
 
-  const soloDip = parsed.data.soloDipendenteId ?? null;
-  if (soloDip && !b.membri.includes(soloDip))
-    return { ok: false, error: 'La persona non fa parte di questo blocco' };
-  // Per-persona: blocco mono-persona senza i mezzi della squadra.
-  const membri = soloDip ? [soloDip] : b.membri;
-  const mezzi = soloDip ? [] : b.mezzi;
-
   const date = Array.from(new Set(parsed.data.date))
     .filter((d) => d !== b.data)
     .sort();
@@ -738,24 +725,24 @@ export async function ripetiBlocco(
   const saltati: { data: string; motivo: string }[] = [];
   const daCreare: string[] = [];
   for (const giorno of date) {
-    const assenti = await assenzeInConflitto(supabase, ctx.tenantId, giorno, membri, b.oraInizio, b.oraFine);
+    const assenti = await assenzeInConflitto(supabase, ctx.tenantId, giorno, b.membri, b.oraInizio, b.oraFine);
     if (assenti.length > 0) {
       saltati.push({ data: giorno, motivo: `in ferie/permesso: ${assenti.join(', ')}` });
       continue;
     }
-    // dedup: salta se la persona (o la squadra) è già su un blocco equivalente
-    // quel giorno → ridimensionare più volte non duplica.
+    // dedup: salta se la stessa squadra è già su un blocco equivalente quel
+    // giorno → ridimensionare più volte non duplica.
     const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, giorno, giorno);
-    const equivalente = (e: BloccoView) =>
-      e.tipo === b.tipo &&
-      e.cantiereId === b.cantiereId &&
-      (e.titolo ?? '') === (b.titolo ?? '') &&
-      e.fascia === b.fascia &&
-      e.oraInizio === b.oraInizio &&
-      e.oraFine === b.oraFine;
-    const giaPresente = soloDip
-      ? esistenti.some((e) => equivalente(e) && e.membri.includes(soloDip))
-      : esistenti.some((e) => equivalente(e) && stessoInsieme(e.membri, b.membri));
+    const giaPresente = esistenti.some(
+      (e) =>
+        e.tipo === b.tipo &&
+        e.cantiereId === b.cantiereId &&
+        (e.titolo ?? '') === (b.titolo ?? '') &&
+        e.fascia === b.fascia &&
+        e.oraInizio === b.oraInizio &&
+        e.oraFine === b.oraFine &&
+        stessoInsieme(e.membri, b.membri),
+    );
     if (giaPresente) {
       saltati.push({ data: giorno, motivo: 'già pianificato' });
       continue;
@@ -787,7 +774,7 @@ export async function ripetiBlocco(
       .single();
     if (error || !nuovo) continue;
     const nuovoId = (nuovo as unknown as { id: string }).id;
-    const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, membri, mezzi);
+    const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, b.membri, b.mezzi);
     if (errFigli) {
       await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
       continue;
@@ -803,7 +790,7 @@ export async function ripetiBlocco(
       entityType: 'pianificazione_blocco',
       entityId: parsed.data.id,
       action: 'pianificazione.blocco.ripeti',
-      after: { giorni: creati, saltati: saltati.length, perPersona: !!soloDip },
+      after: { giorni: creati, saltati: saltati.length },
     });
     revalidatePath(PATH);
   }

@@ -15,9 +15,10 @@ Registro di come funziona la Pianificazione e delle scelte prese, a supporto del
 - **Gruppi lavoro** (reparti, es. Officina/Cantiere/Manutenzione) = `gruppi_approvazione` + `gruppo_membri` (1 dipendente = 1 gruppo). Sono la **"categoria"** usata da filtro ed export.
 - **Assenze** = ferie/permessi **approvati** (`permesso_richieste`), proiettati per giorno. Bloccano l'assegnazione (regola sotto).
 
-> **Regola ferrea (semantica squadra vs persona)**:
-> - **Intera squadra** (tutti i membri + mezzi): il dialog **"Ripeti su più giorni"** (si sta creando/duplicando l'assegnazione della squadra) e lo **spostamento** (long-press → l'intero blocco cambia giorno). Coerente con "Copia precedente".
-> - **Solo la persona**: il **resize** in griglia (trascinare il bordo destro di un chip su una riga) estende **solo quel dipendente** sui giorni successivi (blocchi mono-persona, senza i mezzi della squadra). Il chip vive sulla riga di una persona → il resize riguarda lei.
+> **Regola ferrea (l'azione segue il blocco)**: allargare (resize) e spostare agiscono **sempre sull'intero blocco**.
+> - Se il blocco è una **squadra** (più persone) → l'azione riguarda **tutta la squadra** (membri + mezzi).
+> - Se il blocco è un **tecnico singolo** → riguarda **solo lui**.
+> Ogni chip mostra un **simbolo**: 👥 + numero = squadra, icona singola = tecnico da solo. Così si capisce a colpo d'occhio cosa toccherà l'azione. (Il dialog "Ripeti su più giorni" è sempre a livello di squadra.)
 
 > **Regola ferrea (ferie = HARD)**: chi ha ferie/permesso **approvato** che si sovrappone a giorno/orario **non è assegnabile**. Vale in creazione/modifica **e** in ripeti/sposta (server-side, `assenzeInConflitto`). I conflitti "soft" (persona/mezzo già occupato) invece **non bloccano**: avvisano ("Salva comunque") o compaiono come **ring rosso**.
 
@@ -31,9 +32,10 @@ Nel dialog di **creazione** (non in modifica) c'è la sezione **"Ripeti su più 
 
 ## 3. Griglia — resize e drag
 
-- **Resize (estendi la persona)**: passando sopra un chip appare una **maniglia sul bordo destro**. Trascinandola a destra sui giorni successivi si evidenzia **solo la riga di quella persona** e al rilascio viene creato un blocco **mono-persona** su quei giorni (bozza, stesso cantiere/fascia, senza i mezzi della squadra). È **solo additivo** (non cancella nulla; per togliere un giorno si elimina il chip). Se la persona è già su un blocco equivalente quel giorno → **saltato** (ridimensionare più volte non duplica). Action: `ripetiBlocco` con `soloDipendenteId`.
-- **Sposta (drag & drop)**: **tieni premuto ~0,7s** sul chip per armare la modalità sposta (compare un "ghost" che segue il cursore e le celle bersaglio si evidenziano), poi trascina su un **altro giorno** → l'**intero blocco** (squadra) si sposta lì (cambia solo la data; membri/mezzi invariati). Un **click semplice** resta "apri modifica". Action: `spostaBlocco`.
-- **Segnale visivo**: durante lo **spostamento** si evidenziano **tutte le celle del blocco** (ogni membro → si muove la squadra); durante il **resize** solo la **riga della persona** estesa.
+- **Resize (estendi)**: passando sopra un chip appare una **maniglia sul bordo destro**. Trascinandola a destra sui giorni successivi si evidenziano le celle coperte (**tutte le righe dei membri** del blocco) e al rilascio l'**intero blocco** viene clonato su quei giorni (bozza). È **solo additivo** (non cancella nulla; per togliere un giorno si elimina il chip). Se la stessa squadra è già su un blocco equivalente quel giorno → **saltato** (ridimensionare più volte non duplica). Action: `ripetiBlocco`.
+- **Sposta (drag & drop)**: **tieni premuto ~0,7s** sul chip per armare la modalità sposta (compare un "ghost" che segue il cursore e le celle bersaglio si evidenziano), poi trascina su un **altro giorno** → l'**intero blocco** si sposta lì (cambia solo la data; membri/mezzi invariati). Un **click semplice** resta "apri modifica". Action: `spostaBlocco`.
+- **Segnale visivo**: durante resize/sposta si evidenziano **tutte le celle del blocco** (ogni membro), coerente col fatto che l'azione riguarda l'intera squadra.
+- **Conferme e riepiloghi** (quando il blocco è una **squadra**): lo **spostamento** chiede conferma con i nomi ("Spostare l'intera squadra: Mauro, Pippo, Pluto a Gio 24?"); il **resize** mostra un riepilogo ("Modifica effettuata per l'intera squadra: … su N giorni"); l'**eliminazione** ricapitola chi riguarda. Per un **tecnico singolo** lo spostamento è fluido (senza conferma) e il resize conferma solo con la pill "Salvato".
 - Implementazione: hook `useGridDrag` a **pointer events puri** (nessuna libreria). Il long-press evita spostamenti accidentali; un micro-movimento prima dello scadere annulla (era uno scroll).
 - Lo **stato** del blocco spostato resta invariato (coerente con la modifica normale); i cloni del resize nascono in **bozza**.
 

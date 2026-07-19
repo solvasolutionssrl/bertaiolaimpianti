@@ -29,19 +29,13 @@ export type DragState =
   | { kind: 'idle' }
   | { kind: 'pending'; b: DragBlocco; startX: number; startY: number }
   | { kind: 'moving'; b: DragBlocco; x: number; y: number; overDate: string | null; label: string }
-  | {
-      kind: 'resizing';
-      b: DragBlocco;
-      personId: string; // riga (dipendente) da cui parte il resize → estende SOLO lui
-      overDate: string | null;
-      label: string;
-    };
+  | { kind: 'resizing'; b: DragBlocco; overDate: string | null; label: string };
 
 export interface GridDrag {
   drag: DragState;
   busy: boolean;
   chipPointerDown: (e: React.PointerEvent, b: DragBlocco, label: string) => void;
-  resizePointerDown: (e: React.PointerEvent, b: DragBlocco, label: string, personId: string) => void;
+  resizePointerDown: (e: React.PointerEvent, b: DragBlocco, label: string) => void;
   suppressNextClick: () => boolean;
   isCellTarget: (emp: string, date: string) => boolean;
 }
@@ -49,7 +43,7 @@ export interface GridDrag {
 export function useGridDrag(opts: {
   giorni: string[];
   onMove: (id: string, nuovaData: string) => Promise<void>;
-  onResize: (id: string, date: string[], personId: string) => Promise<void>;
+  onResize: (id: string, date: string[]) => Promise<void>;
 }): GridDrag {
   const [drag, setDragState] = React.useState<DragState>({ kind: 'idle' });
   const [busy, setBusy] = React.useState(false);
@@ -111,11 +105,11 @@ export function useGridDrag(opts: {
       busyRef.current = false;
     }
   };
-  const runResize = async (id: string, dates: string[], personId: string) => {
+  const runResize = async (id: string, dates: string[]) => {
     setBusy(true);
     busyRef.current = true;
     try {
-      await onResizeRef.current(id, dates, personId);
+      await onResizeRef.current(id, dates);
     } finally {
       setBusy(false);
       busyRef.current = false;
@@ -165,7 +159,6 @@ export function useGridDrag(opts: {
       }
       if (cur.kind === 'resizing') {
         const target = cur.overDate;
-        const personId = cur.personId;
         finish();
         if (target) {
           const gi = giorniRef.current;
@@ -173,7 +166,7 @@ export function useGridDrag(opts: {
           const to = gi.indexOf(target);
           if (from >= 0 && to > from) {
             const dates = gi.slice(from + 1, to + 1);
-            if (dates.length) void runResize(cur.b.id, dates, personId);
+            if (dates.length) void runResize(cur.b.id, dates);
           }
         }
         return;
@@ -218,13 +211,13 @@ export function useGridDrag(opts: {
     }, LONG_PRESS_MS);
   };
 
-  const resizePointerDown = (e: React.PointerEvent, b: DragBlocco, label: string, personId: string) => {
+  const resizePointerDown = (e: React.PointerEvent, b: DragBlocco, label: string) => {
     // Il pointerdown è sulla MANIGLIA (non sul bottone) → nessun click del chip
     // da sopprimere. stopPropagation/preventDefault: niente selezione testo.
     if (e.button !== 0 || busyRef.current) return;
     e.stopPropagation();
     e.preventDefault();
-    set({ kind: 'resizing', b, personId, overDate: b.data, label });
+    set({ kind: 'resizing', b, overDate: b.data, label });
     attach();
   };
 
@@ -242,14 +235,13 @@ export function useGridDrag(opts: {
     }
     if (drag.kind === 'resizing') {
       if (!drag.overDate) return false;
-      // resize = SOLO la persona della riga di partenza (non tutta la squadra)
-      if (emp !== drag.personId) return false;
       const gi = opts.giorni;
       const from = gi.indexOf(drag.b.data);
       const to = gi.indexOf(drag.overDate);
       if (from < 0 || to <= from) return false;
       const idx = gi.indexOf(date);
-      return idx > from && idx <= to;
+      // estende l'intero blocco → evidenzia tutte le righe dei membri
+      return idx > from && idx <= to && drag.b.membri.includes(emp);
     }
     return false;
   };
