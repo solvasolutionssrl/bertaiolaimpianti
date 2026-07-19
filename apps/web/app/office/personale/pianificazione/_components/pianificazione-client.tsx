@@ -951,14 +951,19 @@ function BloccoDialog({
             È un blocco di <strong>squadra</strong> ({membriNomiDialog}). Vuoi eliminarlo per tutti
             oppure solo per {contestoDip ? nomeDip(contestoDip) : 'questa persona'}?
           </p>
-          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+          {/* Bottoni impilati a tutta larghezza: con nomi lunghi una riga
+              orizzontale sforerebbe il dialog. Default (rosso) in alto. */}
+          <div className="mt-3 flex flex-col gap-2">
             <Button
               type="button"
-              variant="ghost"
-              onClick={() => setConfermaSquadra(false)}
+              onClick={() => {
+                setConfermaSquadra(false);
+                eliminaTutto();
+              }}
               disabled={pending}
+              className="w-full justify-center bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Annulla
+              <Trash2 className="h-4 w-4" /> Elimina tutta la squadra
             </Button>
             {contestoDip ? (
               <Button
@@ -969,22 +974,21 @@ function BloccoDialog({
                   eliminaSoloMembro();
                 }}
                 disabled={pending}
+                className="w-full justify-center"
               >
-                Elimina solo {nomeDip(contestoDip)}
+                <span className="truncate">Elimina solo {nomeDip(contestoDip)}</span>
               </Button>
             ) : null}
             <Button
               type="button"
-              onClick={() => {
-                setConfermaSquadra(false);
-                eliminaTutto();
-              }}
+              variant="ghost"
+              onClick={() => setConfermaSquadra(false)}
               disabled={pending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="w-full justify-center"
             >
-              <Trash2 className="h-4 w-4" /> Elimina tutta la squadra
+              Annulla
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     ) : null}
