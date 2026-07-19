@@ -1513,12 +1513,15 @@ export function PianificazioneClient({
                     {giorni.map((g, i) => {
                       const cella = perCella.get(`${d.id}|${g}`) ?? [];
                       const weekend = i >= 5;
-                      // Anteprima "striscia" (forma card) durante drag/resize e salvataggio.
-                      const ghost =
-                        vista === 'piano'
-                          ? gridDrag.cellGhost(d.id, g) ??
-                            (savingCells.has(`${d.id}|${g}`) ? savingGhost : null)
+                      // Anteprima "striscia" (forma card): mentre TRASCINI è a 75%
+                      // tratteggiata; al RILASCIO (fase di salvataggio) diventa piena 100%.
+                      const liveGhost = vista === 'piano' ? gridDrag.cellGhost(d.id, g) : null;
+                      const saveGhost =
+                        vista === 'piano' && !liveGhost && savingCells.has(`${d.id}|${g}`)
+                          ? savingGhost
                           : null;
+                      const ghost = liveGhost ?? saveGhost;
+                      const ghostSolido = !!saveGhost;
                       return (
                         <td
                           key={g}
@@ -1546,13 +1549,15 @@ export function PianificazioneClient({
                               <>
                                 {ghost ? (
                                   <div
-                                    className="flex w-full animate-pulse items-center rounded px-1.5 py-1 text-[11px] font-medium leading-tight"
+                                    className="flex w-full items-center rounded px-1.5 py-1 text-[11px] font-medium leading-tight"
                                     style={{
                                       backgroundColor: `hsl(${ghost.hue} 70% 94%)`,
                                       color: `hsl(${ghost.hue} 60% 28%)`,
                                       borderLeft: `3px solid hsl(${ghost.hue} 60% 45%)`,
-                                      outline: `1px dashed hsl(${ghost.hue} 55% 55%)`,
-                                      opacity: 0.8,
+                                      // trascinamento = anteprima 75% tratteggiata; rilascio = card vera 100%
+                                      outline: ghostSolido ? 'none' : `1px dashed hsl(${ghost.hue} 55% 55%)`,
+                                      opacity: ghostSolido ? 1 : 0.75,
+                                      transition: 'opacity 150ms ease',
                                     }}
                                   >
                                     <span className="min-w-0 flex-1 truncate">{ghost.label}</span>
