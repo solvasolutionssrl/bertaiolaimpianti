@@ -166,3 +166,35 @@ export function giorniSettimana(lunediISO: string): string[] {
 }
 
 export const NOMI_GIORNO_BREVI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+
+/**
+ * Numero di settimana ISO-8601 (+ anno ISO) di una data 'YYYY-MM-DD'. L'anno ISO
+ * può differire dall'anno civile a cavallo di dicembre/gennaio (es. 29/12/2025 =
+ * settimana 1 del 2026). Deterministica (no Date.now). Usato per titolo ed export.
+ */
+export function settimanaISO(iso: string): { anno: number; settimana: number } {
+  const [Y, M, D] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(Y!, M! - 1, D!));
+  const dayNum = (d.getUTCDay() + 6) % 7; // lun=0..dom=6
+  d.setUTCDate(d.getUTCDate() - dayNum + 3); // giovedì della settimana ISO
+  const anno = d.getUTCFullYear();
+  const primoGio = new Date(Date.UTC(anno, 0, 4)); // il 4 gennaio è sempre in settimana 1
+  const primoGioDayNum = (primoGio.getUTCDay() + 6) % 7;
+  primoGio.setUTCDate(primoGio.getUTCDate() - primoGioDayNum + 3);
+  const settimana = 1 + Math.round((d.getTime() - primoGio.getTime()) / (7 * 86400000));
+  return { anno, settimana };
+}
+
+/**
+ * Slug sicuro per nome file: minuscolo, senza accenti, non-alfanumerici → `_`.
+ * Vuoto → 'gruppo'. Es. "Cantiere & Manutenzione" → "cantiere_manutenzione".
+ */
+export function slugPianificazione(s: string): string {
+  const out = s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // toglie i segni diacritici combinanti
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return out || 'gruppo';
+}

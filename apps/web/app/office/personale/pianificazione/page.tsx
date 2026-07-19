@@ -22,7 +22,7 @@ export default async function PianificazionePage({
     lunRaw && /^\d{4}-\d{2}-\d{2}$/.test(lunRaw) ? lunediDellaSettimana(lunRaw) : oggiLunedi;
   const domenica = addGiorni(lunedi, 6);
 
-  const [dipRes, cantRes, mezziRes, blocchi, assenze, gruppiRes, membriRes] = await Promise.all([
+  const [dipRes, cantRes, mezziRes, blocchi, assenze, gruppiRes, membriRes, tenantRes] = await Promise.all([
     supabase
       .from('dipendenti' as never)
       .select('id, nome, cognome, mansione, a_turni, stato_attivo')
@@ -52,7 +52,18 @@ export default async function PianificazionePage({
       .from('gruppo_membri' as never)
       .select('gruppo_id, dipendente_id')
       .eq('tenant_id', ctx.tenantId),
+    supabase
+      .from('tenants')
+      .select('nome, logo_url, brand_color')
+      .eq('id', ctx.tenantId)
+      .maybeSingle(),
   ]);
+
+  const tenant = (tenantRes.data ?? null) as {
+    nome: string | null;
+    logo_url: string | null;
+    brand_color: string | null;
+  } | null;
 
   const gruppi = ((gruppiRes.data ?? []) as unknown as {
     id: string;
@@ -114,6 +125,9 @@ export default async function PianificazionePage({
       assenze={assenze}
       gruppi={gruppi}
       dipGruppo={dipGruppo}
+      tenantNome={tenant?.nome ?? 'Azienda'}
+      logoUrl={tenant?.logo_url ?? null}
+      brandColor={tenant?.brand_color ?? null}
     />
   );
 }

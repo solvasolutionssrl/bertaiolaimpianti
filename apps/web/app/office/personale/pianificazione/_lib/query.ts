@@ -86,50 +86,33 @@ export interface BloccoView {
   mezzi: string[]; // mezzo ids
 }
 
-/**
- * Blocchi pianificati (con membri, mezzi e nome cantiere) in un range di giorni
- * [dataFrom, dataTo] inclusi. Una sola query con embed PostgREST. Usato dalla
- * pagina (settimana) e dalle action (singolo giorno) per il calcolo conflitti.
- */
-export async function caricaBlocchiRange(
-  supabase: Supa,
-  tenantId: string,
-  dataFrom: string,
-  dataTo: string,
-): Promise<BloccoView[]> {
-  const { data } = await supabase
-    .from('pianificazione_blocchi' as never)
-    .select(
-      'id, data, tipo, cantiere_id, titolo, luogo, luogo_lat, luogo_lng, fascia, ora_inizio, ora_fine, note, stato, ' +
-        'membri:pianificazione_membri(dipendente_id), ' +
-        'mezzi:pianificazione_blocco_mezzi(mezzo_id), ' +
-        'cantiere:cantieri(nome)',
-    )
-    .eq('tenant_id', tenantId)
-    .gte('data', dataFrom)
-    .lte('data', dataTo)
-    .order('data');
+const SELECT_BLOCCO =
+  'id, data, tipo, cantiere_id, titolo, luogo, luogo_lat, luogo_lng, fascia, ora_inizio, ora_fine, note, stato, ' +
+  'membri:pianificazione_membri(dipendente_id), ' +
+  'mezzi:pianificazione_blocco_mezzi(mezzo_id), ' +
+  'cantiere:cantieri(nome)';
 
-  const rows = (data ?? []) as unknown as Array<{
-    id: string;
-    data: string;
-    tipo: TipoBlocco;
-    cantiere_id: string | null;
-    titolo: string | null;
-    luogo: string | null;
-    luogo_lat: number | null;
-    luogo_lng: number | null;
-    fascia: Fascia;
-    ora_inizio: string;
-    ora_fine: string;
-    note: string | null;
-    stato: 'bozza' | 'pubblicato';
-    membri: { dipendente_id: string }[] | null;
-    mezzi: { mezzo_id: string }[] | null;
-    cantiere: { nome: string } | null;
-  }>;
+interface BloccoRowRaw {
+  id: string;
+  data: string;
+  tipo: TipoBlocco;
+  cantiere_id: string | null;
+  titolo: string | null;
+  luogo: string | null;
+  luogo_lat: number | null;
+  luogo_lng: number | null;
+  fascia: Fascia;
+  ora_inizio: string;
+  ora_fine: string;
+  note: string | null;
+  stato: 'bozza' | 'pubblicato';
+  membri: { dipendente_id: string }[] | null;
+  mezzi: { mezzo_id: string }[] | null;
+  cantiere: { nome: string } | null;
+}
 
-  return rows.map((r) => ({
+function mapBloccoRow(r: BloccoRowRaw): BloccoView {
+  return {
     id: r.id,
     data: r.data,
     tipo: r.tipo,
@@ -146,5 +129,43 @@ export async function caricaBlocchiRange(
     stato: r.stato,
     membri: (r.membri ?? []).map((m) => m.dipendente_id),
     mezzi: (r.mezzi ?? []).map((m) => m.mezzo_id),
-  }));
+  };
+}
+
+/**
+ * Blocchi pianificati (con membri, mezzi e nome cantiere) in un range di giorni
+ * [dataFrom, dataTo] inclusi. Una sola query con embed PostgREST. Usato dalla
+ * pagina (settimana) e dalle action (singolo giorno) per il calcolo conflitti.
+ */
+export async function caricaBlocchiRange(
+  supabase: Supa,
+  tenantId: string,
+  dataFrom: string,
+  dataTo: string,
+): Promise<BloccoView[]> {
+  const { data } = await supabase
+    .from('pianificazione_blocchi' as never)
+    .select(SELECT_BLOCCO)
+    .eq('tenant_id', tenantId)
+    .gte('data', dataFrom)
+    .lte('data', dataTo)
+    .order('data');
+
+  return ((data ?? []) as unknown as BloccoRowRaw[]).map(mapBloccoRow);
+}
+
+/** Un singolo blocco per id (scoping tenant esplicito). Per sposta/ripeti. */
+export async function caricaBloccoById(
+  supabase: Supa,
+  tenantId: string,
+  id: string,
+): Promise<BloccoView | null> {
+  const { data } = await supabase
+    .from('pianificazione_blocchi' as never)
+    .select(SELECT_BLOCCO)
+    .eq('tenant_id', tenantId)
+    .eq('id', id)
+    .maybeSingle();
+  if (!data) return null;
+  return mapBloccoRow(data as unknown as BloccoRowRaw);
 }

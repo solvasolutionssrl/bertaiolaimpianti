@@ -23,7 +23,11 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 import { inviaPushAUtente } from '@/lib/push';
-import { caricaBlocchiRange, type BloccoView } from '@/app/office/personale/pianificazione/_lib/query';
+import {
+  caricaBlocchiRange,
+  caricaBloccoById,
+  type BloccoView,
+} from '@/app/office/personale/pianificazione/_lib/query';
 
 /**
  * Server actions della Pianificazione settimanale (modulo Dipendenti).
@@ -344,6 +348,146 @@ async function inserisciFigli(
   return null;
 }
 
+// ── creaBlocchiRicorrenti (ripeti su più giorni) ─────────────────────
+
+/** Etichetta breve di un giorno per i messaggi ("Gio 24/07"). */
+const NOMI_GG = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+function giornoBreve(iso: string): string {
+  const [Y, M, D] = iso.split('-').map(Number);
+  const dow = new Date(Date.UTC(Y!, M! - 1, D!)).getUTCDay(); // 0=dom..6=sab
+  return `${NOMI_GG[(dow + 6) % 7]} ${String(D).padStart(2, '0')}/${String(M).padStart(2, '0')}`;
+}
+
+const RicorrenteSchema = BloccoSchema.extend({
+  date: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(31),
+});
+
+export type RicorrenteResult =
+  | { ok: true; creati: number; saltati: { data: string; motivo: string }[] }
+  | { ok: false; error: string }
+  | { ok: false; conflitti: string[] };
+
+/**
+ * Crea lo STESSO blocco (squadra + mezzi + cantiere/evento + fascia) su più
+ * giorni. Per ogni giorno: chi è in ferie/permesso approvato è **saltato** (mai
+ * forzato); i conflitti soft (persona/mezzo già occupati) bloccano come nella
+ * creazione singola finché non si conferma con `forza` ("Salva comunque"), poi
+ * si crea comunque. Tutti i blocchi nascono in bozza.
+ */
+export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteResult> {
+  const parsed = RicorrenteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  const data = parsed.data;
+
+  let g;
+  try {
+    g = await guard();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const { ctx, supabase } = g;
+
+  const targetErr = validaTarget(data);
+  if (targetErr) return { ok: false, error: targetErr };
+  const orari = risolviOrari(data);
+  if ('errore' in orari) return { ok: false, error: orari.errore };
+  if (data.dipendentiIds.length === 0) return { ok: false, error: 'Seleziona almeno un dipendente' };
+
+  const date = Array.from(new Set(data.date)).sort();
+  const nomiDip = await nomiDipendenti(supabase, ctx.tenantId);
+  const nomiMezzo = await nomiMezzi(supabase, ctx.tenantId);
+
+  const saltati: { data: string; motivo: string }[] = [];
+  const daCreare: string[] = [];
+  const conflittiTotali: string[] = [];
+
+  for (const giorno of date) {
+    // Ferie/permesso = HARD → salta sempre (anche con forza).
+    const assenti = await assenzeInConflitto(
+      supabase,
+      ctx.tenantId,
+      giorno,
+      data.dipendentiIds,
+      orari.inizio,
+      orari.fine,
+    );
+    if (assenti.length > 0) {
+      saltati.push({ data: giorno, motivo: `in ferie/permesso: ${assenti.join(', ')}` });
+      continue;
+    }
+    // Conflitti soft: raccolti (con prefisso giorno) e bloccanti finché non forza.
+    if (!data.forza) {
+      const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, giorno, giorno);
+      const conflitti = messaggiConflitto({
+        data: giorno,
+        inizio: orari.inizio,
+        fine: orari.fine,
+        dipendenti: data.dipendentiIds,
+        mezzi: data.mezziIds,
+        esistenti,
+        nomiDip,
+        nomiMezzo,
+      });
+      for (const c of conflitti) conflittiTotali.push(`${giornoBreve(giorno)} · ${c}`);
+    }
+    daCreare.push(giorno);
+  }
+
+  if (!data.forza && conflittiTotali.length > 0) return { ok: false, conflitti: conflittiTotali };
+
+  let creati = 0;
+  for (const giorno of daCreare) {
+    const { data: bloccoRow, error: errBlocco } = await supabase
+      .from('pianificazione_blocchi' as never)
+      .insert({
+        tenant_id: ctx.tenantId,
+        data: giorno,
+        tipo: data.tipo,
+        cantiere_id: data.tipo === 'cantiere' ? data.cantiereId : null,
+        titolo: data.tipo !== 'cantiere' ? data.titolo?.trim() : null,
+        luogo: data.tipo !== 'cantiere' ? data.luogo?.trim() ?? null : null,
+        luogo_lat: data.tipo !== 'cantiere' ? data.luogoLat ?? null : null,
+        luogo_lng: data.tipo !== 'cantiere' ? data.luogoLng ?? null : null,
+        fascia: data.fascia,
+        ora_inizio: orari.inizio,
+        ora_fine: orari.fine,
+        note: data.note?.trim() || null,
+        stato: 'bozza',
+        created_by: ctx.userId,
+      } as never)
+      .select('id')
+      .single();
+    if (errBlocco || !bloccoRow) continue;
+    const bloccoId = (bloccoRow as unknown as { id: string }).id;
+    const errFigli = await inserisciFigli(
+      supabase,
+      ctx.tenantId,
+      bloccoId,
+      data.dipendentiIds,
+      data.mezziIds,
+    );
+    if (errFigli) {
+      await supabase.from('pianificazione_blocchi' as never).delete().eq('id', bloccoId);
+      continue;
+    }
+    creati++;
+  }
+
+  if (creati > 0) {
+    await auditTenant(supabase, {
+      tenantId: ctx.tenantId,
+      actorUserId: ctx.userId,
+      actorRole: ctx.role,
+      entityType: 'pianificazione',
+      action: 'pianificazione.blocco.ripeti',
+      after: { tipo: data.tipo, giorni: creati, saltati: saltati.length },
+    });
+    revalidatePath(PATH);
+  }
+
+  return { ok: true, creati, saltati };
+}
+
 // ── aggiornaBlocco ───────────────────────────────────────────────────
 
 const AggiornaSchema = BloccoSchema.extend({ id: z.string().uuid() });
@@ -465,6 +609,206 @@ export async function eliminaBlocco(id: string): Promise<{ ok: true } | { ok: fa
   });
   revalidatePath(PATH);
   return { ok: true };
+}
+
+// ── spostaBlocco (drag & drop su un altro giorno) ────────────────────
+
+const SpostaSchema = z.object({
+  id: z.string().uuid(),
+  nuovaData: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data non valida'),
+});
+
+/**
+ * Sposta un blocco (intera squadra) su un altro giorno. Ferie/permesso sul
+ * nuovo giorno = blocco HARD (rifiuta). I conflitti soft NON bloccano il gesto
+ * (compaiono come ring rosso dopo il refresh). Lo stato (bozza/pubblicato) resta
+ * invariato, coerente con `aggiornaBlocco`.
+ */
+export async function spostaBlocco(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = SpostaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  let g;
+  try {
+    g = await guard();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const { ctx, supabase } = g;
+
+  const b = await caricaBloccoById(supabase, ctx.tenantId, parsed.data.id);
+  if (!b) return { ok: false, error: 'Blocco non trovato' };
+  if (b.data === parsed.data.nuovaData) return { ok: true }; // no-op
+
+  const assenti = await assenzeInConflitto(
+    supabase,
+    ctx.tenantId,
+    parsed.data.nuovaData,
+    b.membri,
+    b.oraInizio,
+    b.oraFine,
+  );
+  if (assenti.length > 0) {
+    return {
+      ok: false,
+      error: `Non spostabile su ${giornoBreve(parsed.data.nuovaData)}: in ferie o permesso · ${assenti.join(', ')}`,
+    };
+  }
+
+  const { error } = await supabase
+    .from('pianificazione_blocchi' as never)
+    .update({ data: parsed.data.nuovaData } as never)
+    .eq('id', parsed.data.id)
+    .eq('tenant_id', ctx.tenantId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'pianificazione_blocco',
+    entityId: parsed.data.id,
+    action: 'pianificazione.blocco.sposta',
+    before: { data: b.data },
+    after: { data: parsed.data.nuovaData },
+  });
+
+  revalidatePath(PATH);
+  return { ok: true };
+}
+
+// ── ripetiBlocco (resize: estende su più giorni) ─────────────────────
+
+const RipetiSchema = z.object({
+  id: z.string().uuid(),
+  date: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(31),
+  // Se valorizzato: estende SOLO questa persona (resize di un chip su una riga)
+  // → crea blocchi mono-persona sui giorni. Assente = clona l'intera squadra.
+  soloDipendenteId: z.string().uuid().optional(),
+});
+
+/** True se i due insiemi di id contengono gli stessi elementi. */
+function stessoInsieme(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const s = new Set(a);
+  return b.every((x) => s.has(x));
+}
+
+/**
+ * Estende un blocco su più giorni (resize della card).
+ *  - `soloDipendenteId` valorizzato → estende **solo quella persona** (blocchi
+ *    mono-persona, senza i mezzi della squadra). È il caso del trascinamento del
+ *    bordo di un chip su una riga.
+ *  - assente → clona l'INTERA squadra + mezzi.
+ * Ferie = saltato; se la persona/squadra è già su un blocco equivalente quel
+ * giorno = saltato (idempotente). I cloni nascono in bozza.
+ */
+export async function ripetiBlocco(
+  input: unknown,
+): Promise<
+  | { ok: true; creati: number; saltati: { data: string; motivo: string }[] }
+  | { ok: false; error: string }
+> {
+  const parsed = RipetiSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  let g;
+  try {
+    g = await guard();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const { ctx, supabase } = g;
+
+  const b = await caricaBloccoById(supabase, ctx.tenantId, parsed.data.id);
+  if (!b) return { ok: false, error: 'Blocco non trovato' };
+
+  const soloDip = parsed.data.soloDipendenteId ?? null;
+  if (soloDip && !b.membri.includes(soloDip))
+    return { ok: false, error: 'La persona non fa parte di questo blocco' };
+  // Per-persona: blocco mono-persona senza i mezzi della squadra.
+  const membri = soloDip ? [soloDip] : b.membri;
+  const mezzi = soloDip ? [] : b.mezzi;
+
+  const date = Array.from(new Set(parsed.data.date))
+    .filter((d) => d !== b.data)
+    .sort();
+  if (date.length === 0) return { ok: true, creati: 0, saltati: [] };
+
+  const saltati: { data: string; motivo: string }[] = [];
+  const daCreare: string[] = [];
+  for (const giorno of date) {
+    const assenti = await assenzeInConflitto(supabase, ctx.tenantId, giorno, membri, b.oraInizio, b.oraFine);
+    if (assenti.length > 0) {
+      saltati.push({ data: giorno, motivo: `in ferie/permesso: ${assenti.join(', ')}` });
+      continue;
+    }
+    // dedup: salta se la persona (o la squadra) è già su un blocco equivalente
+    // quel giorno → ridimensionare più volte non duplica.
+    const esistenti = await caricaBlocchiRange(supabase, ctx.tenantId, giorno, giorno);
+    const equivalente = (e: BloccoView) =>
+      e.tipo === b.tipo &&
+      e.cantiereId === b.cantiereId &&
+      (e.titolo ?? '') === (b.titolo ?? '') &&
+      e.fascia === b.fascia &&
+      e.oraInizio === b.oraInizio &&
+      e.oraFine === b.oraFine;
+    const giaPresente = soloDip
+      ? esistenti.some((e) => equivalente(e) && e.membri.includes(soloDip))
+      : esistenti.some((e) => equivalente(e) && stessoInsieme(e.membri, b.membri));
+    if (giaPresente) {
+      saltati.push({ data: giorno, motivo: 'già pianificato' });
+      continue;
+    }
+    daCreare.push(giorno);
+  }
+
+  let creati = 0;
+  for (const giorno of daCreare) {
+    const { data: nuovo, error } = await supabase
+      .from('pianificazione_blocchi' as never)
+      .insert({
+        tenant_id: ctx.tenantId,
+        data: giorno,
+        tipo: b.tipo,
+        cantiere_id: b.cantiereId,
+        titolo: b.titolo,
+        luogo: b.luogo,
+        luogo_lat: b.luogoLat,
+        luogo_lng: b.luogoLng,
+        fascia: b.fascia,
+        ora_inizio: b.oraInizio,
+        ora_fine: b.oraFine,
+        note: b.note,
+        stato: 'bozza',
+        created_by: ctx.userId,
+      } as never)
+      .select('id')
+      .single();
+    if (error || !nuovo) continue;
+    const nuovoId = (nuovo as unknown as { id: string }).id;
+    const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, membri, mezzi);
+    if (errFigli) {
+      await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
+      continue;
+    }
+    creati++;
+  }
+
+  if (creati > 0) {
+    await auditTenant(supabase, {
+      tenantId: ctx.tenantId,
+      actorUserId: ctx.userId,
+      actorRole: ctx.role,
+      entityType: 'pianificazione_blocco',
+      entityId: parsed.data.id,
+      action: 'pianificazione.blocco.ripeti',
+      after: { giorni: creati, saltati: saltati.length, perPersona: !!soloDip },
+    });
+    revalidatePath(PATH);
+  }
+
+  return { ok: true, creati, saltati };
 }
 
 // ── pubblicaSettimana ────────────────────────────────────────────────

@@ -9,6 +9,8 @@ import {
   addGiorni,
   lunediDellaSettimana,
   giorniSettimana,
+  settimanaISO,
+  slugPianificazione,
   type VoceOccupazione,
 } from './pianificazione';
 
@@ -174,5 +176,40 @@ describe('matematica settimana', () => {
     expect(g).toHaveLength(7);
     expect(g[0]).toBe('2026-07-13');
     expect(g[6]).toBe('2026-07-19');
+  });
+});
+
+describe('settimanaISO', () => {
+  it('settimana ordinaria', () => {
+    expect(settimanaISO('2026-07-20')).toEqual({ anno: 2026, settimana: 30 });
+  });
+  it('primo gennaio (giovedì) è settimana 1', () => {
+    expect(settimanaISO('2026-01-01')).toEqual({ anno: 2026, settimana: 1 });
+  });
+  it('fine dicembre appartiene alla settimana ISO dell’anno seguente', () => {
+    // Lun 29/12/2025 → giovedì 01/01/2026 → settimana 1 del 2026
+    expect(settimanaISO('2025-12-29')).toEqual({ anno: 2026, settimana: 1 });
+  });
+  it('anno con 53 settimane', () => {
+    expect(settimanaISO('2026-12-31')).toEqual({ anno: 2026, settimana: 53 });
+  });
+  it('coerente lungo tutta la settimana (lun e dom danno lo stesso numero)', () => {
+    expect(settimanaISO('2026-07-20').settimana).toBe(settimanaISO('2026-07-26').settimana);
+  });
+});
+
+describe('slugPianificazione', () => {
+  it('minuscolo semplice', () => {
+    expect(slugPianificazione('Officina')).toBe('officina');
+  });
+  it('non-alfanumerici collassano in underscore singolo', () => {
+    expect(slugPianificazione('Cantiere & Manutenzione')).toBe('cantiere_manutenzione');
+  });
+  it('toglie gli accenti', () => {
+    expect(slugPianificazione('Città Est')).toBe('citta_est');
+  });
+  it('stringa vuota o solo simboli → gruppo', () => {
+    expect(slugPianificazione('   ')).toBe('gruppo');
+    expect(slugPianificazione('—/—')).toBe('gruppo');
   });
 });

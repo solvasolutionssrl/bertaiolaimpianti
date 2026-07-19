@@ -15,11 +15,13 @@ import {
   Loader2,
   MapPin,
   Plus,
+  Save,
   Search,
   Send,
   StickyNote,
   Trash2,
   Truck,
+  Umbrella,
   Users,
   X,
 } from 'lucide-react';
@@ -45,11 +47,17 @@ import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
 import type { BloccoView, TipoBlocco, AssenzaView } from '../_lib/query';
 import {
   creaBlocco,
+  creaBlocchiRicorrenti,
   aggiornaBlocco,
   eliminaBlocco,
   pubblicaSettimana,
   copiaSettimanaPrecedente,
+  spostaBlocco,
+  ripetiBlocco,
 } from '@/app/office/_actions/pianificazione';
+import { ExportMenu } from './export-menu';
+import { GruppoFilter } from './gruppo-filter';
+import { useGridDrag, type GridDrag } from './use-grid-drag';
 
 export interface DipRow {
   id: string;
@@ -111,6 +119,13 @@ function fmtGiornoLungo(iso: string): string {
     month: 'long',
     timeZone: 'Europe/Rome',
   });
+}
+
+/** "Gio 24/07" — etichetta breve di un giorno (per riepiloghi/ripetizione). */
+function giornoBreveIT(iso: string): string {
+  const [Y, M, D] = iso.split('-').map(Number);
+  const dow = new Date(Date.UTC(Y!, M! - 1, D!)).getUTCDay(); // 0=dom..6=sab
+  return `${NOMI_GIORNO_BREVI[(dow + 6) % 7]} ${String(D).padStart(2, '0')}/${String(M).padStart(2, '0')}`;
 }
 
 const TIPO_META: Record<
@@ -250,6 +265,7 @@ function BloccoDialog({
   mezzi,
   gruppi,
   dipGruppo,
+  giorni,
   onSaved,
 }: {
   form: FormState;
@@ -259,6 +275,7 @@ function BloccoDialog({
   mezzi: MezzoRow[];
   gruppi: GruppoLite[];
   dipGruppo: Record<string, string>;
+  giorni: string[];
   onSaved: () => void;
 }) {
   const alert = useAlert();
@@ -270,6 +287,8 @@ function BloccoDialog({
   const [cercaDip, setCercaDip] = React.useState('');
   const [cercaMezzo, setCercaMezzo] = React.useState('');
   const [gruppoDip, setGruppoDip] = React.useState('tutti'); // filtro gruppi: predisposto, non ancora attivo
+  // "Ripeti su più giorni" (solo in creazione): giorni EXTRA oltre a f.data.
+  const [ripeti, setRipeti] = React.useState<Set<string>>(() => new Set());
   const isEdit = !!f.id;
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
@@ -337,7 +356,17 @@ function BloccoDialog({
           <input
             type="date"
             value={f.data}
-            onChange={(e) => set('data', e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              set('data', v);
+              // Se il nuovo giorno principale era tra gli "extra", toglilo (è l'ancora).
+              setRipeti((prev) => {
+                if (!prev.has(v)) return prev;
+                const n = new Set(prev);
+                n.delete(v);
+                return n;
+              });
+            }}
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
           />
         </label>
@@ -407,6 +436,34 @@ function BloccoDialog({
         note: f.note,
         forza,
       };
+
+      // Ripeti su più giorni (solo in creazione): clona il blocco sui giorni scelti.
+      if (!isEdit && ripeti.size > 0) {
+        const date = Array.from(new Set([f.data, ...ripeti])).sort();
+        const res = await creaBlocchiRicorrenti({ ...payload, date });
+        if (res.ok) {
+          onSaved();
+          onClose();
+          if (res.saltati.length > 0) {
+            await alert({
+              title: 'Ripetizione completata',
+              body:
+                `Blocco creato su ${res.creati} ${res.creati === 1 ? 'giorno' : 'giorni'}. ` +
+                `Saltati: ${res.saltati
+                  .map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`)
+                  .join('; ')}.`,
+            });
+          }
+          return;
+        }
+        if ('conflitti' in res) {
+          setConflitti(res.conflitti);
+          return;
+        }
+        await alert({ title: 'Non salvato', body: res.error });
+        return;
+      }
+
       const res = isEdit ? await aggiornaBlocco(payload) : await creaBlocco(payload);
       if (res.ok) {
         onSaved();
@@ -595,6 +652,60 @@ function BloccoDialog({
                   {quandoFields}
                 </Sezione>
               )}
+
+              {/* Ripeti su più giorni (solo in creazione): clona il blocco intero
+                  sui giorni scelti della settimana. Il giorno principale (f.data)
+                  è sempre incluso; chi è in ferie quel giorno viene saltato. */}
+              {!isEdit ? (
+                <Sezione
+                  icon={CalendarDays}
+                  title="Ripeti su più giorni"
+                  tinta="comune"
+                  right={
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      {1 + ripeti.size} {1 + ripeti.size === 1 ? 'giorno' : 'giorni'}
+                    </span>
+                  }
+                >
+                  <div className="flex flex-wrap gap-1.5">
+                    {giorni.map((g, i) => {
+                      const anchor = g === f.data;
+                      const on = anchor || ripeti.has(g);
+                      return (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => {
+                            if (anchor) return;
+                            setRipeti((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(g)) n.delete(g);
+                              else n.add(g);
+                              return n;
+                            });
+                          }}
+                          title={anchor ? 'Giorno principale del blocco' : undefined}
+                          className={
+                            'flex min-w-[2.75rem] flex-col items-center rounded-md border px-2 py-1 text-xs font-medium transition-colors ' +
+                            (anchor
+                              ? 'cursor-default border-primary bg-primary text-white'
+                              : on
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-white text-muted-foreground hover:bg-muted/40')
+                          }
+                        >
+                          <span>{NOMI_GIORNO_BREVI[i]}</span>
+                          <span className="text-[10px] tabular-nums opacity-80">{g.slice(8)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    Crea lo stesso blocco (squadra, mezzi, orario) su ogni giorno scelto. Chi è in
+                    ferie quel giorno viene saltato.
+                  </p>
+                </Sezione>
+              ) : null}
 
               {/* Mezzi: ricerca + card compatte */}
               <Sezione
@@ -787,37 +898,60 @@ function BloccoDialog({
 function Chip({
   b,
   conflitto,
-  onClick,
+  onOpen,
+  drag,
+  rowDipId,
 }: {
   b: BloccoView;
   conflitto: boolean;
-  onClick: () => void;
+  onOpen: () => void;
+  drag?: GridDrag;
+  rowDipId: string;
 }) {
   const h = hueTipo(b);
   const label = b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
   const Icon = b.tipo === 'formazione' ? GraduationCap : b.tipo === 'evento' ? CalendarClock : null;
+  const dragBlocco = { id: b.id, data: b.data, membri: b.membri };
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={`${label} · ${b.oraInizio}-${b.oraFine}${b.stato === 'bozza' ? ' · bozza' : ''}`}
-      className={
-        'flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition ' +
-        (conflitto ? 'ring-1 ring-destructive ' : '') +
-        (b.stato === 'bozza' ? 'opacity-70 ' : '')
-      }
-      style={{
-        backgroundColor: `hsl(${h} 70% 94%)`,
-        color: `hsl(${h} 60% 28%)`,
-        borderLeft: `3px solid hsl(${h} 60% 45%)`,
-      }}
-    >
-      {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="shrink-0 tabular-nums opacity-70">
-        {b.fascia === 'mattina' ? 'M' : b.fascia === 'pomeriggio' ? 'P' : b.oraInizio}
-      </span>
-    </button>
+    <div className="group/chip relative">
+      <button
+        type="button"
+        onPointerDown={drag ? (e) => drag.chipPointerDown(e, dragBlocco, label) : undefined}
+        onClick={() => {
+          if (drag?.suppressNextClick()) return;
+          onOpen();
+        }}
+        title={`${label} · ${b.oraInizio}-${b.oraFine}${b.stato === 'bozza' ? ' · bozza' : ''}${
+          drag ? ' · tieni premuto per spostare' : ''
+        }`}
+        className={
+          'flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition ' +
+          (conflitto ? 'ring-1 ring-destructive ' : '') +
+          (b.stato === 'bozza' ? 'opacity-70 ' : '')
+        }
+        style={{
+          backgroundColor: `hsl(${h} 70% 94%)`,
+          color: `hsl(${h} 60% 28%)`,
+          borderLeft: `3px solid hsl(${h} 60% 45%)`,
+        }}
+      >
+        {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="shrink-0 tabular-nums opacity-70">
+          {b.fascia === 'mattina' ? 'M' : b.fascia === 'pomeriggio' ? 'P' : b.oraInizio}
+        </span>
+      </button>
+      {drag ? (
+        <span
+          role="separator"
+          aria-label="Estendi questa persona sui giorni successivi"
+          title="Trascina per estendere solo questa persona sui giorni successivi"
+          onPointerDown={(e) => drag.resizePointerDown(e, dragBlocco, label, rowDipId)}
+          className="absolute inset-y-0 right-0 w-2 cursor-ew-resize rounded-r opacity-0 transition group-hover/chip:opacity-100"
+          style={{ backgroundColor: `hsl(${h} 60% 45%)`, touchAction: 'none' }}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -834,6 +968,9 @@ export function PianificazioneClient({
   assenze,
   gruppi,
   dipGruppo,
+  tenantNome,
+  logoUrl,
+  brandColor,
 }: {
   lunediISO: string;
   oggiLunediISO: string;
@@ -845,6 +982,9 @@ export function PianificazioneClient({
   assenze: AssenzaView[];
   gruppi: GruppoLite[];
   dipGruppo: Record<string, string>;
+  tenantNome: string;
+  logoUrl: string | null;
+  brandColor: string | null;
 }) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -853,7 +993,8 @@ export function PianificazioneClient({
   const [dialog, setDialog] = React.useState<FormState | null>(null);
   const [cerca, setCerca] = React.useState('');
   const [soloTurni, setSoloTurni] = React.useState(false);
-  const [gruppo, setGruppo] = React.useState('tutti'); // filtro gruppo lavoro (reparto)
+  const [gruppoSel, setGruppoSel] = React.useState<string[]>([]); // filtro gruppi (vuoto = tutti)
+  const [vista, setVista] = React.useState<'piano' | 'ferie'>('piano');
 
   const giorni = React.useMemo(() => giorniSettimana(lunediISO), [lunediISO]);
 
@@ -897,16 +1038,86 @@ export function PianificazioneClient({
   const dipFiltrati = React.useMemo(() => {
     let out = dipendenti;
     if (soloTurni) out = out.filter((d) => d.aTurni);
-    if (gruppo !== 'tutti') out = out.filter((d) => dipGruppo[d.id] === gruppo);
+    if (gruppoSel.length > 0) out = out.filter((d) => gruppoSel.includes(dipGruppo[d.id] ?? ''));
     const q = cerca.trim().toLowerCase();
     if (q) out = out.filter((d) => `${nomeDip(d)} ${d.mansione ?? ''}`.toLowerCase().includes(q));
     return out;
-  }, [dipendenti, soloTurni, cerca, gruppo, dipGruppo]);
+  }, [dipendenti, soloTurni, cerca, gruppoSel, dipGruppo]);
 
   const bozze = blocchi.filter((b) => b.stato === 'bozza').length;
 
+  // "Salvato" (rassicurazione): tutto si auto-salva; questa pill/tasto conferma.
+  // salvatoAt è null a inizio render (no new Date() in SSR → niente mismatch).
+  const [salvatoAt, setSalvatoAt] = React.useState<string | null>(null);
+  const [flash, setFlash] = React.useState(false);
+  const segnaSalvato = React.useCallback(() => {
+    setSalvatoAt(
+      new Date().toLocaleTimeString('it-IT', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Rome',
+      }),
+    );
+    setFlash(true);
+    window.setTimeout(() => setFlash(false), 1500);
+  }, []);
+
   const vaiA = (iso: string) => router.push(`${PATH}?lun=${iso}`);
-  const refresh = () => router.refresh();
+  const refresh = () => {
+    segnaSalvato();
+    router.refresh();
+  };
+
+  // Vista "Solo ferie": righe = solo chi ha almeno un'assenza nella settimana.
+  const righeGriglia = React.useMemo(() => {
+    if (vista !== 'ferie') return dipFiltrati;
+    return dipFiltrati.filter((d) =>
+      giorni.some((g) => (assenzePerCella.get(`${d.id}|${g}`) ?? []).length > 0),
+    );
+  }, [vista, dipFiltrati, giorni, assenzePerCella]);
+
+  const dipById = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of dipendenti) m.set(d.id, nomeDip(d));
+    return m;
+  }, [dipendenti]);
+
+  // Drag della griglia: long-press → sposta l'intero blocco su un altro giorno;
+  // resize del bordo → estende SOLO la persona di quella riga sui giorni successivi.
+  const gridDrag = useGridDrag({
+    giorni,
+    onMove: async (id, nuovaData) => {
+      const res = await spostaBlocco({ id, nuovaData });
+      if (!res.ok) {
+        await alert({ title: 'Spostamento non riuscito', body: res.error });
+        return;
+      }
+      refresh();
+    },
+    onResize: async (id, date, personId) => {
+      const res = await ripetiBlocco({ id, date, soloDipendenteId: personId });
+      if (!res.ok) {
+        await alert({ title: 'Estensione non riuscita', body: res.error });
+        return;
+      }
+      refresh();
+      const nome = dipById.get(personId) ?? 'La persona';
+      const salt = res.saltati;
+      if (res.creati === 0 && salt.length > 0) {
+        await alert({
+          title: 'Nessun giorno aggiunto',
+          body: `${nome}: saltati ${salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ')}.`,
+        });
+      } else if (salt.length > 0) {
+        await alert({
+          title: 'Esteso',
+          body:
+            `${nome} aggiunta su ${res.creati} ${res.creati === 1 ? 'giorno' : 'giorni'}. ` +
+            `Saltati: ${salt.map((s) => `${giornoBreveIT(s.data)} (${s.motivo})`).join('; ')}.`,
+        });
+      }
+    },
+  });
 
   const onPubblica = () => {
     start(async () => {
@@ -967,6 +1178,18 @@ export function PianificazioneClient({
                 {bozze} in bozza
               </span>
             ) : null}
+            {salvatoAt ? (
+              <span
+                className={
+                  'ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors ' +
+                  (flash ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500')
+                }
+              >
+                <CheckCircle2 className="h-3 w-3" /> Salvato · {salvatoAt}
+              </span>
+            ) : (
+              <span className="ml-2 text-xs text-muted-foreground/70">Salvataggio automatico</span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -995,8 +1218,32 @@ export function PianificazioneClient({
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+          <ExportMenu
+            lunediISO={lunediISO}
+            giorni={giorni}
+            dipendenti={dipendenti}
+            cantieri={cantieri}
+            blocchi={blocchi}
+            assenze={assenze}
+            gruppi={gruppi}
+            dipGruppo={dipGruppo}
+            gruppoSel={gruppoSel}
+            vista={vista}
+            tenantNome={tenantNome}
+            logoUrl={logoUrl}
+            brandColor={brandColor}
+          />
           <Button type="button" variant="outline" onClick={onCopia} disabled={pending}>
             <Copy className="h-4 w-4" /> Copia precedente
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={segnaSalvato}
+            disabled={pending}
+            title="La pianificazione si salva da sola come bozza. Questo conferma il salvataggio."
+          >
+            <Save className="h-4 w-4" /> Salva bozza
           </Button>
           <Button type="button" onClick={onPubblica} disabled={pending || bozze === 0}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -1007,6 +1254,29 @@ export function PianificazioneClient({
 
       {/* Filtri */}
       <div className="flex flex-wrap items-center gap-3">
+        {/* Vista: Pianificazione ↔ Solo ferie (calendario assenze) */}
+        <div className="inline-flex overflow-hidden rounded-lg border border-border">
+          <button
+            type="button"
+            onClick={() => setVista('piano')}
+            className={
+              'flex h-9 items-center gap-1.5 px-3 text-sm font-medium transition-colors ' +
+              (vista === 'piano' ? 'bg-primary text-white' : 'text-muted-foreground hover:bg-muted/50')
+            }
+          >
+            <CalendarDays className="h-4 w-4" /> Pianificazione
+          </button>
+          <button
+            type="button"
+            onClick={() => setVista('ferie')}
+            className={
+              'flex h-9 items-center gap-1.5 border-l border-border px-3 text-sm font-medium transition-colors ' +
+              (vista === 'ferie' ? 'bg-rose-600 text-white' : 'text-muted-foreground hover:bg-muted/50')
+            }
+          >
+            <Umbrella className="h-4 w-4" /> Solo ferie
+          </button>
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -1016,21 +1286,9 @@ export function PianificazioneClient({
             className="h-9 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
           />
         </div>
-        {/* Filtro gruppo lavoro (reparto) */}
+        {/* Filtro gruppo lavoro (reparto) — multi-select, pilota anche l'export */}
         {gruppi.length > 0 ? (
-          <select
-            value={gruppo}
-            onChange={(e) => setGruppo(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm focus:border-primary focus:outline-none"
-            title="Filtra per gruppo lavoro"
-          >
-            <option value="tutti">Tutti i gruppi</option>
-            {gruppi.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.nome}
-              </option>
-            ))}
-          </select>
+          <GruppoFilter gruppi={gruppi} sel={gruppoSel} onChange={setGruppoSel} />
         ) : null}
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
           <input
@@ -1041,15 +1299,17 @@ export function PianificazioneClient({
           />
           Solo a turni
         </label>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="ml-auto"
-          onClick={() => setDialog(formVuoto(giorni[0]!))}
-        >
-          <Plus className="h-4 w-4" /> Nuovo blocco
-        </Button>
+        {vista === 'piano' ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={() => setDialog(formVuoto(giorni[0]!))}
+          >
+            <Plus className="h-4 w-4" /> Nuovo blocco
+          </Button>
+        ) : null}
       </div>
 
       {/* Griglia — celle a larghezza fissa (table-fixed), header giorni fisso
@@ -1088,14 +1348,14 @@ export function PianificazioneClient({
             </tr>
           </thead>
           <tbody>
-            {dipFiltrati.length === 0 ? (
+            {righeGriglia.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                  Nessun dipendente.
+                  {vista === 'ferie' ? 'Nessuna assenza in questa settimana.' : 'Nessun dipendente.'}
                 </td>
               </tr>
             ) : (
-              dipFiltrati.map((d, ri) => {
+              righeGriglia.map((d, ri) => {
                 const zebra = ri % 2 === 1;
                 const baseBg = zebra ? 'bg-slate-50' : 'bg-white';
                 const weekendBg = zebra ? 'bg-slate-100' : 'bg-slate-50';
@@ -1117,12 +1377,20 @@ export function PianificazioneClient({
                     {giorni.map((g, i) => {
                       const cella = perCella.get(`${d.id}|${g}`) ?? [];
                       const weekend = i >= 5;
+                      const target = vista === 'piano' && gridDrag.isCellTarget(d.id, g);
                       return (
                         <td
                           key={g}
+                          data-cell="1"
+                          data-emp={d.id}
+                          data-date={g}
                           className={
-                            'border-b border-border/70 p-1 align-top ' +
-                            (weekend ? weekendBg : baseBg)
+                            'border-b border-border/70 p-1 align-top transition-colors ' +
+                            (target
+                              ? 'bg-primary/10 ring-2 ring-inset ring-primary/50 '
+                              : weekend
+                                ? weekendBg
+                                : baseBg)
                           }
                         >
                           <div className="flex min-h-[2.75rem] flex-col gap-1">
@@ -1138,23 +1406,29 @@ export function PianificazioneClient({
                                 </span>
                               </span>
                             ))}
-                            {cella.map((b) => (
-                              <Chip
-                                key={b.id}
-                                b={b}
-                                conflitto={conflittoSet.has(`${d.id}|${g}|${b.id}`)}
-                                onClick={() => setDialog(formDaBlocco(b))}
-                              />
-                            ))}
-                            <button
-                              type="button"
-                              onClick={() => setDialog(formVuoto(g, d.id))}
-                              className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 text-muted-foreground/40 transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
-                              style={{ minHeight: cella.length ? '1.5rem' : '2.5rem' }}
-                              aria-label="Aggiungi assegnazione"
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
+                            {vista === 'piano' ? (
+                              <>
+                                {cella.map((b) => (
+                                  <Chip
+                                    key={b.id}
+                                    b={b}
+                                    conflitto={conflittoSet.has(`${d.id}|${g}|${b.id}`)}
+                                    onOpen={() => setDialog(formDaBlocco(b))}
+                                    drag={gridDrag}
+                                    rowDipId={d.id}
+                                  />
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => setDialog(formVuoto(g, d.id))}
+                                  className="flex flex-1 items-center justify-center rounded-md border border-dashed border-border/60 text-muted-foreground/40 transition hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
+                                  style={{ minHeight: cella.length ? '1.5rem' : '2.5rem' }}
+                                  aria-label="Aggiungi assegnazione"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </td>
                       );
@@ -1167,6 +1441,16 @@ export function PianificazioneClient({
         </table>
       </div>
 
+      {/* Ghost del drag "sposta" (segue il puntatore). */}
+      {gridDrag.drag.kind === 'moving' ? (
+        <div
+          className="pointer-events-none fixed z-[60] -translate-x-1/2 -translate-y-full rounded-md border border-primary bg-white px-2 py-1 text-xs font-semibold text-primary shadow-lg"
+          style={{ left: gridDrag.drag.x, top: gridDrag.drag.y - 10 }}
+        >
+          Sposta · {gridDrag.drag.label}
+        </div>
+      ) : null}
+
       {dialog ? (
         <BloccoDialog
           form={dialog}
@@ -1176,6 +1460,7 @@ export function PianificazioneClient({
           mezzi={mezzi}
           gruppi={gruppi}
           dipGruppo={dipGruppo}
+          giorni={giorni}
           onSaved={refresh}
         />
       ) : null}
