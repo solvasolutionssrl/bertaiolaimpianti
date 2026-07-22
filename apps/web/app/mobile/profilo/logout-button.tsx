@@ -43,7 +43,10 @@ export function LogoutButton() {
       await registraEventoAccesso('logout');
       const supabase = createBrowserSupabase();
       await supabase.auth.signOut();
-      router.push('/mobile/login');
+      // `/mobile/login` non esiste: la pagina di accesso è a `/login` (come
+      // portal/office/admin). `replace` così la sessione chiusa non resta nella
+      // history (il back non riporterebbe a una pagina ormai non autenticata).
+      router.replace('/login');
       router.refresh();
     });
   };
