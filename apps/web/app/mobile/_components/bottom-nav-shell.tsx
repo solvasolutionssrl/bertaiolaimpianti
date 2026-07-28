@@ -23,6 +23,17 @@ import type { MobileShell, AppMode } from '@kommessa/api/types';
 import { useRealtimeUnread } from './use-realtime-unread';
 
 /**
+ * Rotte "a tutto schermo" (wizard/foglio) dove la tab bar va NASCOSTA.
+ * Questi flussi hanno già una barra azioni fissa in basso (Indietro/Avanti/
+ * Salva) e l'uscita in alto ("Annulla"): la nav — che è `fixed bottom-0 z-40`,
+ * opaca, con il FAB centrale che sporge — coprirebbe i tasti rendendo
+ * impossibile procedere.
+ */
+const ROTTE_SENZA_NAV: RegExp[] = [
+  /^\/mobile\/commessa\/[^/]+\/modifica(\/|$)/,
+];
+
+/**
  * Wrapper client del bottom-nav.
  * Le icone (React components) devono vivere nel client — non sono serializzabili
  * da Server Component. Il server passa initial unread count + userId + tenantId
@@ -55,6 +66,9 @@ export function BottomNavShell({
     tenantId,
     initialCount: initialUnreadCount,
   });
+
+  // NB: dopo gli hook (regole dei hook), prima di costruire i tab.
+  const nascondiNav = ROTTE_SENZA_NAV.some((r) => r.test(pathname));
 
   const isManager = role === 'admin' || role === 'office';
   let tabs: MobileTab[];
@@ -120,6 +134,8 @@ export function BottomNavShell({
       { id: 'scansiona', label: 'Kantiere', icon: QrCode, href: '/mobile/kantiere' },
     ];
   }
+
+  if (nascondiNav) return null;
 
   const activeTab = matchActive(pathname, tabs, shell);
 

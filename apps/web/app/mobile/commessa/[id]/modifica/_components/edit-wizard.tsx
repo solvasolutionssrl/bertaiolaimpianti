@@ -168,44 +168,53 @@ export function EditWizardMobile({
         ) : null}
       </main>
 
-      {/* Footer nav sticky */}
-      <footer className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur">
-        {step > 1 ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-[48px] flex-1"
-            onClick={() => setStep((s) => (s - 1) as Step)}
-            disabled={pending}
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            Indietro
-          </Button>
-        ) : null}
-        {step < 3 ? (
-          <Button
-            type="button"
-            className="min-h-[48px] flex-1"
-            onClick={() => setStep((s) => (s + 1) as Step)}
-          >
-            Avanti
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            className="min-h-[48px] flex-1"
-            onClick={salva}
-            disabled={pending || !online}
-          >
-            {pending ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Save className="h-4 w-4" aria-hidden="true" />
-            )}
-            Salva
-          </Button>
-        )}
+      {/* Barra azioni fissa.
+          - Su questa rotta la tab bar della shell è nascosta (vedi
+            ROTTE_SENZA_NAV in mobile/_components/bottom-nav-shell.tsx): era
+            `fixed bottom-0 z-40` opaca e copriva Avanti/Salva.
+          - Sfondo OPACO e niente backdrop-blur: su iOS un `fixed` con
+            backdrop-filter si stacca durante lo scroll inerziale (stesso
+            motivo per cui il bottom-nav è opaco).
+          - pb con safe-area per l'home indicator iPhone. */}
+      <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-background shadow-[0_-10px_26px_-14px_rgba(15,30,66,0.28)]">
+        <div className="mx-auto flex max-w-screen-sm items-center gap-2 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {step > 1 ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-[48px] flex-1"
+              onClick={() => setStep((s) => (s - 1) as Step)}
+              disabled={pending}
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              Indietro
+            </Button>
+          ) : null}
+          {step < 3 ? (
+            <Button
+              type="button"
+              className="min-h-[48px] flex-1"
+              onClick={() => setStep((s) => (s + 1) as Step)}
+            >
+              Avanti
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="min-h-[48px] flex-1"
+              onClick={salva}
+              disabled={pending || !online}
+            >
+              {pending ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Save className="h-4 w-4" aria-hidden="true" />
+              )}
+              Salva
+            </Button>
+          )}
+        </div>
       </footer>
     </div>
   );
