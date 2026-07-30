@@ -220,6 +220,34 @@ sono errori. Pagina `/mobile/caricamenti` (raggiungibile dal pannello e dalla
 voce "Caricamenti" nel profilo) con i gruppi Riprendo / In corso / Da riprovare
 / Completati e il tasto "riprova tutti".
 
+## 4ter. La conversione video di iOS — NON è un problema da risolvere
+
+Selezionando un video dalla libreria, iOS resta fermo qualche decina di secondi
+con uno spinner su ogni elemento **prima** di restituire il controllo alla
+pagina: in quella fase il JS non è ancora in gioco, quindi non è un difetto
+dell'app. Sta preparando gli originali, e può fare due lavori:
+
+1. **scaricarli da iCloud** (se "Ottimizza spazio iPhone" è attivo);
+2. **ricodificarli** — misurato in campo il 30/07/2026: sorgente HEVC **300 MB**
+   → consegnato **110 MB** H.264 ridimensionato.
+
+**La ricodifica conviene e va lasciata stare.** Sono ~190 MB in meno da caricare
+(su 5 Mbps in upload, circa 5 minuti risparmiati contro qualche decina di
+secondi di CPU), e l'H.264 **si apre ovunque** mentre l'HEVC originale spesso non
+si riproduce in ufficio su Chrome/Firefox desktop.
+
+⚠️ **Non "correggerla".** Sembra un'ottimizzazione ma è un peggioramento: si
+otterrebbero upload 3× più pesanti e video che l'ufficio non riesce a vedere.
+
+Per completezza, le leve esistenti (tutte lato iPhone, **nessuna lato codice**:
+non esiste un attributo HTML che controlli la conversione):
+
+| Leva | Effetto | Costo |
+|---|---|---|
+| Fotocamera → Formati → "Più compatibile" | registra già in H.264 → niente conversione all'export | sorgenti molto più grandi |
+| Foto → "Mantieni originali" | documentata per il trasferimento a Mac/PC; effetto sull'upload web **non documentato** | da verificare sul device |
+| Salvare il video in File e caricarlo da "Scegli file" | bypassa la compressione | passaggi manuali + si caricano i MB pieni |
+
 ## 5. Piano di intervento (eseguito)
 
 ### ✅ Fase 1 — il bug del progresso
