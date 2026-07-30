@@ -11,6 +11,7 @@ import { guardMobile } from '../_lib/guard';
 import { tenantHasModule } from '../../_lib/modules';
 import { leggiConfigDipendenti } from '../../_lib/dipendenti-config';
 import { InstallPromptHint } from '../_components/install-prompt-hint';
+import { CaricamentiLink } from './_components/caricamenti-link';
 import { LogoutButton } from './logout-button';
 import { PushToggle } from './push-toggle';
 import { PreferenzeNotifiche, type PrefRow } from './preferenze-notifiche';
@@ -175,6 +176,11 @@ export default async function ProfiloPage() {
           </p>
         </div>
       </header>
+
+      {/* Caricamenti — entrata SEMPRE disponibile alla pagina dei file in
+          salita. Il pannello fluttuante sparisce quando ha finito, quindi senza
+          questa voce un upload fallito diventerebbe irraggiungibile. */}
+      <CaricamentiLink />
 
       {/* Ferie e permessi (modulo Dipendenti): richieste + eventuali approvazioni. */}
       {hasFerie ? (

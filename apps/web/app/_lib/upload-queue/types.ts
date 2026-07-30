@@ -8,6 +8,11 @@
  * (il server ha già il fileRefId in stato uploading, è idempotente).
  */
 
+import {
+  MAX_TENTATIVI,
+  RITARDI_RETRY_MS,
+} from '@kommessa/api/upload-queue-policy';
+
 import type { Momento } from '../media-upload-types';
 
 export type JobStatus =
@@ -32,7 +37,13 @@ export interface UploadJobPayload {
   fileName: string;
   fileMime: string;
   fileSize: number;
-  commessaId: string;
+  /**
+   * Destinazione: esattamente uno fra `commessaId` e `bozzaId` (lo impone
+   * /api/upload/media/init). `bozzaId` è la creazione commessa in corso: il
+   * file viene messo in staging e agganciato alla commessa alla finalizzazione.
+   */
+  commessaId?: string | null;
+  bozzaId?: string | null;
   // Standard upload (foto/video commessa per voce/momento)
   momento?: Momento | null;
   voceId?: number | null;
@@ -63,16 +74,18 @@ export interface UploadJob {
   lastError: string | null;
   createdAt: number;
   updatedAt: number;
+  /**
+   * true = job ripescato da IndexedDB dopo che l'app era stata chiusa.
+   * Serve alla UI per distinguere "sto riprendendo roba di prima" (giallo) da
+   * "file appena aggiunto" (blu). Non viene mai rimesso a false.
+   */
+  ripreso?: boolean;
 }
 
-export const MAX_ATTEMPTS = 5;
-export const RETRY_DELAYS_MS = [
-  2_000, // 2s
-  8_000, // 8s
-  30_000, // 30s
-  120_000, // 2min
-  600_000, // 10min
-] as const;
+// Fonte unica di verità: la policy pura in @kommessa/api (unit-testata).
+// Qui restano solo gli alias storici usati dalla UI.
+export const MAX_ATTEMPTS = MAX_TENTATIVI;
+export const RETRY_DELAYS_MS = RITARDI_RETRY_MS;
 
 /** Limite client-side per video (richiesto da Bertaiola: 500 MB). */
 export const VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024;

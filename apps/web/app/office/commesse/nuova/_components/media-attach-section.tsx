@@ -30,6 +30,7 @@ import {
 } from '@kommessa/ui';
 import type { UploadProgressMap } from '../_lib/upload-media';
 import {
+  dataDaLastModified,
   fmtScattoDate,
   readImageDate,
 } from '../../../../_lib/read-image-date';
@@ -136,17 +137,41 @@ export function MediaAttachSection({
     if (errors.length > 0) setValidationErrors(errors);
     if (accepted.length === 0) return;
 
-    // Lettura EXIF in parallelo (exifr legge ~64KB head di ogni file → 50-200ms cad.).
-    // Aggiunge la data a ogni MediaFile prima di esporlo al parent: la UI mostra
-    // direttamente la pill con la data corretta.
-    const withDates = await Promise.all(
-      accepted.map(async (m) => ({
-        ...m,
-        // I PDF non hanno EXIF utile: niente data di scatto.
-        takenAt: m.kind === 'pdf' ? null : await readImageDate(m.file),
-      })),
+    // Consegna in DUE ondate (correzione 30/07/2026).
+    //
+    // Prima si aspettava `Promise.all` sull'EXIF di TUTTO il batch prima di
+    // esporre un solo file al parent: un video selezionato insieme a 20 foto
+    // restava fermo finché exifr non aveva finito con le foto, e solo dopo
+    // iniziava a caricare. Video e PDF non hanno EXIF utile, quindi escono
+    // subito con la data presa da `lastModified`; le foto arrivano appena
+    // l'EXIF è pronto.
+    const immagini = accepted.filter((m) => m.kind === 'image');
+    const senzaExif = accepted.filter((m) => m.kind !== 'image');
+    const base = files;
+
+    if (senzaExif.length > 0) {
+      onChange([
+        ...base,
+        ...senzaExif.map((m) => ({
+          ...m,
+          takenAt: m.kind === 'pdf' ? null : dataDaLastModified(m.file),
+        })),
+      ]);
+    }
+    if (immagini.length === 0) return;
+
+    // exifr legge ~64KB di testa per file → 50-200ms cadauno, in parallelo.
+    const conDate = await Promise.all(
+      immagini.map(async (m) => ({ ...m, takenAt: await readImageDate(m.file) })),
     );
-    onChange([...files, ...withDates]);
+    onChange([
+      ...base,
+      ...senzaExif.map((m) => ({
+        ...m,
+        takenAt: m.kind === 'pdf' ? null : dataDaLastModified(m.file),
+      })),
+      ...conDate,
+    ]);
   };
 
   const remove = (id: string) => {
@@ -268,7 +293,7 @@ export function MediaAttachSection({
                   {f.kind === 'image' ? (
                     <img src={f.previewUrl} alt={f.file.name} className="h-full w-full object-cover" />
                   ) : f.kind === 'video' ? (
-                    <VideoThumb src={f.previewUrl} />
+                    <VideoThumb src={f.previewUrl} sizeMB={f.sizeMB} />
                   ) : (
                     <PdfThumb name={f.file.name} />
                   )}
@@ -489,7 +514,7 @@ export function MediaAttachSection({
             <span>
               Video grande (&gt;{WARN_VIDEO_MB} MB) — il caricamento richiede qualche minuto su rete mobile.
               Per file più leggeri: <strong>Impostazioni iPhone → Fotocamera → Formato → Alta efficienza</strong> (H.265 dimezza la dimensione senza perdita visibile).
-              Tieni lo schermo acceso durante l'upload.
+              Puoi continuare a lavorare o chiudere l&apos;app: il caricamento riprende da solo.
             </span>
           </div>
         )}
@@ -580,9 +605,18 @@ export function MediaAttachSection({
   );
 }
 
-function VideoThumb({ src }: { src: string }) {
+/**
+ * Sopra questa soglia non si estrae il fotogramma di anteprima: decodificare un
+ * video da centinaia di MB sul main thread blocca la UI e ruba CPU proprio
+ * mentre l'upload dovrebbe avanzare. Si mostra l'icona e basta.
+ */
+const ANTEPRIMA_VIDEO_MAX_MB = 30;
+
+function VideoThumb({ src, sizeMB }: { src: string; sizeMB?: number }) {
+  const troppoGrande = (sizeMB ?? 0) > ANTEPRIMA_VIDEO_MAX_MB;
   const [thumb, setThumb] = React.useState<string | null>(null);
   React.useEffect(() => {
+    if (troppoGrande) return;
     const video = document.createElement('video');
     video.src = src;
     video.muted = true;
@@ -597,7 +631,7 @@ function VideoThumb({ src }: { src: string }) {
     };
     video.addEventListener('loadeddata', handler, { once: true });
     return () => { video.src = ''; };
-  }, [src]);
+  }, [src, troppoGrande]);
   return thumb ? (
     <img src={thumb} alt="" className="h-full w-full object-cover" />
   ) : (

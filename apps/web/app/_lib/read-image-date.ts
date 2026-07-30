@@ -18,6 +18,20 @@ import exifr from 'exifr';
  * Performance: exifr legge solo i primi KB del file (cap di default ~64KB).
  * Non scarica/decodifica l'intera immagine. ~5-20ms per foto iPhone tipica.
  */
+/**
+ * Data dal solo `lastModified`, senza toccare l'EXIF. Sincrona.
+ * Usata per video e PDF, dove exifr non serve: così quei file possono essere
+ * consegnati (e messi in coda di upload) **subito**, senza aspettare la
+ * lettura EXIF delle foto selezionate insieme a loro.
+ */
+export function dataDaLastModified(file: File): Date | null {
+  if (file.lastModified > 0) {
+    const d = new Date(file.lastModified);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return null;
+}
+
 export async function readImageDate(file: File): Promise<Date | null> {
   // Solo per immagini: per video non vale la pena far girare exifr.
   if (file.type.startsWith('image/')) {

@@ -1,99 +1,198 @@
 'use client';
 
 /**
- * Upload dei media DURANTE la bozza (staging R2), in modo che non si perdano
- * se l'utente viene interrotto prima di finalizzare.
+ * Media della creazione commessa: staging sulla bozza tramite la CODA
+ * PERSISTENTE globale.
  *
- * - `stage(files, enabled)`: carica in background i file non ancora caricati
- *   sulla bozza (enabled = la bozza esiste già lato server). Best-effort, in
- *   catena per non sovrapporre upload.
- * - `finalizeMedia(files)`: attende la catena, carica eventuali rimasti, e
- *   ritorna i fileRefId dei file ANCORA presenti (keep-set per finalizzaBozza,
- *   che eliminerà quelli rimossi dall'utente).
+ * ─── Perché è stato riscritto (30/07/2026) ────────────────────────────────
+ * Prima questo hook usava `uploadMediaBatch`, un secondo motore di upload
+ * indipendente dalla coda. Conseguenza: i file selezionati durante la creazione
+ * di una commessa vivevano **solo nello state di React**. Lo scenario tipico del
+ * cliente — in campo, crea la commessa al volo, allega due video, blocca il
+ * telefono ed esce — perdeva i file non ancora caricati: la bozza sopravviveva,
+ * i byte no.
  *
- * I file vengono caricati una sola volta (dedup via mappa mediaId→fileRefId).
+ * Ora ogni file entra nella coda persistente (blob su IndexedDB) appena viene
+ * selezionato:
+ *  - l'upload parte SUBITO, non alla pressione di "Crea commessa";
+ *  - se l'app viene chiusa, alla riapertura la coda riprende da sola a caricare
+ *    **sulla stessa bozza**, e l'utente finalizza quando vuole da "Da
+ *    completare";
+ *  - il legame commessa ↔ file non si perde mai.
+ *
+ * `finalizeMedia` attende che i job della bozza siano terminali prima di
+ * materializzare la commessa: è la stessa attesa di prima, ma molto più corta
+ * (gli upload sono partiti al momento della selezione) ed è ciò che garantisce
+ * che nessun file arrivi *dopo* lo spostamento su cartella definitiva.
+ *
+ * Vedi `documentazione_generale/08_LOGICHE/Logiche_Upload_Media.md`.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import {
-  uploadMediaBatch,
-  type UploadProgressMap,
-} from '../../office/commesse/nuova/_lib/upload-media';
+import { useUploadQueue } from '../../_components/upload-queue-provider';
+import { compressImage } from '../../office/commesse/nuova/_lib/compress-image';
+import type { UploadProgressMap } from '../../office/commesse/nuova/_lib/upload-media';
 import type { MediaFile } from '../../office/commesse/nuova/_components/media-attach-section';
+import type { UploadJob } from '../upload-queue/types';
 
-const PENDING = '__pending__';
+/** Segnaposto mentre il job è in preparazione (compressione). */
+const IN_PREPARAZIONE = '__pending__';
+
+const TERMINALI = ['done', 'failed', 'canceled'];
+
+function eTerminale(j: UploadJob): boolean {
+  return TERMINALI.includes(j.status);
+}
+
+function kindPerAllegato(k: MediaFile['kind']): 'foto' | 'video' | 'pdf_acquisito' {
+  if (k === 'video') return 'video';
+  if (k === 'pdf') return 'pdf_acquisito';
+  return 'foto';
+}
 
 export function useBozzaMedia(bozzaId: string, flush: () => Promise<void>) {
-  // mediaId → fileRefId ('__pending__' mentre in volo)
-  const stagedRef = useRef<Map<string, string>>(new Map());
-  const chainRef = useRef<Promise<void>>(Promise.resolve());
-  const [progress, setProgress] = useState<UploadProgressMap>(new Map());
-  const [uploading, setUploading] = useState(false);
+  const queue = useUploadQueue();
 
+  /** mediaId → jobId (o IN_PREPARAZIONE finché non è accodato). */
+  const jobPerMedia = useRef<Map<string, string>>(new Map());
+  /** Specchio dei job per leggerli dentro le callback async. */
+  const jobsRef = useRef<UploadJob[]>(queue.jobs);
+  useEffect(() => {
+    jobsRef.current = queue.jobs;
+  }, [queue.jobs]);
+
+  const accoda = useCallback(
+    (media: MediaFile, blob: Blob | File) => {
+      const jobId = queue.enqueue({
+        fileBlob: blob,
+        fileName: (blob as File).name || media.file.name,
+        fileMime: blob.type || media.file.type || 'application/octet-stream',
+        fileSize: blob.size,
+        bozzaId,
+        kind: kindPerAllegato(media.kind),
+        takenAtIso: media.takenAt ? media.takenAt.toISOString() : null,
+      });
+      jobPerMedia.current.set(media.id, jobId);
+    },
+    [bozzaId, queue],
+  );
+
+  /**
+   * Accoda i file non ancora presi in carico. Idempotente: chiamabile da un
+   * effect a ogni cambio della lista.
+   */
   const stage = useCallback(
     (files: MediaFile[], enabled: boolean) => {
       if (!enabled) return;
-      const pending = files.filter((f) => !stagedRef.current.has(f.id));
-      if (pending.length === 0) return;
-      pending.forEach((f) => stagedRef.current.set(f.id, PENDING));
-      chainRef.current = chainRef.current.then(async () => {
-        setUploading(true);
+      const nuovi = files.filter((f) => !jobPerMedia.current.has(f.id));
+      if (nuovi.length === 0) return;
+      // Prenotazione immediata: l'effect può rientrare prima che la parte
+      // async abbia finito, e non vogliamo accodare due volte lo stesso file.
+      nuovi.forEach((f) => jobPerMedia.current.set(f.id, IN_PREPARAZIONE));
+
+      void (async () => {
         try {
-          await flush(); // assicura che la bozza esista lato server
-          const res = await uploadMediaBatch(pending, { bozzaId }, (p) =>
-            setProgress(new Map(p)),
-          );
-          res.forEach((r) => {
-            if (r.ok && r.fileRefId) stagedRef.current.set(r.id, r.fileRefId);
-            else stagedRef.current.delete(r.id); // fallito: ritenta al prossimo giro
-          });
+          await flush(); // la bozza deve esistere lato server prima di /init
+          // Prima i file che non vanno compressi: partono all'istante.
+          for (const f of nuovi.filter((x) => x.kind !== 'image')) {
+            accoda(f, f.file);
+          }
+          for (const f of nuovi.filter((x) => x.kind === 'image')) {
+            accoda(f, await compressImage(f.file));
+          }
         } catch {
-          pending.forEach((f) => stagedRef.current.delete(f.id));
-        } finally {
-          setUploading(false);
+          // Rilascia la prenotazione: al prossimo giro si riprova.
+          nuovi.forEach((f) => {
+            if (jobPerMedia.current.get(f.id) === IN_PREPARAZIONE) {
+              jobPerMedia.current.delete(f.id);
+            }
+          });
         }
-      });
+      })();
     },
-    [bozzaId, flush],
+    [accoda, flush],
+  );
+
+  /**
+   * Attende che i job dei file indicati siano terminali.
+   * Un job in attesa di backoff viene rilanciato subito: l'utente ha appena
+   * premuto "Crea commessa", non ha senso fargli aspettare 30s di attesa
+   * esponenziale.
+   */
+  const attendiTerminali = useCallback(
+    async (mediaIds: string[]) => {
+      for (;;) {
+        const attesi = mediaIds
+          .map((id) => jobPerMedia.current.get(id))
+          .filter((v): v is string => Boolean(v));
+        const inPreparazione = attesi.some((v) => v === IN_PREPARAZIONE);
+        const jobs = jobsRef.current.filter((j) => attesi.includes(j.id));
+        const inCorso = jobs.filter((j) => !eTerminale(j));
+        if (!inPreparazione && inCorso.length === 0) return;
+        for (const j of inCorso) {
+          if (j.status === 'queued' && j.nextAttemptAt && j.nextAttemptAt > Date.now()) {
+            queue.retry(j.id);
+          }
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    },
+    [queue],
   );
 
   const finalizeMedia = useCallback(
     async (
       files: MediaFile[],
     ): Promise<{ keep: string[]; results: Array<{ name: string; ok: boolean }> }> => {
-      await chainRef.current; // attendi gli eager in volo
-      const missing = files.filter((f) => {
-        const v = stagedRef.current.get(f.id);
-        return !v || v === PENDING;
-      });
-      if (missing.length > 0) {
-        setUploading(true);
-        try {
-          await flush();
-          const res = await uploadMediaBatch(missing, { bozzaId }, (p) =>
-            setProgress(new Map(p)),
-          );
-          res.forEach((r) => {
-            if (r.ok && r.fileRefId) stagedRef.current.set(r.id, r.fileRefId);
-          });
-        } finally {
-          setUploading(false);
-        }
-      }
-      // keep = fileRefId dei file ancora presenti e caricati
+      // I file aggiunti all'ultimo istante potrebbero non essere ancora in coda.
+      stage(files, true);
+      await attendiTerminali(files.map((f) => f.id));
+
       const keep: string[] = [];
       const results: Array<{ name: string; ok: boolean }> = [];
       for (const f of files) {
-        const v = stagedRef.current.get(f.id);
-        const ok = Boolean(v && v !== PENDING);
-        if (ok) keep.push(v as string);
+        const jobId = jobPerMedia.current.get(f.id);
+        const job = jobId ? jobsRef.current.find((j) => j.id === jobId) : undefined;
+        const ok = Boolean(job && job.status === 'done' && job.fileRefId);
+        if (ok) keep.push(job!.fileRefId as string);
         results.push({ name: f.file.name, ok });
       }
       return { keep, results };
     },
-    [bozzaId, flush],
+    [attendiTerminali, stage],
   );
+
+  /** Progresso per mediaId, nella forma attesa dalla MediaAttachSection. */
+  const progress: UploadProgressMap = useMemo(() => {
+    const mappa: UploadProgressMap = new Map();
+    for (const [mediaId, jobId] of jobPerMedia.current.entries()) {
+      if (jobId === IN_PREPARAZIONE) {
+        mappa.set(mediaId, { pct: 0, step: 'compressing' });
+        continue;
+      }
+      const job = queue.jobs.find((j) => j.id === jobId);
+      if (!job) continue;
+      const pct =
+        job.bytesTotal > 0
+          ? Math.floor((job.bytesUploaded / job.bytesTotal) * 100)
+          : 0;
+      if (job.status === 'done') mappa.set(mediaId, { pct: 100, step: 'done' });
+      else if (job.status === 'failed' || job.status === 'canceled') {
+        mappa.set(mediaId, { pct, step: 'error' });
+      } else if (job.status === 'finalizing') {
+        mappa.set(mediaId, { pct: 100, step: 'processing' });
+      } else {
+        mappa.set(mediaId, { pct, step: 'uploading' });
+      }
+    }
+    return mappa;
+  }, [queue.jobs]);
+
+  const uploading = useMemo(() => {
+    const ids = new Set(jobPerMedia.current.values());
+    return queue.jobs.some((j) => ids.has(j.id) && !eTerminale(j));
+  }, [queue.jobs]);
 
   return { progress, uploading, stage, finalizeMedia };
 }

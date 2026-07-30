@@ -37,11 +37,9 @@ import {
   MediaAttachSection,
   type MediaFile,
 } from '../../office/commesse/nuova/_components/media-attach-section';
-import {
-  uploadMediaBatch,
-  type UploadProgressMap,
-  type UploadMediaResult,
-} from '../../office/commesse/nuova/_lib/upload-media';
+import { type UploadProgressMap } from '../../office/commesse/nuova/_lib/upload-media';
+import { compressImage } from '../../office/commesse/nuova/_lib/compress-image';
+import { useUploadQueue } from '../../_components/upload-queue-provider';
 
 interface VoiceSuggested {
   ragione_sociale?: string;
@@ -124,10 +122,30 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
   const [mediaFiles, setMediaFiles] = React.useState<MediaFile[]>([]);
   const [aiPending, setAiPending] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [uploading, setUploading] = React.useState(false);
-  const [uploadProgress, setUploadProgress] = React.useState<UploadProgressMap>(new Map());
-  const [uploadResults, setUploadResults] = React.useState<UploadMediaResult[]>([]);
-  const uploadAbortRef = React.useRef<AbortController | null>(null);
+  // Il progresso vero vive nel pannello upload globale: qui resta una mappa
+  // vuota solo perché MediaAttachSection accetta la prop.
+  const uploadProgress = React.useMemo<UploadProgressMap>(() => new Map(), []);
+  const queue = useUploadQueue();
+  const accodaMedia = React.useCallback(
+    (media: MediaFile, blob: Blob | File, commessaId: string) => {
+      queue.enqueue({
+        fileBlob: blob,
+        fileName: (blob as File).name || media.file.name,
+        fileMime: blob.type || media.file.type || 'application/octet-stream',
+        fileSize: blob.size,
+        commessaId,
+        momento: 'sopralluogo',
+        kind:
+          media.kind === 'video'
+            ? 'video'
+            : media.kind === 'pdf'
+              ? 'pdf_acquisito'
+              : 'foto',
+        takenAtIso: media.takenAt ? media.takenAt.toISOString() : null,
+      });
+    },
+    [queue],
+  );
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<{
     commessaId: string;
@@ -224,27 +242,28 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
       setResult(r);
       setSubmitting(false);
 
-      // Upload foto/video se presenti
+      // Foto/video → CODA PERSISTENTE (30/07/2026).
+      //
+      // Prima si aspettava qui `uploadMediaBatch`: l'utente restava fermo su una
+      // schermata di attesa e, se chiudeva l'app, i file non ancora saliti
+      // sparivano. Ora finiscono nella coda globale (blob su IndexedDB): la
+      // commessa esiste già, quindi l'aggancio è immediato e indistruttibile, e
+      // il caricamento prosegue in sottofondo — con ripresa automatica alla
+      // riapertura dell'app se il telefono viene chiuso.
       if (mediaFiles.length > 0) {
-        const controller = new AbortController();
-        uploadAbortRef.current = controller;
-        setUploading(true);
-        const results = await uploadMediaBatch(
-          mediaFiles,
-          r.commessaId,
-          (map) => setUploadProgress(new Map(map)),
-          controller.signal,
-        );
-        uploadAbortRef.current = null;
-        setUploadResults(results);
-        setUploading(false);
+        // Prima i file che non vanno compressi: partono all'istante.
+        for (const f of mediaFiles.filter((x) => x.kind !== 'image')) {
+          accodaMedia(f, f.file, r.commessaId);
+        }
+        for (const f of mediaFiles.filter((x) => x.kind === 'image')) {
+          accodaMedia(f, await compressImage(f.file), r.commessaId);
+        }
       }
 
       setStep(8);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Creazione commessa fallita');
       setSubmitting(false);
-      setUploading(false);
     }
   };
 
@@ -293,14 +312,14 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
           state={state}
           mediaCount={mediaFiles.length}
           submitting={submitting}
-          uploading={uploading}
+          uploading={false}
           onSubmit={handleSubmit}
         />
       )}
       {step === 8 && result && (
         <Step8Success
           result={result}
-          uploadResults={uploadResults}
+          mediaCount={mediaFiles.length}
           onOpen={() => router.push(`/mobile/commessa/${result.commessaId}`)}
           onScatta={() =>
             router.push(`/mobile/commessa/${result.commessaId}/scatto`)
@@ -1377,17 +1396,15 @@ function Step7Conferma({
 
 function Step8Success({
   result,
-  uploadResults,
+  mediaCount,
   onOpen,
   onScatta,
 }: {
   result: { commessaId: string; codiceInterno: string; nomeCartella: string; cloudFolderPath: string };
-  uploadResults: UploadMediaResult[];
+  mediaCount: number;
   onOpen: () => void;
   onScatta: () => void;
 }) {
-  const uploadOk = uploadResults.filter((r) => r.ok).length;
-  const uploadErr = uploadResults.filter((r) => !r.ok).length;
 
   return (
     <section className="space-y-4">
@@ -1408,14 +1425,10 @@ function Step8Success({
         <p className="text-xs text-muted-foreground">
           Percorso Nextcloud: <code className="break-all">{result.cloudFolderPath}</code>
         </p>
-        {uploadResults.length > 0 ? (
-          <p className="border-t border-border pt-2 text-xs">
-            {uploadOk > 0 && (
-              <span className="text-success">{uploadOk} foto/video caricati ✓</span>
-            )}
-            {uploadErr > 0 && (
-              <span className="ml-2 text-destructive">{uploadErr} falliti — riprova dalla commessa</span>
-            )}
+        {mediaCount > 0 ? (
+          <p className="border-t border-border pt-2 text-xs text-muted-foreground">
+            {mediaCount} file in caricamento. Puoi chiudere l&apos;app: riprendono
+            da soli alla riapertura.
           </p>
         ) : null}
         <p className="pt-1">

@@ -21,7 +21,9 @@
     "./spese": "./src/spese.ts",
     "./pianificazione": "./src/pianificazione.ts",
     "./permessi-tipi": "./src/permessi-tipi.ts",
-    "./rome-time": "./src/rome-time.ts"
+    "./rome-time": "./src/rome-time.ts",
+    "./upload-multipart": "./src/upload-multipart.ts",
+    "./upload-queue-policy": "./src/upload-queue-policy.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",

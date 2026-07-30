@@ -22,6 +22,7 @@ import {
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
   type CompletedPart,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -146,6 +147,49 @@ export class R2StorageProvider {
         return { partNumber, url };
       }),
     );
+  }
+
+  /**
+   * Parti già presenti su R2 per un multipart aperto.
+   *
+   * È la fonte di verità per la RIPRESA di un upload interrotto: il client non
+   * deve ricordarsi nulla, si chiede a R2 cosa è già arrivato e si ricaricano
+   * solo le parti mancanti. Ritorna `null` se il multipart non esiste più
+   * (scaduto o già abortito) → il chiamante ricomincia da capo.
+   */
+  async listParts(
+    key: string,
+    uploadId: string,
+  ): Promise<Array<{ partNumber: number; etag: string; size: number }> | null> {
+    const raccolte: Array<{ partNumber: number; etag: string; size: number }> = [];
+    let marker: number | undefined;
+    try {
+      for (;;) {
+        const res = await this.client.send(
+          new ListPartsCommand({
+            Bucket: this.bucket,
+            Key: key,
+            UploadId: uploadId,
+            PartNumberMarker: marker != null ? String(marker) : undefined,
+          }),
+        );
+        for (const p of res.Parts ?? []) {
+          if (p.PartNumber == null || !p.ETag) continue;
+          raccolte.push({
+            partNumber: p.PartNumber,
+            etag: p.ETag.replace(/^"|"$/g, ''),
+            size: p.Size ?? 0,
+          });
+        }
+        if (!res.IsTruncated || res.NextPartNumberMarker == null) break;
+        marker = Number(res.NextPartNumberMarker);
+      }
+    } catch (e) {
+      const nome = (e as { name?: string } | null)?.name ?? '';
+      if (nome === 'NoSuchUpload' || nome === 'NotFound') return null;
+      throw e;
+    }
+    return raccolte;
   }
 
   async completeMultipart(

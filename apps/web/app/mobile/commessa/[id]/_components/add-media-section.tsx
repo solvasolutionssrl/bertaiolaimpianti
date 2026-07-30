@@ -52,14 +52,11 @@ export function AddMediaSection({ commessaId }: Props) {
     if (daAccodare.length === 0) return;
     daAccodare.forEach((f) => enqueuedIdsRef.current.add(f.id));
     setInviati((n) => n + daAccodare.length);
-    for (const f of daAccodare) {
-      // Le immagini vengono compresse lato client (max 2048px, JPEG 0.82),
-      // come faceva prima la tab Media; video e PDF salgono originali. La coda
-      // globale poi carica in background (persistito su IndexedDB).
-      const blob = f.kind === 'image' ? await compressImage(f.file) : f.file;
+
+    const accoda = (f: MediaFile, blob: Blob | File) => {
       const jobId = queue.enqueue({
         fileBlob: blob,
-        fileName: blob.name || f.file.name,
+        fileName: (blob as File).name || f.file.name,
         fileMime: blob.type || f.file.type || 'application/octet-stream',
         fileSize: blob.size,
         commessaId,
@@ -68,6 +65,18 @@ export function AddMediaSection({ commessaId }: Props) {
         takenAtIso: f.takenAt ? f.takenAt.toISOString() : null,
       });
       jobIdsRef.current.add(jobId);
+    };
+
+    // PRIMA i file che non vanno compressi (video, PDF): partono all'istante.
+    // Prima erano in un unico ciclo `for` con `await compressImage(...)`: un
+    // video in fondo alla selezione aspettava la compressione di tutte le foto
+    // — su iPhone anche decine di secondi — e solo dopo iniziava a salire.
+    for (const f of daAccodare.filter((x) => x.kind !== 'image')) {
+      accoda(f, f.file);
+    }
+    // POI le immagini, compresse una alla volta (2048px, JPEG 0.82).
+    for (const f of daAccodare.filter((x) => x.kind === 'image')) {
+      accoda(f, await compressImage(f.file));
     }
   };
 

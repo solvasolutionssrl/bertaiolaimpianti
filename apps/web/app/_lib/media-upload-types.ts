@@ -40,6 +40,34 @@ export interface InitResponseMultipart {
 
 export type InitResponse = InitResponseSingle | InitResponseMultipart;
 
+/**
+ * Risposta di `/api/upload/media/[id]/resume` — ripresa di un multipart
+ * interrotto (app chiusa, rete caduta).
+ *
+ * `mode: 'multipart'` → il multipart su R2 è ancora aperto: `parts` contiene
+ * SOLO le parti mancanti (già firmate) e `giaCaricate` quelle che R2 ha già,
+ * con il loro ETag, da riusare al momento del complete.
+ * `mode: 'scaduto'` → non c'è più niente da riprendere, si riparte da /init.
+ */
+export interface ResumeResponseMultipart {
+  mode: 'multipart';
+  fileRefId: string;
+  uploadId: string;
+  partSize: number;
+  /** Solo le parti ANCORA da caricare. */
+  parts: { partNumber: number; url: string }[];
+  giaCaricate: CompletePartInfo[];
+  /** Byte già presenti su R2 (per far ripartire la barra dal punto giusto). */
+  bytesGiaCaricati: number;
+  expiresAt: string;
+}
+
+export interface ResumeResponseScaduto {
+  mode: 'scaduto';
+}
+
+export type ResumeResponse = ResumeResponseMultipart | ResumeResponseScaduto;
+
 export interface CompletePartInfo {
   partNumber: number;
   etag: string;

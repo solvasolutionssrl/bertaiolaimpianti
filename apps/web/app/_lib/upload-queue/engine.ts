@@ -1,11 +1,30 @@
 /**
  * Engine di upload R2: init → PUT/multipart → complete.
  *
- * Estratto dalla logica di useChunkedUpload e generalizzato per essere
- * invocato dal worker della UploadQueue (background, non legato a un
- * componente React). Mantiene esattamente le stesse contractual API
- * verso il server (init, complete, abort).
+ * Invocato dal worker della UploadQueue (background, non legato a un
+ * componente React). Mantiene le stesse API contrattuali verso il server
+ * (init, complete, abort).
+ *
+ * L'orchestrazione del multipart vive in `@kommessa/api/upload-multipart`
+ * (pura e unit-testata): qui restiamo con la sola colla DOM (XHR).
+ *
+ * ─── Correzioni 30/07/2026 ────────────────────────────────────────────────
+ *  - i worker fratelli vengono fermati al primo errore e `caricaParti` non
+ *    ritorna finché non sono tutti usciti → niente più due tentativi vivi sullo
+ *    stesso file che si scrivono addosso il progresso;
+ *  - ogni XHR ha una **sentinella di stallo**: se non arrivano byte per
+ *    `STALLO_MS` la richiesta viene abortita (prima un upload congelato teneva
+ *    lo slot occupato per sempre);
+ *  - il progresso è monotono per tentativo.
+ *
+ * Vedi `documentazione_generale/08_LOGICHE/Logiche_Upload_Media.md`.
  */
+
+import {
+  caricaParti,
+  erroreAnnullato,
+  type CaricaParte,
+} from '@kommessa/api/upload-multipart';
 
 import type {
   CompletePartInfo,
@@ -13,10 +32,14 @@ import type {
   CompleteResponse,
   InitRequestBody,
   InitResponse,
+  ResumeResponse,
+  ResumeResponseMultipart,
 } from '../media-upload-types';
 
 const DEFAULT_SHA256_MAX = 100 * 1024 * 1024; // 100 MB
 const DEFAULT_CONCURRENCY = 3;
+/** Nessun byte trasferito per questo tempo ⇒ la richiesta è considerata morta. */
+const STALLO_MS = 45_000;
 
 export interface RunUploadOptions {
   /** Concorrenza per i part upload multipart. */
@@ -43,20 +66,27 @@ export interface UploadInputForEngine {
   fileName: string;
   fileMime: string;
   fileSize: number;
-  commessaId: string;
+  /** Esattamente uno fra `commessaId` e `bozzaId` (lo impone anche /init). */
+  commessaId?: string | null;
   momento?: 'sopralluogo' | 'in_corso' | 'finale' | null;
   voceId?: number | null;
   riunioneId?: string | null;
+  bozzaId?: string | null;
   kind?: 'foto' | 'video' | 'pdf_acquisito' | null;
   geoLat?: number | null;
   geoLng?: number | null;
   takenAtIso?: string | null;
+  /**
+   * fileRefId di un upload interrotto da riprendere (app chiusa a metà).
+   * Si tenta `/resume`: se il multipart su R2 è ancora aperto si ricaricano
+   * solo le parti mancanti, altrimenti si riparte con un /init pulito.
+   */
+  ripresaFileRefId?: string | null;
 }
 
 /**
  * Esegue un singolo upload end-to-end. Idempotente lato server:
  * un retry chiama di nuovo /init (nuovo fileRefId) — il server tollera.
- * Per riprese vere di multipart già parziale si vedrà in iterazione 2.
  */
 export async function runUpload(
   input: UploadInputForEngine,
@@ -66,25 +96,78 @@ export async function runUpload(
   const sha256MaxBytes = options.sha256MaxBytes ?? DEFAULT_SHA256_MAX;
   const { abort, onProgress, onFileRefId, onPhase } = options;
 
-  const xhrs = new Set<XMLHttpRequest>();
-  const cleanup = () => {
-    for (const xhr of xhrs) {
-      try {
-        xhr.abort();
-      } catch {}
+  onPhase('init');
+
+  // 0) RIPRESA — se questo job era già partito in una sessione precedente,
+  // chiediamo a R2 (tramite il server) cosa è già arrivato e ricarichiamo solo
+  // il resto. Fail-soft: qualunque intoppo e si riparte da un /init pulito.
+  let ripresa: ResumeResponseMultipart | null = null;
+  if (input.ripresaFileRefId) {
+    try {
+      const res = await fetch(
+        `/api/upload/media/${input.ripresaFileRefId}/resume`,
+        { method: 'POST', signal: abort.signal },
+      );
+      if (res.ok) {
+        const dati = (await res.json()) as ResumeResponse;
+        if (dati.mode === 'multipart') ripresa = dati;
+      }
+    } catch (e) {
+      if (abort.signal.aborted) throw e;
+      // resume non disponibile → si ricomincia da capo
     }
-    xhrs.clear();
-  };
-  abort.signal.addEventListener('abort', cleanup, { once: true });
+  }
+
+  if (ripresa) {
+    onFileRefId(ripresa.fileRefId);
+    onPhase('uploading');
+    const nuove =
+      ripresa.parts.length > 0
+        ? await caricaParti({
+            parts: ripresa.parts,
+            partSize: ripresa.partSize,
+            fileSize: input.fileSize,
+            concorrenza: concurrency,
+            caricaParte: (fetta, signal, onBytes) =>
+              inviaBlob({
+                url: fetta.url,
+                blob: input.file.slice(fetta.inizio, fetta.fine),
+                signal,
+                onBytes,
+                richiediEtag: true,
+              }),
+            onProgress,
+            signalEsterno: abort.signal,
+            bytesIniziali: ripresa.bytesGiaCaricati,
+          })
+        : [];
+    return finalizza({
+      fileRefId: ripresa.fileRefId,
+      parts: [...ripresa.giaCaricate, ...nuove],
+      input,
+      sha256MaxBytes,
+      abort,
+      onPhase,
+      onProgress,
+    });
+  }
 
   // 1) INIT
-  onPhase('init');
-  const initBody: InitRequestBody & {
+  // NB: /api/upload/media/init impone `commessaId` XOR `bozzaId` — mandarne
+  // due o zero è un 400. Quindi si valorizza solo quello presente.
+  if (!input.commessaId === !input.bozzaId) {
+    throw new Error('Upload: serve esattamente uno fra commessaId e bozzaId');
+  }
+  const initBody: Omit<InitRequestBody, 'commessaId'> & {
+    commessaId?: string;
+    bozzaId?: string;
     riunioneId?: string | null;
     kind?: 'foto' | 'video' | 'pdf_acquisito' | null;
     takenAtIso?: string | null;
   } = {
-    commessaId: input.commessaId,
+    ...(input.commessaId
+      ? { commessaId: input.commessaId }
+      : { bozzaId: input.bozzaId as string }),
     momento: input.momento ?? undefined,
     voceId: input.voceId ?? null,
     filename: input.fileName,
@@ -111,84 +194,82 @@ export async function runUpload(
 
   // 2) UPLOAD
   onPhase('uploading');
-  const completedParts: CompletePartInfo[] = [];
+  let completedParts: CompletePartInfo[] = [];
 
   if (init.mode === 'single') {
-    await uploadSinglePut(
-      input.file,
-      init.uploadUrl,
-      abort.signal,
-      xhrs,
-      (loaded) => onProgress(loaded),
-    );
+    await inviaBlob({
+      url: init.uploadUrl,
+      blob: input.file,
+      signal: abort.signal,
+      onBytes: onProgress,
+    });
   } else {
-    const partSize = init.partSize;
-    const parts = init.parts;
-    const perPartLoaded = new Array<number>(parts.length).fill(0);
+    const caricaParte: CaricaParte = (fetta, signal, onBytes) =>
+      inviaBlob({
+        url: fetta.url,
+        blob: input.file.slice(fetta.inizio, fetta.fine),
+        signal,
+        onBytes,
+        richiediEtag: true,
+      });
 
-    const reportProgress = () => {
-      const sum = perPartLoaded.reduce((a, b) => a + b, 0);
-      onProgress(sum);
-    };
-
-    let nextIdx = 0;
-    const runWorker = async () => {
-      while (true) {
-        if (abort.signal.aborted) {
-          throw new DOMException('aborted', 'AbortError');
-        }
-        const idx = nextIdx++;
-        if (idx >= parts.length) return;
-        const part = parts[idx]!;
-        const start = idx * partSize;
-        const end = Math.min(start + partSize, input.fileSize);
-        const blob = input.file.slice(start, end);
-        const etag = await uploadPart(
-          part.url,
-          blob,
-          abort.signal,
-          xhrs,
-          (loaded) => {
-            perPartLoaded[idx] = loaded;
-            reportProgress();
-          },
-        );
-        completedParts.push({ partNumber: part.partNumber, etag });
-      }
-    };
-
-    const workers = Array.from(
-      { length: Math.min(concurrency, parts.length) },
-      runWorker,
-    );
-    await Promise.all(workers);
+    completedParts = await caricaParti({
+      parts: init.parts,
+      partSize: init.partSize,
+      fileSize: input.fileSize,
+      concorrenza: concurrency,
+      caricaParte,
+      onProgress,
+      signalEsterno: abort.signal,
+    });
   }
 
-  // 3) FINALIZE: SHA-256 client se size piccolo, poi /complete.
+  // 3) FINALIZE
+  return finalizza({
+    fileRefId: init.fileRefId,
+    parts: init.mode === 'multipart' ? completedParts : undefined,
+    input,
+    sha256MaxBytes,
+    abort,
+    onPhase,
+    onProgress,
+  });
+}
+
+/** SHA-256 client (se il file è piccolo) + POST /complete. */
+async function finalizza(opzioni: {
+  fileRefId: string;
+  parts?: CompletePartInfo[];
+  input: UploadInputForEngine;
+  sha256MaxBytes: number;
+  abort: AbortController;
+  onPhase: RunUploadOptions['onPhase'];
+  onProgress: RunUploadOptions['onProgress'];
+}): Promise<RunUploadResult> {
+  const { fileRefId, parts, input, sha256MaxBytes, abort, onPhase, onProgress } =
+    opzioni;
+
   onPhase('finalizing');
   onProgress(input.fileSize);
+
   let sha256Hex: string | undefined;
   if (input.fileSize <= sha256MaxBytes) {
     sha256Hex = await sha256OfBlob(input.file);
   }
 
-  const completeBody: CompleteRequestBody = {
-    sha256Hex,
-    parts: init.mode === 'multipart' ? completedParts : undefined,
-  };
-  const completeRes = await fetch(`/api/upload/media/${init.fileRefId}/complete`, {
+  const body: CompleteRequestBody = { sha256Hex, parts };
+  const res = await fetch(`/api/upload/media/${fileRefId}/complete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(completeBody),
+    body: JSON.stringify(body),
     signal: abort.signal,
   });
-  if (!completeRes.ok) {
-    const t = await completeRes.text();
-    throw new Error(`complete ${completeRes.status}: ${t.slice(0, 200)}`);
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`complete ${res.status}: ${t.slice(0, 200)}`);
   }
-  const completed = (await completeRes.json()) as CompleteResponse;
-
-  return { fileRefId: completed.fileRefId, sizeBytes: completed.sizeBytes };
+  const completato = (await res.json()) as CompleteResponse;
+  return { fileRefId: completato.fileRefId, sizeBytes: completato.sizeBytes };
 }
 
 /** Notifica al server che un job è fallito/cancellato — best-effort. */
@@ -200,77 +281,83 @@ export function notifyAbortToServer(fileRefId: string): void {
 }
 
 // --------------------------------------------------------------------------
-// XHR helpers (estratti dall'hook originale)
+// XHR: un solo helper per il PUT singolo e per la parte multipart.
 // --------------------------------------------------------------------------
 
-function uploadSinglePut(
-  blob: Blob,
-  url: string,
-  signal: AbortSignal,
-  xhrs: Set<XMLHttpRequest>,
-  onProgress: (loaded: number) => void,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhrs.add(xhr);
-    const onAbort = () => xhr.abort();
-    signal.addEventListener('abort', onAbort);
+function inviaBlob(opzioni: {
+  url: string;
+  blob: Blob;
+  signal: AbortSignal;
+  onBytes: (bytes: number) => void;
+  /** Le parti multipart DEVONO restituire un ETag (serve al complete). */
+  richiediEtag?: boolean;
+}): Promise<string> {
+  const { url, blob, signal, onBytes, richiediEtag } = opzioni;
 
-    xhr.upload.onprogress = (ev) => {
-      if (ev.lengthComputable) onProgress(ev.loaded);
+  return new Promise<string>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(erroreAnnullato());
+      return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    let sentinella: ReturnType<typeof setTimeout> | null = null;
+    let concluso = false;
+
+    const chiudi = () => {
+      if (sentinella) {
+        clearTimeout(sentinella);
+        sentinella = null;
+      }
+      signal.removeEventListener('abort', suAbort);
     };
-    xhr.onload = () => {
-      xhrs.delete(xhr);
-      signal.removeEventListener('abort', onAbort);
-      if (xhr.status >= 200 && xhr.status < 300) {
-        const etag = (xhr.getResponseHeader('etag') ?? '').replace(/^"|"$/g, '');
-        resolve(etag);
-      } else {
+
+    /** Riarma la sentinella a ogni segno di vita della connessione. */
+    const riarma = () => {
+      if (concluso) return;
+      if (sentinella) clearTimeout(sentinella);
+      sentinella = setTimeout(() => {
+        if (concluso) return;
+        concluso = true;
+        chiudi();
+        try {
+          xhr.abort();
+        } catch {
+          /* noop */
+        }
         reject(
           new Error(
-            `R2 PUT ${xhr.status}: ${(xhr.responseText ?? '').slice(0, 200)}`,
+            `Trasferimento fermo da ${Math.round(STALLO_MS / 1000)}s: connessione persa`,
           ),
         );
-      }
+      }, STALLO_MS);
     };
-    xhr.onerror = () => {
-      xhrs.delete(xhr);
-      signal.removeEventListener('abort', onAbort);
-      reject(new Error('R2 PUT network error'));
-    };
-    xhr.onabort = () => {
-      xhrs.delete(xhr);
-      signal.removeEventListener('abort', onAbort);
-      reject(new DOMException('aborted', 'AbortError'));
-    };
-    xhr.open('PUT', url, true);
-    if (blob.type) xhr.setRequestHeader('Content-Type', blob.type);
-    xhr.send(blob);
-  });
-}
 
-function uploadPart(
-  url: string,
-  blob: Blob,
-  signal: AbortSignal,
-  xhrs: Set<XMLHttpRequest>,
-  onProgress: (loaded: number) => void,
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhrs.add(xhr);
-    const onAbort = () => xhr.abort();
-    signal.addEventListener('abort', onAbort);
+    function suAbort() {
+      if (concluso) return;
+      concluso = true;
+      chiudi();
+      try {
+        xhr.abort();
+      } catch {
+        /* noop */
+      }
+      reject(erroreAnnullato());
+    }
+    signal.addEventListener('abort', suAbort);
 
     xhr.upload.onprogress = (ev) => {
-      if (ev.lengthComputable) onProgress(ev.loaded);
+      if (concluso) return;
+      riarma();
+      if (ev.lengthComputable) onBytes(ev.loaded);
     };
     xhr.onload = () => {
-      xhrs.delete(xhr);
-      signal.removeEventListener('abort', onAbort);
+      if (concluso) return;
+      concluso = true;
+      chiudi();
       if (xhr.status >= 200 && xhr.status < 300) {
         const etag = (xhr.getResponseHeader('etag') ?? '').replace(/^"|"$/g, '');
-        if (!etag) {
+        if (richiediEtag && !etag) {
           reject(new Error('R2 part: ETag mancante (verifica CORS ExposeHeaders)'));
           return;
         }
@@ -278,22 +365,27 @@ function uploadPart(
       } else {
         reject(
           new Error(
-            `R2 part ${xhr.status}: ${(xhr.responseText ?? '').slice(0, 200)}`,
+            `R2 ${xhr.status}: ${(xhr.responseText ?? '').slice(0, 200)}`,
           ),
         );
       }
     };
     xhr.onerror = () => {
-      xhrs.delete(xhr);
-      signal.removeEventListener('abort', onAbort);
-      reject(new Error('R2 part network error'));
+      if (concluso) return;
+      concluso = true;
+      chiudi();
+      reject(new Error('R2 network error'));
     };
     xhr.onabort = () => {
-      xhrs.delete(xhr);
-      signal.removeEventListener('abort', onAbort);
-      reject(new DOMException('aborted', 'AbortError'));
+      if (concluso) return;
+      concluso = true;
+      chiudi();
+      reject(erroreAnnullato());
     };
+
     xhr.open('PUT', url, true);
+    if (!richiediEtag && blob.type) xhr.setRequestHeader('Content-Type', blob.type);
+    riarma();
     xhr.send(blob);
   });
 }

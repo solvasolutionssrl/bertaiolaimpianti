@@ -3,35 +3,57 @@
 import * as React from 'react';
 
 import {
+  jobDaAvviare,
+  prossimoRisveglioMs,
+  esitoTentativoFallito,
+} from '@kommessa/api/upload-queue-policy';
+
+import {
   deleteJob,
   getAllJobs,
+  putBlob,
   putJob,
 } from '../_lib/upload-queue/idb-store';
 import { notifyAbortToServer, runUpload } from '../_lib/upload-queue/engine';
 import {
-  MAX_ATTEMPTS,
-  RETRY_DELAYS_MS,
   type JobStatus,
   type UploadJob,
   type UploadJobPayload,
 } from '../_lib/upload-queue/types';
 
 /**
- * UploadQueueProvider: queue persistente per gli upload media R2.
+ * UploadQueueProvider: coda persistente per gli upload media R2.
  *
  * Caratteristiche:
- *  - Persistenza IndexedDB: i job sopravvivono al refresh.
+ *  - Persistenza IndexedDB: i job (file compreso) sopravvivono alla chiusura
+ *    dell'app. Alla riapertura ripartono da soli.
  *  - Vita oltre la pagina: l'upload continua quando l'utente naviga in app.
- *  - Concorrenza 3, retry esponenziale (fino a MAX_ATTEMPTS).
+ *  - Concorrenza limitata, retry con backoff esponenziale reale.
  *  - Abort granulare via AbortController per job.
- *  - "warning beforeunload" se ci sono upload in corso.
  *
- * Non gestisce ancora la ripresa cross-session di multipart già parziale:
- * un refresh durante un multipart fa ripartire l'upload da zero (il server
- * rilascia il vecchio fileRefId al cleanup di 24h).
+ * ─── Correzioni 30/07/2026 ────────────────────────────────────────────────
+ *  - la scelta dei job da avviare vive in `@kommessa/api/upload-queue-policy`
+ *    (pura, unit-testata) e **rispetta `nextAttemptAt`**: prima il filtro lo
+ *    ignorava e i retry ripartivano all'istante, bruciando i 5 tentativi in
+ *    pochi secondi;
+ *  - il dispatch dei job non avviene più dentro l'updater di `setJobs`
+ *    (side effect in un reducer): lo stato è specchiato in un ref;
+ *  - il progresso è accettato solo dal tentativo corrente (token di
+ *    generazione) e `bytesUploaded` viene azzerato a ogni nuovo tentativo;
+ *  - IndexedDB non viene più scritto a ogni tick di progresso.
+ *
+ * Non gestisce ancora la ripresa di un multipart già parziale: alla riapertura
+ * il file riparte da zero (il legame con la commessa però non si perde mai).
+ *
+ * Vedi `documentazione_generale/08_LOGICHE/Logiche_Upload_Media.md`.
  */
 
+/** Job contemporanei. I video scendono a 2 per non saturare la rete mobile. */
 const MAX_CONCURRENT = 3;
+const MAX_CONCURRENT_VIDEO = 2;
+/** Parti multipart in volo per singolo job. */
+const PARTI_PARALLELE = 3;
+const PARTI_PARALLELE_VIDEO = 2;
 
 interface UploadQueueContextValue {
   jobs: UploadJob[];
@@ -41,6 +63,8 @@ interface UploadQueueContextValue {
   remove(jobId: string): void;
   /** Numero di job non terminali (queued + init + uploading + finalizing). */
   activeCount: number;
+  /** Job ripescati da una sessione precedente e non ancora completati. */
+  ripresiCount: number;
 }
 
 const UploadQueueContext = React.createContext<UploadQueueContextValue | null>(null);
@@ -49,6 +73,10 @@ const TERMINAL: ReadonlyArray<JobStatus> = ['done', 'failed', 'canceled'];
 
 function isTerminal(s: JobStatus): boolean {
   return TERMINAL.includes(s);
+}
+
+function eVideo(job: UploadJob): boolean {
+  return (job.payload.fileMime ?? '').startsWith('video/');
 }
 
 function genId(): string {
@@ -60,92 +88,105 @@ function genId(): string {
 
 export function UploadQueueProvider({ children }: { children: React.ReactNode }) {
   const [jobs, setJobs] = React.useState<UploadJob[]>([]);
-  // Map dei controller AbortController per ogni job attivo.
+  /**
+   * Specchio sincrono dello stato: il pump deve poter leggere la lista
+   * aggiornata SENZA passare da un updater di setJobs (che deve restare puro).
+   */
+  const jobsRef = React.useRef<UploadJob[]>([]);
   const abortersRef = React.useRef<Map<string, AbortController>>(new Map());
-  // Per evitare doppio dispatch al worker dello stesso job.
+  /** Job già dispatchati al worker, per non avviarli due volte. */
   const runningRef = React.useRef<Set<string>>(new Set());
-  // Timer per il pump del worker pool.
+  /** Tentativo corrente per job: il progresso di un tentativo morto è ignorato. */
+  const generazioneRef = React.useRef<Map<string, number>>(new Map());
   const pumpTimerRef = React.useRef<number | null>(null);
-  // Wake Lock attivo durante upload (per non far spegnere lo schermo iOS/Android).
   const wakeLockRef = React.useRef<{ release: () => Promise<void> } | null>(null);
-  // Contatore "sessione" — quanti job sono terminati con done DA QUANDO la
-  // queue è ripartita da 0. Serve a inviare UNA push aggregata alla fine
-  // ("3 foto caricate") invece che una per file.
   const sessionDoneRef = React.useRef(0);
-  // Per detectare il fronte di discesa activeCount > 0 → 0.
   const prevActiveRef = React.useRef(0);
 
-  // ---- Persistenza helpers --------------------------------------------------
-  const updateJob = React.useCallback(
-    (id: string, patch: Partial<UploadJob>) => {
-      setJobs((prev) => {
-        const next = prev.map((j) =>
-          j.id === id ? { ...j, ...patch, updatedAt: Date.now() } : j,
-        );
-        const target = next.find((j) => j.id === id);
-        if (target) {
-          // Persistenza: cancella record IDB per i terminali, altrimenti put.
-          if (isTerminal(target.status)) {
-            void deleteJob(id);
-          } else {
-            void putJob(target);
-          }
-        }
-        return next;
-      });
+  // ---- Scrittura di stato (ref + React) -------------------------------------
+  const scriviJobs = React.useCallback(
+    (aggiorna: (prev: UploadJob[]) => UploadJob[]) => {
+      const next = aggiorna(jobsRef.current);
+      jobsRef.current = next;
+      setJobs(next);
+      return next;
     },
     [],
   );
 
+  /**
+   * @param persisti false per gli aggiornamenti ad alta frequenza (progresso):
+   * scrivere su IDB a ogni tick era una delle cause degli stalli.
+   */
+  const updateJob = React.useCallback(
+    (id: string, patch: Partial<UploadJob>, persisti = true) => {
+      const next = scriviJobs((prev) =>
+        prev.map((j) => (j.id === id ? { ...j, ...patch, updatedAt: Date.now() } : j)),
+      );
+      const target = next.find((j) => j.id === id);
+      if (!target) return;
+      if (isTerminal(target.status)) void deleteJob(id);
+      else if (persisti) void putJob(target);
+    },
+    [scriviJobs],
+  );
+
+  // ---- Esecuzione di un singolo job -----------------------------------------
+  const startJobRef = React.useRef<(job: UploadJob) => Promise<void>>();
+
   // ---- Pump del worker pool -------------------------------------------------
   const pump = React.useCallback(() => {
-    setJobs((prev) => {
-      const active = prev.filter(
-        (j) => j.status === 'init' || j.status === 'uploading' || j.status === 'finalizing',
-      ).length;
-      if (active >= MAX_CONCURRENT) return prev;
-
-      const now = Date.now();
-      // Job in coda: queued OR (failed in retry pending con nextAttemptAt scaduto)
-      const candidates = prev.filter((j) => {
-        if (runningRef.current.has(j.id)) return false;
-        if (j.status === 'queued') return true;
-        return false;
-      });
-
-      const slotsLeft = MAX_CONCURRENT - active;
-      const toStart = candidates.slice(0, slotsLeft);
-
-      for (const job of toStart) {
-        runningRef.current.add(job.id);
-        void startJob(job);
-      }
-
-      // Schedule il prossimo pump se ci sono job in pending-retry futuri
-      const nextPending = prev
-        .filter((j) => j.status === 'queued' && j.nextAttemptAt && j.nextAttemptAt > now)
-        .map((j) => j.nextAttemptAt as number);
-      if (nextPending.length > 0) {
-        const soonest = Math.min(...nextPending);
-        const delay = Math.max(50, soonest - now + 10);
-        if (pumpTimerRef.current) window.clearTimeout(pumpTimerRef.current);
-        pumpTimerRef.current = window.setTimeout(pump, delay);
-      }
-      return prev;
+    const ora = Date.now();
+    const correnti = jobsRef.current;
+    // I video pesano: se ce n'è uno in ballo si stringe la concorrenza.
+    const ciSonoVideo = correnti.some(
+      (j) => !isTerminal(j.status) && eVideo(j),
+    );
+    const daAvviare = jobDaAvviare({
+      jobs: correnti,
+      ora,
+      maxConcorrenti: ciSonoVideo ? MAX_CONCURRENT_VIDEO : MAX_CONCURRENT,
+      inEsecuzione: runningRef.current,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    for (const id of daAvviare) {
+      const job = jobsRef.current.find((j) => j.id === id);
+      if (!job) continue;
+      runningRef.current.add(id);
+      void startJobRef.current?.(job);
+    }
+
+    // Risveglio per i retry in attesa di backoff.
+    const fra = prossimoRisveglioMs(jobsRef.current, ora);
+    if (fra != null) {
+      if (pumpTimerRef.current) window.clearTimeout(pumpTimerRef.current);
+      pumpTimerRef.current = window.setTimeout(() => {
+        pumpTimerRef.current = null;
+        pump();
+      }, fra);
+    }
   }, []);
 
-  // ---- Esecuzione singolo job ----------------------------------------------
   const startJob = React.useCallback(
     async (job: UploadJob) => {
       const controller = new AbortController();
       abortersRef.current.set(job.id, controller);
+
+      // Token di generazione: solo il tentativo corrente può scrivere progresso.
+      const generazione = (generazioneRef.current.get(job.id) ?? 0) + 1;
+      generazioneRef.current.set(job.id, generazione);
+      const mioTurno = () => generazioneRef.current.get(job.id) === generazione;
+
+      // Ogni tentativo riparte da zero byte: senza questo la barra "salta
+      // indietro" invece di ricominciare in modo leggibile.
       updateJob(job.id, {
         status: 'init',
+        bytesUploaded: 0,
         lastError: null,
         nextAttemptAt: null,
       });
+
+      const video = eVideo(job);
 
       try {
         const result = await runUpload(
@@ -154,7 +195,8 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
             fileName: job.payload.fileName,
             fileMime: job.payload.fileMime,
             fileSize: job.payload.fileSize,
-            commessaId: job.payload.commessaId,
+            commessaId: job.payload.commessaId ?? null,
+            bozzaId: job.payload.bozzaId ?? null,
             momento: job.payload.momento,
             voceId: job.payload.voceId,
             riunioneId: job.payload.riunioneId,
@@ -162,12 +204,23 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
             geoLat: job.payload.geoLat,
             geoLng: job.payload.geoLng,
             takenAtIso: job.payload.takenAtIso,
+            // Presente = tentativo precedente interrotto (o sessione chiusa):
+            // l'engine prova a riprendere le parti già su R2.
+            ripresaFileRefId: job.fileRefId,
           },
           {
             abort: controller,
-            onProgress: (loaded) => updateJob(job.id, { bytesUploaded: loaded }),
-            onFileRefId: (fileRefId) => updateJob(job.id, { fileRefId }),
+            multipartConcurrency: video ? PARTI_PARALLELE_VIDEO : PARTI_PARALLELE,
+            onProgress: (loaded) => {
+              if (!mioTurno()) return;
+              updateJob(job.id, { bytesUploaded: loaded }, false);
+            },
+            onFileRefId: (fileRefId) => {
+              if (!mioTurno()) return;
+              updateJob(job.id, { fileRefId });
+            },
             onPhase: (phase) => {
+              if (!mioTurno()) return;
               const map: Record<typeof phase, JobStatus> = {
                 init: 'init',
                 uploading: 'uploading',
@@ -186,37 +239,33 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
         });
         sessionDoneRef.current += 1;
       } catch (e) {
-        const aborted = controller.signal.aborted;
+        const annullato = controller.signal.aborted;
         const msg = e instanceof Error ? e.message : String(e);
-        const currentAttempt = job.attempt + 1;
-        // Se è un abort esplicito dell'utente, niente retry.
-        if (aborted) {
-          updateJob(job.id, {
-            status: 'canceled',
-            lastError: 'Annullato dall\'utente',
-            attempt: currentAttempt,
-          });
-        } else if (currentAttempt >= MAX_ATTEMPTS) {
-          // Esauriti i tentativi.
-          updateJob(job.id, {
-            status: 'failed',
-            lastError: msg,
-            attempt: currentAttempt,
-          });
-          // Notifica al server che il file ref può essere abbandonato
-          if (job.fileRefId) notifyAbortToServer(job.fileRefId);
-        } else {
-          // Retry pending: schedula il prossimo tentativo.
-          const delay =
-            RETRY_DELAYS_MS[Math.min(currentAttempt - 1, RETRY_DELAYS_MS.length - 1)] ??
-            60_000;
-          updateJob(job.id, {
-            status: 'queued',
-            attempt: currentAttempt,
-            nextAttemptAt: Date.now() + delay,
-            lastError: msg,
-          });
+        // Stato aggiornato: `job` è lo snapshot di quando il pump l'ha scelto.
+        const corrente = jobsRef.current.find((j) => j.id === job.id) ?? job;
+        const esito = esitoTentativoFallito({
+          tentativiFatti: corrente.attempt,
+          annullato,
+          ora: Date.now(),
+        });
+
+        // Il multipart su R2 si butta via SOLO quando non serve più: annullo
+        // dell'utente o tentativi esauriti. Se invece ci sarà un altro giro, si
+        // conserva il fileRefId così il prossimo tentativo **riprende** le parti
+        // già caricate invece di rifare tutto da zero (fondamentale sui video).
+        const riprendibile = esito.status === 'queued';
+        if (!riprendibile && corrente.fileRefId) {
+          notifyAbortToServer(corrente.fileRefId);
         }
+
+        updateJob(job.id, {
+          status: esito.status,
+          attempt: esito.attempt,
+          nextAttemptAt: esito.nextAttemptAt,
+          fileRefId: riprendibile ? corrente.fileRefId : null,
+          lastError:
+            esito.status === 'canceled' ? 'Annullato dall’utente' : msg,
+        });
       } finally {
         abortersRef.current.delete(job.id);
         runningRef.current.delete(job.id);
@@ -225,6 +274,8 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     },
     [pump, updateJob],
   );
+
+  startJobRef.current = startJob;
 
   // ---- API pubblica ---------------------------------------------------------
   const enqueue = React.useCallback(
@@ -242,102 +293,85 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      setJobs((prev) => [...prev, job]);
+      scriviJobs((prev) => [...prev, job]);
+      // Il file si scrive UNA volta: da qui in poi solo metadati.
+      void putBlob(job.id, payload.fileBlob);
       void putJob(job);
-      // Avvia worker pump nel prossimo tick (così lo state ha aggiornato).
       setTimeout(pump, 0);
       return job.id;
     },
-    [pump],
+    [pump, scriviJobs],
   );
 
   const cancel = React.useCallback(
     (jobId: string) => {
       const ctrl = abortersRef.current.get(jobId);
       if (ctrl) ctrl.abort();
-      // Se il job non è in run (era queued), forza canceled subito.
-      setJobs((prev) => {
-        const target = prev.find((j) => j.id === jobId);
-        if (target && !runningRef.current.has(jobId) && !isTerminal(target.status)) {
-          // Marca come canceled in stato locale + IDB.
-          const next = prev.map((j) =>
-            j.id === jobId
-              ? {
-                  ...j,
-                  status: 'canceled' as JobStatus,
-                  lastError: 'Annullato dall\'utente',
-                  updatedAt: Date.now(),
-                }
-              : j,
-          );
-          void deleteJob(jobId);
-          return next;
+      if (!runningRef.current.has(jobId)) {
+        const target = jobsRef.current.find((j) => j.id === jobId);
+        if (target && !isTerminal(target.status)) {
+          updateJob(jobId, {
+            status: 'canceled',
+            lastError: 'Annullato dall’utente',
+          });
         }
-        return prev;
-      });
+      }
     },
-    [],
+    [updateJob],
   );
 
   const retry = React.useCallback(
     (jobId: string) => {
-      setJobs((prev) => {
-        const job = prev.find((j) => j.id === jobId);
-        if (!job) return prev;
-        // Reset stato per un nuovo tentativo manuale.
-        const next = prev.map((j) =>
-          j.id === jobId
-            ? {
-                ...j,
-                status: 'queued' as JobStatus,
-                attempt: 0,
-                nextAttemptAt: null,
-                lastError: null,
-                bytesUploaded: 0,
-                fileRefId: null,
-                updatedAt: Date.now(),
-              }
-            : j,
-        );
-        const target = next.find((j) => j.id === jobId);
-        if (target) void putJob(target);
-        setTimeout(pump, 0);
-        return next;
+      const job = jobsRef.current.find((j) => j.id === jobId);
+      if (!job) return;
+      updateJob(jobId, {
+        status: 'queued',
+        attempt: 0,
+        nextAttemptAt: null,
+        lastError: null,
+        bytesUploaded: 0,
+        fileRefId: null,
       });
+      setTimeout(pump, 0);
     },
-    [pump],
+    [pump, updateJob],
   );
 
-  const remove = React.useCallback((jobId: string) => {
-    setJobs((prev) => prev.filter((j) => j.id !== jobId));
-    void deleteJob(jobId);
-  }, []);
+  const remove = React.useCallback(
+    (jobId: string) => {
+      scriviJobs((prev) => prev.filter((j) => j.id !== jobId));
+      void deleteJob(jobId);
+    },
+    [scriviJobs],
+  );
 
-  // ---- Boot: ricarica IDB ---------------------------------------------------
+  // ---- Boot: ricarica da IndexedDB ------------------------------------------
   React.useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
         const persisted = await getAllJobs();
         if (!mounted) return;
-        // I job non-terminali tornano in coda (forziamo a queued, l'engine
-        // riprenderà da capo con un nuovo init — accettabile per ora).
+        // I job non terminali tornano in coda. `ripreso` li marca come
+        // "roba di una sessione precedente" per la UI.
+        // NB: `fileRefId` si CONSERVA — è la chiave con cui l'engine chiede a
+        // R2 quali parti sono già arrivate e riprende da lì invece che da zero.
         const restored = persisted
           .filter((j) => !isTerminal(j.status))
           .map((j) => ({
             ...j,
             status: 'queued' as JobStatus,
             bytesUploaded: 0,
-            fileRefId: null,
             nextAttemptAt: null,
+            attempt: 0,
+            lastError: null,
+            ripreso: true,
           }));
         if (restored.length > 0) {
-          setJobs((prev) => [...prev, ...restored]);
+          scriviJobs((prev) => [...prev, ...restored]);
           setTimeout(pump, 0);
         }
       } catch (e) {
-        // IDB non disponibile (mode privato Safari?) → degrade silenzioso
-        // gli upload continueranno a funzionare ma senza ripresa post-refresh.
         if (typeof window !== 'undefined') {
           // eslint-disable-next-line no-console
           console.warn('[upload-queue] IDB unavailable, no persistence', e);
@@ -347,7 +381,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     return () => {
       mounted = false;
     };
-  }, [pump]);
+  }, [pump, scriviJobs]);
 
   // ---- Warning beforeunload --------------------------------------------------
   React.useEffect(() => {
@@ -360,7 +394,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       );
       if (hasActive) {
         e.preventDefault();
-        e.returnValue = ''; // prompt browser standard
+        e.returnValue = '';
         return '';
       }
       return undefined;
@@ -377,10 +411,11 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       j.status === 'finalizing',
   ).length;
 
-  // ---- Wake Lock screen mentre ci sono upload attivi ------------------------
-  // Tiene il display acceso così l'utente non spegne lo schermo a metà
-  // caricamento (in PWA iOS questo è l'unico modo per non far morire il JS).
-  // L'API è Wake Lock screen: best-effort, niente errore se non supportata.
+  const ripresiCount = jobs.filter(
+    (j) => j.ripreso === true && !isTerminal(j.status),
+  ).length;
+
+  // ---- Wake Lock schermo mentre ci sono upload attivi ------------------------
   React.useEffect(() => {
     if (typeof navigator === 'undefined') return;
     const wl: any = (navigator as any).wakeLock;
@@ -397,15 +432,11 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
           return;
         }
         wakeLockRef.current = sentinel;
-        // Se il sistema lo revoca (es. tab in background), pulisci ref così
-        // possiamo riacquisire al ritorno in foreground.
         sentinel.addEventListener?.('release', () => {
-          if (wakeLockRef.current === sentinel) {
-            wakeLockRef.current = null;
-          }
+          if (wakeLockRef.current === sentinel) wakeLockRef.current = null;
         });
       } catch {
-        // Permission negata o non supportato: continua silenzioso.
+        /* permesso negato o non supportato */
       }
     };
 
@@ -420,17 +451,15 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       }
     };
 
-    if (activeCount > 0) {
-      void acquire();
-    } else {
-      void release();
-    }
+    if (activeCount > 0) void acquire();
+    else void release();
 
-    // Re-acquire al ritorno in foreground (il browser rilascia automaticamente
-    // il wake lock quando la tab va in background).
     const onVisible = () => {
       if (document.visibilityState === 'visible' && activeCount > 0) {
         void acquire();
+        // Tornando in primo piano dopo una sospensione iOS, i job possono
+        // essere rimasti fermi: una spinta al pump li rimette in moto.
+        pump();
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -438,22 +467,16 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     return () => {
       cancelled = true;
       document.removeEventListener('visibilitychange', onVisible);
-      // Non release qui — se passa da activeCount>0 a >0 (cambia il numero),
-      // l'effect rilancia ma vogliamo tenere il lock. Release esplicita la
-      // fa il branch sopra quando activeCount diventa 0.
     };
-  }, [activeCount]);
+  }, [activeCount, pump]);
 
-  // ---- Notifica push aggregata "Caricamento completato" --------------------
-  // Trigger: activeCount passa da >0 a 0 e nella sessione abbiamo terminato
-  // almeno 1 job con success. Invia UNA push aggregata col conteggio.
+  // ---- Notifica push aggregata "Caricamento completato" ---------------------
   React.useEffect(() => {
     const prev = prevActiveRef.current;
     prevActiveRef.current = activeCount;
     if (prev > 0 && activeCount === 0 && sessionDoneRef.current > 0) {
       const count = sessionDoneRef.current;
       sessionDoneRef.current = 0;
-      // Fire-and-forget: non interessano errori/permessi push qui.
       void fetch('/api/upload/notify-batch-done', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -470,6 +493,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
     retry,
     remove,
     activeCount,
+    ripresiCount,
   };
 
   return (
@@ -479,7 +503,7 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
   );
 }
 
-/** Hook di accesso alla queue. Ritorna null se fuori dal Provider. */
+/** Hook di accesso alla queue. */
 export function useUploadQueue(): UploadQueueContextValue {
   const ctx = React.useContext(UploadQueueContext);
   if (!ctx) {
@@ -488,8 +512,7 @@ export function useUploadQueue(): UploadQueueContextValue {
   return ctx;
 }
 
-/** Variante "safe" che ritorna null fuori dal Provider (per componenti
- *  che possono essere usati anche prima del mount del Provider). */
+/** Variante "safe" che ritorna null fuori dal Provider. */
 export function useUploadQueueOptional(): UploadQueueContextValue | null {
   return React.useContext(UploadQueueContext);
 }
