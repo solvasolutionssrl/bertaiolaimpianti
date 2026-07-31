@@ -162,3 +162,42 @@ python3 costruisci_shortcut.py CaricaSuKommessa kmsa_xxxxx
 
 Il file diventa **una credenziale**: si consegna via AirDrop, mai con un link,
 e se il telefono si perde si revoca il token da `/admin/token-app`.
+
+## Il campo file di un modulo: doppio involucro
+
+La forma corretta, ricavata configurando l'azione a mano nella UI e rileggendo
+il comando dal database. Due tentativi a naso erano falliti in modi diversi:
+
+| Cosa | Esito |
+|---|---|
+| `WFItemType: 5` + allegato **nudo** | il parser va in eccezione, **l'app crasha all'import** |
+| `WFItemType: 0` + allegato nudo | si importa, ma il file parte come **testo** e al server non arriva |
+| `WFItemType: 5` + allegato **avvolto** | ✅ |
+
+```python
+{
+  "WFItemType": 5,
+  "WFKey": {...},
+  "WFValue": {
+    "WFSerializationType": "WFTokenAttachmentParameterState",   # involucro esterno
+    "Value": {
+      "WFSerializationType": "WFTextTokenAttachment",           # involucro interno
+      "Value": {"Type": "ExtensionInput"},
+    },
+  },
+}
+```
+
+Il tipo 5 era giusto fin dall'inizio: sbagliato era il valore.
+
+## Ricerca senza rami condizionali
+
+`--ricerca` aggiunge in testa un "Chiedi input" e passa la risposta come `?q=`.
+Nessun `se`: il caso vuoto si comporta da solo, perché `?q=` vuoto fa tornare la
+lista completa. Un ramo condizionale dentro un comando rapido sarebbe più
+fragile di quanto valga.
+
+```sh
+python3 costruisci_shortcut.py CaricaSuKommessa            kmsa_xxx
+python3 costruisci_shortcut.py CaricaSuKommessa-conRicerca kmsa_xxx --ricerca
+```

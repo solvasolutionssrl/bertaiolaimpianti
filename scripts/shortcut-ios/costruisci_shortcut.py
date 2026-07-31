@@ -29,6 +29,7 @@ from pathlib import Path
 # multipart significherebbe spedire il corpo due volte.
 BASE_URL = "https://www.kommessa.it"
 SEGNAPOSTO_TOKEN = "INCOLLA-QUI-IL-TUO-TOKEN"
+CON_RICERCA = False
 
 # Elenco completo delle classi di contenuto accettate, copiato da un comando
 # reale. I comandi veri le dichiarano tutte.
@@ -91,6 +92,33 @@ def input_comando() -> dict:
     }
 
 
+def campo_file(nome: str) -> dict:
+    """
+    Campo FILE di un modulo (`WFHTTPBodyType: "Form"`).
+
+    ⚠️ La forma esatta, ricavata leggendo un'azione configurata a mano nella UI
+    e rileggendola dal database — due tentativi a naso erano falliti in modi
+    diversi e istruttivi:
+      * `WFItemType: 5` con l'allegato NUDO come valore → il parser va in
+        eccezione e l'app crasha all'import (comando non installabile);
+      * `WFItemType: 0` con l'allegato nudo → si importa, ma il file viene
+        spedito come TESTO e al server non arriva nessun allegato.
+    Il tipo 5 e' corretto; il valore va **avvolto due volte**, con un
+    `WFTokenAttachmentParameterState` attorno al `WFTextTokenAttachment`.
+    """
+    return {
+        "WFItemType": 5,
+        "WFKey": {
+            "Value": {"string": nome, "attachmentsByRange": {}},
+            "WFSerializationType": "WFTextTokenString",
+        },
+        "WFValue": {
+            "Value": input_comando(),
+            "WFSerializationType": "WFTokenAttachmentParameterState",
+        },
+    }
+
+
 def ingresso(uuid_azione: str, nome: str) -> dict:
     """
     Aggancia l'input di un'azione all'uscita di un'altra.
@@ -113,15 +141,51 @@ def azione(identificatore: str, parametri: dict) -> dict:
     }
 
 
-def costruisci() -> dict:
+def costruisci(con_ricerca: bool = False) -> dict:
     uuid_token = uid()
     uuid_etichette = uid()
     uuid_messaggio = uid()
     uuid_lista = uid()      # GET commesse
     uuid_scelta = uid()     # scelta dell'utente
     uuid_upload = uid()     # POST upload
+    uuid_cerca = uid()      # domanda di ricerca (solo variante con ricerca)
 
-    azioni = [
+    # Ricerca senza rami condizionali: si chiede SEMPRE, e il caso vuoto si
+    # comporta da solo — `?q=` vuoto fa tornare la lista completa. Un `se`
+    # dentro un comando rapido sarebbe piu' fragile di quanto valga.
+    prologo = (
+        [
+            azione(
+                "is.workflow.actions.ask",
+                {
+                    "UUID": uuid_cerca,
+                    "WFAskActionPrompt": "Cerca una commessa (vuoto = tutte)",
+                    "WFInputType": "Text",
+                    "WFAskActionDefaultAnswer": "",
+                },
+            )
+        ]
+        if con_ricerca
+        else []
+    )
+
+    url_commesse = (
+        {
+            "Value": {
+                "string": f"{BASE_URL}/api/link/commesse?q={OGGETTO}",
+                "attachmentsByRange": {
+                    f"{{{len(BASE_URL) + len('/api/link/commesse?q=')}, 1}}": uscita_azione(
+                        uuid_cerca, "Risposta fornita"
+                    )
+                },
+            },
+            "WFSerializationType": "WFTextTokenString",
+        }
+        if con_ricerca
+        else f"{BASE_URL}/api/link/commesse"
+    )
+
+    azioni = prologo + [
         # 1 — il token. È l'unica cosa che l'utente deve toccare.
         azione(
             "is.workflow.actions.gettext",
@@ -140,7 +204,7 @@ def costruisci() -> dict:
             "is.workflow.actions.downloadurl",
             {
                 "UUID": uuid_lista,
-                "WFURL": f"{BASE_URL}/api/link/commesse",
+                "WFURL": url_commesse,
                 "WFHTTPMethod": "GET",
                 "ShowHeaders": True,
                 "WFHTTPHeaders": {
@@ -274,22 +338,7 @@ def costruisci() -> dict:
                                     "WFSerializationType": "WFTextTokenString",
                                 },
                             },
-                            {
-                                # WFItemType 0 anche per il file.
-                                # Il 5 (che pare l'ovvio "tipo file") NON esiste
-                                # fra i tipi di un WFDictionaryFieldValue: fa
-                                # crashare il parser in lettura, quindi il
-                                # comando non si importa nemmeno — verificato
-                                # sul banco di prova, `scripts/shortcut-ios`.
-                                # Il fatto che il valore sia un allegato basta a
-                                # Shortcuts per spedirlo come file.
-                                "WFItemType": 0,
-                                "WFKey": {
-                                    "Value": {"string": "file", "attachmentsByRange": {}},
-                                    "WFSerializationType": "WFTextTokenString",
-                                },
-                                "WFValue": input_comando(),
-                            },
+                            campo_file("file"),
                         ]
                     },
                     "WFSerializationType": "WFDictionaryFieldValue",
@@ -353,7 +402,9 @@ def main() -> int:
     # una copia gia' pronta per UNA persona (che quindi non deve incollare
     # niente). Il file diventa una credenziale: si consegna via AirDrop, mai
     # con un link, e si revoca il token se il telefono si perde.
-    global SEGNAPOSTO_TOKEN
+    global SEGNAPOSTO_TOKEN, CON_RICERCA
+    CON_RICERCA = "--ricerca" in sys.argv
+    sys.argv = [a for a in sys.argv if a != "--ricerca"]
     if len(sys.argv) > 2:
         SEGNAPOSTO_TOKEN = sys.argv[2]
     destinazione = Path(sys.argv[1] if len(sys.argv) > 1 else "CaricaSuKommessa")
@@ -363,7 +414,7 @@ def main() -> int:
     firmato = destinazione.with_suffix(".shortcut")
 
     with open(non_firmato, "wb") as f:
-        plistlib.dump(costruisci(), f, fmt=plistlib.FMT_BINARY)
+        plistlib.dump(costruisci(con_ricerca=CON_RICERCA), f, fmt=plistlib.FMT_BINARY)
     print(f"plist scritto: {non_firmato} ({non_firmato.stat().st_size} byte)")
 
     esito = subprocess.run(
