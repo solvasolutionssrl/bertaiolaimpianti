@@ -928,7 +928,7 @@ function Step3Voci({
       <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-0.5">
         {groups.length === 0 ? (
           <div className="rounded-md border border-dashed border-border bg-muted/20 p-6 text-center text-xs text-muted-foreground">
-            Nessuna voce trovata per "{search}".
+            Nessuna voce trovata per &quot;{search}&quot;.
             <br />
             Se serve davvero, aggiungila con <span className="font-medium text-foreground">+ Nuova voce</span>.
           </div>
@@ -1151,7 +1151,7 @@ function NuovaVoceMobileDialog({
               </ul>
               <p className="mt-1 text-[10px] text-amber-900/70 dark:text-amber-200/70">
                 Se è davvero diversa, conferma. Altrimenti seleziona quella
-                già esistente dall'elenco.
+                già esistente dall&apos;elenco.
               </p>
             </div>
           ) : null}

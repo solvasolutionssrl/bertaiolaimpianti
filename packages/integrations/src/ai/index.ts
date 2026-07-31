@@ -46,10 +46,15 @@ export async function proposeFolderName(input: NamingInput): Promise<NamingPropo
     .filter(Boolean)
     .join('\n');
 
+  // NB: qui c'era un `cache_control: { type: 'ephemeral' }` sul system prompt.
+  // Era un no-op: il prompt caching richiede un prefisso minimo (4096 token su
+  // Haiku 4.5) e questo system prompt ne fa circa 130 — quindi non ha mai messo
+  // in cache niente, silenziosamente. In più il campo non esiste sui tipi non
+  // beta dell'SDK 0.32.1, e faceva fallire `pnpm typecheck` sul monorepo.
   const res = await client().messages.create({
     model: HAIKU_MODEL,
     max_tokens: 200,
-    system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+    system: SYSTEM,
     messages: [{ role: 'user', content: userPrompt }],
   });
 
