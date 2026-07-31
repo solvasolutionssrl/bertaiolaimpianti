@@ -25,7 +25,9 @@ import sys
 import uuid
 from pathlib import Path
 
-BASE_URL = "https://kommessa.it"
+# URL CANONICO, con il www: l'apex risponde 307 verso www, e per un POST
+# multipart significherebbe spedire il corpo due volte.
+BASE_URL = "https://www.kommessa.it"
 SEGNAPOSTO_TOKEN = "INCOLLA-QUI-IL-TUO-TOKEN"
 
 # Carattere segnaposto che Shortcuts usa per innestare una variabile nel testo.

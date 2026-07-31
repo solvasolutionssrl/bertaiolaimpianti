@@ -61,3 +61,15 @@ Il token si crea (e si revoca) da **`/admin/token-app`**.
   Per questo l'upload lo fa il comando stesso e a fine giro c'è una notifica.
 - Tetto di 200 MB per invio (il server bufferizza in memoria). Per i video
   lunghi conviene mandarne pochi per volta.
+
+## Gotcha: usare l'URL con il `www`
+
+`kommessa.it` risponde **307 verso `www.kommessa.it`**. Per un GET non cambia
+nulla, ma per il POST multipart significherebbe spedire il corpo due volte.
+`BASE_URL` nello script punta quindi all'URL canonico con il `www`.
+
+Verifica veloce degli endpoint (401 atteso senza token valido):
+
+```sh
+curl -s -w "\n%{http_code}\n" https://www.kommessa.it/api/link/commesse
+```
