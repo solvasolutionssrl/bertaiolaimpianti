@@ -38,7 +38,7 @@ import {
   type MediaFile,
 } from '../../office/commesse/nuova/_components/media-attach-section';
 import { type UploadProgressMap } from '../../office/commesse/nuova/_lib/upload-media';
-import { compressImage } from '../../office/commesse/nuova/_lib/compress-image';
+import { preparaMedia } from '../../_lib/prepara-media';
 import { useUploadQueue } from '../../_components/upload-queue-provider';
 
 interface VoiceSuggested {
@@ -251,12 +251,13 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
       // il caricamento prosegue in sottofondo — con ripresa automatica alla
       // riapertura dell'app se il telefono viene chiuso.
       if (mediaFiles.length > 0) {
-        // Prima i file che non vanno compressi: partono all'istante.
+        // Prima video e PDF, che non hanno preparazione: partono all'istante.
         for (const f of mediaFiles.filter((x) => x.kind !== 'image')) {
           accodaMedia(f, f.file, r.commessaId);
         }
+        // Poi le foto, a piena qualità (vedi `preparaMedia`).
         for (const f of mediaFiles.filter((x) => x.kind === 'image')) {
-          accodaMedia(f, await compressImage(f.file), r.commessaId);
+          accodaMedia(f, await preparaMedia(f.file, 'image'), r.commessaId);
         }
       }
 

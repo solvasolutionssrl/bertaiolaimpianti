@@ -1,8 +1,8 @@
 # Logiche Upload Media — analisi difetti e piano di intervento
 
-**Versione**: 2.0
+**Versione**: 2.1
 **Stato**: ✅ tutte le fasi implementate, verificate con test e build
-**Data**: 30/07/2026
+**Data**: 31/07/2026 (§4quater: attesa dopo il picker, foto a piena qualità)
 **Ambito**: upload foto/video/PDF verso R2 (poi sync Nextcloud) da PWA mobile e office
 
 > Documento nato dall'analisi di due problemi segnalati dal cliente Bertaiola:
@@ -239,6 +239,9 @@ si riproduce in ufficio su Chrome/Firefox desktop.
 ⚠️ **Non "correggerla".** Sembra un'ottimizzazione ma è un peggioramento: si
 otterrebbero upload 3× più pesanti e video che l'ufficio non riesce a vedere.
 
+Resta però il problema di **come viene vissuta**: dal 31/07/2026 l'attesa viene
+almeno dichiarata a schermo, invece di sembrare un blocco → §4quater.
+
 Per completezza, le leve esistenti (tutte lato iPhone, **nessuna lato codice**:
 non esiste un attributo HTML che controlli la conversione):
 
@@ -247,6 +250,52 @@ non esiste un attributo HTML che controlli la conversione):
 | Fotocamera → Formati → "Più compatibile" | registra già in H.264 → niente conversione all'export | sorgenti molto più grandi |
 | Foto → "Mantieni originali" | documentata per il trasferimento a Mac/PC; effetto sull'upload web **non documentato** | da verificare sul device |
 | Salvare il video in File e caricarlo da "Scegli file" | bypassa la compressione | passaggi manuali + si caricano i MB pieni |
+
+## 4quater. L'attesa dopo "Aggiungi" — cosa è nostro e cosa no (31/07/2026)
+
+Segnalazione: *"faccio allega, lui pensa pensa pensa anche dopo il mio ok e poi
+fa l'upload — e succede anche sul telefono del cliente, quindi è una modifica
+nostra"*.
+
+**Verificato: l'attesa è di due nature diverse, sovrapposte.**
+
+| Fase | Chi la fa | Quando è comparsa | Si può togliere? |
+|---|---|---|---|
+| Esportazione/ricodifica dalla libreria | **iOS**, prima che il JS esista | mai cambiata: l'`<input accept="image/*,video/*">` che la innesca è lì dal 21/05/2026 (`0178dd2`, verificabile con `git log -S`) | no — vedi §4ter |
+| Ricompressione canvas di ogni foto (2048px, JPEG 0.82) | **nostra**, sul main thread, una foto alla volta | dal 21/05/2026, ma **fino al 30/07 nella creazione commessa girava in `Promise.all`**; l'unificazione l'ha resa sequenziale | sì → tolta |
+| Copia del file su IndexedDB | **nostra** | 30/07/2026 (`ba82253`): è il prezzo della ripresa dopo la chiusura dell'app | no, si tiene: è la garanzia che il cliente ha chiesto |
+| SHA-256 del file intero a fine upload | **nostra**, main thread | preesistente, soglia 100 MB | sì → soglia a 16 MB |
+
+Quindi: **la conversione di iOS non l'abbiamo introdotta noi** e non è nuova.
+Nuovo è che, dal 30/07, tutto il lavoro nostro si concentra **subito dopo il
+picker** invece di essere spalmato — e resta muto. Da lì la lettura "adesso iOS
+comprime e si blocca".
+
+### Decisioni
+
+1. **Foto a piena qualità** (`apps/web/app/_lib/prepara-media.ts`). Si carica il
+   file come lo consegna il telefono. Unica valvola: sopra **12 MB** si comprime
+   ancora (ProRAW e simili, dove il costo di rete è reale). Costo della scelta:
+   una foto passa da ~0,9 MB a ~2,5-3,5 MB. Beneficio: l'upload parte
+   nell'istante in cui il picker restituisce, e il main thread resta libero per
+   far avanzare i trasferimenti.
+   ⚠️ Se un giorno la banda tornasse a essere il problema, la compressione va
+   **rimessa in un Web Worker** (`createImageBitmap` + `OffscreenCanvas`), non
+   sul main thread: è quello il difetto, non la qualità.
+2. **L'attesa del picker si dichiara** (`_lib/use-attesa-picker.ts`): fra il
+   click sull'input e il `change` — l'unica finestra in cui sappiamo che iOS sta
+   lavorando — dopo 1,2 s compare "Il telefono sta preparando i file…". Si
+   chiude sul `change`, sull'evento `cancel` e comunque dopo 3 minuti. Presente
+   nell'uploader ricco (`MediaAttachSection`: creazione commessa, sopralluogo,
+   Scatto, tab Media) e negli allegati riunione.
+   Verificato con un harness in Chrome headless a tempo virtuale sul codice
+   reale dell'hook: 7 asserzioni su 7 (comparsa, non-comparsa sotto 1,2 s,
+   chiusura su file ricevuti, su annulla, e resa automatica).
+3. **SHA-256 solo sotto 16 MB** (`upload-queue/engine.ts`). `crypto.subtle` non
+   ha forma a flusso: sopra soglia significava tenere in RAM il video intero e
+   bloccare il main thread **al 100%**, quando l'utente si aspetta "fatto".
+   L'impronta viene solo archiviata (`file_refs.sha256`), mai verificata dal
+   server — che si fida dell'HEAD su R2.
 
 ## 5. Piano di intervento (eseguito)
 

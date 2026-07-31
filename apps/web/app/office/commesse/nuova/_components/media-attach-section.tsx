@@ -34,6 +34,7 @@ import {
   fmtScattoDate,
   readImageDate,
 } from '../../../../_lib/read-image-date';
+import { useAttesaPicker } from '../../../../_lib/use-attesa-picker';
 
 export interface MediaFile {
   id: string;
@@ -95,7 +96,16 @@ export function MediaAttachSection({
   const [validationErrors, setValidationErrors] = React.useState<ValidationError[]>([]);
   const [confirmCancel, setConfirmCancel] = React.useState(false);
 
+  // Attesa del picker di sistema: iOS esporta e ricodifica gli originali prima
+  // di consegnarli, e in quella finestra a schermo non succede niente.
+  const {
+    apri: apriPicker,
+    arrivati,
+    mostra: mostraAttesa,
+  } = useAttesaPicker([inputRef, cameraInputRef, docInputRef]);
+
   const addFiles = async (list: FileList | null) => {
+    arrivati();
     if (!list || list.length === 0) return;
     const errors: ValidationError[] = [];
     const accepted: MediaFile[] = [];
@@ -240,11 +250,28 @@ export function MediaAttachSection({
           </div>
         ) : null}
 
+        {/* Il telefono sta esportando gli originali: spiegare l'attesa, che
+            altrimenti sembra un blocco dell'app. */}
+        {mostraAttesa ? (
+          <div className="flex items-start gap-2 rounded-md border border-primary/25 bg-primary/[0.05] px-3 py-2 text-xs">
+            <Loader2
+              className="mt-px h-4 w-4 shrink-0 animate-spin text-primary"
+              aria-hidden="true"
+            />
+            <span>
+              <strong>Il telefono sta preparando i file.</strong> Prima di
+              consegnarli li converte (i video soprattutto): può volerci
+              qualche decina di secondi. Il caricamento parte da solo appena
+              finisce.
+            </span>
+          </div>
+        ) : null}
+
         {files.length === 0 ? (
           <div className={onScanPdf ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-3 gap-2'}>
             <button
               type="button"
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => apriPicker(cameraInputRef)}
               className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/30 bg-primary-soft/20 text-primary transition hover:bg-primary-soft/40 active:scale-[.98]"
             >
               <Camera className="h-6 w-6 opacity-70" aria-hidden="true" />
@@ -253,7 +280,7 @@ export function MediaAttachSection({
             </button>
             <button
               type="button"
-              onClick={() => inputRef.current?.click()}
+              onClick={() => apriPicker(inputRef)}
               className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition hover:bg-muted/40 active:scale-[.98]"
             >
               <Paperclip className="h-6 w-6 opacity-70" aria-hidden="true" />
@@ -262,7 +289,7 @@ export function MediaAttachSection({
             </button>
             <button
               type="button"
-              onClick={() => docInputRef.current?.click()}
+              onClick={() => apriPicker(docInputRef)}
               className="flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 text-muted-foreground transition hover:bg-muted/40 active:scale-[.98]"
             >
               <FileText className="h-6 w-6 opacity-70" aria-hidden="true" />
@@ -304,7 +331,7 @@ export function MediaAttachSection({
                       {prog.step === 'compressing' ? (
                         <>
                           <Loader2 className="h-5 w-5 animate-spin text-white" aria-hidden="true" />
-                          <span className="text-[10px] font-semibold text-white">Comprimo…</span>
+                          <span className="text-[10px] font-semibold text-white">Preparo…</span>
                         </>
                       ) : prog.step === 'processing' ? (
                         <>
@@ -389,7 +416,7 @@ export function MediaAttachSection({
                 <>
                   <button
                     type="button"
-                    onClick={() => cameraInputRef.current?.click()}
+                    onClick={() => apriPicker(cameraInputRef)}
                     aria-label="Scatta una foto"
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-primary/40 bg-primary-soft/30 text-primary transition hover:bg-primary-soft/50 active:scale-[.98]"
                   >
@@ -398,7 +425,7 @@ export function MediaAttachSection({
                   </button>
                   <button
                     type="button"
-                    onClick={() => inputRef.current?.click()}
+                    onClick={() => apriPicker(inputRef)}
                     aria-label="Allega foto o video dalla galleria"
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
                   >
@@ -407,7 +434,7 @@ export function MediaAttachSection({
                   </button>
                   <button
                     type="button"
-                    onClick={() => docInputRef.current?.click()}
+                    onClick={() => apriPicker(docInputRef)}
                     aria-label="Allega un file PDF o documento"
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
                   >
@@ -428,7 +455,7 @@ export function MediaAttachSection({
                 <>
                   <button
                     type="button"
-                    onClick={() => cameraInputRef.current?.click()}
+                    onClick={() => apriPicker(cameraInputRef)}
                     aria-label="Scatta un'altra foto"
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-primary/40 bg-primary-soft/30 text-primary transition hover:bg-primary-soft/50 active:scale-[.98]"
                   >
@@ -439,7 +466,7 @@ export function MediaAttachSection({
                   </button>
                   <button
                     type="button"
-                    onClick={() => inputRef.current?.click()}
+                    onClick={() => apriPicker(inputRef)}
                     aria-label="Allega altri file dalla libreria"
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
                   >
@@ -450,7 +477,7 @@ export function MediaAttachSection({
                   </button>
                   <button
                     type="button"
-                    onClick={() => docInputRef.current?.click()}
+                    onClick={() => apriPicker(docInputRef)}
                     aria-label="Allega un file PDF o documento"
                     className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-border bg-muted/30 text-muted-foreground transition hover:bg-muted/50 active:scale-[.98]"
                   >

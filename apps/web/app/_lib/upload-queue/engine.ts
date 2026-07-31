@@ -36,7 +36,23 @@ import type {
   ResumeResponseMultipart,
 } from '../media-upload-types';
 
-const DEFAULT_SHA256_MAX = 100 * 1024 * 1024; // 100 MB
+/**
+ * Sopra questa dimensione NON si calcola l'impronta SHA-256 lato client.
+ *
+ * `crypto.subtle.digest` non ha una forma a flusso: per calcolarla bisogna
+ * caricare **tutto** il file in memoria (`blob.arrayBuffer()`) e macinarlo sul
+ * main thread. Con la soglia precedente (100 MB) un video da 90 MB si portava
+ * dietro un'allocazione da 90 MB e qualche secondo di blocco **subito dopo
+ * l'ultima parte** — cioè al 100%, quando l'utente si aspetta "fatto" e invece
+ * il telefono resta fermo. Su iOS, con la memoria già occupata dai buffer
+ * dell'upload, è anche un ottimo modo per farsi terminare la scheda.
+ *
+ * L'impronta serve solo a essere archiviata (`file_refs.sha256`, per una
+ * eventuale deduplica futura): non viene verificata dal server, che si fida
+ * dell'HEAD su R2. Rinunciarvi sui file grandi non toglie nessuna garanzia.
+ * Sotto la soglia (foto e PDF) resta, e costa qualche decina di millisecondi.
+ */
+const DEFAULT_SHA256_MAX = 16 * 1024 * 1024; // 16 MB
 const DEFAULT_CONCURRENCY = 3;
 /** Nessun byte trasferito per questo tempo ⇒ la richiesta è considerata morta. */
 const STALLO_MS = 45_000;

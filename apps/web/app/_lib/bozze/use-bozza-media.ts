@@ -31,7 +31,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useUploadQueue } from '../../_components/upload-queue-provider';
-import { compressImage } from '../../office/commesse/nuova/_lib/compress-image';
+import { preparaMedia } from '../prepara-media';
 import type { UploadProgressMap } from '../../office/commesse/nuova/_lib/upload-media';
 import type { MediaFile } from '../../office/commesse/nuova/_components/media-attach-section';
 import type { UploadJob } from '../upload-queue/types';
@@ -94,12 +94,14 @@ export function useBozzaMedia(bozzaId: string, flush: () => Promise<void>) {
       void (async () => {
         try {
           await flush(); // la bozza deve esistere lato server prima di /init
-          // Prima i file che non vanno compressi: partono all'istante.
+          // Prima video e PDF, che non hanno preparazione: partono all'istante.
           for (const f of nuovi.filter((x) => x.kind !== 'image')) {
             accoda(f, f.file);
           }
+          // Poi le foto: dal 31/07/2026 a piena qualità, quindi anche queste
+          // senza attesa salvo il file enorme (vedi `preparaMedia`).
           for (const f of nuovi.filter((x) => x.kind === 'image')) {
-            accoda(f, await compressImage(f.file));
+            accoda(f, await preparaMedia(f.file, 'image'));
           }
         } catch {
           // Rilascia la prenotazione: al prossimo giro si riprova.

@@ -9,7 +9,7 @@ import {
   type MediaFile,
 } from '../../../../office/commesse/nuova/_components/media-attach-section';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
-import { compressImage } from '../../../../office/commesse/nuova/_lib/compress-image';
+import { preparaMedia } from '../../../../_lib/prepara-media';
 
 interface Props {
   commessaId: string;
@@ -67,16 +67,15 @@ export function AddMediaSection({ commessaId }: Props) {
       jobIdsRef.current.add(jobId);
     };
 
-    // PRIMA i file che non vanno compressi (video, PDF): partono all'istante.
-    // Prima erano in un unico ciclo `for` con `await compressImage(...)`: un
-    // video in fondo alla selezione aspettava la compressione di tutte le foto
-    // — su iPhone anche decine di secondi — e solo dopo iniziava a salire.
+    // PRIMA video e PDF, che non passano da nessuna preparazione: partono
+    // all'istante. Poi le foto — che dal 31/07/2026 salgono a piena qualità,
+    // quindi anche loro senza attesa salvo il caso raro del file enorme
+    // (vedi `preparaMedia`).
     for (const f of daAccodare.filter((x) => x.kind !== 'image')) {
       accoda(f, f.file);
     }
-    // POI le immagini, compresse una alla volta (2048px, JPEG 0.82).
     for (const f of daAccodare.filter((x) => x.kind === 'image')) {
-      accoda(f, await compressImage(f.file));
+      accoda(f, await preparaMedia(f.file, 'image'));
     }
   };
 

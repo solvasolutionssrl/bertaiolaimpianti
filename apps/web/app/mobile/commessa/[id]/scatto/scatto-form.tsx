@@ -9,7 +9,7 @@ import {
   MediaAttachSection,
   type MediaFile,
 } from '../../../../office/commesse/nuova/_components/media-attach-section';
-import { compressImage } from '../../../../office/commesse/nuova/_lib/compress-image';
+import { preparaMedia } from '../../../../_lib/prepara-media';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
 
@@ -97,9 +97,10 @@ export function ScattoForm({ commessaId, voci, preselectedVoceId }: ScattoFormPr
     const daCaricare = files;
     const voceIdNum = voceId !== '' ? Number(voceId) : null;
     for (const f of daCaricare) {
-      // Le immagini vengono compresse lato client (come la tab Media); video e
-      // PDF salgono originali. La coda globale carica poi in background.
-      const blob = f.kind === 'image' ? await compressImage(f.file) : f.file;
+      // Piena qualità: si carica il file come arriva dal telefono (solo le foto
+      // enormi vengono ridotte — vedi `preparaMedia`). La coda globale carica
+      // poi in background.
+      const blob = await preparaMedia(f.file, f.kind);
       queue.enqueue({
         fileBlob: blob,
         fileName: blob.name || f.file.name,

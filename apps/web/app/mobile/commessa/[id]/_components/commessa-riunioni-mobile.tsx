@@ -19,6 +19,7 @@ import { useUploadQueue } from '../../../../_components/upload-queue-provider';
 import { VIDEO_MAX_SIZE_BYTES } from '../../../../_lib/upload-queue/types';
 import { useAlert } from '../../../../_components/confirm-provider';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
+import { useAttesaPicker } from '../../../../_lib/use-attesa-picker';
 
 export interface RiunioneAllegatoMobile {
   id: string;
@@ -346,6 +347,13 @@ function AllegatiAttacher({
   const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
   const completedJobIdsRef = React.useRef<Set<string>>(new Set());
   const [scannerOpen, setScannerOpen] = React.useState(false);
+  // Attesa del picker di sistema: iOS esporta e ricodifica gli originali prima
+  // di consegnarli, e in quella finestra a schermo non succede niente.
+  const { apri, arrivati, mostra: mostraAttesa } = useAttesaPicker([
+    galleryRef,
+    cameraRef,
+    docRef,
+  ]);
 
   // Rileva il done dei job di questa riunione → refresh server-side.
   React.useEffect(() => {
@@ -364,6 +372,7 @@ function AllegatiAttacher({
   }, [queue.jobs, router]);
 
   const enqueueFiles = (files: FileList | null) => {
+    arrivati();
     if (!files || files.length === 0) return;
     const oversized: string[] = [];
     for (const file of Array.from(files)) {
@@ -403,11 +412,24 @@ function AllegatiAttacher({
       <p className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-primary/80">
         Aggiungi alla riunione
       </p>
+      {mostraAttesa ? (
+        <div className="mb-1.5 flex items-start gap-1.5 rounded-md border border-primary/25 bg-primary/[0.06] px-2 py-1.5 text-[11px] leading-snug">
+          <Loader2
+            className="mt-px h-3.5 w-3.5 shrink-0 animate-spin text-primary"
+            aria-hidden="true"
+          />
+          <span>
+            <strong>Il telefono sta preparando i file.</strong> Prima di
+            consegnarli li converte: sui video può volerci qualche decina di
+            secondi.
+          </span>
+        </div>
+      ) : null}
       {/* 4 modalità: Foto/video · Scatta · File (PDF esistente) · Scansione (PDF da foto) */}
       <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
-          onClick={() => galleryRef.current?.click()}
+          onClick={() => apri(galleryRef)}
           className="flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-3 py-2.5 text-primary transition-colors hover:bg-primary/5 active:scale-[0.98]"
         >
           <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -415,7 +437,7 @@ function AllegatiAttacher({
         </button>
         <button
           type="button"
-          onClick={() => cameraRef.current?.click()}
+          onClick={() => apri(cameraRef)}
           aria-label="Scatta foto"
           className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
         >
@@ -424,7 +446,7 @@ function AllegatiAttacher({
         </button>
         <button
           type="button"
-          onClick={() => docRef.current?.click()}
+          onClick={() => apri(docRef)}
           aria-label="Allega un file PDF"
           className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
         >
