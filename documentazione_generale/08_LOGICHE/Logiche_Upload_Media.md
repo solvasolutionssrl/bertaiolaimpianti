@@ -297,6 +297,28 @@ comprime e si blocca".
    L'impronta viene solo archiviata (`file_refs.sha256`), mai verificata dal
    server — che si fida dell'HEAD su R2.
 
+### Banco di prova ripetibile — `scripts/banco-upload`
+
+Quest'area è quella che il cliente teme di più, quindi il collaudo non è
+"guardare il codice": `node scripts/banco-upload/prova.mjs` guida **Chrome
+emulato iPhone** sulla vera tab Media (rotta `/prova-upload`, che in produzione
+è 404) e verifica **17 punti** — piena qualità byte-per-byte, valvola dei 12 MB,
+avviso del picker, niente SHA-256 sui video, progresso mai all'indietro con 2
+video in parallelo e una parte che fallisce, ripresa via `/resume`, e ripartenza
+dopo la chiusura dell'app. Istruzioni e trappole in
+`scripts/banco-upload/README.md`.
+
+Due trappole già pagate, da non ripetere: intercettando i PUT dal protocollo di
+debug **il corpo non viene mai trasmesso** (niente eventi di avanzamento: il
+collaudo del progresso sarebbe finto), e simulando il guasto **buttando giù il
+socket** è Chrome a ritentare da solo, quindi l'app non vede alcun errore e il
+banco passa senza aver provato niente. Servono un server vero che consuma il
+corpo al rallentatore e un **500 vero** a metà parte.
+
+Resta fuori portata di qualunque banco su Chrome: la conversione di iOS, le
+stranezze di IndexedDB su WebKit, la sospensione del JS in background. Quelle si
+vedono solo su un telefono vero.
+
 ## 5. Piano di intervento (eseguito)
 
 ### ✅ Fase 1 — il bug del progresso
