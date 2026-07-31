@@ -20,6 +20,11 @@ function isPublic(pathname: string): boolean {
   // Rotte di callback magic link (devono settare cookie, ma sono route handler:
   // non richiedono updateSession prima — il route handler stesso scrive i cookie).
   if (pathname.startsWith('/portal/auth/callback')) return true;
+  // Integrazioni esterne (comando iOS "Carica su Kommessa"): si autenticano da
+  // sole con un token Bearer, NON con i cookie di sessione. Senza questa
+  // esclusione `updateSession` non trova la sessione e rimanda al login con un
+  // 307 — il token non verrebbe mai nemmeno letto.
+  if (pathname.startsWith('/api/link/')) return true;
   return false;
 }
 
