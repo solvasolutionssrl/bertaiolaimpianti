@@ -24,7 +24,14 @@ export const maxDuration = 15;
  * campi anche diversi ("rossi bagno" trova "Rossi Mario — Rifacimento bagno").
  */
 
-const LIMITE_RECENTI = 10;
+// Si mandano TUTTE le commesse aperte, ordinate dalla più recente.
+//
+// La schermata "Scegli da elenco" di iOS non ha un campo di ricerca, quindi la
+// tentazione e' accorciare la lista. Ma questo comando nasce proprio per
+// ritrovare materiale di settimane fa: una commessa esclusa dalla lista
+// sarebbe **irraggiungibile**, senza alcun ripiego sul telefono. Meglio una
+// lista lunga in cui le piu' probabili stanno in cima. (Bertaiola: ~111 aperte.)
+const LIMITE_ELENCO = 300;
 const LIMITE_RICERCA = 15;
 
 interface RigaCommessa {
@@ -66,7 +73,7 @@ export async function GET(request: NextRequest) {
 
   // In ricerca si allarga il bacino prima di filtrare a token in memoria: il
   // match cross-campo non e' esprimibile in una singola query SQL.
-  query = query.limit(q ? 300 : LIMITE_RECENTI);
+  query = query.limit(LIMITE_ELENCO);
 
   const { data, error } = await query;
   if (error) {
