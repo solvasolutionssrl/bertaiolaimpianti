@@ -91,6 +91,21 @@ def input_comando() -> dict:
     }
 
 
+def ingresso(uuid_azione: str, nome: str) -> dict:
+    """
+    Aggancia l'input di un'azione all'uscita di un'altra.
+
+    ⚠️ NON esiste un concatenamento implicito: un'azione senza `WFInput`
+    esplicito non riceve niente, e nella UI si riconosce perche' mostra un
+    segnaposto grigio ("Dizionario") invece del nome del valore. Il guasto e'
+    silenzioso — l'azione restituisce vuoto e il comando tira dritto.
+    """
+    return {
+        "Value": uscita_azione(uuid_azione, nome),
+        "WFSerializationType": "WFTextTokenAttachment",
+    }
+
+
 def azione(identificatore: str, parametri: dict) -> dict:
     return {
         "WFWorkflowActionIdentifier": identificatore,
@@ -102,6 +117,9 @@ def costruisci() -> dict:
     uuid_token = uid()
     uuid_etichette = uid()
     uuid_messaggio = uid()
+    uuid_lista = uid()      # GET commesse
+    uuid_scelta = uid()     # scelta dell'utente
+    uuid_upload = uid()     # POST upload
 
     azioni = [
         # 1 — il token. È l'unica cosa che l'utente deve toccare.
@@ -115,12 +133,13 @@ def costruisci() -> dict:
         # 2 — in variabile, così lo si usa in due punti senza riscriverlo.
         azione(
             "is.workflow.actions.setvariable",
-            {"WFVariableName": "token"},
+            {"WFInput": ingresso(uuid_token, "Testo"), "WFVariableName": "token"},
         ),
         # 3 — elenco commesse recenti.
         azione(
             "is.workflow.actions.downloadurl",
             {
+                "UUID": uuid_lista,
                 "WFURL": f"{BASE_URL}/api/link/commesse",
                 "WFHTTPMethod": "GET",
                 "ShowHeaders": True,
@@ -160,6 +179,7 @@ def costruisci() -> dict:
             "is.workflow.actions.getvalueforkey",
             {
                 "UUID": uuid_etichette,
+                "WFInput": ingresso(uuid_lista, "Contenuti dell'URL"),
                 "WFGetDictionaryValueType": "Value",
                 "WFDictionaryKey": "etichette",
             },
@@ -186,16 +206,21 @@ def costruisci() -> dict:
                     "WFSerializationType": "WFTextTokenString",
                 },
                 "WFChooseFromListActionSelectMultiple": False,
+                "UUID": uuid_scelta,
             },
         ),
         azione(
             "is.workflow.actions.setvariable",
-            {"WFVariableName": "scelta"},
+            {
+                "WFInput": ingresso(uuid_scelta, "Elemento scelto"),
+                "WFVariableName": "scelta",
+            },
         ),
         # 8 — invio: TUTTA la selezione in una richiesta sola.
         azione(
             "is.workflow.actions.downloadurl",
             {
+                "UUID": uuid_upload,
                 "WFURL": f"{BASE_URL}/api/link/upload",
                 "WFHTTPMethod": "POST",
                 "ShowHeaders": True,
@@ -274,7 +299,12 @@ def costruisci() -> dict:
         # 9 — il server manda una frase pronta.
         azione(
             "is.workflow.actions.getvalueforkey",
-            {"UUID": uuid_messaggio, "WFGetDictionaryValueType": "Value", "WFDictionaryKey": "messaggio"},
+            {
+                "UUID": uuid_messaggio,
+                "WFInput": ingresso(uuid_upload, "Contenuti dell'URL"),
+                "WFGetDictionaryValueType": "Value",
+                "WFDictionaryKey": "messaggio",
+            },
         ),
         # 10 — notifica finale.
         azione(
@@ -319,6 +349,13 @@ def costruisci() -> dict:
 
 
 def main() -> int:
+    # Secondo argomento opzionale: il token da incastonare. Serve per produrre
+    # una copia gia' pronta per UNA persona (che quindi non deve incollare
+    # niente). Il file diventa una credenziale: si consegna via AirDrop, mai
+    # con un link, e si revoca il token se il telefono si perde.
+    global SEGNAPOSTO_TOKEN
+    if len(sys.argv) > 2:
+        SEGNAPOSTO_TOKEN = sys.argv[2]
     destinazione = Path(sys.argv[1] if len(sys.argv) > 1 else "CaricaSuKommessa")
     # NB: `shortcuts sign` rifiuta qualunque estensione che non sia .shortcut,
     # anche se il contenuto e' un plist valido.

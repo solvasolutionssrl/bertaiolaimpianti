@@ -109,3 +109,56 @@ Apre il file, aspetta, e dice se l'app lo ha digerito.
 > N+1) e fa sembrare buoni file rotti. `prova.sh` usa un marcatore temporale
 > (`find -newer`) proprio per questo — la prima versione, che contava, mi ha
 > dato tre falsi negativi di fila.
+
+## Il concatenamento implicito NON esiste: `WFInput` sempre
+
+Costruendo un comando nella UI, ogni azione prende in pasto l'uscita della
+precedente. **Nel plist quel collegamento va scritto a mano**: un'azione senza
+`WFInput` esplicito non riceve niente.
+
+Il guasto è **silenzioso e insidioso**: l'azione restituisce vuoto, il comando
+non va in errore e tira dritto fino in fondo. Sintomo tipico: la schermata
+"Scegli da elenco" non compare (lista vuota → Shortcuts la salta) e la notifica
+finale è muta (nessun valore da mostrare).
+
+Si riconosce a occhio nella UI: un'azione agganciata mostra il **nome del
+valore** ("Scegli da *Valore dizionario*"), una scollegata mostra un
+**segnaposto grigio** ("Ottieni Valore per etichette in *Dizionario*").
+
+Vanno agganciate tutte le azioni che consumano un valore — `setvariable`,
+`getvalueforkey`, `choosefromlist` — con:
+
+```python
+"WFInput": {
+    "Value": {"Type": "ActionOutput", "OutputUUID": <uuid>, "OutputName": "..."},
+    "WFSerializationType": "WFTextTokenAttachment",
+}
+```
+
+## Come si ispeziona un comando davvero
+
+Il modo più veloce per capire cosa Shortcuts ha accettato è **importarlo e
+rileggerlo**: all'import l'app normalizza il plist, scarta i parametri che non
+riconosce e riscrive gli altri.
+
+```sh
+shortcuts list                       # c'è?
+shortcuts run <nome>                 # eseguilo e guarda cosa fa
+```
+
+```python
+# e per leggere le azioni come le ha salvate l'app:
+import sqlite3, plistlib
+c = sqlite3.connect("~/Library/Shortcuts/Shortcuts.sqlite")
+c.execute("select a.ZDATA from ZSHORTCUTACTIONS a join ZSHORTCUT s"
+          " on a.ZSHORTCUT = s.Z_PK where s.ZNAME = ?", (nome,))
+```
+
+## Copia personale con il token dentro
+
+```sh
+python3 costruisci_shortcut.py CaricaSuKommessa kmsa_xxxxx
+```
+
+Il file diventa **una credenziale**: si consegna via AirDrop, mai con un link,
+e se il telefono si perde si revoca il token da `/admin/token-app`.
