@@ -33,6 +33,13 @@ export interface ContestoToken {
   tenantId: string;
   userId: string;
   scopes: string[];
+  /**
+   * Ruolo applicativo dell'utente per conto del quale il token agisce.
+   * Serve per l'audit: `audit_events.actor_role` e' un enum `app_role`, quindi
+   * un valore inventato come 'api_token' fa fallire l'insert — e in silenzio,
+   * se non si controlla l'errore.
+   */
+  role: string;
 }
 
 interface RigaToken {
@@ -42,6 +49,7 @@ interface RigaToken {
   scopes: string[] | null;
   revoked_at: string | null;
   last_used_at: string | null;
+  utente: { role: string } | { role: string }[] | null;
 }
 
 /** Estrae il token dall'header `Authorization: Bearer …`. */
@@ -68,7 +76,7 @@ export async function autenticaToken(
   const service = createServiceSupabase();
   const { data, error } = await service
     .from('api_tokens' as never)
-    .select('id, tenant_id, user_id, scopes, revoked_at, last_used_at')
+    .select('id, tenant_id, user_id, scopes, revoked_at, last_used_at, utente:users(role)')
     .eq('token_hash', atteso)
     .maybeSingle();
 
@@ -95,10 +103,12 @@ export async function autenticaToken(
       .eq('id', riga.id);
   }
 
+  const utente = Array.isArray(riga.utente) ? riga.utente[0] : riga.utente;
   return {
     tokenId: riga.id,
     tenantId: riga.tenant_id,
     userId: riga.user_id,
     scopes,
+    role: utente?.role ?? 'tecnico',
   };
 }

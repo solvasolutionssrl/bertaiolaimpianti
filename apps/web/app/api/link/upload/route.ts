@@ -35,8 +35,14 @@ export const maxDuration = 300;
  * Vedi `documentazione_generale/08_LOGICHE/Logiche_Upload_Media.md`.
  */
 
-/** Oltre questa soglia il buffer in memoria su Vercel diventa imprudente. */
-const MAX_BYTES = 200 * 1024 * 1024;
+/**
+ * Tetto per invio. Deve stare SOTTO il limite di corpo richiesta della
+ * piattaforma (100 MB su Vercel): oltre quello la richiesta viene respinta
+ * prima di arrivare qui, con una risposta che non e' JSON — e il comando iOS,
+ * che si aspetta un dizionario, muore con "non ha potuto convertire da Testo a
+ * Dizionario" invece di un messaggio comprensibile.
+ */
+const MAX_BYTES = 90 * 1024 * 1024;
 
 interface RigaCommessa {
   id: string;
@@ -104,7 +110,8 @@ export async function POST(request: NextRequest) {
   if (totale > MAX_BYTES) {
     return Response.json(
       {
-        error: `Selezione troppo grande (${Math.round(totale / 1024 / 1024)} MB, max ${Math.round(MAX_BYTES / 1024 / 1024)} MB). Manda meno file per volta.`,
+        error: 'selezione troppo grande',
+        messaggio: `Selezione troppo grande: ${Math.round(totale / 1024 / 1024)} MB, il massimo e' ${Math.round(MAX_BYTES / 1024 / 1024)} MB. Manda meno file per volta — per i video lunghi usa l'app.`,
       },
       { status: 413 },
     );
@@ -251,7 +258,7 @@ type EsitoFile =
 /** Un singolo file: chiave R2, riga file_refs, PUT, miniatura, sync. */
 async function caricaUnFile(input: {
   file: File;
-  ctx: { tenantId: string; userId: string; tokenId: string };
+  ctx: { tenantId: string; userId: string; tokenId: string; role: string };
   commessa: RigaCommessa;
   tenantSlug: string | null;
   r2: NonNullable<ReturnType<typeof getR2ProviderFromEnv>>;
@@ -344,10 +351,13 @@ async function caricaUnFile(input: {
     } as never)
     .eq('id', fileRefId);
 
-  await service.from('audit_events').insert({
+  // `actor_role` e' un enum `app_role`: un valore inventato fa fallire l'insert.
+  // L'errore si LOGGA — prima veniva ingoiato e i caricamenti dal comando non
+  // finivano nel registro senza che nessuno se ne accorgesse.
+  const { error: auditErr } = await service.from('audit_events').insert({
     tenant_id: ctx.tenantId,
     actor_user_id: ctx.userId,
-    actor_role: 'api_token',
+    actor_role: ctx.role,
     entity_type: 'file_ref',
     entity_id: fileRefId,
     action: 'media.upload.link',
@@ -360,6 +370,10 @@ async function caricaUnFile(input: {
       via: 'shortcut_ios',
     },
   } as never);
+  if (auditErr) {
+    // eslint-disable-next-line no-console
+    console.error('[link/upload] audit fallito:', auditErr.message);
+  }
 
   // Stessa coda di lavori dell'upload da app: miniatura su R2 e clone su
   // Nextcloud. `waitUntil` li tiene vivi dopo la Response (senza, su Vercel
