@@ -73,3 +73,39 @@ Verifica veloce degli endpoint (401 atteso senza token valido):
 ```sh
 curl -s -w "\n%{http_code}\n" https://www.kommessa.it/api/link/commesse
 ```
+
+## Il campo file: `WFItemType` 0, non 5
+
+Sembra ovvio che un campo file di un modulo abbia un tipo dedicato, e in giro si
+legge che sia `5`. **È falso e non fallisce in modo gentile**: `5` non esiste fra
+i tipi di un `WFDictionaryFieldValue`, il parser di WorkflowKit va in eccezione
+mentre legge il file e l'app Comandi Rapidi **crasha all'import** — su iPhone si
+vede solo un lampo e il comando non compare da nessuna parte.
+
+Il campo file va dichiarato con **`WFItemType: 0`**, mettendo come valore un
+allegato (`WFTextTokenAttachment` con `{"Type": "ExtensionInput"}`): è il valore
+a essere un file, non il tipo del campo.
+
+Traccia nel crash report, se ricapita:
+
+```
+-[WFPropertyListParameterValue initWithType:state:identity:]
+ ← -[WFDictionaryParameterKeyValuePair initWithSerializedRepresentation:...]
+```
+
+## Banco di prova (`prova.sh`)
+
+Il crash avviene alla **lettura** del plist, prima di qualunque clic: quindi si
+può verificare un comando sul Mac senza toccare l'iPhone.
+
+```sh
+./scripts/shortcut-ios/prova.sh CaricaSuKommessa.shortcut
+```
+
+Apre il file, aspetta, e dice se l'app lo ha digerito.
+
+> ⚠️ I crash report vengono scritti con **ritardo**: contarli prima e dopo
+> produce un off-by-one (il crash del test N finisce nel conteggio del test
+> N+1) e fa sembrare buoni file rotti. `prova.sh` usa un marcatore temporale
+> (`find -newer`) proprio per questo — la prima versione, che contava, mi ha
+> dato tre falsi negativi di fila.

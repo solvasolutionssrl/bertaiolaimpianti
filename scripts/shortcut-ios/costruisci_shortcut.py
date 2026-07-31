@@ -30,6 +30,17 @@ from pathlib import Path
 BASE_URL = "https://www.kommessa.it"
 SEGNAPOSTO_TOKEN = "INCOLLA-QUI-IL-TUO-TOKEN"
 
+# Elenco completo delle classi di contenuto accettate, copiato da un comando
+# reale. I comandi veri le dichiarano tutte.
+CLASSI_INPUT = [
+    "WFAppStoreAppContentItem", "WFArticleContentItem", "WFContactContentItem",
+    "WFDateContentItem", "WFEmailAddressContentItem", "WFGenericFileContentItem",
+    "WFImageContentItem", "WFiTunesProductContentItem", "WFLocationContentItem",
+    "WFDCMapsLinkContentItem", "WFAVAssetContentItem", "WFPDFContentItem",
+    "WFPhoneNumberContentItem", "WFRichTextContentItem",
+    "WFSafariWebPageContentItem", "WFStringContentItem", "WFURLContentItem",
+]
+
 # Carattere segnaposto che Shortcuts usa per innestare una variabile nel testo.
 OGGETTO = "￼"
 
@@ -119,7 +130,7 @@ def costruisci() -> dict:
                             {
                                 "WFItemType": 0,
                                 "WFKey": {
-                                    "Value": {"string": "Authorization"},
+                                    "Value": {"string": "Authorization", "attachmentsByRange": {}},
                                     "WFSerializationType": "WFTextTokenString",
                                 },
                                 "WFValue": {
@@ -180,7 +191,7 @@ def costruisci() -> dict:
                             {
                                 "WFItemType": 0,
                                 "WFKey": {
-                                    "Value": {"string": "Authorization"},
+                                    "Value": {"string": "Authorization", "attachmentsByRange": {}},
                                     "WFSerializationType": "WFTextTokenString",
                                 },
                                 "WFValue": {
@@ -207,7 +218,7 @@ def costruisci() -> dict:
                                 # 0 = testo
                                 "WFItemType": 0,
                                 "WFKey": {
-                                    "Value": {"string": "commessaId"},
+                                    "Value": {"string": "commessaId", "attachmentsByRange": {}},
                                     "WFSerializationType": "WFTextTokenString",
                                 },
                                 "WFValue": {
@@ -224,10 +235,17 @@ def costruisci() -> dict:
                                 },
                             },
                             {
-                                # 5 = file
-                                "WFItemType": 5,
+                                # WFItemType 0 anche per il file.
+                                # Il 5 (che pare l'ovvio "tipo file") NON esiste
+                                # fra i tipi di un WFDictionaryFieldValue: fa
+                                # crashare il parser in lettura, quindi il
+                                # comando non si importa nemmeno — verificato
+                                # sul banco di prova, `scripts/shortcut-ios`.
+                                # Il fatto che il valore sia un allegato basta a
+                                # Shortcuts per spedirlo come file.
+                                "WFItemType": 0,
                                 "WFKey": {
-                                    "Value": {"string": "file"},
+                                    "Value": {"string": "file", "attachmentsByRange": {}},
                                     "WFSerializationType": "WFTextTokenString",
                                 },
                                 "WFValue": input_comando(),
@@ -263,20 +281,22 @@ def costruisci() -> dict:
     ]
 
     return {
-        "WFWorkflowClientVersion": "2605.0.5",
+        # Valori ricavati da comandi REALI presenti sul Mac (Shortcuts.sqlite):
+        # `WFWorkflowClientVersion` e' una STRINGA di versione, non un numero
+        # inventato — un valore fuori scala fa fallire l'import in silenzio.
+        "WFWorkflowClientVersion": "1146.16",
         "WFWorkflowMinimumClientVersion": 900,
         "WFWorkflowMinimumClientVersionString": "900",
         "WFWorkflowIcon": {
             "WFWorkflowIconStartColor": 946986751,  # blu
             "WFWorkflowIconGlyphNumber": 59511,      # nuvola con freccia
         },
-        # Compare nel menu Condividi e accetta immagini e media.
+        # Compare nel menu Condividi.
         "WFWorkflowTypes": ["ActionExtension"],
-        "WFWorkflowInputContentItemClasses": [
-            "WFImageContentItem",
-            "WFAVAssetContentItem",
-            "WFGenericFileContentItem",
-        ],
+        # I comandi veri dichiarano l'elenco COMPLETO delle classi accettate,
+        # non un sottoinsieme: con tre sole voci l'import puo' rifiutare.
+        "WFWorkflowInputContentItemClasses": CLASSI_INPUT,
+        "WFWorkflowOutputContentItemClasses": [],
         "WFWorkflowHasShortcutInputVariables": True,
         "WFWorkflowImportQuestions": [],
         "WFWorkflowActions": azioni,
