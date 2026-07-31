@@ -3,7 +3,7 @@ import { type NextRequest } from 'next/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 
 import { autenticaToken } from '../../../_lib/api-token';
-import { risolviTitoloCommessa } from '../../../_lib/commessa-display';
+import { etichettaCommessa } from '../../../_lib/link-etichetta';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -14,23 +14,23 @@ export const maxDuration = 15;
  * Elenco commesse per il comando iOS "Carica su Kommessa". Autenticazione a
  * token Bearer (gli Shortcut non hanno la sessione di Safari).
  *
- * Senza `q` ritorna le commesse toccate di recente: nella schermata "Scegli da
- * elenco" degli Shortcut non esiste piu' un campo di ricerca (Apple lo ha tolto
- * in iOS 14), quindi la lista corta di recenti e' cio' che risolve il caso
- * normale, e la ricerca vive qui sul server.
+ * Ritorna `etichette`: **solo stringhe**, ed è su quelle che lo Shortcut fa
+ * scegliere. Far scegliere fra dizionari è possibile ma Shortcuts li mostra in
+ * modo imprevedibile; con le stringhe la lista è leggibile e la scelta torna
+ * indietro come testo, che `/api/link/upload` ri-risolve in commessa.
  *
  * Con `q` filtra a TOKEN cross-campo, la stessa regola del picker cantieri:
- * ogni parola deve comparire da qualche parte fra titolo, codice e cliente, in
- * campi anche diversi ("rossi bagno" trova "Rossi Mario — Rifacimento bagno").
+ * ogni parola deve comparire da qualche parte nell'etichetta, anche in punti
+ * diversi ("rossi bagno" trova "BER-26-004 · Rifacimento bagno · Rossi Mario").
  */
 
 // Si mandano TUTTE le commesse aperte, ordinate dalla più recente.
 //
 // La schermata "Scegli da elenco" di iOS non ha un campo di ricerca, quindi la
-// tentazione e' accorciare la lista. Ma questo comando nasce proprio per
-// ritrovare materiale di settimane fa: una commessa esclusa dalla lista
-// sarebbe **irraggiungibile**, senza alcun ripiego sul telefono. Meglio una
-// lista lunga in cui le piu' probabili stanno in cima. (Bertaiola: ~111 aperte.)
+// tentazione è accorciare la lista. Ma questo comando nasce proprio per
+// ritrovare materiale di settimane fa: una commessa esclusa dalla lista sarebbe
+// **irraggiungibile**, senza alcun ripiego sul telefono. Meglio una lista lunga
+// in cui le più probabili stanno in cima. (Bertaiola: ~111 aperte.)
 const LIMITE_ELENCO = 300;
 const LIMITE_RICERCA = 15;
 
@@ -62,79 +62,51 @@ export async function GET(request: NextRequest) {
   const service = createServiceSupabase();
 
   // Le commesse chiuse non sono destinazioni sensate per una foto nuova.
-  let query = service
+  const { data, error } = await service
     .from('commesse')
     .select(
       'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, stato, updated_at, cliente:clienti(ragione_sociale)',
     )
     .eq('tenant_id', ctx.tenantId)
     .not('stato', 'in', '(archiviata,completata)')
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .limit(LIMITE_ELENCO);
 
-  // In ricerca si allarga il bacino prima di filtrare a token in memoria: il
-  // match cross-campo non e' esprimibile in una singola query SQL.
-  query = query.limit(LIMITE_ELENCO);
-
-  const { data, error } = await query;
   if (error) {
-    return Response.json({ error: 'Lettura commesse fallita' }, { status: 500 });
+    return Response.json(
+      {
+        error: 'Lettura commesse fallita',
+        messaggio: 'Non riesco a leggere le commesse.',
+      },
+      { status: 500 },
+    );
   }
 
-  const righe = (data ?? []) as unknown as RigaCommessa[];
-  const voci = righe.map((r) => {
+  const voci = ((data ?? []) as unknown as RigaCommessa[]).map((r) => {
     const cliente = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
-    const titolo = risolviTitoloCommessa({
+    const etichetta = etichettaCommessa({
+      codice_interno: r.codice_interno,
+      nome_cartella: r.nome_cartella,
       descrizione_ai_finale: r.descrizione_ai_finale,
       descrizione_ai_proposta: r.descrizione_ai_proposta,
       note_iniziali: r.note_iniziali,
-      nome_cartella: r.nome_cartella,
-      codice_interno: r.codice_interno,
-      cliente_nome: cliente?.ragione_sociale ?? null,
+      clienteNome: cliente?.ragione_sociale ?? null,
     });
-    return {
-      id: r.id,
-      titolo,
-      cliente: cliente?.ragione_sociale ?? null,
-      codice: r.codice_interno,
-      // `etichetta` e' cio' che l'utente legge nella lista dello Shortcut:
-      // una riga sola, quindi ci sta il minimo indispensabile per scegliere.
-      etichetta: [titolo, cliente?.ragione_sociale].filter(Boolean).join(' · '),
-      cercabile: [titolo, cliente?.ragione_sociale, r.codice_interno]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase(),
-    };
+    return { id: r.id, etichetta, codice: r.codice_interno };
   });
 
   const filtrate = q
     ? voci
         .filter((v) => {
           const parole = q.toLowerCase().split(/\s+/).filter(Boolean);
-          return parole.every((p) => v.cercabile.includes(p));
+          const cercabile = v.etichetta.toLowerCase();
+          return parole.every((p) => cercabile.includes(p));
         })
         .slice(0, LIMITE_RICERCA)
     : voci;
 
-  // `etichette` = solo stringhe, ed e' quello su cui lo Shortcut fa scegliere.
-  // Far scegliere fra DIZIONARI e' possibile ma Shortcuts li mostra in modo
-  // imprevedibile; con le stringhe la lista e' leggibile e la scelta torna
-  // indietro come testo, che il server ri-risolve in commessa.
-  // Le etichette vengono rese univoche (in coda il codice) perche' la scelta
-  // viaggia per testo: due commesse omonime sarebbero indistinguibili.
-  const conteggio = new Map<string, number>();
-  for (const v of filtrate) {
-    conteggio.set(v.etichetta, (conteggio.get(v.etichetta) ?? 0) + 1);
-  }
-  const conEtichetta = filtrate.map((v) => ({
-    ...v,
-    etichetta:
-      (conteggio.get(v.etichetta) ?? 0) > 1 && v.codice
-        ? `${v.etichetta} (${v.codice})`
-        : v.etichetta,
-  }));
-
   return Response.json({
-    etichette: conEtichetta.map((v) => v.etichetta),
-    commesse: conEtichetta.map(({ cercabile: _scartato, ...resto }) => resto),
+    etichette: filtrate.map((v) => v.etichetta),
+    commesse: filtrate,
   });
 }

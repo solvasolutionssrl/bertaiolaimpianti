@@ -11,7 +11,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { autenticaToken } from '../../../_lib/api-token';
-import { risolviTitoloCommessa } from '../../../_lib/commessa-display';
+import { etichettaCommessa } from '../../../_lib/link-etichetta';
 import { generateAndUploadThumb } from '../../../_lib/thumbnails';
 import { syncOneFile } from '../../../_lib/sync-r2-to-nextcloud';
 
@@ -74,11 +74,28 @@ export async function POST(request: NextRequest) {
   const files = form
     .getAll('file')
     .filter((f): f is File => f instanceof File && f.size > 0);
-  if ((!commessaId && !etichetta) || files.length === 0) {
+  // Errori DISTINTI: "commessa o file mancante" non dice quale dei due, e sul
+  // telefono non c'e' altro modo di capirlo. Si riporta anche cosa e' arrivato.
+  if (!commessaId && !etichetta) {
+    const campi = [...form.keys()].join(', ') || 'nessuno';
     return Response.json(
       {
-        error: 'Servono commessaId (o etichetta) e almeno un file',
-        messaggio: 'Nessuna commessa scelta o nessun file da mandare.',
+        error: 'commessaId/etichetta mancante',
+        messaggio: `Non ho ricevuto la commessa. Campi arrivati: ${campi}.`,
+      },
+      { status: 400 },
+    );
+  }
+  if (files.length === 0) {
+    const campi = [...form.keys()].join(', ') || 'nessuno';
+    const nonFile = form.getAll('file').length;
+    return Response.json(
+      {
+        error: 'nessun file',
+        messaggio:
+          `Commessa ok, ma non ho ricevuto nessun file. ` +
+          `Campi arrivati: ${campi}` +
+          (nonFile > 0 ? ` — «file» c'era ma non come allegato.` : '.'),
       },
       { status: 400 },
     );
@@ -206,16 +223,15 @@ async function risolviPerEtichetta(
     }
   >) {
     const cliente = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
-    const titolo = risolviTitoloCommessa({
+    const etichettaRiga = etichettaCommessa({
+      codice_interno: r.codice_interno,
+      nome_cartella: r.nome_cartella,
       descrizione_ai_finale: r.descrizione_ai_finale,
       descrizione_ai_proposta: r.descrizione_ai_proposta,
       note_iniziali: r.note_iniziali,
-      nome_cartella: r.nome_cartella,
-      codice_interno: r.codice_interno,
-      cliente_nome: cliente?.ragione_sociale ?? null,
+      clienteNome: cliente?.ragione_sociale ?? null,
     });
-    const base = [titolo, cliente?.ragione_sociale].filter(Boolean).join(' · ');
-    if (base === etichetta || `${base} (${r.codice_interno})` === etichetta) {
+    if (etichettaRiga === etichetta) {
       return {
         id: r.id,
         codice_interno: r.codice_interno,
