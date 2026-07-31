@@ -22,6 +22,7 @@ import {
   UserCog,
   Users,
   X,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react';
 import { Badge, cn } from '@kommessa/ui';
@@ -76,6 +77,7 @@ const NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { id: 'audit', label: 'Audit', href: '/admin/audit', icon: Activity },
       { id: 'accessi', label: 'Accessi', href: '/admin/accessi', icon: KeyRound },
+      { id: 'token-app', label: 'Token app', href: '/admin/token-app', icon: Smartphone },
       { id: 'salute', label: 'Salute sistema', href: '/admin/salute', icon: HeartPulse },
     ],
   },
