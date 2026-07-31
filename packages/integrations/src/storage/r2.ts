@@ -89,9 +89,15 @@ export class R2StorageProvider {
   async createPresignedPutUrl(
     key: string,
     contentType: string,
-    opts?: { ttlSec?: number },
+    opts?: { ttlSec?: number; firmaContentType?: boolean },
   ): Promise<PresignedUploadUrl> {
     const ttl = opts?.ttlSec ?? DEFAULT_PUT_TTL_SEC;
+    // `firmaContentType: false` NON include il Content-Type nella firma.
+    // Serve ai client che non controllano l'header che spediscono — il comando
+    // iOS lo deriva dal file — dove un tipo diverso da quello firmato farebbe
+    // fallire il PUT con SignatureDoesNotMatch. Il mime vero resta comunque
+    // quello registrato in `file_refs`.
+    const firma = opts?.firmaContentType !== false;
     // ContentLength NON firmato di proposito: alcuni browser mobile
     // (notabilmente iOS Safari) possono divergere di pochi byte fra dichiarato
     // e payload reale, causando SignatureDoesNotMatch. La size vera viene
@@ -99,7 +105,7 @@ export class R2StorageProvider {
     const cmd = new PutObjectCommand({
       Bucket: this.bucket,
       Key: key,
-      ContentType: contentType,
+      ...(firma ? { ContentType: contentType } : {}),
     });
     const url = await getSignedUrl(this.client, cmd, { expiresIn: ttl });
     return {

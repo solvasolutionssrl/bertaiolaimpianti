@@ -11,7 +11,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { autenticaToken } from '../../../_lib/api-token';
-import { etichettaCommessa } from '../../../_lib/link-etichetta';
+import { risolviCommessa, type RigaCommessa } from '../_lib/risolvi-commessa';
 import { generateAndUploadThumb } from '../../../_lib/thumbnails';
 import { syncOneFile } from '../../../_lib/sync-r2-to-nextcloud';
 
@@ -43,13 +43,6 @@ export const maxDuration = 300;
  * Dizionario" invece di un messaggio comprensibile.
  */
 const MAX_BYTES = 90 * 1024 * 1024;
-
-interface RigaCommessa {
-  id: string;
-  codice_interno: string | null;
-  nome_cartella: string | null;
-  cloud_folder_path: string | null;
-}
 
 export async function POST(request: NextRequest) {
   const ctx = await autenticaToken(request, 'upload');
@@ -122,20 +115,10 @@ export async function POST(request: NextRequest) {
   // La commessa deve essere DI QUESTO tenant: il token non e' un lasciapassare
   // per l'intero database. Lo scoping esplicito e' la difesa, non la RLS
   // (qui giriamo con service role, che la bypassa).
-  let commessa: RigaCommessa | null = null;
-  if (commessaId) {
-    const { data } = await service
-      .from('commesse')
-      .select('id, codice_interno, nome_cartella, cloud_folder_path')
-      .eq('id', commessaId)
-      .eq('tenant_id', ctx.tenantId)
-      .maybeSingle();
-    commessa = data as unknown as RigaCommessa | null;
-  } else {
-    // Risoluzione per etichetta: si ricostruiscono le stesse etichette di
-    // /api/link/commesse e si cerca la corrispondenza esatta.
-    commessa = await risolviPerEtichetta(service, ctx.tenantId, etichetta);
-  }
+  const commessa = await risolviCommessa(service, ctx.tenantId, {
+    commessaId,
+    etichetta,
+  });
   if (!commessa) {
     return Response.json(
       { error: 'Commessa non trovata', messaggio: 'Commessa non trovata.' },
@@ -198,56 +181,6 @@ export async function POST(request: NextRequest) {
     falliti,
     messaggio: parti.join(' · '),
   });
-}
-
-/**
- * Ritrova la commessa dall'etichetta scelta nella lista dello Shortcut.
- * Le etichette sono generate da `/api/link/commesse` come "titolo · cliente"
- * (con il codice in coda se ambigue): qui si ricompone lo stesso testo e si
- * cerca l'unica corrispondenza esatta.
- */
-async function risolviPerEtichetta(
-  service: ReturnType<typeof createServiceSupabase>,
-  tenantId: string,
-  etichetta: string,
-): Promise<RigaCommessa | null> {
-  const { data } = await service
-    .from('commesse')
-    .select(
-      'id, codice_interno, nome_cartella, cloud_folder_path, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, cliente:clienti(ragione_sociale)',
-    )
-    .eq('tenant_id', tenantId)
-    .not('stato', 'in', '(archiviata,completata)')
-    .order('updated_at', { ascending: false })
-    .limit(300);
-
-  for (const r of (data ?? []) as unknown as Array<
-    RigaCommessa & {
-      descrizione_ai_finale: string | null;
-      descrizione_ai_proposta: string | null;
-      note_iniziali: string | null;
-      cliente: { ragione_sociale: string | null } | { ragione_sociale: string | null }[] | null;
-    }
-  >) {
-    const cliente = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
-    const etichettaRiga = etichettaCommessa({
-      codice_interno: r.codice_interno,
-      nome_cartella: r.nome_cartella,
-      descrizione_ai_finale: r.descrizione_ai_finale,
-      descrizione_ai_proposta: r.descrizione_ai_proposta,
-      note_iniziali: r.note_iniziali,
-      clienteNome: cliente?.ragione_sociale ?? null,
-    });
-    if (etichettaRiga === etichetta) {
-      return {
-        id: r.id,
-        codice_interno: r.codice_interno,
-        nome_cartella: r.nome_cartella,
-        cloud_folder_path: r.cloud_folder_path,
-      };
-    }
-  }
-  return null;
 }
 
 type EsitoFile =

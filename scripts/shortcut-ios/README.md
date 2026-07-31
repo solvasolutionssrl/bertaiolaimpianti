@@ -201,3 +201,34 @@ fragile di quanto valga.
 python3 costruisci_shortcut.py CaricaSuKommessa            kmsa_xxx
 python3 costruisci_shortcut.py CaricaSuKommessa-conRicerca kmsa_xxx --ricerca
 ```
+
+## Video: caricamento diretto su R2 (`--video`)
+
+`/api/link/upload` fa passare i byte **dentro** la richiesta al nostro server, e
+lì la piattaforma taglia a **100 MB**: un video da 200 MB viene respinto prima
+di raggiungere il codice, con una risposta che non è JSON — e il comando muore
+con «non ha potuto convertire da Testo a Dizionario», che non spiega niente.
+
+La variante `--video` fa come l'app, in tre passi:
+
+1. `POST /api/link/prepara` → crea la riga e restituisce un **indirizzo firmato**
+2. `PUT` diretto a Cloudflare, il corpo è il file — **non passa dal nostro server**
+3. `POST /api/link/completa` → verifica con HEAD, poi miniatura e sync
+
+Tetto: quello di R2, 5 GB.
+
+**Un file per esecuzione, di proposito.** Il caso "tanti file" richiederebbe un
+ciclo, e dentro un ciclo l'elemento corrente si riferisce con un nome che iOS
+**localizza** — la stessa trappola dei nomi delle variabili magiche. Nel comando
+video il file è l'input stesso (`ExtensionInput`), riferimento stabile in ogni
+lingua. Struttura del ciclo, se un giorno servisse: stessa azione due volte,
+`WFControlFlowMode` 0 (apre) e 2 (chiude), legate da un `GroupingIdentifier`
+condiviso.
+
+**Content-Type non firmato**: il presigned viene generato con
+`firmaContentType: false`, perché il comando deriva l'header dal file e un tipo
+diverso da quello firmato farebbe fallire il PUT con `SignatureDoesNotMatch`.
+
+```sh
+python3 costruisci_shortcut.py CaricaVideoSuKommessa kmsa_xxx --video
+```

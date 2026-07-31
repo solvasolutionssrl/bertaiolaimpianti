@@ -397,6 +397,174 @@ def costruisci(con_ricerca: bool = False) -> dict:
     }
 
 
+def costruisci_video() -> dict:
+    """
+    Variante VIDEO: carica un file per volta **direttamente su R2**.
+
+    `/api/link/upload` fa passare i byte dentro la richiesta al nostro server, e
+    lì la piattaforma taglia a 100 MB. Qui invece si fa come l'app: si chiede un
+    indirizzo firmato, si spediscono i byte a Cloudflare, si conferma. Il tetto
+    diventa quello di R2 (5 GB).
+
+    Un file per esecuzione, di proposito: il caso "tanti file" richiederebbe un
+    ciclo, e dentro un ciclo l'elemento corrente si riferisce con un nome che
+    iOS **localizza** — la stessa trappola che ha gia' fatto fallire due
+    versioni di questo comando. Qui il file e' l'input del comando, riferimento
+    che invece e' stabile in ogni lingua.
+    """
+    u_token, u_cerca, u_lista = uid(), uid(), uid()
+    u_etichette, u_scelta = uid(), uid()
+    u_prepara, u_url, u_rif = uid(), uid(), uid()
+    u_completa, u_messaggio = uid(), uid()
+
+    def header_auth():
+        return {
+            "Value": {
+                "WFDictionaryFieldValueItems": [
+                    {
+                        "WFItemType": 0,
+                        "WFKey": {
+                            "Value": {"string": "Authorization", "attachmentsByRange": {}},
+                            "WFSerializationType": "WFTextTokenString",
+                        },
+                        "WFValue": {
+                            "Value": {
+                                "string": f"Bearer {OGGETTO}",
+                                "attachmentsByRange": {
+                                    "{7, 1}": {"Type": "Variable", "VariableName": "token"}
+                                },
+                            },
+                            "WFSerializationType": "WFTextTokenString",
+                        },
+                    }
+                ]
+            },
+            "WFSerializationType": "WFDictionaryFieldValue",
+        }
+
+    def campo_testo(chiave: str, variabile: str):
+        return {
+            "WFItemType": 0,
+            "WFKey": {
+                "Value": {"string": chiave, "attachmentsByRange": {}},
+                "WFSerializationType": "WFTextTokenString",
+            },
+            "WFValue": {
+                "Value": {
+                    "string": OGGETTO,
+                    "attachmentsByRange": {
+                        "{0, 1}": {"Type": "Variable", "VariableName": variabile}
+                    },
+                },
+                "WFSerializationType": "WFTextTokenString",
+            },
+        }
+
+    def estrai(uuid_sorgente: str, chiave: str, uuid_mio: str):
+        return azione(
+            "is.workflow.actions.getvalueforkey",
+            {
+                "UUID": uuid_mio,
+                "WFInput": ingresso(uuid_sorgente, "Contenuti dell'URL"),
+                "WFGetDictionaryValueType": "Value",
+                "WFDictionaryKey": chiave,
+            },
+        )
+
+    azioni = [
+        azione("is.workflow.actions.gettext",
+               {"UUID": u_token, "WFTextActionText": SEGNAPOSTO_TOKEN}),
+        azione("is.workflow.actions.setvariable",
+               {"WFInput": ingresso(u_token, "Testo"), "WFVariableName": "token"}),
+        azione("is.workflow.actions.ask",
+               {"UUID": u_cerca,
+                "WFAskActionPrompt": "Cerca una commessa (vuoto = tutte)",
+                "WFInputType": "Text", "WFAskActionDefaultAnswer": ""}),
+        azione("is.workflow.actions.downloadurl", {
+            "UUID": u_lista,
+            "WFURL": {
+                "Value": {
+                    "string": f"{BASE_URL}/api/link/commesse?q={OGGETTO}",
+                    "attachmentsByRange": {
+                        f"{{{len(BASE_URL) + len('/api/link/commesse?q=')}, 1}}":
+                            uscita_azione(u_cerca, "Risposta fornita")
+                    },
+                },
+                "WFSerializationType": "WFTextTokenString",
+            },
+            "WFHTTPMethod": "GET", "ShowHeaders": True, "WFHTTPHeaders": header_auth(),
+        }),
+        estrai(u_lista, "etichette", u_etichette),
+        azione("is.workflow.actions.choosefromlist", {
+            "UUID": u_scelta,
+            "WFInput": ingresso(u_etichette, "etichette"),
+            "WFChooseFromListActionPrompt": "Su quale commessa?",
+            "WFChooseFromListActionSelectMultiple": False,
+        }),
+        azione("is.workflow.actions.setvariable",
+               {"WFInput": ingresso(u_scelta, "Elemento scelto"), "WFVariableName": "scelta"}),
+        # 1° passo: chiedi l'indirizzo firmato
+        azione("is.workflow.actions.downloadurl", {
+            "UUID": u_prepara,
+            "WFURL": f"{BASE_URL}/api/link/prepara",
+            "WFHTTPMethod": "POST", "ShowHeaders": True, "WFHTTPHeaders": header_auth(),
+            "WFHTTPBodyType": "Form",
+            "WFFormValues": {
+                "Value": {"WFDictionaryFieldValueItems": [campo_testo("etichetta", "scelta")]},
+                "WFSerializationType": "WFDictionaryFieldValue",
+            },
+        }),
+        estrai(u_prepara, "url", u_url),
+        azione("is.workflow.actions.setvariable",
+               {"WFInput": ingresso(u_url, "url"), "WFVariableName": "indirizzo"}),
+        estrai(u_prepara, "fileRefId", u_rif),
+        azione("is.workflow.actions.setvariable",
+               {"WFInput": ingresso(u_rif, "fileRefId"), "WFVariableName": "riferimento"}),
+        # 2° passo: i byte vanno DIRETTI a Cloudflare, non passano da noi
+        azione("is.workflow.actions.downloadurl", {
+            "WFURL": {
+                "Value": {
+                    "string": OGGETTO,
+                    "attachmentsByRange": {
+                        "{0, 1}": {"Type": "Variable", "VariableName": "indirizzo"}
+                    },
+                },
+                "WFSerializationType": "WFTextTokenString",
+            },
+            "WFHTTPMethod": "PUT",
+            "WFHTTPBodyType": "File",
+            "WFRequestVariable": input_comando(),
+        }),
+        # 3° passo: conferma, e da qui riparte la solita coda (miniatura, sync)
+        azione("is.workflow.actions.downloadurl", {
+            "UUID": u_completa,
+            "WFURL": f"{BASE_URL}/api/link/completa",
+            "WFHTTPMethod": "POST", "ShowHeaders": True, "WFHTTPHeaders": header_auth(),
+            "WFHTTPBodyType": "Form",
+            "WFFormValues": {
+                "Value": {"WFDictionaryFieldValueItems": [campo_testo("fileRefId", "riferimento")]},
+                "WFSerializationType": "WFDictionaryFieldValue",
+            },
+        }),
+        estrai(u_completa, "messaggio", u_messaggio),
+        azione("is.workflow.actions.notification", {
+            "WFNotificationActionTitle": "Kommessa",
+            "WFNotificationActionBody": {
+                "Value": {
+                    "string": OGGETTO,
+                    "attachmentsByRange": {"{0, 1}": uscita_azione(u_messaggio, "messaggio")},
+                },
+                "WFSerializationType": "WFTextTokenString",
+            },
+            "WFNotificationActionSound": True,
+        }),
+    ]
+
+    base = costruisci()
+    base["WFWorkflowActions"] = azioni
+    return base
+
+
 def main() -> int:
     # Secondo argomento opzionale: il token da incastonare. Serve per produrre
     # una copia gia' pronta per UNA persona (che quindi non deve incollare
@@ -404,7 +572,8 @@ def main() -> int:
     # con un link, e si revoca il token se il telefono si perde.
     global SEGNAPOSTO_TOKEN, CON_RICERCA
     CON_RICERCA = "--ricerca" in sys.argv
-    sys.argv = [a for a in sys.argv if a != "--ricerca"]
+    video = "--video" in sys.argv
+    sys.argv = [a for a in sys.argv if a not in ("--ricerca", "--video")]
     if len(sys.argv) > 2:
         SEGNAPOSTO_TOKEN = sys.argv[2]
     destinazione = Path(sys.argv[1] if len(sys.argv) > 1 else "CaricaSuKommessa")
@@ -414,7 +583,8 @@ def main() -> int:
     firmato = destinazione.with_suffix(".shortcut")
 
     with open(non_firmato, "wb") as f:
-        plistlib.dump(costruisci(con_ricerca=CON_RICERCA), f, fmt=plistlib.FMT_BINARY)
+        contenuto = costruisci_video() if video else costruisci(con_ricerca=CON_RICERCA)
+        plistlib.dump(contenuto, f, fmt=plistlib.FMT_BINARY)
     print(f"plist scritto: {non_firmato} ({non_firmato.stat().st_size} byte)")
 
     esito = subprocess.run(
