@@ -11,6 +11,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { autenticaToken } from '../../../_lib/api-token';
+import { risolviTitoloCommessa } from '../../../_lib/commessa-display';
 import { generateAndUploadThumb } from '../../../_lib/thumbnails';
 import { syncOneFile } from '../../../_lib/sync-r2-to-nextcloud';
 
@@ -47,7 +48,13 @@ interface RigaCommessa {
 export async function POST(request: NextRequest) {
   const ctx = await autenticaToken(request, 'upload');
   if (!ctx) {
-    return Response.json({ error: 'Token non valido' }, { status: 401 });
+    return Response.json(
+      {
+        error: 'Token non valido',
+        messaggio: 'Token non valido: controlla la prima azione del comando.',
+      },
+      { status: 401 },
+    );
   }
 
   let form: FormData;
@@ -58,15 +65,21 @@ export async function POST(request: NextRequest) {
   }
 
   const commessaId = String(form.get('commessaId') ?? '').trim();
+  // Lo Shortcut manda l'ETICHETTA scelta, non l'id: far scegliere fra stringhe
+  // e' l'unico modo per avere una lista leggibile su iOS. La si ri-risolve qui.
+  const etichetta = String(form.get('etichetta') ?? '').trim();
   // Il campo `file` puo' ripetersi: lo Shortcut manda l'intera selezione in una
   // richiesta sola, così il comando iOS non ha bisogno di un ciclo (meno azioni
   // = meno cose che si rompono a un aggiornamento di iOS).
   const files = form
     .getAll('file')
     .filter((f): f is File => f instanceof File && f.size > 0);
-  if (!commessaId || files.length === 0) {
+  if ((!commessaId && !etichetta) || files.length === 0) {
     return Response.json(
-      { error: 'Servono il campo commessaId e almeno un file' },
+      {
+        error: 'Servono commessaId (o etichetta) e almeno un file',
+        messaggio: 'Nessuna commessa scelta o nessun file da mandare.',
+      },
       { status: 400 },
     );
   }
@@ -85,15 +98,25 @@ export async function POST(request: NextRequest) {
   // La commessa deve essere DI QUESTO tenant: il token non e' un lasciapassare
   // per l'intero database. Lo scoping esplicito e' la difesa, non la RLS
   // (qui giriamo con service role, che la bypassa).
-  const { data: comRaw } = await service
-    .from('commesse')
-    .select('id, codice_interno, nome_cartella, cloud_folder_path')
-    .eq('id', commessaId)
-    .eq('tenant_id', ctx.tenantId)
-    .maybeSingle();
-  const commessa = comRaw as unknown as RigaCommessa | null;
+  let commessa: RigaCommessa | null = null;
+  if (commessaId) {
+    const { data } = await service
+      .from('commesse')
+      .select('id, codice_interno, nome_cartella, cloud_folder_path')
+      .eq('id', commessaId)
+      .eq('tenant_id', ctx.tenantId)
+      .maybeSingle();
+    commessa = data as unknown as RigaCommessa | null;
+  } else {
+    // Risoluzione per etichetta: si ricostruiscono le stesse etichette di
+    // /api/link/commesse e si cerca la corrispondenza esatta.
+    commessa = await risolviPerEtichetta(service, ctx.tenantId, etichetta);
+  }
   if (!commessa) {
-    return Response.json({ error: 'Commessa non trovata' }, { status: 404 });
+    return Response.json(
+      { error: 'Commessa non trovata', messaggio: 'Commessa non trovata.' },
+      { status: 404 },
+    );
   }
   if (!commessa.cloud_folder_path) {
     return Response.json(
@@ -151,6 +174,57 @@ export async function POST(request: NextRequest) {
     falliti,
     messaggio: parti.join(' · '),
   });
+}
+
+/**
+ * Ritrova la commessa dall'etichetta scelta nella lista dello Shortcut.
+ * Le etichette sono generate da `/api/link/commesse` come "titolo · cliente"
+ * (con il codice in coda se ambigue): qui si ricompone lo stesso testo e si
+ * cerca l'unica corrispondenza esatta.
+ */
+async function risolviPerEtichetta(
+  service: ReturnType<typeof createServiceSupabase>,
+  tenantId: string,
+  etichetta: string,
+): Promise<RigaCommessa | null> {
+  const { data } = await service
+    .from('commesse')
+    .select(
+      'id, codice_interno, nome_cartella, cloud_folder_path, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, cliente:clienti(ragione_sociale)',
+    )
+    .eq('tenant_id', tenantId)
+    .not('stato', 'in', '(archiviata,completata)')
+    .order('updated_at', { ascending: false })
+    .limit(300);
+
+  for (const r of (data ?? []) as unknown as Array<
+    RigaCommessa & {
+      descrizione_ai_finale: string | null;
+      descrizione_ai_proposta: string | null;
+      note_iniziali: string | null;
+      cliente: { ragione_sociale: string | null } | { ragione_sociale: string | null }[] | null;
+    }
+  >) {
+    const cliente = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
+    const titolo = risolviTitoloCommessa({
+      descrizione_ai_finale: r.descrizione_ai_finale,
+      descrizione_ai_proposta: r.descrizione_ai_proposta,
+      note_iniziali: r.note_iniziali,
+      nome_cartella: r.nome_cartella,
+      codice_interno: r.codice_interno,
+      cliente_nome: cliente?.ragione_sociale ?? null,
+    });
+    const base = [titolo, cliente?.ragione_sociale].filter(Boolean).join(' · ');
+    if (base === etichetta || `${base} (${r.codice_interno})` === etichetta) {
+      return {
+        id: r.id,
+        codice_interno: r.codice_interno,
+        nome_cartella: r.nome_cartella,
+        cloud_folder_path: r.cloud_folder_path,
+      };
+    }
+  }
+  return null;
 }
 
 type EsitoFile =

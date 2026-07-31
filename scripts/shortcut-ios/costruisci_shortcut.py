@@ -100,7 +100,7 @@ def azione(identificatore: str, parametri: dict) -> dict:
 
 def costruisci() -> dict:
     uuid_token = uid()
-    uuid_commesse = uid()
+    uuid_etichette = uid()
     uuid_messaggio = uid()
 
     azioni = [
@@ -152,30 +152,45 @@ def costruisci() -> dict:
                 },
             },
         ),
-        # 4 — dal JSON estrai l'array.
+        # 4 — dal JSON estrai l'elenco delle ETICHETTE (stringhe).
+        # Far scegliere fra dizionari e' possibile ma Shortcuts li mostra in
+        # modo imprevedibile: con le stringhe la lista e' leggibile, e il
+        # server ri-risolve l'etichetta scelta in commessa.
         azione(
             "is.workflow.actions.getvalueforkey",
             {
-                "UUID": uuid_commesse,
-                "WFDictionaryKey": "commesse",
+                "UUID": uuid_etichette,
+                "WFGetDictionaryValueType": "Value",
+                "WFDictionaryKey": "etichette",
             },
         ),
-        # 5 — la scelta. `etichetta` e' gia' pronta lato server: una riga sola.
+        # 5 — la scelta.
+        # Due dettagli imparati leggendo un comando VERO:
+        #  * il prompt e' un oggetto testo strutturato, non una stringa: con una
+        #    stringa semplice il parametro non si inizializza e la schermata di
+        #    scelta non compare proprio (il comando tira dritto fino in fondo);
+        #  * l'input si dichiara ESPLICITAMENTE, non ci si affida al
+        #    concatenamento implicito con l'azione precedente.
         azione(
             "is.workflow.actions.choosefromlist",
             {
-                "WFChooseFromListActionPrompt": "Su quale commessa?",
+                "WFInput": {
+                    "Value": uscita_azione(uuid_etichette, "etichette"),
+                    "WFSerializationType": "WFTextTokenAttachment",
+                },
+                "WFChooseFromListActionPrompt": {
+                    "Value": {
+                        "string": "Su quale commessa?",
+                        "attachmentsByRange": {},
+                    },
+                    "WFSerializationType": "WFTextTokenString",
+                },
                 "WFChooseFromListActionSelectMultiple": False,
             },
         ),
-        # 6 — dell'elemento scelto serve solo l'id.
-        azione(
-            "is.workflow.actions.getvalueforkey",
-            {"WFDictionaryKey": "id"},
-        ),
         azione(
             "is.workflow.actions.setvariable",
-            {"WFVariableName": "commessa"},
+            {"WFVariableName": "scelta"},
         ),
         # 8 — invio: TUTTA la selezione in una richiesta sola.
         azione(
@@ -218,7 +233,7 @@ def costruisci() -> dict:
                                 # 0 = testo
                                 "WFItemType": 0,
                                 "WFKey": {
-                                    "Value": {"string": "commessaId", "attachmentsByRange": {}},
+                                    "Value": {"string": "etichetta", "attachmentsByRange": {}},
                                     "WFSerializationType": "WFTextTokenString",
                                 },
                                 "WFValue": {
@@ -227,7 +242,7 @@ def costruisci() -> dict:
                                         "attachmentsByRange": {
                                             "{0, 1}": {
                                                 "Type": "Variable",
-                                                "VariableName": "commessa",
+                                                "VariableName": "scelta",
                                             }
                                         },
                                     },
@@ -259,7 +274,7 @@ def costruisci() -> dict:
         # 9 — il server manda una frase pronta.
         azione(
             "is.workflow.actions.getvalueforkey",
-            {"UUID": uuid_messaggio, "WFDictionaryKey": "messaggio"},
+            {"UUID": uuid_messaggio, "WFGetDictionaryValueType": "Value", "WFDictionaryKey": "messaggio"},
         ),
         # 10 — notifica finale.
         azione(

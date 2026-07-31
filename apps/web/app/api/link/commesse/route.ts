@@ -42,7 +42,13 @@ interface RigaCommessa {
 export async function GET(request: NextRequest) {
   const ctx = await autenticaToken(request, 'upload');
   if (!ctx) {
-    return Response.json({ error: 'Token non valido' }, { status: 401 });
+    return Response.json(
+      {
+        error: 'Token non valido',
+        messaggio: 'Token non valido: controlla la prima azione del comando.',
+      },
+      { status: 401 },
+    );
   }
 
   const q = (new URL(request.url).searchParams.get('q') ?? '').trim();
@@ -102,7 +108,26 @@ export async function GET(request: NextRequest) {
         .slice(0, LIMITE_RICERCA)
     : voci;
 
+  // `etichette` = solo stringhe, ed e' quello su cui lo Shortcut fa scegliere.
+  // Far scegliere fra DIZIONARI e' possibile ma Shortcuts li mostra in modo
+  // imprevedibile; con le stringhe la lista e' leggibile e la scelta torna
+  // indietro come testo, che il server ri-risolve in commessa.
+  // Le etichette vengono rese univoche (in coda il codice) perche' la scelta
+  // viaggia per testo: due commesse omonime sarebbero indistinguibili.
+  const conteggio = new Map<string, number>();
+  for (const v of filtrate) {
+    conteggio.set(v.etichetta, (conteggio.get(v.etichetta) ?? 0) + 1);
+  }
+  const conEtichetta = filtrate.map((v) => ({
+    ...v,
+    etichetta:
+      (conteggio.get(v.etichetta) ?? 0) > 1 && v.codice
+        ? `${v.etichetta} (${v.codice})`
+        : v.etichetta,
+  }));
+
   return Response.json({
-    commesse: filtrate.map(({ cercabile: _scartato, ...resto }) => resto),
+    etichette: conEtichetta.map((v) => v.etichetta),
+    commesse: conEtichetta.map(({ cercabile: _scartato, ...resto }) => resto),
   });
 }
