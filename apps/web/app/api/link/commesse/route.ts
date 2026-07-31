@@ -42,7 +42,6 @@ interface RigaCommessa {
   descrizione_ai_proposta: string | null;
   note_iniziali: string | null;
   stato: string | null;
-  updated_at: string | null;
   cliente: { ragione_sociale: string | null } | { ragione_sociale: string | null }[] | null;
 }
 
@@ -65,11 +64,14 @@ export async function GET(request: NextRequest) {
   const { data, error } = await service
     .from('commesse')
     .select(
-      'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, stato, updated_at, cliente:clienti(ragione_sociale)',
+      'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, stato, cliente:clienti(ragione_sociale)',
     )
     .eq('tenant_id', ctx.tenantId)
     .not('stato', 'in', '(archiviata,completata)')
-    .order('updated_at', { ascending: false })
+    // Ordinate per CODICE, non per data di modifica: con 111 voci e nessun
+    // campo di ricerca su iOS, un ordine prevedibile e' l'unico modo per
+    // scorrere senza impazzire. Decrescente = le piu' recenti in cima.
+    .order('codice_interno', { ascending: false, nullsFirst: false })
     .limit(LIMITE_ELENCO);
 
   if (error) {
