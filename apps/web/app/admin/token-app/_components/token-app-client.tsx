@@ -251,17 +251,18 @@ export function TokenAppClient({
             <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">Etichetta</th>
-                <th className="w-[18%] px-3 py-2 font-medium">Azienda</th>
-                <th className="w-[18%] px-3 py-2 font-medium">Persona</th>
-                <th className="w-[14%] px-3 py-2 font-medium">Ultimo uso</th>
-                <th className="w-[12%] px-3 py-2 font-medium">Stato</th>
+                <th className="w-[15%] px-3 py-2 font-medium">Tipo</th>
+                <th className="w-[15%] px-3 py-2 font-medium">Azienda</th>
+                <th className="w-[16%] px-3 py-2 font-medium">Persona</th>
+                <th className="w-[13%] px-3 py-2 font-medium">Ultimo uso</th>
+                <th className="w-[11%] px-3 py-2 font-medium">Stato</th>
                 <th className="w-[10%] px-3 py-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {tokens.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                     Nessun token creato.
                   </td>
                 </tr>
@@ -274,8 +275,26 @@ export function TokenAppClient({
                     <td className="truncate px-3 py-2 font-medium" title={t.label}>
                       {t.label}
                     </td>
+                    {/* Due specie molto diverse: una vive sul telefono di una
+                        persona, l'altra su una macchina in casa del cliente. */}
+                    <td className="px-3 py-2">
+                      {t.scopes.includes('integrazione') ? (
+                        <Badge variant="outline" className="font-normal text-primary">
+                          Gestionale
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="font-normal text-muted-foreground">
+                          Foto
+                        </Badge>
+                      )}
+                    </td>
                     <td className="truncate px-3 py-2 text-muted-foreground">{t.tenant}</td>
-                    <td className="truncate px-3 py-2 text-muted-foreground">{t.utente}</td>
+                    <td
+                      className="truncate px-3 py-2 text-muted-foreground"
+                      title={t.utente}
+                    >
+                      {t.utente}
+                    </td>
                     <td className="px-3 py-2 tabular-nums text-muted-foreground">
                       {quando(t.lastUsedAt)}
                     </td>

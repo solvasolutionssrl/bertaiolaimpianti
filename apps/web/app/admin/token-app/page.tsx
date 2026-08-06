@@ -64,7 +64,8 @@ export default async function TokenAppPage() {
     (tokensRes.data ?? []) as unknown as Array<{
       id: string;
       tenant_id: string;
-      user_id: string;
+      // Nullo per i token di integrazione: il chiamante e' una macchina.
+      user_id: string | null;
       label: string;
       scopes: string[] | null;
       last_used_at: string | null;
@@ -75,7 +76,11 @@ export default async function TokenAppPage() {
     id: t.id,
     label: t.label,
     tenant: nomiTenant.get(t.tenant_id) ?? t.tenant_id.slice(0, 8),
-    utente: nomiUtente.get(t.user_id) ?? t.user_id.slice(0, 8),
+    // Senza persona non c'e' niente da risolvere: dirlo, invece di lasciare un
+    // trattino muto che sembrerebbe un dato mancante.
+    utente: t.user_id
+      ? (nomiUtente.get(t.user_id) ?? t.user_id.slice(0, 8))
+      : 'Agente (nessuna persona)',
     scopes: t.scopes ?? [],
     lastUsedAt: t.last_used_at,
     createdAt: t.created_at,
@@ -86,8 +91,8 @@ export default async function TokenAppPage() {
     <div className="space-y-6">
       <SectionHeader
         eyebrow="Piattaforma"
-        title="Token app"
-        description="Credenziali personali per il comando iOS «Carica su Kommessa». Il valore si vede una volta sola alla creazione; qui si revocano."
+        title="Token"
+        description="Credenziali per chi entra senza sessione browser: il comando iOS «Carica su Kommessa» e gli agenti che sincronizzano col gestionale di un cliente. Il valore si vede una volta sola alla creazione; qui si revocano."
         icon={<Smartphone className="h-4 w-4" aria-hidden="true" />}
       />
       <TokenAppClient tokens={tokens} tenants={tenants} utenti={utenti} />
