@@ -39,6 +39,14 @@ export interface RigaCollegamento {
   motivo: string;
 }
 
+/** Commessa che esiste sul gestionale e da noi no. */
+export interface SoloNelGestionale {
+  externalId: string;
+  codice: string | null;
+  nome: string;
+  cliente: string | null;
+}
+
 export interface DatiCollegamenti {
   ok: boolean;
   error?: string;
@@ -47,9 +55,17 @@ export interface DatiCollegamenti {
   righe: RigaCollegamento[];
   /** Elenco completo per il menu a tendina quando si sceglie a mano. */
   esterni: Array<{ externalId: string; etichetta: string }>;
+  /** Nel gestionale ma non da noi: si possono creare. */
+  soloNelGestionale: SoloNelGestionale[];
 }
 
-const VUOTO: DatiCollegamenti = { ok: true, esterniTotali: 0, righe: [], esterni: [] };
+const VUOTO: DatiCollegamenti = {
+  ok: true,
+  esterniTotali: 0,
+  righe: [],
+  esterni: [],
+  soloNelGestionale: [],
+};
 
 /** Da un record grezzo del gestionale tira fuori nome e codice, se ci sono. */
 function leggiEsterno(externalId: string, dati: Record<string, unknown>): CandidatoEsterno {
@@ -186,6 +202,23 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
   );
 
   void nostriPerId;
+
+  // Quello che il gestionale ha e noi no. Non si creano da soli: un ERP porta
+  // anche anni di commesse chiuse, e crearle tutte allagherebbe l'elenco
+  // cantieri di roba morta. Si mostrano e si sceglie.
+  const abbinati = new Set(
+    righe.map((r) => r.externalId).filter((x): x is string => !!x),
+  );
+  const soloNelGestionale: SoloNelGestionale[] = esterni
+    .filter((e) => !abbinati.has(e.externalId))
+    .map((e) => ({
+      externalId: e.externalId,
+      codice: e.codice,
+      nome: e.nome,
+      cliente: e.cliente ?? null,
+    }))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
   return {
     ok: true,
     esterniTotali: esterni.length,
@@ -196,7 +229,164 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
         etichetta: [e.codice, e.nome].filter(Boolean).join(' · '),
       }))
       .sort((a, b) => a.etichetta.localeCompare(b.etichetta)),
+    soloNelGestionale,
   };
+}
+
+const CreaSchema = z.object({
+  externalIds: z.array(z.string().min(1)).min(1).max(500),
+});
+
+export interface EsitoCreazione {
+  ok: boolean;
+  error?: string;
+  creati: number;
+  saltati: Array<{ externalId: string; motivo: string }>;
+}
+
+/**
+ * Crea in Kommessa i cantieri che esistono solo sul gestionale, gia' collegati.
+ *
+ * Il verso e' quello giusto per come lavora il cliente: la commessa nasce nel
+ * gestionale (e' li' che si fa l'offerta e si apre la posizione), e Kommessa la
+ * **arricchisce** con quello che il gestionale non ha — posizione sulla mappa,
+ * foto, QR, referenti, note di cantiere.
+ *
+ * Da qui in avanti quel cantiere e' **nostro**: nessun sync successivo lo
+ * sovrascrive. Il gestionale non torna piu' a toccarlo.
+ */
+export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> {
+  const parsed = CreaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Dati non validi.', creati: 0, saltati: [] };
+
+  const c = await contesto();
+  if (!c) {
+    return {
+      ok: false,
+      error: 'Integrazione non attiva o permessi mancanti.',
+      creati: 0,
+      saltati: [],
+    };
+  }
+  const { ctx, service, sistema, mondo } = c;
+
+  // Creare commesse nel mondo Kommessa e' un'altra storia: hanno codice
+  // progressivo, cartelle su Nextcloud, tipologie. Qui si ferma.
+  if (mondo === 'kommessa') {
+    return {
+      ok: false,
+      error:
+        'La creazione automatica vale per i cantieri. Le commesse vanno create dal flusso normale.',
+      creati: 0,
+      saltati: [],
+    };
+  }
+
+  const { data: stagingRaw } = await service
+    .from('integrazione_staging' as never)
+    .select('external_id, dati')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'commessa')
+    .in('external_id', parsed.data.externalIds);
+
+  const daCreare = (
+    (stagingRaw ?? []) as unknown as { external_id: string; dati: Record<string, unknown> }[]
+  ).map((r) => leggiEsterno(r.external_id, r.dati ?? {}));
+
+  // Chi e' gia' collegato non si ricrea: sarebbe un doppione silenzioso.
+  const { data: mapEsistenti } = await service
+    .from('integrazione_mappature' as never)
+    .select('external_id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'cantiere')
+    .in('external_id', parsed.data.externalIds);
+  const gia = new Set(
+    ((mapEsistenti ?? []) as unknown as { external_id: string }[]).map((m) => m.external_id),
+  );
+
+  // ⚠️ Due codici diversi, da non confondere mai:
+  //   * `cantieri.codice`          = il NOSTRO, interno e progressivo (CAN-00190).
+  //                                  E' la nostra numerazione: il gestionale non
+  //                                  la conosce e non deve entrarci.
+  //   * `cantieri.codice_commessa` = quello del CLIENTE / del gestionale (26084).
+  // Mettere il loro codice in `codice` inquinerebbe la nostra serie e la
+  // renderebbe incoerente con i 190 cantieri gia' presenti.
+  const { data: ultimoRaw } = await service
+    .from('cantieri' as never)
+    .select('codice')
+    .eq('tenant_id', ctx.tenantId)
+    .like('codice', 'CAN-%')
+    .order('codice', { ascending: false })
+    .limit(1);
+
+  const ultimo = (ultimoRaw ?? []) as unknown as { codice: string }[];
+  let prossimo =
+    Number((ultimo[0]?.codice ?? '').replace(/^CAN-/, '')) || 0;
+
+  const saltati: EsitoCreazione['saltati'] = [];
+  let creati = 0;
+
+  for (const e of daCreare) {
+    if (gia.has(e.externalId)) {
+      saltati.push({ externalId: e.externalId, motivo: 'già collegato' });
+      continue;
+    }
+
+    prossimo += 1;
+    const codice = `CAN-${String(prossimo).padStart(5, '0')}`;
+
+    const { data: creato, error } = await service
+      .from('cantieri' as never)
+      .insert({
+        tenant_id: ctx.tenantId,
+        codice,
+        nome: e.nome.slice(0, 200),
+        // Qui, e solo qui, va il codice del gestionale.
+        codice_commessa: e.codice,
+        cliente_nome: e.cliente,
+        // Nato dal gestionale, che di indirizzi non ne manda: va completato in
+        // ufficio. Il flag lo rende visibile invece di lasciarlo scoperto.
+        indirizzo_da_verificare: true,
+      } as never)
+      .select('id')
+      .single();
+
+    if (error || !creato) {
+      saltati.push({
+        externalId: e.externalId,
+        motivo: error?.message.includes('duplicate')
+          ? `codice "${codice}" già usato`
+          : (error?.message ?? 'creazione fallita'),
+      });
+      continue;
+    }
+
+    const { error: errMap } = await service.from('integrazione_mappature' as never).insert({
+      tenant_id: ctx.tenantId,
+      sistema,
+      entita: 'cantiere',
+      entita_id: (creato as unknown as { id: string }).id,
+      external_id: e.externalId,
+      external_dati: { codice: e.codice, nome: e.nome, cliente: e.cliente },
+      origine: 'manuale',
+    } as never);
+
+    if (errMap) {
+      // Il cantiere resta, ma senza collegamento non riceverebbe ore: meglio
+      // dirlo che lasciarlo lì a sembrare a posto.
+      saltati.push({
+        externalId: e.externalId,
+        motivo: 'cantiere creato ma collegamento fallito: ricollegalo a mano',
+      });
+      continue;
+    }
+    creati += 1;
+  }
+
+  revalidatePath('/office/integrazione');
+  return { ok: true, creati, saltati };
 }
 
 const SalvaSchema = z.object({

@@ -17,6 +17,7 @@ import {
   type EsitoSalvataggio,
   type RigaCollegamento,
 } from '../../../_actions/integrazione-collegamenti';
+import { NuoveDalGestionale } from './nuove-dal-gestionale';
 
 /**
  * Collegamento delle anagrafiche.
@@ -178,6 +179,8 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
           </CardContent>
         </Card>
       </div>
+
+      <NuoveDalGestionale voci={dati.soloNelGestionale} />
 
       {duplicati.size > 0 ? (
         <Card className="border-destructive/50">
