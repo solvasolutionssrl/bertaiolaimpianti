@@ -101,7 +101,16 @@ export async function autenticaToken(
   const service = createServiceSupabase();
   const { data, error } = await service
     .from('api_tokens' as never)
-    .select('id, tenant_id, user_id, scopes, revoked_at, last_used_at, utente:users(role)')
+    // ⚠️ L'embed va DISAMBIGUATO nominando il vincolo. `api_tokens` ha due
+    // chiavi esterne verso `users` (`user_id` e `created_by`): con il solo
+    // `users(role)` PostgREST non sa quale intendiamo e risponde PGRST201
+    // "Could not embed because more than one relationship was found".
+    // Non e' un errore parziale: l'intera query fallisce, `autenticaToken`
+    // torna null e OGNI token viene rifiutato con 401 — sia quelli di
+    // integrazione sia quelli del comando iOS.
+    .select(
+      'id, tenant_id, user_id, scopes, revoked_at, last_used_at, utente:users!api_tokens_user_id_fkey(role)',
+    )
     .eq('token_hash', atteso)
     .maybeSingle();
 
