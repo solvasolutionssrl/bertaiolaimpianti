@@ -70,6 +70,28 @@ describe('proponiAbbinamenti', () => {
     expect(n2.forza).toBe('certo');
   });
 
+  it('aggancia quando il codice del gestionale E\' il suo identificativo', () => {
+    // Caso ERGO: nessun campo "codice", l'objectId e' il numero che l'ufficio
+    // ha trascritto nel nostro codice_commessa.
+    const nn: CandidatoNostro[] = [
+      { id: 'x', codice: '26084', nome: 'Tutt\'altra descrizione', cliente: null },
+    ];
+    const ee: CandidatoEsterno[] = [
+      { externalId: '26084', codice: null, nome: 'SESA SPA - FORNITURA QE', cliente: null },
+    ];
+    const r = proponiAbbinamenti(nn, ee);
+    expect(r[0]!.externalId).toBe('26084');
+    expect(r[0]!.forza).toBe('certo');
+  });
+
+  it('non aggancia su id diversi solo perche\' entrambi numerici', () => {
+    const nn: CandidatoNostro[] = [{ id: 'x', codice: '26084', nome: 'Alfa', cliente: null }];
+    const ee: CandidatoEsterno[] = [
+      { externalId: '99999', codice: null, nome: 'Beta', cliente: null },
+    ];
+    expect(proponiAbbinamenti(nn, ee)[0]!.externalId).toBeNull();
+  });
+
   it('chi non somiglia a niente resta scoperto invece di essere inventato', () => {
     const n3 = proponiAbbinamenti(nostri, esterni).find((x) => x.nostroId === 'n3')!;
     expect(n3.externalId).toBeNull();

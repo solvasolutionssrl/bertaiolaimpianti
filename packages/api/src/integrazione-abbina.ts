@@ -98,10 +98,16 @@ interface Coppia {
 function valuta(n: CandidatoNostro, e: CandidatoEsterno): Coppia | null {
   const cn = normalizzaCodice(n.codice);
   const ce = normalizzaCodice(e.codice);
+  // Molti gestionali non hanno un "codice" separato: l'identificativo E' il
+  // codice (su ERGO l'`objectId`, che e' proprio il numero che l'ufficio
+  // trascrive nel nostro `codice_commessa`). Confrontare anche l'id recupera
+  // gli abbinamenti certi che altrimenti scivolerebbero sulla somiglianza dei
+  // nomi — molto piu' debole e piena di falsi.
+  const cid = normalizzaCodice(e.externalId);
 
   // Il codice, quando c'e' da entrambe le parti, batte qualunque somiglianza
   // di nome: e' un identificativo, non un indizio.
-  if (cn && ce && cn === ce) {
+  if (cn && ((ce && cn === ce) || cn === cid)) {
     return {
       nostroId: n.id,
       externalId: e.externalId,

@@ -122,6 +122,26 @@ export async function sincronizzaConGestionale(
     mappa.set(`${m.entita}:${m.entita_id}`, m.external_id);
   }
 
+  // Il committente NON si mappa a parte: e' il gestionale a sapere quale
+  // cliente sta dietro a quale commessa, e ce lo dice in `cliente_external_id`.
+  // Serve ai documenti (km, spese) che su molti ERP pretendono il cliente.
+  const { data: clienteDiRaw } = await service
+    .from('integrazione_staging' as never)
+    .select('external_id, cliente_external_id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'commessa')
+    .not('cliente_external_id', 'is', null);
+
+  const clienteDellaCommessa = new Map(
+    (
+      (clienteDiRaw ?? []) as unknown as {
+        external_id: string;
+        cliente_external_id: string;
+      }[]
+    ).map((r) => [r.external_id, r.cliente_external_id]),
+  );
+
   const dal = new Date(Date.now() - parsed.data.giorni * 86_400_000)
     .toISOString()
     .slice(0, 10);
@@ -135,11 +155,15 @@ export async function sincronizzaConGestionale(
     dipendenteId: string | null,
   ): RiferimentiEsterni => {
     const lavoro = risolviCommessa(riga, mondo);
+    const commessa = lavoro
+      ? (mappa.get(`${lavoro.entita}:${lavoro.id}`) ?? null)
+      : null;
     return {
-      commessa: lavoro ? (mappa.get(`${lavoro.entita}:${lavoro.id}`) ?? null) : null,
+      commessa,
       dipendente: dipendenteId ? (mappa.get(`dipendente:${dipendenteId}`) ?? null) : null,
-      // Il cliente si eredita dalla commessa: un cantiere ha un solo committente.
-      cliente: lavoro ? (mappa.get(`cliente_di:${lavoro.id}`) ?? null) : null,
+      // Il committente si eredita dalla commessa — un cantiere ha un solo
+      // cliente — e lo dichiara il gestionale, non lo mappiamo noi.
+      cliente: commessa ? (clienteDellaCommessa.get(commessa) ?? null) : null,
     };
   };
 

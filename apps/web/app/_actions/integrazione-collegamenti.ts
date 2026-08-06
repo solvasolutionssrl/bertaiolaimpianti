@@ -67,20 +67,35 @@ const VUOTO: DatiCollegamenti = {
   soloNelGestionale: [],
 };
 
-/** Da un record grezzo del gestionale tira fuori nome e codice, se ci sono. */
-function leggiEsterno(externalId: string, dati: Record<string, unknown>): CandidatoEsterno {
-  const s = (k: string): string | null => {
-    const v = dati[k];
-    return typeof v === 'string' && v.trim() ? v.trim() : null;
-  };
+/** Colonne canoniche di `integrazione_staging`. */
+interface RigaStaging {
+  external_id: string;
+  nome: string | null;
+  codice: string | null;
+  cliente_external_id: string | null;
+  attiva: boolean | null;
+}
+
+/**
+ * I record arrivano gia' in lingua canonica: qui non si interpreta niente.
+ *
+ * La traduzione dal dialetto del gestionale la fa l'agente — che quel
+ * gestionale lo conosce — e ce la consegna con nomi di campo nostri. Se
+ * Kommessa provasse a indovinare (`description`? `descrizione`? `name`?) la
+ * lista delle chiavi si allungherebbe a ogni cliente nuovo, e sarebbe dialetto
+ * dell'ERP dentro il nostro codice.
+ *
+ * `nomiCliente` serve solo a mostrare il committente accanto alla commessa:
+ * il collegamento lo porta gia' l'agente in `cliente_external_id`.
+ */
+function daStaging(r: RigaStaging, nomiCliente: Map<string, string>): CandidatoEsterno {
   return {
-    externalId,
-    // I gestionali chiamano le stesse cose in modi diversi: si prova in ordine
-    // invece di imporre uno schema, cosi' un ERP nuovo non richiede codice.
-    codice: s('codice') ?? s('code') ?? s('codiceCommessa') ?? s('number') ?? null,
-    nome:
-      s('descrizione') ?? s('description') ?? s('nome') ?? s('name') ?? externalId,
-    cliente: s('cliente') ?? s('customer') ?? s('companyName') ?? s('ragioneSociale') ?? null,
+    externalId: r.external_id,
+    codice: r.codice,
+    nome: r.nome ?? r.external_id,
+    cliente: r.cliente_external_id
+      ? (nomiCliente.get(r.cliente_external_id) ?? null)
+      : null,
   };
 }
 
@@ -148,16 +163,30 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
     }),
   );
 
+  // I clienti servono solo per mostrare il committente accanto alla commessa e
+  // per rafforzare l'abbinamento quando i nomi si somigliano.
+  const { data: clientiRaw } = await service
+    .from('integrazione_staging' as never)
+    .select('external_id, nome')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'cliente');
+  const nomiCliente = new Map(
+    ((clientiRaw ?? []) as unknown as { external_id: string; nome: string | null }[])
+      .filter((r) => r.nome)
+      .map((r) => [r.external_id, r.nome!]),
+  );
+
   const { data: stagingRaw } = await service
     .from('integrazione_staging' as never)
-    .select('external_id, dati')
+    .select('external_id, nome, codice, cliente_external_id, attiva')
     .eq('tenant_id', ctx.tenantId)
     .eq('sistema', sistema)
     .eq('entita', 'commessa');
 
   const esterni: CandidatoEsterno[] = (
-    (stagingRaw ?? []) as unknown as { external_id: string; dati: Record<string, unknown> }[]
-  ).map((r) => leggiEsterno(r.external_id, r.dati ?? {}));
+    (stagingRaw ?? []) as unknown as RigaStaging[]
+  ).map((r) => daStaging(r, nomiCliente));
 
   const { data: mapRaw } = await service
     .from('integrazione_mappature' as never)
@@ -284,15 +313,15 @@ export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> 
 
   const { data: stagingRaw } = await service
     .from('integrazione_staging' as never)
-    .select('external_id, dati')
+    .select('external_id, nome, codice, cliente_external_id, attiva')
     .eq('tenant_id', ctx.tenantId)
     .eq('sistema', sistema)
     .eq('entita', 'commessa')
     .in('external_id', parsed.data.externalIds);
 
-  const daCreare = (
-    (stagingRaw ?? []) as unknown as { external_id: string; dati: Record<string, unknown> }[]
-  ).map((r) => leggiEsterno(r.external_id, r.dati ?? {}));
+  const daCreare = ((stagingRaw ?? []) as unknown as RigaStaging[]).map((r) =>
+    daStaging(r, new Map()),
+  );
 
   // Chi e' gia' collegato non si ricrea: sarebbe un doppione silenzioso.
   const { data: mapEsistenti } = await service

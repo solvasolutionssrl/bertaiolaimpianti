@@ -12,9 +12,25 @@ export const maxDuration = 60;
 const ENTITA_AMMESSE = ['commessa', 'cliente', 'dipendente'] as const;
 const MAX_RECORD = 1000;
 
+/**
+ * Record in **lingua canonica**. La traduzione dal dialetto del gestionale la
+ * fa l'agente, che quel gestionale lo conosce: Kommessa non deve indovinare
+ * dove sta il nome e dove il codice, perche' la lista delle chiavi possibili
+ * si allungherebbe a ogni cliente nuovo.
+ */
 interface RecordLetto {
   externalId: string;
-  dati: Record<string, unknown>;
+  /** Nome leggibile: e' cio' che l'ufficio vede quando abbina. Obbligatorio. */
+  nome?: string;
+  /** Codice leggibile. Se sul gestionale l'identificativo funge da codice,
+   *  ripeti qui l'externalId — e' quello che l'ufficio trascrive da noi. */
+  codice?: string | null;
+  /** Committente sul gestionale: i documenti di km e spese lo pretendono. */
+  clienteExternalId?: string | null;
+  /** `false` = chiusa / non piu' in forza. Guida i default lato Kommessa. */
+  attiva?: boolean | null;
+  /** Risposta grezza del gestionale, come allegato. Non viene interpretata. */
+  dati?: Record<string, unknown>;
 }
 
 /**
@@ -62,7 +78,14 @@ export async function POST(request: NextRequest) {
   const scartati: string[] = [];
   const righe = record
     .filter((r) => {
-      const ok = r && typeof r.externalId === 'string' && r.externalId.trim() !== '';
+      // Senza identificativo il record non e' agganciabile a nulla; senza nome
+      // l'ufficio si troverebbe ad abbinare stringhe vuote.
+      const ok =
+        r &&
+        typeof r.externalId === 'string' &&
+        r.externalId.trim() !== '' &&
+        typeof r.nome === 'string' &&
+        r.nome.trim() !== '';
       if (!ok) scartati.push(String((r as RecordLetto | undefined)?.externalId ?? '?'));
       return ok;
     })
@@ -71,15 +94,27 @@ export async function POST(request: NextRequest) {
       sistema,
       entita,
       external_id: r.externalId.trim(),
+      nome: r.nome!.trim().slice(0, 300),
+      codice: r.codice?.trim() || null,
+      cliente_external_id: r.clienteExternalId?.trim() || null,
+      attiva: typeof r.attiva === 'boolean' ? r.attiva : null,
       dati: r.dati ?? {},
+      // L'impronta copre anche i campi canonici: se cambia il nome ma non il
+      // grezzo (o viceversa) il record va comunque rivisto.
       contenuto_hash: createHash('sha256')
-        .update(JSON.stringify(r.dati ?? {}))
+        .update(
+          JSON.stringify([r.nome, r.codice, r.clienteExternalId, r.attiva, r.dati ?? {}]),
+        )
         .digest('hex'),
       letto_at: new Date().toISOString(),
     }));
 
   if (righe.length === 0) {
-    return erroreApi(400, 'nessun_record_valido', 'Nessun record aveva un `externalId`.');
+    return erroreApi(
+      400,
+      'nessun_record_valido',
+      'Ogni record deve avere `externalId` e `nome`.',
+    );
   }
 
   const service = createServiceSupabase();

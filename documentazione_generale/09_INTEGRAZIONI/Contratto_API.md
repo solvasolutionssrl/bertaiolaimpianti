@@ -174,12 +174,32 @@ Risposta: `{ "contratto": 1, "applicati": 8, "ignorati": 2, "nonTrovati": [] }`
 
 ```jsonc
 { "entita": "commessa",
-  "record": [ { "externalId": "26087", "dati": { "descrizione": "Fincantieri Monfalcone", "chiusa": false } } ] }
+  "record": [ {
+    "externalId": "26087",              // obbligatorio — identificativo sul gestionale
+    "nome": "FINCANTIERI SPA - MONFALCONE",  // obbligatorio — cio' che l'ufficio legge
+    "codice": "26087",                  // codice leggibile; se l'id FA da codice, ripetilo
+    "clienteExternalId": "70796",       // committente: i documenti km/spese lo pretendono
+    "attiva": true,                     // false = chiusa / non piu' in forza
+    "dati": { "…": "risposta grezza, come allegato" }
+  } ] }
 ```
 
-Max 1000 record per chiamata. `dati` è **libero**: mandaci la risposta del gestionale così
-com'è, senza normalizzarla. Serve a Kommessa per mostrare cosa si sta collegando, e a te
-per non dover decidere cosa è importante.
+Max 1000 record per chiamata.
+
+> **I campi sono in lingua canonica, e la traduzione la fai tu.** Kommessa non prova a
+> indovinare dove sia il nome o il codice nella risposta del tuo gestionale: la lista delle
+> chiavi da tentare si allungherebbe a ogni cliente nuovo, e sarebbe dialetto del tuo ERP
+> dentro il nostro codice. Tu il gestionale lo conosci, noi no.
+>
+> - **`nome`** e **`externalId`** sono obbligatori: senza, il record viene scartato.
+> - **`codice`**: se sul tuo gestionale l'identificativo funge anche da codice (è il caso di
+>   ERGO, dove l'`objectId` è il numero che l'ufficio trascrive), **ripeti lì l'externalId**.
+>   È il segnale più forte per l'abbinamento automatico.
+> - **`clienteExternalId`**: l'`externalId` del cliente, non il suo nome. Serve perché molti
+>   gestionali pretendono il committente sui documenti di km e spese, e questo è l'unico
+>   punto in cui possiamo saperlo.
+> - **`attiva`**: guida i default — un dipendente non più in forza nasce disattivato.
+> - **`dati`**: la risposta grezza, come allegato. Non viene interpretata.
 
 I dati atterrano in un'area di sosta e **non toccano** le tabelle vere: un gestionale che
 risponde a metà non deve poter corrompere i cantieri di produzione.

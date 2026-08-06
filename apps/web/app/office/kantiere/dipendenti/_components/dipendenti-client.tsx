@@ -20,6 +20,7 @@ import {
   Check,
   KeyRound,
   ArrowRight,
+  ChevronDown,
 } from 'lucide-react';
 import {
   Badge,
@@ -33,6 +34,7 @@ import {
   DialogTitle,
   Input,
   Label,
+  cn,
 } from '@kommessa/ui';
 import { etichettaAccesso } from '@kommessa/api/kantiere';
 import { useAlert } from '@/app/_components/confirm-provider';
@@ -224,13 +226,19 @@ export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
   // Filtri
   const [cerca, setCerca] = React.useState('');
   const [filtroRuolo, setFiltroRuolo] = React.useState<FiltroRuolo>('');
-  const [filtroStato, setFiltroStato] = React.useState<'tutti' | 'attivi'>('tutti');
+  // Si parte da chi lavora OGGI: con l'import del gestionale i non piu' in
+  // forza superano quelli in forza, e mescolati renderebbero l'elenco inutile.
+  const [filtroStato, setFiltroStato] = React.useState<'tutti' | 'attivi'>('attivi');
+  const [mostraNonInForza, setMostraNonInForza] = React.useState(false);
 
   // Statistiche
   const totale = dipendenti.length;
   const conLogin = dipendenti.filter((d) => !!d.user_id).length;
   const conRuoloOffice = dipendenti.filter((d) => categoriaRuolo(d.user_id, utenti) === 'office').length;
   const attivi = dipendenti.filter((d) => d.stato_attivo).length;
+  const nonInForza = dipendenti
+    .filter((d) => !d.stato_attivo)
+    .sort((a, b) => `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`));
 
   // Applicazione filtri
   const q = cerca.trim().toLowerCase();
@@ -615,6 +623,55 @@ export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Non piu' in forza — chiusa, in fondo, in grigio.
+          Nascono soprattutto dall'import del gestionale, che porta anche i
+          dipendenti di anni passati. Non si buttano (le loro ore storiche
+          restano appese a loro) ma non devono nemmeno stare in mezzo a chi
+          lavora oggi: nell'elenco principale sarebbero rumore. */}
+      {nonInForza.length > 0 && filtroStato === 'attivi' && (
+        <Card className="border-dashed">
+          <CardContent className="p-0">
+            <button
+              type="button"
+              onClick={() => setMostraNonInForza((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="text-sm text-muted-foreground">
+                <strong className="font-semibold">{nonInForza.length}</strong> non più in
+                forza
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className={cn(
+                  'h-4 w-4 text-muted-foreground transition-transform',
+                  mostraNonInForza && 'rotate-180',
+                )}
+              />
+            </button>
+            {mostraNonInForza && (
+              <div className="divide-y divide-border border-t border-border">
+                {nonInForza.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => openEdit(d)}
+                    className="flex w-full items-center justify-between px-4 py-2 text-left opacity-60 transition-opacity hover:opacity-100"
+                  >
+                    <span className="text-sm">
+                      {d.cognome} {d.nome}
+                      {d.mansione ? (
+                        <span className="text-muted-foreground"> · {d.mansione}</span>
+                      ) : null}
+                    </span>
+                    <span className="text-xs text-muted-foreground">riattiva →</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
