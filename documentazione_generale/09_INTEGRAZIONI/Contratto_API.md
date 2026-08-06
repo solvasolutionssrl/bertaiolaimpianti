@@ -207,7 +207,7 @@ l'agente è morto a metà, ed è l'unico modo per accorgersene.
 ```
 GET  /configurazione                       (all'avvio)
 POST /esecuzioni  {apri, scrittura}        → idGiro
-GET  /lavori?limite=50
+POST /lavori      {limite: 50}         ← POST, non GET: vedi §2
      → per ciascuno: traduci e scrivi sul gestionale
 POST /esiti       {esiti:[…]}
 POST /esecuzioni  {chiudi, idGiro, esito, conteggi}

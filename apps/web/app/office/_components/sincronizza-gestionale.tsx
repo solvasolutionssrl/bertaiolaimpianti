@@ -128,6 +128,14 @@ export function SincronizzaGestionale() {
                   Di solito significa che un’anagrafica non è ancora collegata a
                   quella del gestionale.
                 </p>
+                {/* Il problema si scopre qui, quindi qui va la via d'uscita:
+                    senza, resta da indovinare dove si risolve. */}
+                <a
+                  href="/office/integrazione"
+                  className="inline-block text-xs font-semibold text-amber-900 underline underline-offset-2 dark:text-amber-200"
+                >
+                  Collega le anagrafiche →
+                </a>
               </div>
             ) : null}
 
