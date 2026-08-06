@@ -12,7 +12,11 @@ import {
   cn,
 } from '@kommessa/ui';
 
-import { creaApiToken, revocaApiToken } from '../../_actions/api-tokens';
+import {
+  creaApiToken,
+  revocaApiToken,
+  type ScopeTokenAdmin,
+} from '../../_actions/api-tokens';
 
 export interface TokenRow {
   id: string;
@@ -59,6 +63,7 @@ export function TokenAppClient({
   const [tenantId, setTenantId] = React.useState(tenants[0]?.id ?? '');
   const [userId, setUserId] = React.useState('');
   const [label, setLabel] = React.useState('');
+  const [scope, setScope] = React.useState<ScopeTokenAdmin>('upload');
   const [pending, start] = React.useTransition();
   const [errore, setErrore] = React.useState<string | null>(null);
   const [appenaCreato, setAppenaCreato] = React.useState<string | null>(null);
@@ -69,7 +74,7 @@ export function TokenAppClient({
   const crea = () => {
     setErrore(null);
     start(async () => {
-      const res = await creaApiToken({ tenantId, userId, label });
+      const res = await creaApiToken({ tenantId, userId, label, scope });
       if (!res.ok || !res.token) {
         setErrore(res.error ?? 'Creazione fallita');
         return;
@@ -138,7 +143,7 @@ export function TokenAppClient({
       <Card>
         <CardContent className="space-y-4 p-4">
           <p className="text-sm font-semibold">Nuovo token</p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="tk-tenant">Azienda</Label>
               <select
@@ -157,32 +162,64 @@ export function TokenAppClient({
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="tk-utente">Persona</Label>
-              <select
-                id="tk-utente"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-              >
-                <option value="">Scegli…</option>
-                {utentiDelTenant.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nome} ({u.ruolo})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Un agente non agisce per conto di nessuno: chiedere una persona
+                significherebbe attribuirle ore e documenti che non ha inserito. */}
+            {scope === 'integrazione' ? (
+              <div className="space-y-1.5">
+                <Label>Persona</Label>
+                <div className="flex h-10 items-center rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground">
+                  Nessuna — è una macchina
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="tk-utente">Persona</Label>
+                <select
+                  id="tk-utente"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">Scegli…</option>
+                  {utentiDelTenant.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nome} ({u.ruolo})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="tk-label">Etichetta</Label>
               <Input
                 id="tk-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="iPhone di Luca"
+                placeholder={
+                  scope === 'integrazione' ? 'Agente ERGO — VM FPM' : 'iPhone di Luca'
+                }
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="tk-scope">A cosa serve</Label>
+              <select
+                id="tk-scope"
+                value={scope}
+                onChange={(e) => setScope(e.target.value as ScopeTokenAdmin)}
+                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+              >
+                <option value="upload">Caricare foto dal telefono</option>
+                <option value="integrazione">Sincronizzare col gestionale</option>
+              </select>
+            </div>
           </div>
+          {/* I due mondi non si toccano: dirlo qui evita di consegnare a una VM
+              un token che sa anche caricare foto. */}
+          <p className="text-xs text-muted-foreground">
+            {scope === 'integrazione'
+              ? 'Apre solo le rotte di sincronizzazione. Non dà accesso a foto, commesse o al resto dell’app.'
+              : 'Serve al comando iOS “Carica su Kommessa”: elenco commesse e invio file.'}
+          </p>
           {errore ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {errore}
@@ -191,7 +228,12 @@ export function TokenAppClient({
           <Button
             type="button"
             onClick={crea}
-            disabled={pending || !tenantId || !userId || !label.trim()}
+            disabled={
+              pending ||
+              !tenantId ||
+              !label.trim() ||
+              (scope === 'upload' && !userId)
+            }
           >
             {pending ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

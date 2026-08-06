@@ -73,6 +73,8 @@ export interface OfficeShellProps {
   navItems?: OfficeNavItem[];
   activeNavId?: string;
   notificationCount?: number;
+  /** Slot per azioni globali nell'intestazione, a destra della ricerca. */
+  azioniHeader?: React.ReactNode;
   onNotificationsClick?: () => void;
   onLogout?: () => void;
   linkComponent?: React.ComponentType<{
@@ -101,6 +103,7 @@ function OfficeShell({
   navItems = DEFAULT_OFFICE_NAV,
   activeNavId,
   notificationCount = 0,
+  azioniHeader,
   onNotificationsClick,
   onLogout,
   linkComponent: LinkComp,
@@ -412,6 +415,11 @@ function OfficeShell({
               ⌘K
             </kbd>
           </div>
+
+          {/* Azioni trasversali che non appartengono a una pagina sola (es.
+              "Sincronizza col gestionale"). Stanno prima della campanella
+              perche' sono azioni, non notifiche. */}
+          {azioniHeader}
 
           <Button
             variant="ghost"

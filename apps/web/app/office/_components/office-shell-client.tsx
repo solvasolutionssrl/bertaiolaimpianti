@@ -25,6 +25,7 @@ import {
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
+import { SincronizzaGestionale } from './sincronizza-gestionale';
 
 interface Props {
   tenant: { name: string; logoUrl?: string; brandColor?: string };
@@ -32,6 +33,8 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
+  /** Modulo Integrazione attivo → tasto "Sincronizza" nell'intestazione. */
+  hasIntegrazione?: boolean;
   /** Modulo Dipendenti attivo → sezione Personale (Dipendenti, ...). */
   hasDipendenti?: boolean;
   /** Modulo Dipendenti · sotto-flag Pianificazione attivo → voce Pianificazione. */
@@ -358,6 +361,7 @@ export function OfficeShellClient({
   activeNavId,
   notificationCount,
   hasKantiere,
+  hasIntegrazione,
   hasDipendenti,
   hasPianificazione,
   hasFerie,
@@ -407,6 +411,7 @@ export function OfficeShellClient({
         notificationCount={notificationCount}
         onLogout={handleLogout}
         onNotificationsClick={() => router.push('/office/notifiche')}
+        azioniHeader={hasIntegrazione ? <SincronizzaGestionale /> : null}
         linkComponent={NextLinkAdapter}
       >
         {children}

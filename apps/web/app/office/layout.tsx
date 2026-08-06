@@ -106,6 +106,8 @@ export default async function OfficeLayout({
   const notificationCount = notifRes.count ?? 0;
   const hasKantiere = await tenantHasModule('kantiere');
   const hasDipendenti = await tenantHasModule('dipendenti');
+  // Il tasto "Sincronizza" compare solo per chi ha un gestionale collegato.
+  const hasIntegrazione = await tenantHasModule('integrazione');
   // Sotto-flag del modulo Dipendenti (gating fine delle voci nav).
   const dipCfg = hasDipendenti ? await leggiConfigDipendenti(supabase, ctx.tenantId) : null;
   const hasPianificazione = hasDipendenti && (dipCfg?.pianificazioneAttiva ?? true);
@@ -149,6 +151,7 @@ export default async function OfficeLayout({
         user={user}
         notificationCount={notificationCount}
         hasKantiere={hasKantiere}
+        hasIntegrazione={hasIntegrazione}
         hasDipendenti={hasDipendenti}
         hasPianificazione={hasPianificazione}
         hasFerie={hasFerie}

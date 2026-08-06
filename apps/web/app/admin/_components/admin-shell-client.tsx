@@ -10,6 +10,7 @@ import {
   CloudUpload,
   FileEdit,
   HardDrive,
+  Plug,
   HardHat,
   HeartPulse,
   KeyRound,
@@ -70,6 +71,12 @@ const NAV_GROUPS: AdminNavGroup[] = [
       { id: 'media', label: 'Media & sync', href: '/admin/media', icon: CloudUpload },
       { id: 'storage-r2', label: 'Storage R2', href: '/admin/storage-r2', icon: HardDrive },
       { id: 'bozze', label: 'Bozze', href: '/admin/bozze', icon: FileEdit },
+      {
+        id: 'integrazioni',
+        label: 'Integrazioni',
+        href: '/admin/integrazioni',
+        icon: Plug,
+      },
     ],
   },
   {

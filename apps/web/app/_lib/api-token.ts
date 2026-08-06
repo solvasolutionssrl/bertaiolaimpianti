@@ -26,12 +26,24 @@ export function hashToken(inChiaro: string): string {
   return createHash('sha256').update(inChiaro.trim()).digest('hex');
 }
 
-export type ScopeToken = 'upload';
+/**
+ * Permessi concedibili a un token.
+ * - `upload`       : comando iOS "Carica su Kommessa" (elenco commesse + invio file).
+ * - `integrazione` : agente di sync verso il gestionale di un cliente. Apre SOLO
+ *                    le rotte `/api/integrazione/*` — nessun accesso ai media,
+ *                    alle commesse o al resto dell'app.
+ */
+export type ScopeToken = 'upload' | 'integrazione';
 
 export interface ContestoToken {
   tokenId: string;
   tenantId: string;
-  userId: string;
+  /**
+   * Persona per conto della quale il token agisce. `null` per i token di
+   * integrazione: li' il chiamante e' una macchina, non un dipendente, e
+   * attribuirlo a qualcuno sporcherebbe l'audit con un dato falso.
+   */
+  userId: string | null;
   scopes: string[];
   /**
    * Ruolo applicativo dell'utente per conto del quale il token agisce.
@@ -45,7 +57,7 @@ export interface ContestoToken {
 interface RigaToken {
   id: string;
   tenant_id: string;
-  user_id: string;
+  user_id: string | null;
   scopes: string[] | null;
   revoked_at: string | null;
   last_used_at: string | null;
@@ -65,6 +77,19 @@ function leggiHeader(request: Request): string | null {
  * inesistente, revocato, scope mancante): al chiamante basta un 401 uniforme,
  * e non diamo indizi su quale dei casi si sia verificato.
  */
+/**
+ * Con scope `upload` la persona c'e' sempre: il vincolo in tabella la impone e
+ * il controllo qui sotto la ri-verifica. L'overload lo dichiara al compilatore,
+ * cosi' le rotte `/api/link/*` non devono controllarlo a mano.
+ */
+export async function autenticaToken(
+  request: Request,
+  scopeRichiesto: 'upload',
+): Promise<(ContestoToken & { userId: string }) | null>;
+export async function autenticaToken(
+  request: Request,
+  scopeRichiesto: ScopeToken,
+): Promise<ContestoToken | null>;
 export async function autenticaToken(
   request: Request,
   scopeRichiesto: ScopeToken,
@@ -92,6 +117,12 @@ export async function autenticaToken(
 
   const scopes = riga.scopes ?? [];
   if (!scopes.includes(scopeRichiesto)) return null;
+
+  // Un token `upload` senza persona non e' utilizzabile: i file finirebbero
+  // senza proprietario e l'audit senza autore. Il vincolo in tabella lo impedisce,
+  // ma qui si ri-verifica — cosi' l'overload che promette `userId: string` dice
+  // il vero anche se un domani il vincolo cambiasse.
+  if (scopeRichiesto === 'upload' && !riga.user_id) return null;
 
   // `last_used_at` serve a riconoscere i token dimenticati: aggiornato al
   // massimo una volta al minuto per non scrivere a ogni file di un batch.

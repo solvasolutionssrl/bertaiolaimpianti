@@ -19,40 +19,61 @@ export interface RisultatoCreazione {
   error?: string;
 }
 
+/**
+ * A cosa serve il token. Sono mondi separati e non si mescolano: un token per
+ * l'integrazione non deve poter caricare foto, e viceversa.
+ * - `upload`       : comando iOS "Carica su Kommessa" (un telefono, una persona).
+ * - `integrazione` : agente di sincronizzazione col gestionale del cliente
+ *                    (una macchina dentro la loro rete). Apre solo `/api/integrazione/*`.
+ */
+export type ScopeTokenAdmin = 'upload' | 'integrazione';
+
 export async function creaApiToken(input: {
   tenantId: string;
-  userId: string;
+  /** Solo per i token `upload`: un agente non agisce per conto di nessuno. */
+  userId?: string | null;
   label: string;
+  scope?: ScopeTokenAdmin;
 }): Promise<RisultatoCreazione> {
   const admin = await requirePlatformAdmin();
 
   const label = input.label.trim();
   if (!label) return { ok: false, error: 'Serve un’etichetta.' };
-  if (!input.tenantId || !input.userId) {
-    return { ok: false, error: 'Serve un tenant e un utente.' };
+  if (!input.tenantId) return { ok: false, error: 'Serve un’azienda.' };
+
+  const scope: ScopeTokenAdmin = input.scope === 'integrazione' ? 'integrazione' : 'upload';
+
+  // Un token `upload` E' una persona: i file caricati risultano suoi e l'audit
+  // deve poter dire chi ha fatto cosa. Un token di integrazione no — chi chiama
+  // e' una macchina, e attribuirla a un dipendente sarebbe un dato falso.
+  const userId = scope === 'integrazione' ? null : (input.userId ?? null);
+  if (scope === 'upload' && !userId) {
+    return { ok: false, error: 'Serve la persona a cui intestare il token.' };
   }
 
   const service = createServiceSupabase();
 
   // L'utente deve appartenere al tenant scelto: un token e' l'identita' di
   // quella persona dentro quell'azienda, non un accoppiamento arbitrario.
-  const { data: utente } = await service
-    .from('users')
-    .select('id, tenant_id')
-    .eq('id', input.userId)
-    .eq('tenant_id', input.tenantId)
-    .maybeSingle();
-  if (!utente) {
-    return { ok: false, error: 'L’utente non appartiene a questo tenant.' };
+  if (userId) {
+    const { data: utente } = await service
+      .from('users')
+      .select('id, tenant_id')
+      .eq('id', userId)
+      .eq('tenant_id', input.tenantId)
+      .maybeSingle();
+    if (!utente) {
+      return { ok: false, error: 'L’utente non appartiene a questo tenant.' };
+    }
   }
 
   const inChiaro = generaTokenInChiaro();
   const { error } = await service.from('api_tokens' as never).insert({
     tenant_id: input.tenantId,
-    user_id: input.userId,
+    user_id: userId,
     label,
     token_hash: hashToken(inChiaro),
-    scopes: ['upload'],
+    scopes: [scope],
     created_by: admin.userId,
   } as never);
 
@@ -63,9 +84,9 @@ export async function creaApiToken(input: {
     actor_user_id: admin.userId,
     actor_role: 'platform_admin',
     entity_type: 'api_token',
-    entity_id: input.userId,
+    entity_id: userId ?? input.tenantId,
     action: 'api_token.create',
-    metadata: { label, scopes: ['upload'] },
+    metadata: { label, scopes: [scope] },
   } as never);
 
   revalidatePath('/admin/token-app');
