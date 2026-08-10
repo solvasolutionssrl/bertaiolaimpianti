@@ -10,7 +10,7 @@ import { fmtData } from '../../../_lib/format';
 export interface PanoramicaRow {
   id: string;
   codice_interno: string;
-  stato: 'aperta' | 'in_corso' | 'collaudo';
+  stato: 'aperta' | 'in_corso' | 'collaudo' | 'completata';
   cliente_nome: string;
   titolo: string;
   inserita: string | null;
@@ -24,6 +24,8 @@ const STATO_META: Record<
   aperta: { label: 'Non presa', color: '#1a7f52' },
   in_corso: { label: 'In corso', color: '#1340A6' },
   collaudo: { label: 'In collaudo', color: '#F26B23' },
+  // hsl(220 30% 30%) del tema: le chiuse non devono gridare quanto le vive.
+  completata: { label: 'Completata', color: '#364563' },
 };
 
 const FILTRI: Array<{ value: '' | PanoramicaRow['stato']; label: string }> = [
@@ -31,6 +33,7 @@ const FILTRI: Array<{ value: '' | PanoramicaRow['stato']; label: string }> = [
   { value: 'aperta', label: 'Non prese' },
   { value: 'in_corso', label: 'In corso' },
   { value: 'collaudo', label: 'In collaudo' },
+  { value: 'completata', label: 'Completate' },
 ];
 
 export function PanoramicaClient({
@@ -63,7 +66,7 @@ export function PanoramicaClient({
   }, [rows, q, stato]);
 
   const counts = useMemo(() => {
-    const c = { aperta: 0, in_corso: 0, collaudo: 0 } as Record<
+    const c = { aperta: 0, in_corso: 0, collaudo: 0, completata: 0 } as Record<
       PanoramicaRow['stato'],
       number
     >;
@@ -71,7 +74,7 @@ export function PanoramicaClient({
     return c;
   }, [filtered]);
 
-  const statoLabel = stato ? STATO_META[stato].label : 'Tutte le commesse aperte';
+  const statoLabel = stato ? STATO_META[stato].label : 'Tutte le commesse';
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 px-4 pb-10 pt-2 md:px-6">
@@ -145,7 +148,7 @@ export function PanoramicaClient({
           {/* Header brandizzato */}
           <div className="doc-header">
             <div className="doc-head-text">
-              <p className="doc-eyebrow">Panoramica commesse aperte</p>
+              <p className="doc-eyebrow">Panoramica commesse</p>
               <h1 className="doc-title">{tenantName}</h1>
               <p className="doc-sub">
                 Stato: <strong>{statoLabel}</strong> · {filtered.length} commess
@@ -171,13 +174,14 @@ export function PanoramicaClient({
             <StatoChip stato="in_corso" n={counts.in_corso} />
             <StatoChip stato="collaudo" n={counts.collaudo} />
             <StatoChip stato="aperta" n={counts.aperta} />
+            <StatoChip stato="completata" n={counts.completata} />
           </div>
 
           {/* Tabellone */}
           {filtered.length === 0 ? (
             <p className="doc-empty">
               {rows.length === 0
-                ? 'Nessuna commessa aperta al momento.'
+                ? 'Nessuna commessa da mostrare.'
                 : 'Nessuna commessa corrisponde ai filtri selezionati.'}
             </p>
           ) : (
@@ -231,7 +235,7 @@ export function PanoramicaClient({
           )}
 
           <footer className="doc-footer">
-            {tenantName} · Panoramica commesse aperte · Generato da Kommessa ·{' '}
+            {tenantName} · Panoramica commesse · Generato da Kommessa ·{' '}
             {aggiornatoAl}
           </footer>
         </div>

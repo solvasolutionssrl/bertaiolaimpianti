@@ -161,10 +161,32 @@ export async function spostaCommessaInStato(
     const toPath = newCloudPath.replace(/^\/+/, '');
     await storage.move(fromPath, toPath);
   } catch (e) {
-    return {
-      ok: false,
-      error: `MOVE Nextcloud fallito: ${e instanceof Error ? e.message : 'unknown'}`,
-    };
+    const tecnico = e instanceof Error ? e.message : 'unknown';
+    // Il dettaglio WebDAV serve a noi, non all'utente: resta nei log.
+    // eslint-disable-next-line no-console
+    console.error(
+      `[sposta-commessa-stato] MOVE fallito · commessa ${commessa.codice_interno} · ` +
+        `da "${oldCloudPath}" a "${newCloudPath}" · ${tecnico}`,
+    );
+    const spiegazione = await spiegaMoveFallito({
+      storage,
+      oldCloudPath,
+      currentFolder,
+      codiceInterno: commessa.codice_interno,
+      nomeCartella: commessa.nome_cartella,
+      tecnico,
+    });
+    await audit(supabase, ctx, commessaId, commessa.codice_interno, {
+      from_stato: commessa.stato,
+      to_stato: newStato,
+      moved: false,
+      esito: 'errore_move',
+      causa: spiegazione.causa,
+      cartella_attesa: commessa.nome_cartella,
+      cartella_trovata: spiegazione.nomeReale ?? null,
+      errore_tecnico: tecnico,
+    });
+    return { ok: false, error: spiegazione.messaggio };
   }
 
   // 4) UPDATE atomico DB
@@ -330,4 +352,118 @@ async function audit(
       ...metadata,
     } as unknown as never,
   });
+}
+
+/** Le quattro cartelle di stato: dove cercare una cartella che non risponde. */
+const CARTELLE_STATO = [
+  '01_Richieste',
+  '02_In_Lavorazione',
+  '03_Completate',
+  '04_Archivio',
+] as const;
+
+interface SpiegazioneMove {
+  /** Etichetta breve per l'audit. */
+  causa: 'rinominata' | 'altrove' | 'sparita' | 'altro';
+  /** Messaggio per l'utente: dice cos'è successo e cosa può fare. */
+  messaggio: string;
+  /** Nome reale della cartella, se ritrovata. */
+  nomeReale?: string;
+}
+
+/**
+ * Traduce un MOVE fallito in una frase che l'ufficio possa capire e agire.
+ *
+ * ─── Perché esiste (10/08/2026) ────────────────────────────────────────────
+ * Spostando BER-26-038 da "Non presa" a "In corso" compariva un dump WebDAV
+ * ("Sabre\DAV\Exception\NotFound…"): incomprensibile e, soprattutto, muto sulla
+ * causa vera. La causa era che qualcuno aveva **rinominato la cartella a mano**
+ * su Nextcloud (`_Cobi_` → `_Cobit_`, correggendo il nome del cliente): l'app
+ * cerca il nome che conosce e non lo trova più.
+ *
+ * Il caso è riconoscibile senza ambiguità — la cartella del DB non risponde, ma
+ * nelle cartelle di stato ce n'è una che inizia con lo stesso codice commessa —
+ * quindi si può dire all'utente **come si chiama adesso**. Il dettaglio tecnico
+ * resta nei log e nell'audit, dove serve a noi.
+ */
+async function spiegaMoveFallito(opzioni: {
+  storage: StorageProvider;
+  oldCloudPath: string;
+  /** Cartella di stato attuale secondo il DB (null se il path è malformato). */
+  currentFolder: string | null;
+  codiceInterno: string;
+  nomeCartella: string;
+  tecnico: string;
+}): Promise<SpiegazioneMove> {
+  const { storage, oldCloudPath, currentFolder, codiceInterno, nomeCartella } =
+    opzioni;
+
+  const generico: SpiegazioneMove = {
+    causa: 'altro',
+    messaggio:
+      'Non sono riuscito a spostare la cartella su Nextcloud. Lo stato della commessa non è stato cambiato: riprova fra qualche minuto. Se l’errore continua, segnala a SOLVA il codice ' +
+      `${codiceInterno} (il dettaglio tecnico è già nei log).`,
+  };
+
+  try {
+    // La cartella di partenza c'è davvero? Se sì il problema è un altro
+    // (destinazione, permessi, rete) e non ha senso indovinare.
+    if (await storage.exists(oldCloudPath.replace(/^\/+/, ''))) return generico;
+
+    // Cerchiamo una cartella che inizi con lo stesso codice commessa: è il
+    // segno inequivocabile di una rinomina fatta a mano.
+    const prefisso = `${codiceInterno}_`;
+    const daCercare: string[] = [
+      ...(currentFolder ? [currentFolder] : []),
+      ...CARTELLE_STATO.filter((c) => c !== currentFolder),
+    ];
+
+    for (const cartella of daCercare) {
+      let voci;
+      try {
+        voci = await storage.listFolder(cartella);
+      } catch {
+        continue; // cartella di stato non leggibile: si prova la prossima
+      }
+      const trovata = voci.find(
+        (v) => v.isDirectory && v.name.startsWith(prefisso) && v.name !== nomeCartella,
+      );
+      if (!trovata) continue;
+
+      if (cartella === currentFolder) {
+        return {
+          causa: 'rinominata',
+          nomeReale: trovata.name,
+          messaggio:
+            'La cartella di questa commessa è stata rinominata direttamente su Nextcloud, quindi l’app non la trova più.\n\n' +
+            `Kommessa cerca:  ${nomeCartella}\n` +
+            `Su Nextcloud c’è:  ${trovata.name}\n\n` +
+            'Nessun file è perso e lo stato non è stato cambiato. Per proseguire subito, rinomina la cartella com’era prima; ' +
+            'se invece il nome nuovo è quello giusto, chiedi a SOLVA di riallineare l’app (i nomi delle cartelle non vanno cambiati a mano, ' +
+            'perché sono il collegamento fra l’app e i file).',
+        };
+      }
+      return {
+        causa: 'altrove',
+        nomeReale: trovata.name,
+        messaggio:
+          `La cartella di questa commessa non è dove l’app la cerca: si trova in ${cartella} ` +
+          `col nome "${trovata.name}". Qualcuno l’ha spostata o rinominata direttamente su Nextcloud.\n\n` +
+          'Nessun file è perso e lo stato non è stato cambiato. Segnala a SOLVA per riallineare l’app.',
+      };
+    }
+
+    return {
+      causa: 'sparita',
+      messaggio:
+        `Non trovo più la cartella "${nomeCartella}" su Nextcloud` +
+        (currentFolder ? ` (dovrebbe essere in ${currentFolder}).` : '.') +
+        '\n\n' +
+        'Potrebbe essere stata spostata, rinominata o finita nel cestino. Lo stato della commessa non è stato cambiato: ' +
+        'controlla su Nextcloud, oppure segnala a SOLVA il codice ' +
+        `${codiceInterno}.`,
+    };
+  } catch {
+    return generico;
+  }
 }

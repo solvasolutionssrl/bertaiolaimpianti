@@ -3,15 +3,18 @@ import { requireTenantContextCached as requireTenantContext } from '../../../_li
 import { risolviTitoloCommessa } from '../../../_lib/commessa-display';
 import { PanoramicaClient, type PanoramicaRow } from './_components/panoramica-client';
 
-export const metadata = { title: 'Panoramica commesse aperte' };
+export const metadata = { title: 'Panoramica commesse' };
 export const dynamic = 'force-dynamic';
 
 /**
- * Panoramica commesse aperte — tabellone schematico + stampa/PDF.
+ * Panoramica commesse — tabellone schematico + stampa/PDF.
  *
- * "Aperte" = aperta (Non presa) + in_corso + collaudo (stessa definizione del
- * KPI "Commesse aperte"). Il "Creato da" viene dal log audit (evento `create`
- * della commessa → `users.display_name`), con fallback al responsabile.
+ * Mostra le commesse **vive** (aperta = Non presa, in_corso, collaudo) piu' le
+ * **completate**, filtrabili dai segmenti in alto a destra: serve anche a
+ * stampare il consuntivo di quelle chiuse (aggiunta 10/08/2026). Restano fuori
+ * le bozze (non ancora commesse) e le archiviate (fuori dal giro).
+ * Il "Creato da" viene dal log audit (evento `create` della commessa →
+ * `users.display_name`), con fallback al responsabile.
  * Stampa via `window.print()` + CSS `@media print` (nessuna libreria PDF).
  */
 export default async function PanoramicaCommessePage() {
@@ -41,7 +44,7 @@ export default async function PanoramicaCommessePage() {
         cliente:cliente_id ( ragione_sociale )
       `,
     )
-    .in('stato', ['aperta', 'in_corso', 'collaudo'])
+    .in('stato', ['aperta', 'in_corso', 'collaudo', 'completata'])
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
     .limit(1000);
