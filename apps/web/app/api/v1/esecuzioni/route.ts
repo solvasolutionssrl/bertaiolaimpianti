@@ -2,7 +2,7 @@ import { type NextRequest } from 'next/server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 
-import { autenticaAgente, erroreApi, leggiJson } from '../_lib/guard';
+import { autenticaApi, erroreApi, leggiJson } from '../_lib/api';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -43,9 +43,12 @@ interface CorpoChiudi {
  * "disastro".
  */
 export async function POST(request: NextRequest) {
-  const g = await autenticaAgente(request);
+  const g = await autenticaApi(request);
   if (!g.ok) return g.risposta;
   const { tenantId, sistema } = g.ctx;
+  if (!sistema) {
+    return erroreApi(409, 'sistema_non_configurato', 'Manca il sistema di destinazione.');
+  }
 
   const body = await leggiJson<CorpoApri | CorpoChiudi>(request);
   if (!body?.azione) {

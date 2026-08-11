@@ -18,7 +18,6 @@ import {
   type RigaCollegamento,
 } from '../../../_actions/integrazione-collegamenti';
 import { NuoveDalGestionale } from './nuove-dal-gestionale';
-import { RigaDiProva } from './riga-di-prova';
 
 /**
  * Collegamento delle anagrafiche.
@@ -182,8 +181,6 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
       </div>
 
       <NuoveDalGestionale voci={dati.soloNelGestionale} />
-
-      <RigaDiProva cantieri={dati.collegati} />
 
       {duplicati.size > 0 ? (
         <Card className="border-destructive/50">

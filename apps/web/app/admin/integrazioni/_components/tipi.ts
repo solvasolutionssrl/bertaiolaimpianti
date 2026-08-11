@@ -4,29 +4,33 @@ export interface CodaTenant {
   tenantId: string;
   tenant: string;
   sistema: string;
-  sincManuale: boolean;
-  autoPush: boolean;
-  inAttesa: number;
-  inCorso: number;
-  inErrore: number;
-  inviate: number;
-  /** Ultimo giro concluso con esito utile: è il segno che l'agente è vivo. */
+  /** `simulazione` = sicura di collaudo inserita: nessuno deve scrivere fuori. */
+  modalita: string;
+  /** Identificativi esterni aperti anche in simulazione. */
+  collaudoEsterni: number;
+  scrittureOk: number;
+  scrittureErrore: number;
+  /** Ultima scrittura riuscita: se e' vecchia, il collegamento e' fermo. */
+  ultimaScrittura: string | null;
   ultimoGiroOk: string | null;
   ultimoGiro: string | null;
+  /**
+   * Minuti medi fra quando una cosa e' finita sul gestionale e quando ce
+   * l'hanno detto. Se cresce, l'agente sta accumulando ritardo.
+   */
+  ritardoMedioMin: number | null;
 }
 
-export interface OperazioneRow {
+export interface ScritturaRow {
   id: string;
   tenant: string;
-  sistema: string;
-  tipo: string;
-  stato: string;
-  tentativi: number;
+  risorsa: string;
+  variante: string;
+  esito: string;
+  riferimento: string | null;
   errore: string | null;
-  descrizione: string | null;
-  esitoEsterno: string | null;
-  creataAt: string;
-  inviataAt: string | null;
+  scrittoAl: string;
+  registratoAl: string;
 }
 
 export interface EsecuzioneRow {

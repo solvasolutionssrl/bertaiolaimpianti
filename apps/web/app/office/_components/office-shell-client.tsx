@@ -21,11 +21,11 @@ import {
   Truck,
   Users,
   UsersRound,
+  Plug,
 } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
-import { SincronizzaGestionale } from './sincronizza-gestionale';
 
 interface Props {
   tenant: { name: string; logoUrl?: string; brandColor?: string };
@@ -33,7 +33,7 @@ interface Props {
   activeNavId?: string;
   notificationCount?: number;
   hasKantiere?: boolean;
-  /** Modulo Integrazione attivo → tasto "Sincronizza" nell'intestazione. */
+  /** Modulo Integrazione attivo → voce "Gestionale" nel menu. */
   hasIntegrazione?: boolean;
   /** Modulo Dipendenti attivo → sezione Personale (Dipendenti, ...). */
   hasDipendenti?: boolean;
@@ -281,6 +281,38 @@ function buildNav(
  * modulo è spento. Le voci-sezione sono literal freschi a ogni `buildNav`,
  * quindi la mutazione qui è sicura (nessuna condivisione tra render).
  */
+/**
+ * Voce "Gestionale" per i tenant che hanno un ERP collegato.
+ *
+ * Sta in fondo, sotto Impostazioni, perche' e' un lavoro di configurazione che
+ * si fa poche volte — collegare le anagrafiche — non un'attivita' quotidiana.
+ * Prima era raggiungibile solo da un tasto nell'intestazione: sparito quello,
+ * senza una voce di menu la pagina sarebbe diventata irraggiungibile.
+ */
+function injectIntegrazione(
+  nav: OfficeNavItem[],
+  hasIntegrazione?: boolean,
+): OfficeNavItem[] {
+  if (!hasIntegrazione) return nav;
+
+  const voce: OfficeNavItem = {
+    id: 'integrazione',
+    label: 'Gestionale',
+    href: '/office/integrazione',
+    icon: Plug,
+  };
+
+  // Se esiste una sezione "Altro" ci va dentro, accanto a Impostazioni;
+  // altrimenti in coda alla nav.
+  const altro = nav.find((i) => i.id === 'sec-altro');
+  if (altro?.children) {
+    return nav.map((i) =>
+      i.id === 'sec-altro' ? { ...i, children: [...i.children!, voce] } : i,
+    );
+  }
+  return [...nav, voce];
+}
+
 function injectPersonale(
   nav: OfficeNavItem[],
   opts: { hasDipendenti?: boolean; hasPianificazione?: boolean; hasFerie?: boolean },
@@ -370,11 +402,14 @@ export function OfficeShellClient({
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const nav = injectPersonale(buildNav(hasKantiere, appMode), {
-    hasDipendenti,
-    hasPianificazione,
-    hasFerie,
-  });
+  const nav = injectIntegrazione(
+    injectPersonale(buildNav(hasKantiere, appMode), {
+      hasDipendenti,
+      hasPianificazione,
+      hasFerie,
+    }),
+    hasIntegrazione,
+  );
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);
@@ -411,7 +446,6 @@ export function OfficeShellClient({
         notificationCount={notificationCount}
         onLogout={handleLogout}
         onNotificationsClick={() => router.push('/office/notifiche')}
-        azioniHeader={hasIntegrazione ? <SincronizzaGestionale /> : null}
         linkComponent={NextLinkAdapter}
       >
         {children}

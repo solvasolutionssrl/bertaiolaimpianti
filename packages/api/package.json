@@ -24,7 +24,6 @@
     "./rome-time": "./src/rome-time.ts",
     "./upload-multipart": "./src/upload-multipart.ts",
     "./upload-queue-policy": "./src/upload-queue-policy.ts",
-    "./integrazione": "./src/integrazione.ts",
     "./integrazione-mappa": "./src/integrazione-mappa.ts",
     "./integrazione-abbina": "./src/integrazione-abbina.ts"
   },

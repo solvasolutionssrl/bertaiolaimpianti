@@ -1,10 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { AlertTriangle, CheckCircle2, Clock, Plug, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, FlaskConical, Plug, RefreshCw } from 'lucide-react';
 import { Badge, Card, CardContent, cn } from '@kommessa/ui';
 
-import type { CodaTenant, EsecuzioneRow, OperazioneRow } from './tipi';
+import type { CodaTenant, EsecuzioneRow, ScritturaRow } from './tipi';
 
 const fmt = new Intl.DateTimeFormat('it-IT', {
   timeZone: 'Europe/Rome',
@@ -34,49 +34,40 @@ function da(iso: string | null): string {
   return `${gg} ${gg === 1 ? 'giorno' : 'giorni'} fa`;
 }
 
-/** Oltre questo, un'integrazione che dovrebbe girare è probabilmente ferma. */
+/** Oltre questo, un collegamento che dovrebbe girare è probabilmente fermo. */
 const SOGLIA_SILENZIO_ORE = 24;
 
-function silenziosaDa(iso: string | null): boolean {
+function silenziosoDa(iso: string | null): boolean {
   if (!iso) return true;
   return Date.now() - new Date(iso).getTime() > SOGLIA_SILENZIO_ORE * 3600_000;
 }
 
-const COLORE_STATO: Record<string, string> = {
-  in_attesa: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  in_corso: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-  inviato: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-  errore: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
-  annullato: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-500',
-};
+type Tab = 'stato' | 'scritture' | 'giri';
 
-const ETICHETTA_STATO: Record<string, string> = {
-  in_attesa: 'In attesa',
-  in_corso: 'In corso',
-  inviato: 'Inviata',
-  errore: 'Errore',
-  annullato: 'Annullata',
-};
-
-type Tab = 'code' | 'operazioni' | 'giri';
-
+/**
+ * Vista di piattaforma sui collegamenti coi gestionali.
+ *
+ * Con l'API a risorse non c'è più una coda da sorvegliare: decide l'agente
+ * cosa prendere. Restano le due domande che contano quando il cliente chiama —
+ * **cosa è stato scritto fuori** e **da quanto nessuno si fa vivo** — più una
+ * terza che l'esperienza ha aggiunto: **quanto ritardo sta accumulando** chi
+ * ci tiene aggiornati.
+ */
 export function IntegrazioniClient({
   code,
-  operazioni,
+  scritture,
   giri,
   nessunModulo,
 }: {
   code: CodaTenant[];
-  operazioni: OperazioneRow[];
+  scritture: ScritturaRow[];
   giri: EsecuzioneRow[];
   nessunModulo: boolean;
 }) {
-  const [tab, setTab] = React.useState<Tab>('code');
+  const [tab, setTab] = React.useState<Tab>('stato');
   const [soloErrori, setSoloErrori] = React.useState(false);
 
-  const opFiltrate = soloErrori
-    ? operazioni.filter((o) => o.stato === 'errore')
-    : operazioni;
+  const scrFiltrate = soloErrori ? scritture.filter((s) => s.esito === 'errore') : scritture;
 
   return (
     <div className="space-y-5">
@@ -87,14 +78,14 @@ export function IntegrazioniClient({
             Integrazioni
           </h1>
           <p className="text-sm text-muted-foreground">
-            Sincronizzazioni con i gestionali dei clienti.
+            Collegamenti con i gestionali dei clienti.
           </p>
         </div>
         <div className="flex gap-1 rounded-lg border border-border p-1">
           {(
             [
-              ['code', 'Code'],
-              ['operazioni', 'Operazioni'],
+              ['stato', 'Stato'],
+              ['scritture', 'Scritture'],
               ['giri', 'Giri'],
             ] as [Tab, string][]
           ).map(([k, etichetta]) => (
@@ -125,16 +116,17 @@ export function IntegrazioniClient({
         </Card>
       ) : null}
 
-      {tab === 'code' ? (
+      {tab === 'stato' ? (
         <div className="grid gap-3 md:grid-cols-2">
           {code.map((c) => {
-            const muta = silenziosaDa(c.ultimoGiroOk);
+            const muto = silenziosoDa(c.ultimoGiroOk);
+            const inSimulazione = c.modalita !== 'attiva';
             return (
               <Card
                 key={c.tenantId}
                 className={cn(
-                  c.inErrore > 0 && 'border-red-500/40',
-                  c.inErrore === 0 && muta && 'border-amber-500/40',
+                  c.scrittureErrore > 0 && 'border-red-500/40',
+                  c.scrittureErrore === 0 && muto && 'border-amber-500/40',
                 )}
               >
                 <CardContent className="space-y-3 p-4">
@@ -143,18 +135,17 @@ export function IntegrazioniClient({
                       <p className="truncate font-semibold">{c.tenant}</p>
                       <p className="text-xs text-muted-foreground">
                         gestionale: {c.sistema}
-                        {c.autoPush ? ' · invio automatico' : ' · solo manuale'}
                       </p>
                     </div>
-                    {c.inErrore > 0 ? (
+                    {c.scrittureErrore > 0 ? (
                       <Badge className="shrink-0 bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
                         <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                        {c.inErrore} in errore
+                        {c.scrittureErrore} in errore
                       </Badge>
-                    ) : muta ? (
+                    ) : muto ? (
                       <Badge className="shrink-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                         <Clock className="mr-1 h-3 w-3" aria-hidden="true" />
-                        silenziosa
+                        silenzioso
                       </Badge>
                     ) : (
                       <Badge className="shrink-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
@@ -164,40 +155,59 @@ export function IntegrazioniClient({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2 text-center">
+                  {/* La sicura di collaudo va detta forte: chi guarda deve
+                      sapere subito perché non sta uscendo niente. */}
+                  {inSimulazione ? (
+                    <p className="flex items-start gap-1.5 rounded-md border border-sky-500/30 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
+                      <FlaskConical className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                      <span>
+                        In <strong>simulazione</strong>: si legge tutto, ma niente
+                        deve essere scritto sul gestionale.
+                        {c.collaudoEsterni > 0
+                          ? ` ${c.collaudoEsterni} identificativi aperti per la prova.`
+                          : ''}
+                      </span>
+                    </p>
+                  ) : null}
+
+                  <div className="grid grid-cols-3 gap-2 text-center">
                     {(
                       [
-                        ['In attesa', c.inAttesa, ''],
-                        ['In corso', c.inCorso, c.inCorso > 0 ? 'text-amber-600' : ''],
-                        ['Errore', c.inErrore, c.inErrore > 0 ? 'text-red-600' : ''],
-                        ['Inviate', c.inviate, 'text-emerald-600'],
-                      ] as [string, number, string][]
+                        ['Scritte', c.scrittureOk, 'text-emerald-600'],
+                        [
+                          'Errori',
+                          c.scrittureErrore,
+                          c.scrittureErrore > 0 ? 'text-red-600' : '',
+                        ],
+                        [
+                          'Ritardo medio',
+                          c.ritardoMedioMin,
+                          (c.ritardoMedioMin ?? 0) > 60 ? 'text-amber-600' : '',
+                        ],
+                      ] as [string, number | null, string][]
                     ).map(([et, n, colore]) => (
                       <div key={et} className="rounded-md border border-border py-1.5">
                         <p className={cn('text-lg font-semibold tabular-nums', colore)}>
-                          {n}
+                          {n == null ? '—' : et === 'Ritardo medio' ? `${n}′` : n}
                         </p>
                         <p className="text-[11px] text-muted-foreground">{et}</p>
                       </div>
                     ))}
                   </div>
 
-                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                    Ultimo giro riuscito: <strong>{da(c.ultimoGiroOk)}</strong>
-                    {c.ultimoGiro && c.ultimoGiro !== c.ultimoGiroOk
-                      ? ` · ultimo tentativo ${da(c.ultimoGiro)}`
-                      : null}
-                  </p>
-
-                  {/* Un'operazione bloccata in `in_corso` vuol dire che l'agente
-                      l'ha presa e non ha mai riferito: e' morto a meta' giro. */}
-                  {c.inCorso > 0 ? (
-                    <p className="rounded-md border border-amber-500/30 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                      {c.inCorso} presa in carico e mai conclusa: l’agente potrebbe
-                      essersi interrotto a metà giro.
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p className="flex items-center gap-1.5">
+                      <RefreshCw className="h-3 w-3" aria-hidden="true" />
+                      Ultimo giro riuscito: <strong>{da(c.ultimoGiroOk)}</strong>
+                      {c.ultimoGiro && c.ultimoGiro !== c.ultimoGiroOk
+                        ? ` · ultimo tentativo ${da(c.ultimoGiro)}`
+                        : null}
                     </p>
-                  ) : null}
+                    <p>
+                      Ultima scrittura sul gestionale:{' '}
+                      <strong>{da(c.ultimaScrittura)}</strong>
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -205,12 +215,12 @@ export function IntegrazioniClient({
         </div>
       ) : null}
 
-      {tab === 'operazioni' ? (
+      {tab === 'scritture' ? (
         <Card>
           <CardContent className="p-0">
             <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
               <p className="text-sm text-muted-foreground">
-                Ultime {operazioni.length} operazioni
+                Ultime {scritture.length} scritture sui gestionali
               </p>
               <label className="flex items-center gap-2 text-sm">
                 <input
@@ -226,66 +236,70 @@ export function IntegrazioniClient({
               <table className="w-full table-fixed text-sm">
                 <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                   <tr>
-                    <th className="w-[15%] px-3 py-2 font-medium">Cliente</th>
-                    <th className="w-[8%] px-3 py-2 font-medium">Tipo</th>
-                    <th className="w-[10%] px-3 py-2 font-medium">Stato</th>
-                    <th className="w-[37%] px-3 py-2 font-medium">Descrizione</th>
-                    <th className="w-[18%] px-3 py-2 font-medium">Esito / errore</th>
-                    <th className="w-[12%] px-3 py-2 font-medium">Quando</th>
+                    <th className="w-[16%] px-3 py-2 font-medium">Cliente</th>
+                    <th className="w-[14%] px-3 py-2 font-medium">Cosa</th>
+                    <th className="w-[10%] px-3 py-2 font-medium">Esito</th>
+                    <th className="w-[26%] px-3 py-2 font-medium">Riferimento / errore</th>
+                    <th className="w-[17%] px-3 py-2 font-medium">Scritta il</th>
+                    <th className="w-[17%] px-3 py-2 font-medium">Comunicata</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {opFiltrate.map((o, i) => (
+                  {scrFiltrate.map((s, i) => (
                     <tr
-                      key={o.id}
+                      key={s.id}
                       className={cn(
                         'border-t border-border align-top',
                         i % 2 === 1 && 'bg-muted/20',
                       )}
                     >
-                      <td className="truncate px-3 py-2" title={o.tenant}>
-                        {o.tenant}
+                      <td className="truncate px-3 py-2" title={s.tenant}>
+                        {s.tenant}
                       </td>
-                      <td className="px-3 py-2 capitalize">{o.tipo}</td>
-                      <td className="px-3 py-2">
-                        <Badge className={cn('font-normal', COLORE_STATO[o.stato])}>
-                          {ETICHETTA_STATO[o.stato] ?? o.stato}
-                        </Badge>
-                        {o.tentativi > 1 ? (
-                          <span className="ml-1 text-[11px] text-muted-foreground">
-                            ×{o.tentativi}
-                          </span>
+                      <td className="px-3 py-2 capitalize">
+                        {s.risorsa}
+                        {s.variante ? (
+                          <span className="text-muted-foreground"> · {s.variante}</span>
                         ) : null}
                       </td>
-                      <td
-                        className="truncate px-3 py-2 text-muted-foreground"
-                        title={o.descrizione ?? ''}
-                      >
-                        {o.descrizione ?? '—'}
+                      <td className="px-3 py-2">
+                        <Badge
+                          className={cn(
+                            'font-normal',
+                            s.esito === 'ok'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                              : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
+                          )}
+                        >
+                          {s.esito}
+                        </Badge>
                       </td>
                       <td className="px-3 py-2">
-                        {o.errore ? (
-                          <span className="text-red-600 dark:text-red-400">{o.errore}</span>
-                        ) : o.esitoEsterno ? (
+                        {s.errore ? (
+                          <span className="text-red-600 dark:text-red-400">{s.errore}</span>
+                        ) : s.riferimento ? (
                           <code className="text-[11px] text-muted-foreground">
-                            {o.esitoEsterno}
+                            {s.riferimento}
                           </code>
                         ) : (
                           '—'
                         )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
-                        {quando(o.inviataAt ?? o.creataAt)}
+                        {quando(s.scrittoAl)}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {quando(s.registratoAl)}
                       </td>
                     </tr>
                   ))}
-                  {opFiltrate.length === 0 ? (
+                  {scrFiltrate.length === 0 ? (
                     <tr>
                       <td
                         colSpan={6}
                         className="px-3 py-8 text-center text-sm text-muted-foreground"
                       >
-                        {soloErrori ? 'Nessun errore.' : 'Nessuna operazione.'}
+                        {soloErrori ? 'Nessun errore.' : 'Nessuna scrittura registrata.'}
                       </td>
                     </tr>
                   ) : null}
@@ -315,10 +329,7 @@ export function IntegrazioniClient({
                   {giri.map((g, i) => (
                     <tr
                       key={g.id}
-                      className={cn(
-                        'border-t border-border',
-                        i % 2 === 1 && 'bg-muted/20',
-                      )}
+                      className={cn('border-t border-border', i % 2 === 1 && 'bg-muted/20')}
                     >
                       <td className="truncate px-3 py-2" title={g.tenant}>
                         {g.tenant}
@@ -327,7 +338,7 @@ export function IntegrazioniClient({
                         {g.direzione} · {g.avvio}
                       </td>
                       <td className="px-3 py-2">
-                        {/* Aperto e mai chiuso: l'agente non e' tornato. */}
+                        {/* Aperto e mai chiuso: l'agente non è tornato. */}
                         {!g.conclusaAt ? (
                           <Badge className="bg-amber-100 font-normal text-amber-800 dark:bg-amber-950 dark:text-amber-300">
                             in corso

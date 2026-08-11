@@ -57,8 +57,6 @@ export interface DatiCollegamenti {
   esterni: Array<{ externalId: string; etichetta: string }>;
   /** Nel gestionale ma non da noi: si possono creare. */
   soloNelGestionale: SoloNelGestionale[];
-  /** Gia' collegati: gli unici su cui ha senso mandare una riga di prova. */
-  collegati: Array<{ id: string; etichetta: string }>;
 }
 
 const VUOTO: DatiCollegamenti = {
@@ -67,7 +65,6 @@ const VUOTO: DatiCollegamenti = {
   righe: [],
   esterni: [],
   soloNelGestionale: [],
-  collegati: [],
 };
 
 /** Colonne canoniche di `integrazione_staging`. */
@@ -262,13 +259,6 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
       }))
       .sort((a, b) => a.etichetta.localeCompare(b.etichetta)),
     soloNelGestionale,
-    collegati: righe
-      .filter((r) => r.externalId)
-      .map((r) => ({
-        id: r.nostroId,
-        etichetta: [r.nostroCodice, r.nostroNome].filter(Boolean).join(' · '),
-      }))
-      .sort((a, b) => a.etichetta.localeCompare(b.etichetta)),
   };
 }
 
