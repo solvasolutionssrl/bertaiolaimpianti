@@ -34,7 +34,7 @@ interface RecordLetto {
 }
 
 /**
- * POST /api/integrazione/v1/letture
+ * POST /api/v1/letture
  * body: { entita: 'commessa'|'cliente'|'dipendente', record: [{externalId, dati}] }
  *
  * L'agente deposita cio' che ha letto dal gestionale. I dati atterrano **grezzi**

@@ -25,7 +25,7 @@ interface CorpoChiudi {
 }
 
 /**
- * POST /api/integrazione/v1/esecuzioni
+ * POST /api/v1/esecuzioni
  * body: { azione: 'apri', direzione } → { id }
  * body: { azione: 'chiudi', id, esito, letti?, scritti?, errori?, messaggio? }
  *
