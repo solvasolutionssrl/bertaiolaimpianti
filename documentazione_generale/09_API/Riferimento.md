@@ -1,10 +1,33 @@
-# Riferimento — API Kommessa v1
+# Riferimento — API Kommessa
 
-**Contratto**: 1 · **Base**: `https://www.kommessa.it/api/v1`
+**Contratto**: 2 · **Base**: `https://www.kommessa.it/api/v1`
 
 > Usa **questo** dominio, non `bertaiolaimpianti.vercel.app`: stesso deployment, ma
 > quello è il nome tecnico del progetto e se un giorno viene rinominato si rompono
 > insieme tutti i client installati.
+
+---
+
+## La convenzione sui nomi
+
+**I campi che iniziano con `external` contengono dati del GESTIONALE. Senza prefisso sono
+dati di Kommessa.** Il prefisso sta sempre in testa.
+
+Vale per identificativi, codici e riferimenti — non per gli attributi descrittivi
+(`nome`, `categoria`, `attiva`), altrimenti ce l'avrebbero tutti e smetterebbe di dire
+qualcosa.
+
+| | |
+|---|---|
+| `codiceCommessa` | il nostro, progressivo (`CAN-00190`) |
+| `externalCodiceCommessa` | quello del gestionale (`26084`) |
+| `matricola` | la nostra (`00019`) |
+| `externalCodiceDipendente` | quella del gestionale |
+
+> **Perché esiste questa regola.** Fino al contratto 1 `codice` significava il *nostro* in
+> uscita da `/cantieri` e il *loro* in entrata su `/letture`. Un client che rileggeva e
+> riscriveva li invertiva senza che niente desse errore, e le ore finivano sulla commessa
+> di un altro. `/info` la dichiara a runtime in `convenzioneNomi`.
 
 ---
 
@@ -23,7 +46,7 @@ Ogni elenco:
 
 ```json
 {
-  "contratto": 1,
+  "contratto": 2,
   "dati": [ … ],
   "paginazione": { "prossimo": "eyJ0Ijoi…", "altriRisultati": true }
 }
@@ -73,7 +96,7 @@ cambiare una regola senza rimettere mano ai client già installati.
 
 ```json
 {
-  "contratto": 1, "prodotto": "Kommessa",
+  "contratto": 2, "prodotto": "Kommessa",
   "tenantId": "…", "sistema": "ergo",
   "modalita": "simulazione", "collaudoEsterni": ["26087"],
   "risorse": {
@@ -81,6 +104,7 @@ cambiare una regola senza rimettere mano ai client già installati.
     "scrittura": ["scritture","letture","esecuzioni"]
   },
   "paginazione": { "limiteDefault": 200, "limiteMax": 1000 },
+  "convenzioneNomi": { "prefissoEsterno": "external", "regola": "…" },
   "vocabolari": { … }
 }
 ```
@@ -105,7 +129,7 @@ Le ore lavorate, **una riga per giornata e per cantiere**.
   },
   "commessa": {
     "id": "uuid", "entita": "cantiere",
-    "externalId": "26087", "clienteExternalId": "70796"
+    "externalId": "26087", "externalClienteId": "70796"
   },
   "ore":    { "ordinarie": 8, "straordinarie": 1.5, "viaggio": 0.5, "totale": 10 },
   "minuti": { "ordinarie": 480, "straordinarie": 90, "viaggio": 30 },
@@ -161,7 +185,7 @@ Arrivano anche le **bozze** — spese ancora in revisione o in analisi automatic
   "dipendente": { … },
   "ruolo": "autista",
   "partenza": { "tipo": "sede", "id": "uuid", "nome": "Sede Verona", "indirizzo": "…" },
-  "arrivo":   { "id": "uuid", "nome": "Fincantieri Monfalcone", "codice": "CAN-00042",
+  "arrivo":   { "id": "uuid", "nome": "Fincantieri Monfalcone", "codiceCommessa": "CAN-00042",
                 "externalId": "26087" },
   "commessa": { … },
   "km": 50,
@@ -187,19 +211,18 @@ giornata): `tipo` dice quale. I km si imputano sempre alla **destinazione**.
 ```jsonc
 {
   "id": "uuid", "risorsa": "cantieri",
-  "codice": "CAN-00190", "codiceCommessa": "26084",
-  "nome": "…", "cliente": "…", "categoria": "…", "stato": "…",
+  "codiceCommessa": "CAN-00190", "externalCodiceCommessa": "26084",
+  "nome": "…", "clienteNome": "…", "categoria": "…", "stato": "…",
   "indirizzo": { "testo": "…", "lat": 45.4, "lng": 10.9, "daVerificare": false },
   "sedePartenza": "…", "note": null,
-  "externalId": "26084", "clienteExternalId": "70796", "collegato": true,
+  "externalId": "26084", "externalClienteId": "70796", "collegato": true,
   "registratoAl": "…", "modificatoAl": "…"
 }
 ```
 
-> ⚠️ **Due codici, da non confondere.** `codice` è il NOSTRO, progressivo e interno
-> (`CAN-00190`). `codiceCommessa` è quello del cliente o del suo gestionale (`26084`).
-> Scambiarli scrive nella numerazione sbagliata, e non dà nessun segnale finché i conti
-> non tornano.
+> ⚠️ **Due codici, e il prefisso è lì apposta.** `codiceCommessa` è il NOSTRO
+> (`CAN-00190`), `externalCodiceCommessa` è quello del gestionale (`26084`). Scambiarli
+> scrive nella numerazione sbagliata, e non dà nessun segnale finché i conti non tornano.
 
 ## `GET /dipendenti`
 
@@ -233,13 +256,13 @@ errore.
   { "risorsa": "ore", "risorsaId": "uuid", "variante": "straordinario",
     "esito": "ok",
     "scrittoAl": "2026-08-11T09:14:22Z",
-    "riferimentoEsterno": { "docId": 737, "serie": 4 } },
+    "externalRiferimento": { "docId": 737, "serie": 4 } },
   { "risorsa": "spese", "risorsaId": "uuid",
     "esito": "errore", "errore": "Articolo non trovato" }
 ] }
 ```
 
-Risposta: `{ "contratto": 1, "registrate": 2, "scartate": [] }`
+Risposta: `{ "contratto": 2, "registrate": 2, "scartate": [] }`
 
 - **`variante`** distingue più scritture nate dallo stesso record: una riga di ore produce
   ordinarie, straordinarie e viaggio, che sul gestionale sono registrazioni separate.
@@ -247,7 +270,7 @@ Risposta: `{ "contratto": 1, "registrate": 2, "scartate": [] }`
 - **`scrittoAl`** è quando è finito *davvero* sul gestionale, non quando lo stai
   annunciando. Se ometti, vale adesso. Lo scarto fra i due tempi è ciò che ci dice quanto
   ritardo sta accumulando il collegamento.
-- **`riferimentoEsterno`**: qualunque identificativo il sistema restituisca. È l'unica
+- **`externalRiferimento`**: qualunque identificativo il sistema restituisca. È l'unica
   traccia, se lì non si rilegge.
 - **Riannunciare la stessa scrittura è innocuo**: la chiave è
   `(risorsa, risorsaId, variante)` e non crea doppioni. Un agente che riparte dopo un
@@ -262,16 +285,43 @@ Deposita quello che hai letto dal tuo gestionale, **in lingua canonica**.
 ```jsonc
 { "entita": "commessa",
   "record": [{
-    "externalId": "26087",                     // obbligatorio
+    "externalId": "26087",                     // obbligatorio — la tua chiave primaria
     "nome": "SOLVA SOLUTIONS - cantiere TEST", // obbligatorio
-    "codice": "26087",        // se l'id fa da codice, ripetilo qui
-    "clienteExternalId": "70796",
+    "externalCodiceCommessa": "26087",  // se l'id fa da codice, ripetilo qui
+    "externalClienteId": "70796",
+    "clienteNome": "SOLVA SOLUTIONS S.R.L.",
+    "categoria": "QUADRI",
+    "indirizzo": "VIA CASELLE, 9, 37066 SOMMACAMPAGNA",
     "attiva": true,
     "dati": { "…": "risposta grezza, come allegato" }
   }] }
 ```
 
-Massimo 1000 record. `entita` ∈ `commessa` | `cliente` | `dipendente`.
+Massimo 1000 record. `entita` ∈ `commessa` | `cliente` | `dipendente`. Solo `externalId` e
+`nome` sono obbligatori: **se il tuo gestionale non ha gli altri, ometti e basta.**
+
+| Campo | Note |
+|---|---|
+| `externalCodiceCommessa` | codice leggibile della commessa **da voi** |
+| `externalCodiceDipendente` | per `entita: "dipendente"` — vedi l'avvertenza sotto |
+| `externalClienteId` | committente, se il vostro modello ce l'ha |
+| `clienteNome` | mandalo se non depositi anche le anagrafiche cliente: senza, l'ufficio abbina alla cieca |
+| `categoria` | gruppo / tipo di lavoro |
+| `indirizzo` | **una riga sola, già composta** |
+| `attiva` | `false` = chiusa / non più in forza |
+
+**L'indirizzo lo componi tu.** Se il tuo gestionale lo tiene a pezzi (via / cap / comune),
+ricomporli è compito del client: accettare la tua forma vorrebbe dire farci entrare in casa
+il tuo dialetto, e il prossimo gestionale chiamerà quei pezzi in un altro modo ancora.
+
+**Manda anche le chiuse** (`attiva: false`). Senza, non possiamo distinguere «chiusa» da
+«sparita», e l'anagrafica perde per strada i lavori vecchi su cui ci sono ancora ore da
+leggere.
+
+> ⚠️ **`externalCodiceDipendente` non è la nostra matricola.** Le nostre sono `00001`,
+> `00002`, `00019`, e un confronto morbido ignora gli zeri iniziali: su un caso reale
+> avrebbe prodotto **33 accoppiamenti falsi su 35**, cioè ore sulla busta paga sbagliata.
+> Il campo si confronta solo per uguaglianza esatta.
 
 **La traduzione la fai tu.** Kommessa non prova a indovinare dove sia il nome nella
 risposta del tuo gestionale: la lista delle chiavi da tentare si allungherebbe a ogni

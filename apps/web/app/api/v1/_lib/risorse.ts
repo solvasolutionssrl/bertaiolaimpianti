@@ -31,7 +31,7 @@ export interface Esportazione {
   /** Quando ce l'ha comunicato: lo scarto misura il ritardo del collegamento. */
   registratoAl: string;
   /** Cosa ha risposto il sistema esterno (numero documento, protocollo...). */
-  riferimentoEsterno: unknown;
+  externalRiferimento: unknown;
   errore: string | null;
 }
 
@@ -73,7 +73,7 @@ export async function esportazioniPerLotto(
       esito: r.esito,
       scrittoAl: r.scritto_at,
       registratoAl: r.registrato_at,
-      riferimentoEsterno: r.external_ref,
+      externalRiferimento: r.external_ref,
       errore: r.errore,
     });
     out.set(r.risorsa_id, lista);

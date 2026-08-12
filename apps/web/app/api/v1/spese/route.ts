@@ -172,7 +172,7 @@ export async function GET(request: NextRequest) {
             id: lavoro.id,
             entita: lavoro.entita,
             externalId: commessaExt,
-            clienteExternalId: commessaExt ? (clienteDi.get(commessaExt) ?? null) : null,
+            externalClienteId: commessaExt ? (clienteDi.get(commessaExt) ?? null) : null,
           }
         : null,
 

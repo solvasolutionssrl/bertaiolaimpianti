@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
     return {
       id,
       nome: c?.nome ?? null,
-      codice: c?.codice ?? null,
+      codiceCommessa: c?.codice ?? null,
       externalId: mapp.cantiere.get(id) ?? null,
     };
   };
@@ -190,7 +190,7 @@ export async function GET(request: NextRequest) {
             id: destinazione.id,
             entita: 'cantiere' as const,
             externalId: commessaExt,
-            clienteExternalId: commessaExt ? (clienteDi.get(commessaExt) ?? null) : null,
+            externalClienteId: commessaExt ? (clienteDi.get(commessaExt) ?? null) : null,
           }
         : null,
 

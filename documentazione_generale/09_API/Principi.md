@@ -1,6 +1,6 @@
 # Principi — come si aggiunge o si cambia una risorsa
 
-**Aggiornato**: 11/08/2026
+**Aggiornato**: 12/08/2026
 
 Per chi domani deve esporre una risorsa nuova (rapportini, mezzi, presenze, commesse del
 mondo Kommessa) o aggiungere un campo a una che c'è.
@@ -47,11 +47,27 @@ Su cosa ordinare: il campo che indica l'**ultima modifica** del record. Se la ta
 ne ha uno perché quel dato non si ritocca mai (`timbratura_viaggio`), va bene la data di
 creazione — ma va detto nel commento, altrimenti il prossimo lo cambia per sbaglio.
 
-## 4. Gli identificativi esterni arrivano già risolti
+## 4. Gli identificativi esterni arrivano già risolti, e si vede dal nome
 
 Ogni record porta `externalId` dove serve. L'alternativa — che ogni client interroghi le
 mappature e se le tenga in memoria — è lo stesso lavoro ripetuto da tutti, e un'occasione
 in più di sbagliare per ciascuno.
+
+**Il nome dice la provenienza**: un campo che inizia con `external` contiene un dato del
+gestionale, senza prefisso è un dato di Kommessa. Il prefisso sta in testa, sempre —
+`externalClienteId`, non `clienteExternalId`: in coda si legge come un aggettivo e si
+perde nella riga.
+
+Vale per identificativi, codici e riferimenti. **Non** per gli attributi descrittivi:
+`nome`, `categoria`, `indirizzo`, `attiva` restano nudi anche quando descrivono un'entità
+esterna, perché se lo mettessimo ovunque ce l'avrebbero tutti e smetterebbe di significare
+qualcosa.
+
+Se aggiungi un campo, la domanda è una: *questo valore chi lo genera?* Se il gestionale,
+prefisso.
+
+> Nasce da un errore vero: fino al contratto 1 `codice` era il nostro in uscita e il loro
+> in entrata. Un client che rileggeva e riscriveva li invertiva in silenzio.
 
 ## 5. Il registro delle scritture vive qui
 

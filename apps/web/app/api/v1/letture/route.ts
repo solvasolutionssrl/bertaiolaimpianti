@@ -4,7 +4,7 @@ import { type NextRequest } from 'next/server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 
-import { autenticaApi, erroreApi, leggiJson } from '../_lib/api';
+import { CONTRATTO, autenticaApi, erroreApi, leggiJson } from '../_lib/api';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -17,17 +17,54 @@ const MAX_RECORD = 1000;
  * fa l'agente, che quel gestionale lo conosce: Kommessa non deve indovinare
  * dove sta il nome e dove il codice, perche' la lista delle chiavi possibili
  * si allungherebbe a ogni cliente nuovo.
+ *
+ * I campi `external…` sono i dati **del gestionale**. Gli altri descrivono la
+ * stessa entita' ma non sono identificativi, e per quelli il prefisso sarebbe
+ * solo rumore.
  */
 interface RecordLetto {
+  /** Chiave primaria sul gestionale. E' l'aggancio: obbligatorio. */
   externalId: string;
   /** Nome leggibile: e' cio' che l'ufficio vede quando abbina. Obbligatorio. */
   nome?: string;
-  /** Codice leggibile. Se sul gestionale l'identificativo funge da codice,
-   *  ripeti qui l'externalId — e' quello che l'ufficio trascrive da noi. */
-  codice?: string | null;
+  /**
+   * Codice leggibile della **commessa** sul gestionale (ERGO: `objectId`
+   * ripetuto, perche' li' l'identificativo funge da codice). E' quello che
+   * l'ufficio trascrive quando cerca la commessa nel loro sistema.
+   */
+  externalCodiceCommessa?: string | null;
+  /**
+   * Codice/matricola del **dipendente** sul gestionale.
+   *
+   * ⚠️ Va confrontato solo per uguaglianza esatta, mai con la nostra
+   * matricola: le nostre sono `00001`, `00002`, `00019` e il confronto
+   * morbido ignora gli zeri iniziali — su FPM avrebbe prodotto 33
+   * accoppiamenti falsi su 35, cioe' ore sulla busta paga sbagliata.
+   */
+  externalCodiceDipendente?: string | null;
   /** Committente sul gestionale: i documenti di km e spese lo pretendono. */
-  clienteExternalId?: string | null;
-  /** `false` = chiusa / non piu' in forza. Guida i default lato Kommessa. */
+  externalClienteId?: string | null;
+  /**
+   * Nome del committente. Serve quando l'agente deposita le commesse ma non i
+   * clienti: senza, l'ufficio abbinerebbe alla cieca.
+   */
+  clienteNome?: string | null;
+  /** Categoria/gruppo di lavoro (ERGO: `group.description`). */
+  categoria?: string | null;
+  /**
+   * Indirizzo **gia' composto in una riga**. Se il gestionale lo tiene a pezzi
+   * (via / cap / comune), ricomporli e' compito dell'agente: accettare la sua
+   * forma vorrebbe dire farsi entrare il suo dialetto in casa, e il prossimo
+   * gestionale chiamera' quei pezzi in un altro modo ancora.
+   */
+  indirizzo?: string | null;
+  /**
+   * `false` = commessa chiusa / dipendente non piu' in forza.
+   *
+   * Le chiuse vanno mandate lo stesso: senza, chi legge non puo' distinguere
+   * «chiusa» da «sparita», e la nostra anagrafica perde per strada i lavori
+   * vecchi su cui ci sono ancora ore da leggere.
+   */
   attiva?: boolean | null;
   /** Risposta grezza del gestionale, come allegato. Non viene interpretata. */
   dati?: Record<string, unknown>;
@@ -92,25 +129,42 @@ export async function POST(request: NextRequest) {
       if (!ok) scartati.push(String((r as RecordLetto | undefined)?.externalId ?? '?'));
       return ok;
     })
-    .map((r) => ({
-      tenant_id: tenantId,
-      sistema,
-      entita,
-      external_id: r.externalId.trim(),
-      nome: r.nome!.trim().slice(0, 300),
-      codice: r.codice?.trim() || null,
-      cliente_external_id: r.clienteExternalId?.trim() || null,
-      attiva: typeof r.attiva === 'boolean' ? r.attiva : null,
-      dati: r.dati ?? {},
-      // L'impronta copre anche i campi canonici: se cambia il nome ma non il
-      // grezzo (o viceversa) il record va comunque rivisto.
-      contenuto_hash: createHash('sha256')
-        .update(
-          JSON.stringify([r.nome, r.codice, r.clienteExternalId, r.attiva, r.dati ?? {}]),
-        )
-        .digest('hex'),
-      letto_at: new Date().toISOString(),
-    }));
+    .map((r) => {
+      // Una colonna sola per il codice del gestionale: quale dei due nomi
+      // valga lo dice l'entita', e un dipendente non ha un codice commessa.
+      const externalCodice =
+        (entita === 'dipendente' ? r.externalCodiceDipendente : r.externalCodiceCommessa)
+          ?.trim() || null;
+      const canonici = [
+        r.nome,
+        externalCodice,
+        r.externalClienteId,
+        r.clienteNome,
+        r.categoria,
+        r.indirizzo,
+        r.attiva,
+      ];
+      return {
+        tenant_id: tenantId,
+        sistema,
+        entita,
+        external_id: r.externalId.trim(),
+        nome: r.nome!.trim().slice(0, 300),
+        external_codice: externalCodice,
+        external_cliente_id: r.externalClienteId?.trim() || null,
+        cliente_nome: r.clienteNome?.trim().slice(0, 300) || null,
+        categoria: r.categoria?.trim().slice(0, 120) || null,
+        indirizzo: r.indirizzo?.trim().slice(0, 400) || null,
+        attiva: typeof r.attiva === 'boolean' ? r.attiva : null,
+        dati: r.dati ?? {},
+        // L'impronta copre anche i campi canonici: se cambia il nome ma non il
+        // grezzo (o viceversa) il record va comunque rivisto.
+        contenuto_hash: createHash('sha256')
+          .update(JSON.stringify([...canonici, r.dati ?? {}]))
+          .digest('hex'),
+        letto_at: new Date().toISOString(),
+      };
+    });
 
   if (righe.length === 0) {
     return erroreApi(
@@ -130,7 +184,7 @@ export async function POST(request: NextRequest) {
   }
 
   return Response.json({
-    contratto: 1,
+    contratto: CONTRATTO,
     entita,
     salvati: righe.length,
     scartati,

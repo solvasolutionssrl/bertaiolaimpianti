@@ -61,8 +61,8 @@
 <body>
 
 <div class="banner">
-  <h1>API Kommessa · v1</h1>
-  <p class="sub">Scheda rapida · contratto 1 · aggiornata 12/08/2026 · <span class="mono">https://www.kommessa.it/api/v1</span></p>
+  <h1>API Kommessa</h1>
+  <p class="sub">Scheda rapida · contratto 2 · aggiornata 12/08/2026 · <span class="mono">https://www.kommessa.it/api/v1</span></p>
 </div>
 
 <div class="grid2">
@@ -88,6 +88,17 @@
   </div>
 </div>
 
+<div class="nota warn"><strong>La convenzione sui nomi.</strong> I campi che iniziano con
+<code>external</code> contengono dati <strong>del gestionale</strong>; senza prefisso sono dati
+<strong>di Kommessa</strong>. Il prefisso sta sempre in testa. Vale per identificativi, codici e
+riferimenti — non per gli attributi descrittivi (<code>nome</code>, <code>categoria</code>,
+<code>attiva</code>), altrimenti ce l'avrebbero tutti e smetterebbe di dire qualcosa.<br>
+<span class="mono">codiceCommessa</span> = il nostro «CAN-00190» ·
+<span class="mono">externalCodiceCommessa</span> = il loro «26084» ·
+<span class="mono">matricola</span> = la nostra ·
+<span class="mono">externalCodiceDipendente</span> = la loro.<br>
+<code>GET /info</code> la dichiara a runtime in <code>convenzioneNomi</code>.</div>
+
 <div class="nota ok"><strong>Il giro tipico.</strong> Prima volta senza parametri, seguendo
 <code>paginazione.prossimo</code> finché non è <code>null</code>. Poi si tiene il
 <code>modificatoAl</code> più alto visto e si riparte con <code>?modificatoDopo=…</code>:
@@ -110,7 +121,7 @@ scendono solo le novità.</div>
 <table>
   <tr><td class="k">modificatoAl</td><td class="t">ISO</td><td>ultima modifica: è il campo su cui si pagina e si fa l'incrementale</td></tr>
   <tr><td class="k">inviabile</td><td class="t">bool</td><td><strong>la sicura.</strong> In modalità <code>simulazione</code> è <code>false</code> su tutto: si può provare la catena senza scrivere niente sul gestionale del cliente</td></tr>
-  <tr><td class="k">esportazioni[]</td><td class="t">array</td><td>cosa è già uscito, e quando. Elementi: <code>variante</code>, <code>esito</code>, <code>scrittoAl</code>, <code>registratoAl</code>, <code>riferimentoEsterno</code>, <code>errore</code></td></tr>
+  <tr><td class="k">esportazioni[]</td><td class="t">array</td><td>cosa è già uscito, e quando. Elementi: <code>variante</code>, <code>esito</code>, <code>scrittoAl</code>, <code>registratoAl</code>, <code>externalRiferimento</code>, <code>errore</code></td></tr>
 </table>
 
 <div class="nota"><strong>Perché <code>esportazioni</code> esiste.</strong> Molti gestionali non
@@ -136,7 +147,7 @@ ogni gestionale sono causali diverse.</p>
   <tr><td class="k">commessa.id</td><td class="t">uuid</td><td></td></tr>
   <tr><td class="k">commessa.entita</td><td class="t">enum</td><td><code>cantiere</code> | <code>commessa</code> secondo il mondo del tenant</td></tr>
   <tr><td class="k">commessa.externalId</td><td class="t">str?</td><td></td></tr>
-  <tr><td class="k">commessa.clienteExternalId</td><td class="t">str?</td><td>committente secondo il gestionale</td></tr>
+  <tr><td class="k">commessa.externalClienteId</td><td class="t">str?</td><td>committente secondo il gestionale</td></tr>
   <tr><td class="k">ore.ordinarie / .straordinarie / .viaggio / .totale</td><td class="t">num</td><td>ore decimali</td></tr>
   <tr><td class="k">minuti.ordinarie / .straordinarie / .viaggio</td><td class="t">int</td><td>le stesse in minuti: evita arrotondamenti a valle</td></tr>
   <tr><td class="k">durataLeggibile</td><td class="t">str</td><td>«10:00»</td></tr>
@@ -180,8 +191,8 @@ politica, e le politiche appartengono a chi conosce il sistema di destinazione.<
   <tr><td class="k">ruolo</td><td class="t">enum</td><td><strong>autista | passeggero</strong> — arrivano entrambi</td></tr>
   <tr><td class="k">partenza.tipo</td><td class="t">enum</td><td><code>sede</code> oppure <code>cantiere</code> (spostamenti nella stessa giornata)</td></tr>
   <tr><td class="k">partenza.id / .nome / .indirizzo</td><td class="t">str?</td><td>se sede</td></tr>
-  <tr><td class="k">partenza.codice / .externalId</td><td class="t">str?</td><td>se cantiere</td></tr>
-  <tr><td class="k">arrivo.id / .nome / .codice / .externalId</td><td class="t">str?</td><td>destinazione: è a lei che si imputano i km</td></tr>
+  <tr><td class="k">partenza.codiceCommessa / .externalId</td><td class="t">str?</td><td>se cantiere</td></tr>
+  <tr><td class="k">arrivo.id / .nome / .codiceCommessa / .externalId</td><td class="t">str?</td><td>destinazione: è a lei che si imputano i km</td></tr>
   <tr><td class="k">commessa.*</td><td class="t">obj?</td><td>la destinazione, in forma canonica</td></tr>
   <tr><td class="k">km</td><td class="t">num</td><td></td></tr>
   <tr><td class="k">tempo.stimatoMin</td><td class="t">int?</td><td>dal calcolo percorso</td></tr>
@@ -195,17 +206,18 @@ politica, e le politiche appartengono a chi conosce il sistema di destinazione.<
 <table>
   <tr><th>campo</th><th>tipo</th><th>note</th></tr>
   <tr><td class="k">id</td><td class="t">uuid</td><td></td></tr>
-  <tr><td class="k">codice</td><td class="t">str</td><td><strong>il NOSTRO</strong>, progressivo interno — «CAN-00190»</td></tr>
-  <tr><td class="k">codiceCommessa</td><td class="t">str?</td><td><strong>quello del cliente</strong> o del suo gestionale — «26084»</td></tr>
-  <tr><td class="k">nome · cliente · categoria · stato</td><td class="t">str</td><td></td></tr>
+  <tr><td class="k">codiceCommessa</td><td class="t">str</td><td><strong>il NOSTRO</strong>, progressivo interno — «CAN-00190»</td></tr>
+  <tr><td class="k">externalCodiceCommessa</td><td class="t">str?</td><td><strong>quello del gestionale</strong> — «26084»</td></tr>
+  <tr><td class="k">nome · clienteNome · categoria · stato</td><td class="t">str</td><td></td></tr>
   <tr><td class="k">indirizzo.testo / .lat / .lng</td><td class="t">str? · num?</td><td></td></tr>
   <tr><td class="k">indirizzo.daVerificare</td><td class="t">bool</td><td>nato senza indirizzo, da completare in ufficio</td></tr>
   <tr><td class="k">sedePartenza · note</td><td class="t">str?</td><td></td></tr>
-  <tr><td class="k">externalId · clienteExternalId · collegato</td><td class="t">str? · bool</td><td></td></tr>
+  <tr><td class="k">externalId · externalClienteId · collegato</td><td class="t">str? · bool</td><td></td></tr>
 </table>
-<div class="nota warn"><strong>I due codici non si scambiano mai.</strong> <code>codice</code> è
-la nostra numerazione interna, <code>codiceCommessa</code> quella del cliente. Confonderli
-scrive nella serie sbagliata, e non dà nessun segnale finché i conti non tornano.</div>
+<div class="nota warn"><strong>I due codici non si scambiano mai</strong>, e il prefisso è lì
+apposta: <code>codiceCommessa</code> è la nostra numerazione interna,
+<code>externalCodiceCommessa</code> quella del gestionale. Confonderli scrive nella serie
+sbagliata, e non dà nessun segnale finché i conti non tornano.</div>
 
 <h2>GET /dipendenti</h2>
 <table>
@@ -231,7 +243,7 @@ scrive nella serie sbagliata, e non dà nessun segnale finché i conti non torna
   <tr><td class="k">variante</td><td class="t">str</td><td>distingue più scritture dallo stesso record — es. <code>ordinario</code>, <code>straordinario</code>. Vuota se non serve</td></tr>
   <tr><td class="k">esito</td><td class="t">enum</td><td>ok | errore</td></tr>
   <tr><td class="k">scrittoAl</td><td class="t">ISO?</td><td>quando è finito <em>davvero</em> sul gestionale. Se ometti, adesso</td></tr>
-  <tr><td class="k">riferimentoEsterno</td><td class="t">any?</td><td>numero documento, protocollo… l'unica traccia se lì non si rilegge</td></tr>
+  <tr><td class="k">externalRiferimento</td><td class="t">any?</td><td>numero documento, protocollo… l'unica traccia se lì non si rilegge</td></tr>
   <tr><td class="k">errore</td><td class="t">str?</td><td>messaggio comprensibile a un impiegato</td></tr>
 </table>
 <div class="nota"><strong>Riannunciare è innocuo.</strong> La chiave è
@@ -247,9 +259,13 @@ e a cavallo di due periodi di paga quella differenza cambia il conto.</div>
   <tr><td class="k">entita</td><td class="t">enum</td><td>commessa · cliente · dipendente</td></tr>
   <tr><td class="k">record[].externalId</td><td class="t">str</td><td><strong>obbligatorio</strong></td></tr>
   <tr><td class="k">record[].nome</td><td class="t">str</td><td><strong>obbligatorio</strong> — è ciò che l'ufficio legge quando abbina</td></tr>
-  <tr><td class="k">record[].codice</td><td class="t">str?</td><td>se sul gestionale l'id fa da codice, <strong>ripeti lì l'externalId</strong></td></tr>
-  <tr><td class="k">record[].clienteExternalId</td><td class="t">str?</td><td>committente: i documenti di km e spese spesso lo pretendono</td></tr>
-  <tr><td class="k">record[].attiva</td><td class="t">bool?</td><td>false = chiusa / non più in forza</td></tr>
+  <tr><td class="k">record[].externalCodiceCommessa</td><td class="t">str?</td><td>se sul gestionale l'id fa da codice, <strong>ripeti lì l'externalId</strong></td></tr>
+  <tr><td class="k">record[].externalCodiceDipendente</td><td class="t">str?</td><td>per entita=dipendente. <strong>Non è la nostra matricola</strong>: confronto solo esatto</td></tr>
+  <tr><td class="k">record[].externalClienteId</td><td class="t">str?</td><td>committente: i documenti di km e spese spesso lo pretendono</td></tr>
+  <tr><td class="k">record[].clienteNome</td><td class="t">str?</td><td>mandalo se non depositi anche le anagrafiche cliente</td></tr>
+  <tr><td class="k">record[].categoria</td><td class="t">str?</td><td>gruppo / tipo di lavoro</td></tr>
+  <tr><td class="k">record[].indirizzo</td><td class="t">str?</td><td><strong>una riga sola, già composta dal client</strong></td></tr>
+  <tr><td class="k">record[].attiva</td><td class="t">bool?</td><td>false = chiusa / non più in forza. <strong>Manda anche le chiuse</strong></td></tr>
   <tr><td class="k">record[].dati</td><td class="t">obj?</td><td>risposta grezza come allegato: non viene interpretata</td></tr>
 </table>
 <p style="font-size:7.8pt">Massimo 1000 record per chiamata. <strong>La traduzione la fa il

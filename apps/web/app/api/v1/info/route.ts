@@ -44,6 +44,22 @@ export async function GET(request: NextRequest) {
       scrittura: ['scritture', 'letture', 'esecuzioni'],
     },
 
+    /**
+     * La convenzione sui nomi, dichiarata invece che sottintesa: chi scrive un
+     * client puo' verificarla a runtime prima di mappare i campi.
+     */
+    convenzioneNomi: {
+      prefissoEsterno: 'external',
+      regola:
+        'I campi che iniziano con "external" contengono dati DEL GESTIONALE. ' +
+        'Senza prefisso sono dati di Kommessa. Il prefisso vale per identificativi, ' +
+        'codici e riferimenti, non per gli attributi descrittivi.',
+      esempi: {
+        'cantieri.codiceCommessa': 'nostro, progressivo (CAN-00190)',
+        'cantieri.externalCodiceCommessa': 'del gestionale (26084)',
+      },
+    },
+
     paginazione: {
       parametri: ['limite', 'cursore', 'modificatoDopo', 'dal', 'al'],
       limiteDefault: LIMITE_DEFAULT,

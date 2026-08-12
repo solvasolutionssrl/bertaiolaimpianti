@@ -48,7 +48,7 @@ interface ScritturaIn {
   /** Quando e' finito sul sistema esterno. Se assente, adesso. */
   scrittoAl?: string | null;
   /** Cosa ha risposto il sistema esterno: numero documento, protocollo... */
-  riferimentoEsterno?: unknown;
+  externalRiferimento?: unknown;
   /** Messaggio leggibile in ufficio. Niente tracce di stack. */
   errore?: string | null;
 }
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       variante: (s.variante ?? '').trim(),
       esito: s.esito === 'errore' ? 'errore' : 'ok',
       scritto_at: s.scrittoAl ?? new Date().toISOString(),
-      external_ref: s.riferimentoEsterno ?? null,
+      external_ref: s.externalRiferimento ?? null,
       errore: s.errore?.slice(0, 2000) ?? null,
       token_id: ctx.tokenId,
       registrato_at: new Date().toISOString(),
@@ -188,7 +188,7 @@ export async function GET(request: NextRequest) {
     risorsaId: r.risorsa_id,
     variante: r.variante,
     esito: r.esito,
-    riferimentoEsterno: r.external_ref,
+    externalRiferimento: r.external_ref,
     errore: r.errore,
     scrittoAl: r.scritto_at,
     registratoAl: r.registrato_at,

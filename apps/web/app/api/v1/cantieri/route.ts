@@ -21,12 +21,14 @@ export const maxDuration = 30;
  * categoria, sede di partenza. Serve a chi vuole rispecchiarla altrove, o
  * semplicemente a mostrare un nome accanto a un identificativo.
  *
- * ⚠️ Due codici, da non confondere:
- * - **`codice`** e' il NOSTRO, progressivo e interno (`CAN-00190`);
- * - **`codiceCommessa`** e' quello del cliente o del suo gestionale (`26084`).
+ * ⚠️ Due codici, e il prefisso e' li' apposta per non confonderli:
+ * - **`codiceCommessa`** e' il NOSTRO, progressivo e interno (`CAN-00190`);
+ * - **`externalCodiceCommessa`** e' quello del gestionale (`26084`).
  *
  * Scambiarli significa scrivere nella numerazione sbagliata, ed e' un errore
- * che non da' nessun segnale finche' i conti non tornano.
+ * che non da' nessun segnale finche' i conti non tornano. Fino al contratto 1
+ * si chiamavano `codice` e `codiceCommessa`, che e' esattamente il tranello
+ * che questa rinomina ha chiuso.
  */
 
 interface CantiereDb {
@@ -85,10 +87,12 @@ export async function GET(request: NextRequest) {
     return {
       id: r.id,
       risorsa: 'cantieri' as const,
-      codice: r.codice,
-      codiceCommessa: r.codice_commessa,
+      // Nostro, progressivo. Stesso nome che avra' il codice interno delle
+      // commesse il giorno che esporremo anche quelle.
+      codiceCommessa: r.codice,
+      externalCodiceCommessa: r.codice_commessa,
       nome: r.nome,
-      cliente: r.cliente_nome,
+      clienteNome: r.cliente_nome,
       categoria: r.categoria,
       stato: r.stato,
       indirizzo: {
@@ -100,7 +104,7 @@ export async function GET(request: NextRequest) {
       sedePartenza: r.sede_partenza,
       note: r.note,
       externalId,
-      clienteExternalId: externalId ? (clienteDi.get(externalId) ?? null) : null,
+      externalClienteId: externalId ? (clienteDi.get(externalId) ?? null) : null,
       collegato: !!externalId,
       registratoAl: r.created_at,
       modificatoAl: r.updated_at,

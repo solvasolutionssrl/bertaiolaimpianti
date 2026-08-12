@@ -24,10 +24,24 @@ import { autenticaToken, type ScopeToken } from '../../../_lib/api-token';
  *    `modificatoDopo`: al secondo giro si scarica solo il nuovo.
  * 4. **Additiva.** Si aggiungono campi e risorse, non si cambiano quelli che
  *    ci sono. Un client vecchio deve continuare a funzionare.
+ * 5. **`external…` = dato del gestionale.** Nessun prefisso = dato di
+ *    Kommessa. Il prefisso sta in testa, e vale per identificativi, codici e
+ *    riferimenti — non per gli attributi descrittivi, altrimenti ce
+ *    l'avrebbero tutti e smetterebbe di dire qualcosa.
  */
 
-/** Versione del contratto. Cambia solo per rotture, che vanno evitate. */
-export const CONTRATTO = 1;
+/**
+ * Versione del contratto. Cambia solo per rotture, che vanno evitate.
+ *
+ * **2** (12/08/2026) — rinomina di sette campi per la regola `external…`.
+ * Il caso che l'ha resa necessaria: `codice` significava il NOSTRO
+ * (`CAN-00190`) in uscita da `/cantieri` e il LORO (`26084`) in entrata su
+ * `/letture`. Un agente che rileggeva e riscriveva li invertiva senza che
+ * niente desse errore, e le ore finivano sulla commessa di un altro.
+ * Rottura netta, senza sinonimi di transizione: un solo consumatore, in
+ * collaudo, che rilancia la lettura da zero.
+ */
+export const CONTRATTO = 2;
 
 export interface ContestoApi {
   tenantId: string;

@@ -1,6 +1,6 @@
 # Collegare un cliente a un gestionale
 
-**Aggiornato**: 11/08/2026
+**Aggiornato**: 12/08/2026
 
 Fra un anno arriva un cliente con TeamSystem, o Zucchetti, o qualcosa di cui non abbiamo
 mai sentito parlare. Questa è la procedura.

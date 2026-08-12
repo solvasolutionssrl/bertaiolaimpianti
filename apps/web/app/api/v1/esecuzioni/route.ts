@@ -2,7 +2,7 @@ import { type NextRequest } from 'next/server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 
-import { autenticaApi, erroreApi, leggiJson } from '../_lib/api';
+import { CONTRATTO, autenticaApi, erroreApi, leggiJson } from '../_lib/api';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     if (error) {
       return erroreApi(503, 'apertura_fallita', 'Non riesco ad aprire il giro.');
     }
-    return Response.json({ contratto: 1, id: (data as unknown as { id: string }).id });
+    return Response.json({ contratto: CONTRATTO, id: (data as unknown as { id: string }).id });
   }
 
   if (body.azione === 'chiudi') {
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
         'Questo giro è già stato chiuso, oppure non appartiene a questo cliente.',
       );
     }
-    return Response.json({ contratto: 1, chiuso: id });
+    return Response.json({ contratto: CONTRATTO, chiuso: id });
   }
 
   return erroreApi(400, 'azione_sconosciuta', '`azione` deve essere `apri` o `chiudi`.');

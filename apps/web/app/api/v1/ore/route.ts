@@ -156,9 +156,9 @@ export async function GET(request: NextRequest) {
             // consuma non deve saperlo, ma chi indaga un problema si'.
             entita: lavoro.entita,
             externalId: commessaExt,
-            clienteExternalId: commessaExt
+            externalClienteId: commessaExt
               ? (clienteDi.get(commessaExt) ?? null)
-              : null,
+                : null,
           }
         : null,
 

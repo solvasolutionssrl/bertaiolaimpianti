@@ -67,14 +67,28 @@ const VUOTO: DatiCollegamenti = {
   soloNelGestionale: [],
 };
 
-/** Colonne canoniche di `integrazione_staging`. */
+/**
+ * Colonne canoniche di `integrazione_staging`.
+ *
+ * `external_*` = dato del gestionale. Senza prefisso = dato di Kommessa —
+ * la stessa regola dell'API, perche' due vocabolari diversi fra la tabella e
+ * la rotta che la riempie sono un tranello che prima o poi scatta.
+ */
 interface RigaStaging {
   external_id: string;
   nome: string | null;
-  codice: string | null;
-  cliente_external_id: string | null;
+  external_codice: string | null;
+  external_cliente_id: string | null;
+  cliente_nome: string | null;
+  categoria: string | null;
+  indirizzo: string | null;
   attiva: boolean | null;
 }
+
+/** Le colonne che si leggono ovunque: una lista sola, non tre copie. */
+const COLONNE_STAGING =
+  'external_id, nome, external_codice, external_cliente_id, cliente_nome,' +
+  ' categoria, indirizzo, attiva';
 
 /**
  * I record arrivano gia' in lingua canonica: qui non si interpreta niente.
@@ -85,17 +99,20 @@ interface RigaStaging {
  * lista delle chiavi si allungherebbe a ogni cliente nuovo, e sarebbe dialetto
  * dell'ERP dentro il nostro codice.
  *
- * `nomiCliente` serve solo a mostrare il committente accanto alla commessa:
- * il collegamento lo porta gia' l'agente in `cliente_external_id`.
+ * Il nome del committente puo' arrivare per due strade: denormalizzato in
+ * `cliente_nome` (l'agente ce l'ha messo) oppure risolto da `external_cliente_id`
+ * fra i clienti depositati. Si prova la prima, perche' un agente che deposita
+ * le commesse ma non i clienti e' un caso normale — e in quel caso la seconda
+ * non trova niente.
  */
 function daStaging(r: RigaStaging, nomiCliente: Map<string, string>): CandidatoEsterno {
   return {
     externalId: r.external_id,
-    codice: r.codice,
+    codice: r.external_codice,
     nome: r.nome ?? r.external_id,
-    cliente: r.cliente_external_id
-      ? (nomiCliente.get(r.cliente_external_id) ?? null)
-      : null,
+    cliente:
+      r.cliente_nome ??
+      (r.external_cliente_id ? (nomiCliente.get(r.external_cliente_id) ?? null) : null),
   };
 }
 
@@ -179,7 +196,7 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
 
   const { data: stagingRaw } = await service
     .from('integrazione_staging' as never)
-    .select('external_id, nome, codice, cliente_external_id, attiva')
+    .select(COLONNE_STAGING)
     .eq('tenant_id', ctx.tenantId)
     .eq('sistema', sistema)
     .eq('entita', 'commessa');
@@ -313,15 +330,19 @@ export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> 
 
   const { data: stagingRaw } = await service
     .from('integrazione_staging' as never)
-    .select('external_id, nome, codice, cliente_external_id, attiva')
+    .select(COLONNE_STAGING)
     .eq('tenant_id', ctx.tenantId)
     .eq('sistema', sistema)
     .eq('entita', 'commessa')
     .in('external_id', parsed.data.externalIds);
 
-  const daCreare = ((stagingRaw ?? []) as unknown as RigaStaging[]).map((r) =>
-    daStaging(r, new Map()),
-  );
+  // Qui serve la riga intera, non solo i quattro campi dell'abbinamento:
+  // categoria e indirizzo si scrivono sul cantiere nuovo.
+  const daCreare = ((stagingRaw ?? []) as unknown as RigaStaging[]).map((r) => ({
+    ...daStaging(r, new Map()),
+    categoria: r.categoria,
+    indirizzo: r.indirizzo,
+  }));
 
   // Chi e' gia' collegato non si ricrea: sarebbe un doppione silenzioso.
   const { data: mapEsistenti } = await service
@@ -375,8 +396,12 @@ export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> 
         // Qui, e solo qui, va il codice del gestionale.
         codice_commessa: e.codice,
         cliente_nome: e.cliente,
-        // Nato dal gestionale, che di indirizzi non ne manda: va completato in
-        // ufficio. Il flag lo rende visibile invece di lasciarlo scoperto.
+        categoria: e.categoria,
+        indirizzo: e.indirizzo,
+        // Anche quando l'indirizzo arriva, resta da verificare: sul gestionale
+        // e' spesso la sede legale del committente, non il posto dove si lavora.
+        // E senza coordinate il cantiere non comparirebbe comunque sulla mappa:
+        // il flag e' cio' che lo tiene nell'elenco delle cose da sistemare.
         indirizzo_da_verificare: true,
       } as never)
       .select('id')
@@ -398,7 +423,11 @@ export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> 
       entita: 'cantiere',
       entita_id: (creato as unknown as { id: string }).id,
       external_id: e.externalId,
-      external_dati: { codice: e.codice, nome: e.nome, cliente: e.cliente },
+      external_dati: {
+        externalCodice: e.codice,
+        nome: e.nome,
+        clienteNome: e.cliente,
+      },
       origine: 'manuale',
     } as never);
 
