@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>API Kommessa v1 — scheda rapida</title>
+<style>
+  @page { size: A4; margin: 14mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 8.4pt; line-height: 1.4; color: #16202e; margin: 0;
+  }
+  h1 { font-size: 17pt; margin: 0 0 2mm; letter-spacing: -.3pt; }
+  h2 {
+    font-size: 10.5pt; margin: 6mm 0 2mm; padding-bottom: 1mm;
+    border-bottom: 1.4pt solid #16406b; color: #16406b; letter-spacing: -.2pt;
+  }
+  h3 {
+    font-size: 9pt; margin: 3.5mm 0 1.5mm; color: #0f2d4d;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  .sub { color: #5b6b7f; font-size: 8pt; margin: 0 0 4mm; }
+  .banner {
+    background: #0f2d4d; color: #fff; padding: 4mm 5mm; border-radius: 2mm;
+    margin-bottom: 5mm;
+  }
+  .banner h1 { color: #fff; }
+  .banner .sub { color: #a9c4e0; margin: 0; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5mm 0 3mm; }
+  th {
+    text-align: left; font-size: 7pt; text-transform: uppercase; letter-spacing: .4pt;
+    color: #5b6b7f; border-bottom: .6pt solid #c8d3e0; padding: 1mm 2mm 1mm 0; font-weight: 600;
+  }
+  td { padding: .9mm 2mm .9mm 0; border-bottom: .3pt solid #e6ecf3; vertical-align: top; }
+  td.k { font-family: ui-monospace, Menlo, monospace; white-space: nowrap; width: 34%; color: #0f2d4d; }
+  td.t { color: #7a8798; width: 14%; font-size: 7.4pt; white-space: nowrap; }
+  .nota {
+    background: #fff8e6; border-left: 2pt solid #e0a020; padding: 2mm 3mm;
+    margin: 2mm 0 3mm; font-size: 7.8pt;
+  }
+  .warn { background: #fdeced; border-left-color: #c0392b; }
+  .ok { background: #eaf6ef; border-left-color: #1e8449; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 7mm; }
+  .pill {
+    display: inline-block; background: #eef3f9; border-radius: 1mm;
+    padding: .3mm 1.5mm; font-size: 7pt; font-family: ui-monospace, Menlo, monospace;
+    color: #16406b;
+  }
+  .verbo {
+    display: inline-block; background: #16406b; color: #fff; border-radius: 1mm;
+    padding: .3mm 1.6mm; font-size: 7pt; font-weight: 700; margin-right: 1.5mm;
+  }
+  .verbo.post { background: #1e8449; }
+  .break { page-break-before: always; }
+  .avoid { page-break-inside: avoid; }
+  footer { margin-top: 5mm; padding-top: 2mm; border-top: .5pt solid #c8d3e0;
+           color: #7a8798; font-size: 7pt; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  <h1>API Kommessa · v1</h1>
+  <p class="sub">Scheda rapida · contratto 1 · aggiornata 12/08/2026 · <span class="mono">https://www.kommessa.it/api/v1</span></p>
+</div>
+
+<div class="grid2">
+  <div>
+    <h2>Autenticazione</h2>
+    <p>Header <code>Authorization: Bearer kmsa_…</code> su ogni chiamata.<br>
+    Token creato da <code>/admin/token-app</code> con permesso <span class="pill">integrazione</span>.</p>
+    <div class="nota"><strong>Il cliente sta nel token, mai nell'indirizzo.</strong> Nessuna
+    chiamata accetta un identificativo di azienda: se lo accettasse, un token rubato basterebbe
+    a leggere i dati di un altro cliente cambiando un numero nell'URL.</div>
+  </div>
+  <div>
+    <h2>Formato</h2>
+    <p class="mono" style="font-size:7.6pt">
+      elenco → { contratto, dati:[…], paginazione:{ prossimo, altriRisultati } }<br>
+      errore → { errore: { codice, messaggio } }
+    </p>
+    <p><strong>Parametri comuni a tutti gli elenchi:</strong><br>
+    <span class="pill">limite</span> default 200, max 1000 ·
+    <span class="pill">cursore</span> opaco, si rimanda ·
+    <span class="pill">modificatoDopo</span> ISO ·
+    <span class="pill">dal</span> <span class="pill">al</span> giorno YYYY-MM-DD</p>
+  </div>
+</div>
+
+<div class="nota ok"><strong>Il giro tipico.</strong> Prima volta senza parametri, seguendo
+<code>paginazione.prossimo</code> finché non è <code>null</code>. Poi si tiene il
+<code>modificatoAl</code> più alto visto e si riparte con <code>?modificatoDopo=…</code>:
+scendono solo le novità.</div>
+
+<h2>Le rotte</h2>
+<table>
+  <tr><td class="k"><span class="verbo">GET</span>/info</td><td>si auto-descrive: modalità, risorse, vocabolari. Da chiamare a ogni avvio, non cablare le risposte</td></tr>
+  <tr><td class="k"><span class="verbo">GET</span>/ore</td><td>ore lavorate, una riga per giornata <em>e</em> per cantiere</td></tr>
+  <tr><td class="k"><span class="verbo">GET</span>/spese</td><td>spese di cantiere, comprese bozze e in analisi</td></tr>
+  <tr><td class="k"><span class="verbo">GET</span>/viaggi</td><td>tragitti: km, tempo, mezzo, ruolo — compresi i passeggeri</td></tr>
+  <tr><td class="k"><span class="verbo">GET</span>/cantieri</td><td>anagrafica cantieri con posizione</td></tr>
+  <tr><td class="k"><span class="verbo">GET</span>/dipendenti</td><td>anagrafica personale, compresi i non più in forza</td></tr>
+  <tr><td class="k"><span class="verbo post">POST</span>/scritture</td><td><strong>l'ACK</strong>: cosa è finito sul sistema esterno (<code>GET</code> per rileggere il registro)</td></tr>
+  <tr><td class="k"><span class="verbo post">POST</span>/letture</td><td>deposita le anagrafiche lette dal gestionale</td></tr>
+  <tr><td class="k"><span class="verbo post">POST</span>/esecuzioni</td><td>apre e chiude il giro (diario)</td></tr>
+</table>
+
+<h2>Tre campi che ogni risorsa porta con sé</h2>
+<table>
+  <tr><td class="k">modificatoAl</td><td class="t">ISO</td><td>ultima modifica: è il campo su cui si pagina e si fa l'incrementale</td></tr>
+  <tr><td class="k">inviabile</td><td class="t">bool</td><td><strong>la sicura.</strong> In modalità <code>simulazione</code> è <code>false</code> su tutto: si può provare la catena senza scrivere niente sul gestionale del cliente</td></tr>
+  <tr><td class="k">esportazioni[]</td><td class="t">array</td><td>cosa è già uscito, e quando. Elementi: <code>variante</code>, <code>esito</code>, <code>scrittoAl</code>, <code>registratoAl</code>, <code>riferimentoEsterno</code>, <code>errore</code></td></tr>
+</table>
+
+<div class="nota"><strong>Perché <code>esportazioni</code> esiste.</strong> Molti gestionali non
+lasciano rileggere quello che hanno ricevuto, e alcuni non lasciano cancellare. In quel mondo
+«l'ho già mandato?» è la domanda più importante che ci sia, e non può avere come unica risposta
+il giornale locale di una macchina che può morire.</div>
+
+<div class="break"></div>
+
+<h2>GET /ore</h2>
+<p class="sub">Una riga per giornata e per cantiere. Le tre quote non si sommano mai: su quasi
+ogni gestionale sono causali diverse.</p>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">id</td><td class="t">uuid</td><td>identificativo della riga</td></tr>
+  <tr><td class="k">data</td><td class="t">YYYY-MM-DD</td><td>giorno di competenza</td></tr>
+  <tr><td class="k">dipendente.id / .nome / .cognome</td><td class="t">str</td><td></td></tr>
+  <tr><td class="k">dipendente.nomeCompleto</td><td class="t">str</td><td>«Cognome Nome»</td></tr>
+  <tr><td class="k">dipendente.mansione</td><td class="t">str?</td><td></td></tr>
+  <tr><td class="k">dipendente.matricola</td><td class="t">str?</td><td>codice interno aziendale</td></tr>
+  <tr><td class="k">dipendente.inForza</td><td class="t">bool</td><td></td></tr>
+  <tr><td class="k">dipendente.externalId</td><td class="t">str?</td><td>id sul gestionale, già risolto</td></tr>
+  <tr><td class="k">commessa.id</td><td class="t">uuid</td><td></td></tr>
+  <tr><td class="k">commessa.entita</td><td class="t">enum</td><td><code>cantiere</code> | <code>commessa</code> secondo il mondo del tenant</td></tr>
+  <tr><td class="k">commessa.externalId</td><td class="t">str?</td><td></td></tr>
+  <tr><td class="k">commessa.clienteExternalId</td><td class="t">str?</td><td>committente secondo il gestionale</td></tr>
+  <tr><td class="k">ore.ordinarie / .straordinarie / .viaggio / .totale</td><td class="t">num</td><td>ore decimali</td></tr>
+  <tr><td class="k">minuti.ordinarie / .straordinarie / .viaggio</td><td class="t">int</td><td>le stesse in minuti: evita arrotondamenti a valle</td></tr>
+  <tr><td class="k">durataLeggibile</td><td class="t">str</td><td>«10:00»</td></tr>
+  <tr><td class="k">note</td><td class="t">str?</td><td>nota della riga</td></tr>
+  <tr><td class="k">giornata.id</td><td class="t">uuid</td><td>il rapportino che la contiene</td></tr>
+  <tr><td class="k">giornata.stato</td><td class="t">enum</td><td>bozza · inviato · verificato · approvato · respinto · esportato</td></tr>
+  <tr><td class="k">giornata.approvata</td><td class="t">bool</td><td>scorciatoia: stato ∈ {approvato, esportato}</td></tr>
+  <tr><td class="k">giornata.approvataAl / .inviataAl</td><td class="t">ISO?</td><td></td></tr>
+  <tr><td class="k">giornata.note</td><td class="t">str?</td><td></td></tr>
+</table>
+<div class="nota"><strong>Arrivano anche le giornate non approvate.</strong> Filtrarle è una
+politica, e le politiche appartengono a chi conosce il sistema di destinazione.</div>
+
+<h2>GET /spese</h2>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">id · data</td><td class="t">uuid · data</td><td>data scontrino; se manca, di registrazione</td></tr>
+  <tr><td class="k">categoria</td><td class="t">str</td><td>la nostra, fine: hotel · ristorante · bar · trasporti · carburante · varie</td></tr>
+  <tr><td class="k">categoriaCanonica</td><td class="t">enum</td><td>ristorante · albergo · carburante · altro</td></tr>
+  <tr><td class="k">fornitore</td><td class="t">str?</td><td>ragione sociale dell'esercente</td></tr>
+  <tr><td class="k">partitaIva · numeroDocumento · indirizzoEsercente</td><td class="t">str?</td><td>letti dallo scontrino</td></tr>
+  <tr><td class="k">importo.totale / .iva / .imponibile / .valuta</td><td class="t">num</td><td>totale IVA inclusa</td></tr>
+  <tr><td class="k">metodoPagamento</td><td class="t">enum?</td><td>contanti · carta · altro</td></tr>
+  <tr><td class="k">rimborsabile · numeroPersone · note</td><td class="t">bool · int · str?</td><td></td></tr>
+  <tr><td class="k">dipendente.*</td><td class="t">obj?</td><td>come in /ore</td></tr>
+  <tr><td class="k">commessa.*</td><td class="t">obj?</td><td>come in /ore</td></tr>
+  <tr><td class="k">stato · confermata</td><td class="t">enum · bool</td><td>bozza | confermata</td></tr>
+  <tr><td class="k">analisi.conclusaAl / .errore</td><td class="t">ISO? · str?</td><td>esito dell'analisi automatica dello scontrino</td></tr>
+  <tr><td class="k">haFoto</td><td class="t">bool</td><td>il file si chiede a parte, con altro permesso</td></tr>
+  <tr><td class="k">posizione.lat / .lng</td><td class="t">num?</td><td>dove è stata registrata</td></tr>
+  <tr><td class="k">registratoAl</td><td class="t">ISO</td><td></td></tr>
+</table>
+
+<div class="break"></div>
+
+<h2>GET /viaggi</h2>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">id · data · direzione</td><td class="t">uuid · data · enum</td><td>andata | ritorno</td></tr>
+  <tr><td class="k">dipendente.*</td><td class="t">obj?</td><td>come in /ore</td></tr>
+  <tr><td class="k">ruolo</td><td class="t">enum</td><td><strong>autista | passeggero</strong> — arrivano entrambi</td></tr>
+  <tr><td class="k">partenza.tipo</td><td class="t">enum</td><td><code>sede</code> oppure <code>cantiere</code> (spostamenti nella stessa giornata)</td></tr>
+  <tr><td class="k">partenza.id / .nome / .indirizzo</td><td class="t">str?</td><td>se sede</td></tr>
+  <tr><td class="k">partenza.codice / .externalId</td><td class="t">str?</td><td>se cantiere</td></tr>
+  <tr><td class="k">arrivo.id / .nome / .codice / .externalId</td><td class="t">str?</td><td>destinazione: è a lei che si imputano i km</td></tr>
+  <tr><td class="k">commessa.*</td><td class="t">obj?</td><td>la destinazione, in forma canonica</td></tr>
+  <tr><td class="k">km</td><td class="t">num</td><td></td></tr>
+  <tr><td class="k">tempo.stimatoMin</td><td class="t">int?</td><td>dal calcolo percorso</td></tr>
+  <tr><td class="k">tempo.confermatoMin</td><td class="t">int</td><td><code>0</code> = tratta registrata ma non pagata</td></tr>
+  <tr><td class="k">tempo.confermatoLeggibile</td><td class="t">str</td><td>«1:00»</td></tr>
+  <tr><td class="k">mezzo.id / .targa / .modello</td><td class="t">str?</td><td></td></tr>
+  <tr><td class="k">giustificazione · timbraturaId</td><td class="t">str? · uuid?</td><td></td></tr>
+</table>
+
+<h2>GET /cantieri</h2>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">id</td><td class="t">uuid</td><td></td></tr>
+  <tr><td class="k">codice</td><td class="t">str</td><td><strong>il NOSTRO</strong>, progressivo interno — «CAN-00190»</td></tr>
+  <tr><td class="k">codiceCommessa</td><td class="t">str?</td><td><strong>quello del cliente</strong> o del suo gestionale — «26084»</td></tr>
+  <tr><td class="k">nome · cliente · categoria · stato</td><td class="t">str</td><td></td></tr>
+  <tr><td class="k">indirizzo.testo / .lat / .lng</td><td class="t">str? · num?</td><td></td></tr>
+  <tr><td class="k">indirizzo.daVerificare</td><td class="t">bool</td><td>nato senza indirizzo, da completare in ufficio</td></tr>
+  <tr><td class="k">sedePartenza · note</td><td class="t">str?</td><td></td></tr>
+  <tr><td class="k">externalId · clienteExternalId · collegato</td><td class="t">str? · bool</td><td></td></tr>
+</table>
+<div class="nota warn"><strong>I due codici non si scambiano mai.</strong> <code>codice</code> è
+la nostra numerazione interna, <code>codiceCommessa</code> quella del cliente. Confonderli
+scrive nella serie sbagliata, e non dà nessun segnale finché i conti non tornano.</div>
+
+<h2>GET /dipendenti</h2>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">id · nome · cognome · nomeCompleto</td><td class="t">str</td><td></td></tr>
+  <tr><td class="k">mansione · note</td><td class="t">str?</td><td></td></tr>
+  <tr><td class="k">matricola</td><td class="t">str?</td><td>codice interno aziendale, se inserito</td></tr>
+  <tr><td class="k">inForza</td><td class="t">bool</td><td>arrivano anche i <code>false</code>: le loro ore storiche esistono</td></tr>
+  <tr><td class="k">aTurni</td><td class="t">bool</td><td></td></tr>
+  <tr><td class="k">costoOrario</td><td class="t">num?</td><td>dato sensibile: chi emette un token sappia che lo concede</td></tr>
+  <tr><td class="k">haAccessoApp</td><td class="t">bool</td><td>l'identificativo utente non si espone</td></tr>
+  <tr><td class="k">externalId · collegato</td><td class="t">str? · bool</td><td></td></tr>
+</table>
+
+<div class="break"></div>
+
+<h2>POST /scritture — l'ACK</h2>
+<p class="sub">Da chiamare sempre, anche quando è andata male.</p>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">risorsa</td><td class="t">enum</td><td>ore · spese · viaggi · cantieri · dipendenti · clienti</td></tr>
+  <tr><td class="k">risorsaId</td><td class="t">uuid</td><td>l'<code>id</code> del record letto</td></tr>
+  <tr><td class="k">variante</td><td class="t">str</td><td>distingue più scritture dallo stesso record — es. <code>ordinario</code>, <code>straordinario</code>. Vuota se non serve</td></tr>
+  <tr><td class="k">esito</td><td class="t">enum</td><td>ok | errore</td></tr>
+  <tr><td class="k">scrittoAl</td><td class="t">ISO?</td><td>quando è finito <em>davvero</em> sul gestionale. Se ometti, adesso</td></tr>
+  <tr><td class="k">riferimentoEsterno</td><td class="t">any?</td><td>numero documento, protocollo… l'unica traccia se lì non si rilegge</td></tr>
+  <tr><td class="k">errore</td><td class="t">str?</td><td>messaggio comprensibile a un impiegato</td></tr>
+</table>
+<div class="nota"><strong>Riannunciare è innocuo.</strong> La chiave è
+<code>(risorsa, risorsaId, variante)</code>: non si creano doppioni. Un client che riparte dopo
+un guasto può ripetere gli annunci senza pensarci.<br><br>
+<strong>Due tempi diversi.</strong> <code>scrittoAl</code> è quando è arrivato sul gestionale,
+<code>registratoAl</code> quando ce l'hai detto. Lo scarto misura il ritardo del collegamento,
+e a cavallo di due periodi di paga quella differenza cambia il conto.</div>
+
+<h2>POST /letture — anagrafiche dal gestionale</h2>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">entita</td><td class="t">enum</td><td>commessa · cliente · dipendente</td></tr>
+  <tr><td class="k">record[].externalId</td><td class="t">str</td><td><strong>obbligatorio</strong></td></tr>
+  <tr><td class="k">record[].nome</td><td class="t">str</td><td><strong>obbligatorio</strong> — è ciò che l'ufficio legge quando abbina</td></tr>
+  <tr><td class="k">record[].codice</td><td class="t">str?</td><td>se sul gestionale l'id fa da codice, <strong>ripeti lì l'externalId</strong></td></tr>
+  <tr><td class="k">record[].clienteExternalId</td><td class="t">str?</td><td>committente: i documenti di km e spese spesso lo pretendono</td></tr>
+  <tr><td class="k">record[].attiva</td><td class="t">bool?</td><td>false = chiusa / non più in forza</td></tr>
+  <tr><td class="k">record[].dati</td><td class="t">obj?</td><td>risposta grezza come allegato: non viene interpretata</td></tr>
+</table>
+<p style="font-size:7.8pt">Massimo 1000 record per chiamata. <strong>La traduzione la fa il
+client</strong>: Kommessa non prova a indovinare dove sia il nome nella risposta di un
+gestionale che non conosce.</p>
+
+<h2>POST /esecuzioni — il diario</h2>
+<table>
+  <tr><th>campo</th><th>tipo</th><th>note</th></tr>
+  <tr><td class="k">azione: "apri"</td><td class="t">—</td><td>+ <code>direzione</code> (lettura | scrittura), <code>avvio</code> (manuale | schedulato) → ritorna <code>id</code></td></tr>
+  <tr><td class="k">azione: "chiudi"</td><td class="t">—</td><td>+ <code>id</code>, <code>esito</code> (ok | parziale | errore), <code>letti</code>, <code>scritti</code>, <code>errori</code>, <code>messaggio</code>, <code>dettaglio</code></td></tr>
+</table>
+<p style="font-size:7.8pt">Apri <strong>prima</strong> di lavorare: un giro aperto e mai chiuso
+è il segnale che il client è morto a metà, ed è l'unico modo per accorgersene.
+<code>parziale</code> è il caso normale, non un ripiego.</p>
+
+<h2>Errori</h2>
+<table>
+  <tr><td class="k">token_non_valido</td><td class="t">401</td><td>fermarsi: token sbagliato, revocato o senza permesso</td></tr>
+  <tr><td class="k">modulo_spento</td><td class="t">403</td><td>fermarsi: non è un guasto, l'ufficio l'ha spento</td></tr>
+  <tr><td class="k">sistema_non_configurato</td><td class="t">409</td><td>manca il sistema di destinazione</td></tr>
+  <tr><td class="k">cursore_non_valido</td><td class="t">400</td><td>ripartire senza cursore</td></tr>
+  <tr><td class="k">lotto_troppo_grande</td><td class="t">413</td><td>spezzare in più chiamate</td></tr>
+  <tr><td class="k">*_fallita</td><td class="t">503</td><td>temporaneo: ritentare più tardi</td></tr>
+</table>
+
+<footer>
+  Kommessa · SOLVA — documentazione completa in
+  <span class="mono">documentazione_generale/09_API/</span> ·
+  questa scheda è generata da <span class="mono">_scheda-api.html</span>
+</footer>
+
+</body>
+</html>
