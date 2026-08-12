@@ -1,10 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { AlertTriangle, CheckCircle2, Clock, FlaskConical, Plug, RefreshCw } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronRight, FlaskConical, Plug, PowerOff } from 'lucide-react';
 import { Badge, Card, CardContent, cn } from '@kommessa/ui';
 
-import type { CodaTenant, EsecuzioneRow, ScritturaRow } from './tipi';
+import {
+  SemaforoCollegamento,
+  etichettaStato,
+} from '../../_components/semaforo-collegamento';
+import type { EsecuzioneRow, RigaCollegamento, ScritturaRow } from './tipi';
 
 const fmt = new Intl.DateTimeFormat('it-IT', {
   timeZone: 'Europe/Rome',
@@ -20,26 +25,20 @@ function quando(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? '—' : fmt.format(d);
 }
 
-/** «2 ore fa» dice più di un orario quando la domanda è "è fermo?". */
-function da(iso: string | null): string {
-  if (!iso) return 'mai';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return '—';
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return 'adesso';
-  if (min < 60) return `${min} min fa`;
-  const ore = Math.floor(min / 60);
+/**
+ * «2 ore fa» dice più di un orario quando la domanda è "è fermo?".
+ *
+ * Prende le ore **già calcolate dal server** e non guarda l'orologio: un
+ * `Date.now()` nel render di un componente client SSRato produce un testo
+ * diverso fra server e browser, e React scarta l'albero con un errore di
+ * idratazione. Stessa trappola documentata per la PWA.
+ */
+function daOre(ore: number | null): string {
+  if (ore === null) return 'mai';
+  if (ore < 1) return 'da poco';
   if (ore < 24) return `${ore} ${ore === 1 ? 'ora' : 'ore'} fa`;
   const gg = Math.floor(ore / 24);
   return `${gg} ${gg === 1 ? 'giorno' : 'giorni'} fa`;
-}
-
-/** Oltre questo, un collegamento che dovrebbe girare è probabilmente fermo. */
-const SOGLIA_SILENZIO_ORE = 24;
-
-function silenziosoDa(iso: string | null): boolean {
-  if (!iso) return true;
-  return Date.now() - new Date(iso).getTime() > SOGLIA_SILENZIO_ORE * 3600_000;
 }
 
 type Tab = 'stato' | 'scritture' | 'giri';
@@ -48,26 +47,29 @@ type Tab = 'stato' | 'scritture' | 'giri';
  * Vista di piattaforma sui collegamenti coi gestionali.
  *
  * Con l'API a risorse non c'è più una coda da sorvegliare: decide l'agente
- * cosa prendere. Restano le due domande che contano quando il cliente chiama —
- * **cosa è stato scritto fuori** e **da quanto nessuno si fa vivo** — più una
- * terza che l'esperienza ha aggiunto: **quanto ritardo sta accumulando** chi
- * ci tiene aggiornati.
+ * cosa prendere. Restano le domande che contano quando il cliente chiama —
+ * **come sta il collegamento**, **cosa è uscito**, **chi è passato**.
+ *
+ * Il semaforo e il perché arrivano già decisi dal server: la stessa funzione
+ * che decide se mandare la mail. Ricalcolarli qui vorrebbe dire, prima o poi,
+ * una pagina che dice «tutto a posto» mentre parte un avviso di guasto.
  */
 export function IntegrazioniClient({
-  code,
+  righe,
   scritture,
   giri,
-  nessunModulo,
 }: {
-  code: CodaTenant[];
+  righe: RigaCollegamento[];
   scritture: ScritturaRow[];
   giri: EsecuzioneRow[];
-  nessunModulo: boolean;
 }) {
   const [tab, setTab] = React.useState<Tab>('stato');
   const [soloErrori, setSoloErrori] = React.useState(false);
 
   const scrFiltrate = soloErrori ? scritture.filter((s) => s.esito === 'errore') : scritture;
+  const daGuardare = righe.filter(
+    (r) => r.stato === 'guasto' || r.stato === 'attenzione',
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -78,7 +80,11 @@ export function IntegrazioniClient({
             Integrazioni
           </h1>
           <p className="text-sm text-muted-foreground">
-            Collegamenti con i gestionali dei clienti.
+            {righe.length === 0
+              ? 'Nessun cliente collegato a un gestionale.'
+              : daGuardare === 0
+                ? `${righe.length} ${righe.length === 1 ? 'collegamento' : 'collegamenti'}, tutti regolari.`
+                : `${daGuardare} su ${righe.length} ${daGuardare === 1 ? 'chiede' : 'chiedono'} attenzione.`}
           </p>
         </div>
         <div className="flex gap-1 rounded-lg border border-border p-1">
@@ -106,112 +112,114 @@ export function IntegrazioniClient({
         </div>
       </div>
 
-      {nessunModulo ? (
+      {righe.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
-            Nessun cliente ha il modulo <strong>integrazione</strong> attivo.
+            Nessun cliente ha il modulo <strong>integrazione</strong>.
             <br />
-            Si accende dal pannello del singolo cliente.
+            Si accende dal pannello del singolo cliente, scheda Integrazione.
           </CardContent>
         </Card>
       ) : null}
 
       {tab === 'stato' ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          {code.map((c) => {
-            const muto = silenziosoDa(c.ultimoGiroOk);
-            const inSimulazione = c.modalita !== 'attiva';
-            return (
-              <Card
-                key={c.tenantId}
-                className={cn(
-                  c.scrittureErrore > 0 && 'border-red-500/40',
-                  c.scrittureErrore === 0 && muto && 'border-amber-500/40',
-                )}
-              >
-                <CardContent className="space-y-3 p-4">
-                  <div className="flex items-start justify-between gap-2">
+        <div className="space-y-3">
+          {righe.map((r) => (
+            <Card
+              key={r.tenantId}
+              className={cn(
+                r.stato === 'guasto' && 'border-red-500/40',
+                r.stato === 'attenzione' && 'border-amber-500/40',
+              )}
+            >
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <SemaforoCollegamento stato={r.stato} />
                     <div className="min-w-0">
-                      <p className="truncate font-semibold">{c.tenant}</p>
-                      <p className="text-xs text-muted-foreground">
-                        gestionale: {c.sistema}
-                      </p>
-                    </div>
-                    {c.scrittureErrore > 0 ? (
-                      <Badge className="shrink-0 bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300">
-                        <AlertTriangle className="mr-1 h-3 w-3" aria-hidden="true" />
-                        {c.scrittureErrore} in errore
-                      </Badge>
-                    ) : muto ? (
-                      <Badge className="shrink-0 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                        <Clock className="mr-1 h-3 w-3" aria-hidden="true" />
-                        silenzioso
-                      </Badge>
-                    ) : (
-                      <Badge className="shrink-0 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                        <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-                        ok
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* La sicura di collaudo va detta forte: chi guarda deve
-                      sapere subito perché non sta uscendo niente. */}
-                  {inSimulazione ? (
-                    <p className="flex items-start gap-1.5 rounded-md border border-sky-500/30 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
-                      <FlaskConical className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-                      <span>
-                        In <strong>simulazione</strong>: si legge tutto, ma niente
-                        deve essere scritto sul gestionale.
-                        {c.collaudoEsterni > 0
-                          ? ` ${c.collaudoEsterni} identificativi aperti per la prova.`
-                          : ''}
-                      </span>
-                    </p>
-                  ) : null}
-
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    {(
-                      [
-                        ['Scritte', c.scrittureOk, 'text-emerald-600'],
-                        [
-                          'Errori',
-                          c.scrittureErrore,
-                          c.scrittureErrore > 0 ? 'text-red-600' : '',
-                        ],
-                        [
-                          'Ritardo medio',
-                          c.ritardoMedioMin,
-                          (c.ritardoMedioMin ?? 0) > 60 ? 'text-amber-600' : '',
-                        ],
-                      ] as [string, number | null, string][]
-                    ).map(([et, n, colore]) => (
-                      <div key={et} className="rounded-md border border-border py-1.5">
-                        <p className={cn('text-lg font-semibold tabular-nums', colore)}>
-                          {n == null ? '—' : et === 'Ritardo medio' ? `${n}′` : n}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">{et}</p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate font-semibold">{r.tenant}</p>
+                        <Badge variant="outline" className="text-[10px]">
+                          {r.sistema ?? 'gestionale non scelto'}
+                        </Badge>
+                        {!r.attivo ? (
+                          <Badge className="bg-slate-200 text-[10px] font-normal text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <PowerOff className="mr-1 h-3 w-3" aria-hidden="true" />
+                            modulo spento
+                          </Badge>
+                        ) : null}
+                        {r.modalita === 'simulazione' ? (
+                          <Badge className="bg-sky-100 text-[10px] font-normal text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                            <FlaskConical className="mr-1 h-3 w-3" aria-hidden="true" />
+                            simulazione
+                          </Badge>
+                        ) : null}
                       </div>
-                    ))}
+                      <ul className="mt-1 space-y-0.5">
+                        {r.motivi.map((m) => (
+                          <li key={m} className="text-xs text-muted-foreground">
+                            {m}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
+                  <Link
+                    href={`/admin/tenants/${r.tenantId}?tab=integrazione`}
+                    className="inline-flex shrink-0 items-center gap-0.5 text-xs text-primary hover:underline"
+                  >
+                    {etichettaStato(r.stato) === 'Regolare' ? 'Gestisci' : 'Vai a sistemare'}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                </div>
 
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    <p className="flex items-center gap-1.5">
-                      <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                      Ultimo giro riuscito: <strong>{da(c.ultimoGiroOk)}</strong>
-                      {c.ultimoGiro && c.ultimoGiro !== c.ultimoGiroOk
-                        ? ` · ultimo tentativo ${da(c.ultimoGiro)}`
-                        : null}
-                    </p>
-                    <p>
-                      Ultima scrittura sul gestionale:{' '}
-                      <strong>{da(c.ultimaScrittura)}</strong>
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {(
+                    [
+                      ['Visto', daOre(r.silenzioOre), r.stato === 'guasto' ? 'rosso' : ''],
+                      [
+                        'Scritte 24h',
+                        String(r.scrittureOk),
+                        '',
+                      ],
+                      [
+                        'Errori 24h',
+                        String(r.scrittureErrore),
+                        r.scrittureErrore > 0 ? 'rosso' : '',
+                      ],
+                      [
+                        'Ritardo',
+                        r.ritardoMedioMin === null ? '—' : `${r.ritardoMedioMin}′`,
+                        (r.ritardoMedioMin ?? 0) > 60 ? 'ambra' : '',
+                      ],
+                      [
+                        'Collegate',
+                        `${r.collegate}/${r.nostreTotali}`,
+                        r.collegate < r.nostreTotali ? 'ambra' : '',
+                      ],
+                    ] as [string, string, string][]
+                  ).map(([et, v, tono]) => (
+                    <div
+                      key={et}
+                      className={cn(
+                        'rounded-md border px-2.5 py-1.5',
+                        tono === 'rosso'
+                          ? 'border-red-500/30 bg-red-500/[0.05]'
+                          : tono === 'ambra'
+                            ? 'border-amber-500/30 bg-amber-500/[0.05]'
+                            : 'border-border',
+                      )}
+                    >
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {et}
+                      </p>
+                      <p className="truncate text-sm font-semibold tabular-nums">{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       ) : null}
 

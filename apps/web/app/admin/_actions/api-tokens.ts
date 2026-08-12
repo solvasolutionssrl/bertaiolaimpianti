@@ -24,7 +24,10 @@ export interface RisultatoCreazione {
  * l'integrazione non deve poter caricare foto, e viceversa.
  * - `upload`       : comando iOS "Carica su Kommessa" (un telefono, una persona).
  * - `integrazione` : agente di sincronizzazione col gestionale del cliente
- *                    (una macchina dentro la loro rete). Apre solo `/api/integrazione/*`.
+ *                    (una macchina dentro la loro rete). Apre solo `/api/v1/*`,
+ *                    e solo finche' il modulo integrazione resta acceso per
+ *                    quel cliente: spegnerlo chiude il rubinetto senza revocare
+ *                    niente.
  */
 export type ScopeTokenAdmin = 'upload' | 'integrazione';
 

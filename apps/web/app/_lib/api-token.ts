@@ -2,6 +2,8 @@ import 'server-only';
 
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
+import { waitUntil } from '@vercel/functions';
+
 import { createServiceSupabase } from '@kommessa/api/service';
 
 /**
@@ -30,8 +32,9 @@ export function hashToken(inChiaro: string): string {
  * Permessi concedibili a un token.
  * - `upload`       : comando iOS "Carica su Kommessa" (elenco commesse + invio file).
  * - `integrazione` : agente di sync verso il gestionale di un cliente. Apre SOLO
- *                    le rotte `/api/integrazione/*` — nessun accesso ai media,
- *                    alle commesse o al resto dell'app.
+ *                    l'API pubblica `/api/v1/*`, e solo se il modulo
+ *                    `integrazione` e' acceso per quel cliente — nessun accesso
+ *                    ai media, alle commesse o al resto dell'app.
  */
 export type ScopeToken = 'upload' | 'integrazione';
 
@@ -133,14 +136,26 @@ export async function autenticaToken(
   // il vero anche se un domani il vincolo cambiasse.
   if (scopeRichiesto === 'upload' && !riga.user_id) return null;
 
-  // `last_used_at` serve a riconoscere i token dimenticati: aggiornato al
-  // massimo una volta al minuto per non scrivere a ogni file di un batch.
+  // `last_used_at` serve a riconoscere i token dimenticati, ed e' anche il
+  // segnale con cui `/admin/integrazioni` capisce se un agente e' ancora vivo:
+  // dice "ha chiamato" anche quando non aveva niente da scrivere.
+  //
+  // ⚠️ Va dentro `waitUntil`. Un `void promessa` qui non basta: la funzione
+  // serverless restituisce la risposta e Vercel chiude l'invocazione prima che
+  // la UPDATE arrivi al database. E' il motivo per cui la colonna e' rimasta
+  // NULL su tutti i token nonostante l'agente FPM avesse gia' letto 1094
+  // record. Aggiornato al massimo una volta al minuto: un batch non deve
+  // scrivere una riga per file.
   const ultimo = riga.last_used_at ? Date.parse(riga.last_used_at) : 0;
   if (Date.now() - ultimo > 60_000) {
-    void service
-      .from('api_tokens' as never)
-      .update({ last_used_at: new Date().toISOString() } as never)
-      .eq('id', riga.id);
+    waitUntil(
+      Promise.resolve(
+        service
+          .from('api_tokens' as never)
+          .update({ last_used_at: new Date().toISOString() } as never)
+          .eq('id', riga.id),
+      ).catch(() => {}),
+    );
   }
 
   const utente = Array.isArray(riga.utente) ? riga.utente[0] : riga.utente;

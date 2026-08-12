@@ -25,6 +25,9 @@ import { TabAi } from './_components/tab-ai';
 import { TabModuli } from './_components/tab-moduli';
 import { TabFunzioni } from './_components/tab-funzioni';
 import { TabRouting } from './_components/tab-routing';
+import { TabIntegrazione } from './_components/tab-integrazione';
+import { fotoCollegamenti } from '../../_lib/integrazione-foto';
+import { leggiConfigIntegrazione } from '../../_lib/integrazione-config';
 import { googleRoutingDisponibile } from '@/app/_lib/routing';
 
 export const dynamic = 'force-dynamic';
@@ -55,10 +58,28 @@ function fmtConfigKantiere(v: unknown): string {
   return String(v);
 }
 
+/** Schede raggiungibili con `?tab=…`, così i link da altre pagine atterrano giusto. */
+const TAB_VALIDI = [
+  'overview',
+  'utenti',
+  'quote',
+  'storage',
+  'ai',
+  'moduli',
+  'funzioni',
+  'routing',
+  'integrazione',
+  'branding',
+  'note',
+  'audit',
+];
+
 export default async function TenantDetailPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { tab?: string };
 }) {
   await requirePlatformAdmin();
   const supabase = createServiceSupabase();
@@ -125,6 +146,36 @@ export default async function TenantDetailPage({
   const routingProvider: 'free' | 'google' =
     kantiereConfig['routing_provider'] === 'google' ? 'google' : 'free';
   const googleKeyConfigured = googleRoutingDisponibile();
+
+  // ===== Integrazione: config, stato del collegamento, token vivi =====
+  const rigaIntegrazione = moduli.find((m) => m.module_code === 'integrazione');
+  const integrazionePresente = !!rigaIntegrazione;
+  const cfgIntegrazione = leggiConfigIntegrazione(
+    (rigaIntegrazione?.config ?? null) as Record<string, unknown> | null,
+  );
+  const [collegamento] = integrazionePresente
+    ? await fotoCollegamenti(params.id)
+    : [undefined];
+  const { data: tokenRaw } = await supabase
+    .from('api_tokens' as never)
+    .select('id, label, created_at, last_used_at')
+    .eq('tenant_id', params.id)
+    .contains('scopes', ['integrazione'])
+    .is('revoked_at', null)
+    .order('created_at', { ascending: false });
+  const tokenIntegrazione = (
+    (tokenRaw ?? []) as unknown as {
+      id: string;
+      label: string;
+      created_at: string;
+      last_used_at: string | null;
+    }[]
+  ).map((t) => ({
+    id: t.id,
+    label: t.label,
+    creato: t.created_at,
+    ultimoUso: t.last_used_at,
+  }));
 
   const appModeTenant: 'kommessa' | 'kantiere' | 'full' =
     tenant.app_mode === 'kantiere' || tenant.app_mode === 'full' ? tenant.app_mode : 'kommessa';
@@ -209,7 +260,13 @@ export default async function TenantDetailPage({
         />
       </header>
 
-      <Tabs defaultValue="overview">
+      <Tabs
+        defaultValue={
+          searchParams?.tab && TAB_VALIDI.includes(searchParams.tab)
+            ? searchParams.tab
+            : 'overview'
+        }
+      >
         <TabsList className="flex-wrap">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="utenti">Utenti</TabsTrigger>
@@ -219,6 +276,7 @@ export default async function TenantDetailPage({
           <TabsTrigger value="moduli">Moduli</TabsTrigger>
           <TabsTrigger value="funzioni">Funzioni</TabsTrigger>
           {kantiereAttivo ? <TabsTrigger value="routing">Viaggio</TabsTrigger> : null}
+          <TabsTrigger value="integrazione">Integrazione</TabsTrigger>
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="note">Note interne</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -363,6 +421,38 @@ export default async function TenantDetailPage({
             </div>
           </TabsContent>
         ) : null}
+
+        {/* ===== Integrazione (governo di /api/v1 per questo cliente) ===== */}
+        <TabsContent value="integrazione">
+          <TabIntegrazione
+            dati={{
+              tenantId: tenant.id,
+              tenantNome: tenant.nome,
+              slug: tenant.slug,
+              attivo: rigaIntegrazione?.attivo === true,
+              sistema: cfgIntegrazione.sistema,
+              modalita: cfgIntegrazione.modalita,
+              collaudoEsterni: cfgIntegrazione.collaudoEsterni,
+              maxDescrizione: cfgIntegrazione.maxDescrizione,
+              sogliaSilenzioOre: cfgIntegrazione.sogliaSilenzioOre,
+              stato: collegamento?.diagnosi.stato ?? 'mai_visto',
+              motivi: collegamento?.diagnosi.motivi ?? [
+                'Il modulo non è mai stato acceso per questo cliente.',
+              ],
+              silenzioOre: collegamento?.diagnosi.silenzioOre ?? null,
+              scrittureOk: collegamento?.foto.scrittureOk ?? 0,
+              scrittureErrore: collegamento?.foto.scrittureErrore ?? 0,
+              ritardoAckMin: collegamento?.foto.ritardoAckMin ?? null,
+              giriAperti: collegamento?.foto.giriAperti ?? 0,
+              nostreTotali: collegamento?.nostreTotali ?? 0,
+              collegate: collegamento?.collegate ?? 0,
+              staging:
+                collegamento?.staging ?? { commesse: 0, clienti: 0, dipendenti: 0 },
+              ultimaLettura: collegamento?.ultimaLettura ?? null,
+              token: tokenIntegrazione,
+            }}
+          />
+        </TabsContent>
 
         {/* ===== Branding ===== */}
         <TabsContent value="branding">

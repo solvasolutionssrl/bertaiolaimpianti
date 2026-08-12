@@ -9,11 +9,15 @@
  *                  permessi). Sotto-flag in `tenant_modules.config`:
  *                  `pianificazione_attiva`, `ferie_attiva`.
  *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
- * - `integrazione`: ponte verso il gestionale del cliente (ERP esterno).
- *                  Quale gestionale e come si sincronizza sta in
- *                  `tenant_modules.config`: `sistema`, `sinc_manuale`,
- *                  `auto_push`. Il codice di Kommessa resta neutro — il
- *                  dialetto dell'ERP vive solo nell'agente di sync.
+ * - `integrazione`: ponte verso il gestionale del cliente (ERP esterno). È il
+ *                  modulo che apre `/api/v1`: senza riga attiva ogni chiamata
+ *                  autenticata riceve 403 `modulo_spento`, token valido o no.
+ *                  In `tenant_modules.config`: `sistema` (quale gestionale),
+ *                  `modalita` (`simulazione` | `attiva`), `collaudo_esterni`,
+ *                  `max_descrizione`, `soglia_silenzio_ore`. Il codice di
+ *                  Kommessa resta neutro — il dialetto dell'ERP vive solo
+ *                  nell'agente. Si governa da `/admin/tenants/[id]` → tab
+ *                  Integrazione.
  *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
  */
 export type ModuleCode = 'base' | 'kantiere' | 'dipendenti' | 'integrazione';

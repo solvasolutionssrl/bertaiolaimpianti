@@ -1,24 +1,34 @@
 /** Tipi condivisi fra la pagina server e il client di `/admin/integrazioni`. */
 
-export interface CodaTenant {
+import type { StatoCollegamento } from '@kommessa/api/integrazione-salute';
+
+/**
+ * Una riga della panoramica: un cliente, un gestionale, come sta.
+ *
+ * Il giudizio (`stato`, `motivi`) arriva gia' fatto dal server — lo calcola
+ * `valutaCollegamento`, che e' logica pura e la stessa che decide se mandare
+ * la mail. Il client non deve rifarlo, altrimenti la pagina e l'avviso
+ * potrebbero dire due cose diverse.
+ */
+export interface RigaCollegamento {
   tenantId: string;
   tenant: string;
-  sistema: string;
+  sistema: string | null;
   /** `simulazione` = sicura di collaudo inserita: nessuno deve scrivere fuori. */
-  modalita: string;
-  /** Identificativi esterni aperti anche in simulazione. */
-  collaudoEsterni: number;
+  modalita: 'simulazione' | 'attiva';
+  /** Modulo spento = l'API rifiuta tutto, token validi compresi. */
+  attivo: boolean;
+  stato: StatoCollegamento;
+  motivi: string[];
+  silenzioOre: number | null;
+  ultimaAttivita: string | null;
   scrittureOk: number;
   scrittureErrore: number;
-  /** Ultima scrittura riuscita: se e' vecchia, il collegamento e' fermo. */
-  ultimaScrittura: string | null;
-  ultimoGiroOk: string | null;
-  ultimoGiro: string | null;
-  /**
-   * Minuti medi fra quando una cosa e' finita sul gestionale e quando ce
-   * l'hanno detto. Se cresce, l'agente sta accumulando ritardo.
-   */
   ritardoMedioMin: number | null;
+  giriAperti: number;
+  collegate: number;
+  nostreTotali: number;
+  ultimaLettura: string | null;
 }
 
 export interface ScritturaRow {
