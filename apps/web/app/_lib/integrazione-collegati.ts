@@ -84,3 +84,59 @@ export async function leggiCollegamenti(
     return NESSUN_COLLEGAMENTO;
   }
 }
+
+/**
+ * Cosa di questo lotto è già stato portato sul gestionale.
+ *
+ * Legge il **registro delle scritture**, che è l'unica fonte che sopravvive a
+ * una macchina che muore: il giornale locale dell'agente no. Una query per
+ * lotto, mai una per riga.
+ *
+ * Fail-soft come il resto: se qualcosa non torna si restituisce una mappa
+ * vuota e il segno non compare. L'elenco spese serve tutti i giorni,
+ * l'integrazione riguarda un cliente su due.
+ */
+export interface EsportazioneRiga {
+  esito: string;
+  scrittoAl: string;
+  riferimento: unknown;
+  errore: string | null;
+}
+
+export async function leggiEsportazioni(
+  supabase: Supa,
+  tenantId: string,
+  risorsa: 'ore' | 'spese' | 'viaggi',
+  idNostri: string[],
+): Promise<Map<string, EsportazioneRiga[]>> {
+  const out = new Map<string, EsportazioneRiga[]>();
+  if (idNostri.length === 0) return out;
+  try {
+    const { data } = await supabase
+      .from('integrazione_scritture' as never)
+      .select('risorsa_id, esito, scritto_at, external_ref, errore')
+      .eq('tenant_id', tenantId)
+      .eq('risorsa', risorsa)
+      .in('risorsa_id', idNostri);
+
+    for (const r of (data ?? []) as unknown as {
+      risorsa_id: string;
+      esito: string;
+      scritto_at: string;
+      external_ref: unknown;
+      errore: string | null;
+    }[]) {
+      const lista = out.get(r.risorsa_id) ?? [];
+      lista.push({
+        esito: r.esito,
+        scrittoAl: r.scritto_at,
+        riferimento: r.external_ref,
+        errore: r.errore,
+      });
+      out.set(r.risorsa_id, lista);
+    }
+  } catch {
+    // vedi sopra: mai bloccante
+  }
+  return out;
+}

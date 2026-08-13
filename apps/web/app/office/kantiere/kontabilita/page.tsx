@@ -1,3 +1,4 @@
+import { leggiCollegamenti, leggiEsportazioni } from '@/app/_lib/integrazione-collegati';
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -152,6 +153,13 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
     .maybeSingle()) as { data: { id: string } | null };
   const mioDipendenteId = mioDip?.id ?? null;
 
+  // Cosa è già stato portato sul gestionale, e sotto quale gestionale. Due
+  // query per l'intera pagina, non una per riga.
+  const collegamenti = await leggiCollegamenti(supabase, ctx.tenantId);
+  const esportazioni = collegamenti.attiva
+    ? await leggiEsportazioni(supabase, ctx.tenantId, 'spese', spese.map((s) => s.id))
+    : new Map();
+
   // Righe serializzabili per il client.
   const righe: SpesaRiga[] = spese.map((s) => ({
     id: s.id,
@@ -170,6 +178,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
     hasFile: !!s.r2_key,
     numeroPersone: s.numero_persone ?? 1,
     stato: (s.stato as SpesaRiga['stato']) ?? null,
+    esportazioni: esportazioni.get(s.id) ?? [],
   }));
 
   const filtri: FiltriValori = {
@@ -197,6 +206,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
       />
 
       <SpeseTable
+        sistemaGestionale={collegamenti.attiva ? collegamenti.sistema : null}
         spese={righe}
         cantieri={cantieriOptions}
         dipendentiOptions={dipendentiOptions}

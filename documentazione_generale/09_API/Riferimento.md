@@ -175,7 +175,12 @@ mandarle è una politica, e le politiche stanno da chi conosce il sistema di des
 l'accorpamento contabile. Scegli il livello di dettaglio che il tuo sistema regge, invece
 di doverlo ricostruire.
 
-Arrivano anche le **bozze** — spese ancora in revisione o in analisi automatica.
+Arrivano anche le **bozze** — spese ancora in revisione o in analisi automatica. Una
+bozza può essere **incompleta**: se l'analisi della foto è fallita, `importo.totale`,
+`data` e `fornitore` sono `null` e `analisi.errore` dice perché. Scrivere una riga così su
+un gestionale contabile non ha senso: **controlla `confermata` prima di portarla fuori.**
+Non lo decidiamo noi al posto tuo — `inviabile` risponde a un'altra domanda, cioè se la
+sicura di collaudo ti autorizza, non se il record è pronto.
 
 ## `GET /viaggi`
 

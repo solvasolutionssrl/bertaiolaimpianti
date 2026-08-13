@@ -196,7 +196,7 @@ export function TokenAppClient({
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder={
-                  scope === 'integrazione' ? 'Agente ERGO — VM FPM' : 'iPhone di Luca'
+                  scope === 'integrazione' ? 'Agente di sincronizzazione' : 'iPhone di Luca'
                 }
               />
             </div>

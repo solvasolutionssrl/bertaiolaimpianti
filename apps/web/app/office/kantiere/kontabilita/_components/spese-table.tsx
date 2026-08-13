@@ -17,6 +17,11 @@ import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { MediaLightbox, type MediaItem } from '@/app/_components/media-lightbox';
 import { aggiornaSpesa, eliminaSpesa } from '@/app/_actions/kantiere-spese';
 
+import {
+  RegistratoSulGestionale,
+  type Esportazione,
+} from '@/app/office/_components/sinc-gestionale';
+
 import { NuovaSpesaOffice } from './nuova-spesa-office';
 import { CantiereCombo } from './cantiere-combo';
 
@@ -38,6 +43,8 @@ export type SpesaRiga = {
   numeroPersone: number;
   /** 'in_elaborazione' = analisi AI in cloud in corso; 'bozza' = da verificare. */
   stato?: 'bozza' | 'confermata' | 'in_elaborazione' | null;
+  /** Cosa di questa spesa è già finito sul gestionale del cliente. */
+  esportazioni?: Esportazione[];
 };
 
 export type CantiereOption = { id: string; nome: string };
@@ -102,9 +109,20 @@ interface Props {
   cantieri: CantiereOption[];
   dipendentiOptions: DipendenteOption[];
   mioDipendenteId: string | null;
+  /**
+   * Gestionale del cliente, se l'integrazione è accesa. `null` = il segno non
+   * compare affatto. Il nome finisce solo nel suggerimento, mai nell'etichetta.
+   */
+  sistemaGestionale?: string | null;
 }
 
-export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId }: Props) {
+export function SpeseTable({
+  spese,
+  cantieri,
+  dipendentiOptions,
+  mioDipendenteId,
+  sistemaGestionale = null,
+}: Props) {
   const router = useRouter();
   const [aperta, setAperta] = React.useState<SpesaRiga | null>(null);
   const [lightbox, setLightbox] = React.useState<MediaItem | null>(null);
@@ -208,9 +226,16 @@ export function SpeseTable({ spese, cantieri, dipendentiOptions, mioDipendenteId
                     />
                   </td>
 
-                  {/* Categoria */}
+                  {/* Categoria + stato verso il gestionale */}
                   <td className="whitespace-nowrap px-3 py-1.5 align-middle">
-                    <CategoriaBadge categoria={s.categoria} />
+                    <span className="inline-flex items-center gap-1.5">
+                      <CategoriaBadge categoria={s.categoria} />
+                      <RegistratoSulGestionale
+                        esportazioni={s.esportazioni}
+                        sistema={sistemaGestionale}
+                        compatto
+                      />
+                    </span>
                   </td>
 
                   {/* Esercente */}
