@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { CloudOff, Link2, Loader2, UserPlus } from 'lucide-react';
+import { ChevronDown, CloudOff, Link2, Loader2, RotateCcw, UserPlus } from 'lucide-react';
 import {
   Button,
   Card,
@@ -23,6 +23,7 @@ import {
   collegaDalGestionale,
   creaDipendenteDalGestionale,
   ignoraDalGestionale,
+  riprendiIgnorato,
 } from '@/app/_actions/integrazione-nuovi';
 
 /**
@@ -47,6 +48,12 @@ export interface NuovoRow {
   attiva: boolean | null;
 }
 
+export interface IgnoratoRow {
+  externalId: string;
+  etichetta: string | null;
+  motivo: string | null;
+}
+
 export interface DipendenteOpt {
   id: string;
   etichetta: string;
@@ -64,10 +71,12 @@ function spezzaNome(intero: string): { cognome: string; nome: string } {
 
 export function NuoviDalGestionale({
   nuovi,
+  ignorati,
   sistema,
   dipendenti,
 }: {
   nuovi: NuovoRow[];
+  ignorati: IgnoratoRow[];
   sistema: string | null;
   dipendenti: DipendenteOpt[];
 }) {
@@ -78,7 +87,7 @@ export function NuoviDalGestionale({
   const [scelto, setScelto] = React.useState('');
   const [form, setForm] = React.useState({ cognome: '', nome: '', matricola: '', mansione: '' });
 
-  if (!sistema || nuovi.length === 0) return null;
+  if (!sistema || (nuovi.length === 0 && ignorati.length === 0)) return null;
 
   const esegui = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     start(async () => {
@@ -105,6 +114,7 @@ export function NuoviDalGestionale({
 
   return (
     <>
+      {nuovi.length > 0 ? (
       <Card className="border-amber-500/40 bg-amber-500/[0.03]">
         <CardContent className="space-y-3 py-5">
           <div className="flex items-start gap-3">
@@ -192,6 +202,47 @@ export function NuoviDalGestionale({
           </ul>
         </CardContent>
       </Card>
+      ) : null}
+
+      {/* ── Archiviati: la promessa «si disfa con un click» va mantenuta ── */}
+      {ignorati.length > 0 ? (
+        <details className="rounded-lg border border-border bg-card px-3 py-2">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground">
+            <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            {ignorati.length} record del gestionale archiviati come «non nostri»
+          </summary>
+          <ul className="mt-2 space-y-1 border-t border-border/60 pt-2">
+            {ignorati.map((i) => (
+              <li
+                key={i.externalId}
+                className="flex flex-wrap items-center justify-between gap-2 text-xs"
+              >
+                <span className="min-w-0 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {i.etichetta ?? i.externalId}
+                  </span>
+                  <span className="ml-1.5 font-mono text-[10px]">id {i.externalId}</span>
+                  {i.motivo ? <span className="ml-1.5">· {i.motivo}</span> : null}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() =>
+                    esegui(() =>
+                      riprendiIgnorato({ entita: 'dipendente', externalId: i.externalId }),
+                    )
+                  }
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Rimetti negli avvisi
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {/* ── Collega a uno esistente ─────────────────────────────────────── */}
       <Dialog
@@ -351,16 +402,18 @@ export function DipendenteCollegato({
   collegato,
   externalId,
   sistema,
+  className,
 }: {
   collegato: boolean;
   externalId?: string | null;
   sistema?: string | null;
+  className?: string;
 }) {
   if (!sistema || !collegato) return null;
   return (
     <span
       title={`Collegato al gestionale${sistema ? ` (${sistema})` : ''}${externalId ? ` · ${externalId}` : ''}`}
-      className="inline-flex shrink-0 items-center text-sky-600 dark:text-sky-400"
+      className={cn('inline-flex shrink-0 items-center text-sky-600 dark:text-sky-400', className)}
     >
       <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
       <span className="sr-only">collegato al gestionale</span>

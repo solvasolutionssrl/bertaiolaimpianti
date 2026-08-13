@@ -1,6 +1,6 @@
 # API pubblica di Kommessa
 
-**Contratto**: 2 · **Base**: `https://www.kommessa.it/api/v1` · **Aggiornato**: 12/08/2026
+**Contratto**: 2 · **Base**: `https://www.kommessa.it/api/v1` · **Aggiornato**: 13/08/2026
 
 Questa è **l'API del prodotto**, non l'adattamento per un cliente. Espone le risorse di
 Kommessa — ore, spese, viaggi, cantieri, dipendenti — a chiunque abbia un token: oggi un
@@ -14,6 +14,8 @@ nostro servizio.
 | **[Riferimento.md](Riferimento.md)** | a chi scrive un client: rotte, campi, esempi |
 | **[Principi.md](Principi.md)** | a chi aggiunge o modifica una risorsa domani |
 | **[Collegare_un_gestionale.md](Collegare_un_gestionale.md)** | a chi deve collegare un nuovo cliente |
+| **[Anagrafiche.md](Anagrafiche.md)** | come si abbinano commesse, dipendenti e categorie — e chi decide |
+| **[Scheda_API_Kommessa_v1.pdf](Scheda_API_Kommessa_v1.pdf)** | una pagina sola, tutti i campi |
 
 ## L'idea in due minuti
 

@@ -27,11 +27,21 @@ export interface NuovoDalGestionale {
   vistoAl: string;
 }
 
+export interface IgnoratoRiga {
+  externalId: string;
+  etichetta: string | null;
+  motivo: string | null;
+}
+
 export async function nuoviDalGestionale(
   supabase: Supa,
   tenantId: string,
   entita: 'dipendente' | 'commessa',
-): Promise<{ sistema: string | null; nuovi: NuovoDalGestionale[] }> {
+): Promise<{
+  sistema: string | null;
+  nuovi: NuovoDalGestionale[];
+  ignorati: IgnoratoRiga[];
+}> {
   try {
     const { data: mod } = await supabase
       .from('tenant_modules' as never)
@@ -44,10 +54,10 @@ export async function nuoviDalGestionale(
       attivo: boolean;
       config: Record<string, unknown> | null;
     } | null;
-    if (!riga?.attivo) return { sistema: null, nuovi: [] };
+    if (!riga?.attivo) return { sistema: null, nuovi: [], ignorati: [] };
     const sistema =
       typeof riga.config?.sistema === 'string' ? riga.config.sistema : null;
-    if (!sistema) return { sistema: null, nuovi: [] };
+    if (!sistema) return { sistema: null, nuovi: [], ignorati: [] };
 
     // L'entità nostra corrispondente: nel registro delle mappature i
     // dipendenti si chiamano come qui, le commesse diventano `cantiere` nel
@@ -69,16 +79,25 @@ export async function nuoviDalGestionale(
         .in('entita', entitaMappata),
       supabase
         .from('integrazione_ignorati' as never)
-        .select('external_id')
+        .select('external_id, etichetta, motivo')
         .eq('tenant_id', tenantId)
         .eq('sistema', sistema)
-        .eq('entita', entita),
+        .eq('entita', entita)
+        .order('etichetta'),
     ]);
 
     const fuori = new Set([
       ...((mappate.data ?? []) as unknown as { external_id: string }[]).map((r) => r.external_id),
       ...((ignorate.data ?? []) as unknown as { external_id: string }[]).map((r) => r.external_id),
     ]);
+
+    const ignorati: IgnoratoRiga[] = (
+      (ignorate.data ?? []) as unknown as {
+        external_id: string;
+        etichetta: string | null;
+        motivo: string | null;
+      }[]
+    ).map((r) => ({ externalId: r.external_id, etichetta: r.etichetta, motivo: r.motivo }));
 
     const nuovi = ((staging.data ?? []) as unknown as {
       external_id: string;
@@ -103,9 +122,9 @@ export async function nuoviDalGestionale(
           a.nome.localeCompare(b.nome),
       );
 
-    return { sistema, nuovi };
+    return { sistema, nuovi, ignorati };
   } catch {
     // Fail-soft: l'anagrafica dipendenti serve tutti i giorni, l'avviso no.
-    return { sistema: null, nuovi: [] };
+    return { sistema: null, nuovi: [], ignorati: [] };
   }
 }

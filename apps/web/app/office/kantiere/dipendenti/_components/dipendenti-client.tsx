@@ -46,11 +46,16 @@ import {
   creaUtenteDipendente,
 } from '../../../_actions/dipendenti';
 import type { DipendenteRow, UtenteRow } from '../page';
+import { DipendenteCollegato } from './nuovi-dal-gestionale';
 
 interface Props {
   dipendenti: DipendenteRow[];
   utenti: UtenteRow[];
   tenantSlug: string;
+  /** Gestionale del cliente, se acceso. `null` = nessun segno a schermo. */
+  sistemaGestionale?: string | null;
+  /** id dipendente → identificativo sul gestionale, per chi è collegato. */
+  externalPerDipendente?: Record<string, string>;
 }
 
 /** Modalità di gestione dell'accesso app per il dipendente. */
@@ -188,7 +193,13 @@ function categoriaRuolo(user_id: string | null, utenti: UtenteRow[]): FiltroRuol
   return 'altro';
 }
 
-export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
+export function DipendentiClient({
+  dipendenti,
+  utenti,
+  tenantSlug,
+  sistemaGestionale = null,
+  externalPerDipendente,
+}: Props) {
   const router = useRouter();
   const showAlert = useAlert();
   const confirm = useConfirm();
@@ -542,6 +553,14 @@ export function DipendentiClient({ dipendenti, utenti, tenantSlug }: Props) {
                           >
                             {d.cognome} {d.nome}
                           </Link>
+                          {sistemaGestionale ? (
+                            <DipendenteCollegato
+                              collegato={!!externalPerDipendente?.[d.id]}
+                              externalId={externalPerDipendente?.[d.id]}
+                              sistema={sistemaGestionale}
+                              className="ml-1.5 align-middle"
+                            />
+                          ) : null}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground">{d.mansione ?? 'n.d.'}</td>
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">

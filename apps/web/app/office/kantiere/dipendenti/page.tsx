@@ -45,24 +45,28 @@ export default async function DipendentiPage() {
   // che apre l'anagrafica non deve trovarsi davanti una scelta che non è sua.
   const puoDecidere = ['owner', 'admin', 'office'].includes(ctx.role);
   const elenco = (dipendenti ?? []) as DipendenteRow[];
-  const { sistema, nuovi } = puoDecidere
+  const { sistema, nuovi, ignorati } = puoDecidere
     ? await nuoviDalGestionale(supabase, ctx.tenantId, 'dipendente')
-    : { sistema: null, nuovi: [] };
+    : { sistema: null, nuovi: [], ignorati: [] };
 
   // Chi è già collegato non si può scegliere di nuovo: lo stesso record del
   // gestionale su due persone imputerebbe le ore due volte.
-  const collegatiIds = await (async () => {
-    if (!sistema) return new Set<string>();
+  const externalPerDipendente = await (async () => {
+    if (!sistema) return {} as Record<string, string>;
     const { data } = await supabase
       .from('integrazione_mappature' as never)
-      .select('entita_id')
+      .select('entita_id, external_id')
       .eq('tenant_id', ctx.tenantId)
       .eq('sistema', sistema)
       .eq('entita', 'dipendente');
-    return new Set(
-      ((data ?? []) as unknown as { entita_id: string }[]).map((r) => r.entita_id),
+    return Object.fromEntries(
+      ((data ?? []) as unknown as { entita_id: string; external_id: string }[]).map((r) => [
+        r.entita_id,
+        r.external_id,
+      ]),
     );
   })();
+  const collegatiIds = new Set(Object.keys(externalPerDipendente));
 
   return (
     <div className="w-full space-y-5">
@@ -72,6 +76,7 @@ export default async function DipendentiPage() {
       </header>
       <NuoviDalGestionale
         nuovi={nuovi}
+        ignorati={ignorati}
         sistema={sistema}
         dipendenti={elenco.map((d) => ({
           id: d.id,
@@ -81,6 +86,8 @@ export default async function DipendentiPage() {
       />
 
       <DipendentiClient
+        sistemaGestionale={sistema}
+        externalPerDipendente={externalPerDipendente}
         dipendenti={elenco}
         utenti={(utenti ?? []) as UtenteRow[]}
         tenantSlug={ctx.tenantSlug}
