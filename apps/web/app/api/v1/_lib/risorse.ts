@@ -164,19 +164,26 @@ export async function clienteDelleCommesse(
   if (!ctx.sistema) return out;
 
   const service = createServiceSupabase();
-  const { data } = await service
+  // ⚠️ La colonna e' `external_cliente_id` dal contratto 2 (migration
+  // 20260812100000). Con il nome vecchio PostgREST non da' un campo vuoto:
+  // fa fallire l'intera query, `data` torna null e OGNI record esce con
+  // `externalClienteId: null` — in silenzio. E' successo davvero, e i
+  // documenti di km e spese su ERGO il committente lo pretendono.
+  const { data, error } = await service
     .from('integrazione_staging' as never)
-    .select('external_id, cliente_external_id')
+    .select('external_id, external_cliente_id')
     .eq('tenant_id', ctx.tenantId)
     .eq('sistema', ctx.sistema)
     .eq('entita', 'commessa')
-    .not('cliente_external_id', 'is', null);
+    .not('external_cliente_id', 'is', null);
+
+  if (error) return out;
 
   for (const r of (data ?? []) as unknown as {
     external_id: string;
-    cliente_external_id: string;
+    external_cliente_id: string;
   }[]) {
-    out.set(r.external_id, r.cliente_external_id);
+    out.set(r.external_id, r.external_cliente_id);
   }
   return out;
 }

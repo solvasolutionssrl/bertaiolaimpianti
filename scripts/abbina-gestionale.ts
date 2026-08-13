@@ -16,6 +16,13 @@
  *   pnpm tsx scripts/abbina-gestionale.ts --tenant=FPMIMP
  *   pnpm tsx scripts/abbina-gestionale.ts --tenant=FPMIMP --apply
  *   pnpm tsx scripts/abbina-gestionale.ts --tenant=FPMIMP --includi=probabile --apply
+ *   pnpm tsx scripts/abbina-gestionale.ts --tenant=FPMIMP --entita=dipendente --apply
+ *
+ * ⚠️ Sui DIPENDENTI il codice non si guarda mai — si abbina solo per nome.
+ *    Le nostre matricole e quelle del gestionale sono due numerazioni diverse
+ *    che si somigliano: su FPM `00003` e' Benedetti e il `3` di ERGO e'
+ *    Biscaro. Confrontarle produce accoppiamenti sbagliati che non danno
+ *    nessun errore e mandano le ore sulla busta paga di un altro.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -55,6 +62,7 @@ async function main() {
   if (!slug) throw new Error('Serve --tenant=SLUG');
   const applica = flag('apply');
   const includiProbabili = arg('includi') === 'probabile';
+  const entitaScelta = arg('entita') === 'dipendente' ? 'dipendente' : 'commessa';
 
   const { url, key } = env();
   const db = createClient(url, key, { auth: { persistSession: false } });
@@ -81,6 +89,11 @@ async function main() {
 
   console.log(`\n▸ ${(t as { nome: string }).nome} · gestionale "${sistema}"`);
   console.log(`  modalita: ${applica ? 'SCRITTURA' : 'prova (nessuna scrittura)'}\n`);
+
+  if (entitaScelta === 'dipendente') {
+    await abbinaDipendenti(db, tenantId, sistema, applica, includiProbabili);
+    return;
+  }
 
   // --- i nostri -----------------------------------------------------------
   const nostriRaw = inKantiere
@@ -223,6 +236,112 @@ async function main() {
     console.log(`  scritti ${Math.min(i + lotto.length, righe.length)}/${righe.length}`);
   }
   console.log(`\n  ✓ ${righe.length} abbinamenti confermati.\n`);
+}
+
+/**
+ * Dipendenti: stesso motore, ma con il **codice azzerato da entrambe le
+ * parti**. Non e' una semplificazione — e' la protezione contro l'unico modo
+ * in cui questo abbinamento puo' sbagliare in silenzio.
+ */
+async function abbinaDipendenti(
+  db: ReturnType<typeof createClient>,
+  tenantId: string,
+  sistema: string,
+  applica: boolean,
+  includiProbabili: boolean,
+) {
+  const { data: nostriRaw } = await db
+    .from('dipendenti')
+    .select('id, nome, cognome, codice_interno, stato_attivo')
+    .eq('tenant_id', tenantId);
+
+  const etichetta = new Map<string, string>();
+  const nostri: CandidatoNostro[] = (
+    (nostriRaw ?? []) as unknown as {
+      id: string;
+      nome: string;
+      cognome: string;
+      codice_interno: string | null;
+      stato_attivo: boolean;
+    }[]
+  ).map((d) => {
+    const nome = `${d.cognome} ${d.nome}`.trim();
+    etichetta.set(d.id, `${d.codice_interno ?? '?'} · ${nome}${d.stato_attivo ? '' : ' (non in forza)'}`);
+    // `codice: null` deliberato: vedi l'avvertenza in testa al file.
+    return { id: d.id, codice: null, nome, cliente: null };
+  });
+
+  const { data: stagingRaw } = await db
+    .from('integrazione_staging')
+    .select('external_id, nome')
+    .eq('tenant_id', tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'dipendente');
+
+  const esterni: CandidatoEsterno[] = (
+    (stagingRaw ?? []) as unknown as { external_id: string; nome: string | null }[]
+  ).map((r) => ({
+    externalId: r.external_id,
+    codice: null,
+    nome: r.nome ?? r.external_id,
+    cliente: null,
+  }));
+
+  const { data: mapRaw } = await db
+    .from('integrazione_mappature')
+    .select('entita_id, external_id')
+    .eq('tenant_id', tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'dipendente');
+  const gia = ((mapRaw ?? []) as unknown as { entita_id: string; external_id: string }[]).map(
+    (m) => ({ nostroId: m.entita_id, externalId: m.external_id }),
+  );
+
+  console.log(`  nostri: ${nostri.length} · dal gestionale: ${esterni.length} · gia' collegati: ${gia.length}`);
+  console.log('  (abbinamento SOLO per nome: i codici sono due numerazioni diverse)\n');
+
+  const proposte = proponiAbbinamenti(nostri, esterni, gia);
+  const perId = new Map(esterni.map((e) => [e.externalId, e]));
+  for (const f of ['certo', 'probabile', 'debole', 'nessuno'] as const) {
+    console.log(`  ${f.toUpperCase().padEnd(10)} ${String(proposte.filter((p) => p.forza === f).length).padStart(4)}`);
+  }
+  console.log();
+
+  for (const f of ['probabile', 'debole', 'nessuno'] as const) {
+    const g = proposte.filter((p) => p.forza === f);
+    if (g.length === 0) continue;
+    console.log(`  ── ${f} ──`);
+    for (const p of g) {
+      const e = p.externalId ? perId.get(p.externalId) : undefined;
+      console.log(`    ${etichetta.get(p.nostroId)}${e ? `\n      → ${p.externalId} ${e.nome}  [${p.motivo}]` : ''}`);
+    }
+    console.log();
+  }
+
+  const daScrivere = [
+    ...proposte.filter((p) => p.forza === 'certo'),
+    ...(includiProbabili ? proposte.filter((p) => p.forza === 'probabile') : []),
+  ].filter((p): p is typeof p & { externalId: string } => !!p.externalId);
+
+  if (!applica) {
+    console.log(`  Prova: scriverei ${daScrivere.length} abbinamenti. Rilancia con --apply.\n`);
+    return;
+  }
+
+  const { error } = await db.from('integrazione_mappature').upsert(
+    daScrivere.map((p) => ({
+      tenant_id: tenantId,
+      sistema,
+      entita: 'dipendente',
+      entita_id: p.nostroId,
+      external_id: p.externalId,
+      external_dati: { nome: perId.get(p.externalId)?.nome ?? null },
+      origine: 'automatico',
+    })),
+    { onConflict: 'tenant_id,sistema,entita,entita_id' },
+  );
+  if (error) throw new Error(`Scrittura fallita: ${error.message}`);
+  console.log(`  ✓ ${daScrivere.length} dipendenti collegati.\n`);
 }
 
 main().catch((e) => {
