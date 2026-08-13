@@ -48,6 +48,7 @@ import {
 import { CantiereSediCard, type SedeTenant } from './cantiere-sedi-card';
 import { ChiInCantiere, SezioneHeader, type PresenteRow } from './chi-in-cantiere';
 import { StoricoPresenze, type StoricoData } from './storico-presenze';
+import { SincGestionale } from '@/app/office/_components/sinc-gestionale';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +66,8 @@ interface CantiereProp {
   commessaId: string | null;
   stato: 'attivo' | 'sospeso' | 'chiuso';
   note: string | null;
+  /** Identificativo sul gestionale del cliente, se collegato. */
+  externalId: string | null;
 }
 
 interface MembroSquadra {
@@ -110,6 +113,8 @@ interface Props {
   anomalie: AnomaliaRow[];
   chiInCantiere: PresenteRow[];
   storico: StoricoData;
+  /** Gestionale del cliente, se l'integrazione è accesa. `null` = non mostrare. */
+  sistemaGestionale?: string | null;
 }
 
 // ── Select style ──────────────────────────────────────────────────────────
@@ -247,6 +252,7 @@ export function CantiereDetailClient({
   anomalie,
   chiInCantiere,
   storico,
+  sistemaGestionale = null,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -537,6 +543,17 @@ export function CantiereDetailClient({
               </span>
             ) : null}
             <StatoCantiereBadge stato={cantiere.stato} />
+            {/* Qui si mostrano entrambi gli stati, anche il non collegato: in
+                elenco sarebbe rumore su duecento righe, in scheda è la
+                domanda che ci si sta facendo. */}
+            {sistemaGestionale ? (
+              <SincGestionale
+                collegato={!!cantiere.externalId}
+                externalId={cantiere.externalId}
+                sistema={sistemaGestionale}
+                mostraSeAssente
+              />
+            ) : null}
             {form.indirizzoDaVerificare ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
                 <AlertTriangle className="h-3 w-3" aria-hidden="true" />

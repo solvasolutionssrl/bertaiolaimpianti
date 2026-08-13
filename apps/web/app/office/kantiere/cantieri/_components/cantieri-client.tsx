@@ -24,12 +24,18 @@ import {
   categoriaTono,
 } from '@/app/_lib/cantiere-categoria';
 import { CategoriaChips } from '@/app/_components/cantiere-categoria-chips';
+import { SincGestionalePunto } from '@/app/office/_components/sinc-gestionale';
 import { creaCantiere } from '../../../_actions/cantieri';
 import type { CantiereRow, CommessaOption } from '../page';
 
 interface Props {
   rows: CantiereRow[];
   commesse: CommessaOption[];
+  /**
+   * Gestionale del cliente, se l'integrazione è accesa. `null` per i tenant
+   * che non ne hanno uno: la nuvoletta non compare proprio.
+   */
+  sistemaGestionale?: string | null;
 }
 
 interface FormState {
@@ -86,7 +92,7 @@ function StatoBadge({ stato }: { stato: 'attivo' | 'sospeso' | 'chiuso' }) {
   );
 }
 
-export function CantieriClient({ rows, commesse }: Props) {
+export function CantieriClient({ rows, commesse, sistemaGestionale = null }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
@@ -243,8 +249,17 @@ export function CantieriClient({ rows, commesse }: Props) {
                         onClick={() => router.push(`/office/kantiere/cantieri/${row.id}`)}
                       >
                         <td className="px-3 py-2">
-                          <div className="font-mono text-xs font-medium text-foreground">
-                            {codiceCantiereMostrato(row)}
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-xs font-medium text-foreground">
+                              {codiceCantiereMostrato(row)}
+                            </span>
+                            {sistemaGestionale ? (
+                              <SincGestionalePunto
+                                collegato={!!row.externalId}
+                                externalId={row.externalId}
+                                sistema={sistemaGestionale}
+                              />
+                            ) : null}
                           </div>
                         </td>
                         <td className="px-3 py-2 font-semibold">{row.nome}</td>

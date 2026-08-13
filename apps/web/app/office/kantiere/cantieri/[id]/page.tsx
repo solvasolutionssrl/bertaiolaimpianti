@@ -9,6 +9,7 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
+import { leggiCollegamenti } from '@/app/_lib/integrazione-collegati';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
 
 export const dynamic = 'force-dynamic';
@@ -421,6 +422,10 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     (r) => r.sede_id,
   );
 
+  // Collegamento col gestionale del cliente: fail-soft, se il modulo è spento
+  // torna vuoto e la nuvoletta non compare.
+  const collegamenti = await leggiCollegamenti(supabase, ctx.tenantId, [cantiere.id]);
+
   return (
     <div className="w-full space-y-6">
       <CantiereDetailClient
@@ -438,7 +443,9 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
           commessaId: cantiere.commessa_id,
           stato: cantiere.stato,
           note: cantiere.note,
+          externalId: collegamenti.externalPerId.get(cantiere.id) ?? null,
         }}
+        sistemaGestionale={collegamenti.attiva ? collegamenti.sistema : null}
         squadra={squadraConNomi}
         dipendentiAttivi={dipendentiAttivi}
         qr={

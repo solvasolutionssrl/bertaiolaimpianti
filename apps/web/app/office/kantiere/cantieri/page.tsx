@@ -1,6 +1,7 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
+import { leggiCollegamenti } from '@/app/_lib/integrazione-collegati';
 import { CantieriClient } from './_components/cantieri-client';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,8 @@ export interface CantiereRow {
   commessaTitolo: string | null;
   nPersone: number;
   haQr: boolean;
+  /** Identificativo sul gestionale del cliente, se il cantiere è collegato. */
+  externalId: string | null;
 }
 
 export interface CommessaOption {
@@ -133,7 +136,11 @@ export default async function CantieriPage() {
       }) || c.codice_interno || c.id,
   }));
 
-  // 6. Assembla le righe
+  // 6. Chi è collegato al gestionale del cliente (fail-soft: se il modulo è
+  //    spento torna vuoto e la nuvoletta non compare da nessuna parte).
+  const collegamenti = await leggiCollegamenti(supabase, ctx.tenantId, ids);
+
+  // 7. Assembla le righe
   const rows: CantiereRow[] = cantieri.map((c) => ({
     id: c.id,
     codice: c.codice,
@@ -147,6 +154,7 @@ export default async function CantieriPage() {
     commessaTitolo: c.commessa_id ? (commessaTitoliMap[c.commessa_id] ?? null) : null,
     nPersone: personeCounts[c.id] ?? 0,
     haQr: qrSet.has(c.id),
+    externalId: collegamenti.externalPerId.get(c.id) ?? null,
   }));
 
   return (
@@ -157,7 +165,11 @@ export default async function CantieriPage() {
           Siti di lavoro. Un cantiere può essere indipendente o collegato a una commessa.
         </p>
       </header>
-      <CantieriClient rows={rows} commesse={commesse} />
+      <CantieriClient
+        rows={rows}
+        commesse={commesse}
+        sistemaGestionale={collegamenti.attiva ? collegamenti.sistema : null}
+      />
     </div>
   );
 }
