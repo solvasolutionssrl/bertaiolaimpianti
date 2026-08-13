@@ -16,6 +16,14 @@ export function createServerSupabase() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      global: {
+        // Vedi la nota estesa in `service.ts`: senza `no-store`, Next mette le
+        // GET di supabase-js nel Data Cache e continua a servirle anche
+        // quando la tabella e' cambiata. Su dati di un tenant e' peggio che
+        // altrove — si mostrerebbe a un cliente una fotografia vecchia dei
+        // suoi stessi dati, senza che niente lo segnali.
+        fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+      },
       cookies: {
         getAll() {
           return store.getAll();
