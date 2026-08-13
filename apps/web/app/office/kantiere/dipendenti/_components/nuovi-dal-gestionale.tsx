@@ -1,0 +1,369 @@
+'use client';
+
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { CloudOff, Link2, Loader2, UserPlus } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
+  cn,
+} from '@kommessa/ui';
+
+import { useAlert } from '@/app/_components/confirm-provider';
+import {
+  collegaDalGestionale,
+  creaDipendenteDalGestionale,
+  ignoraDalGestionale,
+} from '@/app/_actions/integrazione-nuovi';
+
+/**
+ * «Il gestionale ha una persona che noi non abbiamo.»
+ *
+ * Compare solo quando c'è davvero qualcosa da decidere, e non si chiude da
+ * solo: finché resta, quelle ore non sono attribuibili a nessuno fuori di qui.
+ *
+ * Tre strade, e la terza conta quanto le altre. L'anagrafica di un gestionale
+ * è piena di account di servizio e postazioni — `User Ergo SW`,
+ * `Officina Mobile` — che persone non sono. Senza un modo per dirlo, l'avviso
+ * resterebbe acceso per sempre e in due settimane nessuno lo guarderebbe più.
+ *
+ * Il nome del gestionale non compare nell'etichetta: si dice «il gestionale»,
+ * e il nome vero sta nel sottotitolo, letto dalla configurazione del cliente.
+ */
+
+export interface NuovoRow {
+  externalId: string;
+  nome: string;
+  externalCodice: string | null;
+  attiva: boolean | null;
+}
+
+export interface DipendenteOpt {
+  id: string;
+  etichetta: string;
+  collegato: boolean;
+}
+
+type Modo = { tipo: 'collega' | 'crea'; riga: NuovoRow } | null;
+
+/** «Rossi Mario» → cognome «Rossi», nome «Mario». Il primo token è il cognome. */
+function spezzaNome(intero: string): { cognome: string; nome: string } {
+  const parti = intero.trim().split(/\s+/);
+  if (parti.length === 1) return { cognome: parti[0] ?? '', nome: '' };
+  return { cognome: parti[0] ?? '', nome: parti.slice(1).join(' ') };
+}
+
+export function NuoviDalGestionale({
+  nuovi,
+  sistema,
+  dipendenti,
+}: {
+  nuovi: NuovoRow[];
+  sistema: string | null;
+  dipendenti: DipendenteOpt[];
+}) {
+  const router = useRouter();
+  const showAlert = useAlert();
+  const [pending, start] = React.useTransition();
+  const [modo, setModo] = React.useState<Modo>(null);
+  const [scelto, setScelto] = React.useState('');
+  const [form, setForm] = React.useState({ cognome: '', nome: '', matricola: '', mansione: '' });
+
+  if (!sistema || nuovi.length === 0) return null;
+
+  const esegui = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
+    start(async () => {
+      const r = await fn();
+      if (!r.ok) {
+        await showAlert({ title: 'Non fatto', body: r.error });
+        return;
+      }
+      setModo(null);
+      setScelto('');
+      router.refresh();
+    });
+  };
+
+  const apriCollega = (riga: NuovoRow) => {
+    setScelto('');
+    setModo({ tipo: 'collega', riga });
+  };
+  const apriCrea = (riga: NuovoRow) => {
+    const { cognome, nome } = spezzaNome(riga.nome);
+    setForm({ cognome, nome, matricola: '', mansione: '' });
+    setModo({ tipo: 'crea', riga });
+  };
+
+  return (
+    <>
+      <Card className="border-amber-500/40 bg-amber-500/[0.03]">
+        <CardContent className="space-y-3 py-5">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-400">
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">
+                {nuovi.length === 1
+                  ? 'Nuovo dipendente rilevato sul gestionale'
+                  : `${nuovi.length} dipendenti rilevati sul gestionale`}
+              </h2>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                Non li creiamo da soli: una persona è un contratto e una busta paga.
+                Finché non decidi, le sue ore non sono attribuibili a nessuno fuori
+                di qui.
+                {sistema ? (
+                  <>
+                    {' '}
+                    <span className="font-mono">{sistema}</span>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+
+          <ul className="space-y-2">
+            {nuovi.map((n) => (
+              <li
+                key={n.externalId}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <span className="text-sm font-medium">{n.nome}</span>
+                  <span className="ml-2 font-mono text-[10px] text-muted-foreground">
+                    id {n.externalId}
+                    {n.externalCodice && n.externalCodice !== n.externalId
+                      ? ` · cod. ${n.externalCodice}`
+                      : ''}
+                  </span>
+                  {n.attiva === false ? (
+                    <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      già chiuso là
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    onClick={() => apriCollega(n)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Collega
+                  </Button>
+                  <Button type="button" size="sm" disabled={pending} onClick={() => apriCrea(n)}>
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Crea
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    title="Non è un dipendente (account di servizio, postazione…)"
+                    disabled={pending}
+                    onClick={() =>
+                      esegui(() =>
+                        ignoraDalGestionale({
+                          entita: 'dipendente',
+                          externalId: n.externalId,
+                          etichetta: n.nome,
+                          motivo: 'non è un dipendente',
+                        }),
+                      )
+                    }
+                  >
+                    <CloudOff className="h-3.5 w-3.5" />
+                    Non è una persona
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
+      {/* ── Collega a uno esistente ─────────────────────────────────────── */}
+      <Dialog
+        open={modo?.tipo === 'collega'}
+        onOpenChange={(o) => !o && setModo(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Collega «{modo?.riga.nome}»</DialogTitle>
+            <DialogDescription>
+              A quale dei vostri dipendenti corrisponde? Da qui in avanti le sue ore
+              usciranno con questo riferimento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="scelta-dip">Dipendente</Label>
+            <select
+              id="scelta-dip"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm"
+              value={scelto}
+              onChange={(e) => setScelto(e.target.value)}
+              disabled={pending}
+            >
+              <option value="">Scegli…</option>
+              {dipendenti.map((d) => (
+                <option key={d.id} value={d.id} disabled={d.collegato}>
+                  {d.etichetta}
+                  {d.collegato ? ' — già collegato' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted-foreground">
+              Chi è già collegato non è scegliibile: lo stesso record del gestionale
+              su due persone imputerebbe le ore due volte.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setModo(null)} disabled={pending}>
+              Annulla
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || !scelto}
+              onClick={() =>
+                modo &&
+                esegui(() =>
+                  collegaDalGestionale({
+                    entita: 'dipendente',
+                    externalId: modo.riga.externalId,
+                    nostroId: scelto,
+                    etichetta: modo.riga.nome,
+                  }),
+                )
+              }
+            >
+              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Collega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Crea nuovo ──────────────────────────────────────────────────── */}
+      <Dialog open={modo?.tipo === 'crea'} onOpenChange={(o) => !o && setModo(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crea «{modo?.riga.nome}»</DialogTitle>
+            <DialogDescription>
+              Nome e cognome arrivano dal gestionale. Il resto è vostro.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">Cognome</span>
+              <Input
+                value={form.cognome}
+                onChange={(e) => setForm((f) => ({ ...f, cognome: e.target.value }))}
+                disabled={pending}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">Nome</span>
+              <Input
+                value={form.nome}
+                onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                disabled={pending}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">Matricola</span>
+              <Input
+                value={form.matricola}
+                onChange={(e) => setForm((f) => ({ ...f, matricola: e.target.value }))}
+                placeholder="es. 00061"
+                className="font-mono"
+                disabled={pending}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] font-medium text-muted-foreground">Mansione</span>
+              <Input
+                value={form.mansione}
+                onChange={(e) => setForm((f) => ({ ...f, mansione: e.target.value }))}
+                placeholder="es. Elettricista"
+                disabled={pending}
+              />
+            </label>
+          </div>
+
+          <p
+            className={cn(
+              'rounded-md border border-amber-500/40 bg-amber-500/[0.06] px-3 py-2',
+              'text-[11px] leading-relaxed text-amber-800 dark:text-amber-300',
+            )}
+          >
+            La <strong>matricola è la vostra</strong>, quella del consulente del
+            lavoro — non l&apos;identificativo del gestionale. Le due numerazioni si
+            somigliano e non coincidono. Se non la sai, lasciala vuota e mettila dopo.
+          </p>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setModo(null)} disabled={pending}>
+              Annulla
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || !form.cognome.trim() || !form.nome.trim()}
+              onClick={() =>
+                modo &&
+                esegui(() =>
+                  creaDipendenteDalGestionale({
+                    externalId: modo.riga.externalId,
+                    cognome: form.cognome.trim(),
+                    nome: form.nome.trim(),
+                    matricola: form.matricola.trim() || undefined,
+                    mansione: form.mansione.trim() || undefined,
+                    inForza: modo.riga.attiva !== false,
+                  }),
+                )
+              }
+            >
+              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              Crea e collega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Chiude il cerchio: il segno «collegato» sulla riga di un dipendente. */
+export function DipendenteCollegato({
+  collegato,
+  externalId,
+  sistema,
+}: {
+  collegato: boolean;
+  externalId?: string | null;
+  sistema?: string | null;
+}) {
+  if (!sistema || !collegato) return null;
+  return (
+    <span
+      title={`Collegato al gestionale${sistema ? ` (${sistema})` : ''}${externalId ? ` · ${externalId}` : ''}`}
+      className="inline-flex shrink-0 items-center text-sky-600 dark:text-sky-400"
+    >
+      <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+      <span className="sr-only">collegato al gestionale</span>
+    </span>
+  );
+}
