@@ -26,7 +26,8 @@
     "./upload-queue-policy": "./src/upload-queue-policy.ts",
     "./integrazione-mappa": "./src/integrazione-mappa.ts",
     "./integrazione-abbina": "./src/integrazione-abbina.ts",
-    "./integrazione-salute": "./src/integrazione-salute.ts"
+    "./integrazione-salute": "./src/integrazione-salute.ts",
+    "./categorie-smistamento": "./src/categorie-smistamento.ts"
   },
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",

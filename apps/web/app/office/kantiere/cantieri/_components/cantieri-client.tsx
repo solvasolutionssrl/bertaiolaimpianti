@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, Loader2, Plus, Search, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Loader2, Plus, Search, AlertTriangle, Tags } from 'lucide-react';
 import {
   Button,
   Card,
@@ -36,6 +36,8 @@ interface Props {
    * che non ne hanno uno: la nuvoletta non compare proprio.
    */
   sistemaGestionale?: string | null;
+  /** Valori del gestionale in attesa di smistamento: accende il pallino. */
+  daSmistare?: number;
 }
 
 interface FormState {
@@ -92,7 +94,12 @@ function StatoBadge({ stato }: { stato: 'attivo' | 'sospeso' | 'chiuso' }) {
   );
 }
 
-export function CantieriClient({ rows, commesse, sistemaGestionale = null }: Props) {
+export function CantieriClient({
+  rows,
+  commesse,
+  sistemaGestionale = null,
+  daSmistare = 0,
+}: Props) {
   const router = useRouter();
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
@@ -184,10 +191,23 @@ export function CantieriClient({ rows, commesse, sistemaGestionale = null }: Pro
               ? `${filtered.length} risultat${filtered.length === 1 ? 'o' : 'i'} su ${rows.length}`
               : `${rows.length} cantier${rows.length === 1 ? 'e' : 'i'} · ${nAttivi} attiv${nAttivi === 1 ? 'o' : 'i'}`}
         </p>
-        <Button size="sm" onClick={openNew}>
-          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          Nuovo cantiere
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/office/kantiere/categorie">
+              <Tags className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              Categorie
+              {daSmistare > 0 ? (
+                <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">
+                  {daSmistare}
+                </span>
+              ) : null}
+            </Link>
+          </Button>
+          <Button size="sm" onClick={openNew}>
+            <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Nuovo cantiere
+          </Button>
+        </div>
       </div>
 
       {/* Ricerca + filtro tipologia */}
@@ -259,6 +279,14 @@ export function CantieriClient({ rows, commesse, sistemaGestionale = null }: Pro
                                 externalId={row.externalId}
                                 sistema={sistemaGestionale}
                               />
+                            ) : null}
+                            {row.nuovoDalGestionale ? (
+                              <span
+                                title="Arrivato dal gestionale da poco: controlla indirizzo e categoria."
+                                className="rounded-full bg-emerald-500/15 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400"
+                              >
+                                nuovo
+                              </span>
                             ) : null}
                           </div>
                         </td>

@@ -2,7 +2,10 @@ import { type NextRequest } from 'next/server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 
+import { waitUntil } from '@vercel/functions';
+
 import { CONTRATTO, autenticaApi, erroreApi, leggiJson } from '../_lib/api';
+import { promuoviDalGestionale } from '../../../_lib/integrazione-promuovi';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -110,7 +113,7 @@ export async function POST(request: NextRequest) {
       .eq('sistema', sistema)
       // Un giro gia' chiuso non si riscrive: la storia resta com'e' andata.
       .is('conclusa_at', null)
-      .select('id');
+      .select('id, direzione');
 
     if (error) {
       return erroreApi(503, 'chiusura_fallita', 'Non riesco a chiudere il giro.');
@@ -122,6 +125,19 @@ export async function POST(request: NextRequest) {
         'Questo giro è già stato chiuso, oppure non appartiene a questo cliente.',
       );
     }
+    // ── Promozione ────────────────────────────────────────────────────────
+    // Il deposito delle letture non tocca i dati veri: e' una difesa contro un
+    // gestionale che risponde a meta'. Il momento giusto per portarlo in
+    // produzione e' proprio questo — l'agente ha appena dichiarato che il giro
+    // e' finito, non che si e' interrotto.
+    //
+    // `waitUntil` e non `void`: la funzione serverless risponde subito e senza
+    // waitUntil Vercel chiuderebbe l'invocazione prima che il lavoro finisca.
+    const chiuso = (data ?? [])[0] as unknown as { direzione: string } | undefined;
+    if (chiuso?.direzione === 'lettura' && esito !== 'errore') {
+      waitUntil(promuoviDalGestionale(tenantId).catch(() => {}));
+    }
+
     return Response.json({ contratto: CONTRATTO, chiuso: id });
   }
 
