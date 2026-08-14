@@ -181,6 +181,23 @@ function FotoCell({
 }) {
   const isVideo = item.mime.startsWith('video/');
   const [imgLoaded, setImgLoaded] = React.useState(false);
+  /**
+   * Anteprima che non arriva (11/08/2026).
+   *
+   * Prima c'era solo `imgLoaded`: se la richiesta falliva — miniatura non
+   * ancora generata, proxy Nextcloud che risponde 502, file cancellato a
+   * mano — non scattava nessun evento e **la rotella girava per sempre**.
+   * Ora l'errore si vede (`onError`) e c'e' comunque una rete di sicurezza a
+   * tempo, perche' su un video pesante il browser puo' restare appeso senza
+   * emettere ne' `loadeddata` ne' `error`.
+   */
+  const [nonDisponibile, setNonDisponibile] = React.useState(false);
+
+  React.useEffect(() => {
+    if (imgLoaded || nonDisponibile) return;
+    const t = window.setTimeout(() => setNonDisponibile(true), 12_000);
+    return () => window.clearTimeout(t);
+  }, [imgLoaded, nonDisponibile]);
 
   // Thumbnail strategy:
   //  - Per le immagini usiamo SEMPRE /api/photo/<id>?size=thumb: l'endpoint
@@ -201,14 +218,14 @@ function FotoCell({
       title={item.filename}
       aria-label={`Apri ${item.filename}`}
     >
-      {/* Spinner finché l'immagine non è caricata */}
-      {!imgLoaded && (
+      {/* Rotella solo mentre c'è speranza; poi l'icona del tipo di file. */}
+      {!imgLoaded && !nonDisponibile && (
         <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/60" />
         </span>
       )}
 
-      {thumbSrc ? (
+      {thumbSrc && !nonDisponibile ? (
         isVideo ? (
           <video
             src={thumbSrc}
@@ -217,6 +234,7 @@ function FotoCell({
             playsInline
             className="h-full w-full object-cover"
             onLoadedData={() => setImgLoaded(true)}
+            onError={() => setNonDisponibile(true)}
           />
         ) : (
           <Image
@@ -230,15 +248,21 @@ function FotoCell({
             )}
             unoptimized={thumbSrc.startsWith('/api/')}
             onLoad={() => setImgLoaded(true)}
+            onError={() => setNonDisponibile(true)}
           />
         )
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
           {isVideo ? (
             <Video className="h-5 w-5" aria-hidden="true" />
           ) : (
             <ImageIcon className="h-5 w-5" aria-hidden="true" />
           )}
+          {nonDisponibile ? (
+            <span className="px-1 text-center text-[9px] leading-tight">
+              anteprima non pronta
+            </span>
+          ) : null}
         </div>
       )}
       {isVideo && (

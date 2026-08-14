@@ -39,6 +39,7 @@ import {
 } from '../../office/commesse/nuova/_components/media-attach-section';
 import { type UploadProgressMap } from '../../office/commesse/nuova/_lib/upload-media';
 import { preparaMedia } from '../../_lib/prepara-media';
+import { RitornoAutomatico } from '../_components/ritorno-automatico';
 import { useUploadQueue } from '../../_components/upload-queue-provider';
 
 interface VoiceSuggested {
@@ -1371,9 +1372,12 @@ function Step7Conferma({
         ) : null}
       </ul>
 
+      {/* Conferma finale: verde pieno e alto, così si distingue a colpo
+          d'occhio da tutti i "Avanti" grigi del percorso. */}
       <Button
         size="lg"
-        className="min-h-[52px] w-full text-base"
+        variant="success"
+        className="min-h-[60px] w-full text-base font-semibold shadow-md"
         onClick={onSubmit}
         disabled={busy}
       >
@@ -1449,6 +1453,7 @@ function Step8Success({
       >
         Apri commessa
       </Button>
+      <RitornoAutomatico />
     </section>
   );
 }

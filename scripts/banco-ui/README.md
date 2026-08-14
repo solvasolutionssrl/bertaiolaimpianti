@@ -76,3 +76,20 @@ banco li rimette a mano (59px sopra, 34px sotto) prima di misurare.
 WebKit: il comportamento della tastiera, la sospensione quando l'app va in
 secondo piano, il ritorno da schermo bloccato. Quelle vanno viste su un telefono
 in mano.
+
+### Area upload (`upload-ui.mjs`)
+
+Misura le cose dell'area caricamento che si vedono solo col dito:
+
+```bash
+node scripts/banco-upload/prova.mjs   # genera i file di prova (la prima volta)
+node scripts/banco-ui/upload-ui.mjs
+```
+
+| | |
+|---|---|
+| X per togliere un file | almeno 40px di bersaglio, e visibile senza passarci sopra col mouse |
+| Anteprima | il file selezionato si vede davvero (non un riquadro rotto) |
+
+Gira sulla pagina dev `/prova-upload` (404 in produzione): niente login,
+niente dati veri. Lo screenshot finisce in `esiti/`.

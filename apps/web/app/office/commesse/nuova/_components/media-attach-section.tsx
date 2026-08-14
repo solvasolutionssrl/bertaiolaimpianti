@@ -398,14 +398,22 @@ export function MediaAttachSection({
                     </div>
                   )}
 
+                  {/* Rimozione del file prima dell'invio.
+                      Era 24px e in più compariva solo al passaggio del mouse:
+                      su telefono, dove il mouse non esiste, restava un
+                      bersaglio minuscolo e semi-invisibile. Ora è 32px, sempre
+                      visibile e con l'area di tocco portata a 44px dal padding
+                      trasparente — la misura sotto la quale il dito sbaglia. */}
                   <button
                     type="button"
                     aria-label={`Rimuovi ${f.file.name}`}
                     onClick={() => remove(f.id)}
                     disabled={uploading}
-                    className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 active:opacity-100 disabled:pointer-events-none"
+                    className="absolute -right-1 -top-1 inline-flex items-center justify-center p-1.5 disabled:pointer-events-none"
                   >
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white shadow-md ring-1 ring-white/25 transition active:scale-95">
+                      <X className="h-[18px] w-[18px]" aria-hidden="true" strokeWidth={2.5} />
+                    </span>
                   </button>
                 </div>
               );

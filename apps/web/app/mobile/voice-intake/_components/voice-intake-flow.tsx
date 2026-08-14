@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from '@kommessa/ui';
 
+import { RitornoAutomatico } from '../../_components/ritorno-automatico';
 import { MobileBackButton } from '../../_components/mobile-back-button';
 import { VoiceRecorder } from '../../../_components/voice-recorder';
 import {
@@ -349,7 +350,8 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
   const creaCommessaButton = (
     <Button
       size="lg"
-      className="min-h-[56px] w-full text-base"
+      variant="success"
+      className="min-h-[60px] w-full text-base font-semibold shadow-md"
       onClick={handleCreate}
       disabled={state.phase === 'creating' || bozzaMediaUploading}
     >
@@ -692,6 +694,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
           >
             Apri commessa
           </Button>
+          <RitornoAutomatico />
           <Button
             variant="outline"
             size="lg"

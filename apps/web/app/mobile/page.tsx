@@ -170,9 +170,11 @@ async function GestioneDashboard({
       <section className="space-y-3 animate-fade-up [animation-delay:120ms]">
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">Ultime commesse</h2>
+          {/* Bersaglio da 44px: scritto piccolo ma con l'area di tocco piena,
+              altrimenti col dito (e coi guanti) si manca. */}
           <Link
             href="/mobile/commesse"
-            className="text-xs font-medium text-primary hover:underline"
+            className="-mr-2 inline-flex min-h-11 items-center rounded-md px-2 text-xs font-medium text-primary active:bg-primary/10"
           >
             Tutte →
           </Link>

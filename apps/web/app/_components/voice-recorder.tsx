@@ -50,6 +50,18 @@ type State =
   | { kind: 'finalizing' }
   | { kind: 'error'; message: string };
 
+/**
+ * Durata minima di una registrazione utile (11/08/2026).
+ *
+ * Premendo due volte il microfono — cosa che capita di continuo con i guanti,
+ * o quando non si è sicuri che abbia registrato — partiva una registrazione da
+ * mezzo secondo che veniva comunque mandata a trascrivere: l'AI restituiva
+ * frasi inventate a partire dal rumore, il flusso si impantanava e il tasto
+ * restava inutilizzabile. Sotto questa soglia la registrazione si butta e
+ * basta: nessuna chiamata all'AI, nessuna attesa, tasto subito ripremibile.
+ */
+const DURATA_MINIMA_MS = 3000;
+
 const PICK_MIME_TYPES = [
   'audio/webm;codecs=opus',
   'audio/webm',
@@ -85,6 +97,8 @@ export function VoiceRecorder({
   onCancel,
 }: VoiceRecorderProps) {
   const [state, setState] = React.useState<State>({ kind: 'idle' });
+  /** Avviso transitorio (es. registrazione troppo breve). */
+  const [avviso, setAvviso] = React.useState<string | null>(null);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<Blob[]>([]);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -197,6 +211,7 @@ export function VoiceRecorder({
 
   const start = async () => {
     if (disabled) return;
+    setAvviso(null);
     if (!supportsMediaRecorder) {
       setState({
         kind: 'error',
@@ -269,6 +284,28 @@ export function VoiceRecorder({
 
   const stop = () => {
     if (state.kind !== 'recording') return;
+
+    // Troppo breve per contenere qualcosa: si butta, senza passare dall'AI.
+    if (Date.now() - state.startedAt < DURATA_MINIMA_MS) {
+      setAvviso('Registrazione troppo breve: tieni premuto il microfono e parla.');
+      try {
+        if (recorderRef.current) {
+          recorderRef.current.onstop = () => {
+            cleanup();
+            setState({ kind: 'idle' });
+          };
+          recorderRef.current.stop();
+        } else {
+          cleanup();
+          setState({ kind: 'idle' });
+        }
+      } catch {
+        cleanup();
+        setState({ kind: 'idle' });
+      }
+      return;
+    }
+
     setState({ kind: 'finalizing' });
     try {
       recorderRef.current?.stop();
@@ -443,6 +480,12 @@ export function VoiceRecorder({
             </p>
           </>
         )}
+
+        {avviso ? (
+          <p className="mt-1 rounded-md bg-accent/10 px-3 py-1.5 text-sm font-medium text-accent">
+            {avviso}
+          </p>
+        ) : null}
       </div>
 
       {/* Bottone Annulla (solo se onCancel definito) */}

@@ -472,6 +472,59 @@ async function main() {
     `resume prima: ${primaDelRiavvio}, dopo: ${stato.resume.length}`,
   );
 
+
+  // ── Scenario E: un file DATO PER PERSO riparte alla riapertura ───────────
+  //
+  // Prima i job falliti restavano rossi finché l'utente non li ritoccava a
+  // mano: in cantiere non lo fa nessuno, e i file restavano lì per settimane.
+  // Qui si semina in IndexedDB un job già "failed" (cioè con i tentativi
+  // esauriti in una sessione precedente) e si verifica che riaprendo l'app
+  // riparta da solo e arrivi in fondo.
+  vistiCaricati.clear();
+  stato.complete.length = 0;
+  await pulisci();
+  await vai();
+  // Un caricamento vero, così IndexedDB esiste con i suoi store.
+  await scegliFile(cdp, 'input[accept="image/*,video/*"]', [fotoNormale]);
+  await attendiFine(cdp, ['foto_cantiere.jpg'], { timeoutMs: 60_000, cosa: 'foto di innesco' });
+
+  const semina = await valuta(
+    cdp,
+    `new Promise((res) => {
+      const req = indexedDB.open('kommessa-uploads');
+      req.onsuccess = () => {
+        const db = req.result;
+        const tx = db.transaction(['jobs', 'blobs'], 'readwrite');
+        const id = 'seminato-1';
+        const blob = new Blob([new Uint8Array(2 * 1024 * 1024)], { type: 'video/mp4' });
+        tx.objectStore('blobs').put({ id, blob });
+        tx.objectStore('jobs').put({
+          id,
+          status: 'failed',
+          payload: {
+            fileName: 'video_perso.mp4', fileMime: 'video/mp4', fileSize: blob.size,
+            commessaId: '00000000-0000-0000-0000-0000000000aa', kind: 'video',
+          },
+          fileRefId: null, bytesUploaded: 0, bytesTotal: blob.size,
+          attempt: 5, nextAttemptAt: null, lastError: 'R2 network error',
+          createdAt: 1, updatedAt: 1,
+        });
+        tx.oncomplete = () => res('ok');
+        tx.onerror = () => res('errore: ' + (tx.error && tx.error.message));
+      };
+      req.onerror = () => res('errore apertura');
+    })`,
+    true,
+  );
+  controlla('seminato in IndexedDB un file dato per perso', semina === 'ok', String(semina));
+
+  await vai(); // = riapertura dell'app
+  await attendiFine(cdp, ['video_perso.mp4'], {
+    timeoutMs: 90_000,
+    cosa: 'il file dato per perso riparte e arriva in fondo',
+  });
+  ok('un file fallito in una sessione precedente riparte alla riapertura');
+
   // ── Esito ────────────────────────────────────────────────────────────────
   console.log('\n──────── ESITO ────────');
   for (const e of esiti) {

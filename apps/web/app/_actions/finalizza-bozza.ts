@@ -213,10 +213,12 @@ async function spostaFileBozza(opts: {
   // Elimina i file staged rimossi dall'utente prima di finalizzare
   // (R2 originale + thumb + riga DB). Non finiscono nella commessa.
   if (drop.length > 0) {
-    for (const f of drop) {
-      if (f.r2_key) await r2.delete(f.r2_key).catch(() => {});
-      if (f.r2_thumb_key) await r2.delete(f.r2_thumb_key).catch(() => {});
-    }
+    await Promise.all(
+      drop.flatMap((f) => [
+        f.r2_key ? r2.delete(f.r2_key).catch(() => {}) : Promise.resolve(),
+        f.r2_thumb_key ? r2.delete(f.r2_thumb_key).catch(() => {}) : Promise.resolve(),
+      ]),
+    );
     await service
       .from('file_refs')
       .delete()
@@ -228,9 +230,24 @@ async function spostaFileBozza(opts: {
 
   const root = opts.cloudFolderPath.replace(/^\/+|\/+$/g, '');
 
-  for (const f of files) {
+  /**
+   * Spostamento a gruppi, non in fila (11/08/2026).
+   *
+   * Ogni file costa quattro viaggi verso R2 (copia originale, cancella
+   * staging, copia miniatura, cancella miniatura) piu' una scrittura su DB.
+   * In fila, con venti foto, sono ~100 andate e ritorni **mentre l'utente
+   * guarda la rotella**: da qui il "ci mette tantissimo" segnalato dal
+   * cliente. A gruppi di sei il tempo scende di 4-5 volte e R2 non se ne
+   * accorge nemmeno.
+   *
+   * Il gruppo resta piccolo di proposito: e' una Server Action su Vercel,
+   * non serve saturare la connessione.
+   */
+  const PARALLELI = 6;
+
+  const spostaUno = async (f: BozzaFileRow) => {
     try {
-      if (!f.r2_key) continue;
+      if (!f.r2_key) return;
       // Path Nextcloud definitivo: il path della bozza è RELATIVO (Foto/...);
       // prefissiamo la cartella reale della commessa.
       const relPath = f.path.replace(/^\/+/, '');
@@ -281,5 +298,9 @@ async function spostaFileBozza(opts: {
         e instanceof Error ? e.message : e,
       );
     }
+  };
+
+  for (let i = 0; i < files.length; i += PARALLELI) {
+    await Promise.all(files.slice(i, i + PARALLELI).map(spostaUno));
   }
 }

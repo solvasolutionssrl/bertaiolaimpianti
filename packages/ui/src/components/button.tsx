@@ -30,6 +30,11 @@ const buttonVariants = cva(
           'bg-foreground text-background hover:bg-foreground/90 active:bg-foreground/95',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        // Conferma finale: il verde pieno segnala "questo è IL tasto".
+        // Riservato alle azioni che chiudono un flusso (crea commessa,
+        // conferma giornata): usarlo altrove ne annacqua il significato.
+        success:
+          'bg-success text-success-foreground hover:bg-success/90 active:bg-success/95',
         outline:
           'border border-input bg-card text-foreground shadow-soft hover:bg-accent hover:text-accent-foreground hover:border-accent-foreground/20',
         secondary:

@@ -116,6 +116,6 @@ export async function POST(
       etag: p.etag,
     })),
     bytesGiaCaricati,
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
   } satisfies ResumeResponse);
 }

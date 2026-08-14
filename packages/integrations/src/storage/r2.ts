@@ -63,7 +63,15 @@ export interface ObjectHead {
   lastModified: string | null;
 }
 
-const DEFAULT_PUT_TTL_SEC = 60 * 60; // 1h — sufficiente per upload mobile
+/**
+ * Validità delle firme di caricamento.
+ *
+ * 6 ore, non 1: un video grande su rete di cantiere può metterci molto, e con
+ * le parti da 8 MB le firme sono decine. Se scadono a metà, il tentativo
+ * fallisce e la ripresa deve rifirmare tutto — lavoro inutile. Le firme sono
+ * comunque legate a una chiave sola e a un solo caricamento.
+ */
+const DEFAULT_PUT_TTL_SEC = 6 * 60 * 60;
 const DEFAULT_GET_TTL_SEC = 5 * 60;  // 5 min — TTL del resolver
 
 export class R2StorageProvider {
@@ -390,11 +398,33 @@ export function getR2ProviderFromEnv(): R2StorageProvider | null {
 // Costanti del pipeline
 // ---------------------------------------------------------------------------
 
-/** Soglia oltre la quale usare multipart anziché single PUT. */
-export const MULTIPART_THRESHOLD_BYTES = 100 * 1024 * 1024; // 100 MB
+/**
+ * Soglia oltre la quale si usa il multipart invece di un unico PUT.
+ *
+ * ─── Perché 8 MB e non 100 (11/08/2026) ───────────────────────────────────
+ * Con la soglia a 100 MB un video da 60-80 MB partiva come **una sola
+ * richiesta**: nessun pezzo, nessuna ripresa, nessun progresso parziale. Su
+ * rete di cantiere quella richiesta deve reggere minuti interi; se cade si
+ * ricomincia da zero, e la sentinella di stallo la chiude dopo 45 s senza
+ * byte. Risultato misurato in produzione il 10/08: **66 file fermi** in
+ * `uploading`, tutti video fra 61 e 217 MB, alcuni ritentati per settimane.
+ *
+ * Sotto gli 8 MB il PUT unico resta la scelta giusta (una richiesta sola, che
+ * su qualunque rete finisce in pochi secondi). Sopra, si spezza: un pezzo che
+ * cade costa un pezzo, non l'intero file.
+ */
+export const MULTIPART_THRESHOLD_BYTES = 8 * 1024 * 1024; // 8 MB
 
-/** Dimensione delle parti multipart (R2 minimo: 5 MB per le parti non finali). */
-export const MULTIPART_PART_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+/**
+ * Dimensione delle parti multipart.
+ *
+ * Vincoli R2: minimo **5 MiB** per tutte le parti tranne l'ultima, massimo
+ * **10.000 parti**, e — a differenza di S3 — R2 pretende che le parti non
+ * finali siano **tutte della stessa dimensione**. Con 8 MB: parti uniformi
+ * (le tagliamo a offset fissi), tetto teorico 80 GB, e su una linea lenta un
+ * pezzo si ritrasmette in tempi umani.
+ */
+export const MULTIPART_PART_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB
 
 /** Costruisce la chiave R2 con path leggibile per debugging dal bucket.
  *  Schema: tenants/{slug}/commesse/{codice}[_{nome-cartella}]/{section}/{filename}

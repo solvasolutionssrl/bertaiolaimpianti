@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
       const partNumbers = Array.from({ length: numParts }, (_, i) => i + 1);
       const parts = await r2.signMultipartParts(r2Key, r2UploadId, partNumbers);
 
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
       response = {
         mode: 'multipart',
         fileRefId,

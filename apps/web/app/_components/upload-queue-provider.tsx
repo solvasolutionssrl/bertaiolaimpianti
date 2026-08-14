@@ -352,12 +352,19 @@ export function UploadQueueProvider({ children }: { children: React.ReactNode })
       try {
         const persisted = await getAllJobs();
         if (!mounted) return;
-        // I job non terminali tornano in coda. `ripreso` li marca come
-        // "roba di una sessione precedente" per la UI.
+        // Tornano in coda i job non terminali **e quelli falliti**.
+        //
+        // Prima i falliti restavano rossi finché l'utente non li ritoccava a
+        // mano: chi ha chiuso l'app in cantiere non lo fa mai, e i file
+        // restavano lì per settimane (misurato: file di giugno ancora fermi ad
+        // agosto). Riaprire l'app è il momento giusto per ritentare — di solito
+        // si è tornati sotto una rete decente. I tentativi ripartono da zero,
+        // quindi il tetto resta cinque **per sessione**, non all'infinito.
+        //
         // NB: `fileRefId` si CONSERVA — è la chiave con cui l'engine chiede a
         // R2 quali parti sono già arrivate e riprende da lì invece che da zero.
         const restored = persisted
-          .filter((j) => !isTerminal(j.status))
+          .filter((j) => !isTerminal(j.status) || j.status === 'failed')
           .map((j) => ({
             ...j,
             status: 'queued' as JobStatus,
