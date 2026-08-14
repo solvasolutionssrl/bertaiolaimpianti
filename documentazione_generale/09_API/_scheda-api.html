@@ -200,13 +200,20 @@ a un'altra domanda (la sicura di collaudo), non a «e' pronta».</div>
   <tr><td class="k">partenza.codiceCommessa / .externalId</td><td class="t">str?</td><td>se cantiere</td></tr>
   <tr><td class="k">arrivo.id / .nome / .codiceCommessa / .externalId</td><td class="t">str?</td><td>destinazione: è a lei che si imputano i km</td></tr>
   <tr><td class="k">commessa.*</td><td class="t">obj?</td><td>la destinazione, in forma canonica</td></tr>
-  <tr><td class="k">km</td><td class="t">num</td><td></td></tr>
+  <tr><td class="k">kmTratta</td><td class="t">num?</td><td>lunghezza reale della tratta: un fatto</td></tr>
+  <tr><td class="k">km</td><td class="t">num?</td><td>quanto CONTA per questo cliente: <strong>null sui passeggeri</strong> se vale la regola</td></tr>
   <tr><td class="k">tempo.stimatoMin</td><td class="t">int?</td><td>dal calcolo percorso</td></tr>
   <tr><td class="k">tempo.confermatoMin</td><td class="t">int</td><td><code>0</code> = tratta registrata ma non pagata</td></tr>
   <tr><td class="k">tempo.confermatoLeggibile</td><td class="t">str</td><td>«1:00»</td></tr>
   <tr><td class="k">mezzo.id / .targa / .modello</td><td class="t">str?</td><td></td></tr>
   <tr><td class="k">giustificazione · timbraturaId</td><td class="t">str? · uuid?</td><td></td></tr>
 </table>
+
+<div class="nota warn"><strong>Sui passeggeri <code>km</code> e' null.</strong> Con la regola
+normale (<code>regole.kmSoloAutista</code> in <code>/info</code>, attiva di default) i chilometri
+sono del mezzo, quindi di chi guida: attribuirli a tutti i presenti li conterebbe una volta per
+testa. Il <strong>tempo</strong> invece e' di tutti. La lunghezza reale resta in
+<code>kmTratta</code>: serve per i controlli, non per pagare.</div>
 
 <h2>GET /cantieri</h2>
 <table>

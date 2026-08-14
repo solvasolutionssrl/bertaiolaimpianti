@@ -40,6 +40,7 @@ interface Props {
   tolleranzaChiusuraMin: number;
   splitFineTurnoAttivo: boolean;
   kmSwitchAttivo: boolean;
+  kmSoloAutista: boolean;
   passoMinutiStepper: number;
   avvioTurnoLibero: boolean;
   registraGiornataAttivo: boolean;
@@ -146,6 +147,7 @@ export function ImpostazioniClient({
   tolleranzaChiusuraMin,
   splitFineTurnoAttivo,
   kmSwitchAttivo,
+  kmSoloAutista,
   passoMinutiStepper,
   avvioTurnoLibero,
   registraGiornataAttivo,
@@ -168,6 +170,7 @@ export function ImpostazioniClient({
   const [tolleranza, setTolleranza] = React.useState<number>(tolleranzaChiusuraMin);
   const [splitAttivo, setSplitAttivo] = React.useState<boolean>(splitFineTurnoAttivo);
   const [kmSwitch, setKmSwitch] = React.useState<boolean>(kmSwitchAttivo);
+  const [soloAutista, setSoloAutista] = React.useState<boolean>(kmSoloAutista);
   const [passoMin, setPassoMin] = React.useState<number>(passoMinutiStepper);
   const [avvioLibero, setAvvioLibero] = React.useState<boolean>(avvioTurnoLibero);
   const [registraGiornata, setRegistraGiornata] = React.useState<boolean>(registraGiornataAttivo);
@@ -196,6 +199,7 @@ export function ImpostazioniClient({
         tolleranzaChiusuraMin: tolleranza,
         splitFineTurnoAttivo: splitAttivo,
         kmSwitchAttivo: kmSwitch,
+        kmSoloAutista: soloAutista,
         passoMinutiStepper: passoMin as 5 | 10 | 15 | 30,
         avvioTurnoLibero: avvioLibero,
         registraGiornataAttivo: registraGiornata,
@@ -432,6 +436,22 @@ export function ImpostazioniClient({
                     <>
                       I tecnici vedono e possono avviare un turno su <strong>tutti</strong> i
                       cantieri. Se disattivi, vedono solo quelli con un QR attivo.
+                    </>
+                  }
+                />
+                <ToggleRow
+                  id="km-solo-autista"
+                  checked={soloAutista}
+                  onChange={() => setSoloAutista((v) => !v)}
+                  title="I chilometri li accumula chi guida"
+                  description={
+                    <>
+                      Su una tratta condivisa il <strong>tempo è di tutti</strong> — sono ore in
+                      cui nessuno poteva fare altro — ma i chilometri sono uno solo, quelli del
+                      mezzo. Se disattivi, i km vengono attribuiti anche ai passeggeri: per un
+                      viaggio con tre persone a bordo il cantiere ne conterebbe il triplo.
+                      La tratta resta comunque registrata per intero.{' '}
+                      <strong>Default attivo.</strong>
                     </>
                   }
                 />

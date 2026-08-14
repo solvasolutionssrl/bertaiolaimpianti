@@ -17,6 +17,7 @@ import {
   num,
   oreHMM,
 } from '../_lib/risorse';
+import { leggiKmSoloAutista } from '../../../_lib/kantiere-config';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -127,10 +128,11 @@ export async function GET(request: NextRequest) {
     }[]).map((c) => [c.id, c]),
   );
 
-  const [mapp, clienteDi, esport] = await Promise.all([
+  const [mapp, clienteDi, esport, kmSoloAutista] = await Promise.all([
     caricaMappature(ctx),
     clienteDelleCommesse(ctx),
     esportazioniPerLotto(ctx, 'viaggi', righe.map((r) => r.id)),
+    leggiKmSoloAutista(service, ctx.tenantId),
   ]);
 
   const rifCantiere = (id: string | null) => {
@@ -194,7 +196,18 @@ export async function GET(request: NextRequest) {
           }
         : null,
 
-      km: num(r.distanza_km),
+      // ⚠️ Due numeri diversi, e vanno tenuti distinti.
+      //
+      // `kmTratta` è quanto è lunga la tratta: un fatto, sempre presente.
+      // `km` è quanto conta **per questo cliente**, ed è una decisione di
+      // Kommessa — come `inviabile`. Con la regola normale (`km_solo_autista`)
+      // i chilometri sono del mezzo, quindi di chi guida: attribuirli anche ai
+      // passeggeri li conterebbe una volta per testa, e il costo del cantiere
+      // risulterebbe il triplo del vero per lo stesso viaggio.
+      //
+      // Il tempo invece è di tutti: sono ore in cui nessuno poteva fare altro.
+      km: kmSoloAutista && !r.autista ? null : num(r.distanza_km),
+      kmTratta: num(r.distanza_km),
       // Due tempi: quello stimato dal calcolo percorso e quello riconosciuto.
       // `confermata = 0` vuol dire tratta registrata ma non pagata — succede
       // sugli spostamenti fra cantieri quando il tenant non li conteggia.

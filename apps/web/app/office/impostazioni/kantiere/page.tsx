@@ -60,6 +60,9 @@ export default async function KantiereSettingsPage() {
     typeof config.tolleranza_chiusura_min === 'number' ? config.tolleranza_chiusura_min : 5;
   const splitFineTurnoAttivo = config.split_fine_turno_attivo === false ? false : true;
   const kmSwitchAttivo = config.km_switch_attivo === true;
+  // Default TRUE: i km sono del mezzo, quindi di chi guida. Si spegne solo se
+  // un cliente li rimborsa a testa.
+  const kmSoloAutista = config.km_solo_autista !== false;
   const passoMinutiStepper = [5, 10, 15, 30].includes(config.passo_minuti_stepper as number)
     ? (config.passo_minuti_stepper as number)
     : 15;
@@ -95,6 +98,7 @@ export default async function KantiereSettingsPage() {
         tolleranzaChiusuraMin={tolleranzaChiusuraMin}
         splitFineTurnoAttivo={splitFineTurnoAttivo}
         kmSwitchAttivo={kmSwitchAttivo}
+        kmSoloAutista={kmSoloAutista}
         passoMinutiStepper={passoMinutiStepper}
         avvioTurnoLibero={avvioTurnoLibero}
         registraGiornataAttivo={registraGiornataAttivo}

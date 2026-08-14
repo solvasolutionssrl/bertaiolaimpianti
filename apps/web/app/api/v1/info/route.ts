@@ -1,6 +1,12 @@
 import { type NextRequest } from 'next/server';
 
+import { createServiceSupabase } from '@kommessa/api/service';
+
 import { CONTRATTO, LIMITE_DEFAULT, LIMITE_MAX, autenticaApi } from '../_lib/api';
+import { leggiKmSoloAutista } from '../../../_lib/kantiere-config';
+
+const kmSoloAutistaDelTenant = (tenantId: string) =>
+  leggiKmSoloAutista(createServiceSupabase(), tenantId);
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -38,6 +44,19 @@ export async function GET(request: NextRequest) {
      */
     modalita: ctx.modalita,
     collaudoEsterni: ctx.collaudoEsterni,
+
+    /**
+     * Regole di merito che dipendono dalla configurazione del cliente, e che
+     * il client non deve dedurre. Come `inviabile`: gliele diciamo noi.
+     */
+    regole: {
+      /**
+       * Con `true` i chilometri di una tratta contano solo per chi guida, e
+       * sui passeggeri `km` arriva `null` (il tempo invece è di tutti). La
+       * lunghezza reale della tratta resta sempre in `kmTratta`.
+       */
+      kmSoloAutista: await kmSoloAutistaDelTenant(ctx.tenantId),
+    },
 
     risorse: {
       lettura: ['ore', 'spese', 'viaggi', 'cantieri', 'dipendenti'],

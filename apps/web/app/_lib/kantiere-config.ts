@@ -126,6 +126,29 @@ export async function leggiTrasferimentiAttivi(supabase: Supa, tenantId: string)
   return config['km_switch_attivo'] === true;
 }
 
+/**
+ * «I chilometri li accumula chi guida.»
+ *
+ * Su una tratta condivisa il **tempo** è di tutti — sono ore in cui nessuno dei
+ * passeggeri poteva fare altro — ma i **chilometri** sono uno solo, quelli del
+ * mezzo: attribuirli anche ai passeggeri li conterebbe tre volte per lo stesso
+ * viaggio, e a fine mese il costo del cantiere risulterebbe il triplo del vero.
+ *
+ * La tratta resta comunque registrata per intero (distanza inclusa): questo
+ * toggle decide solo **a chi contano**. Default `true`, che è la regola
+ * normale; si spegne se un cliente rimborsa i km a testa.
+ */
+export async function leggiKmSoloAutista(supabase: Supa, tenantId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  return config['km_solo_autista'] !== false;
+}
+
 export type ImpostazioniTurno = {
   /** Tolleranza (min) sulla somma dello split di fine turno. Default 5. */
   tolleranzaChiusuraMin: number;

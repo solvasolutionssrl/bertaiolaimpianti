@@ -104,6 +104,7 @@ cambiare una regola senza rimettere mano ai client già installati.
     "scrittura": ["scritture","letture","esecuzioni"]
   },
   "paginazione": { "limiteDefault": 200, "limiteMax": 1000 },
+  "regole": { "kmSoloAutista": true },
   "convenzioneNomi": { "prefissoEsterno": "external", "regola": "…" },
   "vocabolari": { … }
 }
@@ -193,7 +194,7 @@ sicura di collaudo ti autorizza, non se il record è pronto.
   "arrivo":   { "id": "uuid", "nome": "Fincantieri Monfalcone", "codiceCommessa": "CAN-00042",
                 "externalId": "26087" },
   "commessa": { … },
-  "km": 50,
+  "km": 50, "kmTratta": 50,
   "tempo": { "stimatoMin": 62, "confermatoMin": 60, "confermatoLeggibile": "1:00" },
   "mezzo": { "id": "uuid", "targa": "AB123CD", "modello": "Ducato" },
   "giustificazione": null, "timbraturaId": "uuid",
@@ -202,9 +203,20 @@ sicura di collaudo ti autorizza, non se il record è pronto.
 }
 ```
 
-**Arrivano anche i passeggeri** (`ruolo: "passeggero"`). Su quasi ogni contabilità i km si
-rimborsano solo a chi guida, ma è una politica: altrove il passeggero serve per la
-sicurezza o per sapere chi c'era su quale mezzo.
+**Arrivano anche i passeggeri** (`ruolo: "passeggero"`): servono a sapere chi c'era su
+quale mezzo.
+
+> ⚠️ **`km` e `kmTratta` sono due numeri diversi.** `kmTratta` è quanto è lunga la tratta:
+> un fatto, sempre presente. **`km` è quanto conta per questo cliente**, ed è una decisione
+> di Kommessa — come `inviabile`.
+>
+> Con la regola normale (`regole.kmSoloAutista` in `GET /info`, attiva per impostazione
+> predefinita) sui passeggeri **`km` arriva `null`**: i chilometri sono del mezzo, quindi di
+> chi guida, e attribuirli a tutti i presenti li conterebbe una volta per testa — un
+> viaggio con tre persone a bordo farebbe risultare al cantiere il triplo dei chilometri
+> veri. Il **tempo** invece resta di tutti: sono ore in cui nessuno poteva fare altro.
+>
+> Usa `km`. `kmTratta` serve per i controlli, non per pagare.
 
 La `partenza` può essere una **sede** o un **altro cantiere** (spostamenti nella stessa
 giornata): `tipo` dice quale. I km si imputano sempre alla **destinazione**.
