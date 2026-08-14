@@ -133,10 +133,11 @@ const CREA_DIPENDENTE = z.object({
  * Crea un dipendente a partire da un record del gestionale, già collegato.
  *
  * ⚠️ La **matricola resta nostra**: è quella del consulente del lavoro, e non
- * ha niente a che vedere con l'identificativo del gestionale. Su FPM le due
- * numerazioni si somigliano e non coincidono — `00003` da noi è Benedetti, il
- * `3` di ERGO è Biscaro. Metterci il loro codice inquinerebbe la busta paga.
- * Per questo il campo si compila a mano e si lascia vuoto se non lo si sa.
+ * ha niente a che vedere con l'identificativo del gestionale. Le due
+ * numerazioni si somigliano e non coincidono — su un caso reale `00003` da noi
+ * era una persona e il `3` dall'altra parte ne era un'altra. Metterci il loro
+ * codice inquinerebbe la busta paga: per questo il campo si compila a mano e
+ * si lascia vuoto se non lo si sa.
  */
 export async function creaDipendenteDalGestionale(
   input: unknown,

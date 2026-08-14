@@ -7,9 +7,10 @@ import { autenticaToken, type ScopeToken } from '../../../_lib/api-token';
 /**
  * Fondamenta dell'**API pubblica di Kommessa** (`/api/v1`).
  *
- * Non e' l'API "dell'integrazione con ERGO": e' l'API del prodotto. Oggi la
- * consuma un agente che parla con un gestionale, domani potra' consumarla un
- * portale cliente, un'app di terze parti o un altro nostro servizio. Per
+ * Non e' l'API "dell'integrazione con il gestionale di un cliente": e' l'API
+ * del prodotto. Oggi la consuma un agente che parla con un gestionale, domani
+ * potra' consumarla un portale cliente, un'app di terze parti o un altro
+ * nostro servizio. Per
  * questo le risorse si chiamano come le cose che sono — `ore`, `spese`,
  * `cantieri` — e non come l'uso che se ne fa.
  *

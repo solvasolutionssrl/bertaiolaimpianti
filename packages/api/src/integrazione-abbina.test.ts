@@ -71,7 +71,7 @@ describe('proponiAbbinamenti', () => {
   });
 
   it('aggancia quando il codice del gestionale E\' il suo identificativo', () => {
-    // Caso ERGO: nessun campo "codice", l'objectId e' il numero che l'ufficio
+    // Caso comune: nessun campo "codice" a parte, l'identificativo e' gia' il numero che l'ufficio
     // ha trascritto nel nostro codice_commessa.
     const nn: CandidatoNostro[] = [
       { id: 'x', codice: '26084', nome: 'Tutt\'altra descrizione', cliente: null },

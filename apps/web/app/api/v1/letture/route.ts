@@ -28,9 +28,12 @@ interface RecordLetto {
   /** Nome leggibile: e' cio' che l'ufficio vede quando abbina. Obbligatorio. */
   nome?: string;
   /**
-   * Codice leggibile della **commessa** sul gestionale (ERGO: `objectId`
-   * ripetuto, perche' li' l'identificativo funge da codice). E' quello che
-   * l'ufficio trascrive quando cerca la commessa nel loro sistema.
+   * Codice leggibile della **commessa** sul gestionale. E' quello che l'ufficio
+   * trascrive quando cerca la commessa nel sistema del cliente.
+   *
+   * Se li' l'identificativo funge gia' da codice, ripeti qui l'`externalId`:
+   * meglio due volte lo stesso numero che un campo vuoto, perche' l'ufficio
+   * quel numero lo legge da noi.
    */
   externalCodiceCommessa?: string | null;
   /**
@@ -49,7 +52,7 @@ interface RecordLetto {
    * clienti: senza, l'ufficio abbinerebbe alla cieca.
    */
   clienteNome?: string | null;
-  /** Categoria/gruppo di lavoro (ERGO: `group.description`). */
+  /** Categoria o gruppo di lavoro, come lo chiama il gestionale. */
   categoria?: string | null;
   /**
    * Indirizzo **gia' composto in una riga**. Se il gestionale lo tiene a pezzi

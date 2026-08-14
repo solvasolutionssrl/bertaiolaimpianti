@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { nuoviDalGestionale } from '@/app/_lib/integrazione-nuovi';
+import { nuoviDalGestionale } from '@/app/_lib/integrazione/nuovi';
 import { DipendentiClient } from './_components/dipendenti-client';
 import { NuoviDalGestionale } from './_components/nuovi-dal-gestionale';
 

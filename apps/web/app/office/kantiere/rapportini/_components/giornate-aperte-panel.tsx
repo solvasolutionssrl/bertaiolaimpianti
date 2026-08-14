@@ -42,7 +42,7 @@ export function GiornateApertePanel({ giorni }: { giorni: GiornataAperta[] }) {
         Giornate rimaste aperte ({giorni.length})
       </h2>
       <p className="mt-0.5 text-xs text-amber-900/80">
-        Manca la timbratura di uscita. Indica l'ora di fine per chiudere la giornata e calcolare le ore.
+        Manca la timbratura di uscita. Indica l&apos;ora di fine per chiudere la giornata e calcolare le ore.
       </p>
       <ul className="mt-2.5 space-y-1.5">
         {giorni.map((g) => (

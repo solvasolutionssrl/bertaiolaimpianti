@@ -7,7 +7,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 
 import { requirePlatformAdmin } from '../_lib/guard';
 import { auditPlatform } from '../_lib/audit-platform';
-import { leggiConfigIntegrazione } from '../_lib/integrazione-config';
+import { leggiConfigIntegrazione } from '../_lib/integrazione/config';
 
 /**
  * Governo del modulo **integrazione** per un cliente. Solo super admin.
@@ -236,8 +236,9 @@ const MODALITA_SCHEMA = z.object({
  *
  * Passare ad `attiva` significa che da quel momento i record escono con
  * `inviabile: true` e l'agente e' autorizzato a scriverli sul gestionale del
- * cliente. Su un ERP append-only — e ERGO lo e': `GET` sulle ore risponde 405 e
- * non esiste una DELETE utilizzabile — quella scrittura **non torna indietro**.
+ * cliente. Su un ERP append-only — e quasi tutti lo sono per le registrazioni
+ * contabili: non si rileggono e non si cancellano — quella scrittura **non
+ * torna indietro**.
  * Non e' un'impostazione, e' un'autorizzazione a produrre effetti contabili
  * fuori da qui.
  *

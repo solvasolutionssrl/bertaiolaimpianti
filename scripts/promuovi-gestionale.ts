@@ -8,7 +8,7 @@
  *
  * Uso: pnpm tsx scripts/promuovi-gestionale.ts --tenant=FPMIMP
  *
- * ⚠️ `integrazione-promuovi` importa `server-only`, che non e' un pacchetto
+ * ⚠️ `_lib/integrazione/promuovi` importa `server-only`, che non e' un pacchetto
  * vero: lo fornisce il bundler di Next. Per lanciarlo da riga di comando serve
  * uno stub locale, una volta sola:
  *
@@ -36,7 +36,7 @@ for (const riga of raw.split('\n')) {
 
 async function main() {
   const { promuoviDalGestionale } = await import(
-    '../apps/web/app/_lib/integrazione-promuovi'
+    '../apps/web/app/_lib/integrazione/promuovi'
   );
 
   const slug = process.argv.find((a) => a.startsWith('--tenant='))?.split('=')[1];

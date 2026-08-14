@@ -1,8 +1,8 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
-import { leggiCollegamenti } from '@/app/_lib/integrazione-collegati';
-import { GIORNI_ETICHETTA_NUOVO } from '@/app/_lib/integrazione-promuovi';
+import { leggiCollegamenti } from '@/app/_lib/integrazione/collegati';
+import { GIORNI_ETICHETTA_NUOVO } from '@/app/_lib/integrazione/promuovi';
 import { CantieriClient } from './_components/cantieri-client';
 
 export const dynamic = 'force-dynamic';

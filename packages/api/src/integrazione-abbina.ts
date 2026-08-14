@@ -99,7 +99,7 @@ function valuta(n: CandidatoNostro, e: CandidatoEsterno): Coppia | null {
   const cn = normalizzaCodice(n.codice);
   const ce = normalizzaCodice(e.codice);
   // Molti gestionali non hanno un "codice" separato: l'identificativo E' il
-  // codice (su ERGO l'`objectId`, che e' proprio il numero che l'ufficio
+  // codice (su alcuni gestionali l'identificativo e' gia' il numero che l'ufficio
   // trascrive nel nostro `codice_commessa`). Confrontare anche l'id recupera
   // gli abbinamenti certi che altrimenti scivolerebbero sulla somiglianza dei
   // nomi — molto piu' debole e piena di falsi.

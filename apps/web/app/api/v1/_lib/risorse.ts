@@ -167,8 +167,9 @@ export async function clienteDelleCommesse(
   // ⚠️ La colonna e' `external_cliente_id` dal contratto 2 (migration
   // 20260812100000). Con il nome vecchio PostgREST non da' un campo vuoto:
   // fa fallire l'intera query, `data` torna null e OGNI record esce con
-  // `externalClienteId: null` — in silenzio. E' successo davvero, e i
-  // documenti di km e spese su ERGO il committente lo pretendono.
+  // `externalClienteId: null` — in silenzio. E' successo davvero, e su un
+  // gestionale i documenti di km e spese il committente lo pretendono quasi
+  // sempre: senza, la scrittura la' fuori non parte nemmeno.
   const { data, error } = await service
     .from('integrazione_staging' as never)
     .select('external_id, external_cliente_id')

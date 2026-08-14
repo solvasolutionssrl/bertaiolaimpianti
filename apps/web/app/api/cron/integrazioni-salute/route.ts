@@ -2,8 +2,8 @@ import { type NextRequest } from 'next/server';
 
 import { meritaAvviso } from '@kommessa/api/integrazione-salute';
 
-import { fotoCollegamenti } from '../../../admin/_lib/integrazione-foto';
-import { segnalaCollegamentoInAvaria } from '../../../_lib/integrazione-alert';
+import { fotoCollegamenti } from '../../../admin/_lib/integrazione/foto';
+import { segnalaCollegamentoInAvaria } from '../../../_lib/integrazione/alert';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

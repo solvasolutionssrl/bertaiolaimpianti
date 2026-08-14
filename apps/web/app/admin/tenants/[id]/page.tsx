@@ -26,8 +26,8 @@ import { TabModuli } from './_components/tab-moduli';
 import { TabFunzioni } from './_components/tab-funzioni';
 import { TabRouting } from './_components/tab-routing';
 import { TabIntegrazione } from './_components/tab-integrazione';
-import { fotoCollegamenti } from '../../_lib/integrazione-foto';
-import { leggiConfigIntegrazione } from '../../_lib/integrazione-config';
+import { fotoCollegamenti } from '../../_lib/integrazione/foto';
+import { leggiConfigIntegrazione } from '../../_lib/integrazione/config';
 import { googleRoutingDisponibile } from '@/app/_lib/routing';
 
 export const dynamic = 'force-dynamic';

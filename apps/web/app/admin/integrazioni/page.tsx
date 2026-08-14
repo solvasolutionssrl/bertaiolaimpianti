@@ -1,7 +1,7 @@
 import { createServiceSupabase } from '@kommessa/api/service';
 
 import { requirePlatformAdmin } from '../_lib/guard';
-import { fotoCollegamenti } from '../_lib/integrazione-foto';
+import { fotoCollegamenti } from '../_lib/integrazione/foto';
 import { IntegrazioniClient } from './_components/integrazioni-client';
 import type { EsecuzioneRow, RigaCollegamento, ScritturaRow } from './_components/tipi';
 

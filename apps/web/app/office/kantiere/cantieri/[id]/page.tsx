@@ -9,7 +9,7 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
-import { leggiCollegamenti } from '@/app/_lib/integrazione-collegati';
+import { leggiCollegamenti } from '@/app/_lib/integrazione/collegati';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
 
 export const dynamic = 'force-dynamic';

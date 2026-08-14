@@ -1,4 +1,4 @@
-import { leggiCollegamenti, leggiEsportazioni } from '@/app/_lib/integrazione-collegati';
+import { leggiCollegamenti, leggiEsportazioni } from '@/app/_lib/integrazione/collegati';
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';

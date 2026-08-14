@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Trash2, Receipt, FileText, ExternalLink } from 'lucide-react';
+import { Loader2, Trash2, Receipt, FileText, ExternalLink, ImageOff } from 'lucide-react';
 import {
   Button,
+  cn,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -49,6 +50,54 @@ export type SpesaRiga = {
 
 export type CantiereOption = { id: string; nome: string };
 export type DipendenteOption = { id: string; nome: string };
+
+/**
+ * L'anteprima dello scontrino, con il suo stato di caricamento.
+ *
+ * La foto arriva da R2 attraverso un nostro proxy: su uno scontrino da qualche
+ * megabyte, o con la linea dell'ufficio sotto sforzo, ci mette qualche secondo.
+ * Senza un segno di attesa il dialog si apre con un buco bianco e sembra che
+ * la ricevuta non ci sia — mentre sta arrivando.
+ *
+ * Tre stati, perché anche il fallimento va detto: un'immagine che non carica
+ * e basta è indistinguibile da una che sta ancora caricando, e chi guarda
+ * resta lì ad aspettare qualcosa che non arriverà.
+ */
+function AnteprimaRicevuta({ spesaId }: { spesaId: string }) {
+  const [stato, setStato] = React.useState<'attesa' | 'ok' | 'errore'>('attesa');
+
+  return (
+    <span className="relative block min-h-[8rem]">
+      {stato === 'attesa' ? (
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+          <span className="text-xs">Carico la ricevuta…</span>
+        </span>
+      ) : null}
+
+      {stato === 'errore' ? (
+        <span className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+          <ImageOff className="h-7 w-7" aria-hidden="true" />
+          <span className="text-xs">
+            Anteprima non disponibile. Il file c&apos;è: aprilo qui sotto.
+          </span>
+        </span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/kantiere/spese/${spesaId}/foto`}
+          alt="Ricevuta"
+          onLoad={() => setStato('ok')}
+          onError={() => setStato('errore')}
+          className={cn(
+            'mx-auto max-h-72 w-auto object-contain transition-opacity',
+            stato === 'ok' ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+      )}
+    </span>
+  );
+}
 
 function fmtValuta(n: number | null | undefined, valuta: string): string {
   if (typeof n !== 'number' || !Number.isFinite(n)) return 'n.d.';
@@ -347,7 +396,7 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Dettaglio spesa</DialogTitle>
         </DialogHeader>
@@ -362,12 +411,7 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
               title="Apri ricevuta fiscale"
             >
               {isImage && !isPdf ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={`/api/kantiere/spese/${spesa.id}/foto`}
-                  alt="Ricevuta"
-                  className="mx-auto max-h-64 w-auto object-contain"
-                />
+                <AnteprimaRicevuta spesaId={spesa.id} />
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
                   <FileText className="h-8 w-8" aria-hidden="true" />
@@ -392,24 +436,29 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
+          {/* `min-w-0` su ogni cella: un grid item ha `min-width:auto`, quindi
+              un esercente con un nome lungo allargherebbe la colonna e con lei
+              tutto il dialog, costringendo a scorrere in orizzontale. */}
+          <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <div className="min-w-0">
               <span className="text-xs text-muted-foreground">Esercente</span>
-              <p className="font-medium">{spesa.ragioneSociale?.trim() || 'Senza nome'}</p>
+              <p className="break-words font-medium">
+                {spesa.ragioneSociale?.trim() || 'Senza nome'}
+              </p>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs text-muted-foreground">Dipendente</span>
-              <p className="font-medium">{spesa.dipendenteNome}</p>
+              <p className="break-words font-medium">{spesa.dipendenteNome}</p>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs text-muted-foreground">Importo</span>
               <p className="font-medium tabular-nums">{fmtValuta(spesa.importoTotale, spesa.valuta)}</p>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs text-muted-foreground">IVA</span>
               <p className="font-medium tabular-nums">{fmtValuta(spesa.importoIva, spesa.valuta)}</p>
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-xs text-muted-foreground">Persone</span>
               <p className="flex items-center gap-1.5 font-medium">
                 <PersoneBadge numero={spesa.numeroPersone} />
@@ -418,12 +467,13 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
             </div>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Categoria</label>
             <select
               value={categoria}
               onChange={(e) => setCategoria(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {CATEGORIE_ORDINATE.map((c) => (
                 <option key={c} value={c}>
@@ -433,12 +483,12 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
             </select>
           </div>
 
-          <div className="flex flex-col gap-1">
+          <div className="flex min-w-0 flex-col gap-1">
             <label className="text-xs font-medium text-muted-foreground">Cantiere</label>
             <select
               value={cantiereId}
               onChange={(e) => setCantiereId(e.target.value)}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full min-w-0 rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Da assegnare</option>
               {cantieri.map((k) => (
@@ -447,6 +497,7 @@ function DettaglioDialog({ spesa, cantieri, onApriRicevuta, onClose, onSaved }: 
                 </option>
               ))}
             </select>
+          </div>
           </div>
 
           <div className="flex flex-col gap-1">

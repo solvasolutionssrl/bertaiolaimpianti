@@ -5,7 +5,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { waitUntil } from '@vercel/functions';
 
 import { CONTRATTO, autenticaApi, erroreApi, leggiJson } from '../_lib/api';
-import { promuoviDalGestionale } from '../../../_lib/integrazione-promuovi';
+import { promuoviDalGestionale } from '../../../_lib/integrazione/promuovi';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;

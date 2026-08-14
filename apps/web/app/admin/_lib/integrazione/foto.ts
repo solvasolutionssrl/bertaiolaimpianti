@@ -7,7 +7,7 @@ import {
   type FotoCollegamento,
 } from '@kommessa/api/integrazione-salute';
 
-import { leggiConfigIntegrazione } from './integrazione-config';
+import { leggiConfigIntegrazione } from './config';
 
 /**
  * Raccoglie lo stato reale di un collegamento verso un gestionale.

@@ -1,6 +1,6 @@
 # Le anagrafiche: collegare, creare, ignorare
 
-**Aggiornato**: 13/08/2026
+**Aggiornato**: 14/08/2026
 
 Prima che una sola ora o una sola spesa possa uscire da Kommessa, i due sistemi
 devono essere d'accordo su **chi è chi** e **cosa è cosa**. Questa pagina descrive come
@@ -115,6 +115,21 @@ subito, e l'avviso dei nuovi nasce con due voci invece di trentacinque.
 | `integrazione_scritture` | il registro degli ACK: cosa è uscito, quando, con che riferimento |
 | `integrazione_esecuzioni` | il diario dei giri. Uno aperto e mai chiuso = il client è morto a metà |
 | `cantiere_categorie` · `categoria_mappature` | il vocabolario nostro e la corrispondenza col loro |
+
+## 8. Dove sta il codice
+
+| | |
+|---|---|
+| `apps/web/app/_lib/integrazione/` | i quattro lettori: `collegati`, `nuovi`, `promuovi`, `alert` — vedi il README lì dentro |
+| `apps/web/app/admin/_lib/integrazione/` | lato piattaforma: `config` (una sola lettura della configurazione) e `foto` (la misura di un collegamento) |
+| `apps/web/app/_actions/integrazione-*.ts` | le mutazioni d'ufficio: abbinamento anagrafiche, e le tre strade sui nuovi |
+| `apps/web/app/admin/_actions/integrazioni.ts` | il governo per-cliente: modulo, gestionale, la leva simulazione/attiva |
+| `packages/api/src/integrazione-*.ts` | logica **pura e testata**: abbinamento, salute, smistamento categorie |
+
+Il giudizio sta sempre nei file puri di `packages/api`, mai nelle pagine: lo
+usano il tab del cliente, la console di piattaforma e il cron delle mail, e se
+ognuno se lo calcolasse la pagina direbbe «tutto a posto» mentre parte un
+avviso di guasto.
 
 Nessuna di queste è materializzata quando può essere derivata: l'elenco dei «nuovi dal
 gestionale» si calcola ogni volta come *depositati − collegati − ignorati*. Una coda tenuta

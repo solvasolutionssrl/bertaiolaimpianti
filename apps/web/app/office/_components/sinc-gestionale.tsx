@@ -9,9 +9,9 @@ import { cn } from '@kommessa/ui';
  * compare **solo nel suggerimento al passaggio del mouse**, dove è
  * un'informazione di servizio e non una parola cucita nel prodotto.
  *
- * Il motivo è pratico: il giorno che il secondo cliente ha un ERP diverso,
- * una scritta «Aggiornato su ERGO» va cercata in venti file e riscritta —
- * ammesso di ricordarsene. Con la parola generica non cambia niente.
+ * Il motivo è pratico: il giorno che il secondo cliente ha un ERP diverso, una
+ * scritta col nome del primo va cercata in venti file e riscritta — ammesso di
+ * ricordarsene. Con la parola generica non cambia niente.
  *
  * **Il vocabolario, uguale ovunque:**
  * - «**Collegato al gestionale**» → un'anagrafica nostra è agganciata a una
