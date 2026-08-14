@@ -29,6 +29,16 @@ export interface RigaCollegamento {
   collegate: number;
   nostreTotali: number;
   ultimaLettura: string | null;
+  /**
+   * Com'e' andata la promozione all'ultimo giro di lettura chiuso.
+   * `ok: null` = il giro c'e' ma non ha lasciato traccia.
+   */
+  promozione: {
+    ok: boolean | null;
+    motivo?: string;
+    cantieriCreati?: number;
+    categorieDaSmistare?: number;
+  } | null;
 }
 
 export interface ScritturaRow {

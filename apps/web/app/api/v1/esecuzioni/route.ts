@@ -5,7 +5,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { waitUntil } from '@vercel/functions';
 
 import { CONTRATTO, autenticaApi, erroreApi, leggiJson } from '../_lib/api';
-import { promuoviDalGestionale } from '../../../_lib/integrazione/promuovi';
+import { promuoviERegistra } from '../../../_lib/integrazione/promuovi';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 15;
@@ -133,9 +133,15 @@ export async function POST(request: NextRequest) {
     //
     // `waitUntil` e non `void`: la funzione serverless risponde subito e senza
     // waitUntil Vercel chiuderebbe l'invocazione prima che il lavoro finisca.
-    const chiuso = (data ?? [])[0] as unknown as { direzione: string } | undefined;
+    //
+    // `promuoviERegistra` e non `promuovi...catch(() => {})`: cosi' resta
+    // scritto in `dettaglio.promozione` se e' partita e cosa ha fatto. Senza,
+    // un giro che gira a vuoto e un giro che non parte sono indistinguibili.
+    const chiuso = (data ?? [])[0] as unknown as
+      | { id: string; direzione: string }
+      | undefined;
     if (chiuso?.direzione === 'lettura' && esito !== 'errore') {
-      waitUntil(promuoviDalGestionale(tenantId).catch(() => {}));
+      waitUntil(promuoviERegistra(tenantId, chiuso.id));
     }
 
     return Response.json({ contratto: CONTRATTO, chiuso: id });

@@ -41,6 +41,42 @@ function daOre(ore: number | null): string {
   return `${gg} ${gg === 1 ? 'giorno' : 'giorni'} fa`;
 }
 
+/**
+ * Il riquadro «Promozione»: cosa ha fatto il travaso dal deposito ai dati veri
+ * all'ultimo giro di lettura chiuso.
+ *
+ * Il caso che conta e' **«nessuna traccia»**: la promozione scrive solo quando
+ * trova roba nuova, quindi un giro andato a vuoto e un giro mai partito
+ * lasciano lo stesso nulla. Da quando l'esito viene registrato, «a vuoto» e'
+ * un'informazione vera e «nessuna traccia» resta solo per i giri vecchi — o
+ * per un gancio che non scatta.
+ */
+function promozioneRiquadro(
+  p: RigaCollegamento['promozione'],
+): [string, string, string, string?] {
+  if (!p) return ['Promozione', '—', '', 'Nessun giro di lettura ancora chiuso.'];
+  if (p.ok === null)
+    return [
+      'Promozione',
+      'nessuna traccia',
+      'ambra',
+      'Il giro si e’ chiuso ma non ha lasciato scritto se la promozione sia partita. Normale sui giri precedenti a questa registrazione.',
+    ];
+  if (!p.ok)
+    return ['Promozione', 'fallita', 'rosso', p.motivo ?? 'Motivo non registrato.'];
+
+  const creati = p.cantieriCreati ?? 0;
+  const daSmistare = p.categorieDaSmistare ?? 0;
+  if (creati === 0 && daSmistare === 0)
+    return ['Promozione', 'a vuoto', '', 'Ha girato: dal gestionale non e’ arrivato niente di nuovo.'];
+  return [
+    'Promozione',
+    creati > 0 ? `${creati} ${creati === 1 ? 'cantiere' : 'cantieri'}` : `${daSmistare} da smistare`,
+    daSmistare > 0 ? 'ambra' : '',
+    `${creati} cantieri creati, ${daSmistare} categorie da smistare.`,
+  ];
+}
+
 type Tab = 'stato' | 'scritture' | 'giri';
 
 /**
@@ -173,7 +209,7 @@ export function IntegrazioniClient({
                   </Link>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
                   {(
                     [
                       ['Visto', daOre(r.silenzioOre), r.stato === 'guasto' ? 'rosso' : ''],
@@ -197,10 +233,15 @@ export function IntegrazioniClient({
                         `${r.collegate}/${r.nostreTotali}`,
                         r.collegate < r.nostreTotali ? 'ambra' : '',
                       ],
-                    ] as [string, string, string][]
-                  ).map(([et, v, tono]) => (
+                      // «A vuoto» e' un esito buono: vuol dire che ha girato e
+                      // non c'era niente di nuovo. Prima non si distingueva da
+                      // «non e' partita», che invece e' un problema.
+                      promozioneRiquadro(r.promozione),
+                    ] as [string, string, string, string?][]
+                  ).map(([et, v, tono, spiega]) => (
                     <div
                       key={et}
+                      title={spiega}
                       className={cn(
                         'rounded-md border px-2.5 py-1.5',
                         tono === 'rosso'

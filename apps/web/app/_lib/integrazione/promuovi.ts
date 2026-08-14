@@ -310,3 +310,71 @@ export async function promuoviDalGestionale(
     cantieriSaltati: saltati,
   };
 }
+
+/**
+ * Come sopra, ma lascia scritto com'e' andata.
+ *
+ * Gira dentro `waitUntil`, cioe' dopo che la risposta e' gia' partita: se qui
+ * si rompe qualcosa non lo vede nessuno. Prima l'esito finiva in un
+ * `.catch(() => {})` e dai dati era impossibile distinguere **«ha girato a
+ * vuoto perche' non c'era niente di nuovo»** da **«non e' mai partita»** — le
+ * due cose lasciano lo stesso identico nulla, perche' la promozione scrive
+ * solo quando trova roba nuova.
+ *
+ * Ora l'esito va in `integrazione_esecuzioni.dettaglio.promozione`, accanto a
+ * quello che ha mandato l'agente. Cosi' basta guardare un giro qualunque,
+ * senza aspettare che dal gestionale arrivi qualcosa.
+ */
+export async function promuoviERegistra(
+  tenantId: string,
+  esecuzioneId: string,
+): Promise<void> {
+  const al = new Date().toISOString();
+  let promozione: Record<string, unknown>;
+
+  try {
+    const e = await promuoviDalGestionale(tenantId);
+    promozione = {
+      al,
+      ok: e.ok,
+      ...(e.motivo ? { motivo: e.motivo } : {}),
+      categorieCollegate: e.categorieCollegate,
+      categorieDaSmistare: e.categorieDaSmistare,
+      cantieriCreati: e.cantieriCreati,
+      saltati: e.cantieriSaltati.length,
+      // Un assaggio basta: se sono tanti il numero sopra dice comunque quanti.
+      esempiSaltati: e.cantieriSaltati.slice(0, 10),
+    };
+  } catch (err) {
+    promozione = {
+      al,
+      ok: false,
+      motivo: err instanceof Error ? err.message : 'errore sconosciuto',
+    };
+  }
+
+  try {
+    const service = createServiceSupabase();
+    const { data } = await service
+      .from('integrazione_esecuzioni' as never)
+      .select('dettaglio')
+      .eq('id', esecuzioneId)
+      .maybeSingle();
+
+    // Il `dettaglio` lo scrive l'agente e puo' essere qualunque cosa: lo
+    // teniamo solo se e' un oggetto, altrimenti ci scriveremmo sopra.
+    const prima = (data as unknown as { dettaglio: unknown } | null)?.dettaglio;
+    const base =
+      prima && typeof prima === 'object' && !Array.isArray(prima)
+        ? (prima as Record<string, unknown>)
+        : {};
+
+    await service
+      .from('integrazione_esecuzioni' as never)
+      .update({ dettaglio: { ...base, promozione } } as never)
+      .eq('id', esecuzioneId);
+  } catch {
+    // Se non riesce nemmeno a scrivere l'esito, pazienza: questo pezzo non
+    // deve far saltare la chiusura del giro, che e' gia' andata a buon fine.
+  }
+}

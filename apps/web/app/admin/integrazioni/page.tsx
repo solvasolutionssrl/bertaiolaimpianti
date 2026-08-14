@@ -98,6 +98,14 @@ export default async function IntegrazioniPage() {
     collegate: c.collegate,
     nostreTotali: c.nostreTotali,
     ultimaLettura: c.ultimaLettura,
+    promozione: c.ultimaPromozione
+      ? {
+          ok: c.ultimaPromozione.ok,
+          motivo: c.ultimaPromozione.motivo,
+          cantieriCreati: c.ultimaPromozione.cantieriCreati,
+          categorieDaSmistare: c.ultimaPromozione.categorieDaSmistare,
+        }
+      : null,
   }));
 
   const scritture: ScritturaRow[] = (

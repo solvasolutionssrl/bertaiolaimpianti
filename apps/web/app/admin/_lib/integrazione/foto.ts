@@ -26,6 +26,22 @@ const FINESTRA_ORE = 24;
 /** Un giro appena partito non e' "aperto": e' in corso. */
 const GIRO_APERTO_DA_ORE = 2;
 
+/**
+ * Com'e' andata la promozione all'ultimo giro di lettura chiuso.
+ * `ok: null` = il giro c'e' ma non ha lasciato traccia (giro vecchio, o non e'
+ * partita): e' un'informazione, non un'assenza di informazione.
+ */
+export interface PromozioneVista {
+  giroChiusoAl: string;
+  ok: boolean | null;
+  al?: string;
+  motivo?: string;
+  categorieCollegate?: number;
+  categorieDaSmistare?: number;
+  cantieriCreati?: number;
+  saltati?: number;
+}
+
 export interface CollegamentoAdmin {
   foto: FotoCollegamento;
   diagnosi: Diagnosi;
@@ -36,6 +52,7 @@ export interface CollegamentoAdmin {
   /** Quante nostre anagrafiche esistono in totale, per dare senso a `nonCollegati`. */
   nostreTotali: number;
   collegate: number;
+  ultimaPromozione: PromozioneVista | null;
 }
 
 interface RigaModulo {
@@ -93,6 +110,7 @@ export async function fotoCollegamenti(
         stagingRows,
         nostreRes,
         mappatureRes,
+        ultimaPromozioneRow,
       ] = await Promise.all([
         service
           .from('integrazione_scritture' as never)
@@ -154,6 +172,17 @@ export async function fotoCollegamenti(
           .select('id', { count: 'exact', head: true })
           .eq('tenant_id', m.tenant_id)
           .in('entita', ['cantiere', 'commessa']),
+        // L'ultimo giro di lettura chiuso: dentro `dettaglio.promozione` c'e'
+        // scritto se la promozione e' partita e cosa ha fatto. Senza questo,
+        // «girata a vuoto» e «mai partita» sono indistinguibili.
+        service
+          .from('integrazione_esecuzioni' as never)
+          .select('conclusa_at, dettaglio')
+          .eq('tenant_id', m.tenant_id)
+          .eq('direzione', 'lettura')
+          .not('conclusa_at', 'is', null)
+          .order('conclusa_at', { ascending: false })
+          .limit(1),
       ]);
 
       const scritture = (scrittureFinestra.data ?? []) as unknown as {
@@ -193,6 +222,19 @@ export async function fotoCollegamenti(
       const nostreTotali = nostreRes.count ?? 0;
       const collegate = mappatureRes.count ?? 0;
 
+      const giroChiuso = ((ultimaPromozioneRow.data ?? []) as unknown as {
+        conclusa_at: string;
+        dettaglio: Record<string, unknown> | null;
+      }[])[0];
+      const promoGrezza = giroChiuso?.dettaglio?.promozione;
+      const ultimaPromozione: PromozioneVista | null = giroChiuso
+        ? promoGrezza && typeof promoGrezza === 'object'
+          ? { giroChiusoAl: giroChiuso.conclusa_at, ...(promoGrezza as Omit<PromozioneVista, 'giroChiusoAl'>) }
+          : // Giro chiuso ma nessuna traccia: o e' precedente a questa scrittura,
+            // oppure la promozione non e' partita. Va detto, non nascosto.
+            { giroChiusoAl: giroChiuso.conclusa_at, ok: null }
+        : null;
+
       const foto: FotoCollegamento = {
         tenantId: m.tenant_id,
         tenant: t?.nome ?? '(cliente rimosso)',
@@ -223,6 +265,7 @@ export async function fotoCollegamenti(
         ultimaLettura,
         nostreTotali,
         collegate,
+        ultimaPromozione,
       } satisfies CollegamentoAdmin;
     }),
   );
