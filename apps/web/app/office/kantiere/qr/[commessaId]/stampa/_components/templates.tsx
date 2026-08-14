@@ -1,3 +1,7 @@
+// Fogli da stampare: next/image carica le immagini pigramente e in stampa
+// uscirebbero dei buchi bianchi. Qui servono <img> normali.
+/* eslint-disable @next/next/no-img-element */
+
 import React from 'react';
 
 export type TemplateProps = {

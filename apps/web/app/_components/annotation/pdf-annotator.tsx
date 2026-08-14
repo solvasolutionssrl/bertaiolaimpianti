@@ -148,6 +148,10 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
         dirty: cur?.dirty ?? false,
       });
     },
+    // pageStatesRef non va fra le dipendenze: e' il contenitore stabile creato
+    // alla riga 105, non cambia mai. Il controllo automatico non se ne accorge
+    // perche' e' fatto con useState invece che con useRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -159,6 +163,10 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
   const anyDirty = React.useCallback(() => {
     for (const v of pageStatesRef.current.values()) if (v.dirty) return true;
     return false;
+  // pageStatesRef non va fra le dipendenze: e' il contenitore stabile creato
+  // alla riga 105, non cambia mai. Il controllo automatico non se ne accorge
+  // perche' e' fatto con useState invece che con useRef.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
@@ -188,6 +196,10 @@ export function PdfAnnotator(props: PdfAnnotatorProps) {
         message: e instanceof Error ? e.message : 'Salvataggio fallito',
       });
     }
+  // pageStatesRef non va fra le dipendenze: e' il contenitore stabile creato
+  // alla riga 105, non cambia mai. Il controllo automatico non se ne accorge
+  // perche' e' fatto con useState invece che con useRef.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly, onSavePage]);
 
   // Auto-save dopo idle

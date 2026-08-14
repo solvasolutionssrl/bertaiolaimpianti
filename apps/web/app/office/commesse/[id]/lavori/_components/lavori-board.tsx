@@ -303,7 +303,7 @@ export function LavoriBoard({
     // File e note granulari escluse: dettaglio in /cronologia.
 
     return all.sort((a, b) => (a.ts < b.ts ? 1 : -1));
-  }, [todos, note, riunioni, auditEvents, filesRecenti]);
+  }, [todos, note, riunioni, auditEvents]);
 
   const timelineFiltrata = React.useMemo(() => {
     return timeline.filter((e) => {

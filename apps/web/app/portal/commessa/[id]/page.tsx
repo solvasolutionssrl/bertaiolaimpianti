@@ -152,7 +152,6 @@ export default async function DettaglioCommessaPage({
                 umanizzaNomeCartella(commessa.nome_cartella)}
             </h1>
           </div>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <StatoBadge stato={commessa.stato as any} />
         </div>
         {commessa.cliente_indirizzo_cantiere ? (

@@ -1,5 +1,10 @@
 'use client';
 
+// Anteprime dei file che l'utente sta caricando: sono indirizzi blob: locali,
+// che next/image non sa trattare (e non c'e' niente da ottimizzare, il file e'
+// gia' sul telefono).
+/* eslint-disable @next/next/no-img-element */
+
 import * as React from 'react';
 import {
   Camera,

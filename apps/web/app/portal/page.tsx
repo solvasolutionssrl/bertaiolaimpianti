@@ -219,6 +219,5 @@ function formatDate(iso: string): string {
 
 function StatoBadgeSafe({ stato }: { stato: string }) {
   // StatoBadge è tipizzato sui valori commessa noti — fallback safe.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return <StatoBadge stato={stato as any} />;
 }

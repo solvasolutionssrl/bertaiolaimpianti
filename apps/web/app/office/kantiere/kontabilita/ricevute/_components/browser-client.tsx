@@ -336,7 +336,12 @@ export function BrowserClient() {
   const years = childrenByPrefix[''] ?? [];
 
   // ── MediaItems per il lightbox (solo a livello file) ──────────────────────
-  const files = data && data.level === 'files' ? data.files : [];
+  // Stabile fra un render e l'altro: altrimenti l'elenco vuoto sarebbe un array
+  // nuovo ogni volta e il memo qui sotto non memorizzerebbe mai niente.
+  const files = React.useMemo(
+    () => (data && data.level === 'files' ? data.files : []),
+    [data],
+  );
   const mediaItems: MediaItem[] = React.useMemo(
     () =>
       files.map((f) => ({

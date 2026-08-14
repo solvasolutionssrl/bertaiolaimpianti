@@ -3,7 +3,6 @@ import { Readable } from 'node:stream';
 
 // archiver usa `export =` (CommonJS): require con cast a firma callable per
 // evitare il vincolo esModuleInterop del tsconfig condiviso.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const archiver = require('archiver') as (
   format: string,
   options?: import('archiver').ArchiverOptions,

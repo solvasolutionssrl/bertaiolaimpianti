@@ -114,7 +114,6 @@ export const PhotoCanvas = React.forwardRef<PhotoCanvasHandle, PhotoCanvasProps>
   } = props;
 
   // Ref allo Stage Konva per export
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stageRef = React.useRef<any>(null);
 
   const { img, natural, error: imgError } = useImage(imageUrl);

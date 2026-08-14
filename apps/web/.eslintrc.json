@@ -1,3 +1,10 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "rules": {
+    // L'app parla italiano: apostrofi e virgolette stanno dentro quasi ogni
+    // frase ("dell'ufficio", "il tasto «Salva»"). La regola li segnalava tutti
+    // — una sessantina di errori che erano solo grammatica, non difetti. Restano
+    // vietati > e } , che in JSX sono davvero il segno di una parentesi persa.
+    "react/no-unescaped-entities": ["error", { "forbid": [">", "}"] }]
+  }
 }

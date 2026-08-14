@@ -27,7 +27,6 @@ export async function salvaPermessi(input: {
   }
 
   // `permissions` column added by migration 20260101002700 — cast until types are regenerated
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const usersTable = supabase.from('users') as any;
   const { error } = await usersTable
     .update({ permissions: input.overrides ?? null })
