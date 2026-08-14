@@ -1,6 +1,6 @@
 -- =====================================================================
--- 20260811090000_cron_purge_upload_morti.sql
--- Cron giornaliero: spazzino dei caricamenti mai finiti.
+-- 20260814150000_cron_purge_upload_morti.sql
+-- Cron ogni 3 giorni: spazzino dei caricamenti mai finiti.
 --
 -- Ogni upload nasce con una riga file_refs in 'uploading', creata da
 -- /api/upload/media/init PRIMA che parta un byte. Se il caricamento non

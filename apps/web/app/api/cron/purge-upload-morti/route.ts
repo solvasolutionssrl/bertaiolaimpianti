@@ -11,7 +11,7 @@ export const maxDuration = 300;
  * più vecchie della finestra di grazia) + abort delle sessioni multipart R2
  * rimaste aperte.
  *
- * Chiamato dal cron giornaliero (migration `20260811090000`). Auth come gli
+ * Chiamato dal cron ogni 3 giorni (migration `20260814150000`). Auth come gli
  * altri cron: `Authorization: Bearer $CRON_SECRET`.
  *
  * Parametri (query): `ore` (grazia, default 24), `max` (righe, default 200),

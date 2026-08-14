@@ -350,7 +350,7 @@ per questo il difetto colpiva proprio la fascia più comune.
 | Job `failed` alla riapertura | restavano rossi finché non li ritoccavi | **tornano in coda da soli** (tentativi azzerati → tetto 5 per sessione) |
 | Righe morte | restavano per sempre, invisibili | **spazzino giornaliero** `/api/cron/purge-upload-morti` |
 
-Lo spazzino (`_lib/purge-upload-morti.ts` + migration `20260811090000`) dopo
+Lo spazzino (`_lib/purge-upload-morti.ts` + migration `20260814150000`) dopo
 **24 h di grazia** aborta la sessione multipart su R2, toglie l'oggetto
 parziale e butta la riga. La grazia non è negoziabile al ribasso: un video
 grande può legittimamente restare `uploading` per ore.
