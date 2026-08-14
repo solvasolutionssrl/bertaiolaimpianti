@@ -20,7 +20,11 @@
 -- legittimamente restare 'uploading' per ore, e la coda del telefono lo
 -- riprende da sola alla riapertura dell'app.
 --
--- Cadenza: 03:47 UTC (sfalsata da purge-cestino 03:17 e purge-bozze 03:31).
+-- Cadenza: ogni 3 giorni (72 ore) alle 03:47 UTC — sfalsata da purge-cestino
+-- (03:17, giornaliero) e purge-bozze (03:31, giornaliero). Piu' rada di quelle
+-- perche' qui non c'e' fretta: la finestra di grazia e' comunque 24h, quindi al
+-- massimo una riga morta resta in giro qualche giorno in piu' senza dare
+-- fastidio a nessuno (non e' visibile in nessuna galleria). Meno corse a vuoto.
 -- =====================================================================
 
 create extension if not exists pg_cron;
@@ -68,8 +72,11 @@ exception when others then
   null;
 end $$;
 
+-- `*/3` sul giorno del mese: gira il 1, 4, 7 … 31. A cavallo di fine mese il
+-- passo puo' accorciarsi a un giorno: e' voluto, meglio una corsa in piu' che
+-- una schedulazione che nessuno riesce a leggere.
 select cron.schedule(
   'purge-upload-morti',
-  '47 3 * * *',
+  '47 3 */3 * *',
   $$select public.trigger_purge_upload_morti(24)$$
 );
