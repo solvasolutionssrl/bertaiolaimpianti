@@ -195,7 +195,10 @@ function FotoCell({
 
   React.useEffect(() => {
     if (imgLoaded || nonDisponibile) return;
-    const t = window.setTimeout(() => setNonDisponibile(true), 12_000);
+    // Generosa di proposito: i file più vecchi non hanno copia su R2 e
+    // passano dal proxy Nextcloud, che su rete lenta ci mette. Serve solo a
+    // non far girare la rotella all'infinito, non a essere severi.
+    const t = window.setTimeout(() => setNonDisponibile(true), 25_000);
     return () => window.clearTimeout(t);
   }, [imgLoaded, nonDisponibile]);
 

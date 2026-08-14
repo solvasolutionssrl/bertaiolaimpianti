@@ -1,8 +1,8 @@
 # Logiche Upload Media — analisi difetti e piano di intervento
 
-**Versione**: 2.1
+**Versione**: 2.2
 **Stato**: ✅ tutte le fasi implementate, verificate con test e build
-**Data**: 31/07/2026 (§4quater: attesa dopo il picker, foto a piena qualità)
+**Data**: 11/08/2026 (§4quinquies: perché i video non finivano)
 **Ambito**: upload foto/video/PDF verso R2 (poi sync Nextcloud) da PWA mobile e office
 
 > Documento nato dall'analisi di due problemi segnalati dal cliente Bertaiola:
@@ -318,6 +318,55 @@ corpo al rallentatore e un **500 vero** a metà parte.
 Resta fuori portata di qualunque banco su Chrome: la conversione di iOS, le
 stranezze di IndexedDB su WebKit, la sospensione del JS in background. Quelle si
 vedono solo su un telefono vero.
+
+## 4quinquies. Perché i video "non finivano più" (11/08/2026)
+
+Segnalazione: caricamenti che non arrivano mai in fondo, e ogni tanto un
+"R2 put network error" che non riparte da solo.
+
+### Il dato, prima della diagnosi
+
+In produzione: **66 righe `file_refs` ferme in `uploading`**, tutte video fra
+61 e 217 MB, tutte dello stesso utente, la più vecchia di due mesi. I nomi
+mostravano che erano **vecchi tentativi ancora nella coda del telefono**,
+ripartiti a ogni apertura dell'app senza mai riuscire.
+
+### La causa
+
+`MULTIPART_THRESHOLD_BYTES` era **100 MB**. Sotto quella soglia il file parte
+come **un unico PUT**: niente pezzi, niente ripresa, niente progresso parziale.
+Un video da 60-80 MB su rete di cantiere è quindi una richiesta sola che deve
+reggere minuti interi; se cade si ricomincia da zero, e la sentinella di stallo
+(45 s senza byte) la chiude. Sopra i 100 MB invece il multipart funzionava —
+per questo il difetto colpiva proprio la fascia più comune.
+
+### Le correzioni
+
+| Cosa | Prima | Ora |
+|---|---|---|
+| Soglia multipart | 100 MB | **8 MB** |
+| Dimensione parte | 10 MB | **8 MB** (R2: min 5 MiB, parti non finali tutte uguali, max 10.000 → tetto 80 GB) |
+| Validità firme | 1 h | **6 h** (con parti piccole sono decine: scadevano a metà strada) |
+| Job `failed` alla riapertura | restavano rossi finché non li ritoccavi | **tornano in coda da soli** (tentativi azzerati → tetto 5 per sessione) |
+| Righe morte | restavano per sempre, invisibili | **spazzino giornaliero** `/api/cron/purge-upload-morti` |
+
+Lo spazzino (`_lib/purge-upload-morti.ts` + migration `20260811090000`) dopo
+**24 h di grazia** aborta la sessione multipart su R2, toglie l'oggetto
+parziale e butta la riga. La grazia non è negoziabile al ribasso: un video
+grande può legittimamente restare `uploading` per ore.
+
+> ⚠️ Quelle righe non erano visibili da nessuna parte — tutte le gallerie
+> filtrano su `uploaded/synced`. Crescevano in silenzio, con le sessioni
+> multipart aperte su R2 che occupano spazio **fatturato**. Ogni stato
+> "di passaggio" vuole uno spazzino, altrimenti non è di passaggio.
+
+### Provato, non supposto
+
+`scripts/banco-upload/prova.mjs` ha ora **19 controlli**, incluso il caso
+nuovo: si semina in IndexedDB un job già `failed` (tentativi esauriti in una
+sessione precedente) e si verifica che riaprendo l'app riparta da solo e arrivi
+in fondo. `scripts/banco-ui/upload-ui.mjs` misura invece le cose che si vedono
+col dito (X per togliere un file: 41×41 px).
 
 ## 5. Piano di intervento (eseguito)
 
