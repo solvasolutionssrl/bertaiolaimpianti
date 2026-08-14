@@ -77,7 +77,7 @@ export default async function DipendentiPage() {
       <NuoviDalGestionale
         nuovi={nuovi}
         ignorati={ignorati}
-        sistema={sistema}
+        attivo={!!sistema}
         dipendenti={elenco.map((d) => ({
           id: d.id,
           etichetta: `${d.cognome} ${d.nome}${d.codice_interno ? ` · ${d.codice_interno}` : ''}`,
@@ -86,7 +86,7 @@ export default async function DipendentiPage() {
       />
 
       <DipendentiClient
-        sistemaGestionale={sistema}
+        gestionaleAttivo={!!sistema}
         externalPerDipendente={externalPerDipendente}
         dipendenti={elenco}
         utenti={(utenti ?? []) as UtenteRow[]}

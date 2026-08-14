@@ -35,7 +35,8 @@ interface Props {
    * Gestionale del cliente, se l'integrazione è accesa. `null` per i tenant
    * che non ne hanno uno: la nuvoletta non compare proprio.
    */
-  sistemaGestionale?: string | null;
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  gestionaleAttivo?: boolean;
   /** Valori del gestionale in attesa di smistamento: accende il pallino. */
   daSmistare?: number;
 }
@@ -97,7 +98,7 @@ function StatoBadge({ stato }: { stato: 'attivo' | 'sospeso' | 'chiuso' }) {
 export function CantieriClient({
   rows,
   commesse,
-  sistemaGestionale = null,
+  gestionaleAttivo = false,
   daSmistare = 0,
 }: Props) {
   const router = useRouter();
@@ -273,16 +274,15 @@ export function CantieriClient({
                             <span className="font-mono text-xs font-medium text-foreground">
                               {codiceCantiereMostrato(row)}
                             </span>
-                            {sistemaGestionale ? (
+                            {gestionaleAttivo ? (
                               <SincGestionalePunto
                                 collegato={!!row.externalId}
                                 externalId={row.externalId}
-                                sistema={sistemaGestionale}
                               />
                             ) : null}
                             {row.nuovoDalGestionale ? (
                               <span
-                                title="Arrivato dal gestionale da poco: controlla indirizzo e categoria."
+                                title="Arrivato da poco dal gestionale locale. Controlla indirizzo e categoria."
                                 className="rounded-full bg-emerald-500/15 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400"
                               >
                                 nuovo

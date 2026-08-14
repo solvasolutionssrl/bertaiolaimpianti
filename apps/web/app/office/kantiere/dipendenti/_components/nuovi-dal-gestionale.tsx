@@ -27,18 +27,17 @@ import {
 } from '@/app/_actions/integrazione-nuovi';
 
 /**
- * «Il gestionale ha una persona che noi non abbiamo.»
+ * «Sul gestionale locale c'è una persona che qui non c'è.»
  *
  * Compare solo quando c'è davvero qualcosa da decidere, e non si chiude da
- * solo: finché resta, quelle ore non sono attribuibili a nessuno fuori di qui.
+ * solo: finché resta lì, le ore di quella persona non escono.
  *
- * Tre strade, e la terza conta quanto le altre. L'anagrafica di un gestionale
- * è piena di account di servizio e postazioni — `User Ergo SW`,
- * `Officina Mobile` — che persone non sono. Senza un modo per dirlo, l'avviso
- * resterebbe acceso per sempre e in due settimane nessuno lo guarderebbe più.
+ * Tre strade, e la terza conta quanto le altre. L'anagrafica di un gestionale è
+ * sempre piena di accessi di servizio e postazioni che persone non sono. Senza
+ * un modo per dirlo, l'avviso resterebbe acceso per sempre e in due settimane
+ * nessuno lo guarderebbe più.
  *
- * Il nome del gestionale non compare nell'etichetta: si dice «il gestionale»,
- * e il nome vero sta nel sottotitolo, letto dalla configurazione del cliente.
+ * ⚠️ Il nome del programma non si scrive: si dice «gestionale locale».
  */
 
 export interface NuovoRow {
@@ -72,12 +71,13 @@ function spezzaNome(intero: string): { cognome: string; nome: string } {
 export function NuoviDalGestionale({
   nuovi,
   ignorati,
-  sistema,
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  attivo,
   dipendenti,
 }: {
   nuovi: NuovoRow[];
   ignorati: IgnoratoRow[];
-  sistema: string | null;
+  attivo: boolean;
   dipendenti: DipendenteOpt[];
 }) {
   const router = useRouter();
@@ -87,7 +87,7 @@ export function NuoviDalGestionale({
   const [scelto, setScelto] = React.useState('');
   const [form, setForm] = React.useState({ cognome: '', nome: '', matricola: '', mansione: '' });
 
-  if (!sistema || (nuovi.length === 0 && ignorati.length === 0)) return null;
+  if (!attivo || (nuovi.length === 0 && ignorati.length === 0)) return null;
 
   const esegui = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     start(async () => {
@@ -124,19 +124,13 @@ export function NuoviDalGestionale({
             <div className="min-w-0">
               <h2 className="text-sm font-semibold">
                 {nuovi.length === 1
-                  ? 'Nuovo dipendente rilevato sul gestionale'
-                  : `${nuovi.length} dipendenti rilevati sul gestionale`}
+                  ? 'Sul gestionale locale c’è una persona nuova'
+                  : `Sul gestionale locale ci sono ${nuovi.length} persone nuove`}
               </h2>
               <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                Non li creiamo da soli: una persona è un contratto e una busta paga.
-                Finché non decidi, le sue ore non sono attribuibili a nessuno fuori
-                di qui.
-                {sistema ? (
-                  <>
-                    {' '}
-                    <span className="font-mono">{sistema}</span>
-                  </>
-                ) : null}
+                Non {nuovi.length === 1 ? 'la creiamo' : 'le creiamo'} da soli: dietro
+                una persona c’è un contratto e una busta paga. Dicci tu chi è. Finché
+                non lo fai, le sue ore restano qui.
               </p>
             </div>
           </div>
@@ -157,7 +151,7 @@ export function NuoviDalGestionale({
                   </span>
                   {n.attiva === false ? (
                     <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      già chiuso là
+                      non più in forza
                     </span>
                   ) : null}
                 </div>
@@ -180,7 +174,7 @@ export function NuoviDalGestionale({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    title="Non è un dipendente (account di servizio, postazione…)"
+                    title="Non è un dipendente: è un accesso di servizio o una postazione"
                     disabled={pending}
                     onClick={() =>
                       esegui(() =>
@@ -204,12 +198,14 @@ export function NuoviDalGestionale({
       </Card>
       ) : null}
 
-      {/* ── Archiviati: la promessa «si disfa con un click» va mantenuta ── */}
+      {/* ── Messi da parte: la promessa «si disfa con un click» va mantenuta ── */}
       {ignorati.length > 0 ? (
         <details className="rounded-lg border border-border bg-card px-3 py-2">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground">
             <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-            {ignorati.length} record del gestionale archiviati come «non nostri»
+            {ignorati.length === 1
+              ? 'Hai messo da parte una voce che non è una persona'
+              : `Hai messo da parte ${ignorati.length} voci che non sono persone`}
           </summary>
           <ul className="mt-2 space-y-1 border-t border-border/60 pt-2">
             {ignorati.map((i) => (
@@ -236,7 +232,7 @@ export function NuoviDalGestionale({
                   }
                 >
                   <RotateCcw className="h-3 w-3" />
-                  Rimetti negli avvisi
+                  Rimettila in elenco
                 </Button>
               </li>
             ))}
@@ -251,10 +247,9 @@ export function NuoviDalGestionale({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Collega «{modo?.riga.nome}»</DialogTitle>
+            <DialogTitle>Collega {modo?.riga.nome}</DialogTitle>
             <DialogDescription>
-              A quale dei vostri dipendenti corrisponde? Da qui in avanti le sue ore
-              usciranno con questo riferimento.
+              Chi è, fra i tuoi? Da adesso in poi le sue ore escono con questo nome.
             </DialogDescription>
           </DialogHeader>
 
@@ -271,13 +266,13 @@ export function NuoviDalGestionale({
               {dipendenti.map((d) => (
                 <option key={d.id} value={d.id} disabled={d.collegato}>
                   {d.etichetta}
-                  {d.collegato ? ' — già collegato' : ''}
+                  {d.collegato ? ' · già collegato' : ''}
                 </option>
               ))}
             </select>
             <p className="text-[11px] text-muted-foreground">
-              Chi è già collegato non è scegliibile: lo stesso record del gestionale
-              su due persone imputerebbe le ore due volte.
+              Chi è già collegato non si può scegliere: la stessa persona su due
+              nomi farebbe contare le ore due volte.
             </p>
           </div>
 
@@ -311,9 +306,9 @@ export function NuoviDalGestionale({
       <Dialog open={modo?.tipo === 'crea'} onOpenChange={(o) => !o && setModo(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Crea «{modo?.riga.nome}»</DialogTitle>
+            <DialogTitle>Crea {modo?.riga.nome}</DialogTitle>
             <DialogDescription>
-              Nome e cognome arrivano dal gestionale. Il resto è vostro.
+              Nome e cognome arrivano dal gestionale locale. Il resto lo metti tu.
             </DialogDescription>
           </DialogHeader>
 
@@ -362,8 +357,8 @@ export function NuoviDalGestionale({
             )}
           >
             La <strong>matricola è la vostra</strong>, quella del consulente del
-            lavoro — non l&apos;identificativo del gestionale. Le due numerazioni si
-            somigliano e non coincidono. Se non la sai, lasciala vuota e mettila dopo.
+            lavoro. Non quella del gestionale locale: si somigliano ma non sono la
+            stessa cosa. Se non la sai, lasciala vuota e la metti dopo.
           </p>
 
           <DialogFooter>
@@ -401,22 +396,26 @@ export function NuoviDalGestionale({
 export function DipendenteCollegato({
   collegato,
   externalId,
-  sistema,
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  attivo,
   className,
 }: {
   collegato: boolean;
   externalId?: string | null;
-  sistema?: string | null;
+  attivo?: boolean;
   className?: string;
 }) {
-  if (!sistema || !collegato) return null;
+  if (!attivo || !collegato) return null;
+  const testo = externalId
+    ? `Collegato al gestionale locale, con il codice ${externalId}.`
+    : 'Collegato al gestionale locale.';
   return (
     <span
-      title={`Collegato al gestionale${sistema ? ` (${sistema})` : ''}${externalId ? ` · ${externalId}` : ''}`}
+      title={testo}
       className={cn('inline-flex shrink-0 items-center text-sky-600 dark:text-sky-400', className)}
     >
       <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
-      <span className="sr-only">collegato al gestionale</span>
+      <span className="sr-only">{testo}</span>
     </span>
   );
 }

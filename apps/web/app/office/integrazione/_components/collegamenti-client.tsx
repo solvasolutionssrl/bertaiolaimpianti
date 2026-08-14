@@ -28,10 +28,10 @@ import { NuoveDalGestionale } from './nuove-dal-gestionale';
  *    davanti quelle che richiedono una decisione: i casi certi si scorrono in
  *    fondo, quelli incerti si guardano subito.
  * 2. **Un abbinamento sbagliato non da' errore.** Manda le ore sulla commessa di
- *    un altro, e sul gestionale non si cancella. Per questo prima di salvare si
- *    ricapitola cosa sta per cambiare.
- * 3. **I duplicati si fermano prima del salvataggio.** Due cantieri sullo stesso
- *    record del gestionale = costi doppi che nessuno nota per mesi.
+ *    un altro, e sul gestionale locale non si cancella. Per questo prima di
+ *    salvare si ricapitola cosa sta per cambiare.
+ * 3. **I doppioni si fermano prima del salvataggio.** Due cantieri sulla stessa
+ *    commessa di la' vuol dire costi doppi che nessuno nota per mesi.
  */
 
 const FORZA: Record<
@@ -142,11 +142,10 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
       <Card>
         <CardContent className="space-y-2 p-6 text-center">
           <CircleDashed className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-          <p className="font-medium">Il gestionale non ha ancora inviato le sue commesse</p>
+          <p className="font-medium">Il gestionale locale non ha ancora mandato niente</p>
           <p className="mx-auto max-w-md text-sm text-muted-foreground">
-            Il collegamento con il gestionale deve fare almeno una lettura prima
-            che si possa abbinare qualcosa. Finché non succede, questa pagina
-            resta vuota.
+            Deve fare almeno una lettura prima che ci sia qualcosa da abbinare.
+            Finché non succede, qui non c’è niente da fare.
           </p>
         </CardContent>
       </Card>
@@ -163,12 +162,12 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
               <strong className="tabular-nums">{dati.righe.length}</strong> tuoi cantieri
             </span>
             <span className="text-muted-foreground">
-              <strong className="tabular-nums">{dati.esterniTotali}</strong> nel gestionale
+              <strong className="tabular-nums">{dati.esterniTotali}</strong> sul gestionale locale
             </span>
             {daCollegare > 0 ? (
               <span className="text-amber-700 dark:text-amber-400">
-                <strong className="tabular-nums">{daCollegare}</strong> ancora da collegare
-                — le loro ore non partono
+                <strong className="tabular-nums">{daCollegare}</strong> ancora da
+                collegare: le loro ore non partono
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
@@ -187,8 +186,8 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
           <CardContent className="flex items-start gap-2 p-3.5 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              Lo stesso record del gestionale è scelto per più cantieri (righe in
-              rosso). Le ore verrebbero contate due volte: risolvi prima di salvare.
+              Hai scelto la stessa commessa per più cantieri (le righe in rosso).
+              Così le ore si contano due volte: sistema prima di salvare.
             </span>
           </CardContent>
         </Card>
@@ -254,7 +253,7 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
                 <tr>
                   <th className="px-3 py-2 font-medium">Il tuo cantiere</th>
                   <th className="w-[13%] px-3 py-2 font-medium">Stato</th>
-                  <th className="w-[38%] px-3 py-2 font-medium">Nel gestionale</th>
+                  <th className="w-[38%] px-3 py-2 font-medium">Sul gestionale locale</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -342,9 +341,9 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
                 {cambiate.length === 1 ? 'modifica' : 'modifiche'}?
               </p>
               <p className="text-sm text-muted-foreground">
-                Da qui in avanti ore, chilometri e spese di questi cantieri verranno
-                imputati alla commessa scelta. Un abbinamento sbagliato manda i dati
-                sulla commessa di un altro, e sul gestionale non si può correggere.
+                Da adesso ore, chilometri e spese di questi cantieri finiscono sulla
+                commessa che hai scelto. Se sbagli abbinamento i dati vanno sulla
+                commessa di un altro, e sul gestionale locale non si tornano indietro.
               </p>
               <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-md border border-border p-2.5">
                 {cambiate.map((r) => {

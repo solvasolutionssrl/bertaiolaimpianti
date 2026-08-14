@@ -1,8 +1,9 @@
 import { Suspense } from 'react';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
+import { leggiSessione } from '@kommessa/api/tenant';
 import { tenantHasModule } from '../_lib/modules';
 import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
 import { OfficeShellClient } from './_components/office-shell-client';
@@ -32,14 +33,19 @@ export default async function OfficeLayout({
   try {
     ctx = await requireTenantContext();
   } catch (e) {
-    // Distinguiamo i due casi così l'utente non si trova con un /login
-    // ingannevole quando in realtà è loggato:
+    // Tre casi diversi, e mandarli tutti al login sarebbe ingannevole:
     //   - NO_TENANT_CLAIM: di solito un platform_admin SOLVA loggato ma
-    //     senza tenant_id nel JWT. Indirizziamolo a /admin/tenants per
-    //     scegliere un tenant da impersonare.
-    //   - UNAUTHENTICATED: nessuna sessione → /login.
+    //     senza tenant_id nel JWT → /admin/tenants per scegliere il tenant.
+    //   - sessione irraggiungibile (rete): i cookie ci sono, la sessione è
+    //     viva → si riprova, non si butta fuori nessuno.
+    //   - nessun cookie: allora sì, l'accesso è chiuso davvero.
     const msg = e instanceof Error ? e.message : '';
     if (msg === 'NO_TENANT_CLAIM') redirect('/admin/tenants?reason=pick_tenant');
+    const esito = await leggiSessione(cookies().getAll());
+    if (esito.stato === 'incerto') {
+      const dove = headers().get('x-percorso') ?? '/office';
+      redirect(`/riprova?dove=${encodeURIComponent(dove)}`);
+    }
     redirect('/login');
   }
 
@@ -106,7 +112,9 @@ export default async function OfficeLayout({
   const notificationCount = notifRes.count ?? 0;
   const hasKantiere = await tenantHasModule('kantiere');
   const hasDipendenti = await tenantHasModule('dipendenti');
-  // Il tasto "Sincronizza" compare solo per chi ha un gestionale collegato.
+  // Voce di menu "Gestionale": solo per chi ne ha uno collegato. Non c'è più
+  // nessun tasto per lanciare una sincronizzazione a mano: è il gestionale
+  // locale a leggere dalle nostre API quando gli serve.
   const hasIntegrazione = await tenantHasModule('integrazione');
   // Sotto-flag del modulo Dipendenti (gating fine delle voci nav).
   const dipCfg = hasDipendenti ? await leggiConfigDipendenti(supabase, ctx.tenantId) : null;

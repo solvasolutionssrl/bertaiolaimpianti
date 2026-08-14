@@ -11,6 +11,7 @@ import { precompilaMioRapportino, mioStoricoRapportini } from '@/app/_actions/ka
 import { OreClient } from './_components/ore-client';
 import { StoricoOre } from './_components/storico-ore';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
 
@@ -51,7 +52,11 @@ export default async function MobileOrePage() {
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
             Kantiere
           </p>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+          <div className="mt-1 flex items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+          {/* Il turno in corso cresce mentre la pagina è aperta. */}
+          <LiveRefresh className="shrink-0 text-[11px]" />
+        </div>
           <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
         </header>
         <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center">
@@ -148,7 +153,11 @@ export default async function MobileOrePage() {
           <Clock className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+          {/* Il turno in corso cresce mentre la pagina è aperta. */}
+          <LiveRefresh className="shrink-0 text-[11px]" />
+        </div>
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
 

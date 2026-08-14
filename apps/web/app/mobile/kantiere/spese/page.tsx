@@ -14,6 +14,7 @@ import { NuovaSpesa } from './_components/nuova-spesa';
 import { SpeseClient, type SpesaRiga } from './_components/spese-client';
 import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 
 export const metadata: Metadata = {
   title: 'Le mie spese',
@@ -138,7 +139,13 @@ export default async function SpeseMobilePage() {
           <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
           Kontabilità
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie spese</h1>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">Le mie spese</h1>
+          {/* Lo scontrino appena fotografato resta "in elaborazione" per
+              qualche secondo: la riga deve cambiare da sola, senza che nessuno
+              debba tirare giù la pagina per ricaricarla. */}
+          <LiveRefresh className="shrink-0 text-[11px]" />
+        </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Scatta lo scontrino: leggo importo e categoria, tu controlli e salvi.
         </p>

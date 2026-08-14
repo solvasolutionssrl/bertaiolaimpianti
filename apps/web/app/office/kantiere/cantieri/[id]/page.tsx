@@ -445,7 +445,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
           note: cantiere.note,
           externalId: collegamenti.externalPerId.get(cantiere.id) ?? null,
         }}
-        sistemaGestionale={collegamenti.attiva ? collegamenti.sistema : null}
+        gestionaleAttivo={collegamenti.attiva}
         squadra={squadraConNomi}
         dipendentiAttivi={dipendentiAttivi}
         qr={

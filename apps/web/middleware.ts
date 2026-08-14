@@ -32,6 +32,9 @@ export async function middleware(req: NextRequest) {
   if (isPublic(req.nextUrl.pathname)) {
     return NextResponse.next();
   }
+  // `updateSession` aggiunge anche l'intestazione `x-percorso` alla richiesta:
+  // serve al controllo dell'accesso per riportare la gente dov'era, quando la
+  // sessione non si riesce a verificare.
   const response = await updateSession(req);
 
   // Landing role-based dei tenant Kantiere: redirect HTTP QUI, fuori dal render

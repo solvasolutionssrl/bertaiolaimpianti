@@ -48,7 +48,15 @@ export function createServerSupabase() {
  * RLS policies always see a valid identity.
  */
 export async function updateSession(req: NextRequest) {
-  let response = NextResponse.next({ request: req });
+  // `x-percorso`: i componenti server non sanno su che indirizzo stanno
+  // girando. Glielo passiamo qui, cosi' quando la sessione non si riesce a
+  // verificare li si puo' riportare esattamente dov'erano invece che sulla
+  // home. Va messo sulla RICHIESTA (non sulla risposta): e' quella che il
+  // render legge.
+  const intestazioni = new Headers(req.headers);
+  intestazioni.set('x-percorso', req.nextUrl.pathname + req.nextUrl.search);
+
+  let response = NextResponse.next({ request: { headers: intestazioni } });
 
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -62,7 +70,10 @@ export async function updateSession(req: NextRequest) {
           for (const { name, value } of toSet) {
             req.cookies.set(name, value);
           }
-          response = NextResponse.next({ request: req });
+          // Ricostruendo la risposta si riparte dalle intestazioni nostre,
+          // altrimenti `x-percorso` andrebbe perso proprio quando i cookie
+          // vengono rinnovati.
+          response = NextResponse.next({ request: { headers: intestazioni } });
           for (const { name, value, options } of toSet) {
             response.cookies.set(name, value, options);
           }

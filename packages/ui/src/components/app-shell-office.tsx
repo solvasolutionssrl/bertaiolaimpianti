@@ -346,7 +346,15 @@ function OfficeShell({
     // scrolla; scrolla SOLO <main>. Così header e sidebar restano ancorati e la
     // sidebar (con footer "Powered by SOLVA") non scorre mai via — robusto anche
     // con `overflow-x: hidden` su html/body (che rompe `position: sticky`).
-    <div className={cn('flex h-screen flex-col overflow-hidden bg-background', className)}>
+    //
+    // ⚠️ `relative` NON è decorativo: senza, un discendente `position: absolute`
+    // che non ha nessun antenato posizionato prende come contenitore il
+    // documento, **sfugge a questo `overflow-hidden`** e allunga la pagina. Con
+    // una pagina più alta della finestra il risultato è uno scroll fantasma:
+    // la finestra scorre, la sidebar scorre via con lei e sotto resta il vuoto.
+    // Succedeva per colpa degli `sr-only` (Tailwind li rende assoluti), quindi
+    // in modo intermittente — solo sulle pagine abbastanza lunghe.
+    <div className={cn('relative flex h-screen flex-col overflow-hidden bg-background', className)}>
       {/* Header (righetta brand + header) come figlio flex shrink-0 in cima:
           resta fisso perché la colonna non scrolla (scrolla solo <main>). */}
       <div className="z-30 shrink-0">
@@ -483,11 +491,17 @@ function OfficeShell({
 
       <div className="flex flex-1 min-h-0">
         {/* ===================== Sidebar (desktop) — cobalt-tinted ===================== */}
-        {/* h-full: riempie la riga (già alta viewport-header). Non serve più sticky:
-            è la shell a non scrollare, solo <main> scrolla. */}
+        {/* ⚠️ `self-stretch`, NON `h-full`.
+            `h-full` vuol dire «il 100% del genitore», e finché il genitore non
+            ha un'altezza già risolta — durante l'idratazione, o mentre la
+            pagina arriva a pezzi — quel 100% cade sull'altezza del contenuto:
+            la sidebar viene su corta e sotto resta il vuoto. Poi si sistema, e
+            infatti il difetto sembrava capitare «a volte».
+            Lo stiramento del flex non ha quel problema: non dipende da un
+            numero, è il comportamento della riga. */}
         <aside
           className={cn(
-            'hidden h-full shrink-0 flex-col justify-between border-r border-border transition-[width] duration-200 md:flex md:shadow-[3px_0_16px_-8px_hsl(220_40%_30%/0.14)]',
+            'hidden self-stretch shrink-0 flex-col justify-between border-r border-border transition-[width] duration-200 md:flex md:shadow-[3px_0_16px_-8px_hsl(220_40%_30%/0.14)]',
             sidebarOpen ? 'w-64' : 'md:w-[72px]',
           )}
           style={{
@@ -620,7 +634,9 @@ function OfficeShell({
         ) : null}
 
         {/* ===================== Main (UNICA area che scrolla) ===================== */}
-        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas">
+        {/* `relative`: gli elementi assoluti del contenuto si ancorano qui e
+            scorrono col contenuto, invece di restare appesi al documento. */}
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas">
           <div className="mx-auto w-full max-w-[1760px] flex-1 px-4 py-5 md:px-7 md:py-6">
             {children}
           </div>

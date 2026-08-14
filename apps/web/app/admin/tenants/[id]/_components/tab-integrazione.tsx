@@ -206,7 +206,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
       setSvuotaAperto(false);
       await showAlert({
         title: 'Deposito svuotato',
-        body: `${res.eliminati} record rimossi. Al prossimo giro l’agente li rideposita.`,
+        body: `Ho tolto ${res.eliminati} righe. Alla prossima lettura tornano.`,
       });
       router.refresh();
     });
@@ -295,7 +295,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
       <Sezione
         icona={<Plug className="h-4 w-4" />}
         titolo="Modulo integrazione"
-        sottotitolo="È l’interruttore vero dell’API. Da spento, ogni chiamata autenticata di questo cliente riceve «modulo spento» prima che venga letto qualunque dato."
+        sottotitolo="È l’interruttore vero. Da spento, questo cliente non riesce a leggere né a scrivere niente: la richiesta viene respinta prima ancora di guardare i dati."
       >
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
           <div className="flex items-center gap-2">
@@ -331,7 +331,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
         <Sezione
           icona={<RadioTower className="h-4 w-4" />}
           titolo="Impostazioni"
-          sottotitolo="Quale gestionale, quanto lunghi possono essere i testi che l’agente compone, dopo quante ore di silenzio considerarlo in avaria."
+          sottotitolo="Quale programma c’è dall’altra parte, quanto possono essere lunghi i testi che gli mandiamo, e dopo quante ore di silenzio dare l’allarme."
         >
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="space-y-1">
@@ -408,7 +408,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
         <Sezione
           icona={<KeyRound className="h-4 w-4" />}
           titolo="Token dell’agente"
-          sottotitolo="Chi chiama è una macchina, non una persona: questi token non hanno un intestatario. Revocarli chiude l’accesso all’istante."
+          sottotitolo="Dall’altra parte c’è un programma, non una persona: queste chiavi non sono intestate a nessuno. Toglierle chiude l’accesso subito."
         >
           {dati.token.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-3 text-xs text-muted-foreground">
@@ -477,7 +477,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
           }
           tono={dati.modalita === 'attiva' ? 'critico' : 'neutro'}
           titolo="Scritture verso il gestionale"
-          sottotitolo="In simulazione ogni record esce marcato «non inviabile»: l’agente prova tutta la catena senza che una riga finisca nel gestionale del cliente."
+          sottotitolo="In prova ogni riga esce marcata come da non mandare: si collauda tutto il giro senza che niente finisca davvero sul gestionale del cliente."
         >
           <div className="grid gap-2.5 lg:grid-cols-2">
             <div
@@ -669,7 +669,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
         <Sezione
           icona={<Trash2 className="h-4 w-4" />}
           titolo="Deposito delle anagrafiche"
-          sottotitolo="Copia di lavoro di quello che l’agente ha letto dal gestionale. Si può svuotare: al giro dopo la rifà. Gli abbinamenti confermati non si toccano."
+          sottotitolo="Una copia di lavoro di quello che è stato letto dal gestionale. Si può svuotare: alla lettura dopo si rifà da sola. Gli abbinamenti già confermati restano."
         >
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
@@ -699,7 +699,7 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
             <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/[0.05] p-3">
               <p className="text-xs text-amber-800 dark:text-amber-300">
                 Si cancellano {dati.staging.commesse + dati.staging.clienti + dati.staging.dipendenti}{' '}
-                record depositati. Gli {dati.collegate} abbinamenti confermati restano.
+                righe lette. Gli {dati.collegate} abbinamenti confermati restano.
                 Per confermare riscrivi <strong className="font-mono">{dati.slug}</strong>.
               </p>
               <div className="flex flex-wrap gap-2">

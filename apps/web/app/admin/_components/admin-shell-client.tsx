@@ -140,7 +140,11 @@ export function AdminShellClient({ user, children }: Props) {
   }, [user.name]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background">
+    // `relative`: senza, un discendente assoluto senza antenato posizionato
+    // (gli `sr-only` di Tailwind, per dirne una) prende come contenitore il
+    // documento, sfugge a questo `overflow-hidden` e allunga la pagina. La
+    // finestra allora scorre, la sidebar scorre via e sotto resta il vuoto.
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
       {/* ===================== Header ink (fisso: scrolla solo <main>) ===================== */}
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 bg-foreground px-4 text-background md:px-6">
         <button
@@ -202,7 +206,10 @@ export function AdminShellClient({ user, children }: Props) {
 
       <div className="flex flex-1 min-h-0">
         {/* ===================== Sidebar ink (desktop) — h-full, non scrolla ===================== */}
-        <aside className="hidden h-full w-60 shrink-0 flex-col justify-between bg-foreground text-background/85 md:flex">
+        {/* `self-stretch`, non `h-full`: il 100% di un genitore che non ha ancora
+            un'altezza risolta cade sul contenuto, e la sidebar viene su corta
+            con il vuoto sotto. Lo stiramento del flex non dipende da un numero. */}
+        <aside className="hidden self-stretch w-60 shrink-0 flex-col justify-between bg-foreground text-background/85 md:flex">
           <div className="flex-1 overflow-y-auto min-h-0 py-4">
             <NavGroups activeId={activeId} />
           </div>
@@ -244,7 +251,7 @@ export function AdminShellClient({ user, children }: Props) {
         ) : null}
 
         {/* ===================== Main (UNICA area che scrolla) ===================== */}
-        <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
           <div className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 sm:px-6 md:px-10 md:py-10">
             {children}
           </div>

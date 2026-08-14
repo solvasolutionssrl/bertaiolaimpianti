@@ -114,7 +114,8 @@ interface Props {
   chiInCantiere: PresenteRow[];
   storico: StoricoData;
   /** Gestionale del cliente, se l'integrazione è accesa. `null` = non mostrare. */
-  sistemaGestionale?: string | null;
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  gestionaleAttivo?: boolean;
 }
 
 // ── Select style ──────────────────────────────────────────────────────────
@@ -252,7 +253,7 @@ export function CantiereDetailClient({
   anomalie,
   chiInCantiere,
   storico,
-  sistemaGestionale = null,
+  gestionaleAttivo = false,
 }: Props) {
   const router = useRouter();
   const confirm = useConfirm();
@@ -546,11 +547,10 @@ export function CantiereDetailClient({
             {/* Qui si mostrano entrambi gli stati, anche il non collegato: in
                 elenco sarebbe rumore su duecento righe, in scheda è la
                 domanda che ci si sta facendo. */}
-            {sistemaGestionale ? (
+            {gestionaleAttivo ? (
               <SincGestionale
                 collegato={!!cantiere.externalId}
                 externalId={cantiere.externalId}
-                sistema={sistemaGestionale}
                 mostraSeAssente
               />
             ) : null}

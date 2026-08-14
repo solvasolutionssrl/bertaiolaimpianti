@@ -117,16 +117,16 @@ export default async function CategoriePage() {
       <header>
         <h1 className="text-lg font-semibold">Categorie cantiere</h1>
         <p className="text-sm text-muted-foreground">
-          Il vocabolario con cui si classificano i lavori.
+          Le voci con cui classificate i lavori.
           {sistema
-            ? ' I valori che arrivano dal gestionale si agganciano a queste: quello che non riconosciamo resta qui sotto, in attesa che tu decida.'
+            ? ' Quelle che arrivano dal gestionale locale si agganciano a queste. Quello che non riconosciamo resta qui sotto e aspetta te.'
             : null}
         </p>
       </header>
       <CategorieClient
         categorie={categorie}
         daSmistare={daSmistare}
-        sistema={sistema}
+        gestionaleAttivo={!!sistema}
       />
     </div>
   );

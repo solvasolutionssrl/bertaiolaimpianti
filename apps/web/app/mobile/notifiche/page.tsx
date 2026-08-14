@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Bell } from 'lucide-react';
 
+import { LiveRefresh } from '@/app/_components/live-refresh';
+
 import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../_lib/guard';
@@ -41,13 +43,18 @@ export default async function NotifichePage() {
           <Bell className="h-3.5 w-3.5" aria-hidden="true" />
           Notifiche
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">
-          {nUnread > 0
-            ? `${nUnread} da leggere`
-            : rows.length === 0
-              ? 'Notifiche'
-              : 'Tutto letto'}
-        </h1>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">
+            {nUnread > 0
+              ? `${nUnread} da leggere`
+              : rows.length === 0
+                ? 'Notifiche'
+                : 'Tutto letto'}
+          </h1>
+          {/* Gli avvisi arrivano mentre la pagina è aperta: è proprio il posto
+              dove non si deve ricaricare a mano. */}
+          <LiveRefresh className="shrink-0 text-[11px]" />
+        </div>
       </header>
 
       <NotificheList rows={rows} />

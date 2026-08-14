@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
 import { getAppModeCached } from '../_lib/app-mode';
 import { getDashboardKpis } from './_lib/queries';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 import {
   TodoDaGestireSection,
   TodoDaGestireSkeleton,
@@ -66,9 +67,15 @@ export default async function DashboardPage() {
             {oggi}
           </p>
         </div>
-        <p className="hidden text-xs text-muted-foreground sm:block">
-          Commesse, collaudi e attività del team in un colpo d&apos;occhio.
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="hidden text-xs text-muted-foreground sm:block">
+            Commesse, collaudi e attività del team in un colpo d&apos;occhio.
+          </p>
+          {/* La dashboard è la pagina che resta aperta tutto il giorno: deve
+              dire quello che succede adesso, non quello che succedeva quando
+              è stata aperta. */}
+          <LiveRefresh className="text-xs" />
+        </div>
       </header>
 
       {/* ===== KPI ===== */}

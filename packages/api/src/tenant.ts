@@ -69,3 +69,42 @@ export async function getTenantContext(): Promise<TenantContext | null> {
     return null;
   }
 }
+
+/**
+ * «Non sei collegato» e «non sono riuscito a verificarlo adesso» sono due cose
+ * diverse, e trattarle allo stesso modo è quello che buttava fuori la gente.
+ *
+ * Sul telefono capita di continuo: l'app resta ferma in tasca, si riapre in un
+ * capannone senza campo e la prima verifica della sessione non arriva a
+ * destinazione. La sessione è viva — il biglietto per rinnovarla è lì nei
+ * cookie — ma il controllo fallisce, e finora questo valeva quanto un logout:
+ * ripartire dalla schermata di accesso, con la password da riscrivere e il
+ * turno da riprendere.
+ *
+ * Qui si guarda **prima** se il biglietto c'è:
+ * - non c'è          → `anonimo`, e allora sì, si va all'accesso;
+ * - c'è ma non passa → `incerto`: si riprova, non si butta fuori nessuno.
+ */
+export type EsitoSessione =
+  | { stato: 'ok'; ctx: TenantContext }
+  | { stato: 'anonimo' }
+  | { stato: 'incerto' };
+
+/** Il cookie che Supabase usa per la sessione, anche spezzato in più pezzi. */
+function haCookieDiSessione(cookies: { name: string }[]): boolean {
+  return cookies.some((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name));
+}
+
+export async function leggiSessione(
+  cookies: { name: string }[],
+): Promise<EsitoSessione> {
+  try {
+    return { stato: 'ok', ctx: await requireTenantContext() };
+  } catch (e) {
+    const causa = e instanceof Error ? e.message : '';
+    // Autenticato ma senza tenant nei claim: è un problema di configurazione
+    // dell'utente, non un dubbio. Lo lasciamo esplodere come prima.
+    if (causa === 'NO_TENANT_CLAIM') throw e;
+    return haCookieDiSessione(cookies) ? { stato: 'incerto' } : { stato: 'anonimo' };
+  }
+}

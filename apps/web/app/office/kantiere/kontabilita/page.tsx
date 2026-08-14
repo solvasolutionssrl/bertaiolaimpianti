@@ -6,6 +6,7 @@ import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { CATEGORIE_SPESA, type CategoriaSpesa } from '@kommessa/api/spese';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 
 import { Filtri, type FiltriValori } from './_components/filtri';
 import {
@@ -192,7 +193,14 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   return (
     <div className="w-full space-y-5">
       <header>
-        <h1 className="text-lg font-semibold">Kontabilità</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold">Kontabilità</h1>
+          {/* Le spese arrivano dal telefono mentre si guarda la pagina, e le
+              foto appena mandate restano "in elaborazione" finché la lettura
+              non finisce: senza aggiornamento da solo bisognerebbe ricaricare
+              per vedere se è andata. */}
+          <LiveRefresh className="text-xs" />
+        </div>
         <p className="text-sm text-muted-foreground">Spese di cantiere</p>
       </header>
 
@@ -206,7 +214,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
       />
 
       <SpeseTable
-        sistemaGestionale={collegamenti.attiva ? collegamenti.sistema : null}
+        gestionaleAttivo={collegamenti.attiva}
         spese={righe}
         cantieri={cantieriOptions}
         dipendentiOptions={dipendentiOptions}

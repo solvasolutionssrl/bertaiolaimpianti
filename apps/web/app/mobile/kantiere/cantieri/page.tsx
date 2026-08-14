@@ -12,6 +12,7 @@ import {
   cantieriVisibiliTecnicoIds,
 } from '../_lib/visibilita-tecnico';
 import { CantieriBrowser, type CantiereItem } from './_components/cantieri-browser';
+import { LiveRefresh } from '@/app/_components/live-refresh';
 
 export const metadata: Metadata = {
   title: 'Cantieri',
@@ -70,7 +71,12 @@ export default async function CantieriMobilePage() {
           <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Cantieri</h1>
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <h1 className="text-xl font-semibold tracking-tight">Cantieri</h1>
+          {/* Chi è dentro e chi è fuori cambia durante la giornata: la pagina
+              si tiene aggiornata da sola, senza tirarla giù. */}
+          <LiveRefresh className="shrink-0 text-[11px]" />
+        </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {cantieri.length === 0
             ? 'Nessun cantiere'

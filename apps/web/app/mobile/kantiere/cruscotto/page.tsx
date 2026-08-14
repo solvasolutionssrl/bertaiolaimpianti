@@ -366,7 +366,7 @@ export default async function CruscottoKantierePage({
         <Link
           href={`/mobile/kantiere/cruscotto?giorno=${prevGiorno}`}
           aria-label="Giorno precedente"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95"
+          className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95"
         >
           <ChevronLeft className="h-5 w-5" aria-hidden="true" />
         </Link>
@@ -385,7 +385,7 @@ export default async function CruscottoKantierePage({
           aria-label="Giorno successivo"
           aria-disabled={isOggi}
           className={
-            'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95 ' +
+            'flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted active:scale-95 ' +
             (isOggi ? 'pointer-events-none opacity-30' : '')
           }
         >

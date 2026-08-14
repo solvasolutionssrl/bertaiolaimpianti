@@ -162,7 +162,8 @@ interface Props {
    * Gestionale del cliente, se l'integrazione è accesa. `null` = il segno non
    * compare affatto. Il nome finisce solo nel suggerimento, mai nell'etichetta.
    */
-  sistemaGestionale?: string | null;
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  gestionaleAttivo?: boolean;
 }
 
 export function SpeseTable({
@@ -170,7 +171,7 @@ export function SpeseTable({
   cantieri,
   dipendentiOptions,
   mioDipendenteId,
-  sistemaGestionale = null,
+  gestionaleAttivo = false,
 }: Props) {
   const router = useRouter();
   const [aperta, setAperta] = React.useState<SpesaRiga | null>(null);
@@ -281,7 +282,6 @@ export function SpeseTable({
                       <CategoriaBadge categoria={s.categoria} />
                       <RegistratoSulGestionale
                         esportazioni={s.esportazioni}
-                        sistema={sistemaGestionale}
                         compatto
                       />
                     </span>

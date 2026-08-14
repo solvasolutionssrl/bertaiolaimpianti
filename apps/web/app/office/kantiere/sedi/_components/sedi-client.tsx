@@ -422,7 +422,7 @@ export function SediClient({ sedi, cantieri, legamiPerSede }: Props) {
                       <td className="px-3 py-2">
                         <button
                           onClick={() => handleToggleAttivo(sede)}
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
+                          className={`inline-flex min-h-[24px] items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
                             sede.attivo
                               ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                               : 'bg-muted text-muted-foreground hover:bg-muted/80'

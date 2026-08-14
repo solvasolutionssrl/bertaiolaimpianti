@@ -58,6 +58,9 @@ export function LiveRefresh({
   return (
     <button
       type="button"
+      // Appiglio per il banco di prova: verifica che le pagine coi dati vivi
+      // dichiarino di aggiornarsi da sole.
+      data-live-refresh={intervalMs}
       onClick={() => aggiorna(true)}
       disabled={refreshing}
       title="Aggiorna i dati adesso (si aggiornano comunque da soli ogni minuto)"

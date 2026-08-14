@@ -193,7 +193,7 @@ export default async function CantieriPage() {
       <CantieriClient
         rows={rows}
         commesse={commesse}
-        sistemaGestionale={collegamenti.attiva ? collegamenti.sistema : null}
+        gestionaleAttivo={collegamenti.attiva}
         daSmistare={daSmistare}
       />
     </div>

@@ -26,6 +26,7 @@ import {
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
+import { NavigazioneSicura } from '@/app/_components/navigazione-sicura';
 
 interface Props {
   tenant: { name: string; logoUrl?: string; brandColor?: string };
@@ -438,6 +439,9 @@ export function OfficeShellClient({
 
   return (
     <>
+      <React.Suspense fallback={null}>
+        <NavigazioneSicura />
+      </React.Suspense>
       <OfficeShell
         tenant={tenant}
         user={user}

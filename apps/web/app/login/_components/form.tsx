@@ -31,7 +31,7 @@ export function LoginForm() {
       className="rounded-2xl border border-[hsl(30,12%,89%)] bg-white/90 px-7 py-8 shadow-[0_8px_40px_-12px_rgba(19,64,166,0.12),0_2px_8px_-2px_rgba(0,0,0,0.06)] backdrop-blur-sm"
     >
       <h1 className="mb-6 text-[22px] font-semibold leading-tight tracking-tight text-[hsl(220,30%,9%)]">
-        Accedi al gestionale
+        Accedi
       </h1>
 
       <form

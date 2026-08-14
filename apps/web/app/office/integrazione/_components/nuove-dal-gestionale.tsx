@@ -11,16 +11,16 @@ import {
 } from '../../../_actions/integrazione-collegamenti';
 
 /**
- * "Nel gestionale ma non da noi": si creano in Kommessa, gia' collegate.
+ * «Sul gestionale locale c'e', qui no»: si creano di qua, gia' collegate.
  *
- * Non si creano da sole, e la scelta e' deliberata: un gestionale porta anche
- * anni di commesse chiuse, e importarle tutte allagherebbe l'elenco cantieri di
- * roba morta che poi nessuno ripulisce. Meglio un elenco da spuntare.
+ * Non si creano da sole, ed e' una scelta: un gestionale si porta dietro anche
+ * anni di commesse chiuse, e prenderle tutte riempirebbe l'elenco cantieri di
+ * roba morta che poi nessuno toglie. Meglio una lista da spuntare.
  *
- * Il verso e' quello giusto per come lavora il cliente: la commessa **nasce nel
- * gestionale** (li' si fa l'offerta e si apre la posizione), Kommessa la
- * **arricchisce** con quello che il gestionale non ha — mappa, foto, QR,
- * referenti. Da quel momento il cantiere e' nostro e nessun sync lo sovrascrive.
+ * Il verso e' quello giusto per come lavora il cliente: la commessa **nasce sul
+ * gestionale locale** (li' si fa l'offerta e si apre la posizione), qui le si
+ * aggiunge quello che di la' non c'e': mappa, foto, QR, referenti. Da quel
+ * momento il cantiere e' nostro e nessuna lettura lo sovrascrive.
  */
 export function NuoveDalGestionale({ voci }: { voci: SoloNelGestionale[] }) {
   const [scelti, setScelti] = React.useState<Set<string>>(() => new Set());
@@ -55,14 +55,14 @@ export function NuoveDalGestionale({ voci }: { voci: SoloNelGestionale[] }) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="font-semibold">
-              {voci.length}{' '}
-              {voci.length === 1 ? 'commessa presente' : 'commesse presenti'} solo nel
-              gestionale
+              {voci.length === 1
+                ? 'C’è una commessa che sta solo sul gestionale locale'
+                : `Ci sono ${voci.length} commesse che stanno solo sul gestionale locale`}
             </p>
             <p className="text-sm text-muted-foreground">
               Puoi crearle qui, già collegate. Da quel momento il cantiere è tuo:
-              indirizzo, foto e QR li aggiungi da Kommessa, e nessuna
-              sincronizzazione successiva li tocca.
+              indirizzo, foto e QR li metti da qui, e il gestionale locale non te
+              li tocca più.
             </p>
           </div>
           <Button
@@ -182,9 +182,9 @@ export function NuoveDalGestionale({ voci }: { voci: SoloNelGestionale[] }) {
                   Creare {scelti.size} {scelti.size === 1 ? 'cantiere' : 'cantieri'}?
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Prendono il prossimo codice della tua numerazione (CAN-…), con il
-                  codice del gestionale a fianco. L’indirizzo resta da completare:
-                  li troverai segnati come «da verificare».
+                  Prendono il prossimo numero della tua numerazione, con accanto il
+                  codice del gestionale locale. L’indirizzo lo metti tu: per ora li
+                  trovi segnati come da verificare.
                 </p>
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setConferma(false)} disabled={pending}>

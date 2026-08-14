@@ -53,7 +53,8 @@ interface Props {
   utenti: UtenteRow[];
   tenantSlug: string;
   /** Gestionale del cliente, se acceso. `null` = nessun segno a schermo. */
-  sistemaGestionale?: string | null;
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  gestionaleAttivo?: boolean;
   /** id dipendente → identificativo sul gestionale, per chi è collegato. */
   externalPerDipendente?: Record<string, string>;
 }
@@ -197,7 +198,7 @@ export function DipendentiClient({
   dipendenti,
   utenti,
   tenantSlug,
-  sistemaGestionale = null,
+  gestionaleAttivo = false,
   externalPerDipendente,
 }: Props) {
   const router = useRouter();
@@ -553,11 +554,11 @@ export function DipendentiClient({
                           >
                             {d.cognome} {d.nome}
                           </Link>
-                          {sistemaGestionale ? (
+                          {gestionaleAttivo ? (
                             <DipendenteCollegato
                               collegato={!!externalPerDipendente?.[d.id]}
                               externalId={externalPerDipendente?.[d.id]}
-                              sistema={sistemaGestionale}
+                              attivo={gestionaleAttivo}
                               className="ml-1.5 align-middle"
                             />
                           ) : null}

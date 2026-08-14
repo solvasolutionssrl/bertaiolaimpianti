@@ -268,7 +268,7 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
           type="button"
           onClick={() => setAttivo((v) => !v)}
           className={[
-            'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+            'inline-flex min-h-[24px] items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
             attivo
               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
               : 'bg-muted text-muted-foreground',

@@ -36,11 +36,12 @@ const SELECT_CLS =
 export function CategorieClient({
   categorie,
   daSmistare,
-  sistema,
+  /** Il collegamento col gestionale locale è acceso per questo cliente. */
+  gestionaleAttivo,
 }: {
   categorie: CategoriaRiga[];
   daSmistare: DaSmistareRiga[];
-  sistema: string | null;
+  gestionaleAttivo: boolean;
 }) {
   const router = useRouter();
   const showAlert = useAlert();
@@ -70,7 +71,7 @@ export function CategorieClient({
   return (
     <div className="space-y-5">
       {/* ── Da smistare: sta in cima perché è la cosa che chiede una decisione ── */}
-      {sistema && daSmistare.length > 0 ? (
+      {gestionaleAttivo && daSmistare.length > 0 ? (
         <Card className="border-amber-500/40">
           <CardContent className="space-y-3 py-5">
             <div className="flex items-start gap-3">
@@ -79,14 +80,16 @@ export function CategorieClient({
               </span>
               <div className="min-w-0">
                 <h2 className="text-sm font-semibold">
-                  {daSmistare.length}{' '}
-                  {daSmistare.length === 1 ? 'valore nuovo' : 'valori nuovi'} da{' '}
-                  {sistema}
+                  {daSmistare.length === 1
+                    ? 'Dal gestionale locale è arrivata una categoria che non conosciamo'
+                    : `Dal gestionale locale sono arrivate ${daSmistare.length} categorie che non conosciamo`}
                 </h2>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-                  Non li abbiamo creati da soli apposta: un refuso del gestionale entrerebbe
-                  nel vostro vocabolario per sempre. Scegli tu se agganciarli a una categoria
-                  che avete già o promuoverli a categoria nuova.
+                  Non {daSmistare.length === 1 ? 'la aggiungiamo' : 'le aggiungiamo'} da
+                  soli, e non è pigrizia: basta un errore di battitura di là e ve lo
+                  ritrovate nell’elenco per sempre. Dì tu se{' '}
+                  {daSmistare.length === 1 ? 'va' : 'vanno'} su una categoria che avete
+                  già, oppure se {daSmistare.length === 1 ? 'è' : 'sono'} roba nuova.
                 </p>
               </div>
             </div>

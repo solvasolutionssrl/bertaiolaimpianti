@@ -323,6 +323,20 @@
   .animate-content-in { animation: content-in 0.3s ease-out both; }
   @media (prefers-reduced-motion: reduce) { .animate-content-in { animation: none; } }
 
+  /* Barretta in cima mentre si apre una pagina. Va e viene da sola: non sa
+     quanto manca, dice solo "sto lavorando". Una barra che finge una
+     percentuale e poi si blocca al 90% è peggio di niente. */
+  @keyframes barra-avanzamento {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
+  .animate-barra-avanzamento {
+    animation: barra-avanzamento 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-barra-avanzamento { animation: none; width: 100%; opacity: 0.5; }
+  }
+
   /* Conferma salvataggio (schermata "fatto"): pop morbido del check con un
      leggero overshoot + anello che si espande dietro. Tocco "premium", discreto. */
   @keyframes success-pop {

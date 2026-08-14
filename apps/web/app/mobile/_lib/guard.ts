@@ -1,19 +1,31 @@
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import type { TenantContext } from '@kommessa/api/tenant';
-import { getTenantContextCached as getTenantContext } from '../../_lib/tenant-cache';
+import { leggiSessione, type TenantContext } from '@kommessa/api/tenant';
 
 /**
- * Auth guard per le pagine in viewport mobile.
+ * Controllo dell'accesso per le pagine dell'app.
  *
- * Chiamala in cima a ogni server component sotto `mobile/`: se l'utente
- * non e' autenticato fa redirect a `/login?next=/mobile`, altrimenti
- * restituisce il `TenantContext` (tenantId, userId, role, ...).
+ * Va chiamata in cima a ogni pagina sotto `mobile/`.
+ *
+ * ⚠️ **Non butta più fuori a ogni intoppo.** Prima bastava che la verifica
+ * della sessione non andasse a buon fine — l'app riaperta dopo ore, un
+ * capannone senza campo — e si finiva alla schermata di accesso, con la
+ * password da riscrivere e il turno da riprendere. Ma la sessione non era
+ * finita: era solo irraggiungibile in quel momento.
+ *
+ * Adesso si distingue: se il biglietto della sessione nei cookie non c'è,
+ * l'accesso è chiuso davvero e si va al login. Se c'è ma non si è potuto
+ * verificare, si passa da «riprova», che lo rinnova dal browser e riporta
+ * esattamente dov'eravamo.
  */
 export async function guardMobile(): Promise<TenantContext> {
-  const ctx = await getTenantContext();
-  if (!ctx) {
-    redirect('/login?next=/mobile');
+  const esito = await leggiSessione(cookies().getAll());
+  if (esito.stato === 'ok') return esito.ctx;
+  // Dove eravamo: lo mette il middleware. Se manca si torna alla home dell'app.
+  const dove = headers().get('x-percorso') ?? '/mobile';
+  if (esito.stato === 'incerto') {
+    redirect(`/riprova?dove=${encodeURIComponent(dove)}`);
   }
-  return ctx;
+  redirect(`/login?next=${encodeURIComponent(dove)}`);
 }
