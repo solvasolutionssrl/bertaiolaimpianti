@@ -41,6 +41,7 @@ import {
   rilevaConflitti,
   LABEL_FASCIA,
   NOMI_GIORNO_BREVI,
+  settimanaISO,
   type Fascia,
   type VoceOccupazione,
 } from '@kommessa/api/pianificazione';
@@ -127,6 +128,22 @@ function fmtGiornoLungo(iso: string): string {
     month: 'long',
     timeZone: 'Europe/Rome',
   });
+}
+
+/** "17–23 ago" — sta dentro un bottone, a differenza del range lungo. */
+function fmtRangeBreve(daISO: string, aISO: string): string {
+  const g = (iso: string) => Number(iso.split('-')[2]);
+  const mese = (iso: string) => {
+    const [Y, M, D] = iso.split('-').map(Number);
+    return new Date(Date.UTC(Y!, M! - 1, D!)).toLocaleDateString('it-IT', {
+      month: 'short',
+      timeZone: 'Europe/Rome',
+    });
+  };
+  const m1 = mese(daISO);
+  const m2 = mese(aISO);
+  // A cavallo di due mesi il mese va detto due volte, altrimenti si legge male.
+  return m1 === m2 ? `${g(daISO)}–${g(aISO)} ${m2}` : `${g(daISO)} ${m1} – ${g(aISO)} ${m2}`;
 }
 
 /** "Gio 24/07" — etichetta breve di un giorno (per riepiloghi/ripetizione). */
@@ -1366,6 +1383,8 @@ export function PianificazioneClient({
   };
 
   const rangeLabel = `${fmtGiornoLungo(giorni[0]!)} · ${fmtGiornoLungo(giorni[6]!)}`;
+  const settimanaCorrente = settimanaISO(lunediISO);
+  const settimanaOggi = settimanaISO(oggiLunediISO);
 
   return (
     <div className="space-y-4">
@@ -1409,14 +1428,23 @@ export function PianificazioneClient({
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => vaiA(oggiLunediISO)}
-              className="h-9 border-x border-border px-3 text-sm font-medium hover:bg-muted/50"
-              title={TIP.oggi}
+            {/*
+              Al centro sta scritto CHE settimana stai guardando, non un tasto
+              «Oggi» che diceva sempre la stessa cosa qualunque settimana
+              avessi aperto: le frecce funzionavano, ma niente lo confermava.
+            */}
+            <div
+              className="flex h-9 min-w-[9.5rem] flex-col items-center justify-center border-x border-border px-3 leading-none"
+              aria-live="polite"
             >
-              Oggi
-            </button>
+              <span className="text-sm font-semibold tabular-nums">
+                Sett. {settimanaCorrente.settimana}
+                {settimanaCorrente.anno !== settimanaOggi.anno ? ` · ${settimanaCorrente.anno}` : ''}
+              </span>
+              <span className="mt-0.5 text-[11px] text-muted-foreground">
+                {fmtRangeBreve(giorni[0]!, giorni[6]!)}
+              </span>
+            </div>
             <button
               type="button"
               onClick={() => vaiA(addGiorni(lunediISO, 7))}
@@ -1427,6 +1455,18 @@ export function PianificazioneClient({
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+          {/* «Oggi» compare solo quando serve: se sei già sulla settimana in
+              corso non c'è niente da tornare. */}
+          {lunediISO !== oggiLunediISO && (
+            <button
+              type="button"
+              onClick={() => vaiA(oggiLunediISO)}
+              className="h-9 rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted/50"
+              title={TIP.oggi}
+            >
+              Oggi
+            </button>
+          )}
           {/* Azione primaria */}
           <Button type="button" onClick={onPubblica} disabled={pending || bozze === 0} title={TIP.pubblica}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

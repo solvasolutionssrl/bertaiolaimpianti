@@ -139,6 +139,10 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
   const M = 12; // margine
   const contentW = PW - M * 2;
 
+  // Basta una voce in bozza perché il foglio sia una bozza: il timbro va in
+  // testa una volta, non ripetuto in ogni casella.
+  const conBozze = opts.righe.some((r) => r.celle.some((c) => c.some((v) => v.bozza)));
+
   const nGiorni = Math.max(1, opts.giorni.length);
   const dipColW = 34;
   const dayColW = (contentW - dipColW) / nGiorni;
@@ -169,6 +173,29 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
     pdf.setFontSize(9);
     setText(MUTED);
     pdf.text(opts.titolo, x, topY + 10);
+    // Misurato ORA, col corpo del titolo: `getTextWidth` usa il font corrente,
+    // quindi chiederlo dopo aver rimpicciolito darebbe un numero sbagliato.
+    const titoloW = pdf.getTextWidth(opts.titolo);
+
+    // Un timbro «bozza» solo, piccolo, accanto al titolo — non uno per casella.
+    if (conBozze) {
+      const et = 'BOZZA';
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(5.5);
+      const bw = pdf.getTextWidth(et) + 2.6;
+      // A destra ci sono settimana e periodo: se il titolo è lungo il timbro
+      // scivola sotto invece di finirci addosso.
+      const accanto = x + titoloW + 2.5;
+      const stretto = accanto + bw > PW - M - 46;
+      const bx = stretto ? x : accanto;
+      const by = topY + (stretto ? 11.2 : 7.1);
+      setFill(HEAD_BG);
+      setDraw(LINE);
+      pdf.setLineWidth(0.2);
+      pdf.roundedRect(bx, by, bw, 3.6, 0.6, 0.6, 'FD');
+      setText(MUTED);
+      pdf.text(et, bx + 1.3, by + 2.5);
+    }
 
     // Blocco destro: settimana + range + categoria (right-aligned).
     const rx = PW - M;
@@ -269,11 +296,11 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
         pdf.text(v.sub, x + 2.4, cy);
         cy += LH_SUB;
       }
-      if (v.bozza) {
-        pdf.setFontSize(5);
-        setText(MUTED);
-        pdf.text('bozza', x + w - 2, cy - LH_MAIN, { align: 'right' });
-      }
+      // Il «bozza» NON si scrive qui. Stava in ogni casella, giorno per
+      // giorno e persona per persona: ripetuto decine di volte sullo stesso
+      // foglio e per giunta sopra il nome del cantiere, che copriva. Finché
+      // non si va a regime stampano tutti così, quindi vale una volta sola —
+      // il timbro sta nell'intestazione (vedi `disegnaHeader`).
       cy += 1.6;
     }
   };

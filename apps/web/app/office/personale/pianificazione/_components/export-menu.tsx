@@ -189,7 +189,11 @@ export function ExportMenu({
     const { giorni: giorniPdf, righe } = costruisci(dips);
     await esportaPianificazionePDF({
       tenantNome,
-      logoUrl,
+      // Non l'indirizzo vero del logo ma il nostro giro: per finire nel PDF
+      // l'immagine passa da un canvas, e un'immagine di un altro dominio senza
+      // header CORS lo sporca — il browser poi non la lascia leggere e il logo
+      // sparisce. Vedi `app/api/tenant/logo/route.ts`.
+      logoUrl: logoUrl ? '/api/tenant/logo' : null,
       brandColor,
       titolo: titoloDoc,
       categoriaLabel,
