@@ -8,6 +8,7 @@ import {
   appaiaTimbrature,
   statoTurno,
   esitoAutoApprovazione,
+  esitoAutoApprovazioneManuale,
   type Timbratura,
 } from './kantiere-ore';
 
@@ -298,5 +299,61 @@ describe('viaggio extra: straordinari solo sul lavoro', () => {
     expect(r.righe[0]!.ore_ordinarie).toBe(8);
     expect(r.righe[0]!.ore_straordinarie).toBe(1);
     expect(r.ore_viaggio).toBe(2);
+  });
+});
+
+describe('esitoAutoApprovazioneManuale', () => {
+  it('approva una giornata dichiarata a mano, senza nessuna timbratura', () => {
+    // È il caso vero: il tecnico registra la sera, ingressi = 0. La regola
+    // delle timbrature la scarterebbe come "nessun turno" e resterebbe in
+    // bozza per sempre.
+    const r = esitoAutoApprovazioneManuale({ minutiDichiarati: 7 * 60, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(true);
+    expect(r.motivo).toBe('ok');
+  });
+
+  it('una giornata vuota non si approva: non c\'è niente da approvare', () => {
+    const r = esitoAutoApprovazioneManuale({ minutiDichiarati: 0, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('nessuna_ora');
+  });
+
+  it('oltre la soglia resta da verificare', () => {
+    const r = esitoAutoApprovazioneManuale({ minutiDichiarati: 11 * 60, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('oltre_soglia');
+  });
+
+  it('esattamente sulla soglia si approva', () => {
+    const r = esitoAutoApprovazioneManuale({ minutiDichiarati: 10 * 60, sogliaOreMax: 10 });
+    expect(r.autoApprova).toBe(true);
+  });
+
+  it('se il turno timbrato è ancora aperto NON si approva, anche con ore scritte', () => {
+    const r = esitoAutoApprovazioneManuale({
+      minutiDichiarati: 4 * 60,
+      sogliaOreMax: 10,
+      ingressi: 1,
+      uscite: 0,
+    });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('aperto');
+  });
+
+  it('fermo in pausa pranzo: non si approva con le sole ore del mattino', () => {
+    const r = esitoAutoApprovazioneManuale({
+      minutiDichiarati: 4 * 60,
+      sogliaOreMax: 10,
+      ingressi: 1,
+      uscite: 1,
+      inPausa: true,
+    });
+    expect(r.autoApprova).toBe(false);
+    expect(r.motivo).toBe('aperto');
+  });
+
+  it('soglia non valida → si usa quella di sicurezza (10h)', () => {
+    expect(esitoAutoApprovazioneManuale({ minutiDichiarati: 9 * 60, sogliaOreMax: 0 }).autoApprova).toBe(true);
+    expect(esitoAutoApprovazioneManuale({ minutiDichiarati: 11 * 60, sogliaOreMax: 0 }).autoApprova).toBe(false);
   });
 });

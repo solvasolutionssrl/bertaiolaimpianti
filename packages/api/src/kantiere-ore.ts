@@ -241,6 +241,47 @@ export function esitoAutoApprovazione(input: {
   return { autoApprova: true, motivo: 'ok' };
 }
 
+export type EsitoApprovazioneManuale = {
+  autoApprova: boolean;
+  /** Perché no: giornata vuota, turno ancora aperto, oltre la soglia ore. */
+  motivo: 'ok' | 'nessuna_ora' | 'aperto' | 'oltre_soglia';
+};
+
+/**
+ * Decide se una giornata scritta A MANO può essere auto-approvata.
+ *
+ * Serve una regola a parte perché `esitoAutoApprovazione` parte dagli
+ * **ingressi**: una giornata dichiarata dall'ufficio o dal tecnico la sera non
+ * ha timbrature, quindi `ingressi = 0` e verrebbe scartata per sempre come
+ * "nessun turno". Restava in bozza in eterno e non arrivava mai al gestionale.
+ *
+ * Qui la sostanza sono le **ore dichiarate**: se ci sono, e stanno entro la
+ * soglia, la giornata è buona. Chi le ha scritte le ha già viste.
+ *
+ * Restano fuori due casi:
+ *  - giornata **vuota** (0 ore): non c'è niente da approvare, la vede l'ufficio;
+ *  - giornata con timbrature ancora **aperte** (o ferma in pausa): il turno non
+ *    è finito, approvarlo adesso fisserebbe ore parziali.
+ */
+export function esitoAutoApprovazioneManuale(input: {
+  /** Minuti dichiarati a mano (ordinarie + straordinarie), viaggio escluso. */
+  minutiDichiarati: number;
+  sogliaOreMax: number;
+  /** Timbrature eventualmente presenti sulla stessa giornata. */
+  ingressi?: number;
+  uscite?: number;
+  inPausa?: boolean;
+}): EsitoApprovazioneManuale {
+  const { minutiDichiarati, sogliaOreMax, ingressi = 0, uscite = 0, inPausa } = input;
+  if (!(minutiDichiarati > 0)) return { autoApprova: false, motivo: 'nessuna_ora' };
+  if (inPausa) return { autoApprova: false, motivo: 'aperto' };
+  if (ingressi !== uscite) return { autoApprova: false, motivo: 'aperto' };
+  const soglia =
+    Number.isFinite(sogliaOreMax) && sogliaOreMax > 0 ? sogliaOreMax : SOGLIA_ANOMALIA_TURNO_ORE;
+  if (minutiDichiarati > soglia * 60) return { autoApprova: false, motivo: 'oltre_soglia' };
+  return { autoApprova: true, motivo: 'ok' };
+}
+
 /** Somma i minuti di viaggio (andata + ritorno) per ciascun target
  *  (chiave sintetica commessa:/cantiere:). Usato dal precompila rapportino
  *  per riempire ore_viaggio della riga corrispondente. */

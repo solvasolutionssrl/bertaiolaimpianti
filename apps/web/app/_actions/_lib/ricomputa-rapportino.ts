@@ -5,6 +5,7 @@ import {
   minutiViaggioPerTarget,
   arrotondaA,
   esitoAutoApprovazione,
+  esitoAutoApprovazioneManuale,
 } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
@@ -252,9 +253,14 @@ export async function ricomputaRapportinoAuto(
   //     manuali, non sovrascriviamo (fallback "non ho timbrato").
   {
     const auto = await leggiAutoCompilato(supabase, rapp.id);
-    if (auto === false) return rapp;
-    if (auto === null && timbrature.length === 0 && (await contaRighe(supabase, rapp.id)) > 0) {
-      return rapp;
+    const legacyManuale =
+      auto === null && timbrature.length === 0 && (await contaRighe(supabase, rapp.id)) > 0;
+    if (auto === false || legacyManuale) {
+      // Le ore NON si toccano — sono state scritte da una persona e vincono.
+      // Ma la giornata va comunque giudicata: prima si usciva di qui e basta,
+      // e una giornata dichiarata a mano restava in bozza per sempre, quindi
+      // non arrivava mai al gestionale. Ora si approva da sola come le altre.
+      return await approvaSeManualeOk(supabase, tenantId, rapp, timbrature);
     }
   }
 
@@ -368,7 +374,72 @@ export async function ricomputaRapportinoAuto(
   return rapp;
 }
 
-/** Marca un rapportino come modificato a mano (stop all'auto-ricalcolo). Best-effort. */
+/**
+ * Giudica una giornata scritta A MANO senza ricalcolarne le ore.
+ *
+ * La sostanza qui sono le ore dichiarate, non le timbrature: le somma dalle
+ * righe e applica la stessa soglia delle altre giornate.
+ *
+ * ⚠️ Non tocca MAI `auto_compilato`: deve restare `false`, altrimenti al giro
+ * dopo il ricalcolo si riprenderebbe la giornata e cancellerebbe le ore
+ * scritte a mano. È la ragione per cui questo pezzo è separato dal percorso
+ * normale invece di essere un ramo dentro di esso.
+ */
+async function approvaSeManualeOk(
+  supabase: Supa,
+  tenantId: string,
+  rapp: RapportinoBase,
+  timbrature: { tipo: 'ingresso' | 'uscita'; pausa: boolean | null }[],
+): Promise<RapportinoBase> {
+  try {
+    const policy = await leggiPolicyRapportini(supabase, tenantId);
+    if (!policy.autoApprova) return rapp;
+
+    const { data: righeRaw } = await supabase
+      .from('rapportino_righe' as never)
+      .select('ore_ordinarie, ore_straordinarie')
+      .eq('rapportino_id', rapp.id);
+    const righe = (righeRaw as { ore_ordinarie: number | null; ore_straordinarie: number | null }[]) ?? [];
+    const minutiDichiarati = Math.round(
+      righe.reduce((a, r) => a + Number(r.ore_ordinarie ?? 0) + Number(r.ore_straordinarie ?? 0), 0) * 60,
+    );
+
+    const ultima = timbrature[timbrature.length - 1];
+    const esito = esitoAutoApprovazioneManuale({
+      minutiDichiarati,
+      sogliaOreMax: policy.sogliaAnomaliaTurnoOre,
+      ingressi: timbrature.filter((t) => t.tipo === 'ingresso').length,
+      uscite: timbrature.filter((t) => t.tipo === 'uscita').length,
+      inPausa: !!ultima && ultima.tipo === 'uscita' && !!ultima.pausa,
+    });
+
+    const nuovoStato = esito.autoApprova ? 'approvato' : 'bozza';
+    if (nuovoStato === rapp.stato) return rapp;
+
+    await supabase
+      .from('rapportini' as never)
+      .update({
+        stato: nuovoStato,
+        approvato_da: null,
+        approvato_at: esito.autoApprova ? new Date().toISOString() : null,
+      } as never)
+      .eq('id', rapp.id);
+    rapp.stato = nuovoStato;
+  } catch {
+    // Il giudizio è un di piu': se fallisce, la giornata resta com'era.
+  }
+  return rapp;
+}
+
+/**
+ * Marca un rapportino come modificato a mano (stop all'auto-ricalcolo) **e lo
+ * giudica**. Best-effort.
+ *
+ * Il giudizio sta qui e non nei cinque punti che la chiamano perché questo è
+ * esattamente il momento in cui le ore a mano sono appena state scritte: fatto
+ * qui, vale per tutte le strade — ufficio, tecnico, «registra giornata» — e per
+ * quelle che verranno.
+ */
 export async function marcaRapportinoManuale(supabase: Supa, rapportinoId: string): Promise<void> {
   try {
     await supabase
@@ -377,5 +448,44 @@ export async function marcaRapportinoManuale(supabase: Supa, rapportinoId: strin
       .eq('id', rapportinoId);
   } catch {
     // colonna non ancora migrata: ignora
+  }
+
+  try {
+    const { data: raw } = await supabase
+      .from('rapportini' as never)
+      .select('id, tenant_id, dipendente_id, data, stato, note, approvato_da')
+      .eq('id', rapportinoId)
+      .maybeSingle();
+    const r = raw as (RapportinoBase & {
+      tenant_id: string;
+      dipendente_id: string;
+      data: string;
+    }) | null;
+    if (!r) return;
+
+    // Stessa regola del percorso normale: se l'ufficio ci ha messo mano, non si
+    // tocca. Auto-approvata dal sistema (`approvato_da` nullo) invece sì.
+    const gestitaDalSistema =
+      r.stato === 'bozza' || (r.stato === 'approvato' && !r.approvato_da);
+    if (!gestitaDalSistema) return;
+
+    const { fromIso, toIso } = romeDayBoundsUtc(r.data);
+    const { data: timbRaw } = await supabase
+      .from('timbrature' as never)
+      .select('tipo, ts, pausa')
+      .eq('tenant_id', r.tenant_id)
+      .eq('dipendente_id', r.dipendente_id)
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
+      .order('ts', { ascending: true });
+
+    await approvaSeManualeOk(
+      supabase,
+      r.tenant_id,
+      r,
+      (timbRaw as { tipo: 'ingresso' | 'uscita'; pausa: boolean | null }[]) ?? [],
+    );
+  } catch {
+    // Il giudizio è un di piu': le ore sono già salvate, che è la cosa che conta.
   }
 }

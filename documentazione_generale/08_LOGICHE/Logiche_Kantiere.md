@@ -130,7 +130,7 @@ Tutte in `tenant_modules.config` (per-tenant). Le principali:
 ### Approvazione presenze
 | Chiave | Default | Effetto |
 |---|---|---|
-| `auto_approva_rapportini` | on | Auto-approva le giornate **chiuse** ed **entro soglia** (vedi §7). |
+| `auto_approva_rapportini` | on | Auto-approva le giornate **chiuse** ed **entro soglia** (vedi §7). Vale anche per quelle scritte a mano (§7.1). |
 | `anomalia_turno_ore_max` | 10 h | Oltre questa durata (pause escluse) la giornata è **anomalia** → resta da verificare. |
 | `soglia_pausa_pranzo_ore` | 5 h | Oltre questo tempo senza pausa timbrata, in uscita compare il promemoria "timbrare la pausa è il modo corretto" + opzioni 30/45/60 min. |
 | Auto-spegnimento pausa | 1 h 30 | Se la pausa resta aperta oltre la soglia, l'orologio riparte da solo (rete di sicurezza per l'app chiusa). |
@@ -154,6 +154,36 @@ Tutte in `tenant_modules.config` (per-tenant). Le principali:
 - Si **ri-valuta a ogni timbratura** (riaprire un turno riporta la giornata in bozza).
 - Congelata solo se l'ufficio l'ha già toccata (`approvato_da` valorizzato).
 - Logica pura testata: `esitoAutoApprovazione`; wiring in `ricomputaRapportinoAuto`.
+
+### 7.1 Anche le giornate scritte A MANO si auto-approvano (dal 20/08/2026)
+
+Una giornata **dichiarata a mano** — dall'ufficio, dal tecnico la sera, o con
+«Registra giornata» — **si auto-approva come tutte le altre**, quindi è subito
+pronta per uscire verso il gestionale.
+
+**Perché serviva una regola a parte.** `esitoAutoApprovazione` parte dagli
+**ingressi**: una giornata senza timbrature ha `ingressi = 0` e veniva scartata
+per sempre come «nessun turno». Restava in bozza in eterno e non arrivava mai
+al gestionale. Successo davvero: al 20/08 c'erano 3 giornate (27 ore) ferme così.
+
+**La regola** (`esitoAutoApprovazioneManuale`, pura e testata) guarda le **ore
+dichiarate** invece degli ingressi. Non approva in due casi:
+
+| Caso | Perché |
+|---|---|
+| **0 ore** | Non c'è niente da approvare: la guarda l'ufficio. |
+| **Turno timbrato ancora aperto** (o fermo in pausa) | Fisserebbe ore parziali. |
+
+Oltre soglia resta «da verificare», come sempre.
+
+> ⚠️ **`auto_compilato` resta `false`.** Il giudizio non lo tocca: se tornasse
+> `true`, il ricalcolo successivo riprenderebbe la giornata e **cancellerebbe le
+> ore scritte a mano**. È il motivo per cui `approvaSeManualeOk` è staccata dal
+> percorso normale invece di essere un ramo dentro di esso.
+
+Il giudizio è agganciato a **`marcaRapportinoManuale`**, cioè al momento esatto
+in cui le ore a mano vengono salvate: vale così per tutte e cinque le strade che
+le scrivono, e per quelle che verranno.
 
 ---
 
