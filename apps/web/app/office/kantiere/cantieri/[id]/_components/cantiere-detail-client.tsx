@@ -52,6 +52,7 @@ import { CantiereSediCard, type SedeTenant } from './cantiere-sedi-card';
 import { ChiInCantiere, SezioneHeader, type PresenteRow } from './chi-in-cantiere';
 import { StoricoPresenze, type StoricoData } from './storico-presenze';
 import { SincGestionale } from '@/app/office/_components/sinc-gestionale';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -217,9 +218,9 @@ function KpiChip({
   );
 }
 
+/** KPI del cantiere: sono somme sul periodo, non le ore di una giornata. */
 function fmtOreKpi(n: number): string {
-  const totMin = Math.max(0, Math.round(n * 60));
-  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
+  return formattaOreTotale(Math.round((Number(n) || 0) * 60));
 }
 
 // ── Section card wrapper (compatto, con header a icona) ─────────────────────

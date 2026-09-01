@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import type { AggregataCostoRiga } from '../page';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 
 interface Filtri {
   from: string;
@@ -15,8 +16,17 @@ interface Props {
   filtri: Filtri;
 }
 
-function fmt(n: number): string {
+/**
+ * Numero decimale con la virgola: serve **solo al CSV**, dove il foglio di
+ * calcolo deve poter sommare. A schermo le ore non si scrivono cosi'.
+ */
+function fmtCsv(n: number): string {
   return String(Math.round(n * 100) / 100).replace('.', ',');
+}
+
+/** Ore a schermo: sono somme sul periodo scelto, non le ore di una giornata. */
+function fmtOre(n: number): string {
+  return formattaOreTotale(Math.round((Number(n) || 0) * 60));
 }
 function fmtEuro(n: number | null): string {
   if (n == null) return 'n.d.';
@@ -68,11 +78,11 @@ export function CostiTab({ aggregati, filtri }: Props) {
     const rows = aggregati.map((r) =>
       [
         r.chiave,
-        fmt(r.ore_ordinarie),
-        fmt(r.ore_straordinarie),
-        fmt(r.ore_viaggio),
-        fmt(r.ore_pesate),
-        r.costo_totale == null ? '' : fmt(r.costo_totale),
+        fmtCsv(r.ore_ordinarie),
+        fmtCsv(r.ore_straordinarie),
+        fmtCsv(r.ore_viaggio),
+        fmtCsv(r.ore_pesate),
+        r.costo_totale == null ? '' : fmtCsv(r.costo_totale),
       ]
         .map(escape)
         .join(';'),
@@ -143,7 +153,7 @@ export function CostiTab({ aggregati, filtri }: Props) {
         </div>
         <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Ore pesate totali</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(tot.ore_pesate)}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmtOre(tot.ore_pesate)}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
           <p className="text-xs text-muted-foreground">Costo totale</p>
@@ -175,10 +185,10 @@ export function CostiTab({ aggregati, filtri }: Props) {
               {aggregati.map((r) => (
                 <tr key={r.chiave} className="hover:bg-muted/30">
                   <td className="px-3 py-1.5 font-medium">{r.chiave}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(r.ore_ordinarie)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(r.ore_straordinarie)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(r.ore_viaggio)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(r.ore_pesate)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtOre(r.ore_ordinarie)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtOre(r.ore_straordinarie)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtOre(r.ore_viaggio)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtOre(r.ore_pesate)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmtEuro(r.costo_totale)}</td>
                 </tr>
               ))}
@@ -188,7 +198,7 @@ export function CostiTab({ aggregati, filtri }: Props) {
                 <td className="px-3 py-2 font-semibold" colSpan={4}>
                   Totale
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmt(tot.ore_pesate)}</td>
+                <td className="px-3 py-2 text-right tabular-nums font-semibold">{fmtOre(tot.ore_pesate)}</td>
                 <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
                   {fmtEuro(tot.costo_totale)}
                 </td>

@@ -60,6 +60,7 @@ import {
 } from '../../../_components/timbrature-riepilogo';
 import { aggiornaDipendente } from '../../../../_actions/dipendenti';
 import { CalendarioOre, type GiornoCalendario } from './calendario-ore';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 
 // ── Tipi ──────────────────────────────────────────────────────────────────
 
@@ -120,10 +121,8 @@ const TEXTAREA_CLS =
 const fmtKm = (km: number) =>
   new Intl.NumberFormat('it-IT', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(km);
 
-const fmtOre = (n: number) => {
-  const totMin = Math.max(0, Math.round(n * 60));
-  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
-};
+/** Ore della scheda dipendente: sono somme su 45/90 giorni. */
+const fmtOre = (n: number) => formattaOreTotale(Math.round((Number(n) || 0) * 60));
 
 const fmtEuro = (n: number) =>
   new Intl.NumberFormat('it-IT', {

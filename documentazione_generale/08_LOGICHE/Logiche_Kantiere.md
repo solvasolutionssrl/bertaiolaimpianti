@@ -211,6 +211,19 @@ conta. Un **totale** no — `705:19` per la somma di 65 giornate è illeggibile 
 un'ora `45 min`, sotto le 10 ore `7:30`, sopra `705 ore`. La soglia è dove il minuto
 smette di essere informazione e diventa rumore.
 
+**Dove valgono l'una e l'altra** (audit del 01/09, 20 punti riscrivevano lo
+stesso formattatore a mano):
+
+| Cosa | Come | Perché |
+|---|---|---|
+| Ore di una giornata, riga di tabella, timbratura | `formattaOreGiornata` → `7:30` | Mezz'ora conta |
+| KPI, totali di colonna, grafici su un periodo, «ultimi 7 giorni» | `formattaOreTotale` → `705 ore` | È una somma |
+| **CSV** | decimale con la virgola (`7,5`) | Il foglio di calcolo deve sommare |
+
+Difetti trovati e chiusi: **Ore e costi** scriveva tutto in decimale (`7,5`),
+la **scheda cantiere dell'app** anche («Ore oggi 7,5 h», «Ultimi 7 giorni»), e
+il KPI «Ore settimana» della dashboard diceva `123:55`.
+
 ---
 
 ## 7.3 Metodi di pagamento (vale per TUTTI i clienti, non solo Kantiere)

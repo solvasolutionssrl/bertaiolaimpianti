@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { BarChart3, Users, Clock, Car } from 'lucide-react';
+import { formattaOreGiornata, formattaOreTotale } from '@kommessa/api/kantiere-ore';
 
 export type AnaliticaCantiereDati = {
   /** Persone presenti o passate oggi su questo cantiere. */
@@ -18,11 +19,19 @@ export type AnaliticaCantiereDati = {
   kmGuidati7gg: number;
 };
 
-function oreLabel(ore: number): string {
-  if (!Number.isFinite(ore) || ore <= 0) return '0';
-  // mostra al decimo, senza zeri inutili (es. 7.5 → "7,5", 8 → "8")
-  const v = Math.round(ore * 10) / 10;
-  return v.toString().replace('.', ',');
+/**
+ * Ore del giorno: `7:30`, non `7,5`. Su un foglio ore il decimale non lo legge
+ * nessuno, e mezz'ora su una giornata conta.
+ */
+function oreGiornoLabel(ore: number): string {
+  if (!Number.isFinite(ore) || ore <= 0) return '0:00';
+  return formattaOreGiornata(Math.round(ore * 60));
+}
+
+/** Ore di un periodo (7 giorni, tutti insieme): e' una somma, si arrotonda. */
+function orePeriodoLabel(ore: number): string {
+  if (!Number.isFinite(ore) || ore <= 0) return '0 ore';
+  return formattaOreTotale(Math.round(ore * 60));
 }
 
 function kmLabel(km: number): string {
@@ -90,8 +99,7 @@ export function AnaliticaCantiere({ dati }: { dati: AnaliticaCantiereDati }) {
         />
         <Chip
           icon={<Clock className="h-3.5 w-3.5" aria-hidden="true" />}
-          valore={oreLabel(dati.oreOggi)}
-          unita="h"
+          valore={oreGiornoLabel(dati.oreOggi)}
           label="Ore oggi"
           tinta="emerald"
         />
@@ -106,7 +114,8 @@ export function AnaliticaCantiere({ dati }: { dati: AnaliticaCantiereDati }) {
 
       {haSettimana ? (
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Ultimi 7 giorni: <span className="font-medium text-foreground">{oreLabel(dati.ore7gg)} ore</span>
+          Ultimi 7 giorni:{' '}
+          <span className="font-medium text-foreground">{orePeriodoLabel(dati.ore7gg)}</span>
           {' · '}
           <span className="font-medium text-foreground">{kmLabel(dati.kmGuidati7gg)} km guidati</span>
         </p>

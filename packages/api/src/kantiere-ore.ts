@@ -297,6 +297,20 @@ export function minutiViaggioPerTarget(
 }
 
 /**
+ * Come si scrivono le ore di UNA giornata (o di una singola riga): `7:30`.
+ *
+ * Mai in decimale — `7,5` e `2,6` non li legge nessuno su un foglio ore — e
+ * mai arrotondate: su una giornata la mezz'ora e' soldi.
+ *
+ * Per una SOMMA serve l'altra, `formattaOreTotale`: `705:19` non e' una lettura,
+ * e' un rebus.
+ */
+export function formattaOreGiornata(minuti: number): string {
+  const m = Math.max(0, Math.round(Number(minuti) || 0));
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+}
+
+/**
  * Come si scrive un TOTALE di ore.
  *
  * Le ore di una giornata si leggono in `H:MM` — 7:30, non 7,5 — ed è giusto

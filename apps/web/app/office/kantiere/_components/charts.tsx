@@ -14,6 +14,7 @@ import {
   PieChart,
   Pie,
 } from 'recharts';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 
 /**
  * Grafici office Kantiere (client). Ricevono solo dati serializzabili (array di
@@ -303,8 +304,7 @@ export function DonutOre({
           <Tooltip
             contentStyle={tooltipStyle}
             formatter={(v, n) => {
-              const m = Math.max(0, Math.round(Number(v) * 60));
-              return [`${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`, n];
+              return [formattaOreTotale(Math.max(0, Math.round(Number(v) * 60))), n];
             }}
           />
         </PieChart>
@@ -317,14 +317,14 @@ export function DonutOre({
               <span className="text-muted-foreground">{d.nome}</span>
             </span>
             <span className="font-mono tabular-nums font-medium text-foreground">
-              {((m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`)(Math.max(0, Math.round(d.valore * 60)))}
+              {formattaOreTotale(Math.max(0, Math.round(d.valore * 60)))}
             </span>
           </li>
         ))}
         <li className="flex items-center justify-between gap-2 border-t border-border pt-1.5 text-sm">
           <span className="text-muted-foreground">Totale</span>
           <span className="font-mono tabular-nums font-semibold text-foreground">
-            {((m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`)(Math.max(0, Math.round(totale * 60)))}
+            {formattaOreTotale(Math.max(0, Math.round(totale * 60)))}
           </span>
         </li>
       </ul>

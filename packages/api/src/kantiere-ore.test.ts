@@ -9,6 +9,7 @@ import {
   statoTurno,
   esitoAutoApprovazione,
   esitoAutoApprovazioneManuale,
+  formattaOreGiornata,
   formattaOreTotale,
   type Timbratura,
 } from './kantiere-ore';
@@ -382,5 +383,23 @@ describe('formattaOreTotale', () => {
     expect(formattaOreTotale(0)).toBe('0 ore');
     expect(formattaOreTotale(-5)).toBe('0 ore');
     expect(formattaOreTotale(Number.NaN)).toBe('0 ore');
+  });
+});
+
+describe('formattaOreGiornata', () => {
+  it('una giornata si legge in H:MM, mai in decimale', () => {
+    expect(formattaOreGiornata(7 * 60 + 30)).toBe('7:30');
+    expect(formattaOreGiornata(2 * 60 + 36)).toBe('2:36');
+  });
+  it('i minuti sotto il dieci hanno lo zero davanti', () => {
+    expect(formattaOreGiornata(8 * 60 + 5)).toBe('8:05');
+  });
+  it('non arrotonda: su una giornata la mezz\'ora conta', () => {
+    expect(formattaOreGiornata(10 * 60 + 30)).toBe('10:30');
+  });
+  it('zero e valori strani non rompono niente', () => {
+    expect(formattaOreGiornata(0)).toBe('0:00');
+    expect(formattaOreGiornata(-9)).toBe('0:00');
+    expect(formattaOreGiornata(Number.NaN)).toBe('0:00');
   });
 });

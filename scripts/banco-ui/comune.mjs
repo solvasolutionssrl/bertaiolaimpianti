@@ -21,6 +21,9 @@ export const ACCESSI = {
   kommessa: { email: 'demo@demok.kommessa.local', password: 'Demo2026!' },
   // Mondo presenze (FPM-like): ha Cantieri, Presenze, Kontabilita'.
   kantiere: { email: 'ufficio@democ.kommessa.local', password: 'Demo2026!' },
+  // Tecnico del mondo presenze: serve per le schermate dell'app che l'ufficio
+  // non vede (le mie ore, i miei viaggi, le mie spese).
+  tecnico: { email: 'marco@democ.kommessa.local', password: 'Demo2026!' },
 };
 
 const CHROME =

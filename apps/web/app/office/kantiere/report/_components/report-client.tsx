@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 import type { AggregataRiga, KpiTotali, ViaggioRigaDip, ViaggioRigaMezzo } from '../page';
 
 interface Filtri {
@@ -18,8 +19,13 @@ interface Props {
   viaggiPerMezzo: ViaggioRigaMezzo[];
 }
 
-function fmt(n: number): string {
-  return String(Math.round(n * 100) / 100).replace('.', ',');
+/**
+ * Ore di un periodo. Scriveva `7,5` in decimale: illeggibile su un foglio ore
+ * e vietato dalla convenzione. Sono somme, quindi si arrotondano all'ora
+ * quando sono grandi.
+ */
+function fmt(ore: number): string {
+  return formattaOreTotale(Math.round((Number(ore) || 0) * 60));
 }
 
 function fmtKm(km: number): string {
@@ -30,8 +36,7 @@ function fmtKm(km: number): string {
 }
 
 function fmtOre(ore: number): string {
-  const totMin = Math.max(0, Math.round(ore * 60));
-  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
+  return formattaOreTotale(Math.round((Number(ore) || 0) * 60));
 }
 
 function buildQs(f: Filtri): string {

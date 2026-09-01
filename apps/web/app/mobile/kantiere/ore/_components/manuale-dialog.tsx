@@ -509,8 +509,12 @@ export function ManualeDialog({
           il dropdown assoluto del picker non viene tagliato) · footer coi tasti
           in basso (mt-auto). `min-h` = modulo più alto e arioso. flex (non grid)
           → niente crescita da min-content; overflow-x-hidden come rete. */}
-      <DialogContent className="relative flex min-h-[64vh] flex-col gap-3 overflow-x-hidden">
-        {/* Dentro il dialog: un secondo dialog Radix chiuderebbe questo. */}
+      <DialogContent className="flex min-h-[64vh] flex-col gap-3 overflow-x-hidden">
+        {/* Dentro il dialog: un secondo dialog Radix chiuderebbe questo.
+            ⚠️ NIENTE `relative` qui: DialogContent e' gia' `fixed`, che basta
+            come ancoraggio per l'`absolute` del pannello. Aggiungerlo lo
+            sovrascriveva — `cn()` mette la className passata per ultima — e il
+            foglio finiva schiacciato in fondo allo schermo. */}
         {passeggero.pannello}
 
         <DialogHeader className="shrink-0 pr-8 text-left">
