@@ -9,6 +9,7 @@ import {
   statoTurno,
   esitoAutoApprovazione,
   esitoAutoApprovazioneManuale,
+  formattaOreTotale,
   type Timbratura,
 } from './kantiere-ore';
 
@@ -355,5 +356,31 @@ describe('esitoAutoApprovazioneManuale', () => {
   it('soglia non valida → si usa quella di sicurezza (10h)', () => {
     expect(esitoAutoApprovazioneManuale({ minutiDichiarati: 9 * 60, sogliaOreMax: 0 }).autoApprova).toBe(true);
     expect(esitoAutoApprovazioneManuale({ minutiDichiarati: 11 * 60, sogliaOreMax: 0 }).autoApprova).toBe(false);
+  });
+});
+
+describe('formattaOreTotale', () => {
+  it('una somma grande si legge in ore intere, non in H:MM', () => {
+    // 705:19 non lo usa nessuno per decidere: quei 19 minuti sono rumore.
+    expect(formattaOreTotale(705 * 60 + 19)).toBe('705 ore');
+  });
+
+  it('sotto le 10 ore il minuto conta ancora', () => {
+    expect(formattaOreTotale(7 * 60 + 30)).toBe('7:30');
+    expect(formattaOreTotale(9 * 60 + 59)).toBe('9:59');
+  });
+
+  it('esattamente 10 ore passa alle ore intere', () => {
+    expect(formattaOreTotale(10 * 60)).toBe('10 ore');
+  });
+
+  it('meno di un ora si scrive in minuti', () => {
+    expect(formattaOreTotale(45)).toBe('45 min');
+  });
+
+  it('zero e valori strani non rompono niente', () => {
+    expect(formattaOreTotale(0)).toBe('0 ore');
+    expect(formattaOreTotale(-5)).toBe('0 ore');
+    expect(formattaOreTotale(Number.NaN)).toBe('0 ore');
   });
 });

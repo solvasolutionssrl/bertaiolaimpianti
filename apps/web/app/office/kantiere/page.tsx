@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { sogliaAnomaliaTurnoOre, giornateOltreSoglia } from '@/app/_lib/kantiere-config';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
 import { TurniAttivi } from './_components/turni-attivi';
@@ -158,7 +159,8 @@ export default async function KantierePanoramica() {
   const oreSettimana = oreOrd + oreStraord + oreViaggio;
 
   const oreSettimanaMin = Number.isFinite(oreSettimana) ? Math.max(0, Math.round(oreSettimana * 60)) : 0;
-  const oreSettimanaDisplay = `${Math.floor(oreSettimanaMin / 60)}:${String(oreSettimanaMin % 60).padStart(2, '0')}`;
+  // Totale di tutti, non le ore di una persona: `123:55` non lo legge nessuno.
+  const oreSettimanaDisplay = formattaOreTotale(oreSettimanaMin);
 
   // ===== Anomalie aperte (conteggio sintetico) =====
   const { count: anomalieAperte } = await supabase
@@ -332,30 +334,30 @@ export default async function KantierePanoramica() {
       </header>
 
       {oltreSoglia.giornate > 0 && (
-        <Link
-          href="/office/kantiere/rapportini?solo=anomalie"
-          className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3.5 transition-colors hover:bg-amber-100/70"
-        >
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3.5">
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800">
             <AlertTriangle className="h-4.5 w-4.5" />
           </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-amber-900">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-900">
               {oltreSoglia.giornate === 1
-                ? '1 giornata aspetta un controllo'
-                : `${oltreSoglia.giornate} giornate aspettano un controllo`}
-            </span>
-            <span className="mt-0.5 block text-sm text-amber-800/90">
-              Superano le {sogliaOre} ore, quindi non si sono approvate da sole:{' '}
-              <strong className="font-semibold">{oltreSoglia.oreTotali}</strong> in attesa
-              {oltreSoglia.chi ? ` · ${oltreSoglia.chi}` : ''}. Finché restano così non arrivano
-              da nessuna parte.
-            </span>
-          </span>
-          <span className="mt-0.5 shrink-0 self-center text-sm font-medium text-amber-900 underline underline-offset-2">
-            Guardale
-          </span>
-        </Link>
+                ? '1 giornata da verificare'
+                : `${oltreSoglia.giornate} giornate da verificare`}
+            </p>
+            <p className="mt-0.5 text-sm text-amber-800/90">
+              {oltreSoglia.giornate === 1 ? 'Supera' : 'Superano'} la soglia di {sogliaOre} ore e
+              non {oltreSoglia.giornate === 1 ? 'è stata approvata' : 'sono state approvate'} in
+              automatico.
+              In attesa: <strong className="font-semibold">{oltreSoglia.oreTotali}</strong>
+              {oltreSoglia.chi ? ` · ${oltreSoglia.chi}` : ''}. Senza approvazione non{' '}
+              {oltreSoglia.giornate === 1 ? 'viene trasmessa' : 'vengono trasmesse'} al gestionale
+              locale.
+            </p>
+          </div>
+          <Button asChild variant="outline" size="sm" className="mt-0.5 shrink-0 self-center">
+            <Link href="/office/kantiere/rapportini?solo=anomalie">Verifica</Link>
+          </Button>
+        </div>
       )}
 
       {/* ===== KPI grid — stile compatto ===== */}

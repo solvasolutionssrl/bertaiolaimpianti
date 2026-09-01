@@ -295,3 +295,25 @@ export function minutiViaggioPerTarget(
   }
   return out;
 }
+
+/**
+ * Come si scrive un TOTALE di ore.
+ *
+ * Le ore di una giornata si leggono in `H:MM` — 7:30, non 7,5 — ed è giusto
+ * così: mezz'ora conta. Ma la stessa forma su una somma diventa illeggibile:
+ * `705:19` per il totale di 65 giornate non dice niente a nessuno, e quei 19
+ * minuti non li userà mai nessuno per decidere qualcosa.
+ *
+ * Quindi: sotto le 10 ore si resta al minuto, sopra si arrotonda all'ora.
+ * La soglia è dove il minuto smette di essere informazione e diventa rumore.
+ */
+export function formattaOreTotale(minuti: number): string {
+  const m = Math.max(0, Math.round(Number(minuti) || 0));
+  if (m === 0) return '0 ore';
+  if (m < 60) return `${m} min`;
+  if (m < 10 * 60) {
+    return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  }
+  const ore = Math.round(m / 60);
+  return `${ore} ore`;
+}

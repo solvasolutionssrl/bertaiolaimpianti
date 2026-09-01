@@ -1,4 +1,5 @@
 import 'server-only';
+import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 
 import { createServerSupabase } from '@kommessa/api/server';
 
@@ -229,7 +230,7 @@ export async function sogliaAnomaliaTurnoOre(
 
 export interface GiornateOltreSoglia {
   giornate: number;
-  /** Ore in attesa, già in formato leggibile: "134:06". */
+  /** Ore in attesa, già scritte come si legge un totale: "705 ore". */
   oreTotali: string;
   /** I nomi di chi le ha, per dare un appiglio: "Atanasoaie, Vanzo e altri 2". */
   chi: string;
@@ -323,7 +324,7 @@ export async function giornateOltreSoglia(
 
     return {
       giornate: ferme.length,
-      oreTotali: `${Math.floor(minuti / 60)}:${String(minuti % 60).padStart(2, '0')}`,
+      oreTotali: formattaOreTotale(minuti),
       chi,
     };
   } catch {

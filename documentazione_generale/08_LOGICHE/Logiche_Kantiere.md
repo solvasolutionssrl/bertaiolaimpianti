@@ -205,6 +205,12 @@ Senza questi due filtri su FPM l'avviso direbbe 71 giornate invece delle 65
 vere. Helper `giornateOltreSoglia` in `_lib/kantiere-config.ts`, fail-soft: se
 qualcosa non risponde l'avviso non compare, non rompe la dashboard.
 
+**Come si scrivono le ore.** Quelle di una giornata restano `H:MM` (7:30): mezz'ora
+conta. Un **totale** no — `705:19` per la somma di 65 giornate è illeggibile e quei
+19 minuti non servono a decidere niente. Helper puro `formattaOreTotale`: sotto
+un'ora `45 min`, sotto le 10 ore `7:30`, sopra `705 ore`. La soglia è dove il minuto
+smette di essere informazione e diventa rumore.
+
 ---
 
 ## 7.3 Metodi di pagamento (vale per TUTTI i clienti, non solo Kantiere)
