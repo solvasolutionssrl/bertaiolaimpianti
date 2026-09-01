@@ -7,6 +7,7 @@ import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
+import NuovaVersione from './_components/nuova-versione';
 import { AppleSplashLinks } from '../_components/apple-splash-links';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
@@ -86,6 +87,7 @@ export default async function MobileLayout({
       {/* <link apple-touch-startup-image> → issati nell'<head> da Next */}
       <AppleSplashLinks />
       <SwRegistrar />
+      <NuovaVersione />
 
       {/* Scrim status bar: con status-bar iOS 'black-translucent' il contenuto va
           a tutto schermo sotto la Dynamic Island. Questa striscia blu brand,
