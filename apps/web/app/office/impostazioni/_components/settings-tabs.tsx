@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'sla',      label: 'SLA',               href: '/office/impostazioni/sla' },
   { id: 'utenti',   label: 'Utenti',            href: '/office/impostazioni/utenti' },
   { id: 'personale', label: 'Ferie e permessi', href: '/office/impostazioni/personale', ferieOnly: true },
+  { id: 'pagamenti', label: 'Pagamenti',        href: '/office/impostazioni/pagamenti' },
   { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding' },
   { id: 'storage',  label: 'Storage',           href: '/office/impostazioni/storage', superadminOnly: true },
   { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle' },

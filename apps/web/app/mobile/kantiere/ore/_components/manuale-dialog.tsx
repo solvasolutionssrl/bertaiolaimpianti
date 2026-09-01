@@ -3,6 +3,7 @@
 import { useState, useTransition, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Car, ChevronDown, Loader2, MapPin } from 'lucide-react';
+import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 import { Button } from '@kommessa/ui';
 import {
   Dialog,
@@ -125,6 +126,7 @@ function TrattaSection({
   disabled,
   stimaLoading,
   onChange,
+  onEvidenzaSpenta,
 }: {
   label: string;
   tratta: TrattaState;
@@ -133,6 +135,8 @@ function TrattaSection({
   disabled: boolean;
   stimaLoading: boolean;
   onChange: (patch: Partial<TrattaState>) => void;
+  /** Spegne l'alone sulla spunta autista appena l'utente ci mette mano. */
+  onEvidenzaSpenta?: () => void;
 }) {
   function step(delta: number) {
     onChange({ minuti: Math.max(0, tratta.minuti + delta) });
@@ -234,7 +238,10 @@ function TrattaSection({
               <input
                 type="checkbox"
                 checked={tratta.autista}
-                onChange={(e) => onChange({ autista: e.target.checked })}
+                onChange={(e) => {
+                  onEvidenzaSpenta?.();
+                  onChange({ autista: e.target.checked });
+                }}
                 disabled={disabled}
                 className="h-4 w-4 rounded border-input accent-primary"
               />
@@ -294,6 +301,7 @@ export function ManualeDialog({
 }: ManualeDialogProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const passeggero = useConfermaPasseggero();
 
   // Nessun cantiere pre-selezionato: con molti cantieri sceglierne uno a caso
   // sarebbe fuorviante. L'utente lo sceglie dal picker (Registra lo richiede).
@@ -425,7 +433,7 @@ export function ManualeDialog({
     }
   }
 
-  function handleRegistra() {
+  async function handleRegistra() {
     setErrore(null);
 
     if (!cantiereId) {
@@ -473,6 +481,10 @@ export function ManualeDialog({
       });
     }
 
+    // Basta una tratta dichiarata da passeggero: quei km non li conta nessuno.
+    const qualcunaDaPasseggero = viaggi.some((v) => !v.autista);
+    if (qualcunaDaPasseggero && !(await passeggero.conferma(false))) return;
+
     startTransition(async () => {
       const res = await registraOreManuali({
         data,
@@ -497,7 +509,9 @@ export function ManualeDialog({
           il dropdown assoluto del picker non viene tagliato) · footer coi tasti
           in basso (mt-auto). `min-h` = modulo più alto e arioso. flex (non grid)
           → niente crescita da min-content; overflow-x-hidden come rete. */}
-      <DialogContent className="flex min-h-[64vh] flex-col gap-3 overflow-x-hidden">
+      <DialogContent className="relative flex min-h-[64vh] flex-col gap-3 overflow-x-hidden">
+        {/* Dentro il dialog: un secondo dialog Radix chiuderebbe questo. */}
+        {passeggero.pannello}
 
         <DialogHeader className="shrink-0 pr-8 text-left">
           <DialogTitle>Aggiungi ore a mano</DialogTitle>
@@ -551,11 +565,15 @@ export function ManualeDialog({
 
           {/* Viaggi — le sedi dipendono dal cantiere: compaiono dopo la scelta */}
           {cantiereId && sediVisibili.length > 0 ? (
-            <div className="space-y-2">
+            <div
+              ref={passeggero.propsEvidenza.ref}
+              className={'space-y-2 ' + passeggero.propsEvidenza.className}
+            >
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                 Viaggio (opzionale)
               </p>
               <TrattaSection
+                onEvidenzaSpenta={passeggero.spegniEvidenza}
                 label="Viaggio di andata"
                 tratta={andata}
                 sedi={sediVisibili}
@@ -565,6 +583,7 @@ export function ManualeDialog({
                 onChange={handleAndataChange}
               />
               <TrattaSection
+                onEvidenzaSpenta={passeggero.spegniEvidenza}
                 label="Viaggio di ritorno"
                 tratta={ritorno}
                 sedi={sediVisibili}

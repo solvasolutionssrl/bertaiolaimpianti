@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Home, ArrowLeft, X, Play } from 'lucide-react';
+import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 
 import type {
   ViaggioRitornoSede,
@@ -100,6 +101,7 @@ export function PartenzaViaggioSheet({
   const [confermMin, setConfermMin] = useState<number>(0);
   const [giustificazione, setGiustificazione] = useState('');
   const [autista, setAutista] = useState(false);
+  const passeggero = useConfermaPasseggero();
   const [mezzoId, setMezzoId] = useState<string>('');
   const [errLocale, setErrLocale] = useState<string | null>(null);
 
@@ -197,7 +199,7 @@ export function PartenzaViaggioSheet({
     setConfermMin((m) => Math.max(0, m + delta));
   }
 
-  function handleConferma() {
+  async function handleConferma() {
     setErrLocale(null);
     if (casa) {
       onConfirm(null);
@@ -211,6 +213,9 @@ export function PartenzaViaggioSheet({
       setErrLocale('Hai modificato la stima: scrivi una breve giustificazione.');
       return;
     }
+    // Passeggero dichiarato: i km non glieli conta nessuno, meglio chiedere.
+    if (!(await passeggero.conferma(autista))) return;
+
     onConfirm({
       sedeId,
       durataStimataMin: stimaMin,
@@ -239,6 +244,8 @@ export function PartenzaViaggioSheet({
         className="relative z-10 max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-background shadow-lg"
         style={{ paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}
       >
+        {/* Dentro il foglio: un secondo dialog lo chiuderebbe. */}
+        {passeggero.pannello}
         <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background px-3 py-3">
           <button
             type="button"
@@ -385,12 +392,18 @@ export function PartenzaViaggioSheet({
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div
+                  ref={passeggero.propsEvidenza.ref}
+                  className={'space-y-2 ' + passeggero.propsEvidenza.className}
+                >
                   <label className="flex cursor-pointer items-center gap-2.5 select-none">
                     <input
                       type="checkbox"
                       checked={autista}
-                      onChange={(e) => setAutista(e.target.checked)}
+                      onChange={(e) => {
+                        passeggero.spegniEvidenza();
+                        setAutista(e.target.checked);
+                      }}
                       className="h-4 w-4 rounded border-input accent-primary"
                     />
                     <span className="inline-flex items-center gap-1.5 text-sm text-foreground">

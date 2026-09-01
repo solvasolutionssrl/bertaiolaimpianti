@@ -187,6 +187,63 @@ le scrivono, e per quelle che verranno.
 
 ---
 
+## 7.2 Avviso in dashboard: le giornate che il freno tiene ferme
+
+La soglia (§7) è voluta, ma senza un richiamo le giornate sopra soglia
+restano in bozza per sempre e **quelle ore non arrivano da nessuna parte**.
+
+La dashboard Kantiere mostra un avviso ambra con **quante giornate**, **quante
+ore** e **chi**, e porta dritto ai rapportini. Conta soltanto quelle che il
+freno tiene ferme davvero:
+
+| Escluso | Perché |
+|---|---|
+| Giornate di **oggi** | Un turno in corso non aspetta un controllo, aspetta di finire. |
+| Giornate rimaste **aperte** (ingressi ≠ uscite) | È un altro problema, e ha la sua pagina. |
+
+Senza questi due filtri su FPM l'avviso direbbe 71 giornate invece delle 65
+vere. Helper `giornateOltreSoglia` in `_lib/kantiere-config.ts`, fail-soft: se
+qualcosa non risponde l'avviso non compare, non rompe la dashboard.
+
+---
+
+## 7.3 Metodi di pagamento (vale per TUTTI i clienti, non solo Kantiere)
+
+Erano un elenco chiuso nel codice (`contanti` | `carta` | `altro`) ripetuto in
+quattro punti. Ora stanno su `metodi_pagamento`, uno per cliente, e si
+gestiscono da **Impostazioni → Pagamenti** (admin/ufficio, con registro).
+
+> ⚠️ **Il `codice` non si tocca mai.** È il testo dentro
+> `spese.metodo_pagamento`: cambiarlo scollegherebbe le spese già registrate e
+> quelle già uscite verso il gestionale. Si rinomina **solo** `nome`, e la
+> conferma a schermo lo dice.
+
+- **Rinominare** e **aggiungere**: sempre con conferma.
+- **Ritirare** non cancella: sparisce dalle scelte nuove, le spese vecchie
+  restano leggibili col loro nome. Almeno uno deve restare in uso.
+- **L'AI vede l'elenco del cliente**: il prompt e il glossario si costruiscono
+  dai suoi metodi, e un codice che l'AI si inventa viene scartato.
+- Lettore difensivo `leggiMetodiPagamento`: se la tabella manca o il cliente è
+  nuovo, tornano i tre di sempre — nessuna tendina resta vuota.
+
+---
+
+## 7.4 «Hai viaggiato da passeggero?»
+
+I km si contano **solo all'autista**. Chi conferma un viaggio senza spuntare
+«sono io l'autista» si vede chiedere conferma; se risponde «guidavo io» torna al
+modulo con la casella **evidenziata** e la vista che ci scorre sopra.
+
+Vale in tutti e tre i punti: viaggio di ritorno, partenza, inserimento ore a
+mano (lì basta che **una** tratta sia da passeggero). Pezzo unico
+`_components/conferma-passeggero.tsx`.
+
+> ⚠️ È un pannello **dentro** il foglio, non un secondo dialog: Radix
+> tratterebbe un dialog annidato come un clic "fuori" e chiuderebbe quello
+> sotto, buttando via quello che l'utente aveva già compilato.
+
+---
+
 ## 8. Ordinario vs straordinario
 
 - Il **tecnico** inserisce le **ore totali di lavoro** (un solo campo): non decide lui cosa è ordinario o straordinario.

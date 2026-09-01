@@ -15,6 +15,7 @@ import {
 } from '@kommessa/integrations/storage';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiMetodiPagamento } from '@/app/_lib/metodi-pagamento';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { chiaviSpeseValide } from '@/app/api/kantiere/spese/_lib/r2-spese';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
@@ -66,6 +67,30 @@ async function cancellaR2BestEffort(
   }
 }
 
+/**
+ * Il metodo di pagamento non e' piu' un elenco chiuso: lo gestisce l'ufficio da
+ * Impostazioni > Pagamenti. Qui si controlla solo la forma; che il codice esista
+ * per QUESTO cliente lo verifica `metodoAmmesso` prima di scrivere — altrimenti
+ * un client modificato potrebbe infilare qualunque testo nel database.
+ */
+const MetodoPagamentoSchema = z.string().trim().min(2).max(40).nullable().optional();
+
+/**
+ * Il codice appartiene all'elenco del cliente?
+ *
+ * Si guardano anche quelli ritirati: modificare una spesa vecchia non deve
+ * costringere a cambiarle anche il metodo di pagamento.
+ */
+async function metodoAmmesso(
+  supabase: Parameters<typeof leggiMetodiPagamento>[0],
+  tenantId: string,
+  codice: string | null | undefined,
+): Promise<boolean> {
+  if (codice === null || codice === undefined) return true;
+  const metodi = await leggiMetodiPagamento(supabase, tenantId);
+  return metodi.some((m) => m.codice === codice);
+}
+
 const CreaSchema = z.object({
   r2Key: z.string().min(1).max(500),
   r2ThumbKey: z.string().min(1).max(500).nullable().optional(),
@@ -78,7 +103,7 @@ const CreaSchema = z.object({
   valuta: z.string().trim().min(1).max(8).default('EUR'),
   dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
   partitaIva: z.string().trim().max(40).nullable().optional(),
-  metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
+  metodoPagamento: MetodoPagamentoSchema,
   numeroDocumento: z.string().trim().max(60).nullable().optional(),
   indirizzoEsercente: z.string().trim().max(200).nullable().optional(),
   numeroPersone: z.number().int().positive().max(99).default(1),
@@ -165,6 +190,11 @@ export async function creaSpesa(input: z.input<typeof CreaSchema>): Promise<Risu
     commessaId = (cant as { commessa_id: string | null } | null)?.commessa_id ?? null;
   }
 
+  // Il codice del metodo deve stare nell'elenco di QUESTO cliente: lo schema
+  // controlla la forma, non l'appartenenza.
+  if (!(await metodoAmmesso(supabase, ctx.tenantId, d.metodoPagamento))) {
+    return { ok: false, error: 'Metodo di pagamento non valido.' };
+  }
   const imponibile = calcolaImponibile(d.importoTotale, d.importoIva ?? null);
 
   const { data: inserted, error } = await supabase
@@ -217,7 +247,7 @@ const CreaOfficeSchema = z.object({
   ragioneSociale: z.string().trim().max(200).nullable().optional(),
   dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
   partitaIva: z.string().trim().max(40).nullable().optional(),
-  metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
+  metodoPagamento: MetodoPagamentoSchema,
   numeroDocumento: z.string().trim().max(60).nullable().optional(),
   indirizzoEsercente: z.string().trim().max(200).nullable().optional(),
   numeroPersone: z.number().int().positive().max(99).default(1),
@@ -282,6 +312,11 @@ export async function creaSpesaOffice(
     commessaId = cantRow.commessa_id ?? null;
   }
 
+  // Il codice del metodo deve stare nell'elenco di QUESTO cliente: lo schema
+  // controlla la forma, non l'appartenenza.
+  if (!(await metodoAmmesso(service, ctx.tenantId, d.metodoPagamento))) {
+    return { ok: false, error: 'Metodo di pagamento non valido.' };
+  }
   const imponibile = calcolaImponibile(d.importoTotale, d.importoIva ?? null);
 
   const { data: inserted, error } = await service
@@ -329,7 +364,7 @@ const AggiornaSchema = z.object({
   ragioneSociale: z.string().trim().max(200).nullable().optional(),
   importoTotale: z.number().finite().positive().optional(),
   importoIva: z.number().finite().nonnegative().nullable().optional(),
-  metodoPagamento: z.enum(['contanti', 'carta', 'altro']).nullable().optional(),
+  metodoPagamento: MetodoPagamentoSchema,
   numeroPersone: z.number().int().positive().max(99).optional(),
   dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
   note: z.string().trim().max(2000).nullable().optional(),
@@ -367,7 +402,12 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
   if (d.categoria !== undefined) patch.categoria = normalizzaCategoria(d.categoria);
   if (d.ragioneSociale !== undefined) patch.ragione_sociale = d.ragioneSociale;
   if (d.note !== undefined) patch.note = d.note;
-  if (d.metodoPagamento !== undefined) patch.metodo_pagamento = d.metodoPagamento;
+  if (d.metodoPagamento !== undefined) {
+    if (!(await metodoAmmesso(supabase, ctx.tenantId, d.metodoPagamento))) {
+      return { ok: false, error: 'Metodo di pagamento non valido.' };
+    }
+    patch.metodo_pagamento = d.metodoPagamento;
+  }
   if (d.numeroPersone !== undefined) patch.numero_persone = d.numeroPersone;
   if (d.dataScontrino !== undefined) patch.data_scontrino = d.dataScontrino;
   if (d.importoTotale !== undefined) patch.importo_totale = d.importoTotale;

@@ -10,6 +10,7 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 
 import { guardMobile } from '../../_lib/guard';
+import { leggiMetodiAttivi } from '@/app/_lib/metodi-pagamento';
 import { NuovaSpesa } from './_components/nuova-spesa';
 import { SpeseClient, type SpesaRiga } from './_components/spese-client';
 import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
@@ -25,6 +26,10 @@ export const dynamic = 'force-dynamic';
 export default async function SpeseMobilePage() {
   const ctx = await guardMobile();
   const supabase = createServerSupabase();
+  const metodi = (await leggiMetodiAttivi(supabase, ctx.tenantId)).map((m) => ({
+    codice: m.codice,
+    nome: m.nome,
+  }));
 
   // Sotto-modulo Kontabilità: gated dal modulo kantiere + flag per-tenant.
   if (!(await tenantHasModule('kantiere')) || !(await kontabilitaAttiva(supabase, ctx.tenantId))) {
@@ -166,6 +171,7 @@ export default async function SpeseMobilePage() {
 
       <SpeseClient
         spese={spese}
+        metodi={metodi}
         cantieriNomi={cantieriNomi}
         canEdit={isManager}
         cantieri={cantieriOpts}

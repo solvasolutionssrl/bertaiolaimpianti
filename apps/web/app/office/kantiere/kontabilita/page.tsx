@@ -1,6 +1,7 @@
 import { leggiCollegamenti, leggiEsportazioni } from '@/app/_lib/integrazione/collegati';
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiMetodiAttivi } from '@/app/_lib/metodi-pagamento';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
@@ -157,6 +158,10 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   // Cosa è già stato portato sul gestionale, e sotto quale gestionale. Due
   // query per l'intera pagina, non una per riga.
   const collegamenti = await leggiCollegamenti(supabase, ctx.tenantId);
+  const metodiPagamento = (await leggiMetodiAttivi(supabase, ctx.tenantId)).map((m) => ({
+    codice: m.codice,
+    nome: m.nome,
+  }));
   const esportazioni = collegamenti.attiva
     ? await leggiEsportazioni(supabase, ctx.tenantId, 'spese', spese.map((s) => s.id))
     : new Map();

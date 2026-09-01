@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { sogliaAnomaliaTurnoOre, giornateOltreSoglia } from '@/app/_lib/kantiere-config';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
 import { TurniAttivi } from './_components/turni-attivi';
@@ -111,6 +112,15 @@ export default async function KantierePanoramica() {
     .select('id', { count: 'exact', head: true })
     .eq('tenant_id', ctx.tenantId)
     .eq('stato', 'inviato');
+
+  // ===== Giornate ferme perche' oltre soglia =====
+  // La soglia (10h di default) è un freno voluto: sopra, la giornata non si
+  // auto-approva e aspetta l'ufficio. Il rischio è che aspetti per sempre —
+  // quelle ore non arrivano al gestionale e nessuno se ne accorge. Qui si
+  // contano e si mostrano, invece di lasciarle sedimentare.
+  const sogliaOre = await sogliaAnomaliaTurnoOre(supabase, ctx.tenantId);
+  const oggiIso = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+  const oltreSoglia = await giornateOltreSoglia(supabase, ctx.tenantId, sogliaOre, oggiIso);
 
   // ===== KPI 4: timbrature oggi =====
   const inizioOggi = inizioOggiRome();
@@ -320,6 +330,33 @@ export default async function KantierePanoramica() {
           </Button>
         </div>
       </header>
+
+      {oltreSoglia.giornate > 0 && (
+        <Link
+          href="/office/kantiere/rapportini?solo=anomalie"
+          className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3.5 transition-colors hover:bg-amber-100/70"
+        >
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-800">
+            <AlertTriangle className="h-4.5 w-4.5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-amber-900">
+              {oltreSoglia.giornate === 1
+                ? '1 giornata aspetta un controllo'
+                : `${oltreSoglia.giornate} giornate aspettano un controllo`}
+            </span>
+            <span className="mt-0.5 block text-sm text-amber-800/90">
+              Superano le {sogliaOre} ore, quindi non si sono approvate da sole:{' '}
+              <strong className="font-semibold">{oltreSoglia.oreTotali}</strong> in attesa
+              {oltreSoglia.chi ? ` · ${oltreSoglia.chi}` : ''}. Finché restano così non arrivano
+              da nessuna parte.
+            </span>
+          </span>
+          <span className="mt-0.5 shrink-0 self-center text-sm font-medium text-amber-900 underline underline-offset-2">
+            Guardale
+          </span>
+        </Link>
+      )}
 
       {/* ===== KPI grid — stile compatto ===== */}
       <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-6">

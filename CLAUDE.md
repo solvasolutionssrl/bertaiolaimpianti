@@ -147,6 +147,12 @@ Chi lavora su **più cantieri** in un giorno genera tragitti **A → B**. Regola
 - **Conteggio = toggle per-tenant** `km_switch_attivo` (rinominato "Conteggia i trasferimenti tra cantieri", default **OFF/opt-in**): se ON i km entrano nei totali del cantiere di destinazione lato tenant; se OFF restano registrati ma **esclusi** dalle aggregazioni del tenant (numeri operativi invariati). Reader `leggiTrasferimentiAttivi`; gate applicato a tutte le somme km lato tenant (mezzi safe: `mezzo_id` null).
 - **Ore pagate NON toccate** (`durata_confermata_min=0`). ⚠️ L'uso del tempo-viaggio nelle ore è **da definire col cliente** (dipende da giorno/straordinari): **SEAM** marcato in `viaggioManualePerTarget` (`_actions/_lib/ricomputa-rapportino.ts`). Vedi doc `documentazione_generale/08_LOGICHE/Logiche_Kantiere.md` §3.1 + memoria `project-trasferimenti-cantiere` / `project-promemoria-operativi` §6 (**da attivare**). Nessuna migration (colonne + config key già esistenti).
 
+#### Metodi di pagamento, avviso soglia e conferma passeggero (01/09/2026)
+
+- **Metodi di pagamento gestibili** (migration `20260901090000`, ✅ APPLICATA) — tabella `metodi_pagamento` per-tenant, UI in **Impostazioni → Pagamenti** (`/office/impostazioni/pagamenti`, admin/ufficio, con audit). **Non è gated da nessun modulo: vale per tutti i clienti.** ⚠️ **`codice` immutabile** (è il testo in `spese.metodo_pagamento`), si rinomina solo `nome` — sempre con conferma. Ritirare ≠ cancellare. L'**AI vede l'elenco del tenant** (`promptScontrino(metodi)` + glossario; un codice inventato viene scartato) e le action validano con `metodoAmmesso` (lo schema zod non è più un enum chiuso). Lettore difensivo `_lib/metodi-pagamento.ts` → se la tabella manca tornano i tre di sempre.
+- **Avviso dashboard giornate oltre soglia** — la soglia resta 10h (scelta cliente); la dashboard Kantiere segnala quante giornate/ore/chi restano ferme. `giornateOltreSoglia` **esclude oggi e le giornate rimaste aperte** (senza quei filtri su FPM direbbe 71 invece di 65).
+- **Conferma passeggero PWA** — chi conferma un viaggio senza spuntare «sono l'autista» deve confermarlo; se dice che guidava torna al modulo con la casella evidenziata. Pezzo unico `_components/conferma-passeggero.tsx`, usato da viaggio-ritorno, partenza e ore-a-mano. ⚠️ È un **pannello dentro il foglio**, non un dialog annidato (Radix lo tratterebbe come clic "fuori" e chiuderebbe quello sotto).
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione

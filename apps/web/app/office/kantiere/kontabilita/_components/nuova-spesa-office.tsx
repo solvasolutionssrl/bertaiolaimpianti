@@ -32,7 +32,15 @@ import type { CantiereOption, DipendenteOption } from './spese-table';
  * l'utente office e' anche un dipendente) e selettore cantiere.
  */
 
-type MetodoPagamento = 'contanti' | 'carta' | 'altro';
+/** Il codice del metodo: l'elenco lo decide l'ufficio, non il codice. */
+type MetodoPagamento = string;
+
+/** Rete se la lista non arriva: meglio tre voci che una tendina vuota. */
+const METODI_DI_RIPIEGO: { codice: string; nome: string }[] = [
+  { codice: 'carta', nome: 'Carta aziendale' },
+  { codice: 'contanti', nome: 'Contanti' },
+  { codice: 'altro', nome: 'Altro' },
+];
 
 type Estratto = {
   ragione_sociale: string | null;
@@ -208,9 +216,17 @@ interface Props {
   cantieri: CantiereOption[];
   dipendentiOptions: DipendenteOption[];
   mioDipendenteId: string | null;
+  /** Metodi di pagamento del cliente (Impostazioni > Pagamenti). */
+  metodi?: { codice: string; nome: string }[];
 }
 
-export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId }: Props) {
+export function NuovaSpesaOffice({
+  cantieri,
+  dipendentiOptions,
+  mioDipendenteId,
+  metodi = [],
+}: Props) {
+  const elencoMetodi = metodi.length > 0 ? metodi : METODI_DI_RIPIEGO;
   const router = useRouter();
   const [aperto, setAperto] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
@@ -235,7 +251,9 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
   const [ragioneSociale, setRagioneSociale] = React.useState('');
   const [dataLocal, setDataLocal] = React.useState('');
   // default sempre "carta" (Carta aziendale) finche' l'AI non restituisce altro
-  const [metodo, setMetodo] = React.useState<MetodoPagamento>('carta');
+  const [metodo, setMetodo] = React.useState<MetodoPagamento>(
+    elencoMetodi[0]?.codice ?? 'carta',
+  );
   const [valuta, setValuta] = React.useState('EUR');
   // numero di persone (coperti): default 1, proposto dall'AI
   const [numeroPersone, setNumeroPersone] = React.useState(1);
@@ -627,9 +645,11 @@ export function NuovaSpesaOffice({ cantieri, dipendentiOptions, mioDipendenteId 
                       onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
                       className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
-                      <option value="carta">Carta aziendale</option>
-                      <option value="contanti">Contanti</option>
-                      <option value="altro">Altro</option>
+                      {elencoMetodi.map((m) => (
+                        <option key={m.codice} value={m.codice}>
+                          {m.nome}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

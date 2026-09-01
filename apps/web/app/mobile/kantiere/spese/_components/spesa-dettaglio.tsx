@@ -31,13 +31,15 @@ import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
 import { Portal } from '@/app/mobile/_components/portal';
 import type { SpesaRiga } from './spese-client';
 
-type Metodo = 'contanti' | 'carta' | 'altro';
+/** Il codice del metodo. Non e' piu' un elenco chiuso: lo gestisce l'ufficio. */
+type Metodo = string;
 
-const METODO_LABEL: Record<Metodo, string> = {
-  carta: 'Carta aziendale',
-  contanti: 'Contanti',
-  altro: 'Altro',
-};
+/** Rete se la lista non arriva: meglio tre voci che una tendina vuota. */
+const METODI_DI_RIPIEGO: { codice: string; nome: string }[] = [
+  { codice: 'carta', nome: 'Carta aziendale' },
+  { codice: 'contanti', nome: 'Contanti' },
+  { codice: 'altro', nome: 'Altro' },
+];
 
 const FIELD =
   'w-full min-w-0 max-w-full rounded-lg border border-border bg-background px-2.5 py-2 text-base outline-none focus:border-primary';
@@ -100,12 +102,15 @@ export function SpesaDettaglio({
   cantieriNomi,
   canEdit,
   cantieri,
+  metodi = [],
   onClose,
 }: {
   spesa: SpesaRiga | null;
   cantieriNomi: Record<string, string>;
   canEdit: boolean;
   cantieri: { id: string; nome: string }[];
+  /** Metodi di pagamento del cliente, gestiti da Impostazioni > Pagamenti. */
+  metodi?: { codice: string; nome: string }[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -123,7 +128,16 @@ export function SpesaDettaglio({
   const [categoria, setCategoria] = React.useState<CategoriaSpesa>('varie');
   const [ragioneSociale, setRagioneSociale] = React.useState('');
   const [dataLocal, setDataLocal] = React.useState('');
-  const [metodo, setMetodo] = React.useState<Metodo>('carta');
+  // Stabile fra un render e l'altro: se cambiasse identita' ogni volta, il
+  // ripristino dei campi qui sotto ripartirebbe e cancellerebbe quello che
+  // l'utente sta scrivendo.
+  const chiaveMetodi = metodi.map((m) => m.codice).join('|');
+  const elencoMetodi = React.useMemo(
+    () => (metodi.length > 0 ? metodi : METODI_DI_RIPIEGO),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chiaveMetodi],
+  );
+  const [metodo, setMetodo] = React.useState<Metodo>(elencoMetodi[0]?.codice ?? 'carta');
   const [numeroPersone, setNumeroPersone] = React.useState(1);
   const [cantiereId, setCantiereId] = React.useState('');
   const [note, setNote] = React.useState('');
@@ -143,11 +157,11 @@ export function SpesaDettaglio({
     setCategoria(spesa.categoria);
     setRagioneSociale(spesa.ragioneSociale ?? '');
     setDataLocal(isoToLocalInput(spesa.dataScontrino));
-    setMetodo(spesa.metodoPagamento ?? 'carta');
+    setMetodo(spesa.metodoPagamento ?? elencoMetodi[0]?.codice ?? 'carta');
     setNumeroPersone(spesa.numeroPersone || 1);
     setCantiereId(spesa.cantiereId ?? '');
     setNote(spesa.note ?? '');
-  }, [spesa]);
+  }, [spesa, elencoMetodi]);
 
   const valuta = spesa?.valuta || 'EUR';
   const importoNum = Number(importoTotale.replace(',', '.'));
@@ -395,9 +409,16 @@ export function SpesaDettaglio({
                         onChange={(e) => setMetodo(e.target.value as Metodo)}
                         className={'mt-1 ' + FIELD}
                       >
-                        <option value="carta">Carta aziendale</option>
-                        <option value="contanti">Contanti</option>
-                        <option value="altro">Altro</option>
+                        {elencoMetodi.map((m) => (
+                          <option key={m.codice} value={m.codice}>
+                            {m.nome}
+                          </option>
+                        ))}
+                        {/* Una spesa vecchia puo' puntare a un metodo ritirato:
+                            va mostrato lo stesso, o sparirebbe dalla tendina. */}
+                        {metodo && !elencoMetodi.some((m) => m.codice === metodo) && (
+                          <option value={metodo}>{metodo}</option>
+                        )}
                       </select>
                     </div>
                     <div className="min-w-0">
@@ -534,7 +555,14 @@ export function SpesaDettaglio({
                 <div className={GROUP + ' !space-y-2.5'}>
                   <p className={GROUP_LBL}>Dettaglio</p>
                   <Row label="Data" value={fmtDataInput(isoToLocalInput(spesa.dataScontrino))} />
-                  <Row label="Pagamento" value={METODO_LABEL[spesa.metodoPagamento ?? 'carta']} />
+                  <Row
+                    label="Pagamento"
+                    value={
+                      elencoMetodi.find((m) => m.codice === spesa.metodoPagamento)?.nome ??
+                      spesa.metodoPagamento ??
+                      '—'
+                    }
+                  />
                   <Row label="Persone" value={String(spesa.numeroPersone)} />
                   <Row label="Categoria" value={CATEGORIA_META[spesa.categoria]?.label} />
                   <Row label="Esercente" value={spesa.ragioneSociale} />

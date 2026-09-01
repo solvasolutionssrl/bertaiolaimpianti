@@ -218,3 +218,115 @@ export async function leggiPolicyRapportini(
     sogliaAnomaliaTurnoOre: toInt(config['anomalia_turno_ore_max'], 10) || 10,
   };
 }
+
+/** Solo la soglia oltre la quale una giornata non si approva da sola. */
+export async function sogliaAnomaliaTurnoOre(
+  supabase: Supa,
+  tenantId: string,
+): Promise<number> {
+  return (await leggiPolicyRapportini(supabase, tenantId)).sogliaAnomaliaTurnoOre;
+}
+
+export interface GiornateOltreSoglia {
+  giornate: number;
+  /** Ore in attesa, già in formato leggibile: "134:06". */
+  oreTotali: string;
+  /** I nomi di chi le ha, per dare un appiglio: "Atanasoaie, Vanzo e altri 2". */
+  chi: string;
+}
+
+/**
+ * Le giornate rimaste «da verificare» perché superano la soglia.
+ *
+ * Sono lavoro vero, non dati sballati: giornate lunghe da trasferta che il
+ * freno tiene ferme apposta. Il guaio è che se nessuno le guarda restano lì per
+ * sempre, e quelle ore non arrivano da nessuna parte — per questo la dashboard
+ * le mostra invece di lasciarle sedimentare in una pagina che nessuno apre.
+ *
+ * Fail-soft: se qualcosa non risponde, l'avviso semplicemente non compare.
+ */
+export async function giornateOltreSoglia(
+  supabase: Supa,
+  tenantId: string,
+  sogliaOre: number,
+  /** Oggi in formato AAAA-MM-GG (ora italiana). */
+  oggiIso: string,
+): Promise<GiornateOltreSoglia> {
+  const vuoto: GiornateOltreSoglia = { giornate: 0, oreTotali: '0:00', chi: '' };
+  try {
+    const { data } = await supabase
+      .from('rapportini' as never)
+      .select(
+        'id, data, dipendente_id, righe:rapportino_righe(ore_ordinarie, ore_straordinarie),' +
+          ' dipendente:dipendenti(cognome)',
+      )
+      .eq('tenant_id', tenantId)
+      .eq('stato', 'bozza')
+      // Oggi no: un turno ancora in corso non "aspetta un controllo", aspetta
+      // solo di finire. Segnalarlo sarebbe gridare al lupo.
+      .lt('data', oggiIso);
+
+    const righe = (data ?? []) as unknown as {
+      id: string;
+      data: string;
+      dipendente_id: string;
+      righe: { ore_ordinarie: number | null; ore_straordinarie: number | null }[] | null;
+      dipendente: { cognome: string | null } | null;
+    }[];
+
+    const candidate = righe
+      .map((r) => ({
+        ...r,
+        minuti: Math.round(
+          (r.righe ?? []).reduce(
+            (a, x) => a + Number(x.ore_ordinarie ?? 0) + Number(x.ore_straordinarie ?? 0),
+            0,
+          ) * 60,
+        ),
+      }))
+      .filter((r) => r.minuti > sogliaOre * 60);
+
+    if (candidate.length === 0) return vuoto;
+
+    // Una giornata rimasta APERTA (qualcuno non ha timbrato l'uscita) è un
+    // problema diverso, e ha la sua pagina: qui si contano solo quelle chiuse
+    // che il freno delle ore tiene ferme.
+    const date = [...new Set(candidate.map((r) => r.data))].sort();
+    const { data: timbRaw } = await supabase
+      .from('timbrature' as never)
+      .select('dipendente_id, tipo, ts')
+      .eq('tenant_id', tenantId)
+      .gte('ts', `${date[0]}T00:00:00Z`);
+
+    const bilancio = new Map<string, number>();
+    for (const tb of (timbRaw ?? []) as unknown as {
+      dipendente_id: string;
+      tipo: string;
+      ts: string;
+    }[]) {
+      const giorno = new Date(tb.ts).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
+      const k = `${tb.dipendente_id}|${giorno}`;
+      bilancio.set(k, (bilancio.get(k) ?? 0) + (tb.tipo === 'ingresso' ? 1 : -1));
+    }
+
+    const ferme = candidate.filter(
+      (r) => (bilancio.get(`${r.dipendente_id}|${r.data}`) ?? 0) === 0,
+    );
+    if (ferme.length === 0) return vuoto;
+
+    const minuti = ferme.reduce((a, r) => a + r.minuti, 0);
+    const nomi = [...new Set(ferme.map((r) => r.dipendente?.cognome).filter(Boolean))] as string[];
+    const chi =
+      nomi.length <= 2
+        ? nomi.join(' e ')
+        : `${nomi.slice(0, 2).join(', ')} e altri ${nomi.length - 2}`;
+
+    return {
+      giornate: ferme.length,
+      oreTotali: `${Math.floor(minuti / 60)}:${String(minuti % 60).padStart(2, '0')}`,
+      chi,
+    };
+  } catch {
+    return vuoto;
+  }
+}

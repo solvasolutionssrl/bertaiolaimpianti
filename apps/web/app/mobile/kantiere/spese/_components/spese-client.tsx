@@ -113,6 +113,7 @@ export function SpeseClient({
   cantieriNomi,
   canEdit = false,
   cantieri = [],
+  metodi = [],
   todayKey,
   yesterdayKey,
 }: {
@@ -121,6 +122,8 @@ export function SpeseClient({
   /** admin/office → dettaglio modificabile; tecnico → sola lettura. */
   canEdit?: boolean;
   cantieri?: { id: string; nome: string }[];
+  /** Metodi di pagamento del cliente, gestiti da Impostazioni > Pagamenti. */
+  metodi?: { codice: string; nome: string }[];
   todayKey: string;
   yesterdayKey: string;
 }) {
@@ -237,6 +240,7 @@ export function SpeseClient({
       ))}
 
       <SpesaDettaglio
+        metodi={metodi}
         spesa={dettaglio}
         cantieriNomi={cantieriNomi}
         canEdit={canEdit}

@@ -1,6 +1,12 @@
 import 'server-only';
 import { z } from 'zod';
 
+import {
+  CODICE_PAGAMENTO_DI_RIPIEGO,
+  METODI_PREDEFINITI,
+  leggiMetodiAttivi,
+} from '@/app/_lib/metodi-pagamento';
+
 import { createServiceSupabase } from '@kommessa/api/service';
 import {
   getR2ProviderFromEnv,
@@ -36,7 +42,13 @@ import { segnalaAiNonDisponibile } from '@/app/_lib/ai-alert';
  *     ufficio), foto SEMPRE conservata (`analisi_errore` spiega il perché).
  */
 
-export const PROMPT_SCONTRINO = `Sei un assistente che legge scontrini e ricevute italiani.
+function promptScontrino(metodi: { codice: string; nome: string }[]): string {
+  // I metodi non sono piu' un elenco fisso: l'ufficio li gestisce da
+  // Impostazioni > Pagamenti, e quello che aggiunge deve diventare subito una
+  // scelta possibile anche per chi legge lo scontrino.
+  const elenco = metodi.map((m) => `"${m.codice}"`).join("|") || '"altro"';
+  const glossario = metodi.map((m) => `${m.codice} = ${m.nome}`).join("; ");
+  return `Sei un assistente che legge scontrini e ricevute italiani.
 Estrai SOLO questi campi e restituisci ESCLUSIVAMENTE un JSON valido (nessun testo extra):
 {
   "ragione_sociale": string|null,        // nome esercente / ragione sociale
@@ -46,14 +58,17 @@ Estrai SOLO questi campi e restituisci ESCLUSIVAMENTE un JSON valido (nessun tes
   "valuta": string|null,                 // es "EUR"
   "data_scontrino": string|null,         // ISO 8601 con ora se presente, es "2026-06-25T13:20:00"
   "partita_iva": string|null,
-  "metodo_pagamento": "contanti"|"carta"|"altro"|null,
+  "metodo_pagamento": ${elenco}|null,
   "numero_documento": string|null,
   "indirizzo_esercente": string|null,
   "numero_persone": number|null       // numero di coperti o di menu' fissi rilevati; se non deducibile null
 }
 Regole: categoria dedotta dall'esercente (ristorante/trattoria/pizzeria=ristorante; bar/caffe=bar; albergo/hotel/B&B=hotel; benzina/carburante/distributore=carburante; pedaggio/parcheggio/taxi/treno/bus=trasporti; altrimenti varie).
 numero_persone = numero di coperti o di menu' fissi rilevati sullo scontrino; se non deducibile usa null.
-Importi col formato dello scontrino (virgola decimale ammessa). Se un campo non e' leggibile usa null. Rispondi solo col JSON.`;
+Importi col formato dello scontrino (virgola decimale ammessa). Se un campo non e' leggibile usa null.
+metodo_pagamento: scegli SOLO fra questi valori, che significano ${glossario}. Se non e' deducibile usa null.
+Rispondi solo col JSON.`;
+}
 
 const EstrattoSchema = z.object({
   ragione_sociale: z.string().trim().min(1).max(200).optional().catch(undefined),
@@ -63,7 +78,9 @@ const EstrattoSchema = z.object({
   valuta: z.string().trim().min(1).max(8).optional().catch(undefined),
   data_scontrino: z.string().trim().min(4).max(40).optional().catch(undefined),
   partita_iva: z.string().trim().min(2).max(40).optional().catch(undefined),
-  metodo_pagamento: z.enum(['contanti', 'carta', 'altro']).optional().catch(undefined),
+  // Non un enum chiuso: i codici li decide il cliente. Il controllo vero e'
+  // dopo, contro la sua lista — qui basta che sia una stringa breve.
+  metodo_pagamento: z.string().trim().min(2).max(40).optional().catch(undefined),
   numero_documento: z.string().trim().min(1).max(60).optional().catch(undefined),
   indirizzo_esercente: z.string().trim().min(2).max(200).optional().catch(undefined),
   numero_persone: z.union([z.string(), z.number()]).optional().catch(undefined),
@@ -77,7 +94,7 @@ export type DatiScontrino = {
   valuta: string;
   data_scontrino: string | null;
   partita_iva: string | null;
-  metodo_pagamento: 'contanti' | 'carta' | 'altro' | null;
+  metodo_pagamento: string | null;
   numero_documento: string | null;
   indirizzo_esercente: string | null;
   numero_persone: number | null;
@@ -110,6 +127,8 @@ const DATI_VUOTI: DatiScontrino = {
 export async function estraiDatiScontrino(
   buf: Buffer,
   mime: string,
+  /** I metodi di pagamento del cliente: e' fra questi che l'AI puo' scegliere. */
+  metodi: { codice: string; nome: string }[] = METODI_PREDEFINITI,
 ): Promise<EsitoEstrazione> {
   if (mime === 'application/pdf' || !isOpenAIConfigured()) {
     return { stato: 'ok', dati: { ...DATI_VUOTI }, aiOk: false };
@@ -127,7 +146,7 @@ export async function estraiDatiScontrino(
         {
           role: 'user',
           content: [
-            { type: 'text', text: PROMPT_SCONTRINO },
+            { type: 'text', text: promptScontrino(metodi) },
             { type: 'image_url', image_url: { url: `data:${mime};base64,${b64}`, detail: 'high' } },
           ],
         },
@@ -160,7 +179,11 @@ export async function estraiDatiScontrino(
         valuta: (e.valuta ?? 'EUR').toUpperCase().slice(0, 8),
         data_scontrino: parseDataScontrino(e.data_scontrino ?? null),
         partita_iva: e.partita_iva ?? null,
-        metodo_pagamento: e.metodo_pagamento ?? null,
+        // L'AI puo' rispondere qualunque cosa: teniamo solo un codice che
+        // il cliente ha davvero in elenco, altrimenti null e sceglie l'utente.
+        metodo_pagamento: metodi.some((m) => m.codice === e.metodo_pagamento)
+          ? (e.metodo_pagamento as string)
+          : null,
         numero_documento: e.numero_documento ?? null,
         indirizzo_esercente: e.indirizzo_esercente ?? null,
         numero_persone: parseNumeroPersone(e.numero_persone),
@@ -251,7 +274,10 @@ export async function processSpesaAI(opts: {
     mime = scaricata.mime;
   }
 
-  const esito = await estraiDatiScontrino(buf, mime);
+  // I metodi di pagamento del cliente: l'AI sceglie fra i suoi, non fra tre
+  // scritti nel codice.
+  const metodi = await leggiMetodiAttivi(service, opts.tenantId);
+  const esito = await estraiDatiScontrino(buf, mime, metodi);
 
   if (esito.stato === 'ai_non_disponibile') {
     // Problema di SERVIZIO (non "illeggibile"): avvisa il super admin, conserva
@@ -281,7 +307,9 @@ export async function processSpesaAI(opts: {
     valuta: d.valuta || 'EUR',
     data_scontrino: d.data_scontrino,
     partita_iva: d.partita_iva,
-    metodo_pagamento: d.metodo_pagamento ?? 'carta',
+    // Se l'AI non se la sente, si ripiega sul primo metodo in uso del cliente:
+    // 'carta' potrebbe non esistere piu' nel suo elenco.
+    metodo_pagamento: d.metodo_pagamento ?? metodi[0]?.codice ?? CODICE_PAGAMENTO_DI_RIPIEGO,
     numero_documento: d.numero_documento,
     indirizzo_esercente: d.indirizzo_esercente,
     numero_persone: d.numero_persone ?? 1,

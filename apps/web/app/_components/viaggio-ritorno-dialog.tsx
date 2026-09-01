@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
+import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 import { Button } from '@kommessa/ui';
 import {
   CantiereSearchSheet,
@@ -254,6 +255,7 @@ export function ViaggioRitornoDialog({
   const [confermMin, setConfermMin] = useState<number>(0);
   const [giustificazione, setGiustificazione] = useState('');
   const [autista, setAutista] = useState(false);
+  const passeggero = useConfermaPasseggero();
   const [mezzoId, setMezzoId] = useState<string>('');
 
   // Pausa pranzo dichiarata (ripiego se non timbrata)
@@ -387,7 +389,7 @@ export function ViaggioRitornoDialog({
     setConfermMin((m) => Math.max(0, m + delta));
   }
 
-  function handleConferma() {
+  async function handleConferma() {
     setErrLocale(null);
     // Casa = nessun viaggio: si salta ogni validazione viaggio.
     if (usaViaggio && !casa) {
@@ -423,6 +425,10 @@ export function ViaggioRitornoDialog({
         return;
       }
     }
+    // Se dichiara di essere passeggero, chiediglielo: quei km non glieli conta
+    // nessuno e non deve scoprirlo a fine mese.
+    if (usaViaggio && !casa && !(await passeggero.conferma(autista))) return;
+
     startTransition(async () => {
       setErroreMsg(null);
       const res = await onConfirm({
@@ -466,6 +472,8 @@ export function ViaggioRitornoDialog({
         className="relative z-10 max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl border-t border-border bg-background shadow-lg"
         style={{ paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom, 0px) + 1rem))' }}
       >
+        {/* Sta DENTRO il foglio: un secondo dialog lo chiuderebbe. */}
+        {passeggero.pannello}
         <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-background px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="mx-auto h-1 w-10 shrink-0 rounded-full bg-muted" aria-hidden />
@@ -598,12 +606,18 @@ export function ViaggioRitornoDialog({
                 )}
               </div>
 
-              <div className="space-y-2">
+              <div
+                ref={passeggero.propsEvidenza.ref}
+                className={"space-y-2 " + passeggero.propsEvidenza.className}
+              >
                 <label className="flex cursor-pointer items-center gap-2.5 select-none">
                   <input
                     type="checkbox"
                     checked={autista}
-                    onChange={(e) => setAutista(e.target.checked)}
+                    onChange={(e) => {
+                      passeggero.spegniEvidenza();
+                      setAutista(e.target.checked);
+                    }}
                     className="h-4 w-4 rounded border-input accent-primary"
                   />
                   <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
