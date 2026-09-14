@@ -7,6 +7,7 @@ import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { differenzeGiornata, type SnapshotGiornata } from '@kommessa/api/kantiere-cronologia';
 import { scriviVersioneRapportino, leggiStatoGiornata, type StatoGiornata } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
 import { inserisciPausaDichiarata, sedeAmmessaPerCantiere } from './_lib/viaggio-timbra';
@@ -645,6 +646,12 @@ export type GiornoStorico = {
   ord: number;
   straord: number;
   viaggio: number;
+  /**
+   * L'ultima correzione dell'ufficio su questa giornata, se ha cambiato qualcosa.
+   * È l'unica parte della cronologia che serve al tecnico: se qualcuno gli ha
+   * cambiato le ore deve poterlo sapere senza telefonare.
+   */
+  correzioneUfficio?: { quando: string; chi: string | null; cosa: string[] } | null;
 };
 
 export async function mioStoricoRapportini(
@@ -696,11 +703,40 @@ export async function mioStoricoRapportini(
     tot.set(rr.rapportino_id, e);
   }
 
+  const correzioni = new Map<string, { quando: string; chi: string | null; cosa: string[] }>();
+  const { data: versRaw } = await supabase
+    .from('rapportino_versioni' as never)
+    .select('rapportino_id, modificato_da_nome, created_at, snapshot')
+    .in('rapportino_id', ids)
+    .in('azione', ['modifica_ufficio', 'pausa_ufficio', 'chiusura_ufficio'])
+    .order('created_at', { ascending: true });
+  for (const v of (versRaw as {
+    rapportino_id: string;
+    modificato_da_nome: string | null;
+    created_at: string;
+    snapshot: SnapshotGiornata | null;
+  }[] | null) ?? []) {
+    // Al tecnico interessano le ore, non i passaggi di stato interni.
+    const cosa = differenzeGiornata(v.snapshot?.prima ?? null, v.snapshot).filter(
+      (r) => !r.startsWith('Stato '),
+    );
+    if (v.snapshot?.prima && cosa.length === 0) continue;
+    correzioni.set(v.rapportino_id, { quando: v.created_at, chi: v.modificato_da_nome, cosa });
+  }
+
   return {
     ok: true,
     giorni: rows.map((x) => {
       const t = tot.get(x.id) ?? { ord: 0, straord: 0, viaggio: 0 };
-      return { id: x.id, data: x.data, stato: x.stato, ord: t.ord, straord: t.straord, viaggio: t.viaggio };
+      return {
+        id: x.id,
+        data: x.data,
+        stato: x.stato,
+        ord: t.ord,
+        straord: t.straord,
+        viaggio: t.viaggio,
+        correzioneUfficio: correzioni.get(x.id) ?? null,
+      };
     }),
   };
 }

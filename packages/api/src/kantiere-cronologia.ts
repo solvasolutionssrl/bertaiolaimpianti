@@ -375,6 +375,10 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
   const lavoro = timb.filter((t) => !t.pausa);
   const ultimaUscitaLavoro = [...lavoro].reverse().find((t) => t.tipo === 'uscita')?.id ?? null;
   const assorbite = new Set<string>();
+  // Il cantiere sotto ogni evento serve solo se la giornata ne ha più d'uno, e
+  // solo quando cambia: con un cantiere solo è già in testa, ripeterlo è rumore.
+  const piuCantieri = new Set(timb.map((t) => t.cantiere).filter(Boolean)).size > 1;
+  let ultimoCantiereMostrato: string | null = null;
 
   for (let i = 0; i < timb.length; i += 1) {
     const t = timb[i]!;
@@ -408,6 +412,7 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
         tipo = 'cambio_cantiere';
         titolo = 'Cambio cantiere';
         cantiere = t.cantiere && dopo.cantiere ? `${t.cantiere} → ${dopo.cantiere}` : dopo.cantiere;
+        ultimoCantiereMostrato = dopo.cantiere;
       } else if (t.id === ultimaUscitaLavoro) {
         tipo = 'fine_turno';
         titolo = 'Fine turno';
@@ -443,7 +448,12 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
       modalita: MODALITA_ETICHETTA[modalita],
       attore,
       chi: attore === 'persona' ? null : attore === 'sistema' ? null : t.creatoNome,
-      dettaglio: cantiere ? [cantiere] : [],
+      dettaglio: (() => {
+        if (tipo === 'cambio_cantiere') return cantiere ? [cantiere] : [];
+        if (!piuCantieri || !cantiere || cantiere === ultimoCantiereMostrato) return [];
+        ultimoCantiereMostrato = cantiere;
+        return [cantiere];
+      })(),
       ricostruita,
       dopoApprovazione: false,
       attenzione: modalita === 'pausa_chiusa_sistema' || modalita === 'ufficio',
@@ -549,6 +559,41 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
   }
 
   return eventi.sort((a, b) => Date.parse(a.quando) - Date.parse(b.quando));
+}
+
+// ---------------------------------------------------------------------------
+// Riassunto delle versioni (per gli elenchi)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cosa raccontano davvero le versioni di una giornata, senza ricostruirla tutta.
+ *
+ * - `azioniSignificative`: le azioni che hanno cambiato qualcosa (le versioni
+ *   vecchie salvate a ore identiche non contano: altrimenti una giornata
+ *   risulterebbe «corretta» senza esserlo).
+ * - `modificheDopoApprovazione`: quante modifiche vere sono arrivate quando la
+ *   giornata era già approvata.
+ */
+export function riassuntoVersioni(versioni: VersioneCronologia[]): {
+  azioniSignificative: string[];
+  modificheDopoApprovazione: number;
+} {
+  const ordinate = [...versioni].sort((a, b) => a.versione - b.versione);
+  const azioni: string[] = [];
+  let dopo = 0;
+  let precedente: SnapshotGiornata | null = null;
+  for (const v of ordinate) {
+    const snap = v.snapshot ?? null;
+    const prima = snap?.prima ?? precedente;
+    const eModifica = AZIONI_MODIFICA.has(v.azione);
+    const cambiata = !eModifica || !prima || differenzeGiornata(prima, snap).length > 0;
+    if (cambiata) {
+      azioni.push(v.azione);
+      if (eModifica && prima?.stato === 'approvato') dopo += 1;
+    }
+    precedente = snap;
+  }
+  return { azioniSignificative: azioni, modificheDopoApprovazione: dopo };
 }
 
 // ---------------------------------------------------------------------------

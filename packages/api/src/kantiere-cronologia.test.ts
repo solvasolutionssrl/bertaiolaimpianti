@@ -9,6 +9,7 @@ import {
   costruisciCronologia,
   differenzeGiornata,
   modalitaDi,
+  riassuntoVersioni,
   versioneSenzaCambiamenti,
   type TimbraturaCronologia,
 } from './kantiere-cronologia';
@@ -146,6 +147,38 @@ describe('costruisciCronologia', () => {
     });
     expect(ev.map((e) => e.titolo)).toEqual(['Inizio turno', 'Cambio cantiere', 'Fine turno']);
     expect(ev[1]!.dettaglio).toEqual(['A → B']);
+  });
+
+  it('con un cantiere solo non lo ripete sotto ogni evento', () => {
+    const ev = costruisciCronologia({
+      timbrature: [
+        timb({ id: 'a', tipo: 'ingresso', ts: '2026-09-01T06:00:00Z', cantiere: 'A' }),
+        timb({ id: 'b', tipo: 'uscita', ts: '2026-09-01T15:00:00Z', cantiere: 'A', modalita: 'app' }),
+      ],
+      viaggi: [], versioni: [], userIdPersona: PERSONA, approvataAutoAl: null,
+    });
+    expect(ev.every((e) => e.dettaglio.length === 0)).toBe(true);
+  });
+
+  it('con più cantieri lo dice solo quando cambia', () => {
+    const ev = costruisciCronologia({
+      timbrature: [
+        timb({ id: 'a', tipo: 'ingresso', ts: '2026-09-01T06:00:00Z', cantiere: 'A' }),
+        timb({ id: 'p', tipo: 'uscita', ts: '2026-09-01T09:00:00Z', cantiere: 'A', pausa: true, modalita: 'app' }),
+        timb({ id: 'q', tipo: 'ingresso', ts: '2026-09-01T09:15:00Z', cantiere: 'A', pausa: true, modalita: 'app' }),
+        timb({ id: 'b', tipo: 'uscita', ts: '2026-09-01T11:00:00Z', cantiere: 'A', modalita: 'app' }),
+        timb({ id: 'c', tipo: 'ingresso', ts: '2026-09-01T11:00:01Z', cantiere: 'B', modalita: 'app' }),
+        timb({ id: 'd', tipo: 'uscita', ts: '2026-09-01T15:00:00Z', cantiere: 'B', modalita: 'app' }),
+      ],
+      viaggi: [], versioni: [], userIdPersona: PERSONA, approvataAutoAl: null,
+    });
+    expect(ev.map((e) => [e.titolo, e.dettaglio.join('')])).toEqual([
+      ['Inizio turno', 'A'],
+      ['Inizio pausa', ''],
+      ['Fine pausa', ''],
+      ['Cambio cantiere', 'A → B'],
+      ['Fine turno', ''],
+    ]);
   });
 
   it('una timbratura dell ufficio dice chi l ha inserita e va in evidenza', () => {
@@ -287,5 +320,25 @@ describe('affidabilitaGiornata', () => {
         timbrature: [timb({ id: 'a', tipo: 'ingresso', ts: 'x', modalita: 'qr' })],
       }),
     ).toBe('corretta_ufficio');
+  });
+});
+
+describe('riassuntoVersioni', () => {
+  it('le versioni senza cambiamenti non rendono «corretta» una giornata', () => {
+    const r = riassuntoVersioni([
+      { versione: 1, azione: 'modifica_tecnico', quando: 'x', chi: null, snapshot: { stato: 'approvato', totali: { ore_ordinarie: 8 } } },
+      { versione: 2, azione: 'modifica_ufficio', quando: 'x', chi: null, snapshot: { stato: 'approvato', totali: { ore_ordinarie: 8 } } },
+    ]);
+    // La prima non ha un «prima» e conta; la seconda è identica e non conta.
+    expect(r.azioniSignificative).toEqual(['modifica_tecnico']);
+    expect(r.modificheDopoApprovazione).toBe(0);
+  });
+
+  it('conta le modifiche vere arrivate su una giornata già approvata', () => {
+    const r = riassuntoVersioni([
+      { versione: 1, azione: 'pausa_ufficio', quando: 'x', chi: null, snapshot: { stato: 'approvato', totali: { ore_ordinarie: 7 }, prima: { stato: 'approvato', totali: { ore_ordinarie: 8 } } } },
+    ]);
+    expect(r.azioniSignificative).toEqual(['pausa_ufficio']);
+    expect(r.modificheDopoApprovazione).toBe(1);
   });
 });

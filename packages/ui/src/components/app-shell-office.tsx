@@ -354,7 +354,7 @@ function OfficeShell({
     // la finestra scorre, la sidebar scorre via con lei e sotto resta il vuoto.
     // Succedeva per colpa degli `sr-only` (Tailwind li rende assoluti), quindi
     // in modo intermittente — solo sulle pagine abbastanza lunghe.
-    <div className={cn('relative flex h-screen flex-col overflow-hidden bg-background', className)}>
+    <div data-app-shell="" className={cn('relative flex h-screen flex-col overflow-hidden bg-background', className)}>
       {/* Header (righetta brand + header) come figlio flex shrink-0 in cima:
           resta fisso perché la colonna non scrolla (scrolla solo <main>). */}
       <div className="z-30 shrink-0">
@@ -636,7 +636,9 @@ function OfficeShell({
         {/* ===================== Main (UNICA area che scrolla) ===================== */}
         {/* `relative`: gli elementi assoluti del contenuto si ancorano qui e
             scorrono col contenuto, invece di restare appesi al documento. */}
-        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas">
+        {/* La riserva per la barra di scorrimento sta qui, sull'elemento che
+            scorre davvero: evita lo scatto fra schede di altezza diversa. */}
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas [scrollbar-gutter:stable]">
           <div className="mx-auto w-full max-w-[1760px] flex-1 px-4 py-5 md:px-7 md:py-6">
             {children}
           </div>

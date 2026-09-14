@@ -15,6 +15,13 @@ function fmtGiorno(data: string): string {
   }).format(new Date(`${data}T12:00:00Z`));
 }
 
+/** "12/09" in ora italiana. */
+function fmtGiornoBreve(iso: string): string {
+  return new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit' }).format(
+    new Date(iso),
+  );
+}
+
 function fmtOre(n: number): string {
   const totMin = Math.max(0, Math.round(n * 60));
   return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
@@ -94,6 +101,24 @@ export function StoricoOre({ giorni, passo = 15 }: { giorni: GiornoStorico[]; pa
                           <span className="tabular-nums text-sky-600">viaggio {fmtOre(g.viaggio)}</span>
                         )}
                       </p>
+                      {/* Una riga sola, e solo se l'ufficio ha cambiato le ore:
+                          al tecnico il resto della cronologia non serve. */}
+                      {g.correzioneUfficio ? (
+                        <p className="mt-1 flex min-w-0 items-start gap-1.5 text-[11px] leading-snug text-amber-700">
+                          <span aria-hidden="true" className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                          {/* Niente troncamento: il «prima → dopo» è proprio la parte
+                              che serve, e tagliata non si leggeva. */}
+                          <span className="min-w-0">
+                            Corretta dall’ufficio il {fmtGiornoBreve(g.correzioneUfficio.quando)}
+                            {g.correzioneUfficio.cosa[0] ? (
+                              <span className="whitespace-nowrap tabular-nums">
+                                {' · '}
+                                {g.correzioneUfficio.cosa[0].replace(/^Lavoro /, 'ore ')}
+                              </span>
+                            ) : null}
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${meta.cls}`}

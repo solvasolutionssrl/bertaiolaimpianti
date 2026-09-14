@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
-import { VersioniDialog } from './versioni-dialog';
+import { BollinoAffidabilita, CronologiaGiornataPannello } from '../../_components/cronologia-giornata';
+import type { Affidabilita } from '@kommessa/api/kantiere-cronologia';
 import {
   TimbratureRiepilogo,
   TimbratureSommario,
@@ -91,6 +92,10 @@ export type RapportiniRiga = {
   nRighe: number;
   righe: RigaCommessa[];
   timbrature: TimbraturaItem[];
+  /** Quanto fidarsi delle ore: tutta timbrata, in parte a mano, corretta dall'ufficio. */
+  affidabilita?: Affidabilita;
+  /** Modifiche vere arrivate quando la giornata era già approvata. */
+  modificheDopoApprovazione?: number;
 };
 
 export type FiltriRapportini = {
@@ -768,7 +773,18 @@ export function RapportiniClient({
                                   )}
                                 </td>
                                 <td className="px-2.5 py-1.5 align-top">
-                                  <div className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</div>
+                                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                    <span className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</span>
+                                    {riga.affidabilita ? (
+                                      <BollinoAffidabilita
+                                        affidabilita={riga.affidabilita}
+                                        modificheDopoApprovazione={riga.modificheDopoApprovazione}
+                                        onClick={() =>
+                                          setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })
+                                        }
+                                      />
+                                    ) : null}
+                                  </div>
                                   <div className="mt-0.5">
                                     <TimbratureSommario timbrature={riga.timbrature} />
                                   </div>
@@ -828,19 +844,18 @@ export function RapportiniClient({
                                     >
                                       <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                                     </Button>
-                                    {riga.stato !== 'bozza' ? (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-7 w-7 p-0"
-                                        title="Cronologia modifiche"
-                                        onClick={() =>
-                                          setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })
-                                        }
-                                      >
-                                        <History className="h-3.5 w-3.5" aria-hidden="true" />
-                                      </Button>
-                                    ) : null}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      title="Cronologia della giornata"
+                                      aria-label="Cronologia della giornata"
+                                      onClick={() =>
+                                        setVersioniFor({ id: riga.id, nome: riga.dipendenteNome, data: riga.data })
+                                      }
+                                    >
+                                      <History className="h-3.5 w-3.5" aria-hidden="true" />
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -993,8 +1008,8 @@ export function RapportiniClient({
         </DialogContent>
       </Dialog>
 
-      {/* Dialog Cronologia versioni */}
-      <VersioniDialog rapportino={versioniFor} onClose={() => setVersioniFor(null)} />
+      {/* Cronologia della giornata: pannello laterale, si legge accanto all'elenco */}
+      <CronologiaGiornataPannello rapportino={versioniFor} onClose={() => setVersioniFor(null)} />
 
       {/* Dialog Correggi giornata (pausa pranzo + correzione ore) */}
       {correggiFor ? (

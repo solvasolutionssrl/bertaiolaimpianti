@@ -105,6 +105,15 @@
        (tabelle, diagrammi) scrollano dentro il proprio contenitore. */
     overflow-x: hidden;
   }
+  /* Nei gusci office e admin la pagina non scorre MAI: scorre solo <main>.
+     Riservare lo spazio della barra sull'html, lì, sprecava 15px su ogni
+     schermata e faceva fermare prima del bordo tutto ciò che è fissato a
+     destra (intestazione, pannelli laterali). E non proteggeva più le schede
+     dallo scatto, perché la barra compare su <main>, non sull'html. Lo spazio
+     si riserva sul <main> dei gusci (vedi app-shell-office e admin-shell). */
+  html:has([data-app-shell]) {
+    scrollbar-gutter: auto;
+  }
   /* Scala un filo più piccola su mobile (~-6%): font e spaziature in rem si
      riducono in proporzione. Gli input restano 16px (regola sotto) per non
      innescare lo zoom-on-focus di iOS. */

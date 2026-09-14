@@ -2,6 +2,11 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import {
+  affidabilitaGiornata,
+  riassuntoVersioni,
+  type SnapshotGiornata,
+} from '@kommessa/api/kantiere-cronologia';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino';
 import {
@@ -22,6 +27,7 @@ type RapportinoRow = {
   inviato_at: string | null;
   approvato_da: string | null;
   note: string | null;
+  auto_compilato: boolean | null;
 };
 
 type RigaRow = {
@@ -47,6 +53,8 @@ type TimbratureRow = {
   created_at: string | null;
   creato_da: string | null;
   auto_chiusa: boolean | null;
+  modalita: string | null;
+  geo_lat: number | null;
 };
 
 type DipendenteRow = {
@@ -123,7 +131,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   // Carica rapportini nel range
   let query = supabase
     .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato, inviato_at, approvato_da, note')
+    .select('id, dipendente_id, data, stato, inviato_at, approvato_da, note, auto_compilato')
     .eq('tenant_id', ctx.tenantId)
     .gte('data', from)
     .lte('data', to)
@@ -158,13 +166,42 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
 
   // Batch-load dipendenti (per display)
   const dipendentiMap = new Map<string, string>();
+  const utenteDelDipendente = new Map<string, string | null>();
   if (dipIds.length > 0) {
     const { data } = (await supabase
       .from('dipendenti' as never)
-      .select('id, nome, cognome')
-      .in('id', dipIds)) as { data: DipendenteRow[] | null };
+      .select('id, nome, cognome, user_id')
+      .in('id', dipIds)) as { data: (DipendenteRow & { user_id: string | null })[] | null };
     for (const d of data ?? []) {
       dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
+      utenteDelDipendente.set(d.id, d.user_id);
+    }
+  }
+
+  // Versioni delle giornate: servono al bollino (corretta dall'ufficio, in parte
+  // a mano) e a segnalare le modifiche arrivate dopo l'approvazione.
+  const versioniPerRapportino = new Map<
+    string,
+    { versione: number; azione: string; quando: string; chi: string | null; snapshot: SnapshotGiornata | null }[]
+  >();
+  if (rapportinoIds.length > 0) {
+    const { data } = (await supabase
+      .from('rapportino_versioni' as never)
+      .select('rapportino_id, versione, azione, modificato_da_nome, created_at, snapshot')
+      .in('rapportino_id', rapportinoIds)) as {
+      data: {
+        rapportino_id: string;
+        versione: number;
+        azione: string;
+        modificato_da_nome: string | null;
+        created_at: string;
+        snapshot: SnapshotGiornata | null;
+      }[] | null;
+    };
+    for (const v of data ?? []) {
+      const arr = versioniPerRapportino.get(v.rapportino_id) ?? [];
+      arr.push({ versione: v.versione, azione: v.azione, quando: v.created_at, chi: v.modificato_da_nome, snapshot: v.snapshot });
+      versioniPerRapportino.set(v.rapportino_id, arr);
     }
   }
 
@@ -179,7 +216,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const { toIso: tsTo } = romeDayBoundsUtc(to);
     const { data } = (await supabase
       .from('timbrature' as never)
-      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa')
+      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa, modalita, geo_lat')
       .eq('tenant_id', ctx.tenantId)
       .in('dipendente_id', dipIds)
       .gte('ts', tsFrom)
@@ -269,6 +306,14 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       autoChiusa: t.auto_chiusa ?? false,
     });
     timbratureByKey.set(key, arr);
+  }
+
+  const timbratureGrezzePerChiave = new Map<string, TimbratureRow[]>();
+  for (const t of timbratureData) {
+    const k = `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`;
+    const arr = timbratureGrezzePerChiave.get(k) ?? [];
+    arr.push(t);
+    timbratureGrezzePerChiave.set(k, arr);
   }
 
   // Mappa rapportino_id -> righe
@@ -419,7 +464,25 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const usciteChiusura = timbrature.filter((t) => t.tipo === 'uscita' && !t.pausa).length;
     const aperta = ingressiChiusura > usciteChiusura;
     const pausaTimbrata = timbrature.some((t) => !!t.pausa);
+    const riassunto = riassuntoVersioni(versioniPerRapportino.get(r.id) ?? []);
+    const affidabilita = affidabilitaGiornata({
+      timbrature: (timbratureGrezzePerChiave.get(timbratureKey) ?? []).map((t) => ({
+        modalita: t.modalita,
+        origine: t.origine,
+        pausa: t.pausa,
+        autoChiusa: t.auto_chiusa,
+        creatoDa: t.creato_da,
+        haGeo: t.geo_lat != null,
+        ts: t.ts,
+        createdAt: t.created_at,
+      })),
+      azioniVersioni: riassunto.azioniSignificative,
+      scrittaAMano: r.auto_compilato === false,
+      userIdPersona: utenteDelDipendente.get(r.dipendente_id) ?? null,
+    });
     return {
+      affidabilita,
+      modificheDopoApprovazione: riassunto.modificheDopoApprovazione,
       id: r.id,
       dipendenteId: r.dipendente_id,
       dipendenteNome: dipendentiMap.get(r.dipendente_id) ?? r.dipendente_id,

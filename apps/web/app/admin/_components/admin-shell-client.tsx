@@ -144,7 +144,7 @@ export function AdminShellClient({ user, children }: Props) {
     // (gli `sr-only` di Tailwind, per dirne una) prende come contenitore il
     // documento, sfugge a questo `overflow-hidden` e allunga la pagina. La
     // finestra allora scorre, la sidebar scorre via e sotto resta il vuoto.
-    <div className="relative flex h-screen flex-col overflow-hidden bg-background">
+    <div data-app-shell="" className="relative flex h-screen flex-col overflow-hidden bg-background">
       {/* ===================== Header ink (fisso: scrolla solo <main>) ===================== */}
       <header className="z-30 flex h-14 shrink-0 items-center gap-3 bg-foreground px-4 text-background md:px-6">
         <button
@@ -251,7 +251,7 @@ export function AdminShellClient({ user, children }: Props) {
         ) : null}
 
         {/* ===================== Main (UNICA area che scrolla) ===================== */}
-        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
           <div className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-6 sm:px-6 md:px-10 md:py-10">
             {children}
           </div>
