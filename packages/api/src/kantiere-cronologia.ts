@@ -148,6 +148,8 @@ export type TipoEvento =
   | 'fine_turno'
   | 'viaggio'
   | 'trasferimento'
+  /** Ore di lavoro scritte a mano, senza timbrature che dicano quando. */
+  | 'lavoro_dichiarato'
   | 'approvata_auto'
   | 'modifica';
 
@@ -170,6 +172,8 @@ export interface EventoCronologia {
   ricostruita: boolean;
   dopoApprovazione: boolean;
   attenzione: boolean;
+  /** Nessun orario vero da mostrare (ore scritte a mano): la UI non scrive l'ora. */
+  senzaOrario?: boolean;
 }
 
 export type Affidabilita = 'timbrata' | 'in_parte_a_mano' | 'corretta_ufficio';
@@ -362,6 +366,14 @@ export interface InputCronologia {
   userIdPersona: string | null;
   /** Approvata in automatico: quando (se lo stato attuale lo è). */
   approvataAutoAl: string | null;
+  /** Il giorno della giornata (YYYY-MM-DD). */
+  data?: string;
+  /**
+   * Le ore del rapportino per cantiere. Servono quando la giornata non ha
+   * timbrature di lavoro (ore scritte a mano): senza, il lavoro non avrebbe
+   * nessun pallino e si vedrebbe solo il viaggio.
+   */
+  lavoro?: { cantiere: string | null; minutiOrdinari: number; minutiStraordinari: number }[];
 }
 
 export function costruisciCronologia(input: InputCronologia): EventoCronologia[] {
@@ -460,6 +472,8 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
     });
   }
 
+  const quandoAndate: number[] = [];
+  const quandoRitorni: number[] = [];
   for (const v of input.viaggi) {
     const trasferimento = !!v.daCantiere;
     const tsLegato = v.timbraturaId ? tsPerTimbratura.get(v.timbraturaId) : undefined;
@@ -467,6 +481,7 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
     const base = tsLegato ?? v.createdAt;
     const spostamento = v.direzione === 'andata' ? -1 : 1;
     const quando = new Date(Date.parse(base) + spostamento).toISOString();
+    if (!trasferimento) (v.direzione === 'andata' ? quandoAndate : quandoRitorni).push(Date.parse(quando));
 
     const parti: string[] = [];
     if (trasferimento) parti.push(`${v.daCantiere} → ${v.cantiere ?? '—'}`);
@@ -555,6 +570,65 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
       ricostruita: false,
       dopoApprovazione: false,
       attenzione: false,
+    });
+  }
+
+  // Ore scritte a mano senza timbrature: nessuna timbratura dice quando il
+  // lavoro è cominciato, e senza un pallino la giornata sembrerebbe fatta del
+  // solo viaggio. Un evento generico, senza orario, messo dove sta logicamente:
+  // dopo l'andata e prima del ritorno. Il totale giusto è già in testa al
+  // pannello; questo serve a leggere la giornata.
+  const righeLavoro = (input.lavoro ?? []).filter((r) => r.minutiOrdinari + r.minutiStraordinari > 0);
+  if (righeLavoro.length > 0 && !timb.some((t) => !t.pausa)) {
+    const ordinari = righeLavoro.reduce((a, r) => a + r.minutiOrdinari, 0);
+    const straordinari = righeLavoro.reduce((a, r) => a + r.minutiStraordinari, 0);
+
+    const dopoAndata = quandoAndate.length > 0 ? Math.max(...quandoAndate) + 1 : null;
+    const primaRitorno = quandoRitorni.length > 0 ? Math.min(...quandoRitorni) - 1 : null;
+    const quandoMs =
+      primaRitorno != null && (dopoAndata == null || primaRitorno >= dopoAndata)
+        ? primaRitorno
+        : dopoAndata != null
+          ? dopoAndata
+          : eventi.length > 0
+            ? Math.min(...eventi.map((e) => Date.parse(e.quando))) - 1
+            : Date.parse(`${input.data ?? '1970-01-01'}T10:00:00Z`);
+
+    const dettaglio: string[] = [];
+    if (straordinari > 0) {
+      dettaglio.push(`${formattaOreGiornata(ordinari)} ordinario · ${formattaOreGiornata(straordinari)} straordinario`);
+    }
+    if (new Set(righeLavoro.map((r) => r.cantiere)).size > 1) {
+      for (const r of righeLavoro) {
+        dettaglio.push(`${r.cantiere ?? 'Cantiere'} · ${formattaOreGiornata(r.minutiOrdinari + r.minutiStraordinari)}`);
+      }
+    }
+    dettaglio.push('Senza timbrature: l’orario non è indicato');
+
+    // Chi le ha scritte: l'ultima scrittura a mano delle ore.
+    const autore = [...input.versioni]
+      .sort((a, b) => b.versione - a.versione)
+      .find((v) => v.azione === 'modifica_tecnico' || v.azione === 'modifica_ufficio');
+    const dallUfficio = autore?.azione === 'modifica_ufficio';
+
+    eventi.push({
+      chiave: 'l:dichiarato',
+      quando: new Date(quandoMs).toISOString(),
+      arrivatoAl: null,
+      arrivoDichiarato: false,
+      tipo: 'lavoro_dichiarato',
+      titolo:
+        straordinari > 0
+          ? `${formattaOreGiornata(ordinari + straordinari)} di lavoro`
+          : `${formattaOreGiornata(ordinari)} di lavoro ordinario`,
+      modalita: null,
+      attore: dallUfficio ? 'ufficio' : 'persona',
+      chi: dallUfficio ? (autore?.chi ?? null) : null,
+      dettaglio,
+      ricostruita: false,
+      dopoApprovazione: false,
+      attenzione: false,
+      senzaOrario: true,
     });
   }
 

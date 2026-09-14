@@ -235,6 +235,13 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     versioni: versioniCronologia,
     userIdPersona,
     approvataAutoAl: rapp.stato === 'approvato' && !rapp.approvato_da ? rapp.approvato_at : null,
+    // Per le giornate scritte a mano senza timbrature: il lavoro ha un pallino.
+    data: rapp.data,
+    lavoro: righe.map((r) => ({
+      cantiere: r.cantiere_id ? (nomeCantiere.get(r.cantiere_id) ?? null) : null,
+      minutiOrdinari: Math.round(Number(r.ore_ordinarie ?? 0) * 60),
+      minutiStraordinari: Math.round(Number(r.ore_straordinarie ?? 0) * 60),
+    })),
   });
   const riassunto = riassuntoVersioni(versioniCronologia);
 

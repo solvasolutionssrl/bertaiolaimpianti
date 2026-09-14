@@ -138,12 +138,28 @@ function useLiveNow(enabled: boolean): number {
  * giornata è ancora aperta, "dalle 07:30 · in corso (1h 23min)". Pensato per
  * essere infilato in liste/tabelle dove serve il colpo d'occhio.
  */
-export function TimbratureSommario({ timbrature }: { timbrature: TimbraturaInput[] }) {
+export function TimbratureSommario({
+  timbrature,
+  minutiLavoro = 0,
+}: {
+  timbrature: TimbraturaInput[];
+  /** Ore del rapportino: senza timbrature dicono almeno quanto si è lavorato. */
+  minutiLavoro?: number;
+}) {
   const r = appaiaTimbrature(soloTimbrature(timbrature));
   const now = useLiveNow(r.aperto);
 
   if (r.coppie.length === 0) {
-    return <span className="text-xs text-muted-foreground/60">Nessuna timbratura</span>;
+    return minutiLavoro > 0 ? (
+      <span
+        className="text-xs text-muted-foreground"
+        title="Ore scritte a mano, senza timbrature: l’orario non è indicato"
+      >
+        Senza timbrature · <span className="tabular-nums text-foreground/80">{fmtMinColon(minutiLavoro)} di lavoro</span>
+      </span>
+    ) : (
+      <span className="text-xs text-muted-foreground/60">Nessuna timbratura</span>
+    );
   }
 
   const prima = r.coppie[0]!;
@@ -207,16 +223,23 @@ export function GiornataFlow({
   timbrature,
   oreViaggio = 0,
   kmViaggio = 0,
+  minutiLavoro = 0,
 }: {
   timbrature: TimbraturaInput[];
   oreViaggio?: number;
   kmViaggio?: number;
+  /**
+   * Ore di lavoro del rapportino. Servono solo senza timbrature (ore scritte a
+   * mano): altrimenti la riga mostrerebbe il viaggio e basta, o «Nessuna timbratura».
+   */
+  minutiLavoro?: number;
 }) {
   const r = appaiaTimbrature(soloTimbrature(timbrature));
   const pause = calcolaPause(timbrature);
   const autoSet = ripreseAutoChiuse(timbrature);
+  const lavoroSenzaTimbrature = r.coppie.length === 0 && minutiLavoro > 0;
 
-  if (r.coppie.length === 0 && oreViaggio <= 0) {
+  if (r.coppie.length === 0 && oreViaggio <= 0 && !lavoroSenzaTimbrature) {
     return <span className="text-[11px] text-muted-foreground/60">Nessuna timbratura</span>;
   }
 
@@ -270,6 +293,18 @@ export function GiornataFlow({
     );
   }
   for (const e of eventi) items.push(e.el);
+  if (lavoroSenzaTimbrature) {
+    // Nessun orario da mostrare: solo quanto, per leggere la giornata.
+    items.push(
+      <span
+        key="l"
+        title="Ore scritte a mano, senza timbrature: l’orario non è indicato"
+        className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-1.5 py-0.5 tabular-nums text-foreground/80"
+      >
+        {fmtMinColon(minutiLavoro)} di lavoro
+      </span>,
+    );
+  }
 
   return (
     <span className="flex flex-wrap items-center gap-1 text-[11px]">

@@ -331,6 +331,7 @@ function OggiRow({
             timbrature={riga.timbrature}
             oreViaggio={riga.totale.viaggio}
             kmViaggio={riga.viaggioKm ?? 0}
+            minutiLavoro={Math.round((riga.totale.ord + riga.totale.straord) * 60)}
           />
         </td>
         <td className="px-2 py-1.5 text-right align-top">
@@ -783,7 +784,10 @@ export function RapportiniClient({
                                     ) : null}
                                   </div>
                                   <div className="mt-0.5">
-                                    <TimbratureSommario timbrature={riga.timbrature} />
+                                    <TimbratureSommario
+                                      timbrature={riga.timbrature}
+                                      minutiLavoro={Math.round((riga.totale.ord + riga.totale.straord) * 60)}
+                                    />
                                   </div>
                                 </td>
                                 <td className="px-2.5 py-1.5 align-top">

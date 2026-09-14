@@ -342,3 +342,104 @@ describe('riassuntoVersioni', () => {
     expect(r.modificheDopoApprovazione).toBe(1);
   });
 });
+
+describe('ore scritte a mano senza timbrature', () => {
+  // Caso reale (FPM, 10/09): 5 ore scritte a mano e il viaggio di ritorno. Senza
+  // timbrature la cronologia mostrava solo il viaggio.
+  const ritorno = {
+    id: 'v1',
+    direzione: 'ritorno',
+    timbraturaId: null,
+    createdAt: '2026-09-10T17:30:00Z',
+    daCantiere: null,
+    sede: 'Sede',
+    cantiere: 'Euroluce',
+    km: 190,
+    minutiPagati: 250,
+    autista: true,
+  };
+  const scritteDallaPersona = {
+    versione: 1,
+    azione: 'modifica_tecnico',
+    quando: '2026-09-10T17:30:02Z',
+    chi: 'Andrea',
+    snapshot: {
+      stato: 'bozza',
+      totali: { ore_ordinarie: 5, ore_straordinarie: 0, ore_viaggio: 4.17 },
+      prima: { stato: 'bozza', totali: { ore_ordinarie: 0, ore_straordinarie: 0, ore_viaggio: 0 } },
+    },
+  };
+
+  it('mette un pallino per il lavoro, senza orario, prima del viaggio di ritorno', () => {
+    const ev = costruisciCronologia({
+      timbrature: [],
+      viaggi: [ritorno],
+      versioni: [scritteDallaPersona],
+      userIdPersona: PERSONA,
+      approvataAutoAl: null,
+      data: '2026-09-10',
+      lavoro: [{ cantiere: 'Euroluce', minutiOrdinari: 300, minutiStraordinari: 0 }],
+    });
+    const titoli = ev.map((e) => e.titolo);
+    expect(titoli).toEqual(['5:00 di lavoro ordinario', 'Viaggio di ritorno', 'Ore scritte a mano dalla persona']);
+    const lavoro = ev[0]!;
+    expect(lavoro.tipo).toBe('lavoro_dichiarato');
+    expect(lavoro.senzaOrario).toBe(true);
+    expect(lavoro.attore).toBe('persona');
+    // Un cantiere solo è già in testa al pannello: non si ripete.
+    expect(lavoro.dettaglio).toEqual(['Senza timbrature: l’orario non è indicato']);
+  });
+
+  it('sta fra andata e ritorno; straordinario e più cantieri finiscono nel dettaglio', () => {
+    const andata = { ...ritorno, id: 'v0', direzione: 'andata', createdAt: '2026-09-10T17:29:00Z' };
+    const ev = costruisciCronologia({
+      timbrature: [],
+      viaggi: [ritorno, andata],
+      versioni: [],
+      userIdPersona: PERSONA,
+      approvataAutoAl: null,
+      lavoro: [
+        { cantiere: 'A', minutiOrdinari: 240, minutiStraordinari: 0 },
+        { cantiere: 'B', minutiOrdinari: 240, minutiStraordinari: 90 },
+      ],
+    });
+    expect(ev.map((e) => e.titolo)).toEqual(['Viaggio di andata', '9:30 di lavoro', 'Viaggio di ritorno']);
+    expect(ev[1]!.dettaglio).toEqual([
+      '8:00 ordinario · 1:30 straordinario',
+      'A · 4:00',
+      'B · 5:30',
+      'Senza timbrature: l’orario non è indicato',
+    ]);
+  });
+
+  it('ore inserite dall ufficio: il pallino è dell ufficio e dice chi', () => {
+    const ev = costruisciCronologia({
+      timbrature: [],
+      viaggi: [],
+      versioni: [{ ...scritteDallaPersona, azione: 'modifica_ufficio', chi: 'Ufficio FPM' }],
+      userIdPersona: PERSONA,
+      approvataAutoAl: null,
+      lavoro: [{ cantiere: 'Euroluce', minutiOrdinari: 600, minutiStraordinari: 0 }],
+    });
+    const lavoro = ev.find((e) => e.tipo === 'lavoro_dichiarato')!;
+    expect(lavoro.titolo).toBe('10:00 di lavoro ordinario');
+    expect(lavoro.attore).toBe('ufficio');
+    expect(lavoro.chi).toBe('Ufficio FPM');
+    expect(ev.indexOf(lavoro)).toBe(0);
+  });
+
+  it('con timbrature di lavoro non aggiunge niente: il lavoro lo raccontano loro', () => {
+    const ev = costruisciCronologia({
+      timbrature: [
+        timb({ id: '1', tipo: 'ingresso', ts: '2026-09-10T06:00:00Z' }),
+        timb({ id: '2', tipo: 'uscita', ts: '2026-09-10T14:00:00Z' }),
+      ],
+      viaggi: [],
+      versioni: [],
+      userIdPersona: PERSONA,
+      approvataAutoAl: null,
+      lavoro: [{ cantiere: 'Cantiere A', minutiOrdinari: 480, minutiStraordinari: 0 }],
+    });
+    expect(ev.some((e) => e.tipo === 'lavoro_dichiarato')).toBe(false);
+  });
+});

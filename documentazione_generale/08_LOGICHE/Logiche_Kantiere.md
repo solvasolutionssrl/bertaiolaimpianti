@@ -317,6 +317,14 @@ scrivono più.
 Al tecnico si mostra il minimo per scelta: gli interessa sapere se qualcuno gli
 ha cambiato le ore, non la storia completa.
 
+**Ore scritte a mano senza timbrature** (14/09/2026). Nessuna timbratura dice
+quando è cominciato il lavoro, quindi il pannello mostrava solo il viaggio. Ora
+c'è un pallino generico, **senza orario**: «5:00 di lavoro ordinario» (con lo
+straordinario «9:30 di lavoro» e il dettaglio; i cantieri solo se più d'uno),
+messo dopo l'andata e prima del ritorno. Si mostra solo se non c'è nessuna
+timbratura di lavoro. La riga dell'elenco dice «Senza timbrature · 5:00 di
+lavoro» invece di «Nessuna timbratura». Banco `scripts/banco-ui/cronologia-a-mano.mjs`.
+
 ---
 
 ## 7.6 Il percorso in «Registra giornata» (dal 14/09/2026)

@@ -20,6 +20,7 @@ BANCO_MONDO=kommessa node scripts/banco-ui/desktop.mjs   # ufficio, mondo commes
 node scripts/banco-ui/app.mjs                     # app tecnici, iPhone emulato
 node scripts/banco-ui/registra-giornata.mjs       # Registra giornata col percorso (BANCO_SALVA=1 salva sul demo)
 BANCO_CHI=tecnico node scripts/banco-ui/campanella.mjs   # niente testo sotto campanella e «＋ Spesa» (anche BANCO_CHI=kantiere)
+node scripts/banco-ui/cronologia-a-mano.mjs      # cronologia di una giornata a mano senza timbrature (serve il seed demo)
 ```
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve

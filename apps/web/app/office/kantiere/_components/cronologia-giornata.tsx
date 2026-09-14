@@ -115,7 +115,10 @@ export function BollinoAffidabilita({
 function RigaEvento({ ev }: { ev: EventoCronologia }) {
   return (
     <li className="relative grid grid-cols-[3.25rem_1rem_minmax(0,1fr)] gap-x-2 pb-4 last:pb-0">
-      <span className="pt-0.5 text-right text-xs tabular-nums text-muted-foreground">{fmtOra(ev.quando)}</span>
+      {/* Le ore scritte a mano non hanno un orario: meglio niente che un'ora finta. */}
+      <span className="pt-0.5 text-right text-xs tabular-nums text-muted-foreground">
+        {ev.senzaOrario ? '' : fmtOra(ev.quando)}
+      </span>
       <span className="relative flex justify-center">
         <span
           aria-hidden="true"
