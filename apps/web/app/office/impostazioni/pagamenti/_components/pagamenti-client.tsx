@@ -243,17 +243,17 @@ export function PagamentiClient({
                 placeholder="Come si chiama? es. Bonifico"
                 maxLength={40}
                 autoFocus
-                className="h-9 max-w-xs"
+                className="h-10 max-w-xs"
               />
-              <Button type="button" onClick={() => void salvaNuovo()} disabled={pending === 'nuovo'}>
+              <Button type="button" size="sm" onClick={() => void salvaNuovo()} disabled={pending === 'nuovo'}>
                 {pending === 'nuovo' ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Aggiungi'}
               </Button>
-              <Button type="button" variant="ghost" onClick={() => setApriNuovo(false)}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setApriNuovo(false)}>
                 Lascia stare
               </Button>
             </div>
           ) : (
-            <Button type="button" variant="outline" onClick={() => setApriNuovo(true)}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setApriNuovo(true)}>
               <Plus className="h-4 w-4" /> Aggiungi un metodo
             </Button>
           )}

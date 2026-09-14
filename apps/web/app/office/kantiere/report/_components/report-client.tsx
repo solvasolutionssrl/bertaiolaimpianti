@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 import type { AggregataRiga, KpiTotali, ViaggioRigaDip, ViaggioRigaMezzo } from '../page';
+import { Button } from '@kommessa/ui';
 
 interface Filtri {
   from: string;
@@ -131,12 +132,9 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
             <option value="verificato">Verificato</option>
           </select>
         </div>
-        <button
-          type="submit"
-          className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
+        <Button type="submit" size="sm">
           Aggiorna
-        </button>
+        </Button>
       </form>
 
       {/* KPI */}
@@ -210,18 +208,12 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
 
       {/* Azioni export */}
       <div className="no-print flex gap-3">
-        <a
-          href={exportHref}
-          className="inline-flex items-center rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
-        >
-          Esporta CSV
-        </a>
-        <button
-          onClick={() => window.print()}
-          className="inline-flex items-center rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
-        >
+        <Button asChild variant="outline" size="sm">
+          <a href={exportHref}>Esporta CSV</a>
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
           Stampa / PDF
-        </button>
+        </Button>
       </div>
 
       {/* ── Sezione Viaggi e km ────────────────────────────────────────────── */}

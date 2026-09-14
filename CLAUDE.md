@@ -153,6 +153,12 @@ Chi lavora su **più cantieri** in un giorno genera tragitti **A → B**. Regola
 - **Avviso dashboard giornate oltre soglia** — la soglia resta 10h (scelta cliente); la dashboard Kantiere segnala quante giornate/ore/chi restano ferme. `giornateOltreSoglia` **esclude oggi e le giornate rimaste aperte** (senza quei filtri su FPM direbbe 71 invece di 65).
 - **Conferma passeggero PWA** — chi conferma un viaggio senza spuntare «sono l'autista» deve confermarlo; se dice che guidava torna al modulo con la casella evidenziata. Pezzo unico `_components/conferma-passeggero.tsx`, usato da viaggio-ritorno, partenza e ore-a-mano. ⚠️ È un **pannello dentro il foglio**, non un dialog annidato (Radix lo tratterebbe come clic "fuori" e chiuderebbe quello sotto).
 
+#### Cronologia della giornata + tasti ufficio (14/09/2026)
+
+- **Cronologia** (migration `20260914090000`, ✅ APPLICATA): `timbrature.modalita` (vocabolario chiuso, scritta nello stesso insert in tutti i 15 punti — `origine` non diceva come) + azioni versione `pausa_ufficio`/`chiusura_ufficio`/`ricalcolo`. Storia **ricostruita dai dati** (`@kommessa/api/kantiere-cronologia`, puro+testato), non da un diario. Ogni modifica passa `prima` (`leggiStatoGiornata`) e le versioni vuote non si scrivono. UI: pannello laterale in Presenze e ore + bollino; tecnico = una riga «Corretta dall'ufficio». ⚠️ Nuovi punti che inseriscono timbrature **devono** scrivere `modalita` (valore del CHECK). → `Logiche_Kantiere.md` §7.5.
+- **`scrollbar-gutter`**: i gusci office/admin non scorrono mai sulla pagina (scorre `<main>`). `html:has([data-app-shell])` → `auto`, riserva sul `<main>` dei gusci. Prima si perdevano 15px su ogni pagina e i `fixed right-0` si fermavano a 1425/1440.
+- **Tasti ufficio**: azioni di pagina e di barra = `<Button size="sm">` (40px, testo 12px, nero; outline per le secondarie). **Mai** tasti fatti a mano con `bg-primary`: il cobalto è per link, badge e stato «selezionato» di filtri e schede. Censimento ripetibile: `BANCO_CDP=9334 node scripts/banco-ui/tasti.mjs`.
+
 Working language for the app UI is **Italian**. Preserve it.
 
 ### Infrastruttura produzione

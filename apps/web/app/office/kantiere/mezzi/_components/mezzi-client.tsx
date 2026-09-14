@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Truck, Car, Package2, CheckCircle2, CircleOff, Search, X } from 'lucide-react';
 import type { MezzoView, MezzoStats, TipoMezzo } from '../page';
 import { creaMezzo, aggiornaMezzo, eliminaMezzo } from '@/app/office/_actions/kantiere-mezzi';
+import { Button } from '@kommessa/ui';
 
 type ViaggioAggRow = {
   mezzo_id: string;
@@ -155,13 +156,9 @@ function AggiiungiMezzoForm() {
           />
         </div>
         <div className="flex items-end">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
+          <Button type="submit" size="sm" disabled={busy}>
             {busy ? 'Salvataggio...' : 'Aggiungi'}
-          </button>
+          </Button>
         </div>
       </div>
       {err && <p className="text-xs text-destructive">{err}</p>}

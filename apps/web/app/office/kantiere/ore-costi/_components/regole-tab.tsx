@@ -9,6 +9,7 @@ import {
   eliminaRegola,
   impostaAmbiti,
 } from '@/app/office/_actions/kantiere-regole';
+import { Button } from '@kommessa/ui';
 
 const TIPI: { value: RegolaView['tipo']; label: string }[] = [
   { value: 'soglia_giornaliera', label: 'Soglia giornaliera' },
@@ -327,13 +328,9 @@ export function RegoleTab({ regole, dipendenti, cantieri }: Props) {
         </div>
 
         <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-          >
+          <Button type="submit" size="sm" disabled={busy}>
             Aggiungi regola
-          </button>
+          </Button>
         </div>
       </form>
 

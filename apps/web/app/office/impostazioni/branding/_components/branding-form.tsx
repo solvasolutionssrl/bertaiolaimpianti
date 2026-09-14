@@ -25,7 +25,7 @@ const initialState: BrandingFormState = { status: 'idle' };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending}>
       {pending ? 'Salvataggio…' : 'Salva branding'}
     </Button>
   );

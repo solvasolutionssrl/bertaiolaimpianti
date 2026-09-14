@@ -683,7 +683,7 @@ export function ImpostazioniClient({
 
       {/* Barra azioni */}
       <div className="flex items-center gap-3 border-t border-border pt-4">
-        <Button onClick={handleSalva} disabled={isPending}>
+        <Button size="sm" onClick={handleSalva} disabled={isPending}>
           {isPending ? 'Salvataggio...' : 'Salva'}
         </Button>
         {esito !== null && esito.ok && <span className="text-sm text-green-600">Salvato</span>}

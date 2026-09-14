@@ -14,6 +14,7 @@ import {
   associaSedeCantiere,
   dissociaSedeCantiere,
 } from '@/app/office/_actions/kantiere-sedi';
+import { Button } from '@kommessa/ui';
 
 // ── Tipi ──────────────────────────────────────────────────────────────────────
 
@@ -212,14 +213,10 @@ export function SediClient({ sedi, cantieri, legamiPerSede }: Props) {
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
+        <Button type="button" size="sm" onClick={() => setShowForm((v) => !v)}>
           <Plus className="h-4 w-4" aria-hidden="true" />
           {showForm ? 'Chiudi' : 'Nuova sede'}
-        </button>
+        </Button>
       </div>
 
       {/* Form aggiunta (collassabile) */}

@@ -144,15 +144,14 @@ export function PermessiClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" onClick={() => setNuovaOpen(true)}>
+          <Button type="button" size="sm" onClick={() => setNuovaOpen(true)}>
             <Plus className="h-4 w-4" /> Nuova richiesta
           </Button>
-          <Link
-            href="/office/personale/tipi-permesso"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/40"
-          >
-            <Scale className="h-4 w-4" /> Tipi e normativa
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/office/personale/tipi-permesso">
+              <Scale className="h-4 w-4" /> Tipi e normativa
+            </Link>
+          </Button>
         </div>
       </header>
 

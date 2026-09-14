@@ -1468,7 +1468,7 @@ export function PianificazioneClient({
             </button>
           )}
           {/* Azione primaria */}
-          <Button type="button" onClick={onPubblica} disabled={pending || bozze === 0} title={TIP.pubblica}>
+          <Button type="button" size="sm" onClick={onPubblica} disabled={pending || bozze === 0} title={TIP.pubblica}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             Pubblica
           </Button>

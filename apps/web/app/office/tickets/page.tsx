@@ -124,7 +124,7 @@ export default async function TicketsPage({
         description="Richieste in entrata da clienti, email e portale. Convertili in commessa quando partono i lavori."
         icon={<TicketCheck />}
         actions={
-          <Button asChild>
+          <Button asChild size="sm">
             <Link href="/office/tickets/nuovo">
               <Plus className="h-4 w-4" />
               Nuovo ticket
@@ -160,11 +160,11 @@ export default async function TicketsPage({
           }
           action={
             hasFilters ? (
-              <Button asChild variant="outline">
+              <Button asChild variant="outline" size="sm">
                 <Link href="/office/tickets">Reset filtri</Link>
               </Button>
             ) : (
-              <Button asChild>
+              <Button asChild size="sm">
                 <Link href="/office/tickets/nuovo">
                   <Plus className="h-4 w-4" />
                   Apri il primo ticket

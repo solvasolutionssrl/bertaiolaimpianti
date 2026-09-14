@@ -38,7 +38,7 @@ export default async function ClientiPage({
         description="Aziende e persone fisiche associate alle commesse. Cerca per ragione sociale."
         icon={<Users />}
         actions={
-          <Button asChild>
+          <Button asChild size="sm">
             <Link href="/office/clienti/nuovo">
               <Plus className="h-4 w-4" />
               Nuovo cliente

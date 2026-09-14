@@ -618,12 +618,9 @@ export function RapportiniClient({
             <PlusCircle className="mr-1.5 h-4 w-4" aria-hidden="true" />
             Registra ore
           </Button>
-          <a
-            href={exportHref}
-            className="inline-flex items-center rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            Esporta CSV
-          </a>
+          <Button asChild variant="outline" size="sm">
+            <a href={exportHref}>Esporta CSV</a>
+          </Button>
           <LiveRefresh intervalMs={60000} />
         </div>
       </div>

@@ -263,6 +263,60 @@ mano (lì basta che **una** tratta sia da passeggero). Pezzo unico
 
 ---
 
+## 7.5 Cronologia della giornata (dal 14/09/2026)
+
+Ogni giornata racconta la sua storia: cosa è successo, **come**, **chi**, **quando**.
+
+**Ricostruita dai dati, non da un diario parallelo.** Le timbrature sono già gli
+eventi, le versioni del rapportino sono già le modifiche. Un diario scritto a
+parte sarebbe una seconda copia della verità: il giorno che una funzione si
+dimentica di annotare, la storia avrebbe un buco invisibile. Modulo puro
+`@kommessa/api/kantiere-cronologia`.
+
+**Come nasce una timbratura — `timbrature.modalita`** (migration
+`20260914090000`). `origine` non bastava: l'avvio turno da app scriveva
+`manuale`, pausa e ripresa da app `qr`. La modalità si scrive nello **stesso
+inserimento** della timbratura, quindi non può divergere.
+
+| `modalita` | Etichetta | Scritta da |
+|---|---|---|
+| `qr` | Cartello QR | scansione |
+| `app` | Dall'app | avvio senza QR, pausa, ripresa, fine turno, cambio cantiere |
+| `capo` | Dal capo squadra | gestione squadra |
+| `divisione_fine_turno` | Divisa a fine turno | split alla chiusura |
+| `giornata_dichiarata` | Dichiarata a fine giornata | Registra giornata |
+| `pausa_dichiarata` | Dichiarata alla chiusura | pausa dichiarata in uscita |
+| `pausa_chiusa_sistema` | Chiusa in automatico | pausa rimasta aperta oltre soglia |
+| `ufficio` | Inserita dall'ufficio | chiudi giornata, aggiungi pausa, timbratura manuale |
+
+Righe precedenti al 14/09: `modalita` NULL, la cronologia la **deduce** e lo dice.
+Un test verifica che ogni valore del codice sia ammesso dal CHECK del database:
+altrimenti la persona non riuscirebbe a timbrare.
+
+> ⚠️ Sulle righe vecchie di QR e app il ritardo fra orario e salvataggio **non**
+> è un dato: quelle create ore o giorni dopo erano caricamenti in blocco (16/07,
+> collaudo del 13/08). «Registrata alle» si mostra solo dove è vero.
+
+**Modifiche con prima → dopo.** Chi modifica una giornata legge com'era prima di
+toccarla (`leggiStatoGiornata`) e lo passa alla versione. Nuove azioni:
+`pausa_ufficio`, `chiusura_ufficio`, `ricalcolo` (solo se sposta le ore di una
+giornata **già approvata**: durante un turno le timbrature raccontano già tutto).
+Le versioni che non cambiano niente — ore, stato, ore per cantiere — non si
+scrivono più.
+
+**Dove si vede**
+
+| Dove | Cosa |
+|---|---|
+| Presenze e ore (ufficio) | tasto cronologia su ogni giornata → pannello laterale con la storia completa; modifiche dopo l'approvazione evidenziate |
+| Elenco (ufficio) | bollino solo se serve: «In parte a mano», «Corretta dall'ufficio», «Modificata dopo l'approvazione» |
+| Storico ore (tecnico) | **una riga sola**, e solo se l'ufficio ha cambiato le ore: «Corretta dall'ufficio il 14/09 · ore 8:00 → 7:30» |
+
+Al tecnico si mostra il minimo per scelta: gli interessa sapere se qualcuno gli
+ha cambiato le ore, non la storia completa.
+
+---
+
 ## 8. Ordinario vs straordinario
 
 - Il **tecnico** inserisce le **ore totali di lavoro** (un solo campo): non decide lui cosa è ordinario o straordinario.

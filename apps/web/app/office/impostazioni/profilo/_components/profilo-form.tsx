@@ -16,7 +16,7 @@ const initialState: FormState = { status: 'idle' };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
+    <Button type="submit" size="sm" disabled={pending}>
       {pending ? 'Salvataggio…' : 'Salva modifiche'}
     </Button>
   );

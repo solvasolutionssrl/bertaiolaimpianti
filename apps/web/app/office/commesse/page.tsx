@@ -125,13 +125,13 @@ export default async function CommessePage({
         icon={<Briefcase />}
         actions={
           <>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="sm">
               <Link href="/office/commesse/panoramica">
                 <LayoutList className="h-4 w-4" />
                 Panoramica
               </Link>
             </Button>
-            <Button asChild>
+            <Button asChild size="sm">
               <Link href="/office/commesse/nuova">
                 <Plus className="h-4 w-4" />
                 Nuova commessa
