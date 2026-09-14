@@ -234,25 +234,25 @@ export async function validaViaggio(
   return { ok: true };
 }
 
+export type OpzioniRigaViaggio = {
+  tenantId: string;
+  dipendenteId: string;
+  cantiereId: string | null;
+  timbraturaId: string;
+  ts: string;
+  tipo: 'ingresso' | 'uscita';
+  viaggio: ViaggioInput;
+};
+
 /**
- * Inserisce la riga `timbratura_viaggio` collegata a una timbratura già creata.
- * `tipo` = 'ingresso' (andata) | 'uscita' (ritorno). Il chiamante gestisce
- * l'eventuale compensazione (delete della timbratura) se ritorna errore.
+ * La riga `timbratura_viaggio` di una tratta legata a una timbratura, senza
+ * scriverla: serve a chi deve inserirne più d'una in un colpo solo (le tratte di
+ * «Registra giornata» entrano insieme o per niente).
+ * `tipo` = 'ingresso' (andata) | 'uscita' (ritorno).
  */
-export async function inserisciViaggioRow(
-  supabase: Supa,
-  opts: {
-    tenantId: string;
-    dipendenteId: string;
-    cantiereId: string | null;
-    timbraturaId: string;
-    ts: string;
-    tipo: 'ingresso' | 'uscita';
-    viaggio: ViaggioInput;
-  },
-): Promise<{ ok: true } | { ok: false; error: string }> {
+export function rigaViaggio(opts: OpzioniRigaViaggio): Record<string, unknown> {
   const { viaggio } = opts;
-  const { error } = await supabase.from('timbratura_viaggio' as never).insert({
+  return {
     tenant_id: opts.tenantId,
     timbratura_id: opts.timbraturaId,
     dipendente_id: opts.dipendenteId,
@@ -266,7 +266,19 @@ export async function inserisciViaggioRow(
     giustificazione: viaggio.giustificazione?.trim() || null,
     autista: viaggio.autista,
     mezzo_id: viaggio.autista ? viaggio.mezzoId ?? null : null,
-  } as never);
+  };
+}
+
+/**
+ * Inserisce la riga `timbratura_viaggio` collegata a una timbratura già creata.
+ * Il chiamante gestisce l'eventuale compensazione (delete della timbratura) se
+ * ritorna errore.
+ */
+export async function inserisciViaggioRow(
+  supabase: Supa,
+  opts: OpzioniRigaViaggio,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await supabase.from('timbratura_viaggio' as never).insert(rigaViaggio(opts) as never);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }

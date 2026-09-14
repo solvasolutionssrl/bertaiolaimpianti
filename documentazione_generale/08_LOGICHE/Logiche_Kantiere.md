@@ -1,8 +1,8 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.2
+**Versione**: 1.3
 **Stato**: Attivo (in produzione)
-**Ultimo aggiornamento**: 07/07/2026
+**Ultimo aggiornamento**: 14/09/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
 
 > **A cosa serve questo file.** Non è un manuale d'uso: è il registro delle **regole e delle scelte operative** già implementate (arrotondamenti, soglie, quando si caricano i km, come si collegano sedi e cantieri, quali impostazioni gestisce l'ufficio). Serve come base per una futura sezione **Help** nell'office e come contesto per un **agente AI interno**.
@@ -45,6 +45,7 @@ I km si registrano su una **tratta di viaggio** (`timbratura_viaggio`), non sull
 1. **Viaggio andata / ritorno** con scelta della **sede** di partenza/arrivo → km e tempo dalla **stima del provider** (vedi §5).
 2. **Trasferimenti cantiere → cantiere** (tra un cantiere e l'altro nella stessa giornata): vedi **§3.1** — sempre registrati.
 3. **Fine turno verso "Abitazione privata"**: opzione sempre disponibile → **0 km, 0 tempo** (nessuna tratta di lavoro da rimborsare).
+4. **Registra giornata** (giornata dichiarata la sera): partenza, rientro, tratte fra cantieri, guida e mezzo nello stesso modulo → vedi **§7.6**.
 
 **Dettagli:**
 
@@ -65,7 +66,7 @@ Copre i **tre** flussi multi-cantiere: **cambio cantiere live**, **split "cosa h
 
 **Il tempo NON entra (ancora) nelle ore pagate.** Sulle righe di trasferimento `durata_confermata_min = 0`: così il tempo è **registrato** ma **non** conteggiato nelle ore. ⚠️ **Da definire col cliente** (segnato nei promemoria): alla futura attivazione il **tempo di viaggio totale della giornata** aiuterà a completare la barra ore del tecnico (es. `8:00` + `0:45` di viaggio), ma **se e come** conti come lavoro dipende dal giorno (feriale/festivo) e dagli **straordinari**. Il punto di aggancio è `viaggioManualePerTarget` in `ricomputa-rapportino.ts` (commento `SEAM ATTIVAZIONE FUTURA`).
 
-> **Stato per tenant**: **FPM Impianti → OFF** (registra ma non conteggia). Da attivare quando avremo definito la regola ore col cliente.
+> **Stato per tenant** (verificato sul database il 14/09/2026): **FPM Impianti → ON**, i km dei trasferimenti entrano nei totali. Il **tempo** resta fuori dalle ore pagate finché non avremo definito la regola col cliente.
 
 ---
 
@@ -249,12 +250,14 @@ gestiscono da **Impostazioni → Pagamenti** (admin/ufficio, con registro).
 
 ## 7.4 «Hai viaggiato da passeggero?»
 
-I km si contano **solo all'autista**. Chi conferma un viaggio senza spuntare
-«sono io l'autista» si vede chiedere conferma; se risponde «guidavo io» torna al
+I km si contano **solo all'autista**. Chi conferma un viaggio senza indicare di
+essere l'autista si vede chiedere conferma; se risponde «guidavo io» torna al
 modulo con la casella **evidenziata** e la vista che ci scorre sopra.
 
-Vale in tutti e tre i punti: viaggio di ritorno, partenza, inserimento ore a
-mano (lì basta che **una** tratta sia da passeggero). Pezzo unico
+Vale in tutti i punti: viaggio di ritorno, partenza, inserimento ore a mano (lì
+basta che **una** tratta sia da passeggero) e Registra giornata (se c'è almeno un
+tragitto e «Guidavo io» è spento). Compare **sempre**, anche a chi viaggia di
+solito da passeggero: scelta del cliente del 14/09/2026. Pezzo unico
 `_components/conferma-passeggero.tsx`.
 
 > ⚠️ È un pannello **dentro** il foglio, non un secondo dialog: Radix
@@ -317,6 +320,57 @@ ha cambiato le ore, non la storia completa.
 
 ---
 
+## 7.6 Il percorso in «Registra giornata» (dal 14/09/2026)
+
+Chi scrive la giornata la sera, senza aver timbrato, dichiara anche il **viaggio**
+nello stesso posto. Prima «Registra giornata» non lo sapeva fare e i km passavano
+solo dalla vecchia «Ore su un cantiere, con viaggio» (1.394 km in 18 giornate nel
+pilota FPM).
+
+**Regole (decise con il cliente)**
+
+| Punto | Regola |
+|---|---|
+| Partenza e rientro | Si indicano una volta, agli estremi: abitazione privata (nessun viaggio), sede predefinita, sedi del cantiere (§4). Chi non tocca il rientro se lo trova uguale alla partenza. |
+| Guida e mezzo | Una volta, valgono per **tutte** le tratte. Si propone l'ultimo mezzo guidato; c'è anche «Mezzo non in elenco». |
+| Tratte fra cantieri | Le costruisce il sistema, **dirette**, con km e tempo stimati. Toccandole si cambiano in «passando da una sede» (sedi ammesse per entrambi i cantieri) o «passando da casa» (nessun viaggio di lavoro). |
+| Obbligatori | Partenza, rientro, tempo della tratta se la stima non c'è, motivo se il tempo è diverso dalla stima, mezzo per chi guida. Quello che manca lo chiede il foglio «Il viaggio» quando si preme «Registra giornata». |
+| Passeggero | La conferma «Hai viaggiato da passeggero?» resta **sempre** (§7.4). |
+
+**Tempo di viaggio e ore**
+
+- **Inizio e fine lavoro** sono l'orario in cantiere. **Andata e ritorno** stanno
+  fuori: il loro tempo confermato va in `ore_viaggio`, come per le timbrature QR.
+  La barra in basso mostra la giornata intera: partenza (= inizio − andata),
+  lavoro con la pausa, rientro (= fine + ritorno).
+- Le **tratte fra cantieri** stanno **dentro** l'orario dichiarato: si registra la
+  stima (`durata_stimata_min`) con `durata_confermata_min = 0`, così non si pagano
+  due volte. È la stessa regola dei trasferimenti (§3.1).
+
+**Cosa si scrive** (`registraGiornataDaZero`, tutto validato **prima** di scrivere)
+
+| Tratta | Riga `timbratura_viaggio` |
+|---|---|
+| Andata | legata alla **prima entrata** (sede, stima, tempo confermato, km, autista, mezzo) |
+| Ritorno | legata all'**ultima uscita** |
+| Diretta A → B | trasferimento (`da_cantiere_id` = A, `cantiere_id` = B), con autista e mezzo della giornata |
+| Passando dalla sede | due righe legate al cambio di cantiere: A → sede sull'uscita da A, sede → B sull'ingresso in B; tempo confermato 0 |
+| Passando da casa | nessuna riga |
+
+Andata e ritorno entrano **insieme**: se l'inserimento fallisce si tolgono le
+timbrature appena scritte (le tratte se ne vanno con loro) e la giornata non resta
+a metà. Le tratte fra cantieri sono best-effort, come i trasferimenti.
+
+Logica pura e testata in `@kommessa/api/kantiere-percorso` (tratte, confini fra
+cantieri, dati mancanti, barra dei tempi). Le stime passano dalla cache condivisa
+`stimaConCache`: con Google la stessa tratta non si paga due volte fra pagina e
+salvataggio. `/api/routing/stima` accetta anche `{ daCantiereId, aCantiereId }`.
+
+> Parco mezzi: i trasferimenti ora possono avere un mezzo, quindi anche le pagine
+> dei mezzi rispettano il toggle `km_switch_attivo` (§3.1).
+
+---
+
 ## 8. Ordinario vs straordinario
 
 - Il **tecnico** inserisce le **ore totali di lavoro** (un solo campo): non decide lui cosa è ordinario o straordinario.
@@ -332,7 +386,7 @@ ha cambiato le ore, non la storia completa.
 | **Turno senza QR** | "Inizia turno" scegliendo un cantiere | Un solo turno aperto per volta. |
 | **Cambio cantiere live** | "Cambia cantiere": chiude A, apre B | Ore dai timestamp reali; km A→B se `km_switch_attivo`. |
 | **Split a fine turno** | "Cosa hai fatto oggi": dividi le ore tra più cantieri | Solo se la **giornata è pulita** (un solo ingresso). Somma = netto ± tolleranza. |
-| **Registra giornata da zero** | Inizio/fine + pausa + cantieri/ore | Solo se **nessuna timbratura** oggi e `registra_giornata_attivo`. |
+| **Registra giornata da zero** | Inizio/fine + pausa + cantieri/ore + percorso (§7.6) | Solo se **nessuna timbratura** oggi e `registra_giornata_attivo`. |
 | **Inserimento manuale ore** | Ore + eventuale viaggio con sede/mezzo | Sede filtrata per cantiere (§4). |
 
 Il netto giornata = `(chiusura − inizio) − pausa`. La pausa dichiarata è una **coppia di timbrature centrata** nel turno (così il calcolo ore la sottrae con la logica pausa esistente).
@@ -341,10 +395,10 @@ Il netto giornata = `(chiusura − inizio) − pausa`. La pausa dichiarata è un
 
 Quando la giornata è senza timbrature, la tab Ore offre **due strumenti distinti** (non sono la stessa cosa lato dati — non vanno fusi alla leggera):
 
-- **Registra giornata** (azione **primaria**) — dichiari **inizio / fine / pausa** e distribuisci le ore su **uno o più cantieri**. Il server **sintetizza le timbrature reali** (`registraGiornataDaZero` → `calcolaSegmentiSplit`) e il rapportino si ricalcola da quelle. Vincolo: **solo oggi** e **giornata vuota**, con `registra_giornata_attivo` on. UI: card **"La giornata"** dominante (orari + pausa a chip), una **card per cantiere** col **colore abbinato** al proprio segmento nella **barra panoramica** in fondo (sempre visibile: ore assegnate/nette, esito Completa/Restano/di troppo, riempimento per cantiere).
+- **Registra giornata** (azione **primaria**) — dichiari **inizio / fine / pausa** e distribuisci le ore su **uno o più cantieri**. Il server **sintetizza le timbrature reali** (`registraGiornataDaZero` → `calcolaSegmentiSplit`) e il rapportino si ricalcola da quelle. Vincolo: **solo oggi** e **giornata vuota**, con `registra_giornata_attivo` on. UI: card **"La giornata"** dominante (orari + pausa a chip), poi **il percorso** in verticale (partenza con guida e mezzo, una **card per cantiere** col **colore abbinato** al proprio segmento, le tratte fra cantieri, rientro) e la **barra dei tempi** in fondo, sempre visibile anche col foglio «Il viaggio» aperto: ore assegnate/nette, esito, viaggio, orari di partenza e rientro (§7.6).
 - **Ore su un cantiere, con viaggio** (azione **secondaria**) — aggiungi ore + **viaggio andata/ritorno** (sede/mezzo/km) a **un solo cantiere**; scrive direttamente `rapportino_righe` + `timbratura_viaggio` (`registraOreManuali`). Funziona anche su **giorni passati** o su una giornata già parziale.
 
-**Quale usare**: se devi tracciare il **viaggio** o correggere un **giorno passato** → il secondo; se devi solo **dichiarare la giornata intera** (una o più commesse) → il primo.
+**Quale usare**: la giornata di **oggi**, con o senza viaggio → il primo, che dal 14/09/2026 registra anche il percorso. Un **giorno passato** o una giornata già parziale → il secondo.
 
 ---
 
@@ -354,12 +408,14 @@ Quando la giornata è senza timbrature, la tab Ore offre **due strumenti distint
 |---|---|
 | Calcolo ore dalle timbrature | `packages/api/src/kantiere-ore.ts` (`minutiPerCommessa`, `statoTurno`) |
 | Split multi-cantiere (puro + testato) | `packages/api/src/kantiere-split.ts` |
+| Percorso di Registra giornata (puro + testato) | `packages/api/src/kantiere-percorso.ts` |
 | Ricalcolo + auto-approvazione | `apps/web/app/_actions/kantiere-rapportino.ts` (`ricomputaRapportinoAuto`) |
 | Timbrature (avvio/cambio/fine turno) | `apps/web/app/_actions/kantiere-timbra.ts` |
 | Viaggio/pausa condivisi + validazione sede | `apps/web/app/_actions/_lib/viaggio-timbra.ts` (`validaViaggio`, `sedeAmmessaPerCantiere`) |
 | Sedi (CRUD + associazioni) | `apps/web/app/office/_actions/kantiere-sedi.ts` |
 | Lettura impostazioni | `apps/web/app/_lib/kantiere-config.ts` (`leggiImpostazioniTurno`, soglie, provider) |
-| Stima viaggio + geocoding | `apps/web/app/_lib/routing/`, `apps/web/app/api/routing/stima`, `apps/web/app/api/geocode/autocomplete` |
+| Stima viaggio + geocoding | `apps/web/app/_lib/routing/` (cache condivisa `stima-cache.ts`), `apps/web/app/api/routing/stima`, `apps/web/app/api/geocode/autocomplete` |
+| Registra giornata (UI) | `apps/web/app/mobile/kantiere/ore/_components/registra-giornata-dialog.tsx`, `percorso-giornata.tsx` |
 
 ---
 

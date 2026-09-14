@@ -11,6 +11,12 @@ import {
   type StatoTurno,
 } from '@kommessa/api/kantiere-ore';
 import { calcolaSegmentiSplit, trasferimentiDaSegmenti } from '@kommessa/api/kantiere-split';
+import {
+  chiaveCoppia,
+  confiniFraCantieri,
+  passaggioDaVia,
+  tratteIntermedie,
+} from '@kommessa/api/kantiere-percorso';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
@@ -18,7 +24,8 @@ import {
   leggiRoutingProvider,
   leggiImpostazioniTurno,
 } from '@/app/_lib/kantiere-config';
-import { getRoutingProvider } from '@/app/_lib/routing';
+import { getRoutingProvider, type Coord } from '@/app/_lib/routing';
+import { stimaConCache } from '@/app/_lib/routing/stima-cache';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 import { caricaTurnoAzioniContesto } from '@/app/mobile/kantiere/_lib/turno-azioni-contesto';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
@@ -26,6 +33,8 @@ import {
   ViaggioSchema,
   validaViaggio,
   inserisciViaggioRow,
+  rigaViaggio,
+  sedeAmmessaPerCantiere,
   inserisciPausaDichiarata,
   inizioSeEleggibilePausa,
   type ViaggioInput,
@@ -816,6 +825,13 @@ async function registraTrasferimentiCantiere(
     dipendenteId: string;
     data: string;
     pairs: { da: string; a: string }[];
+    /**
+     * Chi guidava e con che mezzo, quando la giornata lo dice («Registra
+     * giornata»: si indica una volta e vale per tutte le tratte). Negli altri
+     * flussi non si sa: resta passeggero senza mezzo, come sempre.
+     */
+    autista?: boolean;
+    mezzoId?: string | null;
   },
 ): Promise<void> {
   if (opts.pairs.length === 0) return;
@@ -842,7 +858,7 @@ async function registraTrasferimentiCantiere(
       const a = coord.get(p.da);
       const b = coord.get(p.a);
       if (!a || !b) continue; // coordinate mancanti → tratta saltata (best-effort)
-      const stima = await provider.stima(a, b);
+      const stima = await stimaConCache(provider, a, b);
       if (!stima) continue;
       inserendi.push({
         tenant_id: opts.tenantId,
@@ -856,8 +872,8 @@ async function registraTrasferimentiCantiere(
         durata_stimata_min: Math.round(stima.minuti),
         durata_confermata_min: 0,
         distanza_km: stima.km,
-        autista: false,
-        mezzo_id: null,
+        autista: opts.autista ?? false,
+        mezzo_id: opts.autista ? (opts.mezzoId ?? null) : null,
       });
     }
     if (inserendi.length > 0) {
@@ -865,6 +881,105 @@ async function registraTrasferimentiCantiere(
     }
   } catch {
     // best-effort: mai bloccare il flusso per la registrazione dei trasferimenti
+  }
+}
+
+/**
+ * «Passando dalla sede»: fra due cantieri la persona è passata da una sede (il
+ * magazzino, l'hotel). In «Registra giornata» si indica toccando la tratta fra i
+ * due cantieri. Diventano due tratte legate al cambio di cantiere, come se
+ * avesse chiuso e riaperto il turno passando di lì: cantiere A → sede
+ * sull'uscita da A, sede → cantiere B sull'ingresso in B.
+ *
+ * Stanno DENTRO l'orario di lavoro dichiarato: il tempo si registra come stima e
+ * non si paga una seconda volta (`durata_confermata_min = 0`), i km contano come
+ * quelli di ogni altra tratta. Best-effort come i trasferimenti: la giornata è
+ * già scritta e una stima mancata non deve farla fallire.
+ */
+async function registraPassaggiDaSede(
+  supabase: ReturnType<typeof createServerSupabase>,
+  opts: {
+    tenantId: string;
+    dipendenteId: string;
+    autista: boolean;
+    mezzoId: string | null;
+    passaggi: {
+      sedeId: string;
+      uscita: { id: string; ts: string; cantiereId: string };
+      ingresso: { id: string; ts: string; cantiereId: string };
+    }[];
+  },
+): Promise<void> {
+  if (opts.passaggi.length === 0) return;
+  try {
+    const sedeIds = [...new Set(opts.passaggi.map((p) => p.sedeId))];
+    const cantiereIds = [
+      ...new Set(opts.passaggi.flatMap((p) => [p.uscita.cantiereId, p.ingresso.cantiereId])),
+    ];
+    const [{ data: sediRows }, { data: cantRows }, scelta] = await Promise.all([
+      supabase.from('sedi' as never).select('id, lat, lng').in('id', sedeIds),
+      supabase
+        .from('cantieri' as never)
+        .select('id, indirizzo_lat, indirizzo_lng')
+        .in('id', cantiereIds)
+        .eq('tenant_id', opts.tenantId),
+      leggiRoutingProvider(supabase, opts.tenantId),
+    ]);
+    const coord = new Map<string, Coord>();
+    for (const r of (sediRows as { id: string; lat: number | null; lng: number | null }[] | null) ?? []) {
+      if (r.lat != null && r.lng != null) coord.set(r.id, { lat: Number(r.lat), lng: Number(r.lng) });
+    }
+    for (const r of (cantRows as
+      | { id: string; indirizzo_lat: number | null; indirizzo_lng: number | null }[]
+      | null) ?? []) {
+      if (r.indirizzo_lat != null && r.indirizzo_lng != null) {
+        coord.set(r.id, { lat: Number(r.indirizzo_lat), lng: Number(r.indirizzo_lng) });
+      }
+    }
+    const provider = getRoutingProvider({ provider: scelta });
+    const stima = async (da: string, a: string) => {
+      const o = coord.get(da);
+      const d = coord.get(a);
+      return o && d ? await stimaConCache(provider, o, d) : null;
+    };
+
+    const righe: Record<string, unknown>[] = [];
+    for (const p of opts.passaggi) {
+      const [versoSede, dallaSede] = await Promise.all([
+        stima(p.uscita.cantiereId, p.sedeId),
+        stima(p.sedeId, p.ingresso.cantiereId),
+      ]);
+      const tratta = (s: { minuti: number; km: number | null } | null): ViaggioInput => ({
+        sedeId: p.sedeId,
+        durataStimataMin: s ? s.minuti : null,
+        durataConfermataMin: 0,
+        autista: opts.autista,
+        mezzoId: opts.mezzoId,
+        distanzaKm: s?.km ?? null,
+      });
+      const comune = { tenantId: opts.tenantId, dipendenteId: opts.dipendenteId };
+      righe.push(
+        rigaViaggio({
+          ...comune,
+          cantiereId: p.uscita.cantiereId,
+          timbraturaId: p.uscita.id,
+          ts: p.uscita.ts,
+          tipo: 'uscita',
+          viaggio: tratta(versoSede),
+        }),
+        rigaViaggio({
+          ...comune,
+          cantiereId: p.ingresso.cantiereId,
+          timbraturaId: p.ingresso.id,
+          ts: p.ingresso.ts,
+          tipo: 'ingresso',
+          viaggio: tratta(dallaSede),
+        }),
+      );
+    }
+    await supabase.from('timbratura_viaggio' as never).insert(righe as never);
+  } catch {
+    // best-effort: la giornata è già registrata
   }
 }
 
@@ -1146,6 +1261,41 @@ export async function elencoCantieriTurno(): Promise<
 // Il tecnico non ha mai timbrato: dichiara inizio/fine + cantieri/ore. Si
 // sintetizza la giornata (ingresso reale + segmenti via calcolaSegmentiSplit)
 // così il ricalcolo deriva le righe. Solo su GIORNATA VUOTA (0 eventi oggi).
+//
+// Dal 14/09/2026 anche il PERCORSO: da dove è partito, dove è rientrato, chi
+// guidava e con che mezzo, come è passato da un cantiere all'altro. Regole in
+// `@kommessa/api/kantiere-percorso`. Senza percorso (client vecchio) = come prima.
+
+const TrattaGiornataSchema = z.object({
+  sedeId: z.string().uuid(),
+  durataStimataMin: z.number().int().nonnegative().nullable(),
+  durataConfermataMin: z.number().int().nonnegative(),
+  giustificazione: z.string().max(500).optional(),
+  distanzaKm: z.number().nonnegative().max(100000).nullable().optional(),
+});
+type TrattaGiornata = z.infer<typeof TrattaGiornataSchema>;
+
+const PercorsoGiornataSchema = z.object({
+  /** null = partito da casa (abitazione privata): nessuna tratta di lavoro. */
+  andata: TrattaGiornataSchema.nullable(),
+  /** null = rientrato a casa. */
+  ritorno: TrattaGiornataSchema.nullable(),
+  /** Si dice una volta e vale per tutte le tratte della giornata. */
+  autista: z.boolean(),
+  mezzoId: z.string().uuid().nullable(),
+  /** Come si è passati da un cantiere al successivo; una coppia assente è diretta. */
+  passaggi: z
+    .array(
+      z.object({
+        da: z.string().uuid(),
+        a: z.string().uuid(),
+        via: z.union([z.literal('diretto'), z.literal('casa'), z.string().uuid()]),
+      }),
+    )
+    .max(12)
+    .default([]),
+});
+
 const RegistraGiornataSchema = z.object({
   inizioIso: z.string().datetime(),
   fineIso: z.string().datetime(),
@@ -1154,6 +1304,7 @@ const RegistraGiornataSchema = z.object({
     .array(z.object({ cantiereId: z.string().uuid(), minuti: z.number().int().nonnegative() }))
     .min(1)
     .max(12),
+  percorso: PercorsoGiornataSchema.optional(),
 });
 
 export async function registraGiornataDaZero(input: unknown): Promise<Result> {
@@ -1212,6 +1363,49 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     return { ok: false, error: calc.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
   }
 
+  const primoCantiere = parsed.data.split[0]!.cantiereId;
+  // L'ultimo cantiere vero è quello dell'uscita finale: un cantiere rimasto a
+  // zero minuti in fondo non viene scritto.
+  const ultimoCantiere = calc.eventi[calc.eventi.length - 1]?.cantiereId ?? primoCantiere;
+
+  // ── Percorso: si valida tutto PRIMA di scrivere ─────────────────────────────
+  const percorso = parsed.data.percorso ?? null;
+  const autista = percorso?.autista ?? false;
+  const mezzoId = autista ? (percorso?.mezzoId ?? null) : null;
+  const conGuida = (t: TrattaGiornata): ViaggioInput => ({ ...t, autista, mezzoId });
+  const andata = percorso?.andata ? conGuida(percorso.andata) : null;
+  const ritorno = percorso?.ritorno ? conGuida(percorso.ritorno) : null;
+  if (andata) {
+    const v = await validaViaggio(supabase, andata, primoCantiere);
+    if (!v.ok) return { ok: false, error: v.error };
+  }
+  if (ritorno) {
+    const v = await validaViaggio(supabase, ritorno, ultimoCantiere);
+    if (!v.ok) return { ok: false, error: v.error };
+  }
+  if (mezzoId && !andata && !ritorno) {
+    // Solo tratte fra cantieri: il mezzo non passa da validaViaggio.
+    const { data: mezzoOk } = await supabase
+      .from('mezzi' as never)
+      .select('id')
+      .eq('id', mezzoId)
+      .maybeSingle();
+    if (!mezzoOk) return { ok: false, error: 'MEZZO_NON_VALIDO' };
+  }
+  const intermedie = tratteIntermedie(
+    trasferimentiDaSegmenti(parsed.data.split),
+    Object.fromEntries((percorso?.passaggi ?? []).map((p) => [chiaveCoppia(p), passaggioDaVia(p.via)])),
+  );
+  for (const t of intermedie) {
+    if (t.tipo !== 'via_sede') continue;
+    // La stessa regola delle sedi vale per entrambi i cantieri della tratta.
+    const ammessa =
+      (await sedeAmmessaPerCantiere(supabase, t.sedeId, t.da)) &&
+      (await sedeAmmessaPerCantiere(supabase, t.sedeId, t.a));
+    if (!ammessa) return { ok: false, error: 'SEDE_NON_VALIDA' };
+  }
+
+  // ── Timbrature ──────────────────────────────────────────────────────────────
   const base = {
     tenant_id: ctx.tenantId,
     dipendente_id: me.id,
@@ -1220,7 +1414,6 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     modalita: 'giornata_dichiarata',
     creato_da: ctx.userId,
   };
-  const primoCantiere = parsed.data.split[0]!.cantiereId;
   const rows = [
     { ...base, cantiere_id: primoCantiere, tipo: 'ingresso', pausa: false, ts: inizioIso },
     ...calc.eventi.map((e) => ({
@@ -1231,16 +1424,94 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
       ts: new Date(e.ms).toISOString(),
     })),
   ];
-  const { error } = await supabase.from('timbrature' as never).insert(rows as never);
+  const { data: inserite, error } = await supabase
+    .from('timbrature' as never)
+    .insert(rows as never)
+    .select('id, tipo, ts, pausa, cantiere_id');
   if (error) return { ok: false, error: error.message };
 
-  // Trasferimenti cantiere→cantiere della giornata: km + tempo (best-effort,
-  // sempre registrati; conteggio lato tenant gated dal toggle).
+  // In ordine di orario; a parità (cambio di cantiere senza pausa) prima l'uscita.
+  const eventi = (
+    (inserite as
+      | { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null }[]
+      | null) ?? []
+  )
+    .map((e) => ({ id: e.id, tipo: e.tipo, ts: e.ts, pausa: !!e.pausa, cantiereId: e.cantiere_id ?? '' }))
+    .sort(
+      (x, y) =>
+        Date.parse(x.ts) - Date.parse(y.ts) || (x.tipo === y.tipo ? 0 : x.tipo === 'uscita' ? -1 : 1),
+    );
+
+  // ── Andata e ritorno: sulla prima entrata e sull'ultima uscita ──────────────
+  // Sono il viaggio della giornata: si scrivono insieme e, se non entrano, la
+  // giornata non resta a metà. Si tolgono le timbrature appena scritte (le tratte
+  // se ne vanno con loro) e l'utente riprova.
+  const primoIngresso = eventi.find((e) => e.tipo === 'ingresso');
+  const ultimaUscita = [...eventi].reverse().find((e) => e.tipo === 'uscita' && !e.pausa);
+  const comune = { tenantId: ctx.tenantId, dipendenteId: me.id };
+  const righeViaggio: Record<string, unknown>[] = [];
+  if (andata && primoIngresso) {
+    righeViaggio.push(
+      rigaViaggio({
+        ...comune,
+        cantiereId: primoIngresso.cantiereId,
+        timbraturaId: primoIngresso.id,
+        ts: primoIngresso.ts,
+        tipo: 'ingresso',
+        viaggio: andata,
+      }),
+    );
+  }
+  if (ritorno && ultimaUscita) {
+    righeViaggio.push(
+      rigaViaggio({
+        ...comune,
+        cantiereId: ultimaUscita.cantiereId,
+        timbraturaId: ultimaUscita.id,
+        ts: ultimaUscita.ts,
+        tipo: 'uscita',
+        viaggio: ritorno,
+      }),
+    );
+  }
+  if (righeViaggio.length > 0) {
+    const { error: eViaggio } = await supabase
+      .from('timbratura_viaggio' as never)
+      .insert(righeViaggio as never);
+    if (eViaggio) {
+      await supabase
+        .from('timbrature' as never)
+        .delete()
+        .in(
+          'id',
+          eventi.map((e) => e.id),
+        );
+      return { ok: false, error: 'VIAGGIO_NON_SALVATO' };
+    }
+  }
+
+  // ── Fra un cantiere e l'altro (best-effort) ─────────────────────────────────
+  // Dirette: km + tempo sempre registrati, conteggio lato tenant gated dal toggle.
   await registraTrasferimentiCantiere(supabase, {
-    tenantId: ctx.tenantId,
-    dipendenteId: me.id,
+    ...comune,
     data: oggi,
-    pairs: trasferimentiDaSegmenti(parsed.data.split),
+    pairs: intermedie.flatMap((t) => (t.tipo === 'diretta' ? [{ da: t.da, a: t.a }] : [])),
+    autista,
+    mezzoId,
+  });
+  // Dalla sede: legate al cambio di cantiere. Passando da casa non si scrive niente.
+  const confini = confiniFraCantieri(eventi);
+  await registraPassaggiDaSede(supabase, {
+    ...comune,
+    autista,
+    mezzoId,
+    passaggi: intermedie.flatMap((t, i) => {
+      const c = confini[i];
+      if (t.tipo !== 'via_sede' || !c || c.uscita.cantiereId !== t.da || c.ingresso.cantiereId !== t.a) {
+        return [];
+      }
+      return [{ sedeId: t.sedeId, uscita: c.uscita, ingresso: c.ingresso }];
+    }),
   });
 
   try {

@@ -141,7 +141,7 @@ Audit completo (5 investigatori paralleli + verifiche live Supabase) e correzion
 
 #### Trasferimenti cantiere→cantiere (km + tempo) (in prod dal 07/07/2026)
 
-Chi lavora su **più cantieri** in un giorno genera tragitti **A → B**. Regola a **due livelli** (gated kantiere → Bertaiola-safe; **FPM = OFF**):
+Chi lavora su **più cantieri** in un giorno genera tragitti **A → B**. Regola a **due livelli** (gated kantiere → Bertaiola-safe; **FPM: conteggio ON** sul database al 14/09/2026):
 
 - **Registrazione SEMPRE attiva** (anche a toggle spento): per ogni tratta consecutiva si calcolano **km + tempo** (provider del tenant) e si scrive una riga `timbratura_viaggio` (`timbratura_id` null, `da_cantiere_id`=A, `cantiere_id`=B → km sulla **destinazione**, `durata_stimata_min`=tempo, **`durata_confermata_min=0`** = non pagato). **Sempre visibile al super admin** (`/admin/kantiere/timbrature` → "Trasferimenti tra cantieri"). Copre i 3 flussi multi-cantiere (switch live, split fine turno, registra-giornata) via `registraTrasferimentiCantiere` + puro testato `trasferimentiDaSegmenti`.
 - **Conteggio = toggle per-tenant** `km_switch_attivo` (rinominato "Conteggia i trasferimenti tra cantieri", default **OFF/opt-in**): se ON i km entrano nei totali del cantiere di destinazione lato tenant; se OFF restano registrati ma **esclusi** dalle aggregazioni del tenant (numeri operativi invariati). Reader `leggiTrasferimentiAttivi`; gate applicato a tutte le somme km lato tenant (mezzi safe: `mezzo_id` null).
@@ -160,6 +160,12 @@ Chi lavora su **più cantieri** in un giorno genera tragitti **A → B**. Regola
 - **Tasti ufficio**: azioni di pagina e di barra = `<Button size="sm">` (40px, testo 12px, nero; outline per le secondarie). **Mai** tasti fatti a mano con `bg-primary`: il cobalto è per link, badge e stato «selezionato» di filtri e schede. Censimento ripetibile: `BANCO_CDP=9334 node scripts/banco-ui/tasti.mjs`.
 
 Working language for the app UI is **Italian**. Preserve it.
+
+#### Viaggio dentro «Registra giornata» (14/09/2026)
+
+- **Percorso**: partenza e rientro agli estremi, **guida e mezzo una volta** per tutte le tratte, tratte fra cantieri costruite dal sistema (dirette con km/tempo, modificabili in «passando da una sede» / «passando da casa»). Premendo «Registra giornata» il foglio **«Il viaggio»** chiede solo i dati obbligatori mancanti; la **barra dei tempi** (lavoro + viaggio, partenza/rientro) resta visibile sotto. Conferma passeggero **sempre**.
+- **Ore**: andata e ritorno = tempo di viaggio fuori dall'orario dichiarato (vanno in `ore_viaggio`); le tratte fra cantieri stanno dentro l'orario → `durata_confermata_min = 0`. Andata legata alla prima entrata, ritorno all'ultima uscita, scritte **insieme** (se falliscono si tolgono le timbrature appena scritte). Tutto validato prima di scrivere.
+- **Codice**: puro `@kommessa/api/kantiere-percorso` (+ test), UI `mobile/kantiere/ore/_components/registra-giornata-dialog.tsx` + `percorso-giornata.tsx`, `/api/routing/stima` anche cantiere → cantiere, cache condivisa `_lib/routing/stima-cache.ts`. Le pagine **parco mezzi** ora rispettano `km_switch_attivo` (i trasferimenti possono avere un mezzo). Banco `scripts/banco-ui/registra-giornata.mjs` (`BANCO_SALVA=1` salva sul tenant demo: ripulire dopo). Regole in `Logiche_Kantiere.md` §7.6.
 
 ### Infrastruttura produzione
 

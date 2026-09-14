@@ -68,7 +68,7 @@ export function useConfermaPasseggero() {
           <div className="min-w-0">
             <p className="text-base font-semibold leading-snug">Hai viaggiato da passeggero?</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Non hai spuntato «sono io l’autista». I chilometri vengono conteggiati solo a chi
+              Non hai indicato di essere tu l’autista. I chilometri vengono conteggiati solo a chi
               guida: così questo viaggio non te ne conta nessuno.
             </p>
           </div>

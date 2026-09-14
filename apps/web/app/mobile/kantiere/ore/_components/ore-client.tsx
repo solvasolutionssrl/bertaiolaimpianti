@@ -43,6 +43,8 @@ interface OreClientProps {
   /** cantiere_id → sede_id[] associate (oltre alla predefinita). */
   sediPerCantiere: Record<string, string[]>;
   mezziDisponibili: { id: string; targa: string; modello: string | null }[];
+  /** Ultimo mezzo guidato: «Registra giornata» lo propone. */
+  ultimoMezzoId: string | null;
   /** true se c'è un turno aperto: il totale di oggi è ancora 0/parziale, quindi
    *  la panoramica compare solo a turno finito. */
   turnoInCorso: boolean;
@@ -156,6 +158,7 @@ export function OreClient({
   sediDisponibili,
   sediPerCantiere,
   mezziDisponibili,
+  ultimoMezzoId,
   turnoInCorso,
   registraGiornataAttivo,
   tolleranzaChiusuraMin,
@@ -523,6 +526,10 @@ export function OreClient({
         onClose={() => setRegistraOpen(false)}
         tolleranzaMin={tolleranzaChiusuraMin}
         passoMinuti={passoMinuti}
+        sedi={sediDisponibili}
+        sediPerCantiere={sediPerCantiere}
+        mezzi={mezziDisponibili}
+        ultimoMezzoId={ultimoMezzoId}
       />
 
       {/* Panoramica/correzione della giornata di oggi (pencil sul riepilogo) */}

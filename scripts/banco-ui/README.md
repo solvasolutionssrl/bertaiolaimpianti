@@ -18,6 +18,7 @@ cd apps/web && npx next dev -p 3010
 node scripts/banco-ui/desktop.mjs                 # ufficio, mondo presenze
 BANCO_MONDO=kommessa node scripts/banco-ui/desktop.mjs   # ufficio, mondo commesse
 node scripts/banco-ui/app.mjs                     # app tecnici, iPhone emulato
+node scripts/banco-ui/registra-giornata.mjs       # Registra giornata col percorso (BANCO_SALVA=1 salva sul demo)
 ```
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve

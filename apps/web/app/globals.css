@@ -323,6 +323,10 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .animate-fade-up { animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  /* Foglio che sale dal basso (Registra giornata → «Il viaggio»). */
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .animate-sheet-up { animation: sheet-up 0.38s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  @media (prefers-reduced-motion: reduce) { .animate-sheet-up { animation: none; } }
 
   /* Ingresso del CONTENUTO reale quando sostituisce lo skeleton (loading.tsx):
      solo opacità (niente transform → sicuro con figli position:fixed), così lo

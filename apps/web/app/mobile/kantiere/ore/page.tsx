@@ -133,6 +133,30 @@ export default async function MobileOrePage() {
     (m) => ({ id: m.id, targa: m.targa, modello: m.modello }),
   );
 
+  // L'ultimo mezzo guidato: «Registra giornata» lo propone quando si indica
+  // «Guidavo io». Si legge dalle proprie tratte da autista.
+  const { data: dipRaw } = await supabase
+    .from('dipendenti' as never)
+    .select('id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('user_id', ctx.userId)
+    .maybeSingle();
+  const dipendenteId = (dipRaw as { id: string } | null)?.id ?? null;
+  let ultimoMezzoId: string | null = null;
+  if (dipendenteId) {
+    const { data: umRaw } = await supabase
+      .from('timbratura_viaggio' as never)
+      .select('mezzo_id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('dipendente_id', dipendenteId)
+      .eq('autista', true)
+      .not('mezzo_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    ultimoMezzoId = (umRaw as { mezzo_id: string } | null)?.mezzo_id ?? null;
+  }
+
   const [turno, storicoRes, impTurno] = await Promise.all([
     mioTurnoAttivo(),
     mioStoricoRapportini({}),
@@ -188,6 +212,7 @@ export default async function MobileOrePage() {
         sediDisponibili={sediDisponibili}
         sediPerCantiere={sediPerCantiere}
         mezziDisponibili={mezziDisponibili}
+        ultimoMezzoId={ultimoMezzoId}
         turnoInCorso={!!turno}
         registraGiornataAttivo={impTurno.registraGiornataAttivo}
         tolleranzaChiusuraMin={impTurno.tolleranzaChiusuraMin}

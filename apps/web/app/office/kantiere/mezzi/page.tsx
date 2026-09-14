@@ -4,6 +4,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { BarsOrizzontali } from '../_components/charts';
 import { MezziClient } from './_components/mezzi-client';
 
@@ -47,7 +48,7 @@ export default async function MezziPage() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
 
-  const [mezziRes, viaggiRes] = await Promise.all([
+  const [mezziRes, viaggiRes, trasferimentiConteggiati] = await Promise.all([
     supabase
       .from('mezzi' as never)
       .select('id, tipo, targa, modello, attivo, note')
@@ -56,10 +57,13 @@ export default async function MezziPage() {
       .order('targa') as unknown as Promise<{ data: MezzoRow[] | null }>,
     supabase
       .from('timbratura_viaggio' as never)
-      .select('mezzo_id, distanza_km')
+      .select('mezzo_id, distanza_km, da_cantiere_id')
       .eq('tenant_id', ctx.tenantId)
       .eq('autista', true) // solo chi ha davvero guidato il mezzo
-      .not('mezzo_id', 'is', null) as unknown as Promise<{ data: { mezzo_id: string; distanza_km: number | null }[] | null }>,
+      .not('mezzo_id', 'is', null) as unknown as Promise<{
+      data: { mezzo_id: string; distanza_km: number | null; da_cantiere_id: string | null }[] | null;
+    }>,
+    leggiTrasferimentiAttivi(supabase, ctx.tenantId),
   ]);
 
   const mezzi: MezzoView[] = mezziRes.data ?? [];
@@ -68,6 +72,10 @@ export default async function MezziPage() {
   const statsMap = new Map<string, MezzoStats>();
   for (const v of viaggiRes.data ?? []) {
     if (!v.mezzo_id) continue;
+    // Trasferimenti fra cantieri: con il conteggio spento restano registrati ma
+    // fuori dai totali, come nel resto dell'ufficio. Da «Registra giornata»
+    // arrivano col mezzo di chi guidava.
+    if (!trasferimentiConteggiati && v.da_cantiere_id != null) continue;
     const cur = statsMap.get(v.mezzo_id) ?? { kmTotali: 0, nViaggi: 0 };
     cur.kmTotali += v.distanza_km ?? 0;
     cur.nViaggi += 1;

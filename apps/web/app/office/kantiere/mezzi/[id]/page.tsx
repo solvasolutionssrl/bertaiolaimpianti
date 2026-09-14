@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { MezzoStoricoClient } from './_components/mezzo-storico-client';
 import type { TrattaView, MezzoStorico, TotaliStorico } from './_components/mezzo-storico-client';
 
@@ -28,6 +29,7 @@ type TrattaRow = {
   distanza_km: number | null;
   durata_confermata_min: number | null;
   timbratura_id: string | null;
+  da_cantiere_id: string | null;
 };
 
 type DipendenteRow = { id: string; nome: string; cognome: string };
@@ -60,17 +62,23 @@ export default async function MezzoStoricoPage({ params }: PageProps) {
   // 2. Carica tratte per questo mezzo (ordine data desc)
   const { data: tratteRaw } = (await supabase
     .from('timbratura_viaggio' as never)
-    .select('id, data, dipendente_id, direzione, sede_id, cantiere_id, distanza_km, durata_confermata_min, timbratura_id')
+    .select('id, data, dipendente_id, direzione, sede_id, cantiere_id, distanza_km, durata_confermata_min, timbratura_id, da_cantiere_id')
     .eq('tenant_id', ctx.tenantId)
     .eq('mezzo_id', params.id)
     .order('data', { ascending: false })
     .limit(500)) as { data: TrattaRow[] | null };
 
-  const tratte: TrattaRow[] = tratteRaw ?? [];
+  // Trasferimenti fra cantieri: fuori dai totali se il conteggio è spento.
+  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
+  const tratte: TrattaRow[] = (tratteRaw ?? []).filter(
+    (t) => trasferimentiConteggiati || t.da_cantiere_id == null,
+  );
 
   // 3. Batch-load dipendenti, cantieri, sedi
   const dipIds = [...new Set(tratte.map((t) => t.dipendente_id).filter(Boolean))];
-  const cantiereIds = [...new Set(tratte.map((t) => t.cantiere_id).filter((id): id is string => id != null))];
+  const cantiereIds = [
+    ...new Set(tratte.flatMap((t) => [t.cantiere_id, t.da_cantiere_id]).filter((id): id is string => id != null)),
+  ];
   const sedeIds = [...new Set(tratte.map((t) => t.sede_id).filter((id): id is string => id != null))];
 
   const dipMap = new Map<string, string>();
@@ -112,7 +120,13 @@ export default async function MezzoStoricoPage({ params }: PageProps) {
     data: t.data,
     dipendente: dipMap.get(t.dipendente_id) ?? t.dipendente_id,
     direzione: t.direzione,
-    sede: t.sede_id ? (sedeMap.get(t.sede_id) ?? null) : null,
+    // Un trasferimento parte da un cantiere, non da una sede: in elenco si legge
+    // «cantiere A → cantiere B» nella stessa colonna.
+    sede: t.da_cantiere_id
+      ? (cantiereMap.get(t.da_cantiere_id) ?? null)
+      : t.sede_id
+        ? (sedeMap.get(t.sede_id) ?? null)
+        : null,
     cantiere: t.cantiere_id ? (cantiereMap.get(t.cantiere_id) ?? null) : null,
     distanza_km: t.distanza_km ?? 0,
     durata_min: t.durata_confermata_min,

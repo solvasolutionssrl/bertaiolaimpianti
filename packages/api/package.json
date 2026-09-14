@@ -17,6 +17,7 @@
     "./kantiere-ore": "./src/kantiere-ore.ts",
     "./kantiere-cronologia": "./src/kantiere-cronologia.ts",
     "./kantiere-split": "./src/kantiere-split.ts",
+    "./kantiere-percorso": "./src/kantiere-percorso.ts",
     "./kantiere-report": "./src/kantiere-report.ts",
     "./kantiere-costi": "./src/kantiere-costi.ts",
     "./spese": "./src/spese.ts",

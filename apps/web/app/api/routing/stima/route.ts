@@ -3,39 +3,56 @@ import { z } from 'zod';
 
 import { getTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
-import { createServiceSupabase } from '@kommessa/api/service';
 import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiArrotondamenti, leggiRoutingProvider } from '@/app/_lib/kantiere-config';
 import { getRoutingProvider, type Coord } from '@/app/_lib/routing';
+import { stimaConCache } from '@/app/_lib/routing/stima-cache';
 
 /**
  * POST /api/routing/stima
- * Body: { sedeId, cantiereId, direzione: 'andata'|'ritorno' }
  *
- * Stima i minuti di percorrenza in auto tra sede e cantiere.
- *  - andata  : origine = sede,     destinazione = cantiere
- *  - ritorno : origine = cantiere, destinazione = sede
+ * Stima minuti e km di guida. Due forme di body:
+ *  - `{ sedeId, cantiereId, direzione: 'andata'|'ritorno' }` sede ↔ cantiere
+ *      andata: sede → cantiere · ritorno: cantiere → sede
+ *  - `{ daCantiereId, aCantiereId }` cantiere → cantiere, per le tratte fra
+ *      cantieri che «Registra giornata» mostra mentre si compila
  *
- * Le coppie (origine,dest) sono stabili → cache in `routing_cache` (service).
- * Fail-soft: se il provider non è configurato/risponde, o mancano le coord,
- * ritorna `{ ok:true, minuti:null }` → il tecnico inserisce a mano.
+ * Cache geografica condivisa (`stimaConCache`). Fail-soft: se mancano le
+ * coordinate o il provider non risponde torna `{ ok:true, minuti:null }` e il
+ * tecnico inserisce il tempo a mano.
  *
- * Auth: requireTenantContext. Le letture sede/cantiere passano dalla RLS del
- * tenant (server client); la cache geografica usa il service client.
+ * Auth: tenant + modulo. Le coordinate si leggono col client del tenant (RLS):
+ * una sede o un cantiere di un altro cliente semplicemente non esiste.
  */
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const inputSchema = z.object({
-  sedeId: z.string().uuid(),
-  cantiereId: z.string().uuid(),
-  direzione: z.enum(['andata', 'ritorno']),
-});
+const uuid = z.string().uuid();
+const inputSchema = z.union([
+  z.object({ sedeId: uuid, cantiereId: uuid, direzione: z.enum(['andata', 'ritorno']) }),
+  z.object({ daCantiereId: uuid, aCantiereId: uuid }),
+]);
 
-function round6(n: number): number {
-  return Math.round(n * 1e6) / 1e6;
+type Supa = ReturnType<typeof createServerSupabase>;
+
+async function coordSede(supabase: Supa, id: string): Promise<Coord | null> {
+  const { data } = await supabase.from('sedi' as never).select('lat, lng').eq('id', id).maybeSingle();
+  const r = data as { lat: number | null; lng: number | null } | null;
+  return r?.lat != null && r?.lng != null ? { lat: Number(r.lat), lng: Number(r.lng) } : null;
+}
+
+async function coordCantiere(supabase: Supa, id: string): Promise<Coord | null> {
+  const { data } = await supabase
+    .from('cantieri' as never)
+    .select('indirizzo_lat, indirizzo_lng')
+    .eq('id', id)
+    .maybeSingle();
+  const r = data as { indirizzo_lat: number | null; indirizzo_lng: number | null } | null;
+  return r?.indirizzo_lat != null && r?.indirizzo_lng != null
+    ? { lat: Number(r.indirizzo_lat), lng: Number(r.indirizzo_lng) }
+    : null;
 }
 
 export async function POST(req: Request) {
@@ -47,97 +64,44 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const parsed = inputSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ ok: false, error: 'INPUT' }, { status: 400 });
+  const input = parsed.data;
 
   const supabase = createServerSupabase();
-  // Step di arrotondamento del tempo di viaggio (configurabile dall'ufficio,
-  // default 5 min). Applicato sia sul valore in cache sia su quello fresco.
-  const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, ctx.tenantId);
 
-  const { data: sedeRaw } = await supabase
-    .from('sedi' as never)
-    .select('lat, lng')
-    .eq('id', parsed.data.sedeId)
-    .maybeSingle();
-  const { data: cantRaw } = await supabase
-    .from('cantieri' as never)
-    .select('indirizzo_lat, indirizzo_lng')
-    .eq('id', parsed.data.cantiereId)
-    .maybeSingle();
-
-  const sede = sedeRaw as { lat: number | null; lng: number | null } | null;
-  const cant = cantRaw as { indirizzo_lat: number | null; indirizzo_lng: number | null } | null;
-
-  if (!sede?.lat || !sede?.lng || !cant?.indirizzo_lat || !cant?.indirizzo_lng) {
-    return NextResponse.json({ ok: true, minuti: null, motivo: 'coord_mancanti' });
+  let origine: Coord | null;
+  let destinazione: Coord | null;
+  if ('daCantiereId' in input) {
+    [origine, destinazione] = await Promise.all([
+      coordCantiere(supabase, input.daCantiereId),
+      coordCantiere(supabase, input.aCantiereId),
+    ]);
+  } else {
+    const [sede, cantiere] = await Promise.all([
+      coordSede(supabase, input.sedeId),
+      coordCantiere(supabase, input.cantiereId),
+    ]);
+    [origine, destinazione] = input.direzione === 'andata' ? [sede, cantiere] : [cantiere, sede];
   }
-
-  const sedeCoord: Coord = { lat: Number(sede.lat), lng: Number(sede.lng) };
-  const cantCoord: Coord = { lat: Number(cant.indirizzo_lat), lng: Number(cant.indirizzo_lng) };
-  const origin = parsed.data.direzione === 'andata' ? sedeCoord : cantCoord;
-  const dest = parsed.data.direzione === 'andata' ? cantCoord : sedeCoord;
-
-  const oLat = round6(origin.lat);
-  const oLng = round6(origin.lng);
-  const dLat = round6(dest.lat);
-  const dLng = round6(dest.lng);
-
-  const svc = createServiceSupabase();
+  if (!origine || !destinazione) {
+    return NextResponse.json({ ok: true, minuti: null, km: null, motivo: 'coord_mancanti' });
+  }
 
   // Provider per-tenant: 'google' (traffico reale) se abilitato dal super admin
-  // e con chiave di piattaforma presente, altrimenti free (ORS/OSRM).
-  const choice = await leggiRoutingProvider(supabase, ctx.tenantId);
-  const provider = getRoutingProvider({ provider: choice });
-  // Cache del traffico a TTL corto (il valore dipende dall'ora); free senza TTL.
-  const TTL_MS = 15 * 60 * 1000;
-
-  // 1) cache, per profilo (free 'driving-car' e traffico 'driving-traffic' non
-  //    si mescolano: cambiando provider non si riusa una stima dell'altro tipo)
-  const { data: cached } = await svc
-    .from('routing_cache' as never)
-    .select('durata_min, distanza_km, created_at')
-    .eq('origin_lat', oLat)
-    .eq('origin_lng', oLng)
-    .eq('dest_lat', dLat)
-    .eq('dest_lng', dLng)
-    .eq('profile', provider.profile)
-    .maybeSingle();
-
-  const hit = cached as { durata_min: number; distanza_km: number | null; created_at: string } | null;
-  const fresca = hit ? Date.parse(hit.created_at) > Date.now() - TTL_MS : false;
-  if (hit && typeof hit.durata_min === 'number' && (!provider.trafficAware || fresca)) {
-    return NextResponse.json({
-      ok: true,
-      minuti: arrotondaA(hit.durata_min, stepViaggio),
-      minutiRaw: hit.durata_min,
-      km: hit.distanza_km ?? null,
-    });
-  }
-
-  // 2) stima fresca dal provider attivo
-  const res = await provider.stima(origin, dest);
-  if (res == null) {
+  // e con la chiave di piattaforma, altrimenti free (ORS/OSRM).
+  const [{ viaggioMin: stepViaggio }, scelta] = await Promise.all([
+    leggiArrotondamenti(supabase, ctx.tenantId),
+    leggiRoutingProvider(supabase, ctx.tenantId),
+  ]);
+  const stima = await stimaConCache(getRoutingProvider({ provider: scelta }), origine, destinazione);
+  if (!stima) {
     return NextResponse.json({ ok: true, minuti: null, km: null, motivo: 'stima_non_disponibile' });
   }
 
-  const durata = Math.round(res.minuti);
-  const distanza = Math.round(res.km * 100) / 100;
-  // 3) salva in cache (best-effort). created_at aggiornato: per il traffico
-  //    serve a far valere il TTL; per il free è innocuo.
-  await svc
-    .from('routing_cache' as never)
-    .upsert(
-      {
-        origin_lat: oLat,
-        origin_lng: oLng,
-        dest_lat: dLat,
-        dest_lng: dLng,
-        profile: provider.profile,
-        durata_min: durata,
-        distanza_km: distanza,
-        created_at: new Date().toISOString(),
-      } as never,
-      { onConflict: 'origin_lat,origin_lng,dest_lat,dest_lng,profile' } as never,
-    );
-
-  return NextResponse.json({ ok: true, minuti: arrotondaA(durata, stepViaggio), minutiRaw: durata, km: distanza });
+  // Step di arrotondamento del viaggio (configurabile dall'ufficio, default 5).
+  return NextResponse.json({
+    ok: true,
+    minuti: arrotondaA(stima.minuti, stepViaggio),
+    minutiRaw: stima.minuti,
+    km: stima.km,
+  });
 }
