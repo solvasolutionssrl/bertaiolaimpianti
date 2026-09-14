@@ -189,10 +189,11 @@ export function NuovaSpesa({
           type="button"
           onClick={() => setAperto(true)}
           aria-label="Aggiungi spesa"
-          className="hide-on-sheet fixed z-30 inline-flex h-10 items-center gap-1.5 rounded-full border border-primary/30 bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-soft active:scale-95 transition-transform"
-          style={{ top: 'calc(env(safe-area-inset-top) + 0.5rem)', right: '3.6rem' }}
+          className="hide-on-sheet fixed z-30 inline-flex h-[34px] items-center gap-1 rounded-full border border-primary/30 bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-soft transition-transform before:absolute before:inset-x-0 before:-inset-y-[5px] before:content-[''] active:scale-95"
+          // Sulla stessa riga della campanella (34px, 6px dall'alto), 8px a sinistra.
+          style={{ top: 'calc(env(safe-area-inset-top) + 6px)', right: '54px' }}
         >
-          <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />
           Spesa
         </button>
       );

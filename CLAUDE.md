@@ -124,6 +124,7 @@ La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semp
 - **Elemento nascosto sotto la bottom-nav**: un `fixed` dentro la shell resta intrappolato nello stacking context → **`createPortal` su body + z alto** (pattern `Portal`, `mobile/_components/portal.tsx`).
 - **Tastiera che copre i tasti**: aggancia alla **`visualViewport`** (spaziatore bianco = altezza tastiera, oppure restringi il foglio).
 - **Dropdown dentro un dialog Radix**: usare un **overlay assoluto in-flow** (NON un Portal: Radix lo tratterebbe come "fuori" → chiude il dialog / ruba il focus).
+- **Tasti fissi in alto (campanella, «＋ Spesa»)**: 34px a `safe-area + 6px`, tocco da 44px con un'area invisibile `before:`. La fascia in alto a destra fino a 40px va lasciata libera: niente a destra sulla riga del titolo, «Aggiornato alle» sta sulla riga sotto (14/09/2026, prima la campanella copriva il testo su Cantieri, Ore, Spese). Banco `scripts/banco-ui/campanella.mjs`.
 
 #### Audit Kantiere + correzioni payroll/sicurezza/log (06/07/2026)
 

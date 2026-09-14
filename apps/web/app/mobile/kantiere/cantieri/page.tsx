@@ -71,17 +71,18 @@ export default async function CantieriMobilePage() {
           <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere
         </p>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">Cantieri</h1>
-          {/* Chi è dentro e chi è fuori cambia durante la giornata: la pagina
-              si tiene aggiornata da sola, senza tirarla giù. */}
-          <LiveRefresh className="shrink-0 text-[11px]" />
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Cantieri</h1>
+        {/* Chi è dentro e chi è fuori cambia durante la giornata: la pagina si
+            tiene aggiornata da sola. «Aggiornato alle» sta sulla riga sotto il
+            titolo: in alto a destra c'è la campanella. */}
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {cantieri.length === 0
+              ? 'Nessun cantiere'
+              : `${cantieri.length} ${cantieri.length === 1 ? 'cantiere' : 'cantieri'}`}
+          </p>
+          <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {cantieri.length === 0
-            ? 'Nessun cantiere'
-            : `${cantieri.length} ${cantieri.length === 1 ? 'cantiere' : 'cantieri'}`}
-        </p>
       </header>
 
       <CantieriBrowser

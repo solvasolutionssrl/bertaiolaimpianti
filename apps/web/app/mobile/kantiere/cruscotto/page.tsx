@@ -334,7 +334,7 @@ export default async function CruscottoKantierePage({
       <header className="pt-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Cruscotto</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Panoramica cantieri</h1>
-        {isOggi ? <LiveRefresh className="mt-2" /> : null}
+        {isOggi ? <LiveRefresh className="-ml-1.5 mt-1.5" /> : null}
       </header>
 
       {/* Turno attivo dell'admin/office: stessa card delle sue Ore (pausa,

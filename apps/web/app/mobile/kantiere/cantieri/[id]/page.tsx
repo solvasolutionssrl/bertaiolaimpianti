@@ -287,7 +287,7 @@ export default async function CantiereMobileDetailPage({
             {titoloCase(c.cliente_nome)}
           </p>
         ) : null}
-        {isManager ? <LiveRefresh className="mt-2" /> : null}
+        {isManager ? <LiveRefresh className="-ml-1.5 mt-1.5" /> : null}
       </header>
 
       {turnoQui && azioni ? (

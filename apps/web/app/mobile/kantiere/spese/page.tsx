@@ -139,21 +139,21 @@ export default async function SpeseMobilePage() {
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
-      <header className="pt-1">
+      <header className="pt-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
           <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
           Kontabilità
         </p>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">Le mie spese</h1>
-          {/* Lo scontrino appena fotografato resta "in elaborazione" per
-              qualche secondo: la riga deve cambiare da sola, senza che nessuno
-              debba tirare giù la pagina per ricaricarla. */}
-          <LiveRefresh className="shrink-0 text-[11px]" />
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie spese</h1>
+        {/* Lo scontrino appena fotografato resta "in elaborazione" per qualche
+            secondo: la riga deve cambiare da sola, senza tirare giù la pagina.
+            «Aggiornato alle» sta sotto il titolo: in alto a destra c'è la campanella. */}
+        <div className="mt-0.5 flex items-start justify-between gap-3">
+          <p className="min-w-0 text-xs text-muted-foreground">
+            Scatta lo scontrino: leggo importo e categoria, tu controlli e salvi.
+          </p>
+          <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
         </div>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Scatta lo scontrino: leggo importo e categoria, tu controlli e salvi.
-        </p>
       </header>
 
       {isManager && !dipId ? (

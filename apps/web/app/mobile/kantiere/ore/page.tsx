@@ -52,12 +52,12 @@ export default async function MobileOrePage() {
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
             Kantiere
           </p>
-          <div className="mt-1 flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
-          {/* Il turno in corso cresce mentre la pagina è aperta. */}
-          <LiveRefresh className="shrink-0 text-[11px]" />
-        </div>
-          <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+          {/* «Aggiornato alle» sulla riga della data: in alto a destra c'è la campanella. */}
+          <div className="mt-0.5 flex items-center justify-between gap-2">
+            <p className="text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
+            <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
+          </div>
         </header>
         <div className="rounded-lg border border-dashed border-border bg-muted/20 p-8 text-center">
           <span className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -177,12 +177,13 @@ export default async function MobileOrePage() {
           <Clock className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere
         </p>
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
-          {/* Il turno in corso cresce mentre la pagina è aperta. */}
-          <LiveRefresh className="shrink-0 text-[11px]" />
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+        {/* Il turno in corso cresce mentre la pagina è aperta. «Aggiornato alle»
+            sta sulla riga della data: in alto a destra c'è la campanella. */}
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p className="text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
+          <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
         </div>
-        <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>
 
       {turno && azioni ? (
