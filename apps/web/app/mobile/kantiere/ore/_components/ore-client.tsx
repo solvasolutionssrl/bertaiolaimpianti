@@ -10,7 +10,6 @@ import {
   salvaMioRapportino,
   inviaMioRapportino,
 } from '@/app/_actions/kantiere-rapportino';
-import { ManualeDialog } from './manuale-dialog';
 import { ModificaGiornataDialog } from './modifica-giornata-dialog';
 import { RegistraGiornataDialog } from './registra-giornata-dialog';
 import type { PickerCantiere } from '../../_components/cantiere-picker';
@@ -175,8 +174,7 @@ export function OreClient({
   const [errore, setErrore] = useState<string | null>(null);
   const [successo, setSuccesso] = useState<string | null>(null);
 
-  // dialog inserimento manuale + registra giornata (caso 4)
-  const [manualeOpen, setManualeOpen] = useState(false);
+  // registra giornata senza timbrature (caso 4)
   const [registraOpen, setRegistraOpen] = useState(false);
   // dialog panoramica/correzione della giornata di oggi (pencil sul totale)
   const [panoramicaOpen, setPanoramicaOpen] = useState(false);
@@ -347,10 +345,12 @@ export function OreClient({
     }));
 
   // Le ore si calcolano e si approvano da sole dalle timbrature: la vista del
-  // tecnico è di sola lettura. L'eventuale correzione di un'anomalia la fa
-  // l'ufficio. Resta disponibile solo l'inserimento manuale completo per le
-  // giornate senza timbratura (es. QR non scansionato).
-  const puoiManuale = isEditabile && cantieriDisponibili.length > 0;
+  // tecnico è di sola lettura, le anomalie le corregge l'ufficio. Per una
+  // giornata senza timbrature (es. QR non scansionato) resta «Registra
+  // giornata», l'unico inserimento a mano: dal 14/09/2026 registra anche il
+  // viaggio e la vecchia «Ore su un cantiere, con viaggio» è stata tolta.
+  const puoiRegistrare =
+    isEditabile && cantieriDisponibili.length > 0 && registraGiornataAttivo && !turnoInCorso;
   // Giornata passata ancora in bozza = "da verificare": il giorno è rimasto
   // aperto o le ore sono oltre soglia, quindi è in carico all'ufficio. Per il
   // tecnico è solo un'informazione, non un'azione. (Oggi è normale che sia
@@ -435,55 +435,24 @@ export function OreClient({
         </button>
       ) : null}
 
-      {/* ── Nessuna timbratura: registra la giornata o inserisci a mano ── */}
-      {puoiManuale && (
+      {/* ── Nessuna timbratura: registra la giornata ── */}
+      {puoiRegistrare && (
         <section className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             Non hai timbrato?
           </p>
-
-          {/* Primario: registra l'intera giornata (uno o più cantieri) */}
-          {registraGiornataAttivo && !turnoInCorso ? (
-            <button
-              type="button"
-              onClick={() => setRegistraOpen(true)}
-              className="flex w-full items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] px-3 py-3 text-left transition-colors hover:bg-primary/10 active:scale-[0.99]"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
-                <CalendarClock className="h-5 w-5" aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-foreground">Registra giornata</span>
-                <span className="block text-xs leading-snug text-muted-foreground">
-                  Inizio, fine, pausa e le ore su uno o più cantieri.
-                </span>
-              </span>
-            </button>
-          ) : null}
-
-          {/* Secondario: un cantiere alla volta, con il viaggio (o per un giorno passato) */}
           <button
             type="button"
-            onClick={() => setManualeOpen(true)}
-            className={`flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors active:scale-[0.99] ${
-              registraGiornataAttivo && !turnoInCorso
-                ? 'border-border bg-card hover:bg-muted/40'
-                : 'border-primary/25 bg-primary/[0.06] hover:bg-primary/10'
-            }`}
+            onClick={() => setRegistraOpen(true)}
+            className="flex w-full items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] px-3 py-3 text-left transition-colors hover:bg-primary/10 active:scale-[0.99]"
           >
-            <span
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                registraGiornataAttivo && !turnoInCorso
-                  ? 'bg-muted text-muted-foreground'
-                  : 'bg-primary/12 text-primary'
-              }`}
-            >
-              <PenLine className="h-5 w-5" aria-hidden="true" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+              <CalendarClock className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-sm font-semibold text-foreground">Ore su un cantiere, con viaggio</span>
+              <span className="block text-sm font-semibold text-foreground">Registra giornata</span>
               <span className="block text-xs leading-snug text-muted-foreground">
-                Un cantiere alla volta, con andata e ritorno, sede e mezzo. Va bene anche per un giorno passato.
+                Orario, pausa, cantieri e viaggio della giornata.
               </span>
             </span>
           </button>
@@ -508,17 +477,6 @@ export function OreClient({
           <p className="text-sm text-muted-foreground">{note}</p>
         </section>
       )}
-
-      {/* Dialog inserimento manuale */}
-      <ManualeDialog
-        open={manualeOpen}
-        onClose={() => setManualeOpen(false)}
-        data={rapportino.data}
-        cantieri={cantieriDisponibili}
-        sedi={sediDisponibili}
-        sediPerCantiere={sediPerCantiere}
-        mezzi={mezziDisponibili}
-      />
 
       {/* Caso 4: registra una giornata senza timbrature (più cantieri). */}
       <RegistraGiornataDialog

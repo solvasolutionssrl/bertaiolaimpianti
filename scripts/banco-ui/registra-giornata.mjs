@@ -153,6 +153,12 @@ try {
     cosa: 'tasto Registra giornata',
     timeoutMs: 30_000,
   });
+  // Il vecchio inserimento «Ore su un cantiere, con viaggio» non c'è più.
+  esito(
+    !(await valuta(cdp, `/Ore su un cantiere/.test(document.body.innerText)`)),
+    'la tab Ore offre solo «Registra giornata»',
+  );
+  await foto(cdp, 'rg-00-tab-ore');
   await clicca(cdp, 'Registra giornata');
   await finoA(cdp, `!!document.querySelector('[role="dialog"][aria-label="Registra giornata"]')`, { cosa: 'pagina' });
   await pausa(900);

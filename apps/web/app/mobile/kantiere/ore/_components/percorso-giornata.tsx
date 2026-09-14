@@ -129,18 +129,18 @@ export function Tappa({
   children,
 }: {
   nodo: React.ReactNode;
-  /** Distanza del pallino (alto 24px) dal bordo alto della tappa. */
+  /** Distanza del pallino (alto 22px) dal bordo alto della tappa. */
   nodoTop: number;
   inizio?: boolean;
   fine?: boolean;
   children: React.ReactNode;
 }) {
-  const centro = nodoTop + 12;
+  const centro = nodoTop + 11;
   return (
-    <li className={`relative pl-[36px] ${fine ? '' : 'pb-2'}`}>
+    <li className={`relative pl-[32px] ${fine ? '' : 'pb-1.5'}`}>
       <span
         aria-hidden="true"
-        className="absolute left-[11px] border-l-2 border-dashed border-sky-300"
+        className="absolute left-[10px] border-l-2 border-dashed border-sky-300"
         style={inizio ? { top: centro, bottom: 0 } : fine ? { top: 0, height: centro } : { top: 0, bottom: 0 }}
       />
       <span className="absolute left-0" style={{ top: nodoTop }}>
@@ -157,7 +157,7 @@ export function NodoLuogo({ tipo, allarme }: { tipo: TipoLuogo | null; allarme?:
   const Icona = tipo ? ICONA_LUOGO[tipo] : MapPin;
   return (
     <span
-      className={`flex h-6 w-6 items-center justify-center rounded-full border-2 bg-background ring-4 ring-background ${
+      className={`flex h-[22px] w-[22px] items-center justify-center rounded-full border-2 bg-background ring-[3px] ring-background ${
         allarme
           ? 'border-amber-400 text-amber-600'
           : tipo
@@ -173,7 +173,7 @@ export function NodoLuogo({ tipo, allarme }: { tipo: TipoLuogo | null; allarme?:
 export function NodoCantiere({ indice }: { indice: number }) {
   return (
     <span
-      className={`flex h-6 w-6 items-center justify-center rounded-full ${coloreCantiere(indice).bar} text-[11px] font-bold text-white ring-4 ring-background`}
+      className={`flex h-[22px] w-[22px] items-center justify-center rounded-full ${coloreCantiere(indice).bar} text-[10px] font-bold text-white ring-[3px] ring-background`}
     >
       {indice + 1}
     </span>
@@ -182,7 +182,7 @@ export function NodoCantiere({ indice }: { indice: number }) {
 
 export function NodoTratta() {
   return (
-    <span className="ml-[3px] flex h-[18px] w-[18px] items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-600 ring-[3px] ring-background">
+    <span className="ml-[3px] flex h-[16px] w-[16px] items-center justify-center rounded-full border border-sky-200 bg-sky-50 text-sky-600 ring-[3px] ring-background">
       <Car className="h-2.5 w-2.5" aria-hidden="true" />
     </span>
   );
@@ -190,7 +190,7 @@ export function NodoTratta() {
 
 export function NodoAggiungi() {
   return (
-    <span className="flex h-6 w-6 items-center justify-center rounded-full border border-dashed border-muted-foreground/45 bg-background text-muted-foreground ring-4 ring-background">
+    <span className="flex h-[22px] w-[22px] items-center justify-center rounded-full border border-dashed border-muted-foreground/45 bg-background text-muted-foreground ring-[3px] ring-background">
       <Plus className="h-3 w-3" aria-hidden="true" />
     </span>
   );
@@ -202,11 +202,11 @@ function IconaOpzione({ tipo, attiva }: { tipo: TipoLuogo; attiva: boolean }) {
   const Icona = ICONA_LUOGO[tipo];
   return (
     <span
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
         attiva ? 'bg-sky-100 text-sky-700' : 'border border-border bg-background text-muted-foreground'
       }`}
     >
-      <Icona className="h-3.5 w-3.5" aria-hidden="true" />
+      <Icona className="h-3 w-3" aria-hidden="true" />
     </span>
   );
 }
@@ -235,7 +235,7 @@ function TempoTratta({ vista }: { vista: VistaEstremo }) {
   const sotto = [km, vista.corretta ? 'modificato' : null].filter(Boolean).join(' · ');
   return (
     <span className="flex shrink-0 flex-col items-end leading-none">
-      <span className="font-mono text-sm font-bold tabular-nums text-sky-700">{fmtHM(vista.minuti)}</span>
+      <span className="font-mono text-[13px] font-bold tabular-nums text-sky-700">{fmtHM(vista.minuti)}</span>
       {sotto ? <span className="mt-1 text-[10px] tabular-nums text-muted-foreground">{sotto}</span> : null}
     </span>
   );
@@ -262,9 +262,9 @@ function EditorTempo({
         ? ['Stima', fmtHM(s.minuti), fmtKm(s.km)].filter(Boolean).join(' · ').replace('Stima · ', 'Stima ')
         : 'Stima non disponibile';
   const btn =
-    'flex h-[38px] w-[38px] items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 disabled:opacity-40';
+    'flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-border bg-background text-foreground active:scale-95 disabled:opacity-40';
   return (
-    <div className="space-y-2 border-t border-border/70 px-3 py-2.5">
+    <div className="space-y-2 border-t border-border/70 px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-foreground">Tempo di viaggio</p>
@@ -284,7 +284,7 @@ function EditorTempo({
           >
             <Minus className="h-4 w-4" />
           </button>
-          <span className="w-12 text-center font-mono text-base font-bold tabular-nums text-foreground">
+          <span className="w-11 text-center font-mono text-[15px] font-bold tabular-nums text-foreground">
             {fmtHM(vista.minuti)}
           </span>
           <button
@@ -352,14 +352,14 @@ export function CardEstremo({
         onClick={onApri}
         disabled={disabled}
         aria-expanded={aperto}
-        className="flex min-h-[54px] w-full items-center gap-2.5 px-3 py-2 text-left transition-colors active:bg-muted/40 disabled:opacity-60"
+        className="flex min-h-[48px] w-full items-center gap-2 px-3 py-1.5 text-left transition-colors active:bg-muted/40 disabled:opacity-60"
       >
         <span className="min-w-0 flex-1">
           <span className="block font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {vista.titolo}
           </span>
           <span
-            className={`mt-0.5 block truncate text-[15px] font-semibold leading-tight ${
+            className={`mt-0.5 block truncate text-sm font-semibold leading-tight ${
               vista.nome ? 'text-foreground' : allarme ? 'text-amber-700' : 'text-muted-foreground/80'
             }`}
           >
@@ -386,10 +386,10 @@ export function CardEstremo({
                     aria-selected={sel}
                     disabled={disabled}
                     onClick={() => onScegli(o.luogo)}
-                    className="flex min-h-[46px] w-full items-center gap-2.5 px-3 text-left transition-colors active:bg-muted/70"
+                    className="flex min-h-[42px] w-full items-center gap-2 px-3 text-left transition-colors active:bg-muted/70"
                   >
                     <IconaOpzione tipo={o.tipo} attiva={sel} />
-                    <span className={`min-w-0 flex-1 truncate text-sm text-foreground ${sel ? 'font-semibold' : 'font-medium'}`}>
+                    <span className={`min-w-0 flex-1 truncate text-[13px] text-foreground ${sel ? 'font-semibold' : 'font-medium'}`}>
                       {o.nome}
                     </span>
                     <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -468,30 +468,30 @@ export function RigaGuida({
         aria-checked={autista}
         disabled={disabled}
         onClick={() => onAutista(!autista)}
-        className="flex min-h-[48px] w-full items-center gap-2.5 text-left"
+        className="flex min-h-[42px] w-full items-center gap-2 text-left"
       >
         <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
             autista ? 'bg-sky-100 text-sky-700' : 'bg-muted text-muted-foreground'
           }`}
         >
-          <Car className="h-4 w-4" aria-hidden="true" />
+          <Car className="h-3.5 w-3.5" aria-hidden="true" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-foreground">Guidavo io</span>
+          <span className="block text-[13px] font-semibold text-foreground">Guidavo io</span>
           <span className="block truncate text-[11px] leading-tight text-muted-foreground">
             {autista ? 'Vale per tutte le tratte della giornata' : 'Spento: risulti passeggero'}
           </span>
         </span>
         <span
           aria-hidden="true"
-          className={`relative inline-flex h-[26px] w-[46px] shrink-0 items-center rounded-full transition-colors ${
+          className={`relative inline-flex h-6 w-[42px] shrink-0 items-center rounded-full transition-colors ${
             autista ? 'bg-sky-600' : 'bg-muted-foreground/30'
           }`}
         >
           <span
-            className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              autista ? 'translate-x-[23px]' : 'translate-x-[3px]'
+            className={`inline-block h-[18px] w-[18px] rounded-full bg-white shadow transition-transform ${
+              autista ? 'translate-x-[21px]' : 'translate-x-[3px]'
             }`}
           />
         </span>
@@ -501,7 +501,7 @@ export function RigaGuida({
         <div className="relative mb-2">
           <div
             aria-hidden="true"
-            className={`flex min-h-[44px] items-center gap-2 rounded-xl border px-3 text-sm ${
+            className={`flex min-h-[40px] items-center gap-2 rounded-xl border px-3 text-[13px] ${
               mancaMezzo
                 ? 'border-amber-400 bg-amber-50 font-medium text-amber-800'
                 : scelto || mezzo === MEZZO_NON_IN_ELENCO
@@ -581,7 +581,7 @@ export function TrattaFraCantieri({
         onClick={onApri}
         disabled={disabled}
         aria-expanded={aperto}
-        className={`flex min-h-[40px] w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs transition-colors active:bg-sky-50 disabled:opacity-60 ${
+        className={`flex min-h-[36px] w-full items-center gap-2 rounded-xl px-2.5 text-left text-xs transition-colors active:bg-sky-50 disabled:opacity-60 ${
           aperto ? 'bg-sky-50' : ''
         }`}
       >
@@ -609,10 +609,10 @@ export function TrattaFraCantieri({
                     aria-selected={sel}
                     disabled={disabled}
                     onClick={() => onScegli(o.via)}
-                    className="flex min-h-[46px] w-full items-center gap-2.5 px-3 text-left transition-colors active:bg-muted/60"
+                    className="flex min-h-[42px] w-full items-center gap-2 px-3 text-left transition-colors active:bg-muted/60"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-sm text-foreground ${sel ? 'font-semibold' : 'font-medium'}`}>
+                      <span className={`block truncate text-[13px] text-foreground ${sel ? 'font-semibold' : 'font-medium'}`}>
                         {o.titolo}
                       </span>
                       {o.dettaglio ? (
@@ -675,10 +675,10 @@ export function BarraGiornata({
   destra: { etichetta: string; ora: string };
 }) {
   return (
-    <div className="space-y-2 rounded-xl border border-border bg-card px-3 pb-2.5 pt-2.5 shadow-[0_6px_18px_-5px_rgba(20,40,90,0.28)]">
+    <div className="space-y-1.5 rounded-xl border border-border bg-card px-2.5 py-2 shadow-[0_6px_18px_-5px_rgba(20,40,90,0.28)]">
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-baseline gap-1.5">
-          <span className="text-[15px] font-bold tabular-nums text-foreground">{fmtHM(assegnatoMin)}</span>
+          <span className="text-sm font-bold tabular-nums text-foreground">{fmtHM(assegnatoMin)}</span>
           <span className="truncate text-xs text-muted-foreground">di {fmtHM(Math.max(0, nettoMin))} di lavoro</span>
         </p>
         {stato === 'vuoto' ? (
@@ -694,7 +694,7 @@ export function BarraGiornata({
         )}
       </div>
 
-      <div className="flex h-3 w-full items-stretch gap-[2px] overflow-hidden rounded-full bg-muted" aria-hidden="true">
+      <div className="flex h-2.5 w-full items-stretch gap-[2px] overflow-hidden rounded-full bg-muted" aria-hidden="true">
         {segmenti.map((s, i) => (
           <span
             key={i}

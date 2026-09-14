@@ -122,9 +122,9 @@ function StepperMin({
   const m = minuti % 60;
   const set = (nh: number, nm: number) => onChange(Math.max(0, Math.min(23 * 60 + 59, nh * 60 + nm)));
   const inputCls =
-    'w-9 rounded border border-border bg-background px-0.5 py-1 text-center font-mono text-sm font-semibold tabular-nums focus:border-primary focus:outline-none disabled:opacity-50';
+    'w-8 rounded border border-border bg-background px-0.5 py-1 text-center font-mono text-sm font-semibold tabular-nums focus:border-primary focus:outline-none disabled:opacity-50';
   const btnCls =
-    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground active:scale-95 disabled:opacity-40';
+    'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground active:scale-95 disabled:opacity-40';
   return (
     <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-background/70 p-1">
       <button type="button" disabled={disabled || minuti <= 0} onClick={() => onChange(Math.max(0, minuti - passo))} className={btnCls} aria-label={`Meno ${passo} minuti`}>
@@ -164,7 +164,7 @@ function TimeField({
       <div className="relative">
         <div
           aria-hidden="true"
-          className={`pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2 py-2.5 text-base font-semibold tabular-nums ${
+          className={`pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2 py-2 text-[15px] font-semibold tabular-nums ${
             disabled ? 'opacity-50' : 'text-foreground'
           }`}
         >
@@ -660,7 +660,7 @@ export function RegistraGiornataDialog({
       compatto === foglio ? { ref: passeggero.propsEvidenza.ref, attiva: passeggero.evidenzia } : undefined;
     return (
       <ol>
-        <Tappa inizio nodoTop={15} nodo={<NodoLuogo tipo={vistaPartenza.tipo} allarme={vistaPartenza.mancante != null} />}>
+        <Tappa inizio nodoTop={14} nodo={<NodoLuogo tipo={vistaPartenza.tipo} allarme={vistaPartenza.mancante != null} />}>
           <CardEstremo
             vista={vistaPartenza}
             aperto={aperto === 'partenza'}
@@ -691,23 +691,23 @@ export function RegistraGiornataDialog({
           const tratta = vistaTratte[i];
           return (
             <Fragment key={r.cantiereId}>
-              <Tappa nodoTop={compatto ? 9 : 8} nodo={<NodoCantiere indice={i} />}>
+              <Tappa nodoTop={compatto ? 8 : 7} nodo={<NodoCantiere indice={i} />}>
                 {compatto ? (
                   <div
-                    className={`flex min-h-[42px] items-center gap-2 rounded-xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3`}
+                    className={`flex min-h-[38px] items-center gap-2 rounded-xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3`}
                   >
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{r.nome}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{r.nome}</span>
                     <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
                       {fmtHM(r.minuti)}
                     </span>
                   </div>
                 ) : (
                   <section
-                    className={`rounded-2xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3 pb-2.5 pt-2 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]`}
+                    className={`rounded-2xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3 py-2 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]`}
                   >
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="truncate text-[15px] font-semibold leading-tight text-foreground">{r.nome}</p>
+                        <p className="truncate text-sm font-semibold leading-tight text-foreground">{r.nome}</p>
                         {r.codice ? (
                           <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{r.codice}</p>
                         ) : null}
@@ -720,12 +720,12 @@ export function RegistraGiornataDialog({
                         }}
                         disabled={pending}
                         aria-label={`Rimuovi ${r.nome}`}
-                        className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive active:scale-95 disabled:opacity-40"
+                        className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive active:scale-95 disabled:opacity-40"
                       >
                         <X className="h-4 w-4" />
                       </button>
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-muted-foreground">Ore lavorate</span>
                       <StepperMin
                         minuti={r.minuti}
@@ -738,7 +738,7 @@ export function RegistraGiornataDialog({
                 )}
               </Tappa>
               {tratta ? (
-                <Tappa nodoTop={11} nodo={<NodoTratta />}>
+                <Tappa nodoTop={10} nodo={<NodoTratta />}>
                   <TrattaFraCantieri
                     vista={tratta}
                     aperto={aperto === `tratta:${tratta.chiave}`}
@@ -756,19 +756,19 @@ export function RegistraGiornataDialog({
         })}
 
         {!compatto && disponibili.length > 0 ? (
-          <Tappa nodoTop={9} nodo={<NodoAggiungi />}>
+          <Tappa nodoTop={8} nodo={<NodoAggiungi />}>
             <button
               type="button"
               onClick={() => setPickerOpen(true)}
               disabled={pending}
-              className="flex min-h-[42px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 text-sm font-medium text-muted-foreground hover:bg-muted/50 active:scale-[0.99] disabled:opacity-50"
+              className="flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 text-sm font-medium text-muted-foreground hover:bg-muted/50 active:scale-[0.99] disabled:opacity-50"
             >
               <Plus className="h-4 w-4" /> {righe.length === 0 ? 'Aggiungi il cantiere' : 'Aggiungi cantiere'}
             </button>
           </Tappa>
         ) : null}
 
-        <Tappa fine nodoTop={15} nodo={<NodoLuogo tipo={vistaRientro.tipo} allarme={vistaRientro.mancante != null} />}>
+        <Tappa fine nodoTop={14} nodo={<NodoLuogo tipo={vistaRientro.tipo} allarme={vistaRientro.mancante != null} />}>
           <CardEstremo
             vista={vistaRientro}
             aperto={aperto === 'rientro'}
@@ -790,12 +790,12 @@ export function RegistraGiornataDialog({
     <Portal>
       <div className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-background" role="dialog" aria-modal="true" aria-label="Registra giornata">
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
-            <button type="button" onClick={onClose} aria-label="Chiudi" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95">
-              <X className="h-5 w-5" />
+          <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <button type="button" onClick={onClose} aria-label="Chiudi" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95">
+              <X className="h-[18px] w-[18px]" />
             </button>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold leading-tight tracking-tight">Registra giornata</h2>
+              <h2 className="text-[15px] font-semibold leading-tight tracking-tight">Registra giornata</h2>
               <p className="truncate text-[11px] leading-tight text-muted-foreground first-letter:uppercase">
                 {oggiEsteso} · senza timbrature
               </p>
@@ -822,19 +822,19 @@ export function RegistraGiornataDialog({
               </div>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 pb-6 pt-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-2.5">
               {/* ── La giornata: orari + pausa + netto ───────────────────────── */}
-              <section className="space-y-3 rounded-2xl border-2 border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-3.5 shadow-soft">
+              <section className="space-y-2.5 rounded-2xl border-2 border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-3 shadow-soft">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
                       <CalendarClock className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <span className="text-sm font-semibold text-foreground">La giornata</span>
                   </span>
                   <span className="flex flex-col items-end leading-none">
                     <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Ore nette</span>
-                    <span className="mt-0.5 font-mono text-lg font-bold tabular-nums text-primary">{fmtHM(Math.max(0, nettoMin))}</span>
+                    <span className="mt-0.5 font-mono text-base font-bold tabular-nums text-primary">{fmtHM(Math.max(0, nettoMin))}</span>
                   </span>
                 </div>
 
@@ -858,7 +858,7 @@ export function RegistraGiornataDialog({
                           type="button"
                           disabled={pending}
                           onClick={() => setPausaMin(p.min)}
-                          className={`rounded-lg border px-1 py-2 text-sm font-semibold tabular-nums transition-colors disabled:opacity-50 ${
+                          className={`rounded-lg border px-1 py-1.5 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50 ${
                             attivo
                               ? 'border-primary bg-primary text-primary-foreground shadow-soft'
                               : 'border-border bg-background text-foreground hover:bg-muted/40'
@@ -896,14 +896,14 @@ export function RegistraGiornataDialog({
                 aria-label="Il viaggio"
                 className="animate-sheet-up relative flex max-h-[calc(100%-2.5rem)] flex-col overflow-hidden rounded-t-[28px] bg-background shadow-[0_-24px_48px_-16px_rgba(15,23,42,0.45)]"
               >
-                <div className="shrink-0 px-4 pb-3 pt-2">
-                  <span aria-hidden="true" className="mx-auto mb-2.5 block h-1 w-10 rounded-full bg-muted-foreground/25" />
+                <div className="shrink-0 px-4 pb-2.5 pt-2">
+                  <span aria-hidden="true" className="mx-auto mb-2 block h-1 w-10 rounded-full bg-muted-foreground/25" />
                   <div className="flex items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
-                      <Car className="h-5 w-5" aria-hidden="true" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                      <Car className="h-[18px] w-[18px]" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-semibold leading-tight text-foreground">Il viaggio</h3>
+                      <h3 className="text-[15px] font-semibold leading-tight text-foreground">Il viaggio</h3>
                       <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                         {righe.length > 1
                           ? 'Partenza, rientro e mezzo. Le tratte fra i cantieri sono già calcolate.'
@@ -914,7 +914,7 @@ export function RegistraGiornataDialog({
                       type="button"
                       onClick={() => setFoglio(false)}
                       aria-label="Torna alla giornata"
-                      className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95"
+                      className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -936,7 +936,7 @@ export function RegistraGiornataDialog({
 
         {/* ── Footer: la barra dei tempi + il tasto, visibili anche col foglio aperto ── */}
         {!fatto ? (
-          <div className="relative z-30 shrink-0 border-t border-emerald-600/15 bg-emerald-50 px-4 pt-2.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
+          <div className="relative z-30 shrink-0 border-t border-emerald-600/15 bg-emerald-50 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
             <BarraGiornata
               segmenti={segmenti}
               assegnatoMin={assegnato}
@@ -957,9 +957,9 @@ export function RegistraGiornataDialog({
               type="button"
               onClick={() => void salva()}
               disabled={pending}
-              className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-base font-semibold text-white shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition-transform hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-[15px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition-transform hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
             >
-              {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+              {pending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />}
               Registra giornata
             </button>
           </div>

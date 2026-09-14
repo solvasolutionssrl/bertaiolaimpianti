@@ -254,9 +254,8 @@ I km si contano **solo all'autista**. Chi conferma un viaggio senza indicare di
 essere l'autista si vede chiedere conferma; se risponde «guidavo io» torna al
 modulo con la casella **evidenziata** e la vista che ci scorre sopra.
 
-Vale in tutti i punti: viaggio di ritorno, partenza, inserimento ore a mano (lì
-basta che **una** tratta sia da passeggero) e Registra giornata (se c'è almeno un
-tragitto e «Guidavo io» è spento). Compare **sempre**, anche a chi viaggia di
+Vale in tutti i punti: viaggio di ritorno, partenza e Registra giornata (se c'è
+almeno un tragitto e «Guidavo io» è spento). Compare **sempre**, anche a chi viaggia di
 solito da passeggero: scelta del cliente del 14/09/2026. Pezzo unico
 `_components/conferma-passeggero.tsx`.
 
@@ -387,18 +386,18 @@ salvataggio. `/api/routing/stima` accetta anche `{ daCantiereId, aCantiereId }`.
 | **Cambio cantiere live** | "Cambia cantiere": chiude A, apre B | Ore dai timestamp reali; km A→B se `km_switch_attivo`. |
 | **Split a fine turno** | "Cosa hai fatto oggi": dividi le ore tra più cantieri | Solo se la **giornata è pulita** (un solo ingresso). Somma = netto ± tolleranza. |
 | **Registra giornata da zero** | Inizio/fine + pausa + cantieri/ore + percorso (§7.6) | Solo se **nessuna timbratura** oggi e `registra_giornata_attivo`. |
-| **Inserimento manuale ore** | Ore + eventuale viaggio con sede/mezzo | Sede filtrata per cantiere (§4). |
+| ~~Inserimento manuale ore~~ | Tolto dall'app il 14/09/2026: il viaggio si dichiara in Registra giornata (§7.6). | Le righe e le tratte già scritte restano valide. |
 
 Il netto giornata = `(chiusura − inizio) − pausa`. La pausa dichiarata è una **coppia di timbrature centrata** nel turno (così il calcolo ore la sottrae con la logica pausa esistente).
 
 ### PWA — sezione "Non hai timbrato?" (tab Ore)
 
-Quando la giornata è senza timbrature, la tab Ore offre **due strumenti distinti** (non sono la stessa cosa lato dati — non vanno fusi alla leggera):
+Quando la giornata è senza timbrature, la tab Ore offre **Registra giornata**, dal 14/09/2026 l'unico inserimento a mano del tecnico:
 
-- **Registra giornata** (azione **primaria**) — dichiari **inizio / fine / pausa** e distribuisci le ore su **uno o più cantieri**. Il server **sintetizza le timbrature reali** (`registraGiornataDaZero` → `calcolaSegmentiSplit`) e il rapportino si ricalcola da quelle. Vincolo: **solo oggi** e **giornata vuota**, con `registra_giornata_attivo` on. UI: card **"La giornata"** dominante (orari + pausa a chip), poi **il percorso** in verticale (partenza con guida e mezzo, una **card per cantiere** col **colore abbinato** al proprio segmento, le tratte fra cantieri, rientro) e la **barra dei tempi** in fondo, sempre visibile anche col foglio «Il viaggio» aperto: ore assegnate/nette, esito, viaggio, orari di partenza e rientro (§7.6).
-- **Ore su un cantiere, con viaggio** (azione **secondaria**) — aggiungi ore + **viaggio andata/ritorno** (sede/mezzo/km) a **un solo cantiere**; scrive direttamente `rapportino_righe` + `timbratura_viaggio` (`registraOreManuali`). Funziona anche su **giorni passati** o su una giornata già parziale.
+- **Registra giornata** — dichiari **inizio / fine / pausa** e distribuisci le ore su **uno o più cantieri**. Il server **sintetizza le timbrature reali** (`registraGiornataDaZero` → `calcolaSegmentiSplit`) e il rapportino si ricalcola da quelle. Vincolo: **solo oggi** e **giornata vuota**, con `registra_giornata_attivo` on. UI: card **"La giornata"** dominante (orari + pausa a chip), poi **il percorso** in verticale (partenza con guida e mezzo, una **card per cantiere** col **colore abbinato** al proprio segmento, le tratte fra cantieri, rientro) e la **barra dei tempi** in fondo, sempre visibile anche col foglio «Il viaggio» aperto: ore assegnate/nette, esito, viaggio, orari di partenza e rientro (§7.6).
+- ~~**Ore su un cantiere, con viaggio**~~ — **tolta il 14/09/2026** (scelta del cliente): il viaggio ora sta in Registra giornata. L'azione server `registraOreManuali` resta ma l'app non la chiama più; le tratte che ha scritto contano ancora nel ricalcolo (`viaggioManualePerTarget`).
 
-**Quale usare**: la giornata di **oggi**, con o senza viaggio → il primo, che dal 14/09/2026 registra anche il percorso. Un **giorno passato** o una giornata già parziale → il secondo.
+**Giorni passati e giornate già parziali**: dall'app non si dichiarano più da zero. Si correggono con «Modifica giornata» nello storico (dove ammesso) o dall'ufficio in Presenze e ore.
 
 ---
 
