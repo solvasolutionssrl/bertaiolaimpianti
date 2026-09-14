@@ -15,6 +15,7 @@ import {
   leggiSogliaAutoSpegnimentoPausa,
 } from '@/app/_lib/kantiere-config';
 import { chiudiPausaScadutaSePresente } from '@/app/_actions/_lib/viaggio-timbra';
+import { leggiStatoGiornata, scriviVersioneRapportino } from './scrivi-versione-rapportino';
 
 /**
  * Auto-derivazione del rapportino giornaliero dalle timbrature.
@@ -168,6 +169,11 @@ export async function ricomputaRapportinoAuto(
   tenantId: string,
   dipendenteId: string,
   data: string,
+  /**
+   * `versione: false` quando il chiamante scrive la sua versione, più precisa
+   * (es. «pausa aggiunta dall'ufficio»): altrimenti ne uscirebbero due.
+   */
+  opzioni: { versione?: boolean } = {},
 ): Promise<RapportinoBase | null> {
   // 1. Trova o crea il rapportino del giorno.
   const { data: esistente } = await supabase
@@ -305,6 +311,15 @@ export async function ricomputaRapportinoAuto(
     righeMap.set(key, e);
   }
 
+  // 4b. Com'era prima, per la cronologia. Solo se la giornata era già chiusa:
+  //     durante un turno in corso ogni timbratura cambia le ore, e quelle sono
+  //     già raccontate dalle timbrature stesse. È la giornata approvata che si
+  //     sposta dopo a dover lasciare scritto.
+  const primaDelRicalcolo =
+    opzioni.versione !== false && rapp.stato === 'approvato'
+      ? await leggiStatoGiornata(supabase as never, rapp.id)
+      : null;
+
   // 5. Sostituisci le righe (replace completo: è ancora automatico).
   await supabase.from('rapportino_righe' as never).delete().eq('rapportino_id', rapp.id);
 
@@ -370,6 +385,20 @@ export async function ricomputaRapportinoAuto(
     } as never)
     .eq('id', rapp.id);
   rapp.stato = nuovoStato;
+
+  // Se le ore di una giornata chiusa sono cambiate, resta scritto. Se non sono
+  // cambiate `scriviVersioneRapportino` non scrive niente.
+  if (primaDelRicalcolo) {
+    await scriviVersioneRapportino({
+      supabase: supabase as never,
+      rapportinoId: rapp.id,
+      tenantId,
+      azione: 'ricalcolo',
+      modificatoDa: null,
+      modificatoDaNome: null,
+      prima: primaDelRicalcolo,
+    });
+  }
 
   return rapp;
 }

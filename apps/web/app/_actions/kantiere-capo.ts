@@ -154,6 +154,7 @@ async function applicaAzione(
       tipo,
       pausa,
       origine: self ? 'cronometro' : 'capo',
+      modalita: self ? 'app' : 'capo',
       ts,
       creato_da: ctx.userId,
     } as never)

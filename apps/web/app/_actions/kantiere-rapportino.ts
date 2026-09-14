@@ -7,7 +7,7 @@ import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
-import { scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
+import { scriviVersioneRapportino, leggiStatoGiornata, type StatoGiornata } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
 import { inserisciPausaDichiarata, sedeAmmessaPerCantiere } from './_lib/viaggio-timbra';
 
@@ -329,19 +329,10 @@ export async function salvaMioRapportino(
     return { ok: false, error: 'NON_MODIFICABILE' };
   }
 
-  // Se si modifica un rapportino già inviato/respinto, conserva uno snapshot
-  // della versione corrente PRIMA di sovrascrivere (storico per l'ufficio).
-  const eraGiaInviato = rappRow.stato !== 'bozza';
-  if (eraGiaInviato) {
-    await scriviVersioneRapportino({
-      supabase,
-      rapportinoId: rappRow.id,
-      tenantId: ctx.tenantId,
-      azione: 'modifica_tecnico',
-      modificatoDa: ctx.userId,
-      modificatoDaNome: await nomeDipendente(supabase, me.id),
-    });
-  }
+  // Com'era prima di sovrascrivere. La versione si scrive DOPO, con il prima e
+  // il dopo: prima si fotografava solo lo stato vecchio, e la cronologia non
+  // poteva dire cosa fosse cambiato.
+  const primaDelSalvataggio = await leggiStatoGiornata(supabase, rappRow.id);
 
   // Replace righe: elimina e reinserisci
   const { error: errDel } = await supabase
@@ -379,6 +370,17 @@ export async function salvaMioRapportino(
 
   // Il tecnico ha salvato a mano: stop all'auto-ricalcolo dalle timbrature.
   await marcaRapportinoManuale(supabase, parsed.data.rapportinoId);
+
+  // Se le ore non sono cambiate non viene scritto niente.
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId: parsed.data.rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'modifica_tecnico',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeDipendente(supabase, me.id),
+    prima: primaDelSalvataggio,
+  });
 
   return { ok: true };
 }
@@ -520,21 +522,20 @@ export async function registraOreManuali(
 
   const rapp = esistente as { id: string; stato: string } | null;
   let rapportinoId: string;
+  // Com'era prima: la versione in fondo dirà «lavoro 0:00 → 8:00». Prima si
+  // fotografava lo stato VECCHIO e solo se la giornata non era in bozza, quindi
+  // una giornata scritta a mano la sera non lasciava nessuna traccia.
+  let primaRegistrazione: StatoGiornata | null = {
+    stato: 'bozza',
+    totali: { ore_ordinarie: 0, ore_straordinarie: 0, ore_viaggio: 0 },
+    righe: [],
+  };
 
   if (rapp) {
     if (!STATI_MODIFICABILI_TECNICO.has(rapp.stato)) {
       return { ok: false, error: 'NON_MODIFICABILE' };
     }
-    if (rapp.stato !== 'bozza') {
-      await scriviVersioneRapportino({
-        supabase,
-        rapportinoId: rapp.id,
-        tenantId: ctx.tenantId,
-        azione: 'modifica_tecnico',
-        modificatoDa: ctx.userId,
-        modificatoDaNome: await nomeDipendente(supabase, me.id),
-      });
-    }
+    primaRegistrazione = await leggiStatoGiornata(supabase, rapp.id);
     rapportinoId = rapp.id;
   } else {
     const { data: nuovoRaw, error: insErr } = await supabase
@@ -617,6 +618,16 @@ export async function registraOreManuali(
 
   // Inserimento a mano: stop all'auto-ricalcolo dalle timbrature.
   await marcaRapportinoManuale(supabase, rapportinoId);
+
+  await scriviVersioneRapportino({
+    supabase,
+    rapportinoId,
+    tenantId: ctx.tenantId,
+    azione: 'modifica_tecnico',
+    modificatoDa: ctx.userId,
+    modificatoDaNome: await nomeDipendente(supabase, me.id),
+    prima: primaRegistrazione,
+  });
 
   return { ok: true };
 }
@@ -898,6 +909,9 @@ export async function modificaMiaGiornata(
   const pre = rappPre as { id: string; stato: string; approvato_da: string | null } | null;
   if (pre?.approvato_da) return { ok: false, error: 'NON_MODIFICABILE' };
 
+  // Com'era prima di toccarla: la versione in fondo dirà prima → dopo.
+  const primaDellaModifica = await leggiStatoGiornata(supabase, pre?.id);
+
   // 1) Pausa pranzo dichiarata: coppia-pausa centrata nel turno reale (come
   //    fa l'ufficio in `aggiungiPausaGiornata`). Se una pausa esiste già, la si
   //    SOSTITUISCE (il tecnico può correggerne la durata): rimozione della
@@ -957,7 +971,10 @@ export async function modificaMiaGiornata(
   }
 
   // 2) Ricalcolo: riflette timbrature + pausa e ri-valuta l'auto-approvazione.
-  const rappBase = await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data);
+  // Senza versione automatica: la scriviamo in fondo, una sola, con chi e cosa.
+  const rappBase = await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data, {
+    versione: false,
+  });
   if (!rappBase) return { ok: false, error: 'ERRORE_RAPPORTINO' };
   const rapportinoId = rappBase.id;
 
@@ -1010,6 +1027,7 @@ export async function modificaMiaGiornata(
     azione: 'modifica_tecnico',
     modificatoDa: ctx.userId,
     modificatoDaNome,
+    prima: primaDellaModifica,
   });
 
   // 5) Notifica di sistema all'ufficio (campanella office). Chi modifica NON

@@ -278,6 +278,7 @@ export async function timbra(input: unknown): Promise<Result> {
       tipo,
       pausa,
       origine: self ? 'qr' : 'capo',
+      modalita: self ? 'qr' : 'capo',
       ts,
       geo_lat: parsed.data.geo?.lat ?? null,
       geo_lng: parsed.data.geo?.lng ?? null,
@@ -448,6 +449,7 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
       pausa: false,
       // Chiusura da app (non da QR): origine 'cronometro' per tracciare la fonte.
       origine: 'cronometro',
+      modalita: 'app',
       ts,
       creato_da: ctx.userId,
     } as never)
@@ -545,6 +547,7 @@ async function terminaConSplit(
     dipendente_id: dipendenteId,
     commessa_id: null as string | null,
     origine: 'manuale',
+    modalita: 'divisione_fine_turno',
     creato_da: userId,
   };
   const eventi = calc.eventi;
@@ -663,6 +666,7 @@ async function cambiaStatoTurnoMio(
     tipo,
     pausa,
     origine: 'qr',
+    modalita: 'app',
     ts,
     creato_da: ctx.userId,
   } as never);
@@ -708,6 +712,7 @@ export async function timbraCronometro(input: unknown): Promise<Result> {
     commessa_id: parsed.data.commessaId,
     tipo,
     origine: 'cronometro',
+    modalita: 'app',
     ts,
     geo_lat: parsed.data.geo?.lat ?? null,
     geo_lng: parsed.data.geo?.lng ?? null,
@@ -739,6 +744,7 @@ export async function timbraManuale(input: unknown): Promise<Result> {
     commessa_id: parsed.data.commessaId,
     tipo: parsed.data.tipo,
     origine: 'manuale',
+    modalita: 'ufficio',
     ts: parsed.data.ts,
     creato_da: ctx.userId,
   } as never);
@@ -934,6 +940,7 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
       tipo: 'ingresso',
       pausa: false,
       origine: 'manuale',
+      modalita: 'app',
       ts,
       creato_da: ctx.userId,
     } as never)
@@ -1066,6 +1073,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     tipo: 'uscita',
     pausa: false,
     origine: 'manuale',
+    modalita: 'app',
     ts: uscitaTs,
     creato_da: ctx.userId,
   } as never);
@@ -1080,6 +1088,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     tipo: 'ingresso',
     pausa: false,
     origine: 'manuale',
+    modalita: 'app',
     ts: ingressoTs,
     creato_da: ctx.userId,
   } as never);
@@ -1208,6 +1217,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     dipendente_id: me.id,
     commessa_id: null as string | null,
     origine: 'manuale',
+    modalita: 'giornata_dichiarata',
     creato_da: ctx.userId,
   };
   const primoCantiere = parsed.data.split[0]!.cantiereId;

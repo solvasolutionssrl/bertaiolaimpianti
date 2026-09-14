@@ -90,6 +90,7 @@ export async function inserisciPausaDichiarata(
     cantiere_id: opts.cantiereId,
     pausa: true,
     origine: 'manuale',
+    modalita: 'pausa_dichiarata',
     creato_da: opts.creatoDa,
   };
   await supabase.from('timbrature' as never).insert([
@@ -158,6 +159,7 @@ export async function chiudiPausaScadutaSePresente(
     tipo: 'ingresso',
     pausa: true,
     origine: 'manuale',
+    modalita: 'pausa_chiusa_sistema',
     auto_chiusa: true,
     creato_da: null,
     ts: new Date(scadenzaMs).toISOString(),

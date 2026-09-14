@@ -6,7 +6,9 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import {
+  leggiStatoGiornata,
   scriviVersioneRapportino,
+  statoGiornataPerData,
   type AzioneVersione,
 } from '@/app/_actions/_lib/scrivi-versione-rapportino';
 import {
@@ -392,6 +394,9 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
     rapportinoId = (nuovoRaw as { id: string }).id;
   }
 
+  // Com'era prima della correzione dell'ufficio.
+  const primaModificaUfficio = await leggiStatoGiornata(supabase, rapportinoId);
+
   // Cerca riga esistente per lo stesso target su questo rapportino
   const { data: righeRaw } = await supabase
     .from('rapportino_righe' as never)
@@ -446,6 +451,7 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
     azione: 'modifica_ufficio',
     modificatoDa: ctx.userId,
     modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+    prima: primaModificaUfficio,
   });
 
   revalidatePath('/office/kantiere/rapportini');
@@ -553,6 +559,9 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
     }
   }
 
+  // Com'era prima: dopo non c'è più modo di saperlo.
+  const primaDellaChiusura = await statoGiornataPerData(supabase, ctx.tenantId, dipendenteId, giorno);
+
   const inserts = Array.from(aperti.values()).map((a) => ({
     tenant_id: ctx.tenantId,
     dipendente_id: dipendenteId,
@@ -560,6 +569,7 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
     cantiere_id: a.cantiere_id,
     tipo: 'uscita',
     origine: 'manuale',
+    modalita: 'ufficio',
     ts: uscitaTs,
     creato_da: ctx.userId,
   }));
@@ -567,7 +577,21 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
   if (insErr) return { ok: false, error: insErr.message };
 
   // Ricalcola il rapportino (resta automatico se il tecnico non l'ha toccato).
-  await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, giorno);
+  // Senza versione automatica: la scriviamo noi, con chi e cosa.
+  const rappChiuso = await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, giorno, {
+    versione: false,
+  });
+  if (rappChiuso) {
+    await scriviVersioneRapportino({
+      supabase,
+      rapportinoId: rappChiuso.id,
+      tenantId: ctx.tenantId,
+      azione: 'chiusura_ufficio',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+      prima: primaDellaChiusura,
+    });
+  }
 
   revalidatePath('/office/kantiere/rapportini');
   revalidatePath(`/office/kantiere/dipendenti/${dipendenteId}`);
@@ -806,6 +830,10 @@ export async function aggiungiPausaGiornata(
   const durataTurnoMin = (end - start) / 60000;
   if (minuti >= durataTurnoMin) return { ok: false, error: 'PAUSA_TROPPO_LUNGA' };
 
+  // Com'era prima: la cronologia deve poter dire «lavoro 8:00 → 7:00». Prima
+  // di questa riga la pausa dell'ufficio cambiava le ore senza lasciare traccia.
+  const primaDellaPausa = await statoGiornataPerData(supabase, ctx.tenantId, dipendenteId, data);
+
   // Sostituisce l'eventuale pausa già presente (es. auto-chiusa dal sistema o
   // dichiarata in uscita): "aggiungi pausa" IMPOSTA la pausa della giornata, non
   // se ne accumulano due → altrimenti il pranzo verrebbe sottratto due volte.
@@ -828,6 +856,7 @@ export async function aggiungiPausaGiornata(
     cantiere_id: primoIngresso.cantiere_id,
     pausa: true,
     origine: 'manuale',
+    modalita: 'ufficio',
     creato_da: ctx.userId,
   };
   const { error: insErr } = await supabase.from('timbrature' as never).insert([
@@ -837,7 +866,20 @@ export async function aggiungiPausaGiornata(
   if (insErr) return { ok: false, error: insErr.message };
 
   // Ricalcola la giornata: ore lavorate ridotte → eventuale auto-approvazione.
-  await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, data);
+  const rappPausa = await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, data, {
+    versione: false,
+  });
+  if (rappPausa) {
+    await scriviVersioneRapportino({
+      supabase,
+      rapportinoId: rappPausa.id,
+      tenantId: ctx.tenantId,
+      azione: 'pausa_ufficio',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+      prima: primaDellaPausa,
+    });
+  }
 
   revalidatePath('/office/kantiere/rapportini');
   revalidatePath('/office/kantiere/dipendenti');
