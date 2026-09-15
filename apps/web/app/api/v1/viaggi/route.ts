@@ -209,8 +209,9 @@ export async function GET(request: NextRequest) {
       km: kmSoloAutista && !r.autista ? null : num(r.distanza_km),
       kmTratta: num(r.distanza_km),
       // Due tempi: quello stimato dal calcolo percorso e quello riconosciuto.
-      // `confermata = 0` vuol dire tratta registrata ma non pagata — succede
-      // sugli spostamenti fra cantieri quando il tenant non li conteggia.
+      // `confermata = 0` vuol dire tratta registrata ma non riconosciuta: succede
+      // sugli spostamenti fra cantieri registrati prima del 15/09/2026, quando il
+      // loro tempo non contava ancora come viaggio.
       tempo: {
         stimatoMin: r.durata_stimata_min,
         confermatoMin: r.durata_confermata_min,

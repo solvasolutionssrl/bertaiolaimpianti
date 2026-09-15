@@ -8,13 +8,10 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { differenzeGiornata, type SnapshotGiornata } from '@kommessa/api/kantiere-cronologia';
-import { scriviVersioneRapportino, leggiStatoGiornata, type StatoGiornata } from './_lib/scrivi-versione-rapportino';
+import { scriviVersioneRapportino, leggiStatoGiornata } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
-import { inserisciPausaDichiarata, sedeAmmessaPerCantiere } from './_lib/viaggio-timbra';
-
-// Stati in cui il tecnico può ancora modificare il proprio rapportino
-// (fino all'approvazione dell'ufficio; dopo, lo tocca solo l'ufficio).
-const STATI_MODIFICABILI_TECNICO = new Set(['bozza', 'inviato', 'respinto']);
+import { aggiornaRigheGiornata } from './_lib/righe-giornata';
+import { inserisciPausaDichiarata } from './_lib/viaggio-timbra';
 
 // ── tipi di ritorno ──────────────────────────────────────────────────────────
 
@@ -262,7 +259,7 @@ export async function precompilaMioRapportino(
   // giorno non esiste un rapportino NÉ alcuna timbratura, NON creiamo un guscio
   // vuoto solo perché il tecnico ha aperto la vista — mostriamo un payload vuoto
   // NON persistito. La riga nascerà al primo timbro o con la registrazione
-  // manuale (`registraOreManuali`, che crea da sé). Così non si accumulano più
+  // manuale (che crea da sé). Così non si accumulano più
   // giornate-fantasma a 0 ore.
   const rapp = (await esisteRapportinoOTimbrature(supabase, ctx.tenantId, me.id, data))
     ? await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, data)
@@ -272,365 +269,6 @@ export async function precompilaMioRapportino(
   }
 
   return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp) };
-}
-
-// ── 2) salvaMioRapportino ────────────────────────────────────────────────────
-
-const RigaSalvaSchema = z
-  .object({
-    commessa_id: z.string().uuid().nullable().optional(),
-    cantiere_id: z.string().uuid().nullable().optional(),
-    ore_ordinarie: z.number().min(0).max(24),
-    ore_straordinarie: z.number().min(0).max(24),
-    ore_viaggio: z.number().min(0).max(24),
-    note: z.string().optional(),
-  })
-  .refine(
-    (d) => {
-      const hasCommessa = !!d.commessa_id;
-      const hasCantiere = !!d.cantiere_id;
-      return hasCommessa !== hasCantiere; // XOR: esattamente uno valorizzato
-    },
-    { message: 'Ogni riga deve avere esattamente uno tra commessa_id e cantiere_id' },
-  );
-
-const SalvaSchema = z.object({
-  rapportinoId: z.string().uuid(),
-  righe: z.array(RigaSalvaSchema),
-  note: z.string().optional(),
-});
-
-export async function salvaMioRapportino(
-  input: unknown,
-): Promise<ResultSimple | ResultErr> {
-  const parsed = SalvaSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  const r = await ctxConModulo();
-  if ('error' in r) return { ok: false, error: r.error };
-  const { ctx } = r;
-
-  const supabase = createServerSupabase();
-  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
-  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
-
-  // Verifica proprietà e stato bozza
-  const { data: rapp } = await supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, stato')
-    .eq('id', parsed.data.rapportinoId)
-    .eq('tenant_id', ctx.tenantId)
-    .maybeSingle();
-
-  const rappRow = rapp as { id: string; dipendente_id: string; stato: string } | null;
-  if (!rappRow) return { ok: false, error: 'NON_TROVATO' };
-  if (rappRow.dipendente_id !== me.id) return { ok: false, error: 'FORBIDDEN' };
-  // Editabile finché l'ufficio non ha approvato (bozza/inviato/respinto).
-  if (!STATI_MODIFICABILI_TECNICO.has(rappRow.stato)) {
-    return { ok: false, error: 'NON_MODIFICABILE' };
-  }
-
-  // Com'era prima di sovrascrivere. La versione si scrive DOPO, con il prima e
-  // il dopo: prima si fotografava solo lo stato vecchio, e la cronologia non
-  // poteva dire cosa fosse cambiato.
-  const primaDelSalvataggio = await leggiStatoGiornata(supabase, rappRow.id);
-
-  // Replace righe: elimina e reinserisci
-  const { error: errDel } = await supabase
-    .from('rapportino_righe' as never)
-    .delete()
-    .eq('rapportino_id', parsed.data.rapportinoId);
-
-  if (errDel) return { ok: false, error: errDel.message };
-
-  if (parsed.data.righe.length > 0) {
-    const nuoveRighe = parsed.data.righe.map((rr) => ({
-      rapportino_id: parsed.data.rapportinoId,
-      commessa_id: rr.commessa_id ?? null,
-      cantiere_id: rr.cantiere_id ?? null,
-      ore_ordinarie: rr.ore_ordinarie,
-      ore_straordinarie: rr.ore_straordinarie,
-      ore_viaggio: rr.ore_viaggio,
-      note: rr.note ?? null,
-    }));
-
-    const { error: errIns } = await supabase
-      .from('rapportino_righe' as never)
-      .insert(nuoveRighe as never);
-
-    if (errIns) return { ok: false, error: errIns.message };
-  }
-
-  // Aggiorna nota testata
-  const { error: errUpd } = await supabase
-    .from('rapportini' as never)
-    .update({ note: parsed.data.note ?? null } as never)
-    .eq('id', parsed.data.rapportinoId);
-
-  if (errUpd) return { ok: false, error: errUpd.message };
-
-  // Il tecnico ha salvato a mano: stop all'auto-ricalcolo dalle timbrature.
-  await marcaRapportinoManuale(supabase, parsed.data.rapportinoId);
-
-  // Se le ore non sono cambiate non viene scritto niente.
-  await scriviVersioneRapportino({
-    supabase,
-    rapportinoId: parsed.data.rapportinoId,
-    tenantId: ctx.tenantId,
-    azione: 'modifica_tecnico',
-    modificatoDa: ctx.userId,
-    modificatoDaNome: await nomeDipendente(supabase, me.id),
-    prima: primaDelSalvataggio,
-  });
-
-  return { ok: true };
-}
-
-// ── 3) inviaMioRapportino ────────────────────────────────────────────────────
-
-const InviaSchema = z.object({
-  rapportinoId: z.string().uuid(),
-});
-
-export async function inviaMioRapportino(
-  input: unknown,
-): Promise<ResultSimple | ResultErr> {
-  const parsed = InviaSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  const r = await ctxConModulo();
-  if ('error' in r) return { ok: false, error: r.error };
-  const { ctx } = r;
-
-  const supabase = createServerSupabase();
-  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
-  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
-
-  const { data: rapp } = await supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, stato')
-    .eq('id', parsed.data.rapportinoId)
-    .eq('tenant_id', ctx.tenantId)
-    .maybeSingle();
-
-  const rappRow = rapp as { id: string; dipendente_id: string; stato: string } | null;
-  if (!rappRow) return { ok: false, error: 'NON_TROVATO' };
-  if (rappRow.dipendente_id !== me.id) return { ok: false, error: 'FORBIDDEN' };
-  // Inviabile da bozza o (ri-inviabile) da respinto.
-  if (rappRow.stato !== 'bozza' && rappRow.stato !== 'respinto') {
-    return { ok: false, error: 'NON_MODIFICABILE' };
-  }
-
-  const { error: errUpd } = await supabase
-    .from('rapportini' as never)
-    .update({
-      stato: 'inviato',
-      inviato_da: ctx.userId,
-      inviato_at: new Date().toISOString(),
-    } as never)
-    .eq('id', parsed.data.rapportinoId);
-
-  if (errUpd) return { ok: false, error: errUpd.message };
-
-  // Snapshot dell'invio (la "prima versione" che l'ufficio consulta).
-  await scriviVersioneRapportino({
-    supabase,
-    rapportinoId: rappRow.id,
-    tenantId: ctx.tenantId,
-    azione: 'invio',
-    modificatoDa: ctx.userId,
-    modificatoDaNome: await nomeDipendente(supabase, me.id),
-  });
-
-  return { ok: true };
-}
-
-// ── 4) registraOreManuali ────────────────────────────────────────────────────
-// Il dipendente registra a mano la giornata (es. se non ha timbrato il QR):
-// ore di lavoro + tratte di viaggio (stesso flusso sede/autista/mezzo, ma
-// tempo inserito a mano). Editabile finché l'ufficio non approva.
-
-const ViaggioManualeSchema = z.object({
-  direzione: z.enum(['andata', 'ritorno']),
-  sedeId: z.string().uuid(),
-  minuti: z.number().int().min(0).max(24 * 60),
-  autista: z.boolean(),
-  mezzoId: z.string().uuid().nullable().optional(),
-  /** km dalla stima API (definitivi). */
-  distanzaKm: z.number().nonnegative().max(100000).nullable().optional(),
-});
-
-const RegistraManualeSchema = z.object({
-  data: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
-  cantiereId: z.string().uuid(),
-  ore_ordinarie: z.number().min(0).max(24),
-  ore_straordinarie: z.number().min(0).max(24),
-  viaggi: z.array(ViaggioManualeSchema).max(2),
-});
-
-export async function registraOreManuali(
-  input: unknown,
-): Promise<ResultSimple | ResultErr> {
-  const parsed = RegistraManualeSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  const r = await ctxConModulo();
-  if ('error' in r) return { ok: false, error: r.error };
-  const { ctx } = r;
-
-  const supabase = createServerSupabase();
-  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
-  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
-
-  const data = parsed.data.data ?? oggiRome();
-  const { cantiereId, ore_ordinarie, ore_straordinarie, viaggi } = parsed.data;
-
-  // Valida che cantiere/sedi/mezzi appartengano al tenant (letture RLS-scoped)
-  const { data: cantOk } = await supabase
-    .from('cantieri' as never)
-    .select('id')
-    .eq('id', cantiereId)
-    .maybeSingle();
-  if (!cantOk) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
-
-  for (const v of viaggi) {
-    // Sede AMMESSA per il cantiere: predefinita o associata (non una sede di un
-    // altro cantiere). Stessa regola delle UI e di `validaViaggio`.
-    if (!(await sedeAmmessaPerCantiere(supabase, v.sedeId, cantiereId))) {
-      return { ok: false, error: 'SEDE_NON_VALIDA' };
-    }
-    if (v.autista && v.mezzoId) {
-      const { data: mezzoOk } = await supabase
-        .from('mezzi' as never)
-        .select('id')
-        .eq('id', v.mezzoId)
-        .maybeSingle();
-      if (!mezzoOk) return { ok: false, error: 'MEZZO_NON_VALIDO' };
-    }
-  }
-
-  // Recupera o crea il rapportino del giorno
-  const { data: esistente } = await supabase
-    .from('rapportini' as never)
-    .select('id, stato')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('dipendente_id', me.id)
-    .eq('data', data)
-    .maybeSingle();
-
-  const rapp = esistente as { id: string; stato: string } | null;
-  let rapportinoId: string;
-  // Com'era prima: la versione in fondo dirà «lavoro 0:00 → 8:00». Prima si
-  // fotografava lo stato VECCHIO e solo se la giornata non era in bozza, quindi
-  // una giornata scritta a mano la sera non lasciava nessuna traccia.
-  let primaRegistrazione: StatoGiornata | null = {
-    stato: 'bozza',
-    totali: { ore_ordinarie: 0, ore_straordinarie: 0, ore_viaggio: 0 },
-    righe: [],
-  };
-
-  if (rapp) {
-    if (!STATI_MODIFICABILI_TECNICO.has(rapp.stato)) {
-      return { ok: false, error: 'NON_MODIFICABILE' };
-    }
-    primaRegistrazione = await leggiStatoGiornata(supabase, rapp.id);
-    rapportinoId = rapp.id;
-  } else {
-    const { data: nuovoRaw, error: insErr } = await supabase
-      .from('rapportini' as never)
-      .insert({
-        tenant_id: ctx.tenantId,
-        dipendente_id: me.id,
-        data,
-        stato: 'bozza',
-      } as never)
-      .select('id')
-      .single();
-    if (insErr || !nuovoRaw) return { ok: false, error: insErr?.message ?? 'ERRORE_CREAZIONE' };
-    rapportinoId = (nuovoRaw as { id: string }).id;
-  }
-
-  const oreViaggio =
-    Math.round((viaggi.reduce((s, v) => s + v.minuti, 0) / 60) * 100) / 100;
-
-  // Upsert riga per il cantiere
-  const { data: rigaRaw } = await supabase
-    .from('rapportino_righe' as never)
-    .select('id')
-    .eq('rapportino_id', rapportinoId)
-    .eq('cantiere_id', cantiereId)
-    .maybeSingle();
-  const riga = rigaRaw as { id: string } | null;
-
-  if (riga) {
-    const { error: updErr } = await supabase
-      .from('rapportino_righe' as never)
-      .update({ ore_ordinarie, ore_straordinarie, ore_viaggio: oreViaggio } as never)
-      .eq('id', riga.id);
-    if (updErr) return { ok: false, error: updErr.message };
-  } else {
-    const { error: insRigaErr } = await supabase.from('rapportino_righe' as never).insert({
-      rapportino_id: rapportinoId,
-      commessa_id: null,
-      cantiere_id: cantiereId,
-      ore_ordinarie,
-      ore_straordinarie,
-      ore_viaggio: oreViaggio,
-    } as never);
-    if (insRigaErr) return { ok: false, error: insRigaErr.message };
-  }
-
-  // Tratte di viaggio manuali (senza timbratura, con cantiere+data).
-  // Ripulisci prima le manuali precedenti per (dipendente, cantiere, data) così
-  // un risalvataggio non accumula duplicati. `da_cantiere_id IS NULL` così NON
-  // si cancellano i TRASFERIMENTI cantiere→cantiere (che hanno da_cantiere_id
-  // valorizzato e vivono nella stessa tabella): sono un altro tipo di riga.
-  await supabase
-    .from('timbratura_viaggio' as never)
-    .delete()
-    .eq('tenant_id', ctx.tenantId)
-    .eq('dipendente_id', me.id)
-    .eq('cantiere_id', cantiereId)
-    .eq('data', data)
-    .is('timbratura_id', null)
-    .is('da_cantiere_id', null);
-
-  for (const v of viaggi) {
-    if (v.minuti <= 0) continue;
-    await supabase.from('timbratura_viaggio' as never).insert({
-      tenant_id: ctx.tenantId,
-      timbratura_id: null,
-      cantiere_id: cantiereId,
-      data,
-      dipendente_id: me.id,
-      direzione: v.direzione,
-      sede_id: v.sedeId,
-      durata_stimata_min: null,
-      durata_confermata_min: v.minuti,
-      distanza_km: v.distanzaKm ?? null,
-      giustificazione: null,
-      autista: v.autista,
-      mezzo_id: v.autista ? v.mezzoId ?? null : null,
-    } as never);
-  }
-
-  // Inserimento a mano: stop all'auto-ricalcolo dalle timbrature.
-  await marcaRapportinoManuale(supabase, rapportinoId);
-
-  await scriviVersioneRapportino({
-    supabase,
-    rapportinoId,
-    tenantId: ctx.tenantId,
-    azione: 'modifica_tecnico',
-    modificatoDa: ctx.userId,
-    modificatoDaNome: await nomeDipendente(supabase, me.id),
-    prima: primaRegistrazione,
-  });
-
-  return { ok: true };
 }
 
 // ── 5) mioStoricoRapportini ──────────────────────────────────────────────────
@@ -1014,39 +652,22 @@ export async function modificaMiaGiornata(
   if (!rappBase) return { ok: false, error: 'ERRORE_RAPPORTINO' };
   const rapportinoId = rappBase.id;
 
-  // 3) Applica le ore inserite dal tecnico (override esplicito, per target).
-  //    Upsert come `registraOreManuali`: aggiorna la riga se esiste, altrimenti
-  //    la crea. Le ore di lavoro finiscono in `ore_ordinarie` (il tecnico non
-  //    distingue ord/straord dal suo dialog).
-  for (const rr of righe) {
-    const filtroCol = rr.cantiere_id ? 'cantiere_id' : 'commessa_id';
-    const filtroVal = rr.cantiere_id ?? (rr.commessa_id as string);
-    const { data: rigaRaw } = await supabase
-      .from('rapportino_righe' as never)
-      .select('id')
-      .eq('rapportino_id', rapportinoId)
-      .eq(filtroCol, filtroVal)
-      .maybeSingle();
-    const riga = rigaRaw as { id: string } | null;
-    if (riga) {
-      await supabase
-        .from('rapportino_righe' as never)
-        .update({
-          ore_ordinarie: rr.ore_lavoro,
-          ore_straordinarie: 0,
-          ore_viaggio: rr.ore_viaggio,
-        } as never)
-        .eq('id', riga.id);
-    } else {
-      await supabase.from('rapportino_righe' as never).insert({
-        rapportino_id: rapportinoId,
+  // 3) Applica le ore inserite dal tecnico (override esplicito, per target):
+  //    minuti puri di lavoro e viaggio, le quote le deriva lo scrittore unico
+  //    con la regola del tenant (prima il lavoro finiva tutto nelle ordinarie).
+  if (righe.length > 0) {
+    const scritte = await aggiornaRigheGiornata(supabase, {
+      tenantId: ctx.tenantId,
+      rapportinoId,
+      data,
+      modifiche: righe.map((rr) => ({
         commessa_id: rr.commessa_id ?? null,
         cantiere_id: rr.cantiere_id ?? null,
-        ore_ordinarie: rr.ore_lavoro,
-        ore_straordinarie: 0,
-        ore_viaggio: rr.ore_viaggio,
-      } as never);
-    }
+        minutiLavoro: Math.round(rr.ore_lavoro * 60),
+        minutiViaggio: Math.round(rr.ore_viaggio * 60),
+      })),
+    });
+    if (!scritte.ok) return { ok: false, error: scritte.error };
   }
 
   // Modifica a mano del tecnico: stop all'auto-ricalcolo (le sue ore restano).

@@ -1,15 +1,9 @@
 'use client';
 
-import { useState, useTransition, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { PenLine, Clock, CalendarClock } from 'lucide-react';
 
-import { useConfirm } from '@/app/_components/confirm-provider';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import {
-  salvaMioRapportino,
-  inviaMioRapportino,
-} from '@/app/_actions/kantiere-rapportino';
 import { ModificaGiornataDialog } from './modifica-giornata-dialog';
 import { RegistraGiornataDialog } from './registra-giornata-dialog';
 import type { PickerCantiere } from '../../_components/cantiere-picker';
@@ -53,6 +47,8 @@ interface OreClientProps {
   tolleranzaChiusuraMin: number;
   /** Passo (min) degli stepper. */
   passoMinuti: number;
+  /** Arrotondamento del tempo di viaggio (min), per Registra giornata. */
+  stepViaggio: number;
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -95,60 +91,6 @@ function fmtOre(n: number): string {
   return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
 }
 
-// ── input numerico ore ───────────────────────────────────────────────────────
-
-function OreInput({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <label className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </label>
-      <input
-        type="number"
-        min={0}
-        max={24}
-        step={0.25}
-        value={value}
-        onChange={(e) => {
-          const val = parseFloat(e.target.value);
-          onChange(isNaN(val) ? 0 : Math.max(0, Math.min(24, val)));
-        }}
-        disabled={disabled}
-        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-center font-mono text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
-      />
-    </div>
-  );
-}
-
-// ── stato badge ──────────────────────────────────────────────────────────────
-
-function StatoBadge({ stato }: { stato: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    bozza: { label: 'In verifica', cls: 'bg-amber-500/15 text-amber-700 border-amber-500/30' },
-    inviato: { label: 'Inviato', cls: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/30' },
-    approvato: { label: 'Approvato', cls: 'bg-blue-500/15 text-blue-700 border-blue-500/30' },
-    respinto: { label: 'Respinto', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
-  };
-  const meta = map[stato] ?? { label: stato, cls: 'bg-muted text-muted-foreground border-border' };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] ${meta.cls}`}
-    >
-      {meta.label}
-    </span>
-  );
-}
-
 // ── componente principale ────────────────────────────────────────────────────
 
 export function OreClient({
@@ -162,17 +104,12 @@ export function OreClient({
   registraGiornataAttivo,
   tolleranzaChiusuraMin,
   passoMinuti,
+  stepViaggio,
 }: OreClientProps) {
-  const router = useRouter();
-  const askConfirm = useConfirm();
-  const [isPending, startTransition] = useTransition();
-
-  const [righe, setRighe] = useState<RigaEditable[]>(() =>
-    rapportino.righe.map(rigaFromPayload),
-  );
-  const [note, setNote] = useState(rapportino.note ?? '');
-  const [errore, setErrore] = useState<string | null>(null);
-  const [successo, setSuccesso] = useState<string | null>(null);
+  // Vista di sola lettura: le ore si scrivono da timbrature, Registra giornata e
+  // Modifica giornata, non da qui.
+  const righe = rapportino.righe.map(rigaFromPayload);
+  const note = rapportino.note ?? '';
 
   // registra giornata senza timbrature (caso 4)
   const [registraOpen, setRegistraOpen] = useState(false);
@@ -185,144 +122,6 @@ export function OreClient({
   // La giornata mostrata è oggi (giorno ancora in corso) o una passata/chiusa?
   const oggiRome = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
   const isOggi = rapportino.data >= oggiRome;
-
-  // ── Bozza locale anti-perdita-dati ──────────────────────────────────────────
-  // Le modifiche non salvate vengono memorizzate sul dispositivo: se la rete è
-  // lenta o l'utente naviga avanti/indietro, al rientro vengono ripristinate.
-  const draftKey = `kantiere-ore-draft-${rapportino.id}`;
-  const dirtyRef = useRef(false);
-  const [draftRestored, setDraftRestored] = useState(false);
-
-  // Ripristino bozza locale al montaggio (solo se rapportino in bozza).
-  useEffect(() => {
-    if (!isBozza || typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(draftKey);
-      if (!raw) return;
-      const d = JSON.parse(raw) as { righe?: RigaEditable[]; note?: string };
-      if (d && Array.isArray(d.righe)) {
-        setRighe(d.righe);
-        setNote(typeof d.note === 'string' ? d.note : '');
-        dirtyRef.current = true;
-        setDraftRestored(true);
-      }
-    } catch {
-      /* bozza locale corrotta: ignora */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Persistenza bozza locale a ogni modifica (solo dopo una modifica reale).
-  useEffect(() => {
-    if (!isBozza || typeof window === 'undefined' || !dirtyRef.current) return;
-    try {
-      window.localStorage.setItem(draftKey, JSON.stringify({ righe, note, ts: Date.now() }));
-    } catch {
-      /* quota piena / storage non disponibile: ignora */
-    }
-  }, [righe, note, isBozza, draftKey]);
-
-  function clearDraft() {
-    dirtyRef.current = false;
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.removeItem(draftKey);
-      } catch {
-        /* ignora */
-      }
-    }
-    setDraftRestored(false);
-  }
-
-  function scartaDraft() {
-    setRighe(rapportino.righe.map(rigaFromPayload));
-    setNote(rapportino.note ?? '');
-    clearDraft();
-  }
-
-  function rimuoviRiga(idx: number) {
-    dirtyRef.current = true;
-    setRighe((prev) => prev.filter((_, i) => i !== idx));
-    setErrore(null);
-    setSuccesso(null);
-  }
-
-  function aggiornaRiga<K extends keyof RigaEditable>(idx: number, field: K, value: RigaEditable[K]) {
-    dirtyRef.current = true;
-    setRighe((prev) => {
-      const next = [...prev];
-      const riga = next[idx];
-      if (!riga) return prev;
-      next[idx] = { ...riga, [field]: value };
-      return next;
-    });
-    setErrore(null);
-    setSuccesso(null);
-  }
-
-  function buildRighePayload() {
-    return righe.map((r) => ({
-      commessa_id: r.commessa_id ?? null,
-      cantiere_id: r.cantiere_id ?? null,
-      ore_ordinarie: r.ore_ordinarie,
-      ore_straordinarie: r.ore_straordinarie,
-      ore_viaggio: r.ore_viaggio,
-      note: r.note || undefined,
-    }));
-  }
-
-  function handleSalva() {
-    startTransition(async () => {
-      setErrore(null);
-      setSuccesso(null);
-      const res = await salvaMioRapportino({
-        rapportinoId: rapportino.id,
-        righe: buildRighePayload(),
-        note: note || undefined,
-      });
-      if (res.ok) {
-        clearDraft();
-        setSuccesso('Bozza salvata.');
-        router.refresh();
-      } else {
-        setErrore(messaggioErrore(res.error));
-      }
-    });
-  }
-
-  function handleInvia() {
-    startTransition(async () => {
-      setErrore(null);
-      setSuccesso(null);
-
-      const ok = await askConfirm({
-        title: 'Inviare il rapportino?',
-        description: "Dopo l'invio non sara' piu' modificabile.",
-        confirmLabel: "Invia all'ufficio",
-        cancelLabel: 'Annulla',
-      });
-      if (!ok) return;
-
-      // Prima salva le modifiche correnti, poi invia
-      const salvato = await salvaMioRapportino({
-        rapportinoId: rapportino.id,
-        righe: buildRighePayload(),
-        note: note || undefined,
-      });
-      if (!salvato.ok) {
-        setErrore(messaggioErrore(salvato.error));
-        return;
-      }
-
-      const res = await inviaMioRapportino({ rapportinoId: rapportino.id });
-      if (res.ok) {
-        clearDraft();
-        router.refresh();
-      } else {
-        setErrore(messaggioErrore(res.error));
-      }
-    });
-  }
 
   const totOrdinarie = sumOre(righe, 'ore_ordinarie');
   const totStraordinarie = sumOre(righe, 'ore_straordinarie');
@@ -484,6 +283,7 @@ export function OreClient({
         onClose={() => setRegistraOpen(false)}
         tolleranzaMin={tolleranzaChiusuraMin}
         passoMinuti={passoMinuti}
+        stepViaggio={stepViaggio}
         sedi={sediDisponibili}
         sediPerCantiere={sediPerCantiere}
         mezzi={mezziDisponibili}
@@ -499,27 +299,4 @@ export function OreClient({
       />
     </div>
   );
-}
-
-// ── mappa errori ─────────────────────────────────────────────────────────────
-
-function messaggioErrore(code: string): string {
-  switch (code) {
-    case 'NON_AUTENTICATO':
-      return 'Devi essere autenticato per modificare il rapportino.';
-    case 'MODULO_OFF':
-      return 'Il modulo Kantiere non e abilitato per questo spazio.';
-    case 'NESSUN_DIPENDENTE':
-      return 'Nessun profilo dipendente collegato a questo account.';
-    case 'NON_TROVATO':
-      return 'Rapportino non trovato.';
-    case 'NON_MODIFICABILE':
-      return 'Il rapportino non e piu modificabile (gia inviato).';
-    case 'FORBIDDEN':
-      return 'Non sei autorizzato a modificare questo rapportino.';
-    case 'Input non valido':
-      return 'Dati non validi. Controlla i campi e riprova.';
-    default:
-      return `Errore: ${code}`;
-  }
 }

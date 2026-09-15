@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { COLONNE_QUOTE, quoteDaRiga, quoteOre, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { sogliaAnomaliaTurnoOre, giornateOltreSoglia } from '@/app/_lib/kantiere-config';
@@ -44,11 +45,7 @@ type DipendenteNomeRow = {
   cognome: string;
 };
 
-type RigaOreRow = {
-  ore_ordinarie: number;
-  ore_straordinarie: number;
-  ore_viaggio: number;
-};
+type RigaOreRow = RigaRapportinoLetta;
 
 type TimbraturaRow = {
   dipendente_id: string;
@@ -148,12 +145,14 @@ export default async function KantierePanoramica() {
   if (idsSettimana.length > 0) {
     const { data: righe } = (await supabase
       .from('rapportino_righe' as never)
-      .select('ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select(COLONNE_QUOTE)
       .in('rapportino_id', idsSettimana)) as { data: RigaOreRow[] | null };
+    // Ordinarie = lavoro e viaggio entro l'orario; viaggio = solo l'eccedente.
     for (const r of righe ?? []) {
-      oreOrd += r.ore_ordinarie ?? 0;
-      oreStraord += r.ore_straordinarie ?? 0;
-      oreViaggio += r.ore_viaggio ?? 0;
+      const q = quoteOre(quoteDaRiga(r));
+      oreOrd += q.ordinarie;
+      oreStraord += q.straordinarie;
+      oreViaggio += q.viaggioEccedente;
     }
   }
   const oreSettimana = oreOrd + oreStraord + oreViaggio;

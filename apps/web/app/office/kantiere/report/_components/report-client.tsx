@@ -55,7 +55,7 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
   const totaleColonna = {
     ordinarie: aggregati.reduce((s, r) => s + r.ordinarie, 0),
     straordinarie: aggregati.reduce((s, r) => s + r.straordinarie, 0),
-    viaggio: aggregati.reduce((s, r) => s + r.viaggio, 0),
+    viaggioEccedente: aggregati.reduce((s, r) => s + r.viaggioEccedente, 0),
     totale: aggregati.reduce((s, r) => s + r.totale, 0),
   };
 
@@ -148,14 +148,20 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
           <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(kpi.straordinarie)}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
-          <p className="text-xs text-muted-foreground">Ore viaggio</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(kpi.viaggio)}</p>
+          <p className="text-xs text-muted-foreground">Ore viaggio eccedenti</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{fmt(kpi.viaggioEccedente)}</p>
         </div>
         <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
-          <p className="text-xs text-muted-foreground">Totale ore</p>
+          <p className="text-xs text-muted-foreground">Totale ore (lavoro + viaggio)</p>
           <p className="mt-1 text-xl font-semibold tabular-nums text-primary">{fmt(kpi.totale)}</p>
         </div>
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Ordinarie: lavoro e viaggio entro l&apos;orario ordinario giornaliero. Straordinarie: lavoro
+        oltre l&apos;orario ordinario. Viaggio eccedente: viaggio oltre l&apos;orario ordinario. Le
+        giornate precedenti al 15/09/2026 hanno tutto il viaggio nel viaggio eccedente.
+      </p>
 
       {/* Tabella aggregata */}
       {aggregati.length === 0 ? (
@@ -170,7 +176,7 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
                 </th>
                 <th className="px-3 py-2 text-right font-medium">Ordinarie</th>
                 <th className="px-3 py-2 text-right font-medium">Straordinario</th>
-                <th className="px-3 py-2 text-right font-medium">Viaggio</th>
+                <th className="px-3 py-2 text-right font-medium">Viaggio eccedente</th>
                 <th className="px-3 py-2 text-right font-medium">Totale</th>
               </tr>
             </thead>
@@ -180,7 +186,7 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
                   <td className="px-3 py-1.5 font-medium">{row.chiave}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.ordinarie)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.straordinarie)}</td>
-                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.viaggio)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmt(row.viaggioEccedente)}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums font-medium">{fmt(row.totale)}</td>
                 </tr>
               ))}
@@ -195,7 +201,7 @@ export function ReportClient({ aggregati, kpi, filtri, viaggiPerDipendente, viag
                   {fmt(totaleColonna.straordinarie)}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums font-semibold">
-                  {fmt(totaleColonna.viaggio)}
+                  {fmt(totaleColonna.viaggioEccedente)}
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums font-semibold text-primary">
                   {fmt(totaleColonna.totale)}

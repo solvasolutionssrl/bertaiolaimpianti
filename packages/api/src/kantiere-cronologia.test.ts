@@ -149,6 +149,25 @@ describe('costruisciCronologia', () => {
     expect(ev[1]!.dettaglio).toEqual(['A → B']);
   });
 
+  it('il lavoro dalla sede si legge sull’inizio del turno e sul cambio cantiere', () => {
+    const ev = costruisciCronologia({
+      timbrature: [
+        timb({ id: 'a', tipo: 'ingresso', ts: '2026-09-15T06:00:00Z', cantiere: 'A', modalita: 'app', sedeLavoro: 'Sede Nordest' }),
+        timb({ id: 'b', tipo: 'uscita', ts: '2026-09-15T10:00:00Z', cantiere: 'A', modalita: 'app' }),
+        timb({ id: 'c', tipo: 'ingresso', ts: '2026-09-15T10:00:01Z', cantiere: 'B', modalita: 'app' }),
+        timb({ id: 'd', tipo: 'uscita', ts: '2026-09-15T15:00:00Z', cantiere: 'B', modalita: 'app' }),
+      ],
+      viaggi: [],
+      versioni: [],
+      userIdPersona: PERSONA,
+      approvataAutoAl: null,
+    });
+    expect(ev.map((e) => e.titolo)).toEqual(['Inizio turno', 'Cambio cantiere', 'Fine turno']);
+    expect(ev[0]!.dettaglio).toEqual(['A', 'Lavoro dalla sede Sede Nordest']);
+    // Su B si lavora in cantiere: il cambio non riporta nessuna sede.
+    expect(ev[1]!.dettaglio).toEqual(['A → B']);
+  });
+
   it('con un cantiere solo non lo ripete sotto ogni evento', () => {
     const ev = costruisciCronologia({
       timbrature: [

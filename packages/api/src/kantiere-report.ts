@@ -1,15 +1,28 @@
+/**
+ * Una riga da aggregare, già con le quote (vedi `quoteOre` in
+ * `@kommessa/api/kantiere-quote`): ordinarie, straordinarie e viaggio eccedente
+ * non si sovrappongono e sommano a lavoro + viaggio.
+ */
 export type RigaAgg = {
   chiaveDipendente: string;
   chiaveCommessa: string;
+  /** Lavoro e viaggio entro l'orario ordinario. */
   ore_ordinarie: number;
+  /** Lavoro oltre l'orario ordinario. */
   ore_straordinarie: number;
+  /** Viaggio oltre l'orario ordinario (righe precedenti alla regola: tutto il viaggio). */
+  ore_viaggio_eccedenti: number;
+  ore_lavoro: number;
   ore_viaggio: number;
 };
 
 export type Aggregato = {
   ordinarie: number;
   straordinarie: number;
+  viaggioEccedente: number;
+  lavoro: number;
   viaggio: number;
+  /** Lavoro + viaggio. */
   totale: number;
 };
 
@@ -20,11 +33,14 @@ export function aggregaOre(
   const out = new Map<string, Aggregato>();
   for (const r of righe) {
     const chiave = per === 'dipendente' ? r.chiaveDipendente : r.chiaveCommessa;
-    const cur = out.get(chiave) ?? { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0 };
+    const cur =
+      out.get(chiave) ?? { ordinarie: 0, straordinarie: 0, viaggioEccedente: 0, lavoro: 0, viaggio: 0, totale: 0 };
     cur.ordinarie = round2(cur.ordinarie + r.ore_ordinarie);
     cur.straordinarie = round2(cur.straordinarie + r.ore_straordinarie);
+    cur.viaggioEccedente = round2(cur.viaggioEccedente + r.ore_viaggio_eccedenti);
+    cur.lavoro = round2(cur.lavoro + r.ore_lavoro);
     cur.viaggio = round2(cur.viaggio + r.ore_viaggio);
-    cur.totale = round2(cur.ordinarie + cur.straordinarie + cur.viaggio);
+    cur.totale = round2(cur.lavoro + cur.viaggio);
     out.set(chiave, cur);
   }
   return out;

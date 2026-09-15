@@ -11,10 +11,12 @@ import {
 } from '@/app/office/_actions/kantiere-regole';
 import { Button } from '@kommessa/ui';
 
+// `soglia_giornaliera` resta solo per dare un nome a regole vecchie: il calcolo
+// non lo usa, l'orario ordinario si imposta in Impostazioni Kantiere.
 const TIPI: { value: RegolaView['tipo']; label: string }[] = [
   { value: 'soglia_giornaliera', label: 'Soglia giornaliera' },
   { value: 'maggiorazione_straordinario', label: 'Straordinario' },
-  { value: 'maggiorazione_viaggio', label: 'Viaggio' },
+  { value: 'maggiorazione_viaggio', label: 'Viaggio eccedente' },
   { value: 'notturno', label: 'Notturno' },
   { value: 'festivo', label: 'Festivo' },
   { value: 'weekend', label: 'Weekend' },
@@ -192,7 +194,7 @@ export function RegoleTab({ regole, dipendenti, cantieri }: Props) {
               onChange={(e) => setNuovo({ ...nuovo, tipo: e.target.value as RegolaView['tipo'] })}
               className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
             >
-              {TIPI.map((t) => (
+              {TIPI.filter((t) => t.value !== 'soglia_giornaliera').map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>

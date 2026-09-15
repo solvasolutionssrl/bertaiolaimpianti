@@ -26,52 +26,50 @@ const anomalieSchema = z.object({
   ore_eccessive: z.boolean(),
 });
 
+/**
+ * I campi della pagina Impostazioni Kantiere. Ogni campo corrisponde a una
+ * chiave di `tenant_modules.config`; la lettura e i predefiniti stanno in
+ * `impostazioniDaConfig` (`_lib/kantiere-config`).
+ */
 const schema = z.object({
+  // Orario e ore
   sogliaOreOrdinarie: z.number().min(1).max(24),
-  sedePartenzaDefault: z.string().max(300).optional(),
-  anomalie: anomalieSchema.optional(),
-  anomalie_ore_max: z.number().min(1).max(24).optional(),
-  // Arrotondamenti (min). Viaggio: default 5. Ore: default 0 = nessuno.
   arrotondamentoViaggioMin: z.number().int().min(1).max(60).optional(),
   arrotondamentoOreMin: z.number().int().min(0).max(60).optional(),
-  // Approvazione presenze. Auto-approva: default true. Soglia turno: default 10 ore.
+  // Turni
+  avvioTurnoLibero: z.boolean().optional(),
+  splitFineTurnoAttivo: z.boolean().optional(),
+  registraGiornataAttivo: z.boolean().optional(),
+  tolleranzaChiusuraMin: z.number().int().min(0).max(30).optional(),
+  passoMinutiStepper: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(30)]).optional(),
+  // Pause
+  sogliaPausaPranzoOre: z.number().int().min(1).max(12).optional(),
+  sogliaAutoSpegnimentoPausaOre: z.number().min(0.5).max(8).optional(),
+  // Viaggi e chilometri
+  kmSoloAutista: z.boolean().optional(),
+  sedePartenzaDefault: z.string().max(300).optional(),
+  // Approvazione e anomalie
   autoApprovaRapportini: z.boolean().optional(),
   anomaliaTurnoOreMax: z.number().min(1).max(24).optional(),
-  // Promemoria pausa pranzo: ore di turno senza pausa timbrata oltre cui l'app
-  // (QR e tasto, identici) propone di dichiararla. Default 5.
-  sogliaPausaPranzoOre: z.number().int().min(1).max(12).optional(),
-  // Auto-spegnimento pausa dimenticata: ore oltre cui una pausa avviata si
-  // chiude da sola e il turno riprende (scalando esattamente la soglia).
-  // Default 1.5. Distinta da sogliaPausaPranzoOre (promemoria).
-  sogliaAutoSpegnimentoPausaOre: z.number().min(0.5).max(8).optional(),
-  // Kontabilità: modulo attivo per il tenant. Default true.
+  anomalie: anomalieSchema.optional(),
+  // Kontabilità
   kontabilitaAttiva: z.boolean().optional(),
-  // ── Turni & calcoli (gestione ufficio) ──
-  // Tolleranza (min) sulla somma dello split di fine turno. Default 5.
-  tolleranzaChiusuraMin: z.number().int().min(0).max(30).optional(),
-  // Split "cosa hai fatto oggi" alla chiusura. Default true.
-  splitFineTurnoAttivo: z.boolean().optional(),
-  // Km del tragitto sul cambio cantiere (switch). Default false (opt-in).
-  kmSwitchAttivo: z.boolean().optional(),
-  kmSoloAutista: z.boolean().optional(),
-  // Passo (min) dei +/- degli stepper ore. 5/10/15/30. Default 15.
-  passoMinutiStepper: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(30)]).optional(),
-  // Avvio turno su qualsiasi cantiere (tecnici). Default true.
-  avvioTurnoLibero: z.boolean().optional(),
-  // Registrazione giornata senza timbrature (caso 4). Default true.
-  registraGiornataAttivo: z.boolean().optional(),
 });
+
+/** Chiavi che nessun codice legge più: si tolgono al primo salvataggio. */
+const CHIAVI_DISMESSE = ['km_switch_attivo', 'anomalie_ore_max'];
 
 export async function salvaImpostazioniKantiere(input: unknown): Promise<Result> {
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+    return { ok: false, error: 'Valori non validi. Ricaricare la pagina e riprovare.' };
   }
 
   const ctx = await guard();
   const supabase = createServiceSupabase();
 
-  // Leggi riga corrente per fare un merge non distruttivo del config
+  // Merge non distruttivo: le chiavi non gestite qui (routing_provider,
+  // quote_ore_dal, integrazioni) restano come sono.
   const { data: row, error: fetchError } = await supabase
     .from('tenant_modules' as never)
     .select('config')
@@ -83,60 +81,32 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   if (!row) return { ok: false, error: 'MODULO_NON_TROVATO' };
 
   const existingConfig = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const d = parsed.data;
   const newConfig: Record<string, unknown> = {
     ...existingConfig,
-    soglia_ore_ordinarie: parsed.data.sogliaOreOrdinarie,
-    sede_partenza_default: parsed.data.sedePartenzaDefault?.trim() || null,
+    soglia_ore_ordinarie: d.sogliaOreOrdinarie,
   };
-  if (parsed.data.anomalie !== undefined) {
-    newConfig['anomalie'] = parsed.data.anomalie;
+  const imposta = (chiave: string, valore: unknown) => {
+    if (valore !== undefined) newConfig[chiave] = valore;
+  };
+  imposta('arrotondamento_viaggio_min', d.arrotondamentoViaggioMin);
+  imposta('arrotondamento_ore_min', d.arrotondamentoOreMin);
+  imposta('avvio_turno_libero', d.avvioTurnoLibero);
+  imposta('split_fine_turno_attivo', d.splitFineTurnoAttivo);
+  imposta('registra_giornata_attivo', d.registraGiornataAttivo);
+  imposta('tolleranza_chiusura_min', d.tolleranzaChiusuraMin);
+  imposta('passo_minuti_stepper', d.passoMinutiStepper);
+  imposta('soglia_pausa_pranzo_ore', d.sogliaPausaPranzoOre);
+  imposta('soglia_auto_spegnimento_pausa_ore', d.sogliaAutoSpegnimentoPausaOre);
+  imposta('km_solo_autista', d.kmSoloAutista);
+  if (d.sedePartenzaDefault !== undefined) {
+    newConfig['sede_partenza_default'] = d.sedePartenzaDefault.trim() || null;
   }
-  if (parsed.data.anomalie_ore_max !== undefined) {
-    newConfig['anomalie_ore_max'] = parsed.data.anomalie_ore_max;
-  }
-  if (parsed.data.arrotondamentoViaggioMin !== undefined) {
-    newConfig['arrotondamento_viaggio_min'] = parsed.data.arrotondamentoViaggioMin;
-  }
-  if (parsed.data.arrotondamentoOreMin !== undefined) {
-    newConfig['arrotondamento_ore_min'] = parsed.data.arrotondamentoOreMin;
-  }
-  if (parsed.data.autoApprovaRapportini !== undefined) {
-    newConfig['auto_approva_rapportini'] = parsed.data.autoApprovaRapportini;
-  }
-  if (parsed.data.anomaliaTurnoOreMax !== undefined) {
-    newConfig['anomalia_turno_ore_max'] = parsed.data.anomaliaTurnoOreMax;
-  }
-  if (parsed.data.sogliaPausaPranzoOre !== undefined) {
-    newConfig['soglia_pausa_pranzo_ore'] = parsed.data.sogliaPausaPranzoOre;
-  }
-  if (parsed.data.sogliaAutoSpegnimentoPausaOre !== undefined) {
-    newConfig['soglia_auto_spegnimento_pausa_ore'] = parsed.data.sogliaAutoSpegnimentoPausaOre;
-  }
-  if (parsed.data.kontabilitaAttiva !== undefined) {
-    newConfig['kontabilita_attiva'] = parsed.data.kontabilitaAttiva;
-  }
-  // Turni & calcoli
-  if (parsed.data.tolleranzaChiusuraMin !== undefined) {
-    newConfig['tolleranza_chiusura_min'] = parsed.data.tolleranzaChiusuraMin;
-  }
-  if (parsed.data.splitFineTurnoAttivo !== undefined) {
-    newConfig['split_fine_turno_attivo'] = parsed.data.splitFineTurnoAttivo;
-  }
-  if (parsed.data.kmSoloAutista !== undefined) {
-    newConfig['km_solo_autista'] = parsed.data.kmSoloAutista;
-  }
-  if (parsed.data.kmSwitchAttivo !== undefined) {
-    newConfig['km_switch_attivo'] = parsed.data.kmSwitchAttivo;
-  }
-  if (parsed.data.passoMinutiStepper !== undefined) {
-    newConfig['passo_minuti_stepper'] = parsed.data.passoMinutiStepper;
-  }
-  if (parsed.data.avvioTurnoLibero !== undefined) {
-    newConfig['avvio_turno_libero'] = parsed.data.avvioTurnoLibero;
-  }
-  if (parsed.data.registraGiornataAttivo !== undefined) {
-    newConfig['registra_giornata_attivo'] = parsed.data.registraGiornataAttivo;
-  }
+  imposta('auto_approva_rapportini', d.autoApprovaRapportini);
+  imposta('anomalia_turno_ore_max', d.anomaliaTurnoOreMax);
+  imposta('anomalie', d.anomalie);
+  imposta('kontabilita_attiva', d.kontabilitaAttiva);
+  for (const chiave of CHIAVI_DISMESSE) delete newConfig[chiave];
 
   const { error: updateError } = await supabase
     .from('tenant_modules' as never)
@@ -146,8 +116,7 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
 
   if (updateError) return { ok: false, error: updateError.message };
 
-  // Traccia la modifica delle impostazioni (soglie payroll, arrotondamenti…):
-  // prima/dopo dell'intero config → visibile in /admin/audit.
+  // Prima/dopo dell'intero config → visibile in /admin/audit.
   await auditTenant(supabase, {
     tenantId: ctx.tenantId, actorUserId: ctx.userId, actorRole: ctx.role,
     entityType: 'tenant_module', entityId: ctx.tenantId,

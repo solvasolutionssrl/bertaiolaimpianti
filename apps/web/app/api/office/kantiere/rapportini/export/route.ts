@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { COLONNE_QUOTE, quoteDaRiga, quoteOre } from '@kommessa/api/kantiere-quote';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { createServerSupabase } from '@kommessa/api/server';
@@ -25,6 +26,10 @@ type RigaRow = {
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
+  minuti_lavoro: number | null;
+  minuti_viaggio: number | null;
+  ore_viaggio_ordinarie: number | null;
+  ore_viaggio_eccedenti: number | null;
 };
 
 type CantiereRow = {
@@ -143,7 +148,7 @@ export async function GET(req: NextRequest) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     righeData = data ?? [];
   }
@@ -201,7 +206,20 @@ export async function GET(req: NextRequest) {
   );
 
   // Genera CSV
-  const header = ['Data', 'Dipendente', 'Commessa/Cantiere', 'Ore ordinarie', 'Ore straordinario', 'Ore viaggio', 'Stato'];
+  // Lavoro e viaggio sono i dati puri. Ordinarie (lavoro e viaggio entro l'orario
+  // ordinario), straordinarie e viaggio eccedente sono le quote derivate: non si
+  // sovrappongono e sommano a lavoro + viaggio.
+  const header = [
+    'Data',
+    'Dipendente',
+    'Commessa/Cantiere',
+    'Ore lavoro',
+    'Ore viaggio',
+    'Ore ordinarie',
+    'Ore straordinarie',
+    'Ore viaggio eccedenti',
+    'Stato',
+  ];
 
   const csvRows = righeData.map((r) => {
     const meta = rapportinoMeta.get(r.rapportino_id);
@@ -212,9 +230,16 @@ export async function GET(req: NextRequest) {
       data,
       dipendente,
       commessa,
-      fmtNum(r.ore_ordinarie ?? 0),
-      fmtNum(r.ore_straordinarie ?? 0),
-      fmtNum(r.ore_viaggio ?? 0),
+      ...(() => {
+        const q = quoteOre(quoteDaRiga(r));
+        return [
+          fmtNum(q.lavoro),
+          fmtNum(q.viaggio),
+          fmtNum(q.ordinarie),
+          fmtNum(q.straordinarie),
+          fmtNum(q.viaggioEccedente),
+        ];
+      })(),
       meta?.stato ?? '',
     ]
       .map(escape)

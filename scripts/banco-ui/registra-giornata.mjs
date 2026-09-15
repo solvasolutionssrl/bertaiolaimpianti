@@ -3,8 +3,9 @@
  *
  * iPhone emulato, tecnico demo (DEMOC). Fotografa la pagina e il foglio «Il
  * viaggio» nei casi che contano: un cantiere, due cantieri, la tratta aperta,
- * il passaggio dalla sede, la guida. Misura che la barra dei tempi resti
- * visibile sotto il foglio e che niente sbordi di lato.
+ * il passaggio dalla sede, la guida, il lavoro dalla sede sul progetto. Misura
+ * che la barra dei tempi resti visibile sotto il foglio, che la tratta fra i
+ * cantieri si tolga dalle ore da assegnare e che niente sbordi di lato.
  *
  * Non registra niente: preme «Registra giornata» solo quando manca la
  * partenza, cioè quando il tasto apre il foglio invece di salvare.
@@ -101,6 +102,44 @@ async function ore(cdp, indice, h) {
   await pausa(250);
 }
 
+/** Minuti del cantiere n, scritti in ore e minuti. */
+async function impostaMinuti(cdp, indice, totale) {
+  for (const [campo, v] of [['ore', Math.floor(totale / 60)], ['minuti', totale % 60]]) {
+    await valuta(
+      cdp,
+      `(() => {
+        ${AIUTI}
+        const c = [...pagina().querySelectorAll('input[aria-label="${campo}"]')][${indice}];
+        if (c) setValore(c, '${v}');
+        return !!c;
+      })()`,
+    );
+    await pausa(200);
+  }
+}
+
+/**
+ * Assegna all'ultimo cantiere quello che resta: le ore da assegnare cambiano con
+ * le tratte fra cantieri (sono viaggio), quindi il banco le rilegge dalla barra.
+ */
+async function pareggia(cdp) {
+  const testo = await valuta(cdp, `(() => { ${AIUTI} return t(tastoRegistra()?.parentElement?.innerText); })()`);
+  const m = /di (\d+):(\d\d) di lavoro/.exec(testo ?? '');
+  if (!m) return null;
+  const lavoro = Number(m[1]) * 60 + Number(m[2]);
+  const primo = await valuta(
+    cdp,
+    `(() => {
+      ${AIUTI}
+      const h = [...pagina().querySelectorAll('input[aria-label="ore"]')][0];
+      const mi = [...pagina().querySelectorAll('input[aria-label="minuti"]')][0];
+      return h ? Number(h.value) * 60 + Number(mi.value) : 0;
+    })()`,
+  );
+  await impostaMinuti(cdp, 1, lavoro - primo);
+  return { lavoro, primo, ultimo: lavoro - primo };
+}
+
 async function scorri(cdp, dove) {
   await valuta(
     cdp,
@@ -195,6 +234,30 @@ try {
   await scorri(cdp, 'fondo');
   await foto(cdp, 'rg-04-due-cantieri');
 
+  // La tratta fra i due cantieri è viaggio: si toglie dalle ore da assegnare.
+  m = await misura(cdp);
+  const daAssegnare = /di (\d+):(\d\d) di lavoro/.exec(m.testoPiede);
+  const minutiDaAssegnare = daAssegnare ? Number(daAssegnare[1]) * 60 + Number(daAssegnare[2]) : null;
+  esito(
+    minutiDaAssegnare != null && minutiDaAssegnare < 480,
+    'la tratta fra i cantieri si toglie dalle ore da assegnare',
+    m.testoPiede.slice(0, 48),
+  );
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return /di cui viaggio \\d+:\\d\\d/.test(pagina().innerText); })()`),
+    'la giornata dice quanto viaggio c’è fra i cantieri',
+  );
+  esito(
+    await valuta(
+      cdp,
+      `(() => { ${AIUTI} return [...(tastoRegistra()?.parentElement?.querySelectorAll('[aria-hidden="true"] > span') ?? [])].some((s) => /repeating-linear-gradient/.test(s.style.backgroundImage)); })()`,
+    ),
+    'la barra disegna la tratta con il tratteggio del viaggio',
+  );
+  const pari = await pareggia(cdp);
+  m = await misura(cdp);
+  esito(/Completa/.test(m.testoPiede), 'assegnate le ore rimaste, la giornata torna completa', pari ? JSON.stringify(pari) : '');
+
   const tratta = await valuta(
     cdp,
     `(() => { ${AIUTI} const b = [...pagina().querySelectorAll('button[aria-expanded]')].find((x) => /^Diretta/.test(t(x.textContent))); return b ? t(b.textContent) : null; })()`,
@@ -205,6 +268,7 @@ try {
   await foto(cdp, 'rg-05-menu-tratta');
   esito(await clicca(cdp, '^Passando da Sede', { dentro: 'pagina()' }), 'la tratta si cambia in «passando dalla sede»');
   await pausa(2500);
+  await pareggia(cdp);
   await scorri(cdp, 'fondo');
   await foto(cdp, 'rg-06-via-sede');
 
@@ -257,9 +321,40 @@ try {
     await foto(cdp, 'rg-13-guida-evidenziata');
   }
 
+  // ── Lavoro dalla sede sul progetto ──────────────────────────────────────
+  // Sul primo cantiere si lavora dalla sede predefinita, che è anche la
+  // partenza: niente andata, e la tratta verso il secondo parte dalla sede.
+  await scorri(cdp, 'inizio');
+  const spuntato = await valuta(
+    cdp,
+    `(() => {
+      ${AIUTI}
+      const cb = [...pagina().querySelectorAll('label')]
+        .filter((l) => /Lavoro dalla sede sul progetto/.test(l.textContent))
+        .map((l) => l.querySelector('input[type=checkbox]'))[0];
+      if (!cb) return false;
+      cb.scrollIntoView({ block: 'center' });
+      cb.click();
+      return cb.checked;
+    })()`,
+  );
+  esito(spuntato, 'sul primo cantiere si indica «Lavoro dalla sede sul progetto»');
+  await pausa(3000);
+  const cardPartenza = await valuta(
+    cdp,
+    `(() => { ${AIUTI} const b = [...pagina().querySelectorAll('button[aria-expanded]')].find((x) => /^Partenza/i.test(t(x.textContent))); return b ? t(b.textContent) : null; })()`,
+  );
+  esito(/Nessun viaggio/.test(cardPartenza ?? ''), 'partendo dalla sede in cui si lavora non c’è andata', cardPartenza ?? '');
+  await pareggia(cdp);
+  m = await misura(cdp);
+  esito(/Inizio \d\d:\d\d/.test(m.testoPiede), 'senza andata la barra parte dall’inizio del lavoro', m.testoPiede);
+  esito(/Completa/.test(m.testoPiede), 'con la tratta ricalcolata la giornata resta completa');
+  await foto(cdp, 'rg-14-lavoro-da-sede');
+
   // ── Salvataggio vero, solo se richiesto (tenant demo, da ripulire dopo) ──
   if (process.env.BANCO_SALVA === '1') {
     await clicca(cdp, 'Guidavo io', { dentro: 'pagina()' }); // la riaccende
+    await pareggia(cdp);
     const senzaMezzo = await valuta(
       cdp,
       `(() => { ${AIUTI} const sel = [...pagina().querySelectorAll('select[aria-label="Mezzo"]')].pop(); return !sel || !sel.value; })()`,
@@ -271,7 +366,7 @@ try {
         await valuta(cdp, `(() => { ${AIUTI} return !!foglio(); })()`),
         'chi guida senza aver scelto il mezzo se lo vede chiedere nel foglio',
       );
-      await foto(cdp, 'rg-14-foglio-mezzo');
+      await foto(cdp, 'rg-15-foglio-mezzo');
       const mezzo = await valuta(
         cdp,
         `(() => { ${AIUTI}
@@ -290,7 +385,7 @@ try {
       timeoutMs: 45_000,
     });
     esito(true, 'la giornata si registra');
-    await foto(cdp, 'rg-15-registrata');
+    await foto(cdp, 'rg-16-registrata');
     await pausa(1500);
   }
   esito(erroriBrowser.length === 0, 'nessun errore nel browser', erroriBrowser.length ? `${erroriBrowser.length}` : '');

@@ -462,9 +462,15 @@ export function risolviMaggiorazione(
 export type InputCostoCond = {
   chiaveDipendente: string;
   chiaveCommessa: string;
+  /** Lavoro entro l'orario ordinario. */
   ore_ordinarie: number;
   ore_straordinarie: number;
+  /** Viaggio totale: vale solo per le righe senza le quote di viaggio. */
   ore_viaggio: number;
+  /** Viaggio entro l'orario ordinario: si paga come ora ordinaria. Assente = riga precedente alla regola. */
+  ore_viaggio_ordinarie?: number | null;
+  /** Viaggio oltre l'orario ordinario: prende la % del viaggio. Assente = tutto `ore_viaggio`. */
+  ore_viaggio_eccedenti?: number | null;
   giornoSettimana: number;
   festivo: boolean;
   aTurni: boolean;
@@ -475,16 +481,20 @@ export type InputCostoCond = {
 };
 
 /**
- * Costo giornata col motore a condizioni. Le ore ordinarie e straordinarie
- * (split prime 2 ore / successive) prendono la % della regola più specifica
- * che combacia col giorno/festivo/turni; il viaggio ha la sua % dedicata.
+ * Costo giornata col motore a condizioni. Le ore ordinarie (lavoro e viaggio
+ * entro l'orario ordinario) e le straordinarie (split prime 2 ore / successive)
+ * prendono la % della regola più specifica che combacia col giorno/festivo/turni;
+ * il viaggio eccedente ha la sua % dedicata. Nel risultato `ore_ordinarie`
+ * comprende il viaggio ordinario e `ore_viaggio` è il viaggio eccedente.
+ * Righe precedenti alla regola (senza quote di viaggio): tutto il viaggio a parte.
  * Il notturno per fascia oraria è applicato solo se a monte si passano ore
  * notturne (qui ctx.notturno=false: predisposto, vedi TODO).
  */
 export function calcolaCostoGiornataCond(input: InputCostoCond): RigaCosto {
-  const ord = input.ore_ordinarie ?? 0;
+  const conQuote = input.ore_viaggio_ordinarie != null || input.ore_viaggio_eccedenti != null;
+  const ord = (input.ore_ordinarie ?? 0) + (conQuote ? (input.ore_viaggio_ordinarie ?? 0) : 0);
   const str = input.ore_straordinarie ?? 0;
-  const via = input.ore_viaggio ?? 0;
+  const via = conQuote ? (input.ore_viaggio_eccedenti ?? 0) : (input.ore_viaggio ?? 0);
   const base = {
     giornoSettimana: input.giornoSettimana,
     festivo: input.festivo,

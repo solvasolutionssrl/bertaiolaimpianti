@@ -1,8 +1,8 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.3
+**Versione**: 1.4
 **Stato**: Attivo (in produzione)
-**Ultimo aggiornamento**: 14/09/2026
+**Ultimo aggiornamento**: 15/09/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
 
 > **A cosa serve questo file.** Non è un manuale d'uso: è il registro delle **regole e delle scelte operative** già implementate (arrotondamenti, soglie, quando si caricano i km, come si collegano sedi e cantieri, quali impostazioni gestisce l'ufficio). Serve come base per una futura sezione **Help** nell'office e come contesto per un **agente AI interno**.
@@ -21,6 +21,24 @@ Il conteggio ore **non** si fida di ciò che l'utente scrive: si **ri-deriva sem
 - Conseguenza pratica: lo split multi-cantiere "regge" solo se è fatto di **segmenti timbrati reali** (per questo lo split di fine turno sintetizza segmenti, non scrive direttamente le righe ore).
 
 Il **rapportino** è quindi la **forma** (record-giornata con stato di approvazione), le **timbrature** sono la **sostanza**.
+
+### 1.1 Dati puri e quote derivate (dal 15/09/2026)
+
+Ogni riga della giornata (`rapportino_righe`) conserva i **minuti puri** per cantiere: `minuti_lavoro` e `minuti_viaggio`, come registrati (10 ore di lavoro restano 10 ore, mai «8 + 2» scritte a mano). Le quote si **derivano** dall'orario ordinario giornaliero del tenant (`soglia_ore_ordinarie`, default 8 h) con la funzione pura `quoteGiornata` (`@kommessa/api/kantiere-quote`):
+
+| Quota | Regola | Colonne |
+|---|---|---|
+| **Ordinarie** | lavoro e viaggio fino all'orario ordinario; il lavoro consuma l'orario per primo, riga per riga, poi il viaggio | `ore_ordinarie` (parte lavoro) + `ore_viaggio_ordinarie` |
+| **Straordinarie** | lavoro oltre l'orario ordinario | `ore_straordinarie` |
+| **Viaggio eccedente** | viaggio oltre l'orario ordinario | `ore_viaggio_eccedenti` |
+
+`ore_viaggio` resta il viaggio totale; `rapportini.orario_ordinario_min` registra l'orario usato per la giornata. Esempi con 8 h: 7:00 di lavoro + 2:00 di viaggio → 8:00 ordinarie (7:00 + 1:00 di viaggio) e 1:00 di viaggio eccedente; 10:00 di lavoro + 1:00 di viaggio → 8:00 ordinarie, 2:00 straordinarie, 1:00 di viaggio eccedente.
+
+- **Scrittore unico**: `scriviRigheGiornata` / `aggiornaRigheGiornata` (`_actions/_lib/righe-giornata.ts`). Ricalcolo dalle timbrature, correzione del tecnico e correzioni dell'ufficio passano tutti di lì. Prima le righe le scrivevano cinque funzioni con regole diverse.
+- **Sabato e festivi** si registrano allo stesso modo; le maggiorazioni vengono dalle regole di Ore e costi.
+- **Giornate precedenti** (`quote_ore_dal` nel config; FPM e DEMOC: 15/09/2026): restano com'erano, anche se ricalcolate. Senza quote di viaggio (`ore_viaggio_ordinarie` e `ore_viaggio_eccedenti` a null) tutto il viaggio vale come eccedente. Per un tenant nuovo la chiave non c'è e la regola vale da subito.
+- **Il viaggio dentro l'orario non è lavoro**: dalle timbrature (`minutiDaTimbrature`) il tempo di una tratta usa prima il buco fra i due segmenti; se non basta si toglie dal segmento di arrivo (trasferimento, andata) o da quello di partenza (ritorno). Andata prima del primo ingresso e ritorno dopo l'ultima uscita non tolgono lavoro.
+- **Letture**: report, Ore e costi, costo cantiere, Presenze e ore, schede dipendente e cantiere, dashboard, CSV e API leggono le quote con `quoteDaRiga` / `sommaQuote` / `quoteOre`. Il costo applica la tariffa ordinaria a lavoro e viaggio entro l'orario e la maggiorazione del viaggio solo al viaggio eccedente.
 
 ---
 
@@ -51,7 +69,8 @@ I km si registrano su una **tratta di viaggio** (`timbratura_viaggio`), non sull
 
 - I km della stima sono **definitivi**: il tecnico non li corregge a mano (può correggere solo il **tempo**, con giustificazione se scosta dalla stima).
 - Il flag **autista** sulla tratta distingue chi **guidava** (rilevante per i rimborsi km) dal passeggero.
-- Il tempo di viaggio, ad oggi, **non** viene conteggiato nelle ore di lavoro: si tracciano **km + tempo** a parte (display sempre in `H:MM`).
+- Il tempo di viaggio si registra separato dal lavoro (`minuti_viaggio`) e rientra nelle ore ordinarie fino all'orario ordinario (§1.1). Display sempre in `H:MM`.
+- Chi lavora **dalla sede sul progetto** fa partire e arrivare le tratte alla sede: **§3.2**.
 
 ### 3.1 Trasferimenti cantiere → cantiere (km + tempo)
 
@@ -59,14 +78,30 @@ Chi in una giornata lavora su **più cantieri** percorre dei tragitti **da un ca
 
 Copre i **tre** flussi multi-cantiere: **cambio cantiere live**, **split "cosa hai fatto oggi"** a fine turno, **registra giornata** da zero. Le tratte si derivano dall'ordine dei cantieri con la funzione pura testata `trasferimentiDaSegmenti` (ogni cambio di cantiere = un tragitto). Best-effort: se a un cantiere manca l'indirizzo (niente coordinate), quella tratta si salta senza bloccare.
 
-**Due livelli, distinti apposta:**
+**Sono viaggio, sempre** (dal 15/09/2026, scelta del cliente):
 
-- **Registrazione — SEMPRE attiva** (anche a feature spenta): km + tempo salvati e **visibili al super admin** in `/admin/kantiere/timbrature` (sezione "Trasferimenti tra cantieri", cross-tenant, sempre mostrata). Il tempo è salvato in `durata_stimata_min`.
-- **Conteggio — toggle per-tenant** `km_switch_attivo` ("Conteggia i trasferimenti tra cantieri" in Impostazioni Kantiere → Turni & calcoli), **default OFF (opt-in)**. Se **ON**, i km entrano anche nei **totali del cantiere di destinazione** lato tenant (report, scheda cantiere, cruscotto). Se **OFF**, le tratte restano registrate ma **non compaiono** nelle aggregazioni/liste del tenant (i numeri operativi del tenant non cambiano) — solo il super admin le vede.
+- **Km**: entrano nei totali del cantiere di destinazione e del mezzo, per tutti i tenant. L'interruttore `km_switch_attivo` («Conteggia i trasferimenti tra cantieri») è stato tolto e la chiave rimossa dal config.
+- **Tempo**: `durata_confermata_min` = stima arrotondata al passo del viaggio. La tratta sta dentro l'orario, quindi il suo tempo si toglie dal lavoro: nel cambio cantiere live dal segmento di arrivo (§1.1); in «Registra giornata» diventa un buco fra l'uscita da A e l'ingresso in B, e le ore da assegnare ai cantieri sono (fine − inizio) − pausa − tratte (§7.6).
+- Il super admin continua a vederle in `/admin/kantiere/timbrature` (sezione «Trasferimenti tra cantieri»).
 
-**Il tempo NON entra (ancora) nelle ore pagate.** Sulle righe di trasferimento `durata_confermata_min = 0`: così il tempo è **registrato** ma **non** conteggiato nelle ore. ⚠️ **Da definire col cliente** (segnato nei promemoria): alla futura attivazione il **tempo di viaggio totale della giornata** aiuterà a completare la barra ore del tecnico (es. `8:00` + `0:45` di viaggio), ma **se e come** conti come lavoro dipende dal giorno (feriale/festivo) e dagli **straordinari**. Il punto di aggancio è `viaggioManualePerTarget` in `ricomputa-rapportino.ts` (commento `SEAM ATTIVAZIONE FUTURA`).
+### 3.2 Lavoro dalla sede sul progetto (dal 15/09/2026)
 
-> **Stato per tenant** (verificato sul database il 14/09/2026): **FPM Impianti → ON**, i km dei trasferimenti entrano nei totali. Il **tempo** resta fuori dalle ore pagate finché non avremo definito la regola col cliente.
+Non sempre si lavora fisicamente in cantiere: si può lavorare per un cantiere dalla sede, ad esempio al computer. Di default l'app considera la presenza fisica in cantiere; il flag **«Lavoro dalla sede sul progetto»** cambia solo il **luogo**:
+
+- le **ore** restano del cantiere;
+- le **tratte** partono e arrivano alla **sede predefinita** (`sedi.is_default`), non all'indirizzo del cantiere;
+- nella stessa sede non c'è strada: nessuna tratta e nessun km (partenza o rientro dalla sede predefinita, passaggio fra due cantieri seguiti dalla sede);
+- andare **fisicamente** dalla sede a un cantiere è una tratta normale, sede → cantiere.
+
+| Dove | Come |
+|---|---|
+| Avvio turno da app | Flag nel foglio «Da dove parti?»: l'andata si stima fino alla sede predefinita (`/api/routing/stima` con `{ daSedeId, aSedeId }`). |
+| Cambio cantiere | Flag nel foglio: la tratta va dal luogo precedente (sede o cantiere) a quello nuovo. |
+| Fine turno | Il ritorno si stima dalla sede in cui si è lavorato; la ripartizione a fine turno eredita la sede e non crea tratte. |
+| Registra giornata | Flag per cantiere: tratte, stime e barra usano la sede. |
+| Dati | `timbrature.sede_lavoro_id` sulle timbrature del segmento (null = in cantiere). La cronologia mostra «Lavoro dalla sede …», la card del turno «dalla sede …». |
+
+Serve una sede predefinita attiva: senza, l'azione risponde `SEDE_PREDEFINITA_MANCANTE`.
 
 ---
 
@@ -116,35 +151,53 @@ Per un cantiere, alla timbratura/fine turno si propongono **solo**:
 
 ## 6. Impostazioni gestite dall'ufficio
 
-Tutte in `tenant_modules.config` (per-tenant). Le principali:
+Tutte in `tenant_modules.config` (per-tenant), pagina **Impostazioni → Kantiere**. Lettura e predefiniti in un solo punto, `impostazioniDaConfig` (`_lib/kantiere-config.ts`): pagina, azioni e calcoli usano gli stessi valori, anche per le chiavi mai salvate. Le modifiche che toccano ore, approvazioni e km chiedono conferma e valgono per le giornate registrate o ricalcolate dopo il salvataggio. Ogni salvataggio è tracciato in `/admin/audit` (prima/dopo); il super admin vede i valori in sola lettura nel tab Viaggio di `/admin/tenants/[id]`.
 
-### Turni & calcoli
+### Orario e ore
 | Chiave | Default | Effetto |
 |---|---|---|
-| `tolleranza_chiusura_min` | 5 | Tolleranza sulla somma dello split (§2). |
-| `split_fine_turno_attivo` | on | Abilita "cosa hai fatto oggi" (dividi le ore tra più cantieri a fine turno). |
-| `avvio_turno_libero` | on | **on**: i tecnici vedono **tutti** i cantieri e possono iniziare un turno senza QR. **off**: solo i cantieri con QR attivo (sostituisce il vecchio "gate weekend"). |
-| `km_switch_attivo` | off | **Conteggia i trasferimenti tra cantieri**: i km/tempo A→B sono **sempre registrati** (§3.1); se on entrano anche nei totali del cantiere di destinazione lato tenant. |
-| `passo_minuti_stepper` | 15 | Passo dei tasti +/- di tutti gli stepper ore (split, modifica giornata, storico, registra giornata). |
-| `registra_giornata_attivo` | on | Abilita la "registra giornata da zero" (giornata senza timbrature). |
+| `soglia_ore_ordinarie` | 8 h | **Orario ordinario giornaliero**: classifica lavoro e viaggio in ordinarie, straordinarie e viaggio eccedente (§1.1). La pagina mostra un esempio calcolato con la stessa funzione. |
+| `quote_ore_dal` | assente | Giorno da cui il viaggio entra nell'orario ordinario; le giornate precedenti restano come registrate. Non si modifica dalla pagina (FPM e DEMOC: 15/09/2026). |
+| `arrotondamento_viaggio_min` | 5 | Passo del tempo di viaggio (§2). |
+| `arrotondamento_ore_min` | 0 | Passo delle ore di lavoro, 0 = al minuto (§2). |
 
-### Approvazione presenze
+### Turni
 | Chiave | Default | Effetto |
 |---|---|---|
-| `auto_approva_rapportini` | on | Auto-approva le giornate **chiuse** ed **entro soglia** (vedi §7). Vale anche per quelle scritte a mano (§7.1). |
-| `anomalia_turno_ore_max` | 10 h | Oltre questa durata (pause escluse) la giornata è **anomalia** → resta da verificare. |
-| `soglia_pausa_pranzo_ore` | 5 h | Oltre questo tempo senza pausa timbrata, in uscita compare il promemoria "timbrare la pausa è il modo corretto" + opzioni 30/45/60 min. |
-| Auto-spegnimento pausa | 1 h 30 | Se la pausa resta aperta oltre la soglia, l'orologio riparte da solo (rete di sicurezza per l'app chiusa). |
+| `avvio_turno_libero` | on | **on**: turno avviabile dall'app su ogni cantiere. **off**: solo i cantieri con QR attivo. |
+| `split_fine_turno_attivo` | on | Ripartizione delle ore su più cantieri alla chiusura (giornata con un solo ingresso). |
+| `registra_giornata_attivo` | on | Registra giornata senza timbrature (§7.6). |
+| `tolleranza_chiusura_min` | 5 | Scarto ammesso fra ore assegnate e ore da assegnare (§2). |
+| `passo_minuti_stepper` | 15 | Passo dei tasti + e − degli stepper ore. |
 
-### Viaggio
+### Pause
 | Chiave | Default | Effetto |
 |---|---|---|
-| `routing_provider` | free | Provider stima viaggio + geocoding indirizzi (§5). |
+| `soglia_pausa_pranzo_ore` | 5 h | Oltre questa durata, chiudendo senza pausa timbrata, l'app chiede la pausa pranzo (30/45/60 min). |
+| `soglia_auto_spegnimento_pausa_ore` | 1,5 h | Una pausa rimasta aperta oltre la soglia si chiude e il turno riprende; la pausa registrata è pari alla soglia. |
+
+### Viaggi e chilometri
+| Chiave | Default | Effetto |
+|---|---|---|
+| `km_solo_autista` | on | Su una tratta condivisa i km contano solo per chi guida. Si applica ai km trasmessi al gestionale (API). |
+| `sede_partenza_default` | vuoto | Indirizzo proposto come sede di partenza ai cantieri nuovi. Sede predefinita e sedi collegate si gestiscono nella pagina Sedi (§4). |
+| `routing_provider` | free | Provider di stima e geocoding (§5), scelto dal super admin. |
+
+La pagina riporta anche le regole fisse: andata e ritorno fuori dall'orario, tratte fra cantieri come viaggio (§3.1), lavoro dalla sede (§3.2), abitazione privata senza viaggio.
+
+### Approvazione giornate e anomalie
+| Chiave | Default | Effetto |
+|---|---|---|
+| `auto_approva_rapportini` | on | Approva le giornate **chiuse** ed **entro soglia** (§7), anche quelle scritte a mano (§7.1). |
+| `anomalia_turno_ore_max` | 10 h | **Soglia di verifica**: oltre questa durata (pause escluse) la giornata resta da verificare. Accetta i decimali (prima 10,5 veniva letto 11). Usata anche dalla pagina Anomalie e dall'avviso in dashboard (§7.2). |
+| `anomalie` | tutti on | Controlli della pagina Anomalie: giornate incomplete, oltre soglia, straordinari, festivi, fine settimana, dipendenti senza giornate, giornate corrette dal dipendente. |
 
 ### Kontabilità (spese)
 | Chiave | Default | Effetto |
 |---|---|---|
 | `kontabilita_attiva` | on | Abilita le spese di cantiere (foto scontrino → AI vision → revisione → salva). |
+
+**Tolte il 15/09/2026**: `km_switch_attivo` (i trasferimenti contano sempre, §3.1) e `anomalie_ore_max` (mai letta: la pagina Anomalie usa `anomalia_turno_ore_max`). La migration `20260915090000` le rimuove dal config e il salvataggio della pagina le toglie comunque.
 
 ---
 
@@ -350,9 +403,18 @@ pilota FPM).
   fuori: il loro tempo confermato va in `ore_viaggio`, come per le timbrature QR.
   La barra in basso mostra la giornata intera: partenza (= inizio − andata),
   lavoro con la pausa, rientro (= fine + ritorno).
-- Le **tratte fra cantieri** stanno **dentro** l'orario dichiarato: si registra la
-  stima (`durata_stimata_min`) con `durata_confermata_min = 0`, così non si pagano
-  due volte. È la stessa regola dei trasferimenti (§3.1).
+- Le **tratte fra cantieri** stanno **dentro** l'orario dichiarato e sono
+  **viaggio** (dal 15/09/2026, §3.1): le ore da assegnare ai cantieri sono
+  (fine − inizio) − pausa − tratte, e fra l'uscita da un cantiere e l'ingresso nel
+  successivo resta un buco pari alla tratta. `durata_confermata_min` = stima
+  arrotondata. Pagina e server calcolano le tratte con la stessa funzione pura
+  (`viaggioFraCantieri`): il salvataggio aspetta le stime, la barra mostra le
+  tratte con il tratteggio del viaggio e il totale del viaggio le comprende.
+- Se la pausa cadrebbe sullo stesso cambio di una tratta, va dopo 30 minuti sul
+  cantiere di arrivo (o prima della partenza, se l'arrivo è troppo corto): pausa e
+  viaggio restano due buchi distinti e la pausa mostrata è quella dichiarata
+  (`SCARTO_PAUSA_MIN` in `kantiere-split`, stessa regola nella barra).
+- Per ogni cantiere si può indicare **«Lavoro dalla sede sul progetto»** (§3.2).
 
 **Cosa si scrive** (`registraGiornataDaZero`, tutto validato **prima** di scrivere)
 
@@ -361,7 +423,7 @@ pilota FPM).
 | Andata | legata alla **prima entrata** (sede, stima, tempo confermato, km, autista, mezzo) |
 | Ritorno | legata all'**ultima uscita** |
 | Diretta A → B | trasferimento (`da_cantiere_id` = A, `cantiere_id` = B), con autista e mezzo della giornata |
-| Passando dalla sede | due righe legate al cambio di cantiere: A → sede sull'uscita da A, sede → B sull'ingresso in B; tempo confermato 0 |
+| Passando dalla sede | due righe legate al cambio di cantiere: A → sede sull'uscita da A, sede → B sull'ingresso in B; tempo confermato = stima arrotondata |
 | Passando da casa | nessuna riga |
 
 Andata e ritorno entrano **insieme**: se l'inserimento fallisce si tolgono le
@@ -371,17 +433,19 @@ a metà. Le tratte fra cantieri sono best-effort, come i trasferimenti.
 Logica pura e testata in `@kommessa/api/kantiere-percorso` (tratte, confini fra
 cantieri, dati mancanti, barra dei tempi). Le stime passano dalla cache condivisa
 `stimaConCache`: con Google la stessa tratta non si paga due volte fra pagina e
-salvataggio. `/api/routing/stima` accetta anche `{ daCantiereId, aCantiereId }`.
+salvataggio. `/api/routing/stima` accetta anche `{ daCantiereId, aCantiereId }` e
+`{ daSedeId, aSedeId }`.
 
-> Parco mezzi: i trasferimenti ora possono avere un mezzo, quindi anche le pagine
-> dei mezzi rispettano il toggle `km_switch_attivo` (§3.1).
+> Parco mezzi: i trasferimenti possono avere un mezzo e i loro km contano nei
+> totali del mezzo (§3.1).
 
 ---
 
-## 8. Ordinario vs straordinario
+## 8. Ordinario, straordinario e viaggio
 
-- Il **tecnico** inserisce le **ore totali di lavoro** (un solo campo): non decide lui cosa è ordinario o straordinario.
-- L'**ufficio** fa lo split ordinario/straordinario in fase di ricalcolo, applicando la **soglia** concordata.
+- Si registra il **dato puro**: minuti di lavoro e di viaggio. Né il tecnico né l'ufficio decidono a mano cosa è ordinario o straordinario: la correzione della giornata e «Registra ore» in ufficio chiedono solo **ore di lavoro** e **ore di viaggio**.
+- Le quote (ordinarie, straordinarie, viaggio eccedente) si **derivano** dall'orario ordinario del tenant (§1.1).
+- La soglia di verifica (`anomalia_turno_ore_max`, 10 h) è un'altra cosa: decide solo se la giornata si approva da sola (§7).
 
 ---
 
@@ -391,19 +455,19 @@ salvataggio. `/api/routing/stima` accetta anche `{ daCantiereId, aCantiereId }`.
 |---|---|---|
 | **Turno con QR** | Ingresso QR → uscita QR | Standard. |
 | **Turno senza QR** | "Inizia turno" scegliendo un cantiere | Un solo turno aperto per volta. |
-| **Cambio cantiere live** | "Cambia cantiere": chiude A, apre B | Ore dai timestamp reali; km A→B se `km_switch_attivo`. |
+| **Cambio cantiere live** | "Cambia cantiere": chiude A, apre B | Ore dai timestamp reali; la tratta A→B è viaggio e i km vanno a B (§3.1). Flag «Lavoro dalla sede» (§3.2). |
 | **Split a fine turno** | "Cosa hai fatto oggi": dividi le ore tra più cantieri | Solo se la **giornata è pulita** (un solo ingresso). Somma = netto ± tolleranza. |
 | **Registra giornata da zero** | Inizio/fine + pausa + cantieri/ore + percorso (§7.6) | Solo se **nessuna timbratura** oggi e `registra_giornata_attivo`. |
 | ~~Inserimento manuale ore~~ | Tolto dall'app il 14/09/2026: il viaggio si dichiara in Registra giornata (§7.6). | Le righe e le tratte già scritte restano valide. |
 
-Il netto giornata = `(chiusura − inizio) − pausa`. La pausa dichiarata è una **coppia di timbrature centrata** nel turno (così il calcolo ore la sottrae con la logica pausa esistente).
+Il netto giornata = `(chiusura − inizio) − pausa`; in Registra giornata le ore da assegnare tolgono anche le tratte fra cantieri. La pausa dichiarata è una **coppia di timbrature centrata** nel turno (così il calcolo ore la sottrae con la logica pausa esistente).
 
 ### PWA — sezione "Non hai timbrato?" (tab Ore)
 
 Quando la giornata è senza timbrature, la tab Ore offre **Registra giornata**, dal 14/09/2026 l'unico inserimento a mano del tecnico:
 
 - **Registra giornata** — dichiari **inizio / fine / pausa** e distribuisci le ore su **uno o più cantieri**. Il server **sintetizza le timbrature reali** (`registraGiornataDaZero` → `calcolaSegmentiSplit`) e il rapportino si ricalcola da quelle. Vincolo: **solo oggi** e **giornata vuota**, con `registra_giornata_attivo` on. UI: card **"La giornata"** dominante (orari + pausa a chip), poi **il percorso** in verticale (partenza con guida e mezzo, una **card per cantiere** col **colore abbinato** al proprio segmento, le tratte fra cantieri, rientro) e la **barra dei tempi** in fondo, sempre visibile anche col foglio «Il viaggio» aperto: ore assegnate/nette, esito, viaggio, orari di partenza e rientro (§7.6).
-- ~~**Ore su un cantiere, con viaggio**~~ — **tolta il 14/09/2026** (scelta del cliente): il viaggio ora sta in Registra giornata. L'azione server `registraOreManuali` resta ma l'app non la chiama più; le tratte che ha scritto contano ancora nel ricalcolo (`viaggioManualePerTarget`).
+- ~~**Ore su un cantiere, con viaggio**~~ — **tolta il 14/09/2026** (scelta del cliente): il viaggio ora sta in Registra giornata. L'azione server `registraOreManuali` è stata eliminata il 15/09/2026; le tratte che aveva scritto contano ancora nel ricalcolo (`tratteGiornata` in `ricomputa-rapportino.ts`).
 
 **Giorni passati e giornate già parziali**: dall'app non si dichiarano più da zero. Si correggono con «Modifica giornata» nello storico (dove ammesso) o dall'ufficio in Presenze e ore.
 
@@ -413,14 +477,17 @@ Quando la giornata è senza timbrature, la tab Ore offre **Registra giornata**, 
 
 | Area | File |
 |---|---|
-| Calcolo ore dalle timbrature | `packages/api/src/kantiere-ore.ts` (`minutiPerCommessa`, `statoTurno`) |
+| Calcolo ore dalle timbrature | `packages/api/src/kantiere-ore.ts` (`minutiPerCommessa`, `statoTurno`, `arrotondaA`) |
+| Minuti puri e quote (puro + testato) | `packages/api/src/kantiere-quote.ts` (`quoteGiornata`, `minutiDaTimbrature`, `quoteDaRiga`, `quoteOre`) |
+| Scrittura delle righe di una giornata | `apps/web/app/_actions/_lib/righe-giornata.ts` (`scriviRigheGiornata`, `aggiornaRigheGiornata`) |
 | Split multi-cantiere (puro + testato) | `packages/api/src/kantiere-split.ts` |
 | Percorso di Registra giornata (puro + testato) | `packages/api/src/kantiere-percorso.ts` |
-| Ricalcolo + auto-approvazione | `apps/web/app/_actions/kantiere-rapportino.ts` (`ricomputaRapportinoAuto`) |
+| Ricalcolo + auto-approvazione | `apps/web/app/_actions/_lib/ricomputa-rapportino.ts` (`ricomputaRapportinoAuto`, `tratteGiornata`) |
 | Timbrature (avvio/cambio/fine turno) | `apps/web/app/_actions/kantiere-timbra.ts` |
 | Viaggio/pausa condivisi + validazione sede | `apps/web/app/_actions/_lib/viaggio-timbra.ts` (`validaViaggio`, `sedeAmmessaPerCantiere`) |
 | Sedi (CRUD + associazioni) | `apps/web/app/office/_actions/kantiere-sedi.ts` |
-| Lettura impostazioni | `apps/web/app/_lib/kantiere-config.ts` (`leggiImpostazioniTurno`, soglie, provider) |
+| Lettura impostazioni | `apps/web/app/_lib/kantiere-config.ts` (`impostazioniDaConfig`, `leggiImpostazioniKantiere`) |
+| Pagina impostazioni | `apps/web/app/office/kantiere/impostazioni/_components/impostazioni-client.tsx`, azione `office/_actions/kantiere-impostazioni.ts` |
 | Stima viaggio + geocoding | `apps/web/app/_lib/routing/` (cache condivisa `stima-cache.ts`), `apps/web/app/api/routing/stima`, `apps/web/app/api/geocode/autocomplete` |
 | Registra giornata (UI) | `apps/web/app/mobile/kantiere/ore/_components/registra-giornata-dialog.tsx`, `percorso-giornata.tsx` |
 

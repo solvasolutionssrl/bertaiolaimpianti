@@ -82,9 +82,13 @@ interface GiornoView {
   timbrature: { tipo: string; ts: string; pausa?: boolean | null }[];
   rapportino: {
     stato: string;
+    /** Ordinarie: lavoro e viaggio entro l'orario ordinario. */
     ord: number;
     straord: number;
+    /** Viaggio eccedente. */
     viaggio: number;
+    /** Lavoro puro. */
+    lavoro: number;
   } | null;
 }
 
@@ -358,7 +362,7 @@ export function DipendenteDetailClient({
   const oreStraord = giorni.reduce((s, g) => s + (g.rapportino ? g.rapportino.straord : 0), 0);
   const oreViaggio = giorni.reduce((s, g) => s + (g.rapportino ? g.rapportino.viaggio : 0), 0);
   const oreTotali = oreOrd + oreStraord + oreViaggio;
-  const oreLavoro = oreOrd + oreStraord;
+  const oreLavoro = giorni.reduce((s, g) => s + (g.rapportino ? g.rapportino.lavoro : 0), 0);
   const costoPeriodo =
     dipendente.costoOrario != null ? dipendente.costoOrario * oreLavoro : null;
 
@@ -452,7 +456,7 @@ export function DipendenteDetailClient({
           accent="blue"
           icon={<Car className="h-4 w-4" aria-hidden="true" />}
           valore={`${fmtOreKpi(oreViaggio)}`}
-          label="Viaggio"
+          label="Viaggio eccedente"
         />
         <KpiChip
           accent="emerald"
@@ -502,9 +506,9 @@ export function DipendenteDetailClient({
                     <tr>
                       <th className="px-3 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Giorno</th>
                       <th className="px-3 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Timbrature</th>
-                      <th className="px-3 py-1.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ord.</th>
+                      <th className="px-3 py-1.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground" title="Lavoro e viaggio entro l'orario ordinario">Ord.</th>
                       <th className="px-3 py-1.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Straord.</th>
-                      <th className="px-3 py-1.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Viaggio</th>
+                      <th className="px-3 py-1.5 text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground" title="Viaggio oltre l'orario ordinario">Viaggio ecc.</th>
                       <th className="px-3 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Rapportino</th>
                       <th className="w-8 px-2 py-1.5" aria-label="Espandi" />
                     </tr>
@@ -832,7 +836,7 @@ export function DipendenteDetailClient({
             <div className="divide-y divide-border">
               <RigaInfo label="Ore ordinarie">{fmtOre(oreOrd)}</RigaInfo>
               <RigaInfo label="Straordinari">{fmtOre(oreStraord)}</RigaInfo>
-              <RigaInfo label="Viaggio">{fmtOre(oreViaggio)}</RigaInfo>
+              <RigaInfo label="Viaggio eccedente">{fmtOre(oreViaggio)}</RigaInfo>
               <RigaInfo label="Ore totali">
                 <span className="font-semibold">{fmtOre(oreTotali)}</span>
               </RigaInfo>

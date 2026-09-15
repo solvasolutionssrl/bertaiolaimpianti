@@ -13,6 +13,8 @@ export interface TurnoAzioniContesto {
   sedi: { id: string; nome: string; tipo: string }[];
   mezzi: { id: string; targa: string; modello: string | null }[];
   sedeDefaultId: string | null;
+  /** Sede in cui si lavora sul cantiere («Lavoro dalla sede sul progetto»); null = in cantiere. */
+  sedeLavoro: { id: string; nome: string } | null;
   sogliaPausaPranzoOre: number;
   sogliaAutoSpegnimentoPausaOre: number;
   pausaOggiFatta: boolean;
@@ -94,18 +96,20 @@ export async function caricaTurnoAzioniContesto(
   // (un solo evento oggi = l'ingresso aperto) → lo split è proponibile.
   let pausaOggiFatta = false;
   let giornataPulita = false;
+  let sedeLavoroId: string | null = null;
   const dipId = (meRes.data as { id: string } | null)?.id;
   if (dipId) {
     const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
     const [{ data: evRows }, { count }] = await Promise.all([
       supabase
         .from('timbrature' as never)
-        .select('pausa')
+        .select('tipo, pausa, sede_lavoro_id')
         .eq('tenant_id', tenantId)
         .eq('dipendente_id', dipId)
         .eq('cantiere_id', cantiereId)
         .gte('ts', fromIso)
-        .lt('ts', toIso),
+        .lt('ts', toIso)
+        .order('ts', { ascending: true }),
       supabase
         .from('timbrature' as never)
         .select('id', { count: 'exact', head: true })
@@ -114,14 +118,19 @@ export async function caricaTurnoAzioniContesto(
         .gte('ts', fromIso)
         .lt('ts', toIso),
     ]);
-    pausaOggiFatta = ((evRows as { pausa: boolean | null }[] | null) ?? []).some((e) => e.pausa);
+    const ev = (evRows as { tipo: string; pausa: boolean | null; sede_lavoro_id: string | null }[] | null) ?? [];
+    pausaOggiFatta = ev.some((e) => e.pausa);
+    // L'ultimo inizio di lavoro su questo cantiere dice dove si lavora adesso.
+    sedeLavoroId = [...ev].reverse().find((e) => e.tipo === 'ingresso' && !e.pausa)?.sede_lavoro_id ?? null;
     giornataPulita = (count ?? 0) === 1;
   }
 
+  const sedeLavoroRiga = sedeLavoroId ? allSedi.find((s) => s.id === sedeLavoroId) : undefined;
   return {
     sedi,
     mezzi,
     sedeDefaultId,
+    sedeLavoro: sedeLavoroId ? { id: sedeLavoroId, nome: titoloCase(sedeLavoroRiga?.nome ?? 'Sede') } : null,
     sogliaPausaPranzoOre,
     sogliaAutoSpegnimentoPausaOre,
     pausaOggiFatta,

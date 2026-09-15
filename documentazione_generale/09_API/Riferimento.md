@@ -132,9 +132,11 @@ Le ore lavorate, **una riga per giornata e per cantiere**.
     "id": "uuid", "entita": "cantiere",
     "externalId": "26087", "externalClienteId": "70796"
   },
-  "ore":    { "ordinarie": 8, "straordinarie": 1.5, "viaggio": 0.5, "totale": 10 },
-  "minuti": { "ordinarie": 480, "straordinarie": 90, "viaggio": 30 },
-  "durataLeggibile": "10:00",
+  "ore":    { "lavoro": 7, "ordinarie": 7, "straordinarie": 0, "viaggio": 2,
+              "viaggioOrdinario": 1, "viaggioEccedente": 1, "totale": 9 },
+  "minuti": { "lavoro": 420, "ordinarie": 420, "straordinarie": 0, "viaggio": 120,
+              "viaggioOrdinario": 60, "viaggioEccedente": 60 },
+  "durataLeggibile": "9:00",
   "note": "montaggio quadro",
   "giornata": {
     "id": "uuid", "stato": "approvato", "approvata": true,
@@ -149,6 +151,24 @@ Le ore lavorate, **una riga per giornata e per cantiere**.
 **Le tre quote non si sommano mai.** Su quasi ogni gestionale ordinarie, straordinarie e
 viaggio sono causali diverse. Chi le vuole insieme le somma; chi ha sommato non può più
 separarle.
+
+**Dati puri e quote** (dal 15/09/2026). `lavoro` e `viaggio` sono i tempi registrati. Le
+quote si ricavano dall'orario ordinario giornaliero del cliente (8 ore se non impostato):
+
+| Campo | Significato |
+|---|---|
+| `lavoro` | tempo di lavoro registrato (`ordinarie` + `straordinarie`) |
+| `ordinarie` | lavoro entro l'orario ordinario |
+| `straordinarie` | lavoro oltre l'orario ordinario |
+| `viaggio` | viaggio totale (`viaggioOrdinario` + `viaggioEccedente`) |
+| `viaggioOrdinario` | viaggio che rientra nell'orario ordinario rimasto dopo il lavoro |
+| `viaggioEccedente` | viaggio oltre l'orario ordinario |
+
+Le ore ordinarie retribuite sono `ordinarie + viaggioOrdinario`. I campi di sempre
+(`ordinarie`, `straordinarie`, `viaggio`, `totale`) mantengono il loro significato; `lavoro`,
+`viaggioOrdinario` e `viaggioEccedente` si aggiungono, senza cambio di contratto. Le giornate
+registrate prima della regola hanno `viaggioOrdinario` 0 e tutto il viaggio in
+`viaggioEccedente`.
 
 **Arrivano anche le giornate non approvate**, con `giornata.stato` in chiaro. Decidere se
 mandarle è una politica, e le politiche stanno da chi conosce il sistema di destinazione.

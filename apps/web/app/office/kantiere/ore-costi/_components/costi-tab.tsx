@@ -69,9 +69,9 @@ export function CostiTab({ aggregati, filtri }: Props) {
   function esportaCsv() {
     const header = [
       filtri.per === 'dipendente' ? 'Dipendente' : 'Commessa/Cantiere',
-      'Ore ordinarie',
-      'Ore straordinario',
-      'Ore viaggio',
+      'Ore ordinarie (lavoro e viaggio entro l\'orario)',
+      'Ore straordinarie',
+      'Ore viaggio eccedenti',
       'Ore pesate',
       'Costo (€)',
     ];
@@ -161,6 +161,12 @@ export function CostiTab({ aggregati, filtri }: Props) {
         </div>
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Ordinarie: lavoro e viaggio entro l&apos;orario ordinario giornaliero. Straordinarie: lavoro
+        oltre, con le maggiorazioni dello straordinario. Viaggio ecc.: viaggio oltre l&apos;orario
+        ordinario, con la maggiorazione del viaggio.
+      </p>
+
       {/* Tabella */}
       {aggregati.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -176,7 +182,7 @@ export function CostiTab({ aggregati, filtri }: Props) {
                 </th>
                 <th className="px-3 py-2 text-right font-medium">Ordinarie</th>
                 <th className="px-3 py-2 text-right font-medium">Straord.</th>
-                <th className="px-3 py-2 text-right font-medium">Viaggio</th>
+                <th className="px-3 py-2 text-right font-medium">Viaggio ecc.</th>
                 <th className="px-3 py-2 text-right font-medium">Ore pesate</th>
                 <th className="px-3 py-2 text-right font-medium">Costo</th>
               </tr>

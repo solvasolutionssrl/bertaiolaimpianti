@@ -312,9 +312,9 @@ export default async function TimbratureAdminPage({
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
-          Km e tempo dei tragitti cantiere→cantiere, <strong>sempre tracciati</strong> a
-          prescindere dal toggle di conteggio del tenant. Il tempo è stimato (non pagato) finché
-          non attiviamo il conteggio.
+          Km e tempo dei tragitti cantiere→cantiere. Dal 15/09/2026 sono <strong>viaggio</strong>:
+          i km contano sul cantiere di destinazione e il tempo nelle ore di viaggio. Le tratte
+          precedenti hanno il tempo riconosciuto a zero.
         </p>
         <Card>
           <CardContent className="p-0">

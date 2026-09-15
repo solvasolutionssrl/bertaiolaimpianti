@@ -6,6 +6,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import {
+  arrotondaA,
   prossimoTipoTimbratura,
   statoTurno,
   type StatoTurno,
@@ -16,10 +17,12 @@ import {
   confiniFraCantieri,
   passaggioDaVia,
   tratteIntermedie,
+  viaggioFraCantieri,
 } from '@kommessa/api/kantiere-percorso';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
+  leggiArrotondamenti,
   leggiSogliaPausaPranzoOre,
   leggiRoutingProvider,
   leggiImpostazioniTurno,
@@ -550,10 +553,13 @@ async function terminaConSplit(
   if (calc.eventi.length === 0) return { ok: false, error: 'SPLIT_NON_APPLICABILE' };
 
   // 5. Inserisce gli eventi sintetici (origine 'manuale'). L'ultima uscita a
-  //    parte per collegarci il viaggio di ritorno.
+  //    parte per collegarci il viaggio di ritorno. Chi lavorava dalla sede ci
+  //    resta: i segmenti ereditano la sede di lavoro.
+  const sedeLavoroId = await sedeLavoroAperta(supabase, dipendenteId, opts.cantiereId);
   const base = {
     tenant_id: tenantId,
     dipendente_id: dipendenteId,
+    sede_lavoro_id: sedeLavoroId,
     commessa_id: null as string | null,
     origine: 'manuale',
     modalita: 'divisione_fine_turno',
@@ -595,14 +601,16 @@ async function terminaConSplit(
     });
   }
 
-  // 6b. Trasferimenti cantiere→cantiere della giornata: km + tempo (best-effort,
-  //     sempre registrati; conteggio lato tenant gated dal toggle).
-  await registraTrasferimentiCantiere(supabase, {
-    tenantId,
-    dipendenteId,
-    data: romeDay(new Date(opts.ts)),
-    pairs: trasferimentiDaSegmenti(opts.split),
-  });
+  // 6b. Trasferimenti cantiere→cantiere della giornata: km + tempo, sono viaggio
+  //     (best-effort). Dalla sede non ci si sposta: nessuna tratta.
+  if (!sedeLavoroId) {
+    await registraTrasferimentiCantiere(supabase, {
+      tenantId,
+      dipendenteId,
+      data: romeDay(new Date(opts.ts)),
+      pairs: trasferimentiDaSegmenti(opts.split),
+    });
+  }
 
   // 7. Ricalcolo: deriva le righe per cantiere dai segmenti.
   try {
@@ -808,14 +816,14 @@ async function turnoApertoQualsiasi(
  * legate a un evento di timbratura), `da_cantiere_id` = partenza (la UI mostra
  * "A → B" invece di "Sede → B"), `direzione='andata'`, `sede_id` null.
  *
- * Il TEMPO stimato è salvato in `durata_stimata_min` (registrato, consultabile
- * dal super admin) mentre `durata_confermata_min = 0`: così il trasferimento NON
- * entra mai nelle ore pagate. Alla futura attivazione, quel tempo alimenterà il
- * calcolo delle ore di viaggio della giornata (logica da definire col cliente).
+ * Il tempo è VIAGGIO (scelta del cliente, 14/09/2026): `durata_stimata_min` è la
+ * stima grezza, `durata_confermata_min` la stessa arrotondata al passo del
+ * viaggio del tenant, e conta nelle ore di viaggio come ogni altra tratta. Se fra
+ * i due cantieri non c'è un buco (cambio cantiere dal vivo, split di fine turno)
+ * il ricalcolo lo toglie dal lavoro: vedi `minutiDaTimbrature`.
  *
- * SEMPRE eseguita: è la fase di REGISTRAZIONE, indipendente dal toggle
- * per-tenant `km_switch_attivo` che governa solo il CONTEGGIO lato tenant nelle
- * aggregazioni km. Best-effort: se mancano le coordinate (cantieri senza
+ * Sempre eseguita, per tutti i tenant: dal 15/09/2026 i km dei trasferimenti
+ * contano nei totali del cantiere di destinazione. Best-effort: se mancano le coordinate (cantieri senza
  * indirizzo) o il provider non risponde, salta quella tratta senza mai bloccare.
  */
 async function registraTrasferimentiCantiere(
@@ -832,6 +840,8 @@ async function registraTrasferimentiCantiere(
      */
     autista?: boolean;
     mezzoId?: string | null;
+    /** Stime già calcolate (chiave `da>a`): chi ha già chiesto le tratte non le richiede. */
+    stime?: Map<string, { minuti: number; km: number | null } | null>;
   },
 ): Promise<void> {
   if (opts.pairs.length === 0) return;
@@ -853,12 +863,16 @@ async function registraTrasferimentiCantiere(
 
     const choice = await leggiRoutingProvider(supabase, opts.tenantId);
     const provider = getRoutingProvider({ provider: choice });
+    const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, opts.tenantId);
     const inserendi: Record<string, unknown>[] = [];
     for (const p of opts.pairs) {
-      const a = coord.get(p.da);
-      const b = coord.get(p.a);
-      if (!a || !b) continue; // coordinate mancanti → tratta saltata (best-effort)
-      const stima = await stimaConCache(provider, a, b);
+      let stima = opts.stime?.get(`${p.da}>${p.a}`);
+      if (stima === undefined) {
+        const a = coord.get(p.da);
+        const b = coord.get(p.a);
+        if (!a || !b) continue; // coordinate mancanti → tratta saltata (best-effort)
+        stima = await stimaConCache(provider, a, b);
+      }
       if (!stima) continue;
       inserendi.push({
         tenant_id: opts.tenantId,
@@ -870,7 +884,7 @@ async function registraTrasferimentiCantiere(
         direzione: 'andata',
         sede_id: null,
         durata_stimata_min: Math.round(stima.minuti),
-        durata_confermata_min: 0,
+        durata_confermata_min: arrotondaA(Math.round(stima.minuti), stepViaggio),
         distanza_km: stima.km,
         autista: opts.autista ?? false,
         mezzo_id: opts.autista ? (opts.mezzoId ?? null) : null,
@@ -891,10 +905,10 @@ async function registraTrasferimentiCantiere(
  * avesse chiuso e riaperto il turno passando di lì: cantiere A → sede
  * sull'uscita da A, sede → cantiere B sull'ingresso in B.
  *
- * Stanno DENTRO l'orario di lavoro dichiarato: il tempo si registra come stima e
- * non si paga una seconda volta (`durata_confermata_min = 0`), i km contano come
- * quelli di ogni altra tratta. Best-effort come i trasferimenti: la giornata è
- * già scritta e una stima mancata non deve farla fallire.
+ * Il tempo è viaggio come ogni altra tratta (arrotondato al passo del tenant);
+ * se fra i due cantieri non c'è un buco, il ricalcolo lo toglie dal lavoro. I km
+ * contano come quelli di ogni altra tratta. Best-effort come i trasferimenti: la
+ * giornata è già scritta e una stima mancata non deve farla fallire.
  */
 async function registraPassaggiDaSede(
   supabase: ReturnType<typeof createServerSupabase>,
@@ -907,7 +921,13 @@ async function registraPassaggiDaSede(
       sedeId: string;
       uscita: { id: string; ts: string; cantiereId: string };
       ingresso: { id: string; ts: string; cantiereId: string };
+      /** Sul cantiere di partenza si lavorava già in quella sede: nessuna tratta verso la sede. */
+      senzaVersoSede?: boolean;
+      /** Sul cantiere di arrivo si lavora in quella sede: nessuna tratta dalla sede. */
+      senzaDallaSede?: boolean;
     }[];
+    /** Stime già calcolate (chiave `da>a`, id di cantiere o sede). */
+    stime?: Map<string, { minuti: number; km: number | null } | null>;
   },
 ): Promise<void> {
   if (opts.passaggi.length === 0) return;
@@ -937,7 +957,10 @@ async function registraPassaggiDaSede(
       }
     }
     const provider = getRoutingProvider({ provider: scelta });
+    const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, opts.tenantId);
     const stima = async (da: string, a: string) => {
+      const pre = opts.stime?.get(`${da}>${a}`);
+      if (pre !== undefined) return pre;
       const o = coord.get(da);
       const d = coord.get(a);
       return o && d ? await stimaConCache(provider, o, d) : null;
@@ -946,41 +969,134 @@ async function registraPassaggiDaSede(
     const righe: Record<string, unknown>[] = [];
     for (const p of opts.passaggi) {
       const [versoSede, dallaSede] = await Promise.all([
-        stima(p.uscita.cantiereId, p.sedeId),
-        stima(p.sedeId, p.ingresso.cantiereId),
+        p.senzaVersoSede ? null : stima(p.uscita.cantiereId, p.sedeId),
+        p.senzaDallaSede ? null : stima(p.sedeId, p.ingresso.cantiereId),
       ]);
       const tratta = (s: { minuti: number; km: number | null } | null): ViaggioInput => ({
         sedeId: p.sedeId,
         durataStimataMin: s ? s.minuti : null,
-        durataConfermataMin: 0,
+        durataConfermataMin: s ? arrotondaA(s.minuti, stepViaggio) : 0,
         autista: opts.autista,
         mezzoId: opts.mezzoId,
         distanzaKm: s?.km ?? null,
       });
       const comune = { tenantId: opts.tenantId, dipendenteId: opts.dipendenteId };
-      righe.push(
-        rigaViaggio({
-          ...comune,
-          cantiereId: p.uscita.cantiereId,
-          timbraturaId: p.uscita.id,
-          ts: p.uscita.ts,
-          tipo: 'uscita',
-          viaggio: tratta(versoSede),
-        }),
-        rigaViaggio({
-          ...comune,
-          cantiereId: p.ingresso.cantiereId,
-          timbraturaId: p.ingresso.id,
-          ts: p.ingresso.ts,
-          tipo: 'ingresso',
-          viaggio: tratta(dallaSede),
-        }),
-      );
+      if (!p.senzaVersoSede) {
+        righe.push(
+          rigaViaggio({
+            ...comune,
+            cantiereId: p.uscita.cantiereId,
+            timbraturaId: p.uscita.id,
+            ts: p.uscita.ts,
+            tipo: 'uscita',
+            viaggio: tratta(versoSede),
+          }),
+        );
+      }
+      if (!p.senzaDallaSede) {
+        righe.push(
+          rigaViaggio({
+            ...comune,
+            cantiereId: p.ingresso.cantiereId,
+            timbraturaId: p.ingresso.id,
+            ts: p.ingresso.ts,
+            tipo: 'ingresso',
+            viaggio: tratta(dallaSede),
+          }),
+        );
+      }
     }
-    await supabase.from('timbratura_viaggio' as never).insert(righe as never);
+    if (righe.length > 0) await supabase.from('timbratura_viaggio' as never).insert(righe as never);
   } catch {
     // best-effort: la giornata è già registrata
   }
+}
+
+/**
+ * Stime di più tratte fra luoghi (id di cantiere o di sede), dalla cache
+ * condivisa. Chiave `da>a`; null se mancano le coordinate o il provider non
+ * risponde. Minuti grezzi: l'arrotondamento lo applica chi scrive.
+ */
+async function stimeFraLuoghi(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  coppie: [string, string][],
+): Promise<Map<string, { minuti: number; km: number | null } | null>> {
+  const out = new Map<string, { minuti: number; km: number | null } | null>();
+  if (coppie.length === 0) return out;
+  const ids = [...new Set(coppie.flat())];
+  const [{ data: cantRows }, { data: sediRows }, scelta] = await Promise.all([
+    supabase
+      .from('cantieri' as never)
+      .select('id, indirizzo_lat, indirizzo_lng')
+      .in('id', ids)
+      .eq('tenant_id', tenantId),
+    supabase.from('sedi' as never).select('id, lat, lng').in('id', ids),
+    leggiRoutingProvider(supabase, tenantId),
+  ]);
+  const coord = new Map<string, Coord>();
+  for (const r of (cantRows as { id: string; indirizzo_lat: number | null; indirizzo_lng: number | null }[] | null) ?? []) {
+    if (r.indirizzo_lat != null && r.indirizzo_lng != null) {
+      coord.set(r.id, { lat: Number(r.indirizzo_lat), lng: Number(r.indirizzo_lng) });
+    }
+  }
+  for (const r of (sediRows as { id: string; lat: number | null; lng: number | null }[] | null) ?? []) {
+    if (r.lat != null && r.lng != null) coord.set(r.id, { lat: Number(r.lat), lng: Number(r.lng) });
+  }
+  const provider = getRoutingProvider({ provider: scelta });
+  for (const [da, a] of coppie) {
+    const k = `${da}>${a}`;
+    if (out.has(k)) continue;
+    const o = coord.get(da);
+    const d = coord.get(a);
+    try {
+      out.set(k, o && d ? await stimaConCache(provider, o, d) : null);
+    } catch {
+      out.set(k, null);
+    }
+  }
+  return out;
+}
+
+/** La sede predefinita attiva del tenant, null se non è impostata. */
+async function sedePredefinitaId(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('sedi' as never)
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('is_default', true)
+    .eq('attivo', true)
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
+/**
+ * Dove si lavora sul turno aperto di un cantiere, oggi: la sede se l'ultimo
+ * inizio di lavoro ha «Lavoro dalla sede sul progetto», null = in cantiere.
+ */
+async function sedeLavoroAperta(
+  supabase: ReturnType<typeof createServerSupabase>,
+  dipendenteId: string,
+  cantiereId: string,
+): Promise<string | null> {
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const { data } = await supabase
+    .from('timbrature' as never)
+    .select('sede_lavoro_id')
+    .eq('dipendente_id', dipendenteId)
+    .eq('cantiere_id', cantiereId)
+    .eq('tipo', 'ingresso')
+    .eq('pausa', false)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { sede_lavoro_id: string | null } | null)?.sede_lavoro_id ?? null;
 }
 
 const AvviaTurnoSchema = z.object({
@@ -991,6 +1107,12 @@ const AvviaTurnoSchema = z.object({
    * 0 tempo: nessuna tratta di lavoro da rimborsare) → il client invia null.
    */
   viaggio: ViaggioSchema.optional(),
+  /**
+   * «Lavoro dalla sede sul progetto»: si lavora per il cantiere ma nella sede
+   * predefinita. Le ore restano del cantiere; l'andata si stima fino alla sede
+   * (dalla stessa sede non c'è viaggio e il client non lo invia).
+   */
+  daSede: z.boolean().optional(),
 });
 
 /** Avvia un turno sul cantiere scelto (senza QR). Origine 'manuale'. */
@@ -1034,6 +1156,9 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
     .maybeSingle();
   if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
 
+  const sedeLavoroId = parsed.data.daSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
+  if (parsed.data.daSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
+
   // Viaggio di andata (partenza): valida PRIMA di scrivere l'ingresso, così una
   // sede non valida non lascia un turno orfano. La sede è ammessa solo se è la
   // predefinita del tenant o è associata a QUESTO cantiere (`validaViaggio` con
@@ -1051,6 +1176,7 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
       tenant_id: ctx.tenantId,
       dipendente_id: me.id,
       cantiere_id: parsed.data.cantiereId,
+      sede_lavoro_id: sedeLavoroId,
       commessa_id: null,
       tipo: 'ingresso',
       pausa: false,
@@ -1128,6 +1254,8 @@ export async function opzioniViaggioPartenza(input: unknown): Promise<
 const CambiaCantiereSchema = z.object({
   daCantiereId: z.string().uuid(),
   aCantiereId: z.string().uuid(),
+  /** Sul nuovo cantiere si lavora dalla sede predefinita («Lavoro dalla sede sul progetto»). */
+  aSede: z.boolean().optional(),
 });
 
 /**
@@ -1168,6 +1296,11 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     .maybeSingle();
   if (!dest) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
 
+  // Dove si lavorava e dove si lavorerà: la sede del flag o il cantiere.
+  const sedeDa = await sedeLavoroAperta(supabase, me.id, parsed.data.daCantiereId);
+  const sedeA = parsed.data.aSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
+  if (parsed.data.aSede && !sedeA) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
+
   // Timestamp: uscita (fine A) → ingresso (inizio B), strettamente dopo
   // l'ultima timbratura e nel giorno corrente.
   const ultima = eventi[eventi.length - 1];
@@ -1199,6 +1332,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     tenant_id: ctx.tenantId,
     dipendente_id: me.id,
     cantiere_id: parsed.data.aCantiereId,
+    sede_lavoro_id: sedeA,
     commessa_id: null,
     tipo: 'ingresso',
     pausa: false,
@@ -1218,15 +1352,24 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     return { ok: false, error: errIngresso.message };
   }
 
-  // Trasferimento A→B: km + tempo registrati sul cantiere di destinazione
-  // (best-effort, non blocca). SEMPRE registrato; il conteggio lato tenant è
-  // gated dal toggle `km_switch_attivo` nelle aggregazioni km.
-  await registraTrasferimentiCantiere(supabase, {
-    tenantId: ctx.tenantId,
-    dipendenteId: me.id,
-    data: romeDay(new Date(ingressoTs)),
-    pairs: [{ da: parsed.data.daCantiereId, a: parsed.data.aCantiereId }],
-  });
+  // Trasferimento A→B: km + tempo sul cantiere di destinazione, è viaggio
+  // (best-effort, non blocca). La strada va dal luogo in cui si lavorava a
+  // quello in cui si lavora ora (sede o cantiere); nella stessa sede non c'è.
+  const luogoDa = sedeDa ?? parsed.data.daCantiereId;
+  const luogoA = sedeA ?? parsed.data.aCantiereId;
+  if (luogoDa !== luogoA) {
+    const stime =
+      sedeDa || sedeA ? await stimeFraLuoghi(supabase, ctx.tenantId, [[luogoDa, luogoA]]) : null;
+    await registraTrasferimentiCantiere(supabase, {
+      tenantId: ctx.tenantId,
+      dipendenteId: me.id,
+      data: romeDay(new Date(ingressoTs)),
+      pairs: [{ da: parsed.data.daCantiereId, a: parsed.data.aCantiereId }],
+      stime: stime
+        ? new Map([[`${parsed.data.daCantiereId}>${parsed.data.aCantiereId}`, stime.get(`${luogoDa}>${luogoA}`) ?? null]])
+        : undefined,
+    });
+  }
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ingressoTs)));
@@ -1301,7 +1444,14 @@ const RegistraGiornataSchema = z.object({
   fineIso: z.string().datetime(),
   pausaMin: z.number().int().min(0).max(600).optional(),
   split: z
-    .array(z.object({ cantiereId: z.string().uuid(), minuti: z.number().int().nonnegative() }))
+    .array(
+      z.object({
+        cantiereId: z.string().uuid(),
+        minuti: z.number().int().nonnegative(),
+        /** «Lavoro dalla sede sul progetto»: ore del cantiere, luogo la sede predefinita. */
+        daSede: z.boolean().optional(),
+      }),
+    )
     .min(1)
     .max(12),
   percorso: PercorsoGiornataSchema.optional(),
@@ -1351,6 +1501,16 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   if (((ccRows as { id: string }[] | null)?.length ?? 0) !== ids.length) {
     return { ok: false, error: 'CANTIERE_NON_VALIDO' };
   }
+
+  // «Lavoro dalla sede sul progetto»: sui cantieri segnati si lavora nella sede
+  // predefinita. Le ore restano del cantiere; le tratte partono e arrivano lì.
+  const conSede = parsed.data.split.some((s) => s.daSede);
+  const sedeLavoroId = conSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
+  if (conSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
+  const inSede = new Set(parsed.data.split.filter((s) => s.daSede).map((s) => s.cantiereId));
+  /** Il luogo in cui si lavora su un cantiere della giornata: la sede o il cantiere. */
+  const luogo = (cantiereId: string) => (sedeLavoroId && inSede.has(cantiereId) ? sedeLavoroId : cantiereId);
+  const sedeDi = (cantiereId: string) => (sedeLavoroId && inSede.has(cantiereId) ? sedeLavoroId : null);
 
   // Sintesi segmenti (calc.eventi ESCLUDE l'ingresso iniziale → lo prependo).
   const calc = calcolaSegmentiSplit({
@@ -1405,6 +1565,65 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     if (!ammessa) return { ok: false, error: 'SEDE_NON_VALIDA' };
   }
 
+  // ── Strada fra un cantiere e l'altro: è viaggio, non lavoro ─────────────────
+  // Le ore dichiarate per cantiere sono lavoro puro. Il tempo delle tratte in
+  // mezzo diventa un buco fra l'uscita da un cantiere e l'ingresso nel successivo
+  // (stesse stime e stesso arrotondamento della pagina, dalla cache condivisa).
+  const stimeTratte = await stimeFraLuoghi(
+    supabase,
+    ctx.tenantId,
+    intermedie
+      .flatMap((t): [string, string][] =>
+        t.tipo === 'diretta'
+          ? [[luogo(t.da), luogo(t.a)]]
+          : t.tipo === 'via_sede'
+            ? [
+                [luogo(t.da), t.sedeId],
+                [t.sedeId, luogo(t.a)],
+              ]
+            : [],
+      )
+      .filter(([da, a]) => da !== a),
+  );
+  const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, ctx.tenantId);
+  const minutiStima = (da: string, a: string) => {
+    if (da === a) return 0;
+    const st = stimeTratte.get(`${da}>${a}`);
+    return st ? arrotondaA(Math.round(st.minuti), stepViaggio) : 0;
+  };
+  const { prima: viaggioPrima } = viaggioFraCantieri(
+    parsed.data.split.map((s) => s.cantiereId),
+    intermedie,
+    (pezzo) =>
+      pezzo.tipo === 'fra_cantieri'
+        ? minutiStima(luogo(pezzo.da), luogo(pezzo.a))
+        : pezzo.tipo === 'verso_sede'
+          ? minutiStima(luogo(pezzo.cantiereId), pezzo.sedeId)
+          : minutiStima(pezzo.sedeId, luogo(pezzo.cantiereId)),
+  );
+  // Le stesse stime per chi scrive le tratte, con le chiavi dei cantieri. Fra
+  // due luoghi uguali (la stessa sede) la tratta vale zero.
+  const zero = { minuti: 0, km: 0 };
+  const stimaTra = (da: string, a: string) => (da === a ? zero : (stimeTratte.get(`${da}>${a}`) ?? null));
+  const stimePerCantieri = new Map<string, { minuti: number; km: number | null } | null>();
+  for (const t of intermedie) {
+    if (t.tipo === 'diretta') stimePerCantieri.set(`${t.da}>${t.a}`, stimaTra(luogo(t.da), luogo(t.a)));
+    if (t.tipo === 'via_sede') {
+      stimePerCantieri.set(`${t.da}>${t.sedeId}`, stimaTra(luogo(t.da), t.sedeId));
+      stimePerCantieri.set(`${t.sedeId}>${t.a}`, stimaTra(t.sedeId, luogo(t.a)));
+    }
+  }
+  const calcConStrada = calcolaSegmentiSplit({
+    ingressoMs: Date.parse(inizioIso),
+    uscitaMs: Date.parse(fineIso),
+    pausaMin,
+    segmenti: parsed.data.split,
+    viaggioPrima,
+  });
+  if (!calcConStrada.ok) {
+    return { ok: false, error: calcConStrada.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
+  }
+
   // ── Timbrature ──────────────────────────────────────────────────────────────
   const base = {
     tenant_id: ctx.tenantId,
@@ -1415,10 +1634,18 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     creato_da: ctx.userId,
   };
   const rows = [
-    { ...base, cantiere_id: primoCantiere, tipo: 'ingresso', pausa: false, ts: inizioIso },
-    ...calc.eventi.map((e) => ({
+    {
+      ...base,
+      cantiere_id: primoCantiere,
+      sede_lavoro_id: sedeDi(primoCantiere),
+      tipo: 'ingresso',
+      pausa: false,
+      ts: inizioIso,
+    },
+    ...calcConStrada.eventi.map((e) => ({
       ...base,
       cantiere_id: e.cantiereId,
+      sede_lavoro_id: sedeDi(e.cantiereId),
       tipo: e.tipo,
       pausa: e.pausa,
       ts: new Date(e.ms).toISOString(),
@@ -1495,9 +1722,12 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   await registraTrasferimentiCantiere(supabase, {
     ...comune,
     data: oggi,
-    pairs: intermedie.flatMap((t) => (t.tipo === 'diretta' ? [{ da: t.da, a: t.a }] : [])),
+    pairs: intermedie.flatMap((t) =>
+      t.tipo === 'diretta' && luogo(t.da) !== luogo(t.a) ? [{ da: t.da, a: t.a }] : [],
+    ),
     autista,
     mezzoId,
+    stime: stimePerCantieri,
   });
   // Dalla sede: legate al cambio di cantiere. Passando da casa non si scrive niente.
   const confini = confiniFraCantieri(eventi);
@@ -1505,12 +1735,22 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     ...comune,
     autista,
     mezzoId,
+    stime: stimePerCantieri,
     passaggi: intermedie.flatMap((t, i) => {
       const c = confini[i];
       if (t.tipo !== 'via_sede' || !c || c.uscita.cantiereId !== t.da || c.ingresso.cantiereId !== t.a) {
         return [];
       }
-      return [{ sedeId: t.sedeId, uscita: c.uscita, ingresso: c.ingresso }];
+      // Chi lavorava già in quella sede non fa la strada fino alla sede.
+      return [
+        {
+          sedeId: t.sedeId,
+          uscita: c.uscita,
+          ingresso: c.ingresso,
+          senzaVersoSede: luogo(t.da) === t.sedeId,
+          senzaDallaSede: luogo(t.a) === t.sedeId,
+        },
+      ];
     }),
   });
 

@@ -30,6 +30,8 @@ function messaggioErrore(code: string): string {
       return 'Cantiere non valido. Riprova.';
     case 'SEDE_NON_VALIDA':
       return 'Sede di partenza non valida. Riprova.';
+    case 'SEDE_PREDEFINITA_MANCANTE':
+      return 'Nessuna sede predefinita impostata: l’ufficio la indica in Impostazioni → Sedi.';
     case 'GIUSTIFICAZIONE_RICHIESTA':
       return 'Hai modificato la stima: inserisci una giustificazione.';
     case 'MEZZO_NON_VALIDA':
@@ -130,13 +132,14 @@ export function IniziaTurnoButton({
   }
 
   // Step 2 → avvio effettivo (viaggio null = "Abitazione privata": 0 km/0 tempo).
-  function avvia(viaggio: ViaggioRitornoPayload | null) {
+  function avvia(viaggio: ViaggioRitornoPayload | null, opzioni: { daSede: boolean } = { daSede: false }) {
     if (!selectedId) return;
     setErrore(null);
     startTransition(async () => {
       const res = await avviaTurnoMio({
         cantiereId: selectedId,
         viaggio: viaggio ?? undefined,
+        daSede: opzioni.daSede || undefined,
       });
       if (res.ok) {
         chiudi();

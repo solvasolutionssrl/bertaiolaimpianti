@@ -8,9 +8,12 @@ import { BarsOrizzontali, DonutOre, AreaTrend } from '@/app/office/kantiere/_com
 export interface StoricoPersona {
   dipendenteId: string;
   nome: string;
+  /** Lavoro e viaggio entro l'orario ordinario. */
   ordinarie: number;
   straordinarie: number;
+  /** Viaggio eccedente l'orario ordinario. */
   viaggio: number;
+  /** Lavoro + viaggio. */
   totale: number;
   /** Km percorsi su questo cantiere nel periodo (tutti). */
   km: number;
@@ -125,7 +128,7 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Dipendente</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Ordinarie</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Straord.</th>
-                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Viaggio</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground" title="Viaggio oltre l'orario ordinario">Viaggio ecc.</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Km</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Totale</th>
                 </tr>

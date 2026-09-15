@@ -352,3 +352,31 @@ describe('calcolaCostoGiornataCond — split prime2/successive', () => {
     expect(r.costo_totale).toBe(118);
   });
 });
+
+describe('calcolaCostoGiornataCond — viaggio entro l orario e viaggio eccedente', () => {
+  it('7 di lavoro + 2 di viaggio: 1 di viaggio pagato come ordinario, 1 con la % del viaggio', () => {
+    const r = calcolaCostoGiornataCond({
+      chiaveDipendente: 'd', chiaveCommessa: 'c',
+      ore_ordinarie: 7, ore_straordinarie: 0, ore_viaggio: 2,
+      ore_viaggio_ordinarie: 1, ore_viaggio_eccedenti: 1,
+      giornoSettimana: 2, festivo: false, aTurni: false,
+      pctViaggio: 15, costoOrario: 10, regole: [],
+    });
+    expect(r.ore_ordinarie).toBe(8);
+    expect(r.ore_viaggio).toBe(1);
+    expect(r.ore_pesate).toBe(9.15);
+    expect(r.costo_totale).toBe(91.5);
+  });
+
+  it('riga precedente alla regola: tutto il viaggio con la sua %, come prima', () => {
+    const r = calcolaCostoGiornataCond({
+      chiaveDipendente: 'd', chiaveCommessa: 'c',
+      ore_ordinarie: 7, ore_straordinarie: 0, ore_viaggio: 2,
+      giornoSettimana: 2, festivo: false, aTurni: false,
+      pctViaggio: 15, costoOrario: 10, regole: [],
+    });
+    expect(r.ore_ordinarie).toBe(7);
+    expect(r.ore_viaggio).toBe(2);
+    expect(r.ore_pesate).toBe(9.3);
+  });
+});

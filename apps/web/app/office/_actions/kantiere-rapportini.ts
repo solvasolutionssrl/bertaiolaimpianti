@@ -16,6 +16,7 @@ import {
   marcaRapportinoManuale,
 } from '@/app/_actions/_lib/ricomputa-rapportino';
 import { coppiaPausaCentrata } from '@/app/_actions/_lib/viaggio-timbra';
+import { aggiornaRigheGiornata } from '@/app/_actions/_lib/righe-giornata';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -40,9 +41,10 @@ const RegistraOreSchema = z
     commessaId: z.string().uuid().optional(),
     cantiereId: z.string().uuid().optional(),
     data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato data non valido (YYYY-MM-DD)'),
-    ore_ordinarie: z.number().min(0).max(24),
+    /** Ore di lavoro sul cantiere, pure: ordinarie e straordinarie si derivano. */
+    ore_lavoro: z.number().min(0).max(24),
+    /** Ore di viaggio attribuite al cantiere. */
     ore_viaggio: z.number().min(0).max(24),
-    ore_straordinarie: z.number().min(0).max(24),
     note: z.string().max(1000).optional(),
   })
   .refine(
@@ -328,8 +330,7 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
   const ctx = await guard();
   const supabase = createServerSupabase();
 
-  const { dipendenteId, commessaId, cantiereId, data, ore_ordinarie, ore_viaggio, ore_straordinarie, note } =
-    parsed.data;
+  const { dipendenteId, commessaId, cantiereId, data, ore_lavoro, ore_viaggio, note } = parsed.data;
 
   // Verifica che il dipendente appartenga al tenant
   const { data: dipRow, error: dipErr } = await supabase
@@ -397,48 +398,23 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
   // Com'era prima della correzione dell'ufficio.
   const primaModificaUfficio = await leggiStatoGiornata(supabase, rapportinoId);
 
-  // Cerca riga esistente per lo stesso target su questo rapportino
-  const { data: righeRaw } = await supabase
-    .from('rapportino_righe' as never)
-    .select('id, commessa_id, cantiere_id')
-    .eq('rapportino_id', rapportinoId);
-
-  type RigaMin = { id: string; commessa_id: string | null; cantiere_id: string | null };
-  const righeEsistenti = (righeRaw as RigaMin[]) ?? [];
-
-  const rigaEsistente = righeEsistenti.find((r) => {
-    if (commessaId) return r.commessa_id === commessaId;
-    if (cantiereId) return r.cantiere_id === cantiereId;
-    return false;
-  });
-
-  if (rigaEsistente) {
-    // Aggiorna la riga esistente
-    const { error: updRigaErr } = await supabase
-      .from('rapportino_righe' as never)
-      .update({
-        ore_ordinarie,
-        ore_straordinarie,
-        ore_viaggio,
-        note: note ?? null,
-      } as never)
-      .eq('id', rigaEsistente.id);
-    if (updRigaErr) return { ok: false, error: updRigaErr.message };
-  } else {
-    // Inserisci nuova riga
-    const { error: insRigaErr } = await supabase
-      .from('rapportino_righe' as never)
-      .insert({
-        rapportino_id: rapportinoId,
+  // Minuti puri del cantiere: le quote (ordinarie, straordinarie, viaggio
+  // ordinario ed eccedente) le deriva lo scrittore unico su tutta la giornata.
+  const scritte = await aggiornaRigheGiornata(supabase, {
+    tenantId: ctx.tenantId,
+    rapportinoId,
+    data,
+    modifiche: [
+      {
         commessa_id: commessaId ?? null,
         cantiere_id: cantiereId ?? null,
-        ore_ordinarie,
-        ore_straordinarie,
-        ore_viaggio,
+        minutiLavoro: Math.round(ore_lavoro * 60),
+        minutiViaggio: Math.round(ore_viaggio * 60),
         note: note ?? null,
-      } as never);
-    if (insRigaErr) return { ok: false, error: insRigaErr.message };
-  }
+      },
+    ],
+  });
+  if (!scritte.ok) return { ok: false, error: scritte.error };
 
   // L'ufficio ha scritto a mano: marca il rapportino come manuale così l'auto
   // ricalcolo dalle timbrature non sovrascrive/cancella più queste righe.

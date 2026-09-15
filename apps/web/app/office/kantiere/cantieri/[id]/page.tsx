@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { COLONNE_QUOTE, quoteDaRiga, quoteOre, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import QRCode from 'qrcode';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -8,7 +9,6 @@ import { statoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
-import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { leggiCollegamenti } from '@/app/_lib/integrazione/collegati';
 import { CantiereDetailClient } from './_components/cantiere-detail-client';
 
@@ -168,12 +168,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // ── 9. STORICO PRESENZE: rapportino_righe del cantiere nel periodo ──────────
   // rapportino_righe NON ha tenant_id: è scoped via cantiere_id (già del tenant)
   // + RLS. Si filtra per data del rapportino unendo manualmente i rapportini.
-  type RigaRapRow = {
-    rapportino_id: string;
-    ore_ordinarie: number;
-    ore_straordinarie: number;
-    ore_viaggio: number;
-  };
+  type RigaRapRow = RigaRapportinoLetta & { rapportino_id: string };
   type RapportinoRow = {
     id: string;
     dipendente_id: string;
@@ -183,7 +178,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
 
   const { data: righeRapRaw } = (await supabase
     .from('rapportino_righe' as never)
-    .select('rapportino_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+    .select(`rapportino_id, ${COLONNE_QUOTE}`)
     .eq('cantiere_id', params.id)
     .limit(5000)) as { data: RigaRapRow[] | null };
 
@@ -231,7 +226,6 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // (da timbratura_viaggio, cantiere_id + data popolati). `percorsi` = tutti i km,
   // `guidati` = solo quando era l'autista.
   const kmPerDip = new Map<string, { percorsi: number; guidati: number }>();
-  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
   const { data: viaRaw } = (await supabase
     .from('timbratura_viaggio' as never)
     .select('dipendente_id, distanza_km, autista, da_cantiere_id')
@@ -245,8 +239,6 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   };
   for (const v of viaRaw ?? []) {
     if (!v.dipendente_id) continue;
-    // Trasferimento cantiere→cantiere: nei km del cantiere solo se il tenant li conteggia.
-    if (!trasferimentiConteggiati && v.da_cantiere_id != null) continue;
     const km = Number(v.distanza_km) || 0;
     const cur = kmPerDip.get(v.dipendente_id) ?? { percorsi: 0, guidati: 0 };
     cur.percorsi += km;
@@ -257,12 +249,15 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // Aggregazione per dipendente via aggregaOre (chiave = dipendente_id).
   const righeAgg: RigaAgg[] = righeRapPeriodo.map((r) => {
     const meta = rapMetaById.get(r.rapportino_id)!;
+    const q = quoteOre(quoteDaRiga(r));
     return {
       chiaveDipendente: meta.dipendente_id,
       chiaveCommessa: `k:${params.id}`,
-      ore_ordinarie: Number(r.ore_ordinarie) || 0,
-      ore_straordinarie: Number(r.ore_straordinarie) || 0,
-      ore_viaggio: Number(r.ore_viaggio) || 0,
+      ore_ordinarie: q.ordinarie,
+      ore_straordinarie: q.straordinarie,
+      ore_viaggio_eccedenti: q.viaggioEccedente,
+      ore_lavoro: q.lavoro,
+      ore_viaggio: q.viaggio,
     };
   });
 
@@ -273,7 +268,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
       nome: rapDipMap.get(dipendenteId) ?? dipendenteId,
       ordinarie: agg.ordinarie,
       straordinarie: agg.straordinarie,
-      viaggio: agg.viaggio,
+      viaggio: agg.viaggioEccedente,
       totale: agg.totale,
       km: Math.round(kmPerDip.get(dipendenteId)?.percorsi ?? 0),
       kmGuidati: Math.round(kmPerDip.get(dipendenteId)?.guidati ?? 0),
@@ -293,11 +288,12 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0, km: 0, kmGuidati: 0 },
   );
 
-  // Trend giornaliero: somma ore (ord+straord+viaggio) per giorno del periodo.
+  // Trend giornaliero: lavoro + viaggio per giorno del periodo.
   const orePerGiorno = new Map<string, number>();
   for (const r of righeRapPeriodo) {
     const meta = rapMetaById.get(r.rapportino_id)!;
-    const tot = (Number(r.ore_ordinarie) || 0) + (Number(r.ore_straordinarie) || 0) + (Number(r.ore_viaggio) || 0);
+    const q = quoteDaRiga(r);
+    const tot = (q.minutiLavoro + q.minutiViaggio) / 60;
     orePerGiorno.set(meta.data, Math.round(((orePerGiorno.get(meta.data) ?? 0) + tot) * 100) / 100);
   }
   const trendGiornaliero = [...orePerGiorno.entries()]

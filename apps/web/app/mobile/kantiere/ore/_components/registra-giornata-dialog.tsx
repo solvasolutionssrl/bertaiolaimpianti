@@ -15,11 +15,13 @@ import {
   spostaOrario,
   trattaModificata,
   tratteIntermedie,
+  viaggioFraCantieri,
   type DatoMancante,
   type Estremo,
   type Passaggio,
   type TrattaEstrema,
 } from '@kommessa/api/kantiere-percorso';
+import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { Portal } from '@/app/mobile/_components/portal';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
@@ -70,6 +72,8 @@ function messaggioErrore(code: string): string {
       return 'Un cantiere selezionato non è valido.';
     case 'SEDE_NON_VALIDA':
       return 'Una sede scelta non è ammessa per quel cantiere. Controlla partenza, rientro e tratte.';
+    case 'SEDE_PREDEFINITA_MANCANTE':
+      return 'Nessuna sede predefinita impostata: l’ufficio la indica in Impostazioni → Sedi.';
     case 'MEZZO_NON_VALIDO':
     case 'MEZZO_NON_VALIDA':
       return 'Il mezzo scelto non è valido. Ricarica la pagina e riprova.';
@@ -191,7 +195,8 @@ export interface SedeOpzione {
   isDefault: boolean;
 }
 
-type RigaCantiere = { cantiereId: string; nome: string; codice: string | null; minuti: number };
+/** `daSede` = «Lavoro dalla sede sul progetto»: ore del cantiere, luogo la sede predefinita. */
+type RigaCantiere = { cantiereId: string; nome: string; codice: string | null; minuti: number; daSede: boolean };
 
 /**
  * Partenza o rientro come li ha scelti l'utente. La correzione del tempo vale
@@ -205,9 +210,21 @@ type SceltaEstremo = {
 
 type Apribile = 'partenza' | 'rientro' | `tratta:${string}`;
 
-const chiaveSedeCantiere = (sedeId: string, cantiereId: string, direzione: 'andata' | 'ritorno') =>
-  direzione === 'andata' ? `s:${sedeId}>c:${cantiereId}` : `c:${cantiereId}>s:${sedeId}`;
-const chiaveFraCantieri = (da: string, a: string) => `c:${da}>c:${a}`;
+/** Dove si trova fisicamente la persona: una sede o un cantiere. */
+type Luogo = { tipo: 'sede' | 'cantiere'; id: string };
+const inSede = (sedeId: string): Luogo => ({ tipo: 'sede', id: sedeId });
+const stessoPosto = (da: Luogo, a: Luogo) => da.tipo === a.tipo && da.id === a.id;
+/** Chiave della stima di una tratta, nel verso in cui si percorre. */
+const chiaveTra = (da: Luogo, a: Luogo) =>
+  `${da.tipo === 'sede' ? 's' : 'c'}:${da.id}>${a.tipo === 'sede' ? 's' : 'c'}:${a.id}`;
+/** Il corpo della richiesta a `/api/routing/stima` per una tratta. */
+function corpoStima(da: Luogo, a: Luogo): Record<string, string> {
+  if (da.tipo === 'sede' && a.tipo === 'sede') return { daSedeId: da.id, aSedeId: a.id };
+  if (da.tipo === 'cantiere' && a.tipo === 'cantiere') return { daCantiereId: da.id, aCantiereId: a.id };
+  return da.tipo === 'sede'
+    ? { sedeId: da.id, cantiereId: a.id, direzione: 'andata' }
+    : { sedeId: a.id, cantiereId: da.id, direzione: 'ritorno' };
+}
 
 const stessoLuogo = (a: Estremo | null, b: Estremo | null) =>
   a?.tipo === b?.tipo && (a?.tipo !== 'sede' || (b?.tipo === 'sede' && a.sedeId === b.sedeId));
@@ -228,6 +245,7 @@ export function RegistraGiornataDialog({
   onClose,
   tolleranzaMin,
   passoMinuti,
+  stepViaggio,
   sedi,
   sediPerCantiere,
   mezzi,
@@ -237,6 +255,8 @@ export function RegistraGiornataDialog({
   onClose: () => void;
   tolleranzaMin: number;
   passoMinuti: number;
+  /** Arrotondamento del tempo di viaggio (min): lo stesso che applica il server. */
+  stepViaggio: number;
   sedi: SedeOpzione[];
   /** cantiere_id → sedi associate: si propongono solo la predefinita e queste. */
   sediPerCantiere: Record<string, string[]>;
@@ -285,11 +305,7 @@ export function RegistraGiornataDialog({
   const grossMin = Math.max(0, Math.round((Date.parse(isoOggi(fine)) - Date.parse(isoOggi(inizio))) / 60000));
   const nettoMin = grossMin - pausaMin;
   const assegnato = righe.reduce((a, r) => a + r.minuti, 0);
-  const restano = nettoMin - assegnato;
-  const entroTolleranza = Math.abs(restano) <= tolleranzaMin;
   const disponibili = (cantieri ?? []).filter((c) => !righe.some((r) => r.cantiereId === c.id));
-  const statoLavoro: StatoLavoro =
-    righe.length === 0 || assegnato === 0 ? 'vuoto' : entroTolleranza ? 'completa' : restano > 0 ? 'restano' : 'troppo';
 
   // ── percorso ─────────────────────────────────────────────────────────────────
   // Regola sedi↔cantiere: la predefinita sempre, più quelle associate al cantiere.
@@ -312,12 +328,36 @@ export function RegistraGiornataDialog({
   };
   const luogoAndata = luogoValido(partenza.luogo, sediAndata);
   const luogoRitorno = luogoValido(rientro.luogo, sediRitorno);
-  const chiaveAndata =
-    luogoAndata?.tipo === 'sede' && primo ? chiaveSedeCantiere(luogoAndata.sedeId, primo, 'andata') : null;
-  const chiaveRitorno =
-    luogoRitorno?.tipo === 'sede' && ultimo ? chiaveSedeCantiere(luogoRitorno.sedeId, ultimo, 'ritorno') : null;
 
-  const trattaEstrema = (scelta: SceltaEstremo, luogo: Estremo | null, chiave: string | null): TrattaEstrema => {
+  // Dove si lavora su ogni cantiere: in cantiere, oppure nella sede predefinita
+  // con «Lavoro dalla sede sul progetto». Le tratte partono e arrivano da lì.
+  const sedeDefault = sedi.find((s) => s.isDefault) ?? null;
+  const luogoCantiere = new Map<string, Luogo>(
+    righe.map((r) => [
+      r.cantiereId,
+      r.daSede && sedeDefault ? inSede(sedeDefault.id) : { tipo: 'cantiere', id: r.cantiereId },
+    ]),
+  );
+  const luogoDi = (cantiereId: string): Luogo => luogoCantiere.get(cantiereId) ?? { tipo: 'cantiere', id: cantiereId };
+  const andataSenzaViaggio =
+    luogoAndata?.tipo === 'sede' && primo != null && stessoPosto(inSede(luogoAndata.sedeId), luogoDi(primo));
+  const ritornoSenzaViaggio =
+    luogoRitorno?.tipo === 'sede' && ultimo != null && stessoPosto(luogoDi(ultimo), inSede(luogoRitorno.sedeId));
+  const chiaveAndata =
+    luogoAndata?.tipo === 'sede' && primo && !andataSenzaViaggio
+      ? chiaveTra(inSede(luogoAndata.sedeId), luogoDi(primo))
+      : null;
+  const chiaveRitorno =
+    luogoRitorno?.tipo === 'sede' && ultimo && !ritornoSenzaViaggio
+      ? chiaveTra(luogoDi(ultimo), inSede(luogoRitorno.sedeId))
+      : null;
+
+  const trattaEstrema = (
+    scelta: SceltaEstremo,
+    luogo: Estremo | null,
+    chiave: string | null,
+    senzaViaggio: boolean,
+  ): TrattaEstrema => {
     const s = chiave ? stime[chiave] : undefined;
     const corr = scelta.correzione && scelta.correzione.chiave === chiave ? scelta.correzione : null;
     return {
@@ -326,10 +366,11 @@ export function RegistraGiornataDialog({
       inArrivo: chiave != null && (!s || s.stato === 'arrivo'),
       minutiCorretti: corr ? corr.minuti : null,
       motivo: corr?.motivo ?? '',
+      senzaViaggio,
     };
   };
-  const teAndata = trattaEstrema(partenza, luogoAndata, chiaveAndata);
-  const teRitorno = trattaEstrema(rientro, luogoRitorno, chiaveRitorno);
+  const teAndata = trattaEstrema(partenza, luogoAndata, chiaveAndata, andataSenzaViaggio);
+  const teRitorno = trattaEstrema(rientro, luogoRitorno, chiaveRitorno, ritornoSenzaViaggio);
 
   const coppie = righe.slice(1).map((r, i) => ({ da: righe[i]!.cantiereId, a: r.cantiereId }));
   const sediComuni = (da: string, a: string) => {
@@ -345,18 +386,22 @@ export function RegistraGiornataDialog({
     passaggiValidi[k] = p;
   }
   const intermedie = tratteIntermedie(coppie, passaggiValidi);
+  // Fra due cantieri seguiti dalla stessa sede non c'è strada.
+  const intermedieConStrada = intermedie.filter(
+    (t) => t.tipo === 'via_sede' || !stessoPosto(luogoDi(t.da), luogoDi(t.a)),
+  );
 
-  const conViaggi = ciSonoViaggi({ andata: teAndata, ritorno: teRitorno, intermedie });
+  const conViaggi = ciSonoViaggi({ andata: teAndata, ritorno: teRitorno, intermedie: intermedieConStrada });
   // La riga guida sparisce solo quando è sicuro che viaggi non ce ne sono.
   const mostraGuida = !(
-    luogoAndata?.tipo === 'casa' &&
-    luogoRitorno?.tipo === 'casa' &&
-    !intermedie.some((t) => t.tipo !== 'via_casa')
+    (luogoAndata?.tipo === 'casa' || teAndata.senzaViaggio) &&
+    (luogoRitorno?.tipo === 'casa' || teRitorno.senzaViaggio) &&
+    !intermedieConStrada.some((t) => t.tipo !== 'via_casa')
   );
   const mancanti = datiMancanti({
     andata: teAndata,
     ritorno: teRitorno,
-    intermedie,
+    intermedie: intermedieConStrada,
     autista,
     mezzo: autista ? mezzo : null,
     mezziDisponibili: mezzi.length,
@@ -364,23 +409,16 @@ export function RegistraGiornataDialog({
 
   // ── stime km e tempo, chieste mentre si compila ─────────────────────────────
   const richieste: [string, Record<string, string>][] = [];
-  if (chiaveAndata && luogoAndata?.tipo === 'sede' && primo) {
-    richieste.push([chiaveAndata, { sedeId: luogoAndata.sedeId, cantiereId: primo, direzione: 'andata' }]);
-  }
-  if (chiaveRitorno && luogoRitorno?.tipo === 'sede' && ultimo) {
-    richieste.push([chiaveRitorno, { sedeId: luogoRitorno.sedeId, cantiereId: ultimo, direzione: 'ritorno' }]);
-  }
+  const chiedi = (da: Luogo, a: Luogo) => {
+    if (!stessoPosto(da, a)) richieste.push([chiaveTra(da, a), corpoStima(da, a)]);
+  };
+  if (chiaveAndata && luogoAndata?.tipo === 'sede' && primo) chiedi(inSede(luogoAndata.sedeId), luogoDi(primo));
+  if (chiaveRitorno && luogoRitorno?.tipo === 'sede' && ultimo) chiedi(luogoDi(ultimo), inSede(luogoRitorno.sedeId));
   for (const t of intermedie) {
-    richieste.push([chiaveFraCantieri(t.da, t.a), { daCantiereId: t.da, aCantiereId: t.a }]);
+    chiedi(luogoDi(t.da), luogoDi(t.a));
     if (t.tipo === 'via_sede') {
-      richieste.push([
-        chiaveSedeCantiere(t.sedeId, t.da, 'ritorno'),
-        { sedeId: t.sedeId, cantiereId: t.da, direzione: 'ritorno' },
-      ]);
-      richieste.push([
-        chiaveSedeCantiere(t.sedeId, t.a, 'andata'),
-        { sedeId: t.sedeId, cantiereId: t.a, direzione: 'andata' },
-      ]);
+      chiedi(luogoDi(t.da), inSede(t.sedeId));
+      chiedi(inSede(t.sedeId), luogoDi(t.a));
     }
   }
   const firmaRichieste = richieste.map(([k]) => k).join('|');
@@ -412,17 +450,47 @@ export function RegistraGiornataDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, firmaRichieste]);
 
+  // ── lavoro da assegnare ──────────────────────────────────────────────────────
+  // Le tratte fra cantieri stanno dentro l'orario ma sono viaggio, non lavoro:
+  // si tolgono dalle ore da assegnare. Stesse stime e stesso arrotondamento del
+  // server (`viaggioFraCantieri`), così le ore coincidono.
+  const minutiTra = (da: Luogo, a: Luogo): number | null => {
+    if (stessoPosto(da, a)) return 0;
+    const s = stime[chiaveTra(da, a)];
+    if (!s || s.stato === 'arrivo') return null;
+    return s.stato === 'ok' && s.minuti != null ? arrotondaA(Math.round(s.minuti), stepViaggio) : 0;
+  };
+  const fraCantieri = viaggioFraCantieri(
+    righe.map((r) => r.cantiereId),
+    intermedie,
+    (pezzo) =>
+      pezzo.tipo === 'fra_cantieri'
+        ? minutiTra(luogoDi(pezzo.da), luogoDi(pezzo.a))
+        : pezzo.tipo === 'verso_sede'
+          ? minutiTra(luogoDi(pezzo.cantiereId), inSede(pezzo.sedeId))
+          : minutiTra(inSede(pezzo.sedeId), luogoDi(pezzo.cantiereId)),
+  );
+  const trasferimentiMin = fraCantieri.totale;
+  const lavoroMin = nettoMin - trasferimentiMin;
+  const restano = lavoroMin - assegnato;
+  const entroTolleranza = Math.abs(restano) <= tolleranzaMin;
+  const statoLavoro: StatoLavoro =
+    righe.length === 0 || assegnato === 0 ? 'vuoto' : entroTolleranza ? 'completa' : restano > 0 ? 'restano' : 'troppo';
+
   // ── barra dei tempi ──────────────────────────────────────────────────────────
   const andataMin = minutiTratta(teAndata);
   const ritornoMin = minutiTratta(teRitorno);
+  const viaggioTotaleMin = andataMin + ritornoMin + trasferimentiMin;
   const segmenti = segmentiBarraGiornata({
     andataMin,
     ritornoMin,
     minutiCantieri: righe.map((r) => r.minuti),
+    trasferimentiMin: fraCantieri.prima,
     pausaMin,
-    nettoMin: Math.max(0, nettoMin),
+    nettoMin: Math.max(0, lavoroMin),
   });
-  const viaggioNoto = luogoAndata != null && luogoRitorno != null && !teAndata.inArrivo && !teRitorno.inArrivo;
+  const viaggioNoto =
+    luogoAndata != null && luogoRitorno != null && !teAndata.inArrivo && !teRitorno.inArrivo && !fraCantieri.inArrivo;
 
   // ── viste ────────────────────────────────────────────────────────────────────
   const nomeSede = (id: string) => sedi.find((s) => s.id === id);
@@ -465,19 +533,25 @@ export function RegistraGiornataDialog({
       motivo: te.motivo,
       mancante,
       senzaCantiere: righe.length === 0,
+      senzaViaggio: te.senzaViaggio === true,
     };
   }
 
   const vistaTratte: VistaTratta[] = intermedie.map((t, i) => {
-    const diretta = stime[chiaveFraCantieri(t.da, t.a)];
+    const daL = luogoDi(t.da);
+    const aL = luogoDi(t.a);
+    const stessaSede = stessoPosto(daL, aL);
+    const stimaTra = (da: Luogo, a: Luogo): StatoStima | undefined =>
+      stessoPosto(da, a) ? { stato: 'ok', minuti: 0, km: 0 } : stime[chiaveTra(da, a)];
+    const diretta = stessaSede ? undefined : stimaTra(daL, aL);
     const kmTempo = (s: StatoStima | undefined) =>
       s?.stato === 'ok' && s.minuti != null ? [fmtKm(s.km), fmtHM(s.minuti)].filter(Boolean).join(' · ') : '';
     let stima: StatoStima;
-    if (t.tipo === 'diretta') stima = diretta ?? { stato: 'arrivo' };
+    if (t.tipo === 'diretta') stima = stessaSede ? { stato: 'nessuna' } : (diretta ?? { stato: 'arrivo' });
     else if (t.tipo === 'via_casa') stima = { stato: 'nessuna' };
     else {
-      const s1 = stime[chiaveSedeCantiere(t.sedeId, t.da, 'ritorno')];
-      const s2 = stime[chiaveSedeCantiere(t.sedeId, t.a, 'andata')];
+      const s1 = stimaTra(daL, inSede(t.sedeId));
+      const s2 = stimaTra(inSede(t.sedeId), aL);
       if (s1?.stato !== 'ok' || s2?.stato !== 'ok') stima = { stato: 'arrivo' };
       else
         stima = {
@@ -494,13 +568,15 @@ export function RegistraGiornataDialog({
       scelta: t.tipo === 'diretta' ? 'diretto' : t.tipo === 'via_casa' ? 'casa' : t.sedeId,
       titolo:
         t.tipo === 'diretta'
-          ? 'Diretta'
+          ? stessaSede
+            ? 'Nella stessa sede'
+            : 'Diretta'
           : t.tipo === 'via_casa'
             ? 'Passando da casa'
             : `Passando da ${sedeScelta?.nome ?? 'sede'}`,
       stima,
       opzioni: [
-        { via: 'diretto', titolo: 'Diretta', dettaglio: kmTempo(diretta) },
+        { via: 'diretto', titolo: 'Diretta', dettaglio: stessaSede ? 'Nessun viaggio' : kmTempo(diretta) },
         ...sediComuni(t.da, t.a).map((s) => ({
           via: s.id,
           titolo: `Passando da ${s.nome}`,
@@ -559,7 +635,7 @@ export function RegistraGiornataDialog({
     setRighe((prev) =>
       prev.some((r) => r.cantiereId === id)
         ? prev
-        : [...prev, { cantiereId: id, nome, codice: codiceCantiereMostrato(c), minuti: 0 }],
+        : [...prev, { cantiereId: id, nome, codice: codiceCantiereMostrato(c), minuti: 0, daSede: false }],
     );
     setErrore(null);
   }
@@ -569,11 +645,15 @@ export function RegistraGiornataDialog({
     if (righe.length === 0) return setErrore('Aggiungi almeno un cantiere.');
     if (nettoMin <= 0) return setErrore('La fine del lavoro deve essere dopo l’inizio, pausa esclusa.');
     if (righe.some((r) => r.minuti <= 0)) return setErrore('Ogni cantiere deve avere delle ore.');
+    // Le ore da assegnare dipendono dalle tratte: prima si aspettano le stime.
+    if (teAndata.inArrivo || teRitorno.inArrivo || fraCantieri.inArrivo) {
+      return setErrore('Calcolo dei tempi di viaggio in corso: riprova tra un istante.');
+    }
+    if (lavoroMin <= 0) {
+      return setErrore('Il viaggio fra i cantieri occupa tutto l’orario: controlla inizio, fine e tratte.');
+    }
     if (!entroTolleranza) {
       return setErrore(restano > 0 ? `Restano ${fmtHM(restano)} da assegnare.` : `${fmtHM(-restano)} di troppo.`);
-    }
-    if (teAndata.inArrivo || teRitorno.inArrivo) {
-      return setErrore('Calcolo dei tempi di viaggio in corso: riprova tra un istante.');
     }
 
     // Quello che manca si chiede nel foglio «Il viaggio», aperto sul primo punto.
@@ -595,7 +675,7 @@ export function RegistraGiornataDialog({
     if (conViaggi && !autista && !(await passeggero.conferma(false))) return;
 
     const trattaPayload = (te: TrattaEstrema, chiave: string | null) => {
-      if (te.luogo?.tipo !== 'sede') return null;
+      if (te.luogo?.tipo !== 'sede' || te.senzaViaggio) return null;
       const s = chiave ? stime[chiave] : undefined;
       return {
         sedeId: te.luogo.sedeId,
@@ -612,7 +692,7 @@ export function RegistraGiornataDialog({
         inizioIso: isoOggi(inizio),
         fineIso: isoOggi(fine),
         pausaMin,
-        split: righe.map((r) => ({ cantiereId: r.cantiereId, minuti: r.minuti })),
+        split: righe.map((r) => ({ cantiereId: r.cantiereId, minuti: r.minuti, daSede: r.daSede || undefined })),
         percorso: {
           andata: trattaPayload(teAndata, chiaveAndata),
           ritorno: trattaPayload(teRitorno, chiaveRitorno),
@@ -697,6 +777,9 @@ export function RegistraGiornataDialog({
                     className={`flex min-h-[38px] items-center gap-2 rounded-xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3`}
                   >
                     <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{r.nome}</span>
+                    {r.daSede ? (
+                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary">In sede</span>
+                    ) : null}
                     <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
                       {fmtHM(r.minuti)}
                     </span>
@@ -734,6 +817,20 @@ export function RegistraGiornataDialog({
                         onChange={(m) => setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, minuti: m } : x)))}
                       />
                     </div>
+                    {sedeDefault ? (
+                      <label className="mt-1.5 flex cursor-pointer items-center gap-2 select-none">
+                        <input
+                          type="checkbox"
+                          checked={r.daSede}
+                          disabled={pending}
+                          onChange={(e) =>
+                            setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, daSede: e.target.checked } : x)))
+                          }
+                          className="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        <span className="text-xs text-muted-foreground">Lavoro dalla sede sul progetto</span>
+                      </label>
+                    ) : null}
                   </section>
                 )}
               </Tappa>
@@ -817,7 +914,7 @@ export function RegistraGiornataDialog({
                 <p className="text-lg font-semibold text-foreground">Giornata registrata</p>
                 <p className="text-sm tabular-nums text-muted-foreground">
                   Lavoro {fmtHM(assegnato)}
-                  {andataMin + ritornoMin > 0 ? ` · Viaggio ${fmtHM(andataMin + ritornoMin)}` : ''}
+                  {viaggioTotaleMin > 0 ? ` · Viaggio ${fmtHM(viaggioTotaleMin)}` : ''}
                 </p>
               </div>
             </div>
@@ -835,6 +932,11 @@ export function RegistraGiornataDialog({
                   <span className="flex flex-col items-end leading-none">
                     <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Ore nette</span>
                     <span className="mt-0.5 font-mono text-base font-bold tabular-nums text-primary">{fmtHM(Math.max(0, nettoMin))}</span>
+                    {trasferimentiMin > 0 ? (
+                      <span className="mt-1 text-[10px] font-medium tabular-nums text-sky-700">
+                        di cui viaggio {fmtHM(trasferimentiMin)}
+                      </span>
+                    ) : null}
                   </span>
                 </div>
 
@@ -940,10 +1042,10 @@ export function RegistraGiornataDialog({
             <BarraGiornata
               segmenti={segmenti}
               assegnatoMin={assegnato}
-              nettoMin={nettoMin}
+              nettoMin={lavoroMin}
               stato={statoLavoro}
               restanoMin={restano}
-              viaggioMin={andataMin + ritornoMin}
+              viaggioMin={viaggioTotaleMin}
               viaggioNoto={viaggioNoto}
               sinistra={conPartenza ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) } : { etichetta: 'Inizio', ora: inizio }}
               destra={conRientro ? { etichetta: 'Rientro', ora: spostaOrario(fine, ritornoMin) } : { etichetta: 'Fine', ora: fine }}

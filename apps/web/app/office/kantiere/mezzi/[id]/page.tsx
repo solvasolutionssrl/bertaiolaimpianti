@@ -2,7 +2,6 @@ import { notFound, redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { MezzoStoricoClient } from './_components/mezzo-storico-client';
 import type { TrattaView, MezzoStorico, TotaliStorico } from './_components/mezzo-storico-client';
 
@@ -68,11 +67,8 @@ export default async function MezzoStoricoPage({ params }: PageProps) {
     .order('data', { ascending: false })
     .limit(500)) as { data: TrattaRow[] | null };
 
-  // Trasferimenti fra cantieri: fuori dai totali se il conteggio è spento.
-  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
-  const tratte: TrattaRow[] = (tratteRaw ?? []).filter(
-    (t) => trasferimentiConteggiati || t.da_cantiere_id == null,
-  );
+  // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio.
+  const tratte: TrattaRow[] = tratteRaw ?? [];
 
   // 3. Batch-load dipendenti, cantieri, sedi
   const dipIds = [...new Set(tratte.map((t) => t.dipendente_id).filter(Boolean))];

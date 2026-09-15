@@ -96,6 +96,8 @@ export interface VistaEstremo {
   mancante: 'luogo' | 'tempo' | 'motivo' | null;
   /** Senza cantieri non c'è una tratta da stimare. */
   senzaCantiere: boolean;
+  /** È la sede in cui si lavora sul cantiere vicino: nessuna strada. */
+  senzaViaggio?: boolean;
 }
 
 export interface VistaTratta {
@@ -217,6 +219,9 @@ function TempoTratta({ vista }: { vista: VistaEstremo }) {
     return <span className="shrink-0 text-[11px] font-medium text-muted-foreground">Nessun viaggio</span>;
   }
   if (vista.tipo == null || vista.senzaCantiere) return null;
+  if (vista.senzaViaggio) {
+    return <span className="shrink-0 text-[11px] font-medium text-muted-foreground">Nessun viaggio</span>;
+  }
   if (vista.stima.stato === 'arrivo') {
     return (
       <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
@@ -404,6 +409,10 @@ export function CardEstremo({
           {inViaggio && vista.senzaCantiere ? (
             <p className="border-t border-border/70 px-3 py-2 text-[11px] text-muted-foreground">
               Aggiungi un cantiere per calcolare km e tempo.
+            </p>
+          ) : inViaggio && vista.senzaViaggio ? (
+            <p className="border-t border-border/70 px-3 py-2 text-[11px] text-muted-foreground">
+              È la sede in cui si lavora sul cantiere: nessun km né tempo di viaggio.
             </p>
           ) : inViaggio ? (
             <EditorTempo vista={vista} disabled={disabled} onMinuti={onMinuti} onMotivo={onMotivo} />
@@ -626,7 +635,8 @@ export function TrattaFraCantieri({
             })}
           </ul>
           <p className="border-t border-border/70 bg-muted/25 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-            Il tempo fra un cantiere e l&apos;altro è già compreso nell&apos;orario di lavoro.
+            Il tempo della tratta conta come viaggio: è dentro l&apos;orario di lavoro e si toglie dalle ore da
+            assegnare ai cantieri.
           </p>
         </div>
       ) : null}
@@ -710,7 +720,9 @@ export function BarraGiornata({
             style={{
               flexGrow: s.minuti,
               flexBasis: 0,
-              ...(s.tipo === 'andata' || s.tipo === 'ritorno' ? { backgroundImage: RIGHE_VIAGGIO } : null),
+              ...(s.tipo === 'andata' || s.tipo === 'ritorno' || s.tipo === 'trasferimento'
+                ? { backgroundImage: RIGHE_VIAGGIO }
+                : null),
             }}
           />
         ))}

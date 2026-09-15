@@ -10,13 +10,17 @@
  * - **partenza e rientro** sono gli estremi della giornata e si dicono una volta;
  * - **guida e mezzo** si dicono una volta e valgono per tutte le tratte;
  * - le **tratte fra cantieri** le costruisce il sistema, l'utente le corregge;
- * - andata e ritorno sono **tempo di viaggio** (fuori dall'orario di lavoro
- *   dichiarato); le tratte in mezzo stanno **dentro** quell'orario, quindi se ne
- *   registra la stima ma non si pagano una seconda volta.
+ * - andata e ritorno sono **tempo di viaggio** fuori dall'orario di lavoro
+ *   dichiarato; le tratte in mezzo stanno **dentro** quell'orario ma sono
+ *   anch'esse viaggio: si tolgono dalle ore da assegnare ai cantieri (15/09/2026);
+ * - «lavoro dalla sede sul progetto»: le ore restano del cantiere, ma le tratte
+ *   partono e arrivano alla sede predefinita; nella stessa sede non c'è strada.
  *
  * Pura e deterministica: la usano la pagina (cosa manca, la barra dei tempi) e
  * l'azione sul server (quali righe scrivere e a quali timbrature legarle).
  */
+
+import { SCARTO_PAUSA_MIN } from './kantiere-split';
 
 /** Da dove si parte la mattina / dove si rientra la sera. */
 export type Estremo = { tipo: 'casa' } | { tipo: 'sede'; sedeId: string };
@@ -104,6 +108,11 @@ export interface TrattaEstrema {
   /** Minuti corretti a mano, null se si tiene la stima. */
   minutiCorretti: number | null;
   motivo: string;
+  /**
+   * Il luogo è la sede in cui si lavora sul cantiere vicino («lavoro dalla sede
+   * sul progetto»): non c'è strada, quindi nessuna tratta e niente da chiedere.
+   */
+  senzaViaggio?: boolean;
 }
 
 /** Il mezzo è stato scelto ma non è nel parco mezzi (auto propria, noleggio). */
@@ -120,7 +129,7 @@ export type DatoMancante =
 
 /** Minuti di viaggio della tratta: la correzione vince sulla stima. Casa = 0. */
 export function minutiTratta(t: TrattaEstrema): number {
-  if (t.luogo?.tipo !== 'sede') return 0;
+  if (t.luogo?.tipo !== 'sede' || t.senzaViaggio) return 0;
   return Math.max(0, t.minutiCorretti ?? t.stimaMin ?? 0);
 }
 
@@ -128,6 +137,7 @@ export function minutiTratta(t: TrattaEstrema): number {
 export function trattaModificata(t: TrattaEstrema): boolean {
   return (
     t.luogo?.tipo === 'sede' &&
+    !t.senzaViaggio &&
     t.stimaMin != null &&
     t.minutiCorretti != null &&
     t.minutiCorretti !== t.stimaMin
@@ -141,8 +151,8 @@ export function ciSonoViaggi(p: {
   intermedie: readonly TrattaIntermedia[];
 }): boolean {
   return (
-    p.andata.luogo?.tipo === 'sede' ||
-    p.ritorno.luogo?.tipo === 'sede' ||
+    (p.andata.luogo?.tipo === 'sede' && !p.andata.senzaViaggio) ||
+    (p.ritorno.luogo?.tipo === 'sede' && !p.ritorno.senzaViaggio) ||
     p.intermedie.some((t) => t.tipo !== 'via_casa')
   );
 }
@@ -166,7 +176,7 @@ export function datiMancanti(p: {
       out.push(luogo);
       return;
     }
-    if (t.luogo.tipo !== 'sede' || t.inArrivo) return;
+    if (t.luogo.tipo !== 'sede' || t.inArrivo || t.senzaViaggio) return;
     if (minutiTratta(t) <= 0) out.push(tempo);
     else if (trattaModificata(t) && t.motivo.trim().length < 3) out.push(motivo);
   };
@@ -176,30 +186,84 @@ export function datiMancanti(p: {
   return out;
 }
 
+// ── Il viaggio fra un cantiere e l'altro ────────────────────────────────────
+
+/** Un pezzo di strada di una tratta fra cantieri, di cui serve la stima. */
+export type PezzoTratta =
+  | { tipo: 'fra_cantieri'; da: string; a: string }
+  | { tipo: 'verso_sede'; cantiereId: string; sedeId: string }
+  | { tipo: 'da_sede'; sedeId: string; cantiereId: string };
+
+/**
+ * I minuti di viaggio prima di ogni cantiere (stesso indice di `cantieri`, il
+ * primo è 0): le tratte fra un cantiere e il successivo. Sono viaggio e non
+ * lavoro, quindi si tolgono dalle ore da assegnare ai cantieri.
+ *
+ * - tratta diretta: la stima della tratta;
+ * - passando da una sede: la somma delle due tratte, verso la sede e dalla sede;
+ * - passando da casa: 0, non è un viaggio di lavoro.
+ *
+ * `minuti` restituisce la stima già arrotondata, 0 se la stima non c'è, null se
+ * è ancora in arrivo (`inArrivo`: la pagina non deve ancora registrare). La
+ * usano sia la pagina sia il server, così le ore da assegnare coincidono.
+ */
+export function viaggioFraCantieri(
+  cantieri: readonly string[],
+  intermedie: readonly TrattaIntermedia[],
+  minuti: (pezzo: PezzoTratta) => number | null,
+): { prima: number[]; totale: number; inArrivo: boolean } {
+  let inArrivo = false;
+  const leggi = (pezzo: PezzoTratta) => {
+    const m = minuti(pezzo);
+    if (m == null) {
+      inArrivo = true;
+      return 0;
+    }
+    return Number.isFinite(m) ? Math.max(0, Math.round(m)) : 0;
+  };
+  const prima = cantieri.map((a, j) => {
+    if (j === 0) return 0;
+    const da = cantieri[j - 1]!;
+    const t = intermedie.find((x) => x.da === da && x.a === a);
+    if (!t || t.tipo === 'via_casa') return 0;
+    if (t.tipo === 'diretta') return leggi({ tipo: 'fra_cantieri', da, a });
+    return (
+      leggi({ tipo: 'verso_sede', cantiereId: da, sedeId: t.sedeId }) +
+      leggi({ tipo: 'da_sede', sedeId: t.sedeId, cantiereId: a })
+    );
+  });
+  return { prima, totale: prima.reduce((s, m) => s + m, 0), inArrivo };
+}
+
 // ── La barra dei tempi ──────────────────────────────────────────────────────
 
 export type SegmentoBarra =
   | { tipo: 'andata'; minuti: number }
   | { tipo: 'cantiere'; indice: number; minuti: number }
   | { tipo: 'pausa'; minuti: number }
+  | { tipo: 'trasferimento'; minuti: number }
   | { tipo: 'da_assegnare'; minuti: number }
   | { tipo: 'ritorno'; minuti: number };
 
 /**
  * La giornata da un capo all'altro, in ordine: andata, lavoro sui cantieri con
- * la pausa in mezzo, il lavoro ancora da assegnare, ritorno.
+ * la pausa e le tratte in mezzo, il lavoro ancora da assegnare, ritorno.
  *
  * La pausa si mette dove la mette `calcolaSegmentiSplit` quando registra: al
  * cambio di cantiere più vicino a metà giornata, oppure a metà dell'unico
- * cantiere. Così la barra mostra la giornata come verrà scritta.
+ * cantiere; se a quel cambio c'è una tratta, dopo SCARTO_PAUSA_MIN sul cantiere
+ * di arrivo (o prima della partenza). La tratta sta subito prima del cantiere
+ * che raggiunge. Così la barra mostra la giornata come verrà scritta.
  */
 export function segmentiBarraGiornata(p: {
   andataMin: number;
   ritornoMin: number;
   /** Minuti dichiarati per cantiere, nell'ordine della pagina. */
   minutiCantieri: readonly number[];
+  /** Viaggio prima di ogni cantiere (vedi `viaggioFraCantieri`); il primo si ignora. */
+  trasferimentiMin?: readonly number[];
   pausaMin: number;
-  /** Lavoro netto dall'orario: (fine − inizio) − pausa. */
+  /** Lavoro da assegnare: (fine − inizio) − pausa − tratte fra cantieri. */
   nettoMin: number;
 }): SegmentoBarra[] {
   type Lavoro = Extract<SegmentoBarra, { tipo: 'cantiere' | 'da_assegnare' | 'pausa' }>;
@@ -211,6 +275,16 @@ export function segmentiBarraGiornata(p: {
   const assegnati = lavoro.reduce((a, s) => a + s.minuti, 0);
   const resto = Math.round(p.nettoMin) - assegnati;
   if (resto > 0) lavoro.push({ tipo: 'da_assegnare', minuti: resto });
+
+  // Minuti di strada prima di ogni cantiere (il primo non ne ha).
+  const tratte = p.minutiCantieri.map((_, i) =>
+    i === 0 ? 0 : Math.max(0, Math.round(p.trasferimentiMin?.[i] ?? 0)),
+  );
+  const tratteFra = (da: number, a: number) => {
+    let minuti = 0;
+    for (let k = da + 1; k <= a && k < tratte.length; k++) minuti += tratte[k]!;
+    return minuti;
+  };
 
   const pausa = Math.max(0, Math.round(p.pausaMin));
   if (pausa > 0 && lavoro.length > 0) {
@@ -239,13 +313,46 @@ export function segmentiBarraGiornata(p: {
           migliore = i;
         }
       }
-      lavoro.splice(migliore, 0, { tipo: 'pausa', minuti: pausa });
+      const precedente = lavoro[migliore - 1]!;
+      const arrivo = lavoro[migliore]!;
+      const scarto = (m: number) => Math.min(SCARTO_PAUSA_MIN, Math.floor(m / 2));
+      const conStrada =
+        precedente.tipo === 'cantiere' && arrivo.tipo === 'cantiere' && tratteFra(precedente.indice, arrivo.indice) > 0;
+      if (conStrada && scarto(arrivo.minuti) >= 1) {
+        const s = scarto(arrivo.minuti);
+        lavoro.splice(migliore, 1, { ...arrivo, minuti: s }, { tipo: 'pausa', minuti: pausa }, { ...arrivo, minuti: arrivo.minuti - s });
+      } else if (conStrada && scarto(precedente.minuti) >= 1) {
+        const s = scarto(precedente.minuti);
+        lavoro.splice(
+          migliore - 1,
+          1,
+          { ...precedente, minuti: precedente.minuti - s },
+          { tipo: 'pausa', minuti: pausa },
+          { ...precedente, minuti: s },
+        );
+      } else {
+        lavoro.splice(migliore, 0, { tipo: 'pausa', minuti: pausa });
+      }
     }
   }
 
   const out: SegmentoBarra[] = [];
   if (p.andataMin > 0) out.push({ tipo: 'andata', minuti: Math.round(p.andataMin) });
-  out.push(...lavoro);
+  // Le tratte non ancora messe in barra si mettono davanti al cantiere che
+  // raggiungono; quelle verso cantieri ancora a zero, davanti al da assegnare.
+  let tratteMesse = 0;
+  const metteTratteFino = (indice: number) => {
+    let minuti = 0;
+    for (let k = tratteMesse + 1; k <= indice && k < tratte.length; k++) minuti += tratte[k]!;
+    tratteMesse = Math.max(tratteMesse, indice);
+    if (minuti > 0) out.push({ tipo: 'trasferimento', minuti });
+  };
+  for (const s of lavoro) {
+    if (s.tipo === 'cantiere') metteTratteFino(s.indice);
+    else if (s.tipo === 'da_assegnare') metteTratteFino(tratte.length - 1);
+    out.push(s);
+  }
+  metteTratteFino(tratte.length - 1);
   if (p.ritornoMin > 0) out.push({ tipo: 'ritorno', minuti: Math.round(p.ritornoMin) });
   return out;
 }

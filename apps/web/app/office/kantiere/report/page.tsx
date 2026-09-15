@@ -1,5 +1,5 @@
 import { createServerSupabase } from '@kommessa/api/server';
-import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
+import { COLONNE_QUOTE, quoteDaRiga, quoteOre, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { aggregaOre, type RigaAgg } from '@kommessa/api/kantiere-report';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
@@ -28,13 +28,10 @@ type RapportinoRow = {
   stato: string;
 };
 
-type RigaRow = {
+type RigaRow = RigaRapportinoLetta & {
   rapportino_id: string;
   commessa_id: string | null;
   cantiere_id: string | null;
-  ore_ordinarie: number;
-  ore_straordinarie: number;
-  ore_viaggio: number;
 };
 
 type DipendenteRow = {
@@ -93,15 +90,21 @@ interface PageProps {
 
 export type AggregataRiga = {
   chiave: string;
+  /** Lavoro e viaggio entro l'orario ordinario. */
   ordinarie: number;
   straordinarie: number;
+  viaggioEccedente: number;
+  lavoro: number;
   viaggio: number;
+  /** Lavoro + viaggio. */
   totale: number;
 };
 
 export type KpiTotali = {
   ordinarie: number;
   straordinarie: number;
+  viaggioEccedente: number;
+  lavoro: number;
   viaggio: number;
   totale: number;
 };
@@ -171,7 +174,7 @@ export default async function ReportPage({ searchParams }: PageProps) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     righeData = data ?? [];
   }
@@ -180,11 +183,8 @@ export default async function ReportPage({ searchParams }: PageProps) {
   const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
   // Calcola dipendenti ids dai viaggi per il batch-load (unione con quelli dei rapportini)
-  // Trasferimenti cantiere→cantiere: nel report solo se il tenant li conteggia.
-  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
-  const viaggi: ViaggioRow[] = (viaggiRes.data ?? []).filter(
-    (v) => trasferimentiConteggiati || v.da_cantiere_id == null,
-  );
+  // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio.
+  const viaggi: ViaggioRow[] = viaggiRes.data ?? [];
   const viaggiDipIds = [...new Set(viaggi.map((v) => v.dipendente_id))];
   const tuttiDipIds = [...new Set([...dipIds, ...viaggiDipIds])];
 
@@ -254,9 +254,16 @@ export default async function ReportPage({ searchParams }: PageProps) {
     return {
       chiaveDipendente: dipendentiMap.get(dipId) ?? dipId,
       chiaveCommessa: targetLabel(r, commesseTitoloMap, cantieriNomeMap),
-      ore_ordinarie: r.ore_ordinarie ?? 0,
-      ore_straordinarie: r.ore_straordinarie ?? 0,
-      ore_viaggio: r.ore_viaggio ?? 0,
+      ...(() => {
+        const q = quoteOre(quoteDaRiga(r));
+        return {
+          ore_ordinarie: q.ordinarie,
+          ore_straordinarie: q.straordinarie,
+          ore_viaggio_eccedenti: q.viaggioEccedente,
+          ore_lavoro: q.lavoro,
+          ore_viaggio: q.viaggio,
+        };
+      })(),
     };
   });
 
@@ -271,10 +278,12 @@ export default async function ReportPage({ searchParams }: PageProps) {
     (acc, r) => ({
       ordinarie: acc.ordinarie + r.ore_ordinarie,
       straordinarie: acc.straordinarie + r.ore_straordinarie,
+      viaggioEccedente: acc.viaggioEccedente + r.ore_viaggio_eccedenti,
+      lavoro: acc.lavoro + r.ore_lavoro,
       viaggio: acc.viaggio + r.ore_viaggio,
-      totale: acc.totale + r.ore_ordinarie + r.ore_straordinarie + r.ore_viaggio,
+      totale: acc.totale + r.ore_lavoro + r.ore_viaggio,
     }),
-    { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0 },
+    { ordinarie: 0, straordinarie: 0, viaggioEccedente: 0, lavoro: 0, viaggio: 0, totale: 0 },
   );
 
   // ── Aggregati viaggi per dipendente ───────────────────────────────────────

@@ -1,19 +1,71 @@
 import 'server-only';
 import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
+import { orarioOrdinarioValido } from '@kommessa/api/kantiere-quote';
 
 import { createServerSupabase } from '@kommessa/api/server';
 
 type Supa = ReturnType<typeof createServerSupabase>;
 
-export type ArrotondamentiKantiere = {
-  /** Step (min) per l'arrotondamento del TEMPO DI VIAGGIO. Default 5. */
-  viaggioMin: number;
-  /** Step (min) per l'arrotondamento delle ORE LAVORO. Default 0 = nessuno
-   *  (si raccoglie tutto a dettaglio massimo, si arrotonda nel report). */
-  oreMin: number;
-};
+// ── Impostazioni del modulo Kantiere ────────────────────────────────────────
 
-function toInt(v: unknown, def: number): number {
+/** I controlli della pagina Anomalie (config `anomalie`), tutti attivi se assenti. */
+export interface AnomalieKantiere {
+  incomplete: boolean;
+  straordinari: boolean;
+  senza_rapportino: boolean;
+  modificato: boolean;
+  festivo: boolean;
+  weekend: boolean;
+  ore_eccessive: boolean;
+}
+
+/**
+ * Le impostazioni Kantiere di un tenant (`tenant_modules.config`), normalizzate.
+ * Chiave assente o non valida = valore predefinito. Pagina Impostazioni, azioni
+ * e calcoli leggono tutti da `impostazioniDaConfig`, quindi i predefiniti sono
+ * gli stessi ovunque.
+ */
+export interface ImpostazioniKantiere {
+  /** `soglia_ore_ordinarie` (ore): orario ordinario giornaliero, in minuti. Predefinito 480. */
+  orarioOrdinarioMin: number;
+  /** `quote_ore_dal`: giorno da cui il viaggio entra nell'orario ordinario; null = da sempre. */
+  quoteOreDal: string | null;
+  /** `arrotondamento_viaggio_min`: passo del tempo di viaggio. Predefinito 5. */
+  arrotondamentoViaggioMin: number;
+  /** `arrotondamento_ore_min`: passo delle ore di lavoro, 0 = al minuto. Predefinito 0. */
+  arrotondamentoOreMin: number;
+  /** `avvio_turno_libero`: turno avviabile su ogni cantiere. Predefinito sì. */
+  avvioTurnoLibero: boolean;
+  /** `split_fine_turno_attivo`: ripartizione delle ore alla chiusura. Predefinito sì. */
+  splitFineTurnoAttivo: boolean;
+  /** `registra_giornata_attivo`: giornata senza timbrature. Predefinito sì. */
+  registraGiornataAttivo: boolean;
+  /** `tolleranza_chiusura_min`: scarto ammesso nella ripartizione (0-30). Predefinito 5. */
+  tolleranzaChiusuraMin: number;
+  /** `passo_minuti_stepper`: passo dei tasti + e − (5/10/15/30). Predefinito 15. */
+  passoMinutiStepper: number;
+  /** `soglia_pausa_pranzo_ore`: durata del turno oltre cui si chiede la pausa. Predefinito 5. */
+  sogliaPausaPranzoOre: number;
+  /** `soglia_auto_spegnimento_pausa_ore`: chiusura automatica della pausa (≥ 0,5). Predefinito 1,5. */
+  sogliaAutoSpegnimentoPausaOre: number;
+  /** `km_solo_autista`: i km di una tratta condivisa vanno a chi guida. Predefinito sì. */
+  kmSoloAutista: boolean;
+  /** `sede_partenza_default`: indirizzo proposto ai cantieri nuovi. Predefinito vuoto. */
+  sedePartenzaDefault: string;
+  /** `routing_provider`: stime di viaggio, scelto dal super admin. Predefinito 'free'. */
+  routingProvider: 'free' | 'google';
+  /** `auto_approva_rapportini`: approvazione automatica delle giornate. Predefinito sì. */
+  autoApprovaRapportini: boolean;
+  /** `anomalia_turno_ore_max` (ore): soglia di verifica della giornata. Predefinito 10. */
+  anomaliaTurnoOreMax: number;
+  anomalie: AnomalieKantiere;
+  /** `kontabilita_attiva`: spese di cantiere. Predefinito sì. */
+  kontabilitaAttiva: boolean;
+}
+
+export const PASSI_MINUTI_STEPPER = [5, 10, 15, 30] as const;
+
+function intero(v: unknown, def: number): number {
   if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.round(v);
   if (typeof v === 'string') {
     const n = parseInt(v, 10);
@@ -22,209 +74,165 @@ function toInt(v: unknown, def: number): number {
   return def;
 }
 
-/** Legge gli step di arrotondamento dal config del modulo kantiere del tenant. */
-export async function leggiArrotondamenti(
-  supabase: Supa,
-  tenantId: string,
-): Promise<ArrotondamentiKantiere> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+function decimale(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+export function impostazioniDaConfig(config: Record<string, unknown>): ImpostazioniKantiere {
+  const soglia = decimale(config['soglia_ore_ordinarie']);
+  const dal = config['quote_ore_dal'];
+  const passo = intero(config['passo_minuti_stepper'], 15);
+  const pausa = intero(config['soglia_pausa_pranzo_ore'], 5);
+  const autoPausa = decimale(config['soglia_auto_spegnimento_pausa_ore']);
+  const verifica = decimale(config['anomalia_turno_ore_max']);
+  const an =
+    config['anomalie'] && typeof config['anomalie'] === 'object'
+      ? (config['anomalie'] as Record<string, unknown>)
+      : {};
   return {
-    viaggioMin: toInt(config['arrotondamento_viaggio_min'], 5),
-    oreMin: toInt(config['arrotondamento_ore_min'], 0),
+    orarioOrdinarioMin: orarioOrdinarioValido(soglia != null ? Math.round(soglia * 60) : null),
+    quoteOreDal: typeof dal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dal) ? dal : null,
+    arrotondamentoViaggioMin: intero(config['arrotondamento_viaggio_min'], 5),
+    arrotondamentoOreMin: intero(config['arrotondamento_ore_min'], 0),
+    avvioTurnoLibero: config['avvio_turno_libero'] !== false,
+    splitFineTurnoAttivo: config['split_fine_turno_attivo'] !== false,
+    registraGiornataAttivo: config['registra_giornata_attivo'] !== false,
+    tolleranzaChiusuraMin: Math.min(30, intero(config['tolleranza_chiusura_min'], 5)),
+    passoMinutiStepper: (PASSI_MINUTI_STEPPER as readonly number[]).includes(passo) ? passo : 15,
+    sogliaPausaPranzoOre: pausa >= 1 ? pausa : 5,
+    sogliaAutoSpegnimentoPausaOre: autoPausa != null && autoPausa > 0 ? Math.max(0.5, autoPausa) : 1.5,
+    kmSoloAutista: config['km_solo_autista'] !== false,
+    sedePartenzaDefault: typeof config['sede_partenza_default'] === 'string' ? config['sede_partenza_default'] : '',
+    routingProvider: config['routing_provider'] === 'google' ? 'google' : 'free',
+    autoApprovaRapportini: config['auto_approva_rapportini'] !== false,
+    // Con i decimali: 10,5 ore restano 10,5 (prima si arrotondava a 11).
+    anomaliaTurnoOreMax: verifica != null && verifica > 0 ? verifica : 10,
+    anomalie: {
+      incomplete: an['incomplete'] !== false,
+      straordinari: an['straordinari'] !== false,
+      senza_rapportino: an['senza_rapportino'] !== false,
+      modificato: an['modificato'] !== false,
+      festivo: an['festivo'] !== false,
+      weekend: an['weekend'] !== false,
+      ore_eccessive: an['ore_eccessive'] !== false,
+    },
+    kontabilitaAttiva: config['kontabilita_attiva'] !== false,
   };
 }
 
-/**
- * Soglia (ore) oltre cui, in chiusura turno SENZA pausa timbrata, l'app propone
- * di dichiarare la pausa pranzo. Identica per QR e tasto in-app. Default 5h
- * (`SOGLIA_PAUSA_PRANZO_ORE`), configurabile dalle Impostazioni Kantiere.
- */
-export async function leggiSogliaPausaPranzoOre(
-  supabase: Supa,
-  tenantId: string,
-): Promise<number> {
+async function leggiConfig(supabase: Supa, tenantId: string): Promise<Record<string, unknown>> {
   const { data } = await supabase
     .from('tenant_modules' as never)
     .select('config')
     .eq('tenant_id', tenantId)
     .eq('module_code', 'kantiere')
     .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  const n = toInt(config['soglia_pausa_pranzo_ore'], 5);
-  return n >= 1 ? n : 5;
+  return (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+}
+
+/** Tutte le impostazioni Kantiere del tenant, con i predefiniti. */
+export async function leggiImpostazioniKantiere(supabase: Supa, tenantId: string): Promise<ImpostazioniKantiere> {
+  return impostazioniDaConfig(await leggiConfig(supabase, tenantId));
+}
+
+// ── Letture parziali (stessi valori, per chi ne usa solo una parte) ─────────
+
+export type ArrotondamentiKantiere = {
+  /** Passo (min) del tempo di viaggio. */
+  viaggioMin: number;
+  /** Passo (min) delle ore di lavoro, 0 = al minuto. */
+  oreMin: number;
+};
+
+export async function leggiArrotondamenti(supabase: Supa, tenantId: string): Promise<ArrotondamentiKantiere> {
+  const imp = await leggiImpostazioniKantiere(supabase, tenantId);
+  return { viaggioMin: imp.arrotondamentoViaggioMin, oreMin: imp.arrotondamentoOreMin };
+}
+
+export type RegolaQuote = {
+  /** Orario ordinario giornaliero in minuti. */
+  orarioOrdinarioMin: number;
+  /**
+   * Giorno (AAAA-MM-GG) da cui le quote si derivano con la regola del viaggio.
+   * Le giornate precedenti restano come registrate anche se ricalcolate.
+   * null = la regola vale da sempre (tenant nuovi).
+   */
+  quoteDal: string | null;
+};
+
+/** La regola con cui si derivano le quote dai minuti puri. Vedi `@kommessa/api/kantiere-quote`. */
+export async function leggiRegolaQuote(supabase: Supa, tenantId: string): Promise<RegolaQuote> {
+  const imp = await leggiImpostazioniKantiere(supabase, tenantId);
+  return { orarioOrdinarioMin: imp.orarioOrdinarioMin, quoteDal: imp.quoteOreDal };
+}
+
+/** Durata del turno (ore) oltre cui, chiudendo senza pausa timbrata, si chiede la pausa. */
+export async function leggiSogliaPausaPranzoOre(supabase: Supa, tenantId: string): Promise<number> {
+  return (await leggiImpostazioniKantiere(supabase, tenantId)).sogliaPausaPranzoOre;
+}
+
+/** Durata (ore) oltre cui una pausa rimasta aperta si chiude e il turno riprende. */
+export async function leggiSogliaAutoSpegnimentoPausa(supabase: Supa, tenantId: string): Promise<number> {
+  return (await leggiImpostazioniKantiere(supabase, tenantId)).sogliaAutoSpegnimentoPausaOre;
 }
 
 /**
- * Soglia (ore) oltre cui una pausa pranzo avviata e DIMENTICATA si auto-spegne:
- * il turno riprende in automatico (l'orologio riparte) e vengono scalati
- * esattamente `soglia` minuti. Distinta da `soglia_pausa_pranzo_ore` (5h, che
- * governa il PROMEMORIA a dichiarare la pausa in chiusura turno). Default 1.5h,
- * forzata >= 0.5h. Configurabile dalle Impostazioni Kantiere.
+ * Provider delle stime di viaggio scelto dal super admin ('free' | 'google').
+ * La chiave Google è di piattaforma (env): qui c'è solo la scelta.
  */
-export async function leggiSogliaAutoSpegnimentoPausa(
-  supabase: Supa,
-  tenantId: string,
-): Promise<number> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  const raw = config['soglia_auto_spegnimento_pausa_ore'];
-  let n = 1.5;
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) n = raw;
-  else if (typeof raw === 'string') {
-    const parsed = parseFloat(raw);
-    if (!isNaN(parsed) && parsed > 0) n = parsed;
-  }
-  return n >= 0.5 ? n : 0.5;
+export async function leggiRoutingProvider(supabase: Supa, tenantId: string): Promise<'free' | 'google'> {
+  return (await leggiImpostazioniKantiere(supabase, tenantId)).routingProvider;
 }
 
 /**
- * Provider di routing scelto dal super admin per il tenant ('free' | 'google').
- * Default 'free'. La CHIAVE Google è unica di piattaforma (env), qui c'è solo la
- * scelta abilitato/no — non è un segreto, quindi sta in `tenant_modules.config`.
- */
-export async function leggiRoutingProvider(
-  supabase: Supa,
-  tenantId: string,
-): Promise<'free' | 'google'> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  return config['routing_provider'] === 'google' ? 'google' : 'free';
-}
-
-/**
- * Toggle per-tenant "conteggia i trasferimenti tra cantieri" (chiave storica
- * `km_switch_attivo`). I trasferimenti cantiere→cantiere (km + tempo stimato)
- * sono SEMPRE registrati e visibili al super admin; questo toggle governa solo
- * il CONTEGGIO lato tenant: se OFF, le aggregazioni km del tenant escludono le
- * tratte cantiere→cantiere (i numeri operativi del tenant non cambiano). Alla
- * futura attivazione entrerà anche il tempo di viaggio nel calcolo ore (logica
- * da definire col cliente). Default false (opt-in). FPM Impianti: OFF.
- */
-export async function leggiTrasferimentiAttivi(supabase: Supa, tenantId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  return config['km_switch_attivo'] === true;
-}
-
-/**
- * «I chilometri li accumula chi guida.»
- *
- * Su una tratta condivisa il **tempo** è di tutti — sono ore in cui nessuno dei
- * passeggeri poteva fare altro — ma i **chilometri** sono uno solo, quelli del
- * mezzo: attribuirli anche ai passeggeri li conterebbe tre volte per lo stesso
- * viaggio, e a fine mese il costo del cantiere risulterebbe il triplo del vero.
- *
- * La tratta resta comunque registrata per intero (distanza inclusa): questo
- * toggle decide solo **a chi contano**. Default `true`, che è la regola
- * normale; si spegne se un cliente rimborsa i km a testa.
+ * «I chilometri li accumula chi guida.» Su una tratta condivisa il tempo vale
+ * per ciascuno, i chilometri sono quelli del mezzo: attribuirli anche ai
+ * passeggeri li conterebbe più volte. La tratta resta registrata per intero;
+ * l'impostazione decide solo a chi contano.
  */
 export async function leggiKmSoloAutista(supabase: Supa, tenantId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  return config['km_solo_autista'] !== false;
+  return (await leggiImpostazioniKantiere(supabase, tenantId)).kmSoloAutista;
 }
 
 export type ImpostazioniTurno = {
-  /** Tolleranza (min) sulla somma dello split di fine turno. Default 5. */
   tolleranzaChiusuraMin: number;
-  /** Split "cosa hai fatto oggi" attivo. Default true. */
   splitAttivo: boolean;
-  /** Passo (min) dei +/- degli stepper ore (5/10/15/30). Default 15. */
   passoMinuti: number;
-  /** I tecnici possono avviare un turno su QUALSIASI cantiere. Default true. */
   avvioLibero: boolean;
-  /** Registrazione di una giornata senza timbrature (caso 4). Default true. */
   registraGiornataAttivo: boolean;
 };
 
-const PASSI_MINUTI = [5, 10, 15, 30];
-
-/**
- * Impostazioni per il flusso turni (chiusura, split, km, stepper, avvio libero).
- * Gestite dall'ufficio (Impostazioni Kantiere). Una sola lettura del config.
- */
-export async function leggiImpostazioniTurno(
-  supabase: Supa,
-  tenantId: string,
-): Promise<ImpostazioniTurno> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  const passo = toInt(config['passo_minuti_stepper'], 15);
+/** Impostazioni del flusso turni (avvio, chiusura, ripartizione, stepper). */
+export async function leggiImpostazioniTurno(supabase: Supa, tenantId: string): Promise<ImpostazioniTurno> {
+  const imp = await leggiImpostazioniKantiere(supabase, tenantId);
   return {
-    tolleranzaChiusuraMin: Math.min(30, toInt(config['tolleranza_chiusura_min'], 5)),
-    splitAttivo: config['split_fine_turno_attivo'] === false ? false : true,
-    passoMinuti: PASSI_MINUTI.includes(passo) ? passo : 15,
-    avvioLibero: config['avvio_turno_libero'] === false ? false : true,
-    registraGiornataAttivo: config['registra_giornata_attivo'] === false ? false : true,
+    tolleranzaChiusuraMin: imp.tolleranzaChiusuraMin,
+    splitAttivo: imp.splitFineTurnoAttivo,
+    passoMinuti: imp.passoMinutiStepper,
+    avvioLibero: imp.avvioTurnoLibero,
+    registraGiornataAttivo: imp.registraGiornataAttivo,
   };
 }
 
 export type PolicyRapportini = {
-  /** Auto-approvazione delle giornate "pulite" (turno chiuso, entro soglia). Default true. */
+  /** Approvazione automatica delle giornate chiuse entro soglia. */
   autoApprova: boolean;
-  /** Soglia ore lavorate (pause escluse) oltre cui la giornata è anomalia "da verificare". Default 10. */
+  /** Ore di lavoro (pause escluse) oltre cui la giornata resta da verificare. */
   sogliaAnomaliaTurnoOre: number;
 };
 
 /**
- * Policy di approvazione rapportini del tenant. Le timbrature sono le ore
- * effettive: le giornate complete entro soglia si auto-approvano; quelle oltre
- * soglia (o aperte) restano "da verificare" per l'ufficio.
+ * Le timbrature sono le ore effettive: le giornate chiuse entro soglia si
+ * approvano da sole, quelle oltre soglia (o aperte) restano da verificare.
  */
-export async function leggiPolicyRapportini(
-  supabase: Supa,
-  tenantId: string,
-): Promise<PolicyRapportini> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
-  const auto = config['auto_approva_rapportini'];
-  return {
-    autoApprova: auto === false ? false : true, // default true
-    sogliaAnomaliaTurnoOre: toInt(config['anomalia_turno_ore_max'], 10) || 10,
-  };
+export async function leggiPolicyRapportini(supabase: Supa, tenantId: string): Promise<PolicyRapportini> {
+  const imp = await leggiImpostazioniKantiere(supabase, tenantId);
+  return { autoApprova: imp.autoApprovaRapportini, sogliaAnomaliaTurnoOre: imp.anomaliaTurnoOreMax };
 }
 
 /** Solo la soglia oltre la quale una giornata non si approva da sola. */
-export async function sogliaAnomaliaTurnoOre(
-  supabase: Supa,
-  tenantId: string,
-): Promise<number> {
+export async function sogliaAnomaliaTurnoOre(supabase: Supa, tenantId: string): Promise<number> {
   return (await leggiPolicyRapportini(supabase, tenantId)).sogliaAnomaliaTurnoOre;
 }
 

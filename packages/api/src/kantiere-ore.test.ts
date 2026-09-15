@@ -1,10 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   minutiPerCommessa,
-  calcolaOreGiornata,
   prossimoTipoTimbratura,
   arrotonda15,
-  minutiViaggioPerTarget,
   appaiaTimbrature,
   statoTurno,
   esitoAutoApprovazione,
@@ -205,48 +203,6 @@ describe('minutiPerCommessa', () => {
   });
 });
 
-describe('calcolaOreGiornata', () => {
-  it('0h → righe a zero', () => {
-    const r = calcolaOreGiornata({ minutiLavoratiPerCommessa: [] });
-    expect(r.righe).toEqual([]);
-    expect(r.ore_viaggio).toBe(0);
-  });
-  it('solo viaggio', () => {
-    const r = calcolaOreGiornata({ minutiLavoratiPerCommessa: [], minutiViaggio: 90 });
-    expect(r.righe).toEqual([]);
-    expect(r.ore_viaggio).toBe(1.5);
-  });
-  it('sotto soglia → tutto ordinario', () => {
-    const r = calcolaOreGiornata({ minutiLavoratiPerCommessa: [{ commessa_id: 'A', minuti: 300 }] });
-    expect(r.righe[0]).toEqual({ commessa_id: 'A', ore_ordinarie: 5, ore_straordinarie: 0 });
-  });
-  it('esattamente soglia 8h → tutto ordinario', () => {
-    const r = calcolaOreGiornata({ minutiLavoratiPerCommessa: [{ commessa_id: 'A', minuti: 480 }] });
-    expect(r.righe[0]).toEqual({ commessa_id: 'A', ore_ordinarie: 8, ore_straordinarie: 0 });
-  });
-  it('sfora soglia → eccedenza straordinario', () => {
-    const r = calcolaOreGiornata({ minutiLavoratiPerCommessa: [{ commessa_id: 'A', minuti: 600 }] });
-    expect(r.righe[0]).toEqual({ commessa_id: 'A', ore_ordinarie: 8, ore_straordinarie: 2 });
-  });
-  it('multi-commessa: riempimento sequenziale fino a soglia', () => {
-    const r = calcolaOreGiornata({
-      minutiLavoratiPerCommessa: [
-        { commessa_id: 'A', minuti: 300 }, // 5h → 5 ord
-        { commessa_id: 'B', minuti: 300 }, // 5h → 3 ord + 2 straord
-      ],
-    });
-    expect(r.righe[0]).toEqual({ commessa_id: 'A', ore_ordinarie: 5, ore_straordinarie: 0 });
-    expect(r.righe[1]).toEqual({ commessa_id: 'B', ore_ordinarie: 3, ore_straordinarie: 2 });
-  });
-  it('soglia custom (tenant 6h)', () => {
-    const r = calcolaOreGiornata({
-      minutiLavoratiPerCommessa: [{ commessa_id: 'A', minuti: 480 }],
-      sogliaOreOrdinarie: 6,
-    });
-    expect(r.righe[0]).toEqual({ commessa_id: 'A', ore_ordinarie: 6, ore_straordinarie: 2 });
-  });
-});
-
 describe('prossimoTipoTimbratura', () => {
   it('nessuna timbrata → ingresso', () => expect(prossimoTipoTimbratura([])).toBe('ingresso'));
   it('ultima ingresso → uscita', () =>
@@ -272,35 +228,6 @@ describe('arrotonda15', () => {
     expect(arrotonda15(0)).toBe(0);
     expect(arrotonda15(-10)).toBe(0);
     expect(arrotonda15(NaN)).toBe(0);
-  });
-});
-
-describe('minutiViaggioPerTarget', () => {
-  it('somma andata + ritorno per target', () => {
-    const m = minutiViaggioPerTarget([
-      { targetKey: 'cantiere:A', minuti: 90 },
-      { targetKey: 'cantiere:A', minuti: 75 },
-      { targetKey: 'commessa:B', minuti: 30 },
-    ]);
-    expect(m.get('cantiere:A')).toBe(165);
-    expect(m.get('commessa:B')).toBe(30);
-  });
-  it('ignora chiavi vuote', () => {
-    const m = minutiViaggioPerTarget([{ targetKey: '', minuti: 50 }]);
-    expect(m.size).toBe(0);
-  });
-});
-
-describe('viaggio extra: straordinari solo sul lavoro', () => {
-  it('9h lavoro → 8 ord + 1 straord, viaggio separato non concorre', () => {
-    const r = calcolaOreGiornata({
-      minutiLavoratiPerCommessa: [{ commessa_id: 'cantiere:A', minuti: 9 * 60 }],
-      minutiViaggio: 120,
-      sogliaOreOrdinarie: 8,
-    });
-    expect(r.righe[0]!.ore_ordinarie).toBe(8);
-    expect(r.righe[0]!.ore_straordinarie).toBe(1);
-    expect(r.ore_viaggio).toBe(2);
   });
 });
 

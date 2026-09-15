@@ -538,7 +538,7 @@ una pausa è rimasta aperta.
 **04_viaggi** — \`direzione\` andata/ritorno; con \`da_cantiere\` valorizzato è
 uno spostamento fra due cantieri. \`minuti_pagati\` (\`durata_confermata_min\`) a
 zero vuol dire **registrato ma non pagato**: è il caso dei trasferimenti fra
-cantieri.
+cantieri registrati fino al 14/09/2026. Dal 15/09 il loro tempo è viaggio.
 
 **05_spese** — importi come li ha letti l'AI dallo scontrino e poi confermati.
 \`foto_r2\` è dove sta la foto: **le immagini non sono in questo archivio**, se

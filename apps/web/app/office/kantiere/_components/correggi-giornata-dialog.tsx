@@ -22,8 +22,8 @@ export type CorreggiRiga = {
   targetId: string;
   targetTipo: 'commessa' | 'cantiere';
   titolo: string;
-  ord: number;
-  straord: number;
+  /** Ore di lavoro (ordinarie e straordinarie si derivano dall'orario ordinario). */
+  lavoro: number;
   viaggio: number;
 };
 
@@ -76,9 +76,7 @@ export function CorreggiGiornataDialog({
 
   // Sezione avanzata "correggi a mano"
   const [avanzateOpen, setAvanzateOpen] = React.useState(false);
-  const [valori, setValori] = React.useState<
-    Record<string, { ord: number; straord: number; viaggio: number }>
-  >({});
+  const [valori, setValori] = React.useState<Record<string, { lavoro: number; viaggio: number }>>({});
   const [erroreRiga, setErroreRiga] = React.useState<Record<string, string>>({});
   const [salvataId, setSalvataId] = React.useState<string | null>(null);
 
@@ -90,9 +88,9 @@ export function CorreggiGiornataDialog({
       setAvanzateOpen(false);
       setSalvataId(null);
       setErroreRiga({});
-      const init: Record<string, { ord: number; straord: number; viaggio: number }> = {};
+      const init: Record<string, { lavoro: number; viaggio: number }> = {};
       for (const r of righe ?? []) {
-        init[r.targetId] = { ord: r.ord, straord: r.straord, viaggio: r.viaggio };
+        init[r.targetId] = { lavoro: r.lavoro, viaggio: r.viaggio };
       }
       setValori(init);
     }
@@ -129,7 +127,7 @@ export function CorreggiGiornataDialog({
       delete n[r.targetId];
       return n;
     });
-    const v = valori[r.targetId] ?? { ord: r.ord, straord: r.straord, viaggio: r.viaggio };
+    const v = valori[r.targetId] ?? { lavoro: r.lavoro, viaggio: r.viaggio };
     setSalvataId(null);
     startTransition(async () => {
       const res = await registraOrePerDipendente({
@@ -137,8 +135,7 @@ export function CorreggiGiornataDialog({
         commessaId: r.targetTipo === 'commessa' ? r.targetId : undefined,
         cantiereId: r.targetTipo === 'cantiere' ? r.targetId : undefined,
         data,
-        ore_ordinarie: v.ord,
-        ore_straordinarie: v.straord,
+        ore_lavoro: v.lavoro,
         ore_viaggio: v.viaggio,
       });
       if (!res.ok) {
@@ -150,11 +147,11 @@ export function CorreggiGiornataDialog({
     });
   }
 
-  function setCampo(targetId: string, campo: 'ord' | 'straord' | 'viaggio', val: number) {
+  function setCampo(targetId: string, campo: 'lavoro' | 'viaggio', val: number) {
     setSalvataId(null);
     setValori((prev) => ({
       ...prev,
-      [targetId]: { ...(prev[targetId] ?? { ord: 0, straord: 0, viaggio: 0 }), [campo]: val },
+      [targetId]: { ...(prev[targetId] ?? { lavoro: 0, viaggio: 0 }), [campo]: val },
     }));
   }
 
@@ -292,14 +289,12 @@ export function CorreggiGiornataDialog({
                   <>
                     <p className="mb-3 text-xs text-muted-foreground">
                       La correzione a mano segna la giornata come approvata dall&apos;ufficio.
+                      Ordinarie, straordinarie e viaggio eccedente si calcolano dall&apos;orario
+                      ordinario giornaliero delle impostazioni.
                     </p>
                     <div className="space-y-3">
                       {(righe ?? []).map((r) => {
-                        const v = valori[r.targetId] ?? {
-                          ord: r.ord,
-                          straord: r.straord,
-                          viaggio: r.viaggio,
-                        };
+                        const v = valori[r.targetId] ?? { lavoro: r.lavoro, viaggio: r.viaggio };
                         return (
                           <div
                             key={r.targetId}
@@ -308,12 +303,11 @@ export function CorreggiGiornataDialog({
                             <p className="mb-2 truncate text-xs font-medium text-foreground">
                               {r.titolo}
                             </p>
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 gap-2">
                               {(
                                 [
-                                  ['ord', 'Ord.'],
-                                  ['straord', 'Straord.'],
-                                  ['viaggio', 'Viaggio'],
+                                  ['lavoro', 'Lavoro (ore)'],
+                                  ['viaggio', 'Viaggio (ore)'],
                                 ] as const
                               ).map(([campo, label]) => (
                                 <div key={campo} className="space-y-1">

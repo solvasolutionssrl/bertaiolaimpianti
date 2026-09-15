@@ -12,7 +12,10 @@ import {
   spostaOrario,
   tratteIntermedie,
   viaDaPassaggio,
+  viaggioFraCantieri,
+  type PezzoTratta,
   type TrattaEstrema,
+  trattaModificata,
 } from './kantiere-percorso';
 import { calcolaSegmentiSplit, trasferimentiDaSegmenti } from './kantiere-split';
 
@@ -162,6 +165,25 @@ describe('datiMancanti', () => {
   });
 });
 
+describe('lavoro dalla sede', () => {
+  it('partenza dalla sede in cui si lavora: nessuna tratta e niente da chiedere', () => {
+    const t = sede(null, { senzaViaggio: true });
+    expect(minutiTratta(t)).toBe(0);
+    expect(trattaModificata({ ...t, stimaMin: 30, minutiCorretti: 20 })).toBe(false);
+    expect(ciSonoViaggi({ andata: t, ritorno: casa, intermedie: [] })).toBe(false);
+    expect(
+      datiMancanti({ andata: t, ritorno: casa, intermedie: [], autista: true, mezzo: null, mezziDisponibili: 3 }),
+    ).toEqual([]);
+  });
+
+  it('una sede diversa da quella di lavoro resta una tratta normale', () => {
+    const t = sede(null, { senzaViaggio: false });
+    expect(datiMancanti({ andata: t, ritorno: casa, intermedie: [], autista: false, mezzo: null, mezziDisponibili: 0 })).toEqual([
+      'tempo_andata',
+    ]);
+  });
+});
+
 describe('segmentiBarraGiornata', () => {
   const somma = (s: { minuti: number }[]) => s.reduce((a, x) => a + x.minuti, 0);
 
@@ -189,10 +211,135 @@ describe('segmentiBarraGiornata', () => {
     ]);
   });
 
+  it('con la strada allo stesso cambio la pausa va dopo 30 minuti sul cantiere di arrivo', () => {
+    const s = segmentiBarraGiornata({
+      andataMin: 30,
+      ritornoMin: 30,
+      minutiCantieri: [200, 220],
+      trasferimentiMin: [0, 40],
+      pausaMin: 60,
+      nettoMin: 420,
+    });
+    expect(s).toEqual([
+      { tipo: 'andata', minuti: 30 },
+      { tipo: 'cantiere', indice: 0, minuti: 200 },
+      { tipo: 'trasferimento', minuti: 40 },
+      { tipo: 'cantiere', indice: 1, minuti: 30 },
+      { tipo: 'pausa', minuti: 60 },
+      { tipo: 'cantiere', indice: 1, minuti: 190 },
+      { tipo: 'ritorno', minuti: 30 },
+    ]);
+    // Da partenza a rientro: andata + (fine − inizio) + ritorno.
+    expect(somma(s)).toBe(30 + (420 + 40 + 60) + 30);
+  });
+
+  it('la barra mette pausa e tratta dove le mette la registrazione', () => {
+    const barra = segmentiBarraGiornata({ andataMin: 0, ritornoMin: 0, minutiCantieri: [200, 220], trasferimentiMin: [0, 40], pausaMin: 60, nettoMin: 420 });
+    const calc = calcolaSegmentiSplit({
+      ingressoMs: T0,
+      uscitaMs: T0 + 520 * 60000,
+      pausaMin: 60,
+      segmenti: [
+        { cantiereId: 'A', minuti: 200 },
+        { cantiereId: 'B', minuti: 220 },
+      ],
+      viaggioPrima: [0, 40],
+    });
+    expect(calc.ok).toBe(true);
+    if (!calc.ok) return;
+    // Minuti dall'inizio in cui ogni pezzo della barra finisce = orari degli eventi.
+    let t = 0;
+    const fini = barra.map((x) => (t += x.minuti));
+    const eventi = calc.eventi.map((e) => (e.ms - T0) / 60000);
+    expect(eventi).toEqual([fini[0], fini[1], fini[2], fini[3], fini[4]]);
+  });
+
+  it('senza pausa la tratta separa i due cantieri', () => {
+    const s = segmentiBarraGiornata({ andataMin: 0, ritornoMin: 0, minutiCantieri: [240, 200], trasferimentiMin: [0, 40], pausaMin: 0, nettoMin: 440 });
+    expect(s).toEqual([
+      { tipo: 'cantiere', indice: 0, minuti: 240 },
+      { tipo: 'trasferimento', minuti: 40 },
+      { tipo: 'cantiere', indice: 1, minuti: 200 },
+    ]);
+  });
+
+  it('la tratta verso un cantiere ancora a zero resta in barra, prima del da assegnare', () => {
+    const s = segmentiBarraGiornata({ andataMin: 0, ritornoMin: 0, minutiCantieri: [300, 0], trasferimentiMin: [0, 25], pausaMin: 0, nettoMin: 455 });
+    expect(s).toEqual([
+      { tipo: 'cantiere', indice: 0, minuti: 300 },
+      { tipo: 'trasferimento', minuti: 25 },
+      { tipo: 'da_assegnare', minuti: 155 },
+    ]);
+    expect(somma(s)).toBe(480);
+  });
+
   it('la pausa va al cambio più vicino a metà giornata, come nella registrazione', () => {
     // Confini a 120 e 300 su 480: il centro è 240, vince 300 (distanza 60 contro 120).
     const s = segmentiBarraGiornata({ andataMin: 0, ritornoMin: 0, minutiCantieri: [120, 180, 180], pausaMin: 45, nettoMin: 480 });
     expect(s.map((x) => x.tipo)).toEqual(['cantiere', 'cantiere', 'pausa', 'cantiere']);
+  });
+});
+
+describe('viaggioFraCantieri', () => {
+  const stime = (pezzo: PezzoTratta) =>
+    pezzo.tipo === 'fra_cantieri' ? 20 : pezzo.tipo === 'verso_sede' ? 15 : 25;
+
+  it('diretta = stima, passando dalla sede = le due tratte, passando da casa = 0', () => {
+    const intermedie = tratteIntermedie(
+      [
+        { da: 'A', a: 'B' },
+        { da: 'B', a: 'C' },
+        { da: 'C', a: 'D' },
+      ],
+      { [chiaveCoppia({ da: 'B', a: 'C' })]: { sedeId: 'S1' }, [chiaveCoppia({ da: 'C', a: 'D' })]: 'casa' },
+    );
+    const v = viaggioFraCantieri(['A', 'B', 'C', 'D'], intermedie, stime);
+    expect(v).toEqual({ prima: [0, 20, 40, 0], totale: 60, inArrivo: false });
+  });
+
+  it('chiede i pezzi giusti per la tratta che passa dalla sede', () => {
+    const chiesti: PezzoTratta[] = [];
+    viaggioFraCantieri(['A', 'B'], [{ tipo: 'via_sede', da: 'A', a: 'B', sedeId: 'S1' }], (p) => {
+      chiesti.push(p);
+      return 10;
+    });
+    expect(chiesti).toEqual([
+      { tipo: 'verso_sede', cantiereId: 'A', sedeId: 'S1' },
+      { tipo: 'da_sede', sedeId: 'S1', cantiereId: 'B' },
+    ]);
+  });
+
+  it('una stima in arrivo blocca e intanto vale 0; una stima assente vale 0', () => {
+    const intermedie = [{ tipo: 'diretta', da: 'A', a: 'B' } as const];
+    expect(viaggioFraCantieri(['A', 'B'], intermedie, () => null)).toEqual({ prima: [0, 0], totale: 0, inArrivo: true });
+    expect(viaggioFraCantieri(['A', 'B'], intermedie, () => 0)).toEqual({ prima: [0, 0], totale: 0, inArrivo: false });
+  });
+
+  it('un solo cantiere: nessuna tratta', () => {
+    expect(viaggioFraCantieri(['A'], [], stime)).toEqual({ prima: [0], totale: 0, inArrivo: false });
+  });
+
+  it('con la registrazione: le ore dei cantieri sono lavoro, la tratta è un buco fra uscita e ingresso', () => {
+    const intermedie = [{ tipo: 'diretta', da: 'A', a: 'B' } as const];
+    const v = viaggioFraCantieri(['A', 'B'], intermedie, () => 40);
+    // 8 ore di presenza senza pausa: 40 minuti di strada, 440 di lavoro da assegnare.
+    const calc = calcolaSegmentiSplit({
+      ingressoMs: T0,
+      uscitaMs: T0 + 480 * 60000,
+      pausaMin: 0,
+      segmenti: [
+        { cantiereId: 'A', minuti: 200 },
+        { cantiereId: 'B', minuti: 480 - v.totale - 200 },
+      ],
+      viaggioPrima: v.prima,
+    });
+    expect(calc.ok).toBe(true);
+    if (!calc.ok) return;
+    expect(calc.nettoMin).toBe(440);
+    const uscitaA = calc.eventi.find((e) => e.cantiereId === 'A' && e.tipo === 'uscita')!;
+    const ingressoB = calc.eventi.find((e) => e.cantiereId === 'B' && e.tipo === 'ingresso')!;
+    expect((ingressoB.ms - uscitaA.ms) / 60000).toBe(40);
+    expect((uscitaA.ms - T0) / 60000).toBe(200);
   });
 });
 

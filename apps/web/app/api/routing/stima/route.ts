@@ -17,6 +17,8 @@ import { stimaConCache } from '@/app/_lib/routing/stima-cache';
  *      andata: sede → cantiere · ritorno: cantiere → sede
  *  - `{ daCantiereId, aCantiereId }` cantiere → cantiere, per le tratte fra
  *      cantieri che «Registra giornata» mostra mentre si compila
+ *  - `{ daSedeId, aSedeId }` sede → sede, quando si lavora dalla sede sul
+ *      progetto e si parte o si rientra da un'altra sede
  *
  * Cache geografica condivisa (`stimaConCache`). Fail-soft: se mancano le
  * coordinate o il provider non risponde torna `{ ok:true, minuti:null }` e il
@@ -33,6 +35,7 @@ const uuid = z.string().uuid();
 const inputSchema = z.union([
   z.object({ sedeId: uuid, cantiereId: uuid, direzione: z.enum(['andata', 'ritorno']) }),
   z.object({ daCantiereId: uuid, aCantiereId: uuid }),
+  z.object({ daSedeId: uuid, aSedeId: uuid }),
 ]);
 
 type Supa = ReturnType<typeof createServerSupabase>;
@@ -70,7 +73,12 @@ export async function POST(req: Request) {
 
   let origine: Coord | null;
   let destinazione: Coord | null;
-  if ('daCantiereId' in input) {
+  if ('daSedeId' in input) {
+    [origine, destinazione] = await Promise.all([
+      coordSede(supabase, input.daSedeId),
+      coordSede(supabase, input.aSedeId),
+    ]);
+  } else if ('daCantiereId' in input) {
     [origine, destinazione] = await Promise.all([
       coordCantiere(supabase, input.daCantiereId),
       coordCantiere(supabase, input.aCantiereId),

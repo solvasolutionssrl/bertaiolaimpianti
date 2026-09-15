@@ -62,9 +62,15 @@ export type RigaCommessa = {
   targetId: string | null;
   targetTipo: 'commessa' | 'cantiere' | null;
   commessaTitolo: string;
+  /** Lavoro entro l'orario ordinario (ord + straord = lavoro). */
   ore_ordinarie: number;
   ore_straordinarie: number;
+  /** Viaggio totale. */
   ore_viaggio: number;
+  lavoro: number;
+  /** Quota mostrata: lavoro e viaggio entro l'orario ordinario. */
+  ordinarie: number;
+  viaggio_eccedente: number;
   note: string | null;
 };
 
@@ -88,7 +94,7 @@ export type RapportiniRiga = {
   viaggi?: ViaggioTratta[];
   inviatoAt: string | null;
   note: string | null;
-  totale: { ord: number; straord: number; viaggio: number };
+  totale: { ord: number; straord: number; viaggio: number; lavoro: number; ordinarie: number; viaggioEccedente: number };
   nRighe: number;
   righe: RigaCommessa[];
   timbrature: TimbraturaItem[];
@@ -205,9 +211,11 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
             <thead>
               <tr className="text-left text-muted-foreground border-b border-border/40">
                 <th className="pb-1 pr-4 font-medium">Commessa / Cantiere</th>
-                <th className="pb-1 pr-3 font-medium text-right">Ord.</th>
-                <th className="pb-1 pr-3 font-medium text-right">Straord.</th>
+                <th className="pb-1 pr-3 font-medium text-right">Lavoro</th>
                 <th className="pb-1 pr-3 font-medium text-right">Viaggio</th>
+                <th className="pb-1 pr-3 font-medium text-right" title="Lavoro e viaggio entro l'orario ordinario">Ordinarie</th>
+                <th className="pb-1 pr-3 font-medium text-right">Straord.</th>
+                <th className="pb-1 pr-3 font-medium text-right" title="Viaggio oltre l'orario ordinario">Viaggio ecc.</th>
                 <th className="pb-1 font-medium">Note</th>
               </tr>
             </thead>
@@ -215,9 +223,11 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
               {riga.righe.map((r, j) => (
                 <tr key={j} className="border-b border-border/30">
                   <td className="py-1 pr-4 font-medium text-foreground">{r.commessaTitolo}</td>
-                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ore_ordinarie)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-foreground">{fmtOreColon(r.lavoro)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-foreground">{fmtOreColon(r.ore_viaggio)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ordinarie)}</td>
                   <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ore_straordinarie)}</td>
-                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.ore_viaggio)}</td>
+                  <td className="py-1 pr-3 tabular-nums text-right text-muted-foreground">{fmtOreColon(r.viaggio_eccedente)}</td>
                   <td className="py-1 text-muted-foreground max-w-[200px] truncate">
                     {r.note ?? <span className="select-none opacity-40">·</span>}
                   </td>
@@ -394,8 +404,7 @@ export function RapportiniClient({
         targetId: r.targetId,
         targetTipo: r.targetTipo,
         titolo: r.commessaTitolo,
-        ord: r.ore_ordinarie,
-        straord: r.ore_straordinarie,
+        lavoro: r.lavoro,
         viaggio: r.ore_viaggio,
       }));
     setCorreggiFor({
@@ -412,9 +421,8 @@ export function RapportiniClient({
   const [regDipendenteId, setRegDipendenteId] = React.useState('');
   const [regTarget, setRegTarget] = React.useState(''); // "c:<id>" cantiere | "k:<id>" commessa
   const [regData, setRegData] = React.useState(oggiLocale());
-  const [regOrdinarie, setRegOrdinarie] = React.useState(0);
+  const [regLavoro, setRegLavoro] = React.useState(0);
   const [regViaggio, setRegViaggio] = React.useState(0);
-  const [regStraordinari, setRegStraordinari] = React.useState(0);
   const [regNote, setRegNote] = React.useState('');
   const [regError, setRegError] = React.useState('');
   const [isRegPending, startRegAction] = React.useTransition();
@@ -427,9 +435,8 @@ export function RapportiniClient({
     setRegDipendenteId(dipendenti[0]?.id ?? '');
     setRegTarget('');
     setRegData(oggiLocale());
-    setRegOrdinarie(0);
+    setRegLavoro(0);
     setRegViaggio(0);
-    setRegStraordinari(0);
     setRegError('');
     setRegistraOpen(true);
   }
@@ -450,9 +457,8 @@ export function RapportiniClient({
         commessaId: isCommessa ? targetId : undefined,
         cantiereId: isCantiere ? targetId : undefined,
         data: regData,
-        ore_ordinarie: regOrdinarie,
+        ore_lavoro: regLavoro,
         ore_viaggio: regViaggio,
-        ore_straordinarie: regStraordinari,
         note: regNote.trim() || undefined,
       });
       if (!res.ok) {
@@ -517,9 +523,9 @@ export function RapportiniClient({
   }
 
   // Totali (sullo storico visibile)
-  const totalOrd = storicoRighe.reduce((s, r) => s + r.totale.ord, 0);
+  const totalOrd = storicoRighe.reduce((s, r) => s + r.totale.ordinarie, 0);
   const totalStraord = storicoRighe.reduce((s, r) => s + r.totale.straord, 0);
-  const totalViaggio = storicoRighe.reduce((s, r) => s + r.totale.viaggio, 0);
+  const totalViaggioEcc = storicoRighe.reduce((s, r) => s + r.totale.viaggioEccedente, 0);
 
   // Esito di una giornata: ore lavorate, anomalia (e perché), pausa mancante.
   function esitoRiga(riga: RapportiniRiga) {
@@ -685,13 +691,13 @@ export function RapportiniClient({
                   </span>
                   <span className="text-border">|</span>
                   <span>
-                    Ord. <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalOrd)}</span>
+                    Ordinarie <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalOrd)}</span>
                   </span>
                   <span>
                     Straord. <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalStraord)}</span>
                   </span>
                   <span>
-                    Viaggio <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalViaggio)}</span>
+                    Viaggio ecc. <span className="tabular-nums font-medium text-foreground">{fmtOreColon(totalViaggioEcc)}</span>
                   </span>
                 </div>
               ) : null}
@@ -940,22 +946,22 @@ export function RapportiniClient({
               />
             </div>
 
-            {/* Ore */}
-            <div className="grid grid-cols-3 gap-3">
+            {/* Ore pure: le quote si derivano dall'orario ordinario giornaliero */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Ore ordinarie</label>
+                <label className="text-xs font-medium text-muted-foreground">Ore di lavoro</label>
                 <input
                   type="number"
                   min={0}
                   max={24}
                   step={0.25}
-                  value={regOrdinarie}
-                  onChange={(e) => setRegOrdinarie(parseFloat(e.target.value) || 0)}
+                  value={regLavoro}
+                  onChange={(e) => setRegLavoro(parseFloat(e.target.value) || 0)}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Ore viaggio</label>
+                <label className="text-xs font-medium text-muted-foreground">Ore di viaggio</label>
                 <input
                   type="number"
                   min={0}
@@ -966,19 +972,11 @@ export function RapportiniClient({
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">Straordinari</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={24}
-                  step={0.25}
-                  value={regStraordinari}
-                  onChange={(e) => setRegStraordinari(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Ordinarie, straordinarie e viaggio eccedente si calcolano dall&apos;orario ordinario
+              giornaliero delle impostazioni.
+            </p>
 
             {/* Note */}
             <div className="space-y-1">

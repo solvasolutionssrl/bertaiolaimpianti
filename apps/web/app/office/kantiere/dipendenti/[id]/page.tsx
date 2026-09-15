@@ -1,9 +1,9 @@
 import { notFound, redirect } from 'next/navigation';
+import { COLONNE_QUOTE, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { leggiTrasferimentiAttivi } from '@/app/_lib/kantiere-config';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
@@ -164,11 +164,8 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   const rapportinoIds = rapportiniTutti.map((r) => r.id);
 
   // rapportino_righe NON ha tenant_id: scoped via rapportino_id (già del tenant) + RLS.
-  type RigaRap = {
+  type RigaRap = RigaRapportinoLetta & {
     rapportino_id: string;
-    ore_ordinarie: number | null;
-    ore_straordinarie: number | null;
-    ore_viaggio: number | null;
     commessa_id: string | null;
     cantiere_id: string | null;
   };
@@ -176,31 +173,34 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   if (rapportinoIds.length > 0) {
     const { data: righeRaw } = (await supabase
       .from('rapportino_righe' as never)
-      .select('rapportino_id, ore_ordinarie, ore_straordinarie, ore_viaggio, commessa_id, cantiere_id')
+      .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
       .in('rapportino_id', rapportinoIds)
       .limit(4000)) as { data: RigaRap[] | null };
     righeRap = righeRaw ?? [];
   }
 
   // Somma ore per rapportino, poi mappa per giornata.
-  const oreByRapportino = new Map<
-    string,
-    { ord: number; straord: number; viaggio: number }
-  >();
+  // Quote per giornata: `ord` = ordinarie (lavoro e viaggio entro l'orario),
+  // `straord`, `viaggio` = viaggio eccedente, `lavoro` = lavoro puro. Così
+  // ord + straord + viaggio resta il totale lavoro + viaggio.
+  const righePerRapportino = new Map<string, RigaRap[]>();
   for (const r of righeRap) {
-    const cur = oreByRapportino.get(r.rapportino_id) ?? { ord: 0, straord: 0, viaggio: 0 };
-    cur.ord += Number(r.ore_ordinarie ?? 0);
-    cur.straord += Number(r.ore_straordinarie ?? 0);
-    cur.viaggio += Number(r.ore_viaggio ?? 0);
-    oreByRapportino.set(r.rapportino_id, cur);
+    const arr = righePerRapportino.get(r.rapportino_id) ?? [];
+    arr.push(r);
+    righePerRapportino.set(r.rapportino_id, arr);
+  }
+  const oreByRapportino = new Map<string, { ord: number; straord: number; viaggio: number; lavoro: number }>();
+  for (const [id, righe] of righePerRapportino) {
+    const q = quoteOre(sommaQuote(righe));
+    oreByRapportino.set(id, { ord: q.ordinarie, straord: q.straordinarie, viaggio: q.viaggioEccedente, lavoro: q.lavoro });
   }
 
   const rapByGiorno = new Map<
     string,
-    { stato: string; ord: number; straord: number; viaggio: number }
+    { stato: string; ord: number; straord: number; viaggio: number; lavoro: number }
   >();
   for (const r of rapportini) {
-    const ore = oreByRapportino.get(r.id) ?? { ord: 0, straord: 0, viaggio: 0 };
+    const ore = oreByRapportino.get(r.id) ?? { ord: 0, straord: 0, viaggio: 0, lavoro: 0 };
     // r.data è già YYYY-MM-DD; chiave coerente col bucket timbrature
     rapByGiorno.set(r.data, { stato: r.stato, ...ore });
   }
@@ -225,11 +225,8 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
         }[]
       | null;
   };
-  // Trasferimenti cantiere→cantiere: nel profilo dipendente solo se il tenant li conteggia.
-  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
-  const viaggi = (viaggiRaw ?? []).filter(
-    (v) => trasferimentiConteggiati || v.da_cantiere_id == null,
-  );
+  // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio.
+  const viaggi = viaggiRaw ?? [];
 
   // (a) Mezzi guidati (autista = true, mezzo_id valorizzato)
   const mezzoAggMap = new Map<string, { viaggi: number; km: number }>();
@@ -317,6 +314,7 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
               ord: rap.ord,
               straord: rap.straord,
               viaggio: rap.viaggio,
+              lavoro: rap.lavoro,
             }
           : null,
       };

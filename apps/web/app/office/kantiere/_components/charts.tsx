@@ -279,8 +279,8 @@ export function DonutOre({
 }) {
   const data = [
     { nome: 'Ordinarie', valore: Math.round(ordinarie * 10) / 10, colore: C.blue },
-    { nome: 'Straordinario', valore: Math.round(straordinarie * 10) / 10, colore: C.amber },
-    { nome: 'Viaggio', valore: Math.round(viaggio * 10) / 10, colore: C.emerald },
+    { nome: 'Straordinarie', valore: Math.round(straordinarie * 10) / 10, colore: C.amber },
+    { nome: 'Viaggio eccedente', valore: Math.round(viaggio * 10) / 10, colore: C.emerald },
   ].filter((d) => d.valore > 0);
   const totale = data.reduce((a, d) => a + d.valore, 0);
   if (totale <= 0) return <Vuoto testo="Nessuna ora nel periodo." />;

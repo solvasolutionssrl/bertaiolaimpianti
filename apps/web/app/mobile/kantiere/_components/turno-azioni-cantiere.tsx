@@ -37,6 +37,8 @@ export interface TurnoAzioniCantiereProps {
   mezzi?: ViaggioRitornoMezzo[];
   /** Sede preselezionata (default del tenant). */
   sedeDefaultId?: string | null;
+  /** Sede in cui si lavora sul cantiere («Lavoro dalla sede sul progetto»); null = in cantiere. */
+  sedeLavoro?: { id: string; nome: string } | null;
   /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
   sogliaPausaPranzoOre?: number;
   /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
@@ -124,6 +126,7 @@ export function TurnoAzioniCantiere({
   sedi = [],
   mezzi = [],
   sedeDefaultId = null,
+  sedeLavoro = null,
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
   sogliaAutoSpegnimentoPausaOre = 1.5,
   cantiereNome,
@@ -282,7 +285,7 @@ export function TurnoAzioniCantiere({
             <span className={`mt-0.5 block text-xs ${palette.sub}`}>
               {inPausa
                 ? `In pausa dalle ${inizioPausaTs ? ora(inizioPausaTs) : '--:--'} · apri cantiere`
-                : `Timbrato alle ${ora(inizioTs)} · apri cantiere`}
+                : `Timbrato alle ${ora(inizioTs)}${sedeLavoro ? ` · dalla sede ${sedeLavoro.nome}` : ''} · apri cantiere`}
             </span>
           </span>
           <ChevronRight className={`h-4 w-4 shrink-0 ${palette.tag}`} aria-hidden="true" />
@@ -291,7 +294,7 @@ export function TurnoAzioniCantiere({
         <p className={`mt-1.5 text-xs ${palette.sub}`}>
           {inPausa
             ? `In pausa dalle ${inizioPausaTs ? ora(inizioPausaTs) : '--:--'}`
-            : `Timbrato alle ${ora(inizioTs)}`}
+            : `Timbrato alle ${ora(inizioTs)}${sedeLavoro ? ` · dalla sede ${sedeLavoro.nome}` : ''}`}
         </p>
       )}
       {inPausa && rimanentePausaMs != null ? (
@@ -326,7 +329,7 @@ export function TurnoAzioniCantiere({
                 Pausa
               </button>
             )}
-            {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} compatto /> : null}
+            {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} sedePredefinita={sedeDefaultId != null} compatto /> : null}
             {!inPausa ? (
               <button
                 type="button"
@@ -368,7 +371,7 @@ export function TurnoAzioniCantiere({
         {/* Cambia cantiere: chiude il segmento corrente e ne apre uno nuovo
             (ore divise dai timestamp, km al cantiere di destinazione). Non in
             pausa: prima si riprende il turno. */}
-        {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} /> : null}
+        {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} sedePredefinita={sedeDefaultId != null} /> : null}
 
         {/* La pausa pranzo dichiarata + il viaggio di ritorno vivono nel dialog
             "Termina turno". In pausa non si chiude: prima "Riprendi turno". */}
@@ -431,6 +434,7 @@ export function TurnoAzioniCantiere({
         cantiereId={cantiereId}
         sedi={sedi}
         sedeDefaultId={sedeDefaultId}
+        sedeLavoroId={sedeLavoro?.id ?? null}
         mezzi={mezzi}
         pausaPrompt={promptPausa ? { durataMin: durataTurnoMin } : null}
         splitContesto={

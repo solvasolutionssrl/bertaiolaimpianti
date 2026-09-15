@@ -24,6 +24,8 @@ function messaggioErrore(code: string): string {
       return 'Cantiere non valido. Riprova.';
     case 'ORA_NON_VALIDA':
       return 'Non è stato possibile registrare il cambio ora. Riprova.';
+    case 'SEDE_PREDEFINITA_MANCANTE':
+      return 'Nessuna sede predefinita impostata: l’ufficio la indica in Impostazioni → Sedi.';
     default:
       return 'Cambio cantiere non riuscito. Riprova.';
   }
@@ -37,9 +39,12 @@ function messaggioErrore(code: string): string {
  */
 export function CambiaCantiereButton({
   cantiereId,
+  sedePredefinita = false,
   compatto = false,
 }: {
   cantiereId: string;
+  /** Il tenant ha una sede predefinita: si può scegliere «Lavoro dalla sede sul progetto». */
+  sedePredefinita?: boolean;
   /** true = pulsante compatto verticale (per la card turno "compatta"). */
   compatto?: boolean;
 }) {
@@ -49,11 +54,13 @@ export function CambiaCantiereButton({
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const [aSede, setASede] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const apri = useCallback(async () => {
     setErrore(null);
     setSelectedId(null);
+    setASede(false);
     setOpen(true);
     if (cantieri == null) {
       setLoading(true);
@@ -79,7 +86,11 @@ export function CambiaCantiereButton({
     if (!selectedId) return;
     setErrore(null);
     startTransition(async () => {
-      const res = await cambiaCantiereMio({ daCantiereId: cantiereId, aCantiereId: selectedId });
+      const res = await cambiaCantiereMio({
+        daCantiereId: cantiereId,
+        aCantiereId: selectedId,
+        aSede: aSede || undefined,
+      });
       if (res.ok) {
         chiudi();
         router.refresh();
@@ -123,9 +134,22 @@ export function CambiaCantiereButton({
         onClose={chiudi}
         footer={
           <div className="space-y-2">
+            {sedePredefinita ? (
+              <label className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-2.5 select-none">
+                <input
+                  type="checkbox"
+                  checked={aSede}
+                  onChange={(e) => setASede(e.target.checked)}
+                  className="h-4 w-4 rounded border-input accent-primary"
+                />
+                <span className="text-sm text-foreground">Lavoro dalla sede sul progetto</span>
+              </label>
+            ) : null}
             <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-              Chiudo il turno sul cantiere attuale e lo riapro su quello scelto. Le ore si dividono da
-              sole; i km del tragitto vanno al nuovo cantiere.
+              Il turno sul cantiere attuale si chiude e si riapre su quello scelto; le ore si dividono dagli
+              orari. {aSede
+                ? 'Sul nuovo cantiere si lavora dalla sede predefinita: il tragitto, se c’è, arriva alla sede.'
+                : 'Il tragitto conta come viaggio e i km vanno al nuovo cantiere.'}
             </p>
             {errore ? (
               <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">

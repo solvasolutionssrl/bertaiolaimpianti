@@ -78,7 +78,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
       .maybeSingle(),
     supabase
       .from('timbrature' as never)
-      .select('id, tipo, ts, origine, modalita, pausa, auto_chiusa, created_at, creato_da, geo_lat, cantiere_id')
+      .select('id, tipo, ts, origine, modalita, pausa, auto_chiusa, created_at, creato_da, geo_lat, cantiere_id, sede_lavoro_id')
       .eq('tenant_id', ctx.tenantId)
       .eq('dipendente_id', rapp.dipendente_id)
       .gte('ts', fromIso)
@@ -117,6 +117,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     creato_da: string | null;
     geo_lat: number | null;
     cantiere_id: string | null;
+    sede_lavoro_id: string | null;
   }[] | null) ?? [];
   const versioni = (versRes.data as {
     versione: number;
@@ -164,7 +165,9 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
       ].filter((x): x is string => !!x),
     ),
   ];
-  const idSedi = [...new Set(viaggi.map((v) => v.sede_id).filter((x): x is string => !!x))];
+  const idSedi = [
+    ...new Set([...viaggi.map((v) => v.sede_id), ...timb.map((t) => t.sede_lavoro_id)].filter((x): x is string => !!x)),
+  ];
 
   const [utentiRes, cantieriRes, sediRes] = await Promise.all([
     idUtenti.length
@@ -205,6 +208,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     creatoNome: t.creato_da ? (nomeUtente.get(t.creato_da) ?? null) : null,
     haGeo: t.geo_lat != null,
     cantiere: t.cantiere_id ? (nomeCantiere.get(t.cantiere_id) ?? null) : null,
+    sedeLavoro: t.sede_lavoro_id ? (nomeSede.get(t.sede_lavoro_id) ?? 'Sede') : null,
   }));
 
   const viaggiCronologia: ViaggioCronologia[] = viaggi.map((v) => ({

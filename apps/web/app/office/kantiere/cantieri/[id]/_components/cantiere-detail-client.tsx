@@ -611,7 +611,7 @@ export function CantiereDetailClient({
           accent="blue"
           icon={<Car className="h-4 w-4" aria-hidden="true" />}
           valore={`${fmtOreKpi(storico.totali.viaggio)}`}
-          label="Viaggio"
+          label="Viaggio eccedente"
         />
         <KpiChip
           accent={anomalie.length > 0 ? 'amber' : 'slate'}

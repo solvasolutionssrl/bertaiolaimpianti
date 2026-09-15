@@ -21,6 +21,9 @@ node scripts/banco-ui/app.mjs                     # app tecnici, iPhone emulato
 node scripts/banco-ui/registra-giornata.mjs       # Registra giornata col percorso (BANCO_SALVA=1 salva sul demo)
 BANCO_CHI=tecnico node scripts/banco-ui/campanella.mjs   # niente testo sotto campanella e «＋ Spesa» (anche BANCO_CHI=kantiere)
 node scripts/banco-ui/cronologia-a-mano.mjs      # cronologia di una giornata a mano senza timbrature (serve il seed demo)
+node scripts/banco-ui/impostazioni.mjs           # Impostazioni Kantiere: sezioni, esempio dell'orario ordinario, validazione (non salva)
+node scripts/banco-ui/lavoro-da-sede.mjs         # «Lavoro dalla sede sul progetto» in avvio e fine turno (BANCO_SALVA=1 avvia e chiude un turno sul demo)
+node scripts/banco-ui/ore-quote.mjs              # quote delle ore nelle pagine ufficio (dopo registra-giornata con BANCO_SALVA=1)
 ```
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve

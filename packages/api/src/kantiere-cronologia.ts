@@ -85,6 +85,8 @@ export interface TimbraturaCronologia {
   /** Il QR registra la posizione; pausa e ripresa da app no. Serve per le righe vecchie. */
   haGeo: boolean;
   cantiere: string | null;
+  /** Sede in cui si è lavorato sul cantiere («Lavoro dalla sede sul progetto»); null = in cantiere. */
+  sedeLavoro?: string | null;
 }
 
 export interface ViaggioCronologia {
@@ -403,6 +405,8 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
     let tipo: TipoEvento;
     let titolo: string;
     let cantiere = t.cantiere;
+    // L'ingresso che apre il lavoro: dice se si lavorava dalla sede.
+    let entrata: TimbraturaCronologia | undefined = t.tipo === 'ingresso' && !t.pausa ? t : undefined;
 
     if (t.pausa) {
       tipo = t.tipo === 'uscita' ? 'inizio_pausa' : 'fine_pausa';
@@ -421,6 +425,7 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
         (Date.parse(dopo.ts) - Date.parse(t.ts)) / MIN <= CAMBIO_CANTIERE_MAX_MIN;
       if (eCambio && dopo) {
         assorbite.add(dopo.id);
+        entrata = dopo;
         tipo = 'cambio_cantiere';
         titolo = 'Cambio cantiere';
         cantiere = t.cantiere && dopo.cantiere ? `${t.cantiere} → ${dopo.cantiere}` : dopo.cantiere;
@@ -461,10 +466,11 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
       attore,
       chi: attore === 'persona' ? null : attore === 'sistema' ? null : t.creatoNome,
       dettaglio: (() => {
-        if (tipo === 'cambio_cantiere') return cantiere ? [cantiere] : [];
-        if (!piuCantieri || !cantiere || cantiere === ultimoCantiereMostrato) return [];
+        const sede = entrata?.sedeLavoro ? [`Lavoro dalla sede ${entrata.sedeLavoro}`] : [];
+        if (tipo === 'cambio_cantiere') return [...(cantiere ? [cantiere] : []), ...sede];
+        if (!piuCantieri || !cantiere || cantiere === ultimoCantiereMostrato) return sede;
         ultimoCantiereMostrato = cantiere;
-        return [cantiere];
+        return [cantiere, ...sede];
       })(),
       ricostruita,
       dopoApprovazione: false,

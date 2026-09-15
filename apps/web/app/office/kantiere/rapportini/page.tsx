@@ -1,4 +1,5 @@
 import { createServerSupabase } from '@kommessa/api/server';
+import { COLONNE_QUOTE, quoteDaRiga, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
@@ -12,7 +13,6 @@ import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino
 import {
   leggiPolicyRapportini,
   leggiSogliaPausaPranzoOre,
-  leggiTrasferimentiAttivi,
 } from '@/app/_lib/kantiere-config';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
@@ -30,7 +30,7 @@ type RapportinoRow = {
   auto_compilato: boolean | null;
 };
 
-type RigaRow = {
+type RigaRow = RigaRapportinoLetta & {
   id: string;
   rapportino_id: string;
   commessa_id: string | null;
@@ -156,7 +156,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('id, rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
+      .select(`id, rapportino_id, commessa_id, cantiere_id, note, ${COLONNE_QUOTE}`)
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     righeData = data ?? [];
   }
@@ -371,11 +371,9 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       .in('timbratura_id', timbratureData.map((t) => t.id))) as { data: ViaggioRow[] | null };
     viaggioRows.push(...(data ?? []));
   }
-  // Righe viaggio senza timbratura = trasferimenti cantiere→cantiere: mostrati
-  // solo se il tenant conteggia i trasferimenti (altrimenti restano registrati
-  // ma non compaiono nelle giornate del tenant, visibili solo al super admin).
-  const trasferimentiConteggiati = await leggiTrasferimentiAttivi(supabase, ctx.tenantId);
-  if (trasferimentiConteggiati && dipIds.length > 0) {
+  // Righe viaggio senza timbratura: ore scritte a mano e trasferimenti fra
+  // cantieri, che sono viaggio come ogni altra tratta.
+  if (dipIds.length > 0) {
     const { data } = (await supabase
       .from('timbratura_viaggio' as never)
       .select(VIAGGIO_COLS)
@@ -437,14 +435,23 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   // Costruisci righe per il client
   const righe: RapportiniRiga[] = rapportini.map((r) => {
     const rr = righeByRapportino.get(r.id) ?? [];
-    const totale = rr.reduce(
-      (acc, x) => ({
-        ord: acc.ord + (x.ore_ordinarie ?? 0),
-        straord: acc.straord + (x.ore_straordinarie ?? 0),
-        viaggio: acc.viaggio + (x.ore_viaggio ?? 0),
-      }),
-      { ord: 0, straord: 0, viaggio: 0 },
-    );
+    // `ord` resta il lavoro entro l'orario (ord + straord = lavoro); le quote
+    // mostrate (ordinarie con il viaggio entro l'orario, viaggio eccedente) si
+    // ricavano dalla regola, anche per le righe precedenti.
+    const quote = quoteOre(sommaQuote(rr));
+    const totale = {
+      ...rr.reduce(
+        (acc, x) => ({
+          ord: acc.ord + (x.ore_ordinarie ?? 0),
+          straord: acc.straord + (x.ore_straordinarie ?? 0),
+          viaggio: acc.viaggio + (x.ore_viaggio ?? 0),
+        }),
+        { ord: 0, straord: 0, viaggio: 0 },
+      ),
+      lavoro: quote.lavoro,
+      ordinarie: quote.ordinarie,
+      viaggioEccedente: quote.viaggioEccedente,
+    };
     const timbratureKey = `${r.dipendente_id}:${r.data}`;
     const timbrature = timbratureByKey.get(timbratureKey) ?? [];
     // Segnale: giornata non più in bozza (congelata) ma con ore lavorate dalle
@@ -505,6 +512,10 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         ore_ordinarie: x.ore_ordinarie ?? 0,
         ore_straordinarie: x.ore_straordinarie ?? 0,
         ore_viaggio: x.ore_viaggio ?? 0,
+        ...(() => {
+          const q = quoteOre(quoteDaRiga(x));
+          return { lavoro: q.lavoro, ordinarie: q.ordinarie, viaggio_eccedente: q.viaggioEccedente };
+        })(),
         note: x.note ?? null,
       })),
       timbrature,

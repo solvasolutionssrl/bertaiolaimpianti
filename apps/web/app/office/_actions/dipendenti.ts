@@ -84,7 +84,9 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
       a_turni: parsed.data.a_turni ?? false,
-      costo_orario: parsed.data.costo_orario ?? null,
+      // Il costo orario si scrive solo se arriva: il modulo dell'elenco Dipendenti
+      // non lo ha, e salvare da lì lo azzerava.
+      ...(parsed.data.costo_orario !== undefined ? { costo_orario: parsed.data.costo_orario } : {}),
       note: parsed.data.note ?? null,
     } as never)
     .eq('id', parsed.data.id);

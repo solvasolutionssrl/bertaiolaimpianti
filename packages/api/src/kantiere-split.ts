@@ -24,6 +24,12 @@ export interface SegmentoSplit {
   minuti: number;
 }
 
+/**
+ * Minuti di lavoro fra l'arrivo su un cantiere e la pausa, quando la pausa
+ * cadrebbe sullo stesso cambio di una tratta (vedi `calcolaSegmentiSplit`).
+ */
+export const SCARTO_PAUSA_MIN = 30;
+
 export interface CalcolaSplitInput {
   /** Inizio turno (ms epoch) = ingresso reale. */
   ingressoMs: number;
@@ -33,6 +39,14 @@ export interface CalcolaSplitInput {
   pausaMin: number;
   /** Segmenti dichiarati; il primo è il cantiere del turno. Somma ≈ netto. */
   segmenti: SegmentoSplit[];
+  /**
+   * Minuti di viaggio PRIMA di ogni segmento (stesso indice di `segmenti`; il
+   * primo si ignora): i trasferimenti fra cantieri. Diventano un buco fra
+   * l'uscita dal cantiere precedente e l'ingresso nel successivo, così le ore
+   * dichiarate restano lavoro puro e il viaggio non si conta due volte.
+   * Assente = segmenti attaccati (split di fine turno, come prima).
+   */
+  viaggioPrima?: number[];
 }
 
 export interface EventoSplit {
@@ -61,44 +75,72 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
   if (netMin <= 0) return { ok: false, error: 'NETTO_NON_VALIDO' };
   if (input.segmenti.length === 0) return { ok: false, error: 'NESSUN_SEGMENTO' };
 
-  // Interi ≥ 0, ordine preservato.
-  let segs = input.segmenti.map((s) => ({
+  // Interi ≥ 0, ordine preservato. Il viaggio prima di un segmento vale solo se
+  // il segmento resta (a zero minuti non c'è un cantiere da raggiungere).
+  const ultimo = input.segmenti.length - 1;
+  let segs = input.segmenti.map((s, i) => ({
     cantiereId: s.cantiereId,
     minuti: Math.max(0, Math.round(s.minuti)),
+    viaggioPrima: i === 0 ? 0 : Math.max(0, Math.round(input.viaggioPrima?.[i] ?? 0)),
   }));
+  const viaggioTot = segs.reduce((a, s, i) => a + (s.minuti > 0 || i === ultimo ? s.viaggioPrima : 0), 0);
+  const lavoroMin = netMin - viaggioTot;
+  if (lavoroMin <= 0) return { ok: false, error: 'NETTO_NON_VALIDO' };
 
-  // L'ULTIMA riga assorbe il resto → somma esatta = netMin.
+  // L'ULTIMA riga assorbe il resto → somma esatta = lavoro netto.
   const sommaRest = segs.slice(0, -1).reduce((a, s) => a + s.minuti, 0);
-  if (sommaRest > netMin) return { ok: false, error: 'SOMMA_NON_TORNA' };
-  segs[segs.length - 1] = { ...segs[segs.length - 1]!, minuti: netMin - sommaRest };
+  if (sommaRest > lavoroMin) return { ok: false, error: 'SOMMA_NON_TORNA' };
+  segs[ultimo] = { ...segs[ultimo]!, minuti: lavoroMin - sommaRest };
+  // L'ultimo cantiere senza lavoro ma con un viaggio per raggiungerlo: i conti
+  // non tornano, meglio dirlo che scrivere un viaggio verso il niente.
+  if (segs[ultimo]!.minuti === 0 && segs[ultimo]!.viaggioPrima > 0) {
+    return { ok: false, error: 'SOMMA_NON_TORNA' };
+  }
 
   // Via i segmenti a 0 minuti (nessun lavoro).
   segs = segs.filter((s) => s.minuti > 0);
   if (segs.length === 0) return { ok: false, error: 'NETTO_NON_VALIDO' };
+  const netLavoro = lavoroMin;
 
-  // Cumulate net-time dei confini (cum[N] === netMin).
+  // Cumulate net-time dei confini (cum[N] === lavoro netto).
   const cum: number[] = [0];
   for (const s of segs) cum.push(cum[cum.length - 1]! + s.minuti);
 
-  type Cut = { netTime: number; nextCantiere: string; pausa: boolean };
+  type Cut = { netTime: number; nextCantiere: string; pausa: boolean; viaggio: number };
   const cuts: Cut[] = [];
   for (let i = 1; i < segs.length; i++) {
-    cuts.push({ netTime: cum[i]!, nextCantiere: segs[i]!.cantiereId, pausa: false });
+    cuts.push({ netTime: cum[i]!, nextCantiere: segs[i]!.cantiereId, pausa: false, viaggio: segs[i]!.viaggioPrima });
   }
 
   // Pausa = gap. Con ≥2 segmenti → confine più vicino al centro; con 1 solo
-  // cantiere → spezza il segmento al centro (straddle).
+  // cantiere → spezza il segmento al centro (straddle). Se a quel confine c'è
+  // anche una tratta, pausa e strada farebbero un buco solo e la pausa
+  // risulterebbe più lunga di quella dichiarata: la pausa va dentro il cantiere
+  // di arrivo dopo SCARTO_PAUSA_MIN di lavoro (o prima della partenza, se
+  // l'arrivo è troppo corto). Pausa e viaggio restano due buchi distinti.
   if (P > 0) {
-    const center = netMin / 2;
+    const center = netLavoro / 2;
     if (cuts.length >= 1) {
       let best = 0;
       for (let i = 1; i < cuts.length; i++) {
         if (Math.abs(cuts[i]!.netTime - center) < Math.abs(cuts[best]!.netTime - center)) best = i;
       }
-      cuts[best]!.pausa = true;
+      const scelto = cuts[best]!;
+      const scarto = (m: number) => Math.min(SCARTO_PAUSA_MIN, Math.floor(m / 2));
+      const partenza = segs[best]!;
+      const arrivo = segs[best + 1]!;
+      if (scelto.viaggio === 0) {
+        scelto.pausa = true;
+      } else if (scarto(arrivo.minuti) >= 1) {
+        cuts.push({ netTime: scelto.netTime + scarto(arrivo.minuti), nextCantiere: arrivo.cantiereId, pausa: true, viaggio: 0 });
+      } else if (scarto(partenza.minuti) >= 1) {
+        cuts.push({ netTime: scelto.netTime - scarto(partenza.minuti), nextCantiere: partenza.cantiereId, pausa: true, viaggio: 0 });
+      } else {
+        scelto.pausa = true;
+      }
     } else {
-      const mid = Math.min(netMin - 1, Math.max(1, Math.round(center)));
-      cuts.push({ netTime: mid, nextCantiere: segs[0]!.cantiereId, pausa: true });
+      const mid = Math.min(netLavoro - 1, Math.max(1, Math.round(center)));
+      cuts.push({ netTime: mid, nextCantiere: segs[0]!.cantiereId, pausa: true, viaggio: 0 });
     }
   }
   cuts.sort((a, b) => a.netTime - b.netTime);
@@ -112,14 +154,15 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
     realMs += (cut.netTime - prevNet) * MIN_MS;
     eventi.push({ cantiereId: cur, tipo: 'uscita', pausa: cut.pausa, ms: realMs });
     if (cut.pausa) realMs += P * MIN_MS;
+    realMs += cut.viaggio * MIN_MS;
     eventi.push({ cantiereId: cut.nextCantiere, tipo: 'ingresso', pausa: cut.pausa, ms: realMs });
     cur = cut.nextCantiere;
     prevNet = cut.netTime;
   }
-  realMs += (netMin - prevNet) * MIN_MS;
+  realMs += (netLavoro - prevNet) * MIN_MS;
   eventi.push({ cantiereId: cur, tipo: 'uscita', pausa: false, ms: realMs });
 
-  return { ok: true, eventi, nettoMin: netMin };
+  return { ok: true, eventi, nettoMin: netLavoro };
 }
 
 /** Tratta di trasferimento cantiere→cantiere (partenza `da`, arrivo `a`). */

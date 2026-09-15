@@ -45,6 +45,8 @@ type RigaRow = {
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
+  ore_viaggio_ordinarie: number | null;
+  ore_viaggio_eccedenti: number | null;
 };
 type SpesaRow = { cantiere_id: string | null; importo_totale: number | null };
 
@@ -167,7 +169,7 @@ export default async function CostoCantierePage({ searchParams }: PageProps) {
   if (rapportinoIds.length > 0) {
     const { data } = (await supabase
       .from('rapportino_righe' as never)
-      .select('rapportino_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select('rapportino_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti')
       .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
     // Solo le righe imputate a un cantiere (le commesse non rientrano qui).
     righeData = (data ?? []).filter((r) => r.cantiere_id != null);
@@ -206,6 +208,8 @@ export default async function CostoCantierePage({ searchParams }: PageProps) {
       ore_ordinarie: Number(r.ore_ordinarie ?? 0),
       ore_straordinarie: Number(r.ore_straordinarie ?? 0),
       ore_viaggio: Number(r.ore_viaggio ?? 0),
+      ore_viaggio_ordinarie: r.ore_viaggio_ordinarie == null ? null : Number(r.ore_viaggio_ordinarie),
+      ore_viaggio_eccedenti: r.ore_viaggio_eccedenti == null ? null : Number(r.ore_viaggio_eccedenti),
       giornoSettimana,
       festivo,
       aTurni,

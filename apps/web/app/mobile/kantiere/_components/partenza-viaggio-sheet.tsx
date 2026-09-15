@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Car, Loader2, Home, ArrowLeft, X, Play } from 'lucide-react';
+import { MapPin, Car, Loader2, Home, ArrowLeft, X, Play, Building2 } from 'lucide-react';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 
 import type {
@@ -61,8 +61,12 @@ export interface PartenzaViaggioSheetProps {
   onBack: () => void;
   /** Chiudi tutto (annulla l'avvio). */
   onClose: () => void;
-  /** Conferma: viaggio di andata, oppure null = "Abitazione privata" (0 km/0 tempo). */
-  onConfirm: (viaggio: ViaggioRitornoPayload | null) => void;
+  /**
+   * Conferma: viaggio di andata, oppure null = nessuna tratta ("Abitazione
+   * privata", o la stessa sede in cui si lavora). `daSede` = «Lavoro dalla sede
+   * sul progetto».
+   */
+  onConfirm: (viaggio: ViaggioRitornoPayload | null, opzioni: { daSede: boolean }) => void;
 }
 
 /**
@@ -104,9 +108,14 @@ export function PartenzaViaggioSheet({
   const passeggero = useConfermaPasseggero();
   const [mezzoId, setMezzoId] = useState<string>('');
   const [errLocale, setErrLocale] = useState<string | null>(null);
+  // «Lavoro dalla sede sul progetto»: l'andata arriva alla sede predefinita.
+  const [daSede, setDaSede] = useState(false);
 
   const casa = sedeId === CASA_ID;
-  const modificato = !casa && stimaMin != null && confermMin !== stimaMin;
+  const stessaSede = daSede && sedeDefaultId != null && sedeId === sedeDefaultId;
+  const senzaViaggio = casa || stessaSede;
+  const modificato = !senzaViaggio && stimaMin != null && confermMin !== stimaMin;
+  const nomeSedeDefault = sedi.find((s) => s.id === sedeDefaultId)?.nome ?? 'la sede predefinita';
   const giustObbligatoria = modificato;
 
   // Sede predefinita ("sede FPM") in cima, poi le sedi collegate al cantiere.
@@ -124,17 +133,26 @@ export function PartenzaViaggioSheet({
   // se la nuova stima non è disponibile (che scriverebbe minuti fasulli).
   const reqSeq = useRef(0);
 
-  async function calcolaStima(targetSedeId: string) {
+  async function calcolaStima(targetSedeId: string, lavoroInSede: boolean) {
     const seq = ++reqSeq.current;
-    setStimaLoading(true);
     setStimaMin(null);
     setStimaKm(null);
     setConfermMin(0);
+    // Si parte dalla sede in cui si lavora: nessuna strada da stimare.
+    if (lavoroInSede && targetSedeId === sedeDefaultId) {
+      setStimaLoading(false);
+      return;
+    }
+    setStimaLoading(true);
     try {
       const res = await fetch('/api/routing/stima', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sedeId: targetSedeId, cantiereId, direzione: 'andata' }),
+        body: JSON.stringify(
+          lavoroInSede && sedeDefaultId
+            ? { daSedeId: targetSedeId, aSedeId: sedeDefaultId }
+            : { sedeId: targetSedeId, cantiereId, direzione: 'andata' },
+        ),
       });
       const j = (await res.json()) as { ok: boolean; minuti: number | null; km?: number | null };
       if (seq !== reqSeq.current) return; // risposta obsoleta: la sede è cambiata
@@ -170,7 +188,14 @@ export function PartenzaViaggioSheet({
       setStimaLoading(false);
       return;
     }
-    void calcolaStima(id);
+    void calcolaStima(id, daSede);
+  }
+
+  function cambiaDaSede(attivo: boolean) {
+    setDaSede(attivo);
+    setGiustificazione('');
+    setErrLocale(null);
+    if (sedeId && sedeId !== CASA_ID) void calcolaStima(sedeId, attivo);
   }
 
   // All'apertura (o quando arrivano le opzioni): preseleziona la sede predefinita
@@ -186,12 +211,13 @@ export function PartenzaViaggioSheet({
       setAutista(false);
       setMezzoId('');
       setErrLocale(null);
+      setDaSede(false);
       return;
     }
     if (loading) return;
     const def = sedeDefaultId ?? sedi[0]?.id ?? CASA_ID;
     setSedeId(def);
-    if (def !== CASA_ID) void calcolaStima(def);
+    if (def !== CASA_ID) void calcolaStima(def, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, loading]);
 
@@ -201,8 +227,8 @@ export function PartenzaViaggioSheet({
 
   async function handleConferma() {
     setErrLocale(null);
-    if (casa) {
-      onConfirm(null);
+    if (senzaViaggio) {
+      onConfirm(null, { daSede });
       return;
     }
     if (!sedeId) {
@@ -224,7 +250,7 @@ export function PartenzaViaggioSheet({
       autista,
       mezzoId: autista ? mezzoId || null : null,
       distanzaKm: stimaKm,
-    });
+    }, { daSede });
   }
 
   if (!open || !mounted) return null;
@@ -281,6 +307,30 @@ export function PartenzaViaggioSheet({
           </div>
         ) : (
           <div className="space-y-4 p-4">
+            {sedeDefaultId ? (
+              <label
+                className={[
+                  'flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 select-none transition-colors',
+                  daSede ? 'border-primary bg-primary/5' : 'border-border bg-background',
+                ].join(' ')}
+              >
+                <input
+                  type="checkbox"
+                  checked={daSede}
+                  onChange={(e) => cambiaDaSede(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary"
+                />
+                <span className="min-w-0">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                    Lavoro dalla sede sul progetto
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                    Le ore vanno al cantiere. Il viaggio si calcola fino a {nomeSedeDefault}.
+                  </span>
+                </span>
+              </label>
+            ) : null}
             <div className="space-y-2">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                 <MapPin className="h-4 w-4 text-primary" strokeWidth={1.75} />
@@ -330,6 +380,10 @@ export function PartenzaViaggioSheet({
             {casa ? (
               <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
                 Parti da casa: nessun km né tempo di viaggio da registrare.
+              </p>
+            ) : stessaSede ? (
+              <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                Parti dalla sede in cui lavori: nessun km né tempo di viaggio da registrare.
               </p>
             ) : (
               <>

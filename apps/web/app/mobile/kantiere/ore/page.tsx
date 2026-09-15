@@ -6,7 +6,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
-import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
+import { leggiArrotondamenti, leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
 import { precompilaMioRapportino, mioStoricoRapportini } from '@/app/_actions/kantiere-rapportino';
 import { OreClient } from './_components/ore-client';
 import { StoricoOre } from './_components/storico-ore';
@@ -157,10 +157,11 @@ export default async function MobileOrePage() {
     ultimoMezzoId = (umRaw as { mezzo_id: string } | null)?.mezzo_id ?? null;
   }
 
-  const [turno, storicoRes, impTurno] = await Promise.all([
+  const [turno, storicoRes, impTurno, arrotondamenti] = await Promise.all([
     mioTurnoAttivo(),
     mioStoricoRapportini({}),
     leggiImpostazioniTurno(supabase, ctx.tenantId),
+    leggiArrotondamenti(supabase, ctx.tenantId),
   ]);
   const storico = storicoRes.ok ? storicoRes.giorni : [];
 
@@ -198,6 +199,7 @@ export default async function MobileOrePage() {
           sedi={azioni.sedi}
           mezzi={azioni.mezzi}
           sedeDefaultId={azioni.sedeDefaultId}
+          sedeLavoro={azioni.sedeLavoro}
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
           sogliaAutoSpegnimentoPausaOre={azioni.sogliaAutoSpegnimentoPausaOre}
           giornataPulita={azioni.giornataPulita}
@@ -218,6 +220,7 @@ export default async function MobileOrePage() {
         registraGiornataAttivo={impTurno.registraGiornataAttivo}
         tolleranzaChiusuraMin={impTurno.tolleranzaChiusuraMin}
         passoMinuti={impTurno.passoMinuti}
+        stepViaggio={arrotondamenti.viaggioMin}
       />
 
       <StoricoOre giorni={storico} passo={impTurno.passoMinuti} />

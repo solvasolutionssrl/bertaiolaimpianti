@@ -1,12 +1,15 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import {
-  minutiPerCommessa,
-  calcolaOreGiornata,
-  minutiViaggioPerTarget,
   arrotondaA,
   esitoAutoApprovazione,
   esitoAutoApprovazioneManuale,
 } from '@kommessa/api/kantiere-ore';
+import {
+  minutiDaTimbrature,
+  quoteDaRiga,
+  type RigaRapportinoLetta,
+  type TrattaMinuti,
+} from '@kommessa/api/kantiere-quote';
 import { targetTimbratura } from '@kommessa/api/kantiere';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
@@ -16,13 +19,15 @@ import {
 } from '@/app/_lib/kantiere-config';
 import { chiudiPausaScadutaSePresente } from '@/app/_actions/_lib/viaggio-timbra';
 import { leggiStatoGiornata, scriviVersioneRapportino } from './scrivi-versione-rapportino';
+import { scriviRigheGiornata, type RigaGiornataPura } from './righe-giornata';
 
 /**
  * Auto-derivazione del rapportino giornaliero dalle timbrature.
  *
- * Idea: ogni giornata timbrata produce automaticamente un rapportino bozza con
- * le ore ord/straord (da ingresso→uscita per target, con soglia tenant) + le
- * ore di viaggio (da timbratura_viaggio). Finché il tecnico non SALVA a mano
+ * Idea: ogni giornata timbrata produce automaticamente un rapportino bozza con i
+ * minuti puri di lavoro (ingresso→uscita per target) e di viaggio (da
+ * timbratura_viaggio), e accanto le quote derivate con la regola del tenant
+ * (`scriviRigheGiornata` → `@kommessa/api/kantiere-quote`). Finché il tecnico non SALVA a mano
  * (`auto_compilato=false`), il rapportino resta "automatico" e viene
  * ricalcolato a ogni timbratura / apertura.
  *
@@ -59,80 +64,53 @@ export function oreDaMin(min: number): number {
   return Math.round((min / 60) * 100) / 100;
 }
 
-// ── soglia ore ordinarie del tenant ──────────────────────────────────────────
+// ── tratte di viaggio della giornata ─────────────────────────────────────────
 
-export async function sogliaOreTenant(supabase: Supa, tenantId: string): Promise<number> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'kantiere')
-    .maybeSingle();
-  const row = data as { config: Record<string, unknown> | null } | null;
-  const val = row?.config?.['soglia_ore_ordinarie'];
-  if (typeof val === 'number' && val > 0) return val;
-  if (typeof val === 'string') {
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  return 8;
-}
-
-// ── viaggio per target (somma durata_confermata_min) ─────────────────────────
-
-async function viaggioPerTarget(
-  supabase: Supa,
-  timbrature: { id: string; commessa_id: string | null; cantiere_id: string | null }[],
-): Promise<Map<string, number>> {
-  if (timbrature.length === 0) return new Map();
-  const idToKey = new Map<string, string>();
-  for (const t of timbrature) {
-    const key = chiaveTarget(t);
-    if (key) idToKey.set(t.id, key);
-  }
-  const ids = Array.from(idToKey.keys());
-  if (ids.length === 0) return new Map();
-  const { data } = await supabase
-    .from('timbratura_viaggio' as never)
-    .select('timbratura_id, durata_confermata_min')
-    .in('timbratura_id', ids);
-  const rows = (data as { timbratura_id: string; durata_confermata_min: number }[] | null) ?? [];
-  const viaggi = rows.map((r) => ({
-    targetKey: idToKey.get(r.timbratura_id) ?? '',
-    minuti: Number(r.durata_confermata_min) || 0,
-  }));
-  return minutiViaggioPerTarget(viaggi);
-}
-
-/** Tratte manuali (timbratura_id null) per cantiere+data → viaggio per target.
+/**
+ * Tutte le tratte della giornata come le vuole `minutiDaTimbrature`: quelle
+ * legate alle timbrature del giorno (andata, ritorno, passaggi dalla sede) e
+ * quelle non legate, con `data` e cantiere di destinazione (ore scritte a mano,
+ * trasferimenti fra cantieri).
  *
- * NB (trasferimenti cantiere→cantiere): anche le tratte di TRASFERIMENTO
- * (da_cantiere_id valorizzato) vivono qui con timbratura_id null, ma hanno
- * `durata_confermata_min = 0` → contribuiscono 0 alle ore di viaggio pagate.
- * È voluto: il tempo dei trasferimenti è REGISTRATO in `durata_stimata_min`
- * (visibile al super admin) ma NON entra nelle ore finché non lo attiviamo.
- * ⚠️ SEAM ATTIVAZIONE FUTURA: quando decideremo che il tempo di viaggio conta
- * nelle ore (logica da definire col cliente: dipende da giorno/straordinari), è
- * QUI che si leggerà `durata_stimata_min` dei trasferimenti, gated dal toggle
- * per-tenant `km_switch_attivo`. Vedi doc Logiche_Kantiere e promemoria. */
-async function viaggioManualePerTarget(
+ * I trasferimenti fanno parte del viaggio (scelta del cliente, 14/09/2026): il
+ * loro tempo confermato conta come quello di ogni altra tratta.
+ */
+async function tratteGiornata(
   supabase: Supa,
   tenantId: string,
   dipendenteId: string,
   data: string,
-): Promise<Map<string, number>> {
-  const { data: rows } = await supabase
-    .from('timbratura_viaggio' as never)
-    .select('cantiere_id, durata_confermata_min')
-    .eq('tenant_id', tenantId)
-    .eq('dipendente_id', dipendenteId)
-    .eq('data', data)
-    .is('timbratura_id', null);
-  const out = new Map<string, number>();
-  for (const r of (rows as { cantiere_id: string | null; durata_confermata_min: number }[] | null) ?? []) {
+  idTimbrature: string[],
+): Promise<TrattaMinuti[]> {
+  const [legateRes, scioltaRes] = await Promise.all([
+    idTimbrature.length > 0
+      ? supabase
+          .from('timbratura_viaggio' as never)
+          .select('timbratura_id, durata_confermata_min')
+          .in('timbratura_id', idTimbrature)
+      : Promise.resolve({ data: [] as unknown[] }),
+    supabase
+      .from('timbratura_viaggio' as never)
+      .select('cantiere_id, da_cantiere_id, durata_confermata_min')
+      .eq('tenant_id', tenantId)
+      .eq('dipendente_id', dipendenteId)
+      .eq('data', data)
+      .is('timbratura_id', null),
+  ]);
+  const out: TrattaMinuti[] = [];
+  for (const r of (legateRes.data as { timbratura_id: string; durata_confermata_min: number | null }[] | null) ?? []) {
+    out.push({ minuti: Number(r.durata_confermata_min) || 0, timbraturaId: r.timbratura_id, chiave: null, daChiave: null });
+  }
+  for (const r of (scioltaRes.data as
+    | { cantiere_id: string | null; da_cantiere_id: string | null; durata_confermata_min: number | null }[]
+    | null) ?? []) {
     if (!r.cantiere_id) continue;
-    const key = `cantiere:${r.cantiere_id}`;
-    out.set(key, (out.get(key) ?? 0) + (Number(r.durata_confermata_min) || 0));
+    out.push({
+      minuti: Number(r.durata_confermata_min) || 0,
+      timbraturaId: null,
+      chiave: `cantiere:${r.cantiere_id}`,
+      daChiave: r.da_cantiere_id ? `cantiere:${r.da_cantiere_id}` : null,
+    });
   }
   return out;
 }
@@ -270,46 +248,32 @@ export async function ricomputaRapportinoAuto(
     }
   }
 
-  // 4. Minuti lavorati per target + viaggio (da timbrature + tratte manuali).
-  const sintetiche = timbrature
-    .map((t) => {
-      const k = chiaveTarget(t);
-      return k ? { commessa_id: k, tipo: t.tipo, ts: t.ts } : null;
-    })
-    .filter((t): t is { commessa_id: string; tipo: 'ingresso' | 'uscita'; ts: string } => t !== null);
-
-  const minutiMap = minutiPerCommessa(sintetiche);
-  const soglia = await sogliaOreTenant(supabase, tenantId);
-  // Arrotondamento ore-lavoro: default 0 = nessuno (dettaglio massimo, ore
-  // identiche a oggi). Configurabile dall'ufficio per arrotondare in futuro.
+  // 4. Minuti puri per target: lavoro dalle timbrature, viaggio dalle tratte. Il
+  //    viaggio fatto dentro l'orario (trasferimenti, passaggi dalla sede) si
+  //    toglie dal lavoro: vedi `minutiDaTimbrature`.
+  const tratte = await tratteGiornata(
+    supabase,
+    tenantId,
+    dipendenteId,
+    data,
+    timbrature.map((t) => t.id),
+  );
+  const perTarget = minutiDaTimbrature(
+    timbrature.map((t) => ({ id: t.id, tipo: t.tipo, ms: Date.parse(t.ts), chiave: chiaveTarget(t) || null })),
+    tratte,
+  );
+  // Arrotondamento ore-lavoro: default 0 = nessuno (dettaglio massimo).
   const { oreMin: stepOre } = await leggiArrotondamenti(supabase, tenantId);
-  const risultato = calcolaOreGiornata({
-    minutiLavoratiPerCommessa: Array.from(minutiMap.entries()).map(([commessa_id, minuti]) => ({
-      commessa_id,
-      minuti: arrotondaA(minuti, stepOre),
-    })),
-    sogliaOreOrdinarie: soglia,
+  // L'orario ordinario si riempie nell'ordine della giornata: i cantieri come
+  // compaiono nelle timbrature, poi quelli con solo viaggio.
+  const ordine = [
+    ...new Set([...timbrature.map((t) => chiaveTarget(t)).filter(Boolean), ...perTarget.keys()]),
+  ];
+  const righePure: RigaGiornataPura[] = ordine.flatMap((key) => {
+    const v = perTarget.get(key);
+    if (!v) return [];
+    return [{ ...decodeChiave(key), minutiLavoro: arrotondaA(v.minutiLavoro, stepOre), minutiViaggio: v.minutiViaggio }];
   });
-
-  const [viaQR, viaMan] = await Promise.all([
-    viaggioPerTarget(supabase, timbrature),
-    viaggioManualePerTarget(supabase, tenantId, dipendenteId, data),
-  ]);
-
-  const righeMap = new Map<string, { ord: number; straord: number; viaggioMin: number }>();
-  for (const rr of risultato.righe) {
-    righeMap.set(rr.commessa_id, { ord: rr.ore_ordinarie, straord: rr.ore_straordinarie, viaggioMin: 0 });
-  }
-  for (const [key, min] of viaQR) {
-    const e = righeMap.get(key) ?? { ord: 0, straord: 0, viaggioMin: 0 };
-    e.viaggioMin += min;
-    righeMap.set(key, e);
-  }
-  for (const [key, min] of viaMan) {
-    const e = righeMap.get(key) ?? { ord: 0, straord: 0, viaggioMin: 0 };
-    e.viaggioMin += min;
-    righeMap.set(key, e);
-  }
 
   // 4b. Com'era prima, per la cronologia. Solo se la giornata era già chiusa:
   //     durante un turno in corso ogni timbratura cambia le ore, e quelle sono
@@ -320,26 +284,9 @@ export async function ricomputaRapportinoAuto(
       ? await leggiStatoGiornata(supabase as never, rapp.id)
       : null;
 
-  // 5. Sostituisci le righe (replace completo: è ancora automatico).
-  await supabase.from('rapportino_righe' as never).delete().eq('rapportino_id', rapp.id);
-
-  const righeInsert = Array.from(righeMap.entries())
-    .filter(([, v]) => v.ord > 0 || v.straord > 0 || v.viaggioMin > 0)
-    .map(([key, v]) => {
-      const fk = decodeChiave(key);
-      return {
-        rapportino_id: rapp!.id,
-        commessa_id: fk.commessa_id,
-        cantiere_id: fk.cantiere_id,
-        ore_ordinarie: v.ord,
-        ore_straordinarie: v.straord,
-        ore_viaggio: oreDaMin(v.viaggioMin),
-      };
-    });
-
-  if (righeInsert.length > 0) {
-    await supabase.from('rapportino_righe' as never).insert(righeInsert as never);
-  }
+  // 5. Sostituisci le righe (replace completo: è ancora automatico), minuti puri
+  //    e quote derivate insieme.
+  await scriviRigheGiornata(supabase, { tenantId, rapportinoId: rapp.id, data, righe: righePure });
 
   // 6. AUTO-APPROVAZIONE. Le timbrature sono le ore effettive: una giornata
   //    CHIUSA (ingressi === uscite) ed entro soglia si approva da sola (sistema,
@@ -349,8 +296,7 @@ export async function ricomputaRapportinoAuto(
   const policy = await leggiPolicyRapportini(supabase, tenantId);
   const ingressi = timbrature.filter((t) => t.tipo === 'ingresso').length;
   const uscite = timbrature.filter((t) => t.tipo === 'uscita').length;
-  let minutiLavoratiTotali = 0;
-  for (const m of minutiMap.values()) minutiLavoratiTotali += m;
+  const minutiLavoratiTotali = righePure.reduce((a, r) => a + r.minutiLavoro, 0);
   // Giornata ferma in pausa = ultimo evento cronologico è un'uscita di pausa.
   // In quel caso ingressi/uscite tornano ma il turno è aperto → non auto-approva.
   const ultimaTimb = timbrature[timbrature.length - 1];
@@ -426,12 +372,10 @@ async function approvaSeManualeOk(
 
     const { data: righeRaw } = await supabase
       .from('rapportino_righe' as never)
-      .select('ore_ordinarie, ore_straordinarie')
+      .select('minuti_lavoro, ore_ordinarie, ore_straordinarie, ore_viaggio_ordinarie, ore_viaggio_eccedenti')
       .eq('rapportino_id', rapp.id);
-    const righe = (righeRaw as { ore_ordinarie: number | null; ore_straordinarie: number | null }[]) ?? [];
-    const minutiDichiarati = Math.round(
-      righe.reduce((a, r) => a + Number(r.ore_ordinarie ?? 0) + Number(r.ore_straordinarie ?? 0), 0) * 60,
-    );
+    const righe = (righeRaw as RigaRapportinoLetta[] | null) ?? [];
+    const minutiDichiarati = righe.reduce((a, r) => a + quoteDaRiga(r).minutiLavoro, 0);
 
     const ultima = timbrature[timbrature.length - 1];
     const esito = esitoAutoApprovazioneManuale({

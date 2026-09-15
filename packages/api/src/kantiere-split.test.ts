@@ -202,3 +202,89 @@ describe('trasferimentiDaSegmenti', () => {
     ]);
   });
 });
+
+describe('calcolaSegmentiSplit con i trasferimenti fra cantieri (viaggioPrima)', () => {
+  const T0s = Date.parse('2026-09-15T06:00:00.000Z');
+  const minS = (n: number) => T0s + n * 60000;
+
+  it('il trasferimento diventa un buco fra i due cantieri: le ore dichiarate restano lavoro', () => {
+    // 08:00-17:00, niente pausa, A 4:00 poi 0:30 di strada, B 4:30.
+    const r = calcolaSegmentiSplit({
+      ingressoMs: minS(0),
+      uscitaMs: minS(540),
+      pausaMin: 0,
+      segmenti: [
+        { cantiereId: 'A', minuti: 240 },
+        { cantiereId: 'B', minuti: 270 },
+      ],
+      viaggioPrima: [0, 30],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.nettoMin).toBe(510);
+    expect(r.eventi).toEqual([
+      { cantiereId: 'A', tipo: 'uscita', pausa: false, ms: minS(240) },
+      { cantiereId: 'B', tipo: 'ingresso', pausa: false, ms: minS(270) },
+      { cantiereId: 'B', tipo: 'uscita', pausa: false, ms: minS(540) },
+    ]);
+  });
+
+  it('con la pausa allo stesso cambio della strada: la pausa va dopo 30 minuti sul cantiere di arrivo', () => {
+    // Pausa e tratta nello stesso buco farebbero sembrare la pausa di 1:30.
+    const r = calcolaSegmentiSplit({
+      ingressoMs: minS(0),
+      uscitaMs: minS(570),
+      pausaMin: 60,
+      segmenti: [
+        { cantiereId: 'A', minuti: 240 },
+        { cantiereId: 'B', minuti: 240 },
+      ],
+      viaggioPrima: [0, 30],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.eventi.map((e) => [e.cantiereId, e.tipo, e.pausa, (e.ms - T0s) / 60000])).toEqual([
+      ['A', 'uscita', false, 240],
+      ['B', 'ingresso', false, 270],
+      ['B', 'uscita', true, 300],
+      ['B', 'ingresso', true, 360],
+      ['B', 'uscita', false, 570],
+    ]);
+  });
+
+  it('se il cantiere di arrivo è troppo corto la pausa va prima della partenza', () => {
+    const r = calcolaSegmentiSplit({
+      ingressoMs: minS(0),
+      uscitaMs: minS(331),
+      pausaMin: 60,
+      segmenti: [
+        { cantiereId: 'A', minuti: 240 },
+        { cantiereId: 'B', minuti: 1 },
+      ],
+      viaggioPrima: [0, 30],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.eventi.map((e) => [e.cantiereId, e.tipo, e.pausa, (e.ms - T0s) / 60000])).toEqual([
+      ['A', 'uscita', true, 210],
+      ['A', 'ingresso', true, 270],
+      ['A', 'uscita', false, 300],
+      ['B', 'ingresso', false, 330],
+      ['B', 'uscita', false, 331],
+    ]);
+  });
+
+  it('le ore che non tornano col viaggio tolto si segnalano', () => {
+    const r = calcolaSegmentiSplit({
+      ingressoMs: minS(0),
+      uscitaMs: minS(480),
+      pausaMin: 0,
+      segmenti: [
+        { cantiereId: 'A', minuti: 470 },
+        { cantiereId: 'B', minuti: 10 },
+      ],
+      viaggioPrima: [0, 30],
+    });
+    expect(r).toEqual({ ok: false, error: 'SOMMA_NON_TORNA' });
+  });
+});

@@ -66,6 +66,8 @@ export interface ViaggioRitornoDialogProps {
   cantiereId: string;
   sedi: ViaggioRitornoSede[];
   sedeDefaultId: string | null;
+  /** Sede in cui si è lavorato («Lavoro dalla sede sul progetto»): il ritorno si stima da lì. */
+  sedeLavoroId?: string | null;
   mezzi: ViaggioRitornoMezzo[];
   /** Se presente, mostra il box "pausa pranzo non rilevata" (durata turno in min). */
   pausaPrompt: { durataMin: number } | null;
@@ -230,6 +232,7 @@ export function ViaggioRitornoDialog({
   cantiereId,
   sedi,
   sedeDefaultId,
+  sedeLavoroId = null,
   mezzi,
   pausaPrompt,
   intestazione,
@@ -269,7 +272,9 @@ export function ViaggioRitornoDialog({
   useEffect(() => setMounted(true), []);
 
   const casa = sedeId === CASA_ID;
-  const modificato = !casa && stimaMin != null && confermMin !== stimaMin;
+  const stessaSede = sedeLavoroId != null && sedeId === sedeLavoroId;
+  const senzaViaggio = casa || stessaSede;
+  const modificato = !senzaViaggio && stimaMin != null && confermMin !== stimaMin;
   const giustObbligatoria = modificato;
 
   // Guardia anti-race: ogni stima incrementa il contatore; una risposta obsoleta
@@ -282,15 +287,24 @@ export function ViaggioRitornoDialog({
   async function calcolaStima(targetSedeId: string) {
     if (!usaViaggio) return;
     const seq = ++reqSeq.current;
-    setStimaLoading(true);
     setStimaMin(null);
     setStimaKm(null);
     setConfermMin(0);
+    // Rientro nella sede in cui si è lavorato: nessuna strada da stimare.
+    if (sedeLavoroId && targetSedeId === sedeLavoroId) {
+      setStimaLoading(false);
+      return;
+    }
+    setStimaLoading(true);
     try {
       const res = await fetch('/api/routing/stima', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sedeId: targetSedeId, cantiereId, direzione: 'ritorno' }),
+        body: JSON.stringify(
+          sedeLavoroId
+            ? { daSedeId: sedeLavoroId, aSedeId: targetSedeId }
+            : { sedeId: targetSedeId, cantiereId, direzione: 'ritorno' },
+        ),
       });
       const j = (await res.json()) as { ok: boolean; minuti: number | null; km?: number | null };
       if (seq !== reqSeq.current) return; // risposta obsoleta: la sede è cambiata
@@ -392,7 +406,7 @@ export function ViaggioRitornoDialog({
   async function handleConferma() {
     setErrLocale(null);
     // Casa = nessun viaggio: si salta ogni validazione viaggio.
-    if (usaViaggio && !casa) {
+    if (usaViaggio && !senzaViaggio) {
       if (!sedeId) {
         setErrLocale('Seleziona dove vai adesso.');
         return;
@@ -427,13 +441,13 @@ export function ViaggioRitornoDialog({
     }
     // Se dichiara di essere passeggero, chiediglielo: quei km non glieli conta
     // nessuno e non deve scoprirlo a fine mese.
-    if (usaViaggio && !casa && !(await passeggero.conferma(autista))) return;
+    if (usaViaggio && !senzaViaggio && !(await passeggero.conferma(autista))) return;
 
     startTransition(async () => {
       setErroreMsg(null);
       const res = await onConfirm({
         viaggio:
-          usaViaggio && !casa
+          usaViaggio && !senzaViaggio
             ? {
                 sedeId,
                 durataStimataMin: stimaMin,
@@ -544,6 +558,10 @@ export function ViaggioRitornoDialog({
               {casa ? (
                 <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
                   Rientro a casa: nessun km né tempo di viaggio da registrare.
+                </p>
+              ) : stessaSede ? (
+                <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                  Rientro nella sede in cui hai lavorato: nessun km né tempo di viaggio da registrare.
                 </p>
               ) : (
                 <>

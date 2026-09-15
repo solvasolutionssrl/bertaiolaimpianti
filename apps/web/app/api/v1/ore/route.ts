@@ -1,4 +1,5 @@
 import { type NextRequest } from 'next/server';
+import { quoteDaRiga, quoteOre } from '@kommessa/api/kantiere-quote';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 import { risolviCommessa, type MondoTenant } from '@kommessa/api/integrazione-mappa';
@@ -33,10 +34,17 @@ export const maxDuration = 30;
  * chi conosce il sistema di destinazione. Kommessa dice com'e' fatta la
  * realta', non cosa farne.
  *
- * **Le tre quote restano separate** — ordinarie, straordinarie, viaggio — e
- * non si sommano mai. Su quasi ogni gestionale sono causali diverse, e la
- * somma perderebbe proprio l'informazione che serve alle paghe. Chi le vuole
- * insieme le somma; chi ha sommato non puo' piu' separarle.
+ * **Le quote restano separate** e non si sommano mai. Su quasi ogni gestionale
+ * sono causali diverse, e la somma perderebbe proprio l'informazione che serve
+ * alle paghe. Chi le vuole insieme le somma; chi ha sommato non puo' piu'
+ * separarle.
+ *
+ * Dati puri: `lavoro` e `viaggio`. Quote (regola del tenant, 15/09/2026):
+ * `ordinarie` = lavoro entro l'orario ordinario, `straordinarie` = lavoro oltre,
+ * `viaggioOrdinario` = viaggio entro l'orario ordinario rimasto, `viaggioEccedente`
+ * = viaggio oltre. Le ore ordinarie retribuite sono `ordinarie + viaggioOrdinario`.
+ * Le giornate precedenti alla regola hanno `viaggioOrdinario` 0 e tutto il viaggio
+ * in `viaggioEccedente`.
  *
  * Parametri: `modificatoDopo`, `dal`, `al`, `cursore`, `limite`.
  */
@@ -48,6 +56,10 @@ interface RigaDb {
   ore_ordinarie: unknown;
   ore_straordinarie: unknown;
   ore_viaggio: unknown;
+  minuti_lavoro: number | null;
+  minuti_viaggio: number | null;
+  ore_viaggio_ordinarie: unknown;
+  ore_viaggio_eccedenti: unknown;
   note: string | null;
   rapportino: {
     id: string;
@@ -94,7 +106,8 @@ export async function GET(request: NextRequest) {
   let q = service
     .from('rapportino_righe' as never)
     .select(
-      'id, cantiere_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note,' +
+      'id, cantiere_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio,' +
+        ' minuti_lavoro, minuti_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti, note,' +
         ' rapportino:rapportini!inner(id, data, stato, note, approvato_at, inviato_at, updated_at, dipendente_id,' +
         ' dipendente:dipendenti(id, nome, cognome, mansione, codice_interno, stato_attivo))',
     )
@@ -130,6 +143,16 @@ export async function GET(request: NextRequest) {
     const ord = num(r.ore_ordinarie);
     const str = num(r.ore_straordinarie);
     const via = num(r.ore_viaggio);
+    const q = quoteDaRiga({
+      minuti_lavoro: r.minuti_lavoro,
+      minuti_viaggio: r.minuti_viaggio,
+      ore_ordinarie: ord,
+      ore_straordinarie: str,
+      ore_viaggio: via,
+      ore_viaggio_ordinarie: r.ore_viaggio_ordinarie == null ? null : num(r.ore_viaggio_ordinarie),
+      ore_viaggio_eccedenti: r.ore_viaggio_eccedenti == null ? null : num(r.ore_viaggio_eccedenti),
+    });
+    const qo = quoteOre(q);
 
     return {
       id: r.id,
@@ -166,15 +189,21 @@ export async function GET(request: NextRequest) {
       // vogliono l'una o gli altri, e convertire a valle e' un'occasione di
       // errore di arrotondamento in piu'.
       ore: {
+        lavoro: qo.lavoro,
         ordinarie: ord,
         straordinarie: str,
         viaggio: via,
+        viaggioOrdinario: qo.viaggioOrdinario,
+        viaggioEccedente: qo.viaggioEccedente,
         totale: Math.round((ord + str + via) * 100) / 100,
       },
       minuti: {
+        lavoro: q.minutiLavoro,
         ordinarie: Math.round(ord * 60),
         straordinarie: Math.round(str * 60),
         viaggio: Math.round(via * 60),
+        viaggioOrdinario: q.minutiViaggioOrdinari,
+        viaggioEccedente: q.minutiViaggioEccedenti,
       },
       durataLeggibile: oreHMM(Math.round((ord + str + via) * 60)),
 
