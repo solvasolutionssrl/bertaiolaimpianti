@@ -47,6 +47,9 @@ export default async function ProfiloPage() {
 
   const appMode = tenant?.app_mode ?? null;
   const isKantiere = appMode === 'kantiere' || appMode === 'full';
+  // Solo Kantiere: niente mondo commesse (preferenze notifiche, caricamenti).
+  // Un tenant 'full' le tiene: ha anche le commesse.
+  const soloKantiere = appMode === 'kantiere';
   const isManager = ctx.role === 'admin' || ctx.role === 'office';
 
   // Ferie e permessi: se il modulo Dipendenti + sotto-flag ferie sono attivi.
@@ -60,7 +63,7 @@ export default async function ProfiloPage() {
   // kommessa). Si evita anche di interrogarle.
   let prefs: PrefRow[] = [];
   let quiet: { quiet_hours_start: number | null; quiet_hours_end: number | null } | null = null;
-  if (!isKantiere) {
+  if (!soloKantiere) {
     const [prefsRes, quietRes] = await Promise.all([
       supabase
         .from('notification_preferences_effective')
@@ -177,10 +180,10 @@ export default async function ProfiloPage() {
         </div>
       </header>
 
-      {/* Caricamenti — entrata SEMPRE disponibile alla pagina dei file in
-          salita. Il pannello fluttuante sparisce quando ha finito, quindi senza
-          questa voce un upload fallito diventerebbe irraggiungibile. */}
-      <CaricamentiLink />
+      {/* Caricamenti — entrata sempre disponibile (mondo commesse) alla pagina
+          dei file in salita. Il pannello fluttuante sparisce quando ha finito,
+          quindi senza questa voce un upload fallito diventerebbe irraggiungibile. */}
+      {soloKantiere ? null : <CaricamentiLink />}
 
       {/* Ferie e permessi (modulo Dipendenti): richieste + eventuali approvazioni. */}
       {hasFerie ? (
@@ -225,7 +228,7 @@ export default async function ProfiloPage() {
 
       {/* Gestione notifiche granulare: solo mondo commesse (in Kantiere è la
           campanella a gestire tutto). */}
-      {!isKantiere ? (
+      {!soloKantiere ? (
         <>
           <section className="flex flex-col gap-2">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">

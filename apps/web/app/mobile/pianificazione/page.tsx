@@ -24,6 +24,7 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 import { guardMobile } from '../_lib/guard';
 import { tenantHasModule } from '../../_lib/modules';
+import { leggiConfigDipendenti } from '../../_lib/dipendenti-config';
 import { caricaBlocchiRange } from '@/app/office/personale/pianificazione/_lib/query';
 
 export const metadata: Metadata = { title: 'La mia settimana' };
@@ -37,6 +38,7 @@ export default async function MiaSettimanaPage({
   const ctx = await guardMobile();
   if (!(await tenantHasModule('dipendenti'))) notFound();
   const supabase = createServerSupabase();
+  if (!(await leggiConfigDipendenti(supabase, ctx.tenantId)).pianificazioneAttiva) notFound();
 
   const oggi = romeDay(new Date());
   const lunRaw = searchParams.lun;

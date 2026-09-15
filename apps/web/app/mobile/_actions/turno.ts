@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
+import { isKantiereOnly } from '@/app/_lib/app-mode';
+
 /**
  * Server Actions per il time tracking lato PWA tecnici.
  *
@@ -37,6 +39,10 @@ export async function iniziaTurno(
     ctx = await requireTenantContext();
   } catch {
     return { ok: false, error: 'UNAUTHENTICATED' };
+  }
+  // Il turno su commessa è del mondo commesse: i tenant solo Kantiere timbrano.
+  if (await isKantiereOnly()) {
+    return { ok: false, error: 'Il turno su commessa non è attivo per questa azienda.' };
   }
 
   const supabase = createServerSupabase();

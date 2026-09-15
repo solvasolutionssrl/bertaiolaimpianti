@@ -179,11 +179,10 @@ export function BrandingForm({
                   type="email"
                   value={inboundEmail}
                   onChange={(e) => setInboundEmail(e.target.value)}
-                  placeholder="supporto@bertaiola.kommessa.eu"
+                  placeholder="supporto@nomeazienda.it"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Indirizzo da cui verranno generati i ticket via email
-                  (sostituirà Freshdesk).
+                  Indirizzo da cui verranno generati i ticket via email.
                 </p>
               </div>
             </fieldset>

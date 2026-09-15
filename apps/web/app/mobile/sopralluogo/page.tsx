@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../_lib/guard';
+import { soloMondoCommesse } from '../_lib/mondo';
 import { SopralluogoWizard, type ClienteOption, type VoceCatalogoOption, type PresetOption } from './wizard';
 
 export const metadata: Metadata = {
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
  *  2. Cattura sul posto (foto/video/nota/canvas-schizzo) → upload temp
  *  3. Selezione voci (checkboxes per categoria; Sezione A pre-spuntate non disattivabili)
  *  4. Riepilogo
- *  5. Genera nome cartella (Edge Function ai-name); editabile dal capo
- *  6. Conferma → Edge Function create-commessa
+ *  5. Genera nome cartella (/api/suggerisci-nome); editabile dal capo
+ *  6. Conferma → action creaCommessa
  *  7. Successo: codice + path + redirect a dettaglio
  *
  * Il server fetcha qui sotto cataloghi + clienti + preset; lo step state
@@ -24,6 +25,7 @@ export const metadata: Metadata = {
  */
 export default async function SopralluogoPage() {
   const ctx = await guardMobile();
+  await soloMondoCommesse();
   const supabase = createServerSupabase();
 
   const [{ data: clientiRaw }, { data: vociRaw }, { data: presetRaw }] = await Promise.all([

@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
+import { isKantiereOnly } from '@/app/_lib/app-mode';
+
 import {
   buildExtractPrompt,
   localExtract,
@@ -97,6 +99,10 @@ export async function POST(req: NextRequest) {
     ctx = await requireTenantContext();
   } catch {
     return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+  }
+  // Dettatura di una commessa: mondo commesse. Niente chiamate AI a vuoto.
+  if (await isKantiereOnly()) {
+    return NextResponse.json({ error: 'NON_DISPONIBILE' }, { status: 403 });
   }
 
   // --- Body ---

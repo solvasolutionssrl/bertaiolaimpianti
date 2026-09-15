@@ -1,6 +1,8 @@
+import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
+import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
 import { lunediDellaSettimana, addGiorni } from '@kommessa/api/pianificazione';
 import { caricaBlocchiRange, caricaAssenze } from './_lib/query';
 import { PianificazioneClient, type DipRow, type CantRow, type MezzoRow } from './_components/pianificazione-client';
@@ -14,6 +16,8 @@ export default async function PianificazionePage({
 }) {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
+  // Modulo e ruolo li controlla il layout di Personale; qui il sotto-flag.
+  if (!(await leggiConfigDipendenti(supabase, ctx.tenantId)).pianificazioneAttiva) notFound();
 
   const oggi = romeDay(new Date());
   const oggiLunedi = lunediDellaSettimana(oggi);

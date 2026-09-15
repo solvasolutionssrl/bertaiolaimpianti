@@ -24,7 +24,7 @@ import {
   Plug,
 } from 'lucide-react';
 import { NextLinkAdapter } from './link-next';
-import { CommandPalette } from './command-palette';
+import { CommandPalette, type MondoRicerca } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
 import { NavigazioneSicura } from '@/app/_components/navigazione-sicura';
 
@@ -42,8 +42,12 @@ interface Props {
   hasPianificazione?: boolean;
   /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Analisi. */
   hasFerie?: boolean;
+  /** Kontabilità attiva (modulo Kantiere): false toglie la voce dal menu. */
+  hasKontabilita?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
   appMode?: 'kommessa' | 'kantiere' | 'full';
+  /** Quali mondi e funzioni mostrare nella ricerca rapida (⌘K). */
+  mondoRicerca?: MondoRicerca;
   children: React.ReactNode;
 }
 
@@ -247,7 +251,6 @@ function buildNav(
         { id: 'kant-rapp', label: 'Presenze e ore', href: '/office/kantiere/rapportini' },
         { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
         { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
-        { id: 'kant-anom', label: 'Anomalie', href: '/office/kantiere/anomalie' },
       ],
     },
     // Kontabilità: voce top-level (sibling del modulo Kantiere) per dare
@@ -322,7 +325,11 @@ function injectPersonale(
   // legate ai dipendenti. Tipi e normativa NON è qui: è sottopagina di Ferie
   // e permessi.
   const voci: OfficeNavItem[] = [];
-  if (opts.hasDipendenti) {
+  // Il ramo 'full' ha già Dipendenti in Azienda: niente doppione con lo stesso id.
+  const dipendentiGiaInMenu = nav.some(
+    (n) => n.id === 'dipendenti' || (n.children ?? []).some((c) => c.id === 'dipendenti'),
+  );
+  if (opts.hasDipendenti && !dipendentiGiaInMenu) {
     voci.push({ id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' });
   }
   if (opts.hasPianificazione) {
@@ -398,13 +405,18 @@ export function OfficeShellClient({
   hasDipendenti,
   hasPianificazione,
   hasFerie,
+  hasKontabilita,
   appMode,
+  mondoRicerca,
   children,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const navBase = buildNav(hasKantiere, appMode).filter(
+    (item) => item.id !== 'kontabilita' || hasKontabilita !== false,
+  );
   const nav = injectIntegrazione(
-    injectPersonale(buildNav(hasKantiere, appMode), {
+    injectPersonale(navBase, {
       hasDipendenti,
       hasPianificazione,
       hasFerie,
@@ -459,6 +471,7 @@ export function OfficeShellClient({
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         onLogout={handleLogout}
+        mondo={mondoRicerca}
       />
     </>
   );

@@ -5,6 +5,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import type { AppMode } from '@kommessa/api/types';
 
 import { requireTenantContextCached } from '@/app/_lib/tenant-cache';
+import { tenantHasModule } from '@/app/_lib/modules';
 
 /**
  * `tenants.app_mode` del tenant corrente, deduplicato per request.
@@ -26,7 +27,11 @@ export const getAppModeCached = cache(async (): Promise<AppMode> => {
     .eq('id', ctx.tenantId)
     .maybeSingle();
   const raw = (data as { app_mode?: string | null } | null)?.app_mode ?? null;
-  return raw === 'kantiere' || raw === 'full' ? raw : 'kommessa';
+  if (raw !== 'kantiere' && raw !== 'full') return 'kommessa';
+  // Senza il modulo Kantiere le sue aree sono chiuse: restare su 'kantiere' o
+  // 'full' rimbalzerebbe all'infinito fra /office e /office/kantiere (e fra
+  // /mobile e /mobile/kantiere). Si torna all'esperienza commesse.
+  return (await tenantHasModule('kantiere')) ? raw : 'kommessa';
 });
 
 /**

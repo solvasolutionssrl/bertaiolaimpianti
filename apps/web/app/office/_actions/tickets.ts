@@ -4,6 +4,9 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { romeDay } from '@kommessa/api/rome-time';
+
+import { isKantiereOnly } from '@/app/_lib/app-mode';
 
 const creaInput = z.object({
   oggetto: z.string().min(3),
@@ -17,14 +20,23 @@ const creaInput = z.object({
     .default('manual'),
 });
 
+/** I ticket sono del mondo commesse: un tenant solo Kantiere non li usa. */
+async function assertMondoCommesse(): Promise<void> {
+  if (await isKantiereOnly()) {
+    throw new Error('FORBIDDEN: i ticket non sono attivi per questa azienda.');
+  }
+}
+
 function genCodiceTicket(slug: string) {
-  const anno = new Date().getFullYear();
+  const anno = romeDay(new Date()).slice(0, 4);
   const rand = Math.floor(Math.random() * 9000 + 1000);
   return `TKT-${anno}-${rand}`;
 }
 
 export async function creaTicket(input: z.infer<typeof creaInput>) {
   const ctx = await requireTenantContext();
+  assertOfficeRole(ctx.role);
+  await assertMondoCommesse();
   const parsed = creaInput.parse(input);
   const supabase = createServerSupabase();
 
@@ -67,6 +79,7 @@ const inviaMessaggioInput = z.object({
 
 export async function inviaMessaggio(input: z.infer<typeof inviaMessaggioInput>) {
   const ctx = await requireTenantContext();
+  await assertMondoCommesse();
   const parsed = inviaMessaggioInput.parse(input);
   const supabase = createServerSupabase();
 
@@ -116,7 +129,7 @@ export async function inviaMessaggio(input: z.infer<typeof inviaMessaggioInput>)
 const STAFF_ROLES = ['admin', 'office', 'tecnico'] as const;
 
 function assertOfficeRole(role: string): void {
-  if (role !== 'admin' && role !== 'admin' && role !== 'office') {
+  if (role !== 'owner' && role !== 'admin' && role !== 'office') {
     throw new Error('FORBIDDEN: solo office/admin/owner possono eseguire questa operazione.');
   }
 }
@@ -131,6 +144,7 @@ const assegnaInput = z.object({ ticketId: z.string().uuid() });
 export async function assegnaRoundRobin(ticketId: string) {
   const ctx = await requireTenantContext();
   assertOfficeRole(ctx.role);
+  await assertMondoCommesse();
   const parsed = assegnaInput.parse({ ticketId });
   const supabase = createServerSupabase();
 
@@ -212,6 +226,7 @@ const aggiornaPrioritaInput = z.object({
 export async function aggiornaPriorita(input: z.infer<typeof aggiornaPrioritaInput>) {
   const ctx = await requireTenantContext();
   assertOfficeRole(ctx.role);
+  await assertMondoCommesse();
   const parsed = aggiornaPrioritaInput.parse(input);
   const supabase = createServerSupabase();
 
@@ -279,6 +294,9 @@ const convertiInput = z.object({
 });
 
 export async function convertiInCommessa(input: z.infer<typeof convertiInput>) {
+  const ctx = await requireTenantContext();
+  assertOfficeRole(ctx.role);
+  await assertMondoCommesse();
   const parsed = convertiInput.parse(input);
   const supabase = createServerSupabase();
 
@@ -297,7 +315,6 @@ export async function convertiInCommessa(input: z.infer<typeof convertiInput>) {
   }
 
   // 2) Fallback minimal: crea commessa con cliente del ticket e link
-  const ctx = await requireTenantContext();
   const tk = await supabase
     .from('tickets')
     .select('cliente_id, oggetto')
@@ -316,7 +333,7 @@ export async function convertiInCommessa(input: z.infer<typeof convertiInput>) {
     .select('ragione_sociale')
     .eq('id', tk.data.cliente_id)
     .maybeSingle();
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = romeDay(new Date());
   const safe = (cliente.data?.ragione_sociale ?? 'Commessa')
     .replace(/[^A-Za-z0-9]+/g, '_')
     .slice(0, 32);

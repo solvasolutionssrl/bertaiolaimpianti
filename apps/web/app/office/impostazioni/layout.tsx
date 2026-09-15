@@ -18,10 +18,7 @@ export default async function ImpostazioniLayout({
   const supabase = createServerSupabase();
   const { data } = await supabase.auth.getUser();
   const meta = (data.user?.app_metadata ?? {}) as Record<string, unknown>;
-  const isPlatformAdmin =
-    meta.platform_admin === true ||
-    meta.platform_admin === 'true' ||
-    ctx.email.toLowerCase() === 'dev@solva.it';
+  const isPlatformAdmin = meta.platform_admin === true || meta.platform_admin === 'true';
   const hasKantiere = await tenantHasModule('kantiere');
   const hasFerie =
     (await tenantHasModule('dipendenti')) &&
@@ -44,6 +41,7 @@ export default async function ImpostazioniLayout({
         isPlatformAdmin={isPlatformAdmin}
         hasKantiere={hasKantiere}
         hasFerie={hasFerie}
+        kommessaWorld={kommessaWorld}
         hiddenIds={hiddenIds}
       />
       <div className="mt-6">{children}</div>

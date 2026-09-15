@@ -2,8 +2,10 @@ import type { Metadata } from 'next';
 import { Timer } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 
 import { guardMobile } from '../_lib/guard';
+import { soloMondoCommesse } from '../_lib/mondo';
 import {
   InterventiOggiList,
   TurnoClient,
@@ -32,13 +34,12 @@ export const dynamic = 'force-dynamic';
  */
 export default async function MobileTurnoPage() {
   const ctx = await guardMobile();
+  await soloMondoCommesse();
   const supabase = createServerSupabase();
 
-  // Inizio giornata locale (timezone server = UTC su Vercel; usiamo
-  // semplicemente "ultime 24h" per evitare problemi di TZ — il filtro
-  // strict by-day si farà a livello office/turni con date locali).
-  const oggiStart = new Date();
-  oggiStart.setHours(0, 0, 0, 0);
+  // Inizio della giornata a Roma: il server gira in UTC e la mezzanotte UTC
+  // lascerebbe fuori gli interventi fra le 00 e le 02 italiane.
+  const { fromIso: oggiDaIso } = romeDayBoundsUtc(romeDay(new Date()));
 
   const [apertoRes, recentiRes, commesseRes] = await Promise.all([
     supabase
@@ -66,7 +67,7 @@ export default async function MobileTurnoPage() {
         `,
       )
       .eq('user_id', ctx.userId)
-      .gte('start_at', oggiStart.toISOString())
+      .gte('start_at', oggiDaIso)
       .order('start_at', { ascending: false })
       .limit(5),
     supabase

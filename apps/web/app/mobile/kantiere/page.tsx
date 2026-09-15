@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { QrCode, Clock, MapPin, HardHat } from 'lucide-react';
+import { QrCode, Clock, MapPin, HardHat, LayoutDashboard, ReceiptText, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
@@ -9,6 +9,9 @@ import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 
 import { guardMobile } from '../_lib/guard';
 import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
+import { getAppModeCached } from '@/app/_lib/app-mode';
+import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
+import { sonoCapoSquadra } from './_lib/capo';
 import { mioTurnoAttivo } from './_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from './_lib/turno-azioni-contesto';
 import {
@@ -104,6 +107,26 @@ export default async function KantiereHomePage() {
   }
 
   const dentro = ultima?.tipo === 'ingresso';
+
+  // Tenant 'full': qui arriva la tab Kantiere della barra commesse, che non ha
+  // gli slot della shell Kantiere. Cruscotto, Spese e Squadra si linkano qui.
+  const appMode = await getAppModeCached();
+  const isManager = ctx.role === 'admin' || ctx.role === 'office';
+  const [kontab, capo] =
+    appMode === 'full'
+      ? await Promise.all([
+          kontabilitaAttiva(supabase, ctx.tenantId),
+          isManager ? Promise.resolve(false) : sonoCapoSquadra(ctx.tenantId, ctx.userId),
+        ])
+      : [false, false];
+  const collegamentiFull =
+    appMode === 'full'
+      ? [
+          ...(isManager ? [{ href: '/mobile/kantiere/cruscotto', label: 'Cruscotto', Icona: LayoutDashboard }] : []),
+          ...(kontab ? [{ href: '/mobile/kantiere/spese', label: 'Spese', Icona: ReceiptText }] : []),
+          ...(capo ? [{ href: '/mobile/kantiere/gestione-squadra', label: 'Squadra', Icona: Users }] : []),
+        ]
+      : [];
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-6 p-4">
@@ -211,6 +234,23 @@ export default async function KantiereHomePage() {
           <span className="text-sm font-semibold">Cantieri</span>
         </Link>
       </div>
+
+      {collegamentiFull.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3">
+          {collegamentiFull.map(({ href, label, Icona }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-4 shadow-soft active:scale-[0.99] transition-transform"
+            >
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Icona className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="text-sm font-semibold">{label}</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       {/* Cantieri recenti */}
       {cantieri.length > 0 ? (

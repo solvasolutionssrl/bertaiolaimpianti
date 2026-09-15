@@ -6,6 +6,8 @@ import { requireTenantContextCached as requireTenantContext } from '../_lib/tena
 import { leggiSessione } from '@kommessa/api/tenant';
 import { tenantHasModule } from '../_lib/modules';
 import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
+import { kontabilitaAttiva } from '../_lib/kontabilita-config';
+import { tenantFeatureEnabled } from '../_lib/tenant-features';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { ImpersonationBanner } from './_components/impersonation-banner';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
@@ -123,8 +125,17 @@ export default async function OfficeLayout({
   // Esperienza app del tenant. Default 'kommessa' = comportamento attuale
   // (Bertaiola invariata). 'kantiere' → office puro-Kantiere (nulla di commessa).
   const rawAppMode = (tenantRow?.app_mode as string | null | undefined) ?? null;
+  // Senza il modulo Kantiere le sue aree sono chiuse: si resta sulle commesse.
   const appMode: 'kommessa' | 'kantiere' | 'full' =
-    rawAppMode === 'kantiere' || rawAppMode === 'full' ? rawAppMode : 'kommessa';
+    (rawAppMode === 'kantiere' || rawAppMode === 'full') && hasKantiere ? rawAppMode : 'kommessa';
+  const kommessaWorld = appMode !== 'kantiere';
+  // Kontabilità (interruttore del super admin) e funzioni del mondo commesse:
+  // servono a menu e ricerca rapida per non proporre pagine che non si aprono.
+  const [hasKontabilita, showVoci, showPreset] = await Promise.all([
+    hasKantiere ? kontabilitaAttiva(supabase, ctx.tenantId) : Promise.resolve(false),
+    tenantFeatureEnabled('voci_catalogo', kommessaWorld),
+    tenantFeatureEnabled('preset_lavoro', kommessaWorld),
+  ]);
   const onboardedAt = (userRow?.onboarded_at as string | null | undefined) ?? null;
   const showOnboardingTour = onboardedAt === null;
 
@@ -132,10 +143,7 @@ export default async function OfficeLayout({
   // Sono opzionali — non bloccanti.
   const supabaseUserRes = await supabase.auth.getUser();
   const meta = (supabaseUserRes.data.user?.app_metadata ?? {}) as Record<string, unknown>;
-  const isPlatformAdmin =
-    meta.platform_admin === true ||
-    meta.platform_admin === 'true' ||
-    ctx.email.toLowerCase() === 'dev@solva.it';
+  const isPlatformAdmin = meta.platform_admin === true || meta.platform_admin === 'true';
 
   const cookieJar = cookies();
   // Nuovo formato (JWT shadow): cookie `shadow_admin` (httpOnly) presente +
@@ -163,7 +171,15 @@ export default async function OfficeLayout({
         hasDipendenti={hasDipendenti}
         hasPianificazione={hasPianificazione}
         hasFerie={hasFerie}
+        hasKontabilita={hasKontabilita}
         appMode={appMode}
+        mondoRicerca={{
+          commesse: kommessaWorld,
+          kantiere: hasKantiere,
+          dipendenti: hasDipendenti,
+          voci: showVoci,
+          preset: showPreset,
+        }}
       >
         {isPlatformAdmin && !isImpersonating ? <PlatformAdminPill /> : null}
         {children}

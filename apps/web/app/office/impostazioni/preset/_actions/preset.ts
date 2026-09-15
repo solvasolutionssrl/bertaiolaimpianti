@@ -5,6 +5,16 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
+import { getAppModeCached } from '@/app/_lib/app-mode';
+import { tenantFeatureEnabled } from '@/app/_lib/tenant-features';
+
+/** Stesso controllo della pagina: i preset possono essere spenti per il tenant. */
+async function assertPresetAttivi(): Promise<void> {
+  const kommessaWorld = (await getAppModeCached()) !== 'kantiere';
+  if (!(await tenantFeatureEnabled('preset_lavoro', kommessaWorld))) {
+    throw new Error('I preset di lavoro non sono attivi per questa azienda.');
+  }
+}
 
 const presetSchema = z.object({
   nome: z.string().trim().min(1, 'Nome obbligatorio').max(120),
@@ -20,6 +30,7 @@ export type PresetFormState =
 export async function creaPreset(input: z.infer<typeof presetSchema>) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  await assertPresetAttivi();
   const parsed = presetSchema.parse(input);
   const supabase = createServerSupabase();
   const { data, error } = await supabase
@@ -43,6 +54,7 @@ const updateSchema = presetSchema.extend({ id: z.string().uuid() });
 export async function aggiornaPreset(input: z.infer<typeof updateSchema>) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  await assertPresetAttivi();
   const parsed = updateSchema.parse(input);
   const supabase = createServerSupabase();
   const { error } = await supabase
@@ -60,6 +72,7 @@ export async function aggiornaPreset(input: z.infer<typeof updateSchema>) {
 export async function eliminaPreset(input: { id: string }) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  await assertPresetAttivi();
   const { id } = z.object({ id: z.string().uuid() }).parse(input);
   const supabase = createServerSupabase();
   const { error } = await supabase.from('preset').delete().eq('id', id);
@@ -70,6 +83,7 @@ export async function eliminaPreset(input: { id: string }) {
 export async function duplicaPreset(input: { id: string }) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  await assertPresetAttivi();
   const { id } = z.object({ id: z.string().uuid() }).parse(input);
   const supabase = createServerSupabase();
 

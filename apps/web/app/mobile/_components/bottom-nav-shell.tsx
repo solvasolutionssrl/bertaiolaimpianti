@@ -48,6 +48,7 @@ export function BottomNavShell({
   userId,
   tenantId,
   isCapo = false,
+  hasKontabilita = true,
 }: {
   unreadCount: number;
   shell: MobileShell;
@@ -57,6 +58,8 @@ export function BottomNavShell({
   tenantId: string;
   /** Solo shell kantiere/tecnico: se capo, "Attività" diventa "Squadra". */
   isCapo?: boolean;
+  /** Solo shell kantiere/tecnico: Kontabilità spenta = niente tab Spese. */
+  hasKontabilita?: boolean;
 }) {
   const pathname = usePathname() ?? '';
 
@@ -89,19 +92,23 @@ export function BottomNavShell({
       // restano raggiungibili dalla campanella fissa della shell kantiere.
       // Se è caposquadra, lo slot "Ore" diventa "Squadra" (le ore restano
       // raggiungibili dalla pagina Squadra).
+      // Con Kontabilità spenta lo slot Spese torna a Ore (capo) o Notifiche.
+      const spese: MobileTab = { id: 'spese', label: 'Spese', icon: ReceiptText, href: '/mobile/kantiere/spese' };
       tabs = isCapo
         ? [
             { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
             { id: 'squadra', label: 'Squadra', icon: Users, href: '/mobile/kantiere/gestione-squadra' },
             { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
-            { id: 'spese', label: 'Spese', icon: ReceiptText, href: '/mobile/kantiere/spese' },
+            hasKontabilita ? spese : { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
             { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
           ]
         : [
             { id: 'cantieri', label: 'Cantieri', icon: MapPin, href: '/mobile/kantiere/cantieri' },
             { id: 'ore', label: 'Ore', icon: Clock, href: '/mobile/kantiere/ore' },
             { id: 'scansiona', label: 'Scansiona', icon: QrCode, href: '/mobile/kantiere/scansiona', primary: true },
-            { id: 'spese', label: 'Spese', icon: ReceiptText, href: '/mobile/kantiere/spese' },
+            hasKontabilita
+              ? spese
+              : { id: 'notifiche', label: 'Notifiche', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
             { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
           ];
     }
@@ -126,13 +133,15 @@ export function BottomNavShell({
   }
 
   // app_mode='full': shell kommessa (gestione/campo) + entry point Kantiere.
-  // Inietta lo slot "Scansiona" al posto del Profilo (raggiungibile dall'home),
-  // così resta a 5 slot. Per 'kommessa' NON entra mai qui (zero diff Bertaiola).
+  // Lo slot Kantiere prende il posto di Notifiche (nell'area Kantiere c'è la
+  // campanella), così Profilo, e con lui l'uscita, resta raggiungibile.
+  // Per 'kommessa' NON entra mai qui (zero diff Bertaiola).
   if (appMode === 'full' && shell !== 'kantiere') {
-    tabs = [
-      ...tabs.slice(0, 4),
-      { id: 'scansiona', label: 'Kantiere', icon: QrCode, href: '/mobile/kantiere' },
-    ];
+    tabs = tabs.map((t) =>
+      t.id === 'notifiche'
+        ? { id: 'scansiona', label: 'Kantiere', icon: QrCode, href: '/mobile/kantiere' }
+        : t,
+    );
   }
 
   if (nascondiNav) return null;

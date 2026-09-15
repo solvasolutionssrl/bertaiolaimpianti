@@ -7,6 +7,8 @@ import {
   Bell,
   Briefcase,
   Building2,
+  Clock,
+  HardHat,
   LayoutDashboard,
   LogOut,
   Plus,
@@ -26,12 +28,49 @@ import { createBrowserSupabase } from '@kommessa/api/client';
  */
 type ResultGroupId = 'commesse' | 'clienti' | 'tickets' | 'menu' | 'azioni';
 
+/**
+ * Quali mondi e funzioni ha il tenant: la ricerca rapida propone solo pagine
+ * che per lui si aprono (un tenant solo Kantiere non vede commesse e ticket).
+ */
+export interface MondoRicerca {
+  /** Mondo commesse (app_mode diverso da 'kantiere'). */
+  commesse: boolean;
+  /** Modulo Kantiere attivo. */
+  kantiere: boolean;
+  /** Modulo Dipendenti attivo. */
+  dipendenti: boolean;
+  /** Funzione Voci catalogo attiva. */
+  voci: boolean;
+  /** Funzione Preset di lavoro attiva. */
+  preset: boolean;
+}
+
+/** Senza indicazioni: la palette di sempre, quella del mondo commesse. */
+const MONDO_COMMESSE: MondoRicerca = {
+  commesse: true,
+  kantiere: false,
+  dipendenti: false,
+  voci: true,
+  preset: true,
+};
+
+type Requisito = 'commesse' | 'kantiere' | 'dipendenti' | 'voci' | 'preset';
+
+function requisitoSoddisfatto(requisito: Requisito | undefined, m: MondoRicerca): boolean {
+  if (!requisito) return true;
+  // Dipendenti vive sotto /office/kantiere: servono entrambi i moduli.
+  if (requisito === 'dipendenti') return m.kantiere && m.dipendenti;
+  return m[requisito];
+}
+
 interface BaseResult {
   id: string;
   group: ResultGroupId;
   title: string;
   subtitle?: string;
   icon: LucideIcon;
+  /** Mondo o funzione che serve perché la voce abbia senso. */
+  richiede?: Requisito;
 }
 
 interface NavResult extends BaseResult {
@@ -80,6 +119,7 @@ const MENU_ITEMS: NavResult[] = [
     title: 'Commesse',
     href: '/office/commesse',
     icon: Briefcase,
+    richiede: 'commesse',
   },
   {
     id: 'menu-commesse-nuova',
@@ -89,6 +129,7 @@ const MENU_ITEMS: NavResult[] = [
     subtitle: 'Commesse · Nuova',
     href: '/office/commesse/nuova',
     icon: Briefcase,
+    richiede: 'commesse',
   },
   {
     id: 'menu-tickets',
@@ -97,6 +138,7 @@ const MENU_ITEMS: NavResult[] = [
     title: 'Tickets',
     href: '/office/tickets',
     icon: TicketCheck,
+    richiede: 'commesse',
   },
   {
     id: 'menu-clienti',
@@ -105,6 +147,36 @@ const MENU_ITEMS: NavResult[] = [
     title: 'Clienti',
     href: '/office/clienti',
     icon: Users,
+  },
+  {
+    id: 'menu-kantiere-cantieri',
+    kind: 'nav',
+    group: 'menu',
+    title: 'Cantieri',
+    subtitle: 'Kantiere · Cantieri',
+    href: '/office/kantiere/cantieri',
+    icon: HardHat,
+    richiede: 'kantiere',
+  },
+  {
+    id: 'menu-kantiere-presenze',
+    kind: 'nav',
+    group: 'menu',
+    title: 'Presenze e ore',
+    subtitle: 'Kantiere · Presenze e ore',
+    href: '/office/kantiere/rapportini',
+    icon: Clock,
+    richiede: 'kantiere',
+  },
+  {
+    id: 'menu-dipendenti',
+    kind: 'nav',
+    group: 'menu',
+    title: 'Dipendenti',
+    subtitle: 'Personale · Dipendenti',
+    href: '/office/kantiere/dipendenti',
+    icon: Users,
+    richiede: 'dipendenti',
   },
   {
     id: 'menu-cerca',
@@ -147,6 +219,7 @@ const MENU_ITEMS: NavResult[] = [
     subtitle: 'Impostazioni · Voci',
     href: '/office/impostazioni/voci',
     icon: Settings,
+    richiede: 'voci',
   },
   {
     id: 'menu-imp-preset',
@@ -156,6 +229,7 @@ const MENU_ITEMS: NavResult[] = [
     subtitle: 'Impostazioni · Preset',
     href: '/office/impostazioni/preset',
     icon: Settings,
+    richiede: 'preset',
   },
   {
     id: 'menu-imp-utenti',
@@ -183,6 +257,7 @@ const MENU_ITEMS: NavResult[] = [
     subtitle: 'Impostazioni · Storage',
     href: '/office/impostazioni/storage',
     icon: Settings,
+    richiede: 'commesse',
   },
 ];
 
@@ -196,6 +271,7 @@ function buildQuickActions(router: ReturnType<typeof useRouter>, onLogout: () =>
       title: 'Nuova commessa',
       subtitle: 'Apri il wizard creazione commessa',
       icon: Plus,
+      richiede: 'commesse',
       run: () => router.push('/office/commesse/nuova'),
     },
     {
@@ -205,6 +281,7 @@ function buildQuickActions(router: ReturnType<typeof useRouter>, onLogout: () =>
       title: 'Nuovo ticket',
       subtitle: 'Registra una nuova richiesta',
       icon: Plus,
+      richiede: 'commesse',
       run: () => router.push('/office/tickets/nuovo'),
     },
     {
@@ -243,10 +320,13 @@ interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogout: () => void | Promise<void>;
+  /** Mondi e funzioni del tenant. Assente = palette del mondo commesse. */
+  mondo?: MondoRicerca;
 }
 
-export function CommandPalette({ open, onOpenChange, onLogout }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, onLogout, mondo = MONDO_COMMESSE }: CommandPaletteProps) {
   const router = useRouter();
+  const { commesse: mCommesse, kantiere: mKantiere, dipendenti: mDipendenti, voci: mVoci, preset: mPreset } = mondo;
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   const [query, setQuery] = React.useState('');
@@ -385,10 +465,18 @@ export function CommandPalette({ open, onOpenChange, onLogout }: CommandPaletteP
   }, [open, debouncedQuery]);
 
   // Costruzione lista risultati ordinata per gruppo
-  const quickActions = React.useMemo(
-    () => buildQuickActions(router, onLogout),
-    [router, onLogout],
-  );
+  const quickActions = React.useMemo(() => {
+    const m = { commesse: mCommesse, kantiere: mKantiere, dipendenti: mDipendenti, voci: mVoci, preset: mPreset };
+    return buildQuickActions(router, onLogout).filter((a) => requisitoSoddisfatto(a.richiede, m));
+  }, [router, onLogout, mCommesse, mKantiere, mDipendenti, mVoci, mPreset]);
+
+  // Voci di menu del tenant. Senza mondo commesse la Dashboard è quella Kantiere.
+  const menuItems = React.useMemo(() => {
+    const m = { commesse: mCommesse, kantiere: mKantiere, dipendenti: mDipendenti, voci: mVoci, preset: mPreset };
+    return MENU_ITEMS.filter((v) => requisitoSoddisfatto(v.richiede, m)).map((v) =>
+      v.id === 'menu-dashboard' && !mCommesse && mKantiere ? { ...v, href: '/office/kantiere' } : v,
+    );
+  }, [mCommesse, mKantiere, mDipendenti, mVoci, mPreset]);
 
   const flatResults = React.useMemo<PaletteResult[]>(() => {
     const q = debouncedQuery;
@@ -397,7 +485,7 @@ export function CommandPalette({ open, onOpenChange, onLogout }: CommandPaletteP
       return quickActions.filter((a) => a.id !== 'azione-logout').slice(0, 3);
     }
 
-    const filteredMenu = MENU_ITEMS.filter((m) =>
+    const filteredMenu = menuItems.filter((m) =>
       tokenMatch(`${m.title} ${m.subtitle ?? ''}`, q),
     ).slice(0, 6);
 
@@ -418,7 +506,7 @@ export function CommandPalette({ open, onOpenChange, onLogout }: CommandPaletteP
       out.push(...buckets[g]);
     }
     return out;
-  }, [debouncedQuery, quickActions, commesse, clienti, tickets]);
+  }, [debouncedQuery, quickActions, menuItems, commesse, clienti, tickets]);
 
   const selectResult = React.useCallback(
     (res: PaletteResult) => {

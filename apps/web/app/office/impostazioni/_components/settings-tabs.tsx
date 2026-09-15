@@ -10,6 +10,8 @@ interface NavItem {
   href: string;
   superadminOnly?: boolean;
   kantiereOnly?: boolean;
+  /** Solo per chi ha il mondo commesse (non per i tenant solo Kantiere). */
+  kommessaOnly?: boolean;
   ferieOnly?: boolean;
 }
 
@@ -17,13 +19,13 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'profilo',  label: 'Profilo',           href: '/office/impostazioni/profilo' },
   { id: 'voci',     label: 'Voci catalogo',     href: '/office/impostazioni/voci' },
   { id: 'preset',   label: 'Preset lavoro',     href: '/office/impostazioni/preset' },
-  { id: 'sla',      label: 'SLA',               href: '/office/impostazioni/sla' },
+  { id: 'sla',      label: 'SLA',               href: '/office/impostazioni/sla', kommessaOnly: true },
   { id: 'utenti',   label: 'Utenti',            href: '/office/impostazioni/utenti' },
   { id: 'personale', label: 'Ferie e permessi', href: '/office/impostazioni/personale', ferieOnly: true },
   { id: 'pagamenti', label: 'Pagamenti',        href: '/office/impostazioni/pagamenti' },
   { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding' },
   { id: 'storage',  label: 'Storage',           href: '/office/impostazioni/storage', superadminOnly: true },
-  { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle' },
+  { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle', kommessaOnly: true },
   { id: 'kantiere', label: 'Kantiere',          href: '/office/impostazioni/kantiere', kantiereOnly: true },
 ];
 
@@ -31,11 +33,14 @@ export function SettingsTopNav({
   isPlatformAdmin = false,
   hasKantiere = false,
   hasFerie = false,
+  kommessaWorld = true,
   hiddenIds = [],
 }: {
   isPlatformAdmin?: boolean;
   hasKantiere?: boolean;
   hasFerie?: boolean;
+  /** Mondo commesse (app_mode diverso da 'kantiere'): SLA e permessi cartelle. */
+  kommessaWorld?: boolean;
   /** Id di voci nascoste per questo tenant (feature-flag risolti lato server). */
   hiddenIds?: string[];
 }) {
@@ -44,6 +49,7 @@ export function SettingsTopNav({
     (item) =>
       (!item.superadminOnly || isPlatformAdmin) &&
       (!item.kantiereOnly || hasKantiere) &&
+      (!item.kommessaOnly || kommessaWorld) &&
       (!item.ferieOnly || hasFerie) &&
       !hiddenIds.includes(item.id),
   );
@@ -78,6 +84,3 @@ export function SettingsTopNav({
     </div>
   );
 }
-
-/** @deprecated usa SettingsTopNav */
-export { SettingsTopNav as SettingsSideNav, SettingsTopNav as SettingsTabs };

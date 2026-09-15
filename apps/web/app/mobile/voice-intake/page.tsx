@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../_lib/guard';
+import { soloMondoCommesse } from '../_lib/mondo';
 import { VoiceIntakeFlow, type VoceOption } from './_components/voice-intake-flow';
 
 export const metadata: Metadata = {
@@ -32,6 +33,7 @@ export default async function VoiceIntakePage({
 }) {
   const { bozza } = await searchParams;
   await guardMobile();
+  await soloMondoCommesse();
   const supabase = createServerSupabase();
 
   const { data: vociRaw } = await supabase

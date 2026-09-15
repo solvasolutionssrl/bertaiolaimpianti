@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
+import { tenantHasModule } from '@/app/_lib/modules';
 import {
   leggiConfigDipendenti,
   leggiTipiPermessoAttivi,
@@ -13,6 +14,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function PersonaleSettingsPage() {
   const ctx = await requireTenantContext();
+  // Il sotto-flag ferie vale "attivo" anche senza riga del modulo: prima il modulo.
+  if (!(await tenantHasModule('dipendenti'))) notFound();
   const supabase = createServerSupabase();
   const cfg = await leggiConfigDipendenti(supabase, ctx.tenantId);
   if (!cfg.ferieAttiva) notFound();

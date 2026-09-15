@@ -6,6 +6,7 @@ import type { StatoCommessa } from '@kommessa/api/types';
 import { getMobileShell } from '@kommessa/api/types';
 
 import { guardMobile } from '../_lib/guard';
+import { soloMondoCommesse } from '../_lib/mondo';
 import { Hero, HeroMeta } from '../_components/blueprint';
 import { CommesseBrowser, type BrowserRow } from './_components/commesse-browser';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
 
 export default async function MobileCommessePage() {
   const ctx = await guardMobile();
+  await soloMondoCommesse();
 
   if (getMobileShell(ctx.role) !== 'gestione') {
     redirect('/mobile');

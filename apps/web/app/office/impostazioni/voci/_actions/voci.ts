@@ -5,6 +5,16 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
+import { getAppModeCached } from '@/app/_lib/app-mode';
+import { tenantFeatureEnabled } from '@/app/_lib/tenant-features';
+
+const VOCI_NON_ATTIVE = 'Il catalogo voci non è attivo per questa azienda.';
+
+/** Stesso controllo della pagina: la funzione può essere spenta per il tenant. */
+async function vociAttive(): Promise<boolean> {
+  const kommessaWorld = (await getAppModeCached()) !== 'kantiere';
+  return tenantFeatureEnabled('voci_catalogo', kommessaWorld);
+}
 
 const overrideSchema = z.object({
   voceId: z.number().int().min(1).max(32767),
@@ -55,6 +65,7 @@ export async function salvaVoceOverride(
       message: 'Solo gli amministratori possono modificare il catalogo.',
     };
   }
+  if (!(await vociAttive())) return { status: 'error', message: VOCI_NON_ATTIVE };
 
   const parsed = overrideSchema.safeParse({
     voceId: Number(formData.get('voceId') ?? 0),
@@ -162,6 +173,7 @@ export async function salvaVoceOverride(
 export async function resetVoceOverride(input: { voceId: number }) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  if (!(await vociAttive())) throw new Error(VOCI_NON_ATTIVE);
   const { voceId } = z
     .object({ voceId: z.number().int().min(1).max(32767) })
     .parse(input);
@@ -257,6 +269,7 @@ export async function vociSimili(input: {
 }): Promise<VoceSimile[]> {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  if (!(await vociAttive())) throw new Error(VOCI_NON_ATTIVE);
   const { nome } = z.object({ nome: nomeVoceSchema }).parse(input);
 
   const supabase = createServerSupabase();
@@ -313,6 +326,7 @@ export async function creaVoceCustom(input: {
 > {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  if (!(await vociAttive())) return { ok: false, reason: 'error', message: VOCI_NON_ATTIVE };
   const parsed = creaVoceSchema.parse(input);
 
   // Pre-check fuzzy: se forceSimilar=false e troviamo voci simili, blocca
@@ -394,6 +408,7 @@ export async function creaVoceCustom(input: {
 export async function eliminaVoceCustom(input: { voceId: number }) {
   const ctx = await requireTenantContext();
   assertCanManageTenant(ctx);
+  if (!(await vociAttive())) throw new Error(VOCI_NON_ATTIVE);
   const { voceId } = z
     .object({ voceId: z.number().int().min(1000).max(32767) })
     .parse(input);

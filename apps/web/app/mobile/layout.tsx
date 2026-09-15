@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
+import { tenantHasModule } from '../_lib/modules';
+import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
@@ -69,6 +71,8 @@ export default async function MobileLayout({
     const rawMode = (tenantRes.data as { app_mode?: string | null } | null)?.app_mode ?? null;
     appMode =
       rawMode === 'kantiere' || rawMode === 'full' ? rawMode : 'kommessa';
+    // Senza il modulo Kantiere le sue aree sono chiuse: si resta sulle commesse.
+    if (appMode !== 'kommessa' && !(await tenantHasModule('kantiere'))) appMode = 'kommessa';
   }
 
   const shell = ctx
@@ -78,8 +82,12 @@ export default async function MobileLayout({
   // Caposquadra: solo nella shell kantiere per i tecnici (non admin/office).
   // Per Bertaiola (shell != 'kantiere') resta sempre false → zero differenze.
   let isCapo = false;
+  let hasKontabilita = true;
   if (ctx && shell === 'kantiere' && !(ctx.role === 'admin' || ctx.role === 'office')) {
-    isCapo = await sonoCapoSquadra(ctx.tenantId, ctx.userId);
+    [isCapo, hasKontabilita] = await Promise.all([
+      sonoCapoSquadra(ctx.tenantId, ctx.userId),
+      kontabilitaAttiva(createServerSupabase(), ctx.tenantId),
+    ]);
   }
 
   return (
@@ -128,6 +136,7 @@ export default async function MobileLayout({
           userId={ctx.userId}
           tenantId={ctx.tenantId}
           isCapo={isCapo}
+          hasKontabilita={hasKontabilita}
         />
       ) : null}
 

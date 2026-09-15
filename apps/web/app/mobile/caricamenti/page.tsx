@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { UploadCloud } from 'lucide-react';
 
 import { guardMobile } from '../_lib/guard';
+import { soloMondoCommesse } from '../_lib/mondo';
 import { MobileBackButton } from '../_components/mobile-back-button';
 import { CaricamentiList } from './_components/caricamenti-list';
 
@@ -19,6 +20,7 @@ export const dynamic = 'force-dynamic';
  */
 export default async function CaricamentiPage() {
   await guardMobile();
+  await soloMondoCommesse();
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
