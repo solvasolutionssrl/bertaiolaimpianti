@@ -29,6 +29,17 @@ export default async function StoragePage() {
     (tenant?.storage_provider as Provider | null) ?? 'supabase';
   const config =
     (tenant?.storage_config as Record<string, unknown> | null) ?? {};
+  // Al browser va solo quello che il modulo mostra, mai la password: la pagina
+  // la apre anche l'ufficio, in sola lettura. Legge camelCase con fallback
+  // snake_case (legacy).
+  const configMostrata = {
+    baseUrl:
+      (config.baseUrl as string | undefined) ?? (config.base_url as string | undefined) ?? '',
+    user: (config.user as string | undefined) ?? '',
+    hasPassword: Boolean(
+      ((config.appPassword as string | undefined) ?? (config.app_password as string | undefined))?.trim(),
+    ),
+  };
 
   return (
     <div className="space-y-6">
@@ -40,7 +51,7 @@ export default async function StoragePage() {
       {!canEdit ? <AdminRequiredNotice /> : null}
       <StorageForm
         initialProvider={provider}
-        initialConfig={config}
+        initialConfig={configMostrata}
         canEdit={canEdit}
       />
     </div>

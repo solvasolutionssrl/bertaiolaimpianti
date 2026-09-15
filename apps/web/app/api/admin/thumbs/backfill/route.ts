@@ -1,3 +1,4 @@
+import { segretoValido } from '@/app/_lib/segreto';
 /**
  * Backfill thumbnail per immagini esistenti senza r2_thumb_key.
  *
@@ -36,9 +37,7 @@ const Body = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const expected = process.env.CRON_SECRET;
-  const provided = req.headers.get('x-internal-backfill-secret');
-  if (!expected || provided !== expected) {
+  if (!segretoValido(req.headers.get('x-internal-backfill-secret'), process.env.CRON_SECRET)) {
     return Response.json({ error: 'Non autorizzato' }, { status: 401 });
   }
 

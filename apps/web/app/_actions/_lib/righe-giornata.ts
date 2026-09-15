@@ -72,19 +72,42 @@ export async function scriviRigheGiornata(
     };
   });
 
-  const { error: eDel } = await supabase
+  // Prima le righe nuove, poi via le vecchie: se l'inserimento fallisce la
+  // giornata resta com'era, invece di restare senza ore.
+  const { data: vecchieRaw, error: eLett } = await supabase
     .from('rapportino_righe' as never)
-    .delete()
+    .select('id')
     .eq('rapportino_id', opts.rapportinoId);
-  if (eDel) return { ok: false, error: eDel.message };
+  if (eLett) return { ok: false, error: eLett.message };
+  const vecchie = ((vecchieRaw as { id: string }[] | null) ?? []).map((r) => r.id);
+
+  let nuove: string[] = [];
   if (insert.length > 0) {
-    const { error: eIns } = await supabase.from('rapportino_righe' as never).insert(insert as never);
+    const { data: nuoveRaw, error: eIns } = await supabase
+      .from('rapportino_righe' as never)
+      .insert(insert as never)
+      .select('id');
     if (eIns) return { ok: false, error: eIns.message };
+    nuove = ((nuoveRaw as { id: string }[] | null) ?? []).map((r) => r.id);
   }
-  await supabase
+
+  if (vecchie.length > 0) {
+    const { error: eDel } = await supabase.from('rapportino_righe' as never).delete().in('id', vecchie);
+    if (eDel) {
+      // Le vecchie sono rimaste: si tolgono le nuove per non contare le ore due volte.
+      if (nuove.length > 0) {
+        const { error: eRip } = await supabase.from('rapportino_righe' as never).delete().in('id', nuove);
+        if (eRip) console.error('[righe-giornata] righe doppie da togliere a mano:', opts.rapportinoId, eRip.message);
+      }
+      return { ok: false, error: eDel.message };
+    }
+  }
+
+  const { error: eOrario } = await supabase
     .from('rapportini' as never)
     .update({ orario_ordinario_min: conViaggioDerivato ? regola.orarioOrdinarioMin : null } as never)
     .eq('id', opts.rapportinoId);
+  if (eOrario) return { ok: false, error: eOrario.message };
   return { ok: true };
 }
 

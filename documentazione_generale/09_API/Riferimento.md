@@ -73,7 +73,7 @@ Ogni errore:
 
 | Parametro | Cosa fa |
 |---|---|
-| `limite` | quanti record (default 200, massimo 1000) |
+| `limite` | quanti record (default 200, massimo 999) |
 | `cursore` | riprende da dove si era arrivati. Opaco: si rimanda e basta |
 | `modificatoDopo` | solo i record toccati dopo questo istante (ISO 8601) |
 | `dal` / `al` | filtro sul giorno di competenza (`YYYY-MM-DD`) |
@@ -103,7 +103,7 @@ cambiare una regola senza rimettere mano ai client già installati.
     "lettura": ["ore","spese","viaggi","cantieri","dipendenti"],
     "scrittura": ["scritture","letture","esecuzioni"]
   },
-  "paginazione": { "limiteDefault": 200, "limiteMax": 1000 },
+  "paginazione": { "limiteDefault": 200, "limiteMax": 999 },
   "regole": { "kmSoloAutista": true },
   "convenzioneNomi": { "prefissoEsterno": "external", "regola": "…" },
   "vocabolari": { … }

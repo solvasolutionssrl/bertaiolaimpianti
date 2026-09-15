@@ -64,6 +64,10 @@ export async function POST(request: NextRequest) {
   } catch {
     return Response.json({ error: 'Non autenticato' }, { status: 401 });
   }
+  // Il cliente del portale non carica file nelle commesse.
+  if (ctx.role === 'cliente') {
+    return Response.json({ error: 'Non autorizzato' }, { status: 403 });
+  }
 
   // 2. Body
   const json = await request.json().catch(() => null);

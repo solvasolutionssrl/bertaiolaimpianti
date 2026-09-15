@@ -389,7 +389,7 @@ async function approvaSeManualeOk(
     const nuovoStato = esito.autoApprova ? 'approvato' : 'bozza';
     if (nuovoStato === rapp.stato) return rapp;
 
-    await supabase
+    const { error: eStato } = await supabase
       .from('rapportini' as never)
       .update({
         stato: nuovoStato,
@@ -397,6 +397,10 @@ async function approvaSeManualeOk(
         approvato_at: esito.autoApprova ? new Date().toISOString() : null,
       } as never)
       .eq('id', rapp.id);
+    if (eStato) {
+      console.error('[ricomputa-rapportino] stato della giornata non aggiornato:', eStato.message);
+      return rapp;
+    }
     rapp.stato = nuovoStato;
   } catch {
     // Il giudizio è un di piu': se fallisce, la giornata resta com'era.
@@ -414,13 +418,14 @@ async function approvaSeManualeOk(
  * quelle che verranno.
  */
 export async function marcaRapportinoManuale(supabase: Supa, rapportinoId: string): Promise<void> {
-  try {
-    await supabase
-      .from('rapportini' as never)
-      .update({ auto_compilato: false } as never)
-      .eq('id', rapportinoId);
-  } catch {
-    // colonna non ancora migrata: ignora
+  // Senza questo segno il ricalcolo successivo riscriverebbe le ore dalle
+  // timbrature e cancellerebbe quelle scritte a mano: l'errore va registrato.
+  const { error: eMarca } = await supabase
+    .from('rapportini' as never)
+    .update({ auto_compilato: false } as never)
+    .eq('id', rapportinoId);
+  if (eMarca) {
+    console.error('[ricomputa-rapportino] giornata non marcata come scritta a mano:', eMarca.message);
   }
 
   try {

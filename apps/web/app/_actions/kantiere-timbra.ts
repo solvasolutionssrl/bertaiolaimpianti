@@ -267,7 +267,7 @@ export async function timbra(input: unknown): Promise<Result> {
     const sogliaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
     const inizio = inizioSeEleggibilePausa(statoTurno(eventi), eventi, ts, sogliaOre);
     if (inizio) {
-      await inserisciPausaDichiarata(supabase, {
+      const pausaScritta = await inserisciPausaDichiarata(supabase, {
         tenantId: ctx.tenantId,
         dipendenteId: bersaglioId,
         commessaId: target.tipo === 'commessa' ? target.id : null,
@@ -277,6 +277,7 @@ export async function timbra(input: unknown): Promise<Result> {
         endIso: ts,
         minuti: parsed.data.pausaPranzoMin,
       });
+      if (!pausaScritta.ok) return { ok: false, error: 'La pausa pranzo non è stata registrata e il turno non è stato chiuso: riprova.' };
     }
   }
 
@@ -437,7 +438,7 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
     const sogliaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
     const inizio = inizioSeEleggibilePausa(info, eventi, ts, sogliaOre);
     if (inizio) {
-      await inserisciPausaDichiarata(supabase, {
+      const pausaScritta = await inserisciPausaDichiarata(supabase, {
         tenantId: ctx.tenantId,
         dipendenteId: me.id,
         commessaId: null,
@@ -447,6 +448,7 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
         endIso: ts,
         minuti: parsed.data.pausaPranzoMin,
       });
+      if (!pausaScritta.ok) return { ok: false, error: 'La pausa pranzo non è stata registrata e il turno non è stato chiuso: riprova.' };
     }
   }
 
@@ -705,76 +707,11 @@ export async function riprendiTurnoMio(input: unknown): Promise<Result> {
   return cambiaStatoTurnoMio(input, 'ripresa');
 }
 
-// ── 2) cronometro (solo sé, senza QR) ───────────────────────────────────
-const CronoSchema = z.object({
-  commessaId: z.string().uuid(),
-  azione: z.enum(['start', 'stop']),
-  geo: GeoSchema,
-});
-
-export async function timbraCronometro(input: unknown): Promise<Result> {
-  const parsed = CronoSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-  const r = await ctxConModulo();
-  if ('error' in r) return { ok: false, error: r.error };
-  const { ctx } = r;
-  const supabase = createServerSupabase();
-  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
-  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
-  const tipo = parsed.data.azione === 'start' ? 'ingresso' : 'uscita';
-  const ts = new Date().toISOString();
-  const { error } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: me.id,
-    commessa_id: parsed.data.commessaId,
-    tipo,
-    origine: 'cronometro',
-    modalita: 'app',
-    ts,
-    geo_lat: parsed.data.geo?.lat ?? null,
-    geo_lng: parsed.data.geo?.lng ?? null,
-    creato_da: ctx.userId,
-  } as never);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, tipo, pausa: false, ts };
-}
-
-// ── 3) manuale (office/admin o capo) ────────────────────────────────────
-const ManualeSchema = z.object({
-  commessaId: z.string().uuid(),
-  dipendenteId: z.string().uuid(),
-  tipo: z.enum(['ingresso', 'uscita']),
-  ts: z.string().min(1),
-});
-
-export async function timbraManuale(input: unknown): Promise<Result> {
-  const parsed = ManualeSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-  const r = await ctxConModulo();
-  if ('error' in r) return { ok: false, error: r.error };
-  const { ctx } = r;
-  if (!['admin', 'office'].includes(ctx.role)) return { ok: false, error: 'FORBIDDEN' };
-  const supabase = createServerSupabase();
-  const { error } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: parsed.data.dipendenteId,
-    commessa_id: parsed.data.commessaId,
-    tipo: parsed.data.tipo,
-    origine: 'manuale',
-    modalita: 'ufficio',
-    ts: parsed.data.ts,
-    creato_da: ctx.userId,
-  } as never);
-  if (error) return { ok: false, error: error.message };
-  return { ok: true, tipo: parsed.data.tipo, pausa: false, ts: parsed.data.ts };
-}
-
 // ── 4) turno manuale self: avvio senza QR + cambio cantiere ─────────────────
 // Il tecnico avvia un turno scegliendo un cantiere qualsiasi (senza QR) e, se
 // durante la giornata si sposta, "cambia cantiere": chiude il segmento corrente
-// e ne apre uno nuovo (ore giuste dai timestamp reali). I km A→B sono attribuiti
-// al cantiere di DESTINAZIONE come tratta manuale (durata 0 = niente ore-viaggio,
-// solo km), senza toccare lo schema. Le timbrature restano la verità: il
+// e ne apre uno nuovo (ore giuste dai timestamp reali). La tratta A→B va al
+// cantiere di DESTINAZIONE con km e tempo, che dal 15/09/2026 è viaggio. Le timbrature restano la verità: il
 // rapportino si ricalcola da sé.
 
 /** true se il dipendente ha almeno un turno aperto oggi (qualsiasi target). */
@@ -903,10 +840,12 @@ async function registraTrasferimentiCantiere(
       });
     }
     if (inserendi.length > 0) {
-      await supabase.from('timbratura_viaggio' as never).insert(inserendi as never);
+      const { error } = await supabase.from('timbratura_viaggio' as never).insert(inserendi as never);
+      if (error) console.error('[kantiere-timbra] trasferimenti fra cantieri non registrati:', error.message);
     }
-  } catch {
+  } catch (e) {
     // best-effort: mai bloccare il flusso per la registrazione dei trasferimenti
+    console.error('[kantiere-timbra] trasferimenti fra cantieri non registrati:', e instanceof Error ? e.message : e);
   }
 }
 
@@ -1239,7 +1178,8 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
       tipo: 'ingresso',
       viaggio,
     });
-    void rv; // best-effort: non blocchiamo l'avvio se la tratta non entra.
+    // best-effort: l'avvio non si blocca se la tratta non entra, ma si registra.
+    if (!rv.ok) console.error('[kantiere-timbra] tratta di andata non registrata:', rv.error);
   }
 
   try {

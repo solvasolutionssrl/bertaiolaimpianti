@@ -412,13 +412,17 @@ export async function purgeExpiredMedia(opts: {
       const { nc, r2 } = await getProv(row.tenant_id as string);
 
       if (row.r2_key && r2) {
-        await r2.delete(row.r2_key as string).catch(() => undefined);
+        await r2.delete(row.r2_key as string).catch((e) => console.error('[media-cestino] R2 non pulito:', row.r2_key, e));
       }
       if (row.r2_thumb_key && r2) {
-        await r2.delete(row.r2_thumb_key as string).catch(() => undefined);
+        await r2
+          .delete(row.r2_thumb_key as string)
+          .catch((e) => console.error('[media-cestino] miniatura R2 non pulita:', row.r2_thumb_key, e));
       }
       if (row.trash_nc_path && nc) {
-        await nc.delete(row.trash_nc_path as string).catch(() => undefined);
+        await nc
+          .delete(row.trash_nc_path as string)
+          .catch((e) => console.error('[media-cestino] cestino Nextcloud non pulito:', row.trash_nc_path, e));
       }
 
       await service

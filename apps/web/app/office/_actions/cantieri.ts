@@ -11,7 +11,7 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 
 /**
- * Server actions per la gestione dei Cantieri (CRUD + squadra + QR cantiere).
+ * Server actions per la gestione dei Cantieri (CRUD, squadra, QR cantiere).
  *
  * Gated: richiede il modulo `kantiere`. Solo `admin` e `office` possono
  * eseguire mutazioni.
@@ -113,16 +113,23 @@ async function sincronizzaSedeDefaultDaCantiere(
     }
     if (!sedeId) return;
 
-    // Imposta come predefinita (reset altri, set questa).
-    await supabase
-      .from('sedi' as never)
-      .update({ is_default: false } as never)
-      .eq('tenant_id', tenantId);
-    await supabase
+    // Imposta come predefinita: prima questa, poi via le altre. Nell'ordine
+    // opposto un errore a metà lascerebbe il tenant senza sede predefinita.
+    const { error: eSet } = await supabase
       .from('sedi' as never)
       .update({ is_default: true } as never)
       .eq('id', sedeId)
       .eq('tenant_id', tenantId);
+    if (eSet) {
+      console.error('[cantieri] sede predefinita non impostata:', eSet.message);
+      return;
+    }
+    const { error: eReset } = await supabase
+      .from('sedi' as never)
+      .update({ is_default: false } as never)
+      .eq('tenant_id', tenantId)
+      .neq('id', sedeId);
+    if (eReset) console.error('[cantieri] altre sedi ancora predefinite:', eReset.message);
 
     // Associa al cantiere (idempotente).
     await supabase
@@ -310,118 +317,7 @@ export async function eliminaCantiere(input: unknown): Promise<OkResult> {
   return { ok: true };
 }
 
-// ── 4. aggiungiMembroSquadraCantiere ─────────────────────────────────────
-
-const AggiungiMembroSchema = z.object({
-  cantiereId: z.string().uuid(),
-  dipendenteId: z.string().uuid(),
-  ruolo: z.enum(['capo', 'membro']).optional(),
-});
-
-export async function aggiungiMembroSquadraCantiere(input: unknown): Promise<OkResult> {
-  const parsed = AggiungiMembroSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  let ctx;
-  try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
-
-  const supabase = createServerSupabase();
-
-  // Verifica cantiere appartiene al tenant
-  if (!(await cantiereDelTenant(supabase, ctx.tenantId, parsed.data.cantiereId))) {
-    return { ok: false, error: 'Cantiere non trovato per questo tenant' };
-  }
-
-  // Verifica dipendente appartiene al tenant
-  const { data: dip } = await supabase
-    .from('dipendenti' as never)
-    .select('id, tenant_id')
-    .eq('id', parsed.data.dipendenteId)
-    .maybeSingle();
-  const dipRow = dip as { id: string; tenant_id: string } | null;
-  if (!dipRow || dipRow.tenant_id !== ctx.tenantId) {
-    return { ok: false, error: 'Dipendente non trovato per questo tenant' };
-  }
-
-  const { error } = await supabase
-    .from('cantiere_squadra' as never)
-    .upsert(
-      {
-        cantiere_id: parsed.data.cantiereId,
-        dipendente_id: parsed.data.dipendenteId,
-        tenant_id: ctx.tenantId,
-        ruolo: parsed.data.ruolo ?? 'membro',
-        assegnato_da: ctx.userId,
-      } as never,
-      { onConflict: 'cantiere_id,dipendente_id' },
-    );
-
-  if (error) return { ok: false, error: `Assegnazione fallita: ${error.message}` };
-
-  revalidatePath(`/office/kantiere/cantieri/${parsed.data.cantiereId}`);
-  return { ok: true };
-}
-
-// ── 5. rimuoviMembroSquadraCantiere ──────────────────────────────────────
-
-const RimuoviMembroSchema = z.object({
-  cantiereId: z.string().uuid(),
-  dipendenteId: z.string().uuid(),
-});
-
-export async function rimuoviMembroSquadraCantiere(input: unknown): Promise<OkResult> {
-  const parsed = RimuoviMembroSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  let ctx;
-  try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
-
-  const supabase = createServerSupabase();
-
-  const { error } = await supabase
-    .from('cantiere_squadra' as never)
-    .delete()
-    .eq('cantiere_id', parsed.data.cantiereId)
-    .eq('dipendente_id', parsed.data.dipendenteId)
-    .eq('tenant_id', ctx.tenantId);
-
-  if (error) return { ok: false, error: `Rimozione fallita: ${error.message}` };
-
-  revalidatePath(`/office/kantiere/cantieri/${parsed.data.cantiereId}`);
-  return { ok: true };
-}
-
-// ── 6. impostaRuoloSquadraCantiere ────────────────────────────────────────
-
-const ImpostaRuoloSchema = z.object({
-  cantiereId: z.string().uuid(),
-  dipendenteId: z.string().uuid(),
-  ruolo: z.enum(['capo', 'membro']),
-});
-
-export async function impostaRuoloSquadraCantiere(input: unknown): Promise<OkResult> {
-  const parsed = ImpostaRuoloSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  let ctx;
-  try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
-
-  const supabase = createServerSupabase();
-
-  const { error } = await supabase
-    .from('cantiere_squadra' as never)
-    .update({ ruolo: parsed.data.ruolo } as never)
-    .eq('cantiere_id', parsed.data.cantiereId)
-    .eq('dipendente_id', parsed.data.dipendenteId)
-    .eq('tenant_id', ctx.tenantId);
-
-  if (error) return { ok: false, error: `Aggiornamento ruolo fallito: ${error.message}` };
-
-  revalidatePath(`/office/kantiere/cantieri/${parsed.data.cantiereId}`);
-  return { ok: true };
-}
-
-// ── 7. generaQrCantiere ───────────────────────────────────────────────────
+// ── 4. generaQrCantiere ───────────────────────────────────────────────────
 
 const QrCantSchema = z.object({ cantiereId: z.string().uuid() });
 
@@ -461,7 +357,7 @@ export async function generaQrCantiere(input: unknown): Promise<QrResult> {
   return { ok: true, token };
 }
 
-// ── 9. impostaSquadraCantiere ─────────────────────────────────────────────
+// ── 5. impostaSquadraCantiere ─────────────────────────────────────────────
 
 const ImpostaSquadraSchema = z.object({
   cantiereId: z.string().uuid(),
@@ -534,7 +430,7 @@ export async function impostaSquadraCantiere(input: unknown): Promise<OkResult> 
   return { ok: true };
 }
 
-// ── 8. rigeneraQrCantiere ─────────────────────────────────────────────────
+// ── 6. rigeneraQrCantiere ─────────────────────────────────────────────────
 
 export async function rigeneraQrCantiere(input: unknown): Promise<QrResult> {
   const parsed = QrCantSchema.safeParse(input);

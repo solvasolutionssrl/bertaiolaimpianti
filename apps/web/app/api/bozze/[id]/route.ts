@@ -162,8 +162,10 @@ export async function DELETE(
       ) ?? getR2ProviderFromEnv();
     if (r2) {
       for (const f of files) {
-        if (f.r2_key) await r2.delete(f.r2_key).catch(() => {});
-        if (f.r2_thumb_key) await r2.delete(f.r2_thumb_key).catch(() => {});
+        if (f.r2_key) await r2.delete(f.r2_key).catch((e) => console.error('[bozze] R2 non pulito:', f.r2_key, e));
+        if (f.r2_thumb_key) {
+          await r2.delete(f.r2_thumb_key).catch((e) => console.error('[bozze] R2 non pulito:', f.r2_thumb_key, e));
+        }
       }
     }
   }

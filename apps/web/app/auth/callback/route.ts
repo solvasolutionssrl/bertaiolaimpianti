@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@kommessa/api/server';
+import { percorsoInterno } from '@/app/_lib/percorso-sicuro';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +16,7 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
-  const next = url.searchParams.get('next') ?? '/office';
+  const next = percorsoInterno(url.searchParams.get('next'), '/office');
 
   if (!code) {
     return NextResponse.redirect(new URL('/login?error=invalid_link', req.url));

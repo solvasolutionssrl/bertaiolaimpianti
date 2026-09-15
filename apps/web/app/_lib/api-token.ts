@@ -57,6 +57,11 @@ export interface ContestoToken {
   role: string;
 }
 
+interface UtenteToken {
+  role: string;
+  attivo?: boolean | null;
+}
+
 interface RigaToken {
   id: string;
   tenant_id: string;
@@ -64,7 +69,7 @@ interface RigaToken {
   scopes: string[] | null;
   revoked_at: string | null;
   last_used_at: string | null;
-  utente: { role: string } | { role: string }[] | null;
+  utente: UtenteToken | UtenteToken[] | null;
 }
 
 /** Estrae il token dall'header `Authorization: Bearer …`. */
@@ -112,7 +117,7 @@ export async function autenticaToken(
     // torna null e OGNI token viene rifiutato con 401 — sia quelli di
     // integrazione sia quelli del comando iOS.
     .select(
-      'id, tenant_id, user_id, scopes, revoked_at, last_used_at, utente:users!api_tokens_user_id_fkey(role)',
+      'id, tenant_id, user_id, scopes, revoked_at, last_used_at, utente:users!api_tokens_user_id_fkey(role, attivo)',
     )
     .eq('token_hash', atteso)
     .maybeSingle();
@@ -135,6 +140,11 @@ export async function autenticaToken(
   // ma qui si ri-verifica — cosi' l'overload che promette `userId: string` dice
   // il vero anche se un domani il vincolo cambiasse.
   if (scopeRichiesto === 'upload' && !riga.user_id) return null;
+
+  // Un token legato a una persona smette di valere quando la persona viene
+  // disattivata: un ex dipendente non carica piu' file con il comando iOS.
+  const persona = Array.isArray(riga.utente) ? riga.utente[0] : riga.utente;
+  if (riga.user_id && persona?.attivo === false) return null;
 
   // `last_used_at` serve a riconoscere i token dimenticati, ed e' anche il
   // segnale con cui `/admin/integrazioni` capisce se un agente e' ancora vivo:

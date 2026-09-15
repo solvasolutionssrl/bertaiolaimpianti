@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -478,13 +479,19 @@ export async function richiediPermesso(
     const title = 'Nuova richiesta permesso';
     const body = `${nome} · ${tipoLabel} · ${fmtRange(d.dataInizio, d.dataFine)}`;
     const url = '/office/personale/permessi';
-    await svc.from('notifiche' as never).insert({
+    const { error: eNotifica } = await svc.from('notifiche' as never).insert({
       tenant_id: ctx.tenantId,
       user_id: approverUserId,
       type: 'permesso_richiesto',
       payload: { title, body, url },
     } as never);
-    inviaPushAUtente(svc as never, approverUserId, { title, body, url }).catch(() => null);
+    if (eNotifica) console.error('[ferie-permessi] notifica non registrata:', eNotifica.message);
+    // Senza waitUntil la function si ferma dopo la risposta e il push si perde.
+    waitUntil(
+      inviaPushAUtente(svc as never, approverUserId, { title, body, url }).catch((e) =>
+        console.error('[ferie-permessi] push non inviato:', e),
+      ),
+    );
   }
 
   revalidatePath(PATH_PERMESSI);
@@ -568,13 +575,18 @@ export async function decidiPermesso(
     const title = 'Esito richiesta permesso';
     const body = `La tua richiesta (${tipoPermesso(r.tipo)?.label ?? r.tipo}) è ${esitoLabel}.`;
     const url = '/mobile/permessi';
-    await svc.from('notifiche' as never).insert({
+    const { error: eNotifica } = await svc.from('notifiche' as never).insert({
       tenant_id: ctx.tenantId,
       user_id: targetUser,
       type: 'permesso_esito',
       payload: { title, body, url },
     } as never);
-    inviaPushAUtente(svc as never, targetUser, { title, body, url }).catch(() => null);
+    if (eNotifica) console.error('[ferie-permessi] notifica non registrata:', eNotifica.message);
+    waitUntil(
+      inviaPushAUtente(svc as never, targetUser, { title, body, url }).catch((e) =>
+        console.error('[ferie-permessi] push non inviato:', e),
+      ),
+    );
   }
 
   revalidatePath(PATH_PERMESSI);

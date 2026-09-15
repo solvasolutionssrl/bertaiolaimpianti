@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { canAccessFile } from '@/app/_lib/file-authz';
 import {
   getR2ProviderFromEnv,
   getR2ProviderFromTenantConfig,
@@ -73,6 +74,11 @@ export async function POST(
     return Response.json({ error: 'Media non trovato' }, { status: 404 });
   }
   if (ref.tenant_id !== ctx.tenantId) {
+    return Response.json({ error: 'Non autorizzato' }, { status: 403 });
+  }
+  // Sovrascrive l'originale: servono gli stessi permessi della lettura (niente
+  // cliente, tecnico assegnato alla commessa, cartelle visibili).
+  if (!(await canAccessFile(ctx, { commessaId: ref.commessa_id, path: ref.path }))) {
     return Response.json({ error: 'Non autorizzato' }, { status: 403 });
   }
   if (!ref.r2_key) {

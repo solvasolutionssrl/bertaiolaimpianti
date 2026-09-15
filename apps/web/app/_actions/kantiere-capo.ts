@@ -131,7 +131,7 @@ async function applicaAzione(
     const sogliaOre = await leggiSogliaPausaPranzoOre(supabase, ctx.tenantId);
     const inizio = inizioSeEleggibilePausa(info, eventi, ts, sogliaOre);
     if (inizio) {
-      await inserisciPausaDichiarata(supabase, {
+      const pausaScritta = await inserisciPausaDichiarata(supabase, {
         tenantId: ctx.tenantId,
         dipendenteId,
         commessaId: null,
@@ -141,6 +141,7 @@ async function applicaAzione(
         endIso: ts,
         minuti: opts.pausaPranzoMin,
       });
+      if (!pausaScritta.ok) return { toccato: false, error: 'La pausa pranzo non è stata registrata e il turno non è stato chiuso: riprova.' };
     }
   }
 

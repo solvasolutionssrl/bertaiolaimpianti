@@ -81,7 +81,7 @@ export async function inserisciPausaDichiarata(
     endIso: string;
     minuti: number;
   },
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const { uscitaIso, ingressoIso } = coppiaPausaCentrata(opts.startIso, opts.endIso, opts.minuti);
   const base = {
     tenant_id: opts.tenantId,
@@ -93,10 +93,17 @@ export async function inserisciPausaDichiarata(
     modalita: 'pausa_dichiarata',
     creato_da: opts.creatoDa,
   };
-  await supabase.from('timbrature' as never).insert([
+  // Se la coppia non entra, chi chiama si ferma prima dell'uscita di fine: senza
+  // pausa le ore risulterebbero più alte e la giornata potrebbe approvarsi da sola.
+  const { error } = await supabase.from('timbrature' as never).insert([
     { ...base, tipo: 'uscita', ts: uscitaIso },
     { ...base, tipo: 'ingresso', ts: ingressoIso },
   ] as never);
+  if (error) {
+    console.error('[viaggio-timbra] pausa dichiarata non registrata:', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
 }
 
 /**

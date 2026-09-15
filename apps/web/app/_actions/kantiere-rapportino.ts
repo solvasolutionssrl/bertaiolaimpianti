@@ -632,7 +632,7 @@ export async function modificaMiaGiornata(
         .gte('ts', fromIso)
         .lt('ts', toIso);
     }
-    await inserisciPausaDichiarata(supabase, {
+    const pausaScritta = await inserisciPausaDichiarata(supabase, {
       tenantId: ctx.tenantId,
       dipendenteId: me.id,
       commessaId: primoIngresso.commessa_id,
@@ -642,6 +642,7 @@ export async function modificaMiaGiornata(
       endIso: ultimaUscita.ts,
       minuti: pausaMinuti,
     });
+    if (!pausaScritta.ok) return { ok: false, error: 'La pausa pranzo non è stata registrata: riprova.' };
   }
 
   // 2) Ricalcolo: riflette timbrature + pausa e ri-valuta l'auto-approvazione.

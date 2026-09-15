@@ -15,10 +15,15 @@ import {
  * con tutti gli interventi della settimana / filtri richiesti.
  */
 export async function GET(req: NextRequest) {
+  let ctx;
   try {
-    await requireTenantContext();
+    ctx = await requireTenantContext();
   } catch {
     return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+  }
+  // Le ore di tutti: solo l'ufficio, come l'export delle presenze.
+  if (ctx.role !== 'admin' && ctx.role !== 'office') {
+    return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
   }
 
   const url = new URL(req.url);

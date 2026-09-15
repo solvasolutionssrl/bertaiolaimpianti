@@ -1,3 +1,4 @@
+import { segretoValido } from '@/app/_lib/segreto';
 /**
  * POST /api/push/send-internal
  *
@@ -40,9 +41,7 @@ function isQuietNow(start: number | null, end: number | null): boolean {
 }
 
 export async function POST(req: Request) {
-  const expected = process.env.NOTIFY_WEBHOOK_SECRET ?? '';
-  const got = req.headers.get('x-webhook-secret') ?? '';
-  if (!expected || got !== expected) {
+  if (!segretoValido(req.headers.get('x-webhook-secret'), process.env.NOTIFY_WEBHOOK_SECRET)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
 

@@ -39,7 +39,7 @@ export function StorageForm({
   canEdit,
 }: {
   initialProvider: 'supabase' | 'nextcloud';
-  initialConfig: Record<string, unknown> | null;
+  initialConfig: { baseUrl: string; user: string; hasPassword: boolean };
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -50,16 +50,8 @@ export function StorageForm({
     if (state.status === 'success') router.refresh();
   }, [state, router]);
 
-  // Compatibilità: legge camelCase (canonico) con fallback snake_case (legacy)
-  const baseUrl =
-    (initialConfig?.baseUrl as string | undefined) ??
-    (initialConfig?.base_url as string | undefined) ??
-    '';
-  const user = (initialConfig?.user as string | undefined) ?? '';
-  const hasPassword = Boolean(
-    ((initialConfig?.appPassword as string | undefined) ??
-      (initialConfig?.app_password as string | undefined))?.trim(),
-  );
+  // La pagina passa solo cosa mostrare: la password non arriva mai al browser.
+  const { baseUrl, user, hasPassword } = initialConfig;
 
   return (
     <div className="space-y-6">

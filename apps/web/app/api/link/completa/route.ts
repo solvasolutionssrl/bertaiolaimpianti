@@ -113,7 +113,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await service
+  // Senza lo stato «uploaded» la pulizia dei caricamenti morti, dopo 24 ore,
+  // cancellerebbe il file: meglio dirlo subito e far riprovare.
+  const { error: uErr } = await service
     .from('file_refs')
     .update({
       status: 'uploaded',
@@ -121,6 +123,13 @@ export async function POST(request: NextRequest) {
       last_sync_error: null,
     } as never)
     .eq('id', fileRefId);
+  if (uErr) {
+    console.error('[link/completa] stato del file non aggiornato:', uErr.message);
+    return Response.json(
+      { error: `aggiornamento fallito: ${uErr.message}`, messaggio: 'Il file è arrivato ma non è stato registrato: riprova.' },
+      { status: 500 },
+    );
+  }
 
   const { error: auditErr } = await service.from('audit_events').insert({
     tenant_id: ctx.tenantId,
@@ -149,10 +158,16 @@ export async function POST(request: NextRequest) {
   }
 
   if (ref.mime?.startsWith('image/')) {
-    waitUntil(generateAndUploadThumb(ctx.tenantId, fileRefId).catch(() => {}));
+    waitUntil(
+      generateAndUploadThumb(ctx.tenantId, fileRefId).catch((e) =>
+        console.error('[link/completa] miniatura non generata:', fileRefId, e),
+      ),
+    );
   }
   if ((tenantRow?.storage_provider as string | undefined) !== 'r2') {
-    waitUntil(syncOneFile(fileRefId).catch(() => {}));
+    waitUntil(
+      syncOneFile(fileRefId).catch((e) => console.error('[link/completa] sync non avviato:', fileRefId, e)),
+    );
   }
 
   const mb = Math.max(1, Math.round(head.size / 1024 / 1024));

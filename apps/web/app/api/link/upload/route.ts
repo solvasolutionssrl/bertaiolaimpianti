@@ -274,7 +274,9 @@ async function caricaUnFile(input: {
     return { stato: 'errore', errore: msg };
   }
 
-  await service
+  // Senza lo stato «uploaded» la pulizia dei caricamenti morti, dopo 24 ore,
+  // cancellerebbe il file: meglio dirlo subito e far riprovare.
+  const { error: uErr } = await service
     .from('file_refs')
     .update({
       status: 'uploaded',
@@ -283,6 +285,10 @@ async function caricaUnFile(input: {
       last_sync_error: null,
     } as never)
     .eq('id', fileRefId);
+  if (uErr) {
+    console.error('[link/upload] stato del file non aggiornato:', uErr.message);
+    return { stato: 'errore', errore: uErr.message };
+  }
 
   // `actor_role` e' un enum `app_role`: un valore inventato fa fallire l'insert.
   // L'errore si LOGGA — prima veniva ingoiato e i caricamenti dal comando non
@@ -312,10 +318,16 @@ async function caricaUnFile(input: {
   // Nextcloud. `waitUntil` li tiene vivi dopo la Response (senza, su Vercel
   // la function viene congelata e i task si perdono).
   if (mime.startsWith('image/')) {
-    waitUntil(generateAndUploadThumb(ctx.tenantId, fileRefId).catch(() => {}));
+    waitUntil(
+      generateAndUploadThumb(ctx.tenantId, fileRefId).catch((e) =>
+        console.error('[link/upload] miniatura non generata:', fileRefId, e),
+      ),
+    );
   }
   if (storageProvider !== 'r2') {
-    waitUntil(syncOneFile(fileRefId).catch(() => {}));
+    waitUntil(
+      syncOneFile(fileRefId).catch((e) => console.error('[link/upload] sync non avviato:', fileRefId, e)),
+    );
   }
 
   return { stato: 'ok', fileRefId };

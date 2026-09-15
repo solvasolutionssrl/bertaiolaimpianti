@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
+import { percorsoInterno } from '@/app/_lib/percorso-sicuro';
 
 /**
  * Callback magic-link.
@@ -19,7 +20,7 @@ export const runtime = 'nodejs';
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
-  const next = url.searchParams.get('next') ?? '/';
+  const next = percorsoInterno(url.searchParams.get('next'), '/');
 
   if (!code) {
     return NextResponse.redirect(new URL('/login', req.url));

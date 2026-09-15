@@ -51,10 +51,13 @@ export function TurniAttivi({
 }) {
   const [gruppi, setGruppi] = React.useState<GruppoTurni[]>(iniziale);
   const [totale, setTotale] = React.useState(totaleIniziale);
-  const [now, setNow] = React.useState<number>(() => Date.parse(new Date().toISOString()));
+  // Niente orario al primo render (server e browser darebbero minuti diversi):
+  // l'effetto lo imposta subito e poi ogni 30 secondi.
+  const [now, setNow] = React.useState<number | null>(null);
 
   // Tick del tempo trascorso (ogni 30s)
   React.useEffect(() => {
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
@@ -130,7 +133,7 @@ export function TurniAttivi({
                               <Utensils className="h-3 w-3" strokeWidth={2} /> in pausa pranzo
                             </span>
                           ) : (
-                            <>dalle {oraInizio(t.inizioTs)} · {trascorso(t.inizioTs, now)}</>
+                            <>dalle {oraInizio(t.inizioTs)}{now != null ? ` · ${trascorso(t.inizioTs, now)}` : ''}</>
                           )}
                         </p>
                       </div>

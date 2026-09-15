@@ -169,7 +169,9 @@ export async function autenticaApi(
 // ---------------------------------------------------------------------------
 
 export const LIMITE_DEFAULT = 200;
-export const LIMITE_MAX = 1000;
+// Si chiede sempre un record in più del limite (vedi `impagina`) e PostgREST ne
+// restituisce al massimo 1000 per richiesta: oltre 999 l'ultima pagina sparirebbe.
+export const LIMITE_MAX = 999;
 
 export interface Cursore {
   /** Timestamp dell'ultimo record consegnato. */

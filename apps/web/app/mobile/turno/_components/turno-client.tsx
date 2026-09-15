@@ -174,7 +174,9 @@ function TurnoApertoCard({
     () => new Date(aperto.start_at).getTime(),
     [aperto.start_at],
   );
-  const [now, setNow] = useState<number>(() => Date.now());
+  // Niente orario al primo render: server e telefono segnerebbero secondi diversi
+  // (hydration mismatch). L'effetto lo imposta subito.
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -183,7 +185,7 @@ function TurnoApertoCard({
     return () => window.clearInterval(id);
   }, []);
 
-  const elapsedMs = Math.max(0, now - startMs);
+  const elapsedMs = now == null ? 0 : Math.max(0, now - startMs);
   const hh = Math.floor(elapsedMs / 3_600_000);
   const mm = Math.floor((elapsedMs % 3_600_000) / 60_000);
   const ss = Math.floor((elapsedMs % 60_000) / 1000);
@@ -215,7 +217,7 @@ function TurnoApertoCard({
           className="font-mono text-4xl font-semibold tabular-nums tracking-tight text-foreground"
           aria-live="polite"
         >
-          {pad(hh)}:{pad(mm)}:{pad(ss)}
+          {now == null ? '--:--:--' : `${pad(hh)}:${pad(mm)}:${pad(ss)}`}
         </div>
 
         <p className="text-xs text-muted-foreground">

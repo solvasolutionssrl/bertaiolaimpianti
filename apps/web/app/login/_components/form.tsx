@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { percorsoInterno } from '@/app/_lib/percorso-sicuro';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { createBrowserSupabase } from '@kommessa/api/client';
 import { risolviLogin } from '../_actions/risolvi-login';
@@ -19,7 +20,7 @@ function pickHomeForDevice(): string {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const explicitNext = searchParams.get('next');
+  const explicitNext = percorsoInterno(searchParams.get('next'), '');
 
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -75,9 +76,7 @@ export function LoginForm() {
               const { data: ures } = await supabase.auth.getUser();
               const meta = (ures.user?.app_metadata ?? {}) as Record<string, unknown>;
               const isPlatform =
-                meta.platform_admin === true ||
-                meta.platform_admin === 'true' ||
-                (ures.user?.email ?? '').toLowerCase() === 'dev@solva.it';
+                meta.platform_admin === true || meta.platform_admin === 'true';
               dest = isPlatform ? '/admin' : pickHomeForDevice();
             }
             router.replace(dest);

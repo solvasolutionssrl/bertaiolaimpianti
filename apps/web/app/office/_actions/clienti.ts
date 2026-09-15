@@ -53,6 +53,7 @@ export async function cercaClientiPerNome(input: {
 
 export async function creaCliente(input: z.infer<typeof baseSchema>) {
   const ctx = await requireTenantContext();
+  if (ctx.role === 'cliente') throw new Error('Non autorizzato');
   const parsed = baseSchema.parse(input);
   const supabase = createServerSupabase();
   const { data, error } = await supabase
@@ -81,6 +82,8 @@ export async function creaCliente(input: z.infer<typeof baseSchema>) {
 const updateSchema = baseSchema.extend({ id: z.string().uuid() });
 
 export async function aggiornaCliente(input: z.infer<typeof updateSchema>) {
+  const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') throw new Error('Non autorizzato');
   const parsed = updateSchema.parse(input);
   const supabase = createServerSupabase();
   const { error } = await supabase
@@ -110,7 +113,8 @@ export async function eliminaCliente(
   const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
 
-  await requireTenantContext();
+  const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') return { ok: false, error: 'Non autorizzato' };
   const supabase = createServerSupabase();
 
   // Difesa: blocca se ci sono commesse legate al cliente. Postgres
@@ -147,7 +151,8 @@ export async function rinominaCliente(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.errors[0]?.message ?? 'Input non valido' };
   }
-  await requireTenantContext();
+  const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') return { ok: false, error: 'Non autorizzato' };
   const supabase = createServerSupabase();
   const { error } = await supabase
     .from('clienti')

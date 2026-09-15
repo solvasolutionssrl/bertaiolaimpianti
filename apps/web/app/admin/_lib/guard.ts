@@ -30,12 +30,8 @@ export type PlatformAdminCheck =
 /**
  * Verifica se l'utente loggato è un platform admin SOLVA.
  * Legge il JWT custom claim `app_metadata.platform_admin` (popolato da
- * `sync_user_claims` quando `users.is_platform_admin = true`).
- *
- * Per robustezza in fase di sviluppo (claim non ancora propagato per il
- * primo utente seed) accettiamo ANCHE l'email `dev@solva.it` come admin —
- * questo evita lock-out se la migration platform è appena stata applicata
- * e il JWT in cookie è "vecchio".
+ * `sync_user_claims` quando `users.is_platform_admin = true`). Nessuna
+ * eccezione per indirizzo email: un'email non e' un permesso.
  */
 export async function checkPlatformAdmin(): Promise<PlatformAdminCheck> {
   const supabase = createServerSupabase();
@@ -46,9 +42,7 @@ export async function checkPlatformAdmin(): Promise<PlatformAdminCheck> {
   const email = data.user.email ?? '';
   const meta = (data.user.app_metadata ?? {}) as Record<string, unknown>;
   const flag = meta.platform_admin === true || meta.platform_admin === 'true';
-  // Fallback dev: email hard-coded del seed SOLVA owner
-  const isDevSolva = email.toLowerCase() === 'dev@solva.it';
-  if (flag || isDevSolva) {
+  if (flag) {
     return { kind: 'admin', ctx: { userId: data.user.id, email } };
   }
   return { kind: 'tenant_user', email };

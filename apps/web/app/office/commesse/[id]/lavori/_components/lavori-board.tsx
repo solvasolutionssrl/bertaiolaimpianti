@@ -276,7 +276,7 @@ export function LavoriBoard({
       | { kind: 'file'; ts: string; file: FileView };
 
     const all: Entry[] = [];
-    // TODO: solo completato/annullato — i "creato" sono rumore nella cronologia
+    // Solo completato/annullato: i "creato" sono rumore nella cronologia
     for (const t of todos) {
       if (t.completato_at && t.stato === 'completato')
         all.push({ kind: 'todo_completato', ts: t.completato_at, todo: t });
@@ -1451,11 +1451,13 @@ function fmtOra(iso: string): string {
 }
 function fmtGiorno(dateStr: string): string {
   try {
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    // Giorni di calendario a Roma (en-CA dà YYYY-MM-DD), non in UTC.
+    const giornoRoma = (x: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(x);
+    const today = giornoRoma(new Date());
+    const yesterday = giornoRoma(new Date(Date.now() - 86400000));
     if (dateStr === today) return 'Oggi';
     if (dateStr === yesterday) return 'Ieri';
-    const d = new Date(dateStr + 'T00:00:00');
+    const d = new Date(dateStr + 'T12:00:00');
     const sameYear = d.getFullYear() === new Date().getFullYear();
     return d.toLocaleDateString('it-IT', {
       timeZone: 'Europe/Rome',

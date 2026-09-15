@@ -1,5 +1,6 @@
 import 'server-only';
 import { createServerSupabase } from '@kommessa/api/server';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import type { TenantContext } from '@kommessa/api';
 import { risolviTitoloCommessa } from '../../_lib/commessa-display';
 
@@ -12,7 +13,8 @@ export async function getDashboardKpis(_ctx: TenantContext) {
   const supabase = createServerSupabase();
 
   const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
+  // Inizio di oggi a Roma: il server gira in UTC.
+  const { fromIso: inizioOggi } = romeDayBoundsUtc(romeDay(today));
   const tre = new Date(today);
   tre.setDate(tre.getDate() - 3);
   const treIso = tre.toISOString();
@@ -30,7 +32,7 @@ export async function getDashboardKpis(_ctx: TenantContext) {
     supabase
       .from('file_refs')
       .select('id', { count: 'exact', head: true })
-      .gte('uploaded_at', `${todayIso}T00:00:00Z`)
+      .gte('uploaded_at', inizioOggi)
       .like('mime', 'image/%'),
     // DICO in scadenza: non c'è una colonna `data_collaudo` esplicita in commesse,
     // quindi come fallback contiamo le commesse in stato 'collaudo' senza file
@@ -47,50 +49,6 @@ export async function getDashboardKpis(_ctx: TenantContext) {
     fotoOggi: fotoOggi.count ?? 0,
     dicoScadenza: dicoScadenza.count ?? 0,
   };
-}
-
-/**
- * Commesse "a rischio": stato `in_corso` con almeno una voce attiva da >3 gg
- * senza foto sufficienti, oppure stato `collaudo` senza scadenza coperta.
- * Per ora restituiamo un campione delle commesse non chiuse con priorità ai
- * casi con voci sotto target (heuristica grezza ma deterministica).
- */
-export async function getCommesseARischio() {
-  const supabase = createServerSupabase();
-  const { data, error } = await supabase
-    .from('commesse')
-    .select(
-      `
-        id,
-        codice_interno,
-        nome_cartella,
-        stato,
-        cliente:cliente_id ( id, ragione_sociale ),
-        responsabile:responsabile_id ( id, display_name ),
-        data_apertura,
-        cliente_indirizzo_cantiere
-      `,
-    )
-    .in('stato', ['in_corso', 'collaudo'])
-    .order('data_apertura', { ascending: true })
-    .limit(5);
-
-  if (error) return [];
-  return data ?? [];
-}
-
-/** Ultime righe del log audit, leggibili in italiano. */
-export async function getUltimaAttivita(limit = 8) {
-  const supabase = createServerSupabase();
-  const { data, error } = await supabase
-    .from('audit_events')
-    .select(
-      'id, entity_type, entity_id, action, metadata, created_at, actor_user_id',
-    )
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  if (error) return [];
-  return data ?? [];
 }
 
 /* ------------------------------------------------------------------ */

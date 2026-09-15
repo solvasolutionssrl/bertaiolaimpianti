@@ -1,3 +1,4 @@
+import { bearerValido, segretoValido } from '@/app/_lib/segreto';
 import { type NextRequest } from 'next/server';
 import { z } from 'zod';
 
@@ -71,16 +72,11 @@ export async function POST(request: NextRequest) {
 // --------------------------------------------------------------------------
 
 function isAuthorizedCron(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const header = request.headers.get('authorization') ?? '';
-  return header === `Bearer ${secret}`;
+  return bearerValido(request, process.env.CRON_SECRET);
 }
 
 function isAuthorizedInternal(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return request.headers.get('x-internal-sync-secret') === secret;
+  return segretoValido(request.headers.get('x-internal-sync-secret'), process.env.CRON_SECRET);
 }
 
 function clampMax(raw: string | null): number {

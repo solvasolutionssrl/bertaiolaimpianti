@@ -1,3 +1,4 @@
+import { bearerValido } from '@/app/_lib/segreto';
 import { type NextRequest } from 'next/server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
@@ -25,9 +26,7 @@ export const maxDuration = 300;
  * Auth: `Authorization: Bearer $CRON_SECRET` (stesso secret del sync/cestino).
  */
 function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return (request.headers.get('authorization') ?? '') === `Bearer ${secret}`;
+  return bearerValido(request, process.env.CRON_SECRET);
 }
 
 function clampDays(raw: string | null): number {

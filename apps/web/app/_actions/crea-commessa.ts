@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { romeDay } from '@kommessa/api/rome-time';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { isKantiereOnly } from '@/app/_lib/app-mode';
@@ -79,8 +80,9 @@ function estraiSegmentoCliente(
   return ragioneSociale.trim();
 }
 
+/** Oggi a Roma: il server gira in UTC e fra mezzanotte e le 2 sarebbe ancora ieri. */
 function dataIsoOggi(): string {
-  return new Date().toISOString().slice(0, 10);
+  return romeDay(new Date());
 }
 
 // ---------------------------------------------------------------------

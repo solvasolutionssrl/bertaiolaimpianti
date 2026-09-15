@@ -19,7 +19,10 @@ export const metadata = { title: 'Dashboard' };
 export const dynamic = 'force-dynamic';
 
 function salutoOrario(d: Date): string {
-  const h = d.getHours();
+  // Ora di Roma: il server gira in UTC e alle 7 direbbe ancora «Buonanotte».
+  const h = Number(
+    new Intl.DateTimeFormat('it-IT', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Europe/Rome' }).format(d),
+  );
   if (h < 6) return 'Buonanotte';
   if (h < 12) return 'Buongiorno';
   if (h < 18) return 'Buon pomeriggio';

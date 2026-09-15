@@ -123,10 +123,13 @@ function soloTimbrature(timbrature: TimbraturaInput[]) {
 }
 
 /** Hook: ticka ogni 30s solo se serve un contatore live (giornata aperta). */
-function useLiveNow(enabled: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
+function useLiveNow(enabled: boolean): number | null {
+  // Niente orario al primo render: server e browser darebbero minuti diversi
+  // (hydration mismatch). L'effetto lo imposta subito.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     if (!enabled) return;
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, [enabled]);
@@ -164,7 +167,7 @@ export function TimbratureSommario({
 
   const prima = r.coppie[0]!;
   const ultima = r.coppie[r.coppie.length - 1]!;
-  const liveMin = r.ingressoAperto ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
+  const liveMin = r.ingressoAperto && now != null ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
   const totaleConLive = r.minutiTotali + (r.aperto ? liveMin : 0);
 
   return (
@@ -210,7 +213,7 @@ function fmtOreColon(n: number): string {
 export function useTotaleGiornata(timbrature: TimbraturaInput[]): { minuti: number; aperto: boolean } {
   const r = appaiaTimbrature(soloTimbrature(timbrature));
   const now = useLiveNow(r.aperto);
-  const liveMin = r.ingressoAperto ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
+  const liveMin = r.ingressoAperto && now != null ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
   return { minuti: r.minutiTotali + (r.aperto ? liveMin : 0), aperto: r.aperto };
 }
 
@@ -356,7 +359,7 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
     return <p className="text-xs text-muted-foreground">Nessuna timbratura registrata.</p>;
   }
 
-  const liveMin = r.ingressoAperto ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
+  const liveMin = r.ingressoAperto && now != null ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
   const totaleConLive = r.minutiTotali + (r.aperto ? liveMin : 0);
 
   return (

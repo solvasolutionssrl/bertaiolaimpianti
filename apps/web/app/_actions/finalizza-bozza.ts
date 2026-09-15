@@ -215,8 +215,10 @@ async function spostaFileBozza(opts: {
   if (drop.length > 0) {
     await Promise.all(
       drop.flatMap((f) => [
-        f.r2_key ? r2.delete(f.r2_key).catch(() => {}) : Promise.resolve(),
-        f.r2_thumb_key ? r2.delete(f.r2_thumb_key).catch(() => {}) : Promise.resolve(),
+        f.r2_key ? r2.delete(f.r2_key).catch((e) => console.error('[finalizza-bozza] R2 non pulito:', f.r2_key, e)) : Promise.resolve(),
+        f.r2_thumb_key
+          ? r2.delete(f.r2_thumb_key).catch((e) => console.error('[finalizza-bozza] R2 non pulito:', f.r2_thumb_key, e))
+          : Promise.resolve(),
       ]),
     );
     await service
@@ -265,7 +267,7 @@ async function spostaFileBozza(opts: {
 
       // Copia originale R2 → R2 (server-side, no banda Vercel) e rimuovi staging.
       await r2.copyObject(f.r2_key, newKey);
-      await r2.delete(f.r2_key).catch(() => {});
+      await r2.delete(f.r2_key).catch((e) => console.error('[finalizza-bozza] staging R2 non pulito:', f.r2_key, e));
 
       // Sposta anche il thumbnail, se già generato durante la bozza.
       let newThumbKey: string | null = null;
@@ -274,7 +276,11 @@ async function spostaFileBozza(opts: {
         await r2.copyObject(f.r2_thumb_key, newThumbKey).catch(() => {
           newThumbKey = null; // se la copia fallisce, lascia che venga rigenerato
         });
-        if (newThumbKey) await r2.delete(f.r2_thumb_key).catch(() => {});
+        if (newThumbKey) {
+          await r2
+            .delete(f.r2_thumb_key)
+            .catch((e) => console.error('[finalizza-bozza] miniatura di staging non pulita:', f.r2_thumb_key, e));
+        }
       }
 
       // Ri-aggancia la riga: ora è un file di commessa "uploaded" pronto al sync.
@@ -291,7 +297,7 @@ async function spostaFileBozza(opts: {
         .eq('id', f.id);
 
       // Avvia il sync verso Nextcloud (best-effort, non blocca).
-      waitUntil(syncOneFile(f.id).catch(() => {}));
+      waitUntil(syncOneFile(f.id).catch((e) => console.error('[finalizza-bozza] sync non avviato:', f.id, e)));
     } catch (e) {
       console.error(
         `[finalizza-bozza] spostamento file ${f.id} fallito:`,

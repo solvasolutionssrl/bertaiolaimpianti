@@ -181,9 +181,18 @@ async function main() {
           document.querySelectorAll('button, a[href], [role=button]').forEach((el) => {
             const r = el.getBoundingClientRect();
             if (r.width === 0 || r.height === 0) return;
+            // L'area di tocco può essere più grande del disegno: i tasti fissi in
+            // alto (34px) hanno un ::before invisibile da 44px.
+            let h = r.height;
+            let w = r.width;
+            const area = getComputedStyle(el, '::before');
+            if (area.content !== 'none' && area.position === 'absolute') {
+              h = Math.max(h, parseFloat(area.height) || 0);
+              w = Math.max(w, parseFloat(area.width) || 0);
+            }
             // 40px: sotto questa misura un dito sbaglia bersaglio.
-            if (r.height < 40 && r.width < 40) {
-              fuori.push(Math.round(r.height) + 'x' + Math.round(r.width) + ' ' +
+            if (h < 40 && w < 40) {
+              fuori.push(Math.round(h) + 'x' + Math.round(w) + ' ' +
                 (el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 24));
             }
           });

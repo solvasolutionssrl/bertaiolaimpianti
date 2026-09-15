@@ -5,54 +5,6 @@ import { z } from 'zod';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 
-/**
- * Invita un nuovo platform admin SOLVA (tenant_id = NULL).
- * Setta `is_platform_admin=true` + `platform_admin=true` nel JWT claim.
- */
-export async function invitaPlatformAdmin(email: string, displayName: string) {
-  const ctx = await requirePlatformAdmin();
-  const parsed = z
-    .object({ email: z.string().email(), displayName: z.string().min(2) })
-    .safeParse({ email, displayName });
-  if (!parsed.success) return { ok: false as const, error: parsed.error.message };
-
-  const supabase = createServiceSupabase();
-
-  const invite = await supabase.auth.admin.inviteUserByEmail(parsed.data.email, {
-    data: { display_name: parsed.data.displayName },
-  });
-  if (invite.error) return { ok: false as const, error: invite.error.message };
-  const uid = invite.data.user?.id;
-  if (!uid) return { ok: false as const, error: 'auth id mancante' };
-
-  await supabase.auth.admin.updateUserById(uid, {
-    app_metadata: { platform_admin: true, role: 'admin' } as never,
-  });
-
-  await supabase.from('users').insert({
-    id: uid,
-    tenant_id: null,
-    role: 'admin',
-    display_name: parsed.data.displayName,
-    is_platform_admin: true,
-    attivo: true,
-  } as never);
-
-  await supabase.from('audit_events').insert({
-    tenant_id: null,
-    actor_user_id: ctx.userId,
-    actor_role: 'admin',
-    entity_type: 'platform_admin',
-    entity_id: uid,
-    action: 'invite',
-    after_data: { email: parsed.data.email } as Record<string, unknown>,
-    metadata: { platform: true, actor_email: ctx.email } as Record<string, unknown>,
-  } as never);
-
-  revalidatePath('/admin/utenti');
-  return { ok: true as const };
-}
-
 /** Invia un magic link / reset password (Supabase `generateLink`). */
 export async function resetPasswordUser(authId: string) {
   const ctx = await requirePlatformAdmin();
@@ -409,13 +361,19 @@ export async function invitaUtenteTenant(input: z.infer<typeof invitaTenantUserS
     } as never,
   });
 
-  await supabase.from('users').insert({
+  const { error: insErr } = await supabase.from('users').insert({
     id: uid,
     tenant_id: parsed.data.tenantId,
     role: parsed.data.role,
     display_name: parsed.data.displayName,
     attivo: true,
   } as never);
+  if (insErr) {
+    // Senza la riga applicativa l'accesso resterebbe a metà: si toglie anche l'utente Auth.
+    const { error: delErr } = await supabase.auth.admin.deleteUser(uid);
+    if (delErr) console.error('[admin/utenti] utente Auth rimasto senza profilo:', uid, delErr.message);
+    return { ok: false as const, error: `Profilo non creato: ${insErr.message}` };
+  }
 
   await supabase.from('audit_events').insert({
     tenant_id: parsed.data.tenantId,

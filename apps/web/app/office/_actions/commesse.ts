@@ -18,6 +18,7 @@ const aggiungiInput = z.object({
 
 export async function aggiungiVoce(input: z.infer<typeof aggiungiInput>) {
   const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') throw new Error('Non autorizzato');
   const parsed = aggiungiInput.parse(input);
   const supabase = createServerSupabase();
 
@@ -53,6 +54,8 @@ const cambiaStatoInput = z.object({
 });
 
 export async function cambiaStatoVoce(input: z.infer<typeof cambiaStatoInput>) {
+  const ctx = await requireTenantContext();
+  if (ctx.role !== 'admin' && ctx.role !== 'office') throw new Error('Non autorizzato');
   const parsed = cambiaStatoInput.parse(input);
   const supabase = createServerSupabase();
   const { error } = await supabase

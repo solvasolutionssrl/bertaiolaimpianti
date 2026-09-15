@@ -34,7 +34,7 @@ export async function POST(
   const supabase = createServerSupabase();
   const { data: ref, error: rErr } = await supabase
     .from('file_refs')
-    .select('id, tenant_id, commessa_id, r2_key, r2_upload_id, status')
+    .select('id, tenant_id, commessa_id, r2_key, r2_upload_id, status, uploaded_by')
     .eq('id', fileRefId)
     .single();
 
@@ -48,6 +48,17 @@ export async function POST(
   // Idempotenza
   if (ref.status === 'failed' || ref.status === 'deleted') {
     return Response.json({ ok: true, alreadyAborted: true });
+  }
+
+  // Si annulla solo un caricamento ancora in corso. Un file gia' caricato non
+  // si tocca da qui: segnato 'failed' finirebbe fra gli upload morti e verrebbe
+  // cancellato davvero dopo 24 ore.
+  if (ref.status !== 'uploading') {
+    return Response.json({ ok: true, alreadyCompleted: true });
+  }
+  // Lo annulla chi l'ha avviato, oppure l'ufficio.
+  if (ref.uploaded_by !== ctx.userId && ctx.role !== 'admin' && ctx.role !== 'office') {
+    return Response.json({ error: 'Non autorizzato' }, { status: 403 });
   }
 
   // Abort multipart su R2 se applicabile

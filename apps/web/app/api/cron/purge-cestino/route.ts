@@ -1,3 +1,4 @@
+import { bearerValido } from '@/app/_lib/segreto';
 import { type NextRequest } from 'next/server';
 
 import { purgeExpiredMedia } from '../../../_lib/media-cestino';
@@ -17,9 +18,7 @@ export const maxDuration = 300;
  * Auth: `Authorization: Bearer $CRON_SECRET` (stesso secret del sync).
  */
 function isAuthorized(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return (request.headers.get('authorization') ?? '') === `Bearer ${secret}`;
+  return bearerValido(request, process.env.CRON_SECRET);
 }
 
 function clampMax(raw: string | null): number {

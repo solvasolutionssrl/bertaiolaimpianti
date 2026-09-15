@@ -176,6 +176,16 @@ Working language for the app UI is **Italian**. Preserve it.
 - **«Lavoro dalla sede sul progetto»** (flag in avvio turno, cambio cantiere, Registra giornata per cantiere): ore del cantiere, tratte da/verso la **sede predefinita**; stessa sede = nessuna tratta. `timbrature.sede_lavoro_id`; `/api/routing/stima` accetta `{ daSedeId, aSedeId }`. → `Logiche_Kantiere.md` §3.2.
 - **Impostazioni Kantiere riordinate** (Orario e ore · Turni · Pause · Viaggi e chilometri · Approvazione giornate · Anomalie · Kontabilità) con descrizioni oggettive ed esempio calcolato; tolta `anomalie_ore_max` (mai letta); soglia di verifica ora con i decimali. Fix: salvare dall'elenco Dipendenti azzerava `costo_orario`.
 
+#### Audit generale: sicurezza, convivenza e pulizia (15/09/2026)
+
+- **Segreti** (cron, webhook, backfill): `segretoValido` / `bearerValido` in `_lib/segreto.ts`, mai `===`. **`?next=`** dopo login e callback: `percorsoInterno` (`_lib/percorso-sicuro.ts`), mai un URL esterno. **Super admin** solo da `app_metadata.platform_admin`: nessuna eccezione per email.
+- ⚠️ **Tetto di 1000 righe di PostgREST confermato** (chiesto 5000, restituite 1000, senza errore): una lettura che deve essere completa (totali, export, API) va paginata. API v1: `LIMITE_MAX = 999` perché si chiede `limite+1`.
+- **Nuove funzioni SECURITY DEFINER**: `revoke execute ... from public, anon, authenticated` se non servono agli utenti (le funzioni nuove in `public` nascono eseguibili da tutti).
+- **Convivenza dei mondi**: pagine commesse mobile con `soloMondoCommesse()` (`mobile/_lib/mondo.ts`), `/office/tickets` chiuso ai tenant solo Kantiere, Kontabilità spenta = niente voce e `notFound()` (layout), `getAppModeCached` torna a `kommessa` se manca il modulo Kantiere, ⌘K filtrata per mondo. `app_mode=full` su mobile: il tab Kantiere prende il posto di Notifiche, Profilo resta.
+- **Scritture ore**: `scriviRigheGiornata` inserisce le righe nuove e poi cancella le vecchie (se l'insert fallisce la giornata resta com'era); `inserisciPausaDichiarata` restituisce l'esito e chi chiude il turno si ferma se la pausa non entra.
+- **Upload**: l'annullamento vale solo per un caricamento `uploading`, dell'autore o dell'ufficio (prima un file già sincronizzato finiva fra gli upload morti e veniva cancellato). La pagina Storage non manda più la password al browser.
+- Migration **`20260915180000_sicurezza_privilegi_utenti_tenant`** preparata e provata in transazione annullata, **da applicare con Luca**. Punti ancora aperti → memoria `project-audit-generale-2026-09-15`.
+
 ### Infrastruttura produzione
 
 | Servizio | Dettaglio |

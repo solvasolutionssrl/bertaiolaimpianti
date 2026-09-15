@@ -1,6 +1,8 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env"],
+  "globalDependencies": [
+    ".env"
+  ],
   "globalEnv": [
     "NODE_ENV",
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -8,14 +10,12 @@
     "SUPABASE_SERVICE_ROLE_KEY",
     "ANTHROPIC_API_KEY",
     "RESEND_API_KEY",
-    "STORAGE_PROVIDER",
     "NEXTCLOUD_BASE_URL",
     "NEXTCLOUD_USER",
     "NEXTCLOUD_APP_PASSWORD",
     "VAPID_PUBLIC_KEY",
     "VAPID_PRIVATE_KEY",
     "NEXT_PUBLIC_APP_URL",
-    "NEXT_PUBLIC_TENANT_DEFAULT",
     "OPENAI_API_KEY",
     "OPENAI_MODEL_CHAT",
     "OPENAI_MODEL_VISION",
@@ -28,12 +28,27 @@
     "R2_ACCESS_KEY_ID",
     "R2_SECRET_ACCESS_KEY",
     "R2_ENDPOINT",
-    "CRON_SECRET"
+    "CRON_SECRET",
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+    "SENTRY_AUTH_TOKEN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+    "GOOGLE_MAPS_API_KEY",
+    "ORS_API_KEY",
+    "OPENAI_MODEL_EXTRACT",
+    "PLATFORM_ALERT_EMAIL"
   ],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**",
+        "dist/**"
+      ]
     },
     "dev": {
       "cache": false,

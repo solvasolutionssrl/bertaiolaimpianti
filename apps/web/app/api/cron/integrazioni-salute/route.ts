@@ -1,3 +1,4 @@
+import { bearerValido } from '@/app/_lib/segreto';
 import { type NextRequest } from 'next/server';
 
 import { meritaAvviso } from '@kommessa/api/integrazione-salute';
@@ -31,9 +32,7 @@ export const maxDuration = 60;
  */
 
 function autorizzato(request: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  return (request.headers.get('authorization') ?? '') === `Bearer ${secret}`;
+  return bearerValido(request, process.env.CRON_SECRET);
 }
 
 async function run(request: NextRequest) {

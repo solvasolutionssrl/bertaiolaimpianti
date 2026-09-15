@@ -74,10 +74,6 @@ async function GestioneDashboard({
 }) {
   const supabase = createServerSupabase();
 
-  const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
-  const treGiorniFa = new Date(today);
-  treGiorniFa.setDate(treGiorniFa.getDate() - 3);
 
   const recenti = await supabase
     .from('commesse')
