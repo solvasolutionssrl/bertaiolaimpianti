@@ -3,10 +3,14 @@ import { Timer, LogIn, LogOut, MapPin, ArrowLeft, Route } from 'lucide-react';
 import { Badge, Card, CardContent } from '@kommessa/ui';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { leggiTutto, leggiPerGruppi, type EsitoPagina } from '@kommessa/api/pagine';
 import { romeDay } from '@kommessa/api/rome-time';
 import { requirePlatformAdmin } from '../../_lib/guard';
 import { SectionHeader } from '../../../_components/section-header';
 import { FiltriTimbrature } from './_components/filtri-timbrature';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /** min → "H:MM" (tempo di viaggio registrato). */
 function hm(min: number): string {
@@ -126,43 +130,80 @@ export default async function TimbratureAdminPage({
   const userIds = [...new Set(rows.map((r) => r.creato_da).filter(Boolean))] as string[];
   const timbIds = rows.map((r) => r.id);
 
-  const [dipRes, cantRes, userRes, viaRes] = await Promise.all([
-    dipIds.length
-      ? sb.from('dipendenti' as never).select('id, nome, cognome').in('id', dipIds)
-      : Promise.resolve({ data: [] }),
-    cantIds.length
-      ? sb.from('cantieri' as never).select('id, nome, codice').in('id', cantIds)
-      : Promise.resolve({ data: [] }),
-    userIds.length
-      ? sb.from('users').select('id, display_name').in('id', userIds)
-      : Promise.resolve({ data: [] }),
-    timbIds.length
-      ? sb
-          .from('timbratura_viaggio' as never)
-          .select('timbratura_id, distanza_km, mezzo_id, autista')
-          .in('timbratura_id', timbIds)
-      : Promise.resolve({ data: [] }),
+  // Id a gruppi: 300 timbrature portano fino a 300 id nell'URL, oltre il limite
+  // del gateway. Ogni gruppo si legge a pagine.
+  type Via = { timbratura_id: string; distanza_km: number | null; mezzo_id: string | null; autista: boolean };
+  type Dip = { id: string; nome: string; cognome: string };
+  type Cant = { id: string; nome: string | null; codice: string | null };
+  type Utente = { id: string; display_name: string | null };
+  const [dipRows, cantRows, userRows, viaRows] = await Promise.all([
+    leggiPerGruppi(dipIds, (gruppo) =>
+      leggiTutto<Dip>(
+        (da, a) =>
+          sb
+            .from('dipendenti' as never)
+            .select('id, nome, cognome')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Dip>,
+        { contesto: 'super admin timbrature: dipendenti' },
+      ),
+    ),
+    leggiPerGruppi(cantIds, (gruppo) =>
+      leggiTutto<Cant>(
+        (da, a) =>
+          sb
+            .from('cantieri' as never)
+            .select('id, nome, codice')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Cant>,
+        { contesto: 'super admin timbrature: cantieri' },
+      ),
+    ),
+    leggiPerGruppi(userIds, (gruppo) =>
+      leggiTutto<Utente>(
+        (da, a) =>
+          sb
+            .from('users')
+            .select('id, display_name')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Utente>,
+        { contesto: 'super admin timbrature: utenti' },
+      ),
+    ),
+    leggiPerGruppi(timbIds, (gruppo) =>
+      leggiTutto<Via>(
+        (da, a) =>
+          sb
+            .from('timbratura_viaggio' as never)
+            .select('timbratura_id, distanza_km, mezzo_id, autista')
+            .in('timbratura_id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Via>,
+        { contesto: 'super admin timbrature: viaggi' },
+      ),
+    ),
   ]);
 
   const dipMap = new Map(
-    ((dipRes.data as { id: string; nome: string; cognome: string }[] | null) ?? []).map((d) => [
+    dipRows.map((d) => [
       d.id,
       `${d.nome} ${d.cognome}`.trim(),
     ]),
   );
   const cantMap = new Map(
-    ((cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? []).map(
+    cantRows.map(
       (c) => [c.id, c.nome || c.codice || ''],
     ),
   );
   const userMap = new Map(
-    ((userRes.data as { id: string; display_name: string | null }[] | null) ?? []).map((u) => [
+    userRows.map((u) => [
       u.id,
       u.display_name ?? '',
     ]),
   );
-  type Via = { timbratura_id: string; distanza_km: number | null; mezzo_id: string | null; autista: boolean };
-  const viaRows = (viaRes.data as Via[] | null) ?? [];
   const viaMap = new Map(viaRows.map((v) => [v.timbratura_id, v]));
   const mezzoIds = [...new Set(viaRows.map((v) => v.mezzo_id).filter(Boolean))] as string[];
   const mezzoMap = new Map<string, string>();

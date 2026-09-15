@@ -38,8 +38,40 @@ const STATI_COMMESSA = [
 
 const idsSchema = z.array(z.string().uuid()).min(1).max(500);
 
+/**
+ * Le azioni massive accettano fino a 500 id: tutti insieme in `in(...)` finiscono
+ * nell'URL e superano il limite del gateway. Si lavora a gruppi da 100.
+ */
+const ID_PER_GRUPPO = 100;
+
+async function leggiAGruppi<R>(
+  ids: readonly string[],
+  leggi: (gruppo: string[]) => PromiseLike<{ data: R[] | null; error: { message: string } | null }>,
+): Promise<{ data: R[]; error: { message: string } | null }> {
+  const data: R[] = [];
+  for (let i = 0; i < ids.length; i += ID_PER_GRUPPO) {
+    const r = await leggi(ids.slice(i, i + ID_PER_GRUPPO));
+    if (r.error) return { data, error: r.error };
+    for (const riga of r.data ?? []) data.push(riga);
+  }
+  return { data, error: null };
+}
+
+async function scriviAGruppi(
+  ids: readonly string[],
+  scrivi: (gruppo: string[]) => PromiseLike<{ error: { message: string } | null }>,
+): Promise<{ error: { message: string } | null }> {
+  for (let i = 0; i < ids.length; i += ID_PER_GRUPPO) {
+    const { error } = await scrivi(ids.slice(i, i + ID_PER_GRUPPO));
+    if (error) {
+      return { error: { message: `${error.message} (aggiornati ${i} su ${ids.length})` } };
+    }
+  }
+  return { error: null };
+}
+
 function assertOfficeRole(role: string): void {
-  if (role !== 'admin' && role !== 'admin' && role !== 'office') {
+  if (role !== 'admin' && role !== 'office') {
     throw new Error('FORBIDDEN: solo office/admin/owner possono eseguire bulk action.');
   }
 }
@@ -92,10 +124,9 @@ export async function bulkAssegna(
     const parsed = bulkAssegnaSchema.parse({ ids, userId });
     const supabase = createServerSupabase();
 
-    const { error } = await supabase
-      .from('tickets')
-      .update({ assegnato_a: parsed.userId })
-      .in('id', parsed.ids);
+    const { error } = await scriviAGruppi(parsed.ids, (gruppo) =>
+      supabase.from('tickets').update({ assegnato_a: parsed.userId }).in('id', gruppo),
+    );
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -137,10 +168,9 @@ export async function bulkCambiaStato(
       updates.closed_at = new Date().toISOString();
     }
 
-    const { error } = await supabase
-      .from('tickets')
-      .update(updates)
-      .in('id', parsed.ids);
+    const { error } = await scriviAGruppi(parsed.ids, (gruppo) =>
+      supabase.from('tickets').update(updates).in('id', gruppo),
+    );
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -235,15 +265,16 @@ export async function bulkCambiaStatoCommessa(
     const supabase = createServerSupabase();
 
     // Snapshot commesse prima del cambio (per notifica al responsabile)
-    const { data: commesseInfo } = await supabase
-      .from('commesse')
-      .select('id, codice_interno, responsabile_id, cliente:clienti(ragione_sociale)')
-      .in('id', parsed.ids);
+    const { data: commesseInfo } = await leggiAGruppi(parsed.ids, (gruppo) =>
+      supabase
+        .from('commesse')
+        .select('id, codice_interno, responsabile_id, cliente:clienti(ragione_sociale)')
+        .in('id', gruppo),
+    );
 
-    const { error } = await supabase
-      .from('commesse')
-      .update({ stato: parsed.stato })
-      .in('id', parsed.ids);
+    const { error } = await scriviAGruppi(parsed.ids, (gruppo) =>
+      supabase.from('commesse').update({ stato: parsed.stato }).in('id', gruppo),
+    );
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({
@@ -321,15 +352,16 @@ export async function bulkAssegnaResponsabile(
 
     // Leggi codici delle commesse PRIMA dell'update così abbiamo info
     // ricche per la notifica al nuovo responsabile
-    const { data: commesseInfo } = await supabase
-      .from('commesse')
-      .select('id, codice_interno, cliente:clienti(ragione_sociale)')
-      .in('id', parsed.ids);
+    const { data: commesseInfo } = await leggiAGruppi(parsed.ids, (gruppo) =>
+      supabase
+        .from('commesse')
+        .select('id, codice_interno, cliente:clienti(ragione_sociale)')
+        .in('id', gruppo),
+    );
 
-    const { error } = await supabase
-      .from('commesse')
-      .update({ responsabile_id: parsed.userId })
-      .in('id', parsed.ids);
+    const { error } = await scriviAGruppi(parsed.ids, (gruppo) =>
+      supabase.from('commesse').update({ responsabile_id: parsed.userId }).in('id', gruppo),
+    );
     if (error) return { ok: false, error: error.message };
 
     await logBulkAudit({

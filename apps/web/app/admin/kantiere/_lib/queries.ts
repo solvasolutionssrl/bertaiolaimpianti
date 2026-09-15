@@ -1,8 +1,12 @@
 import 'server-only';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { statoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * Query cross-tenant per il monitoraggio Kantiere lato platform admin.
@@ -57,29 +61,54 @@ export async function statKantierePerTenant(): Promise<KantiereTenantStat[]> {
   const ids = rilevanti.map((t) => t.id);
   const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
 
-  const [dipRes, cantRes, oggiRes] = await Promise.all([
-    sb.from('dipendenti' as never).select('tenant_id, stato_attivo').in('tenant_id', ids),
-    sb.from('cantieri' as never).select('tenant_id').in('tenant_id', ids),
-    sb
-      .from('timbrature' as never)
-      .select('tenant_id, dipendente_id, tipo, ts, pausa')
-      .in('tenant_id', ids)
-      .gte('ts', fromIso)
-      .lt('ts', toIso)
-      .order('ts', { ascending: true }),
+  // A pagine: sommando più tenant, dipendenti, cantieri e timbrature superano
+  // presto le 1000 righe che il database restituisce per richiesta.
+  const [dipendenti, cantieri, oggi] = await Promise.all([
+    leggiTutto<{ tenant_id: string; stato_attivo: boolean }>(
+      (da, a) =>
+        sb
+          .from('dipendenti' as never)
+          .select('tenant_id, stato_attivo')
+          .in('tenant_id', ids)
+          .order('id')
+          .range(da, a) as unknown as Pagina<{ tenant_id: string; stato_attivo: boolean }>,
+      { contesto: 'super admin kantiere: dipendenti' },
+    ),
+    leggiTutto<{ tenant_id: string }>(
+      (da, a) =>
+        sb
+          .from('cantieri' as never)
+          .select('tenant_id')
+          .in('tenant_id', ids)
+          .order('id')
+          .range(da, a) as unknown as Pagina<{ tenant_id: string }>,
+      { contesto: 'super admin kantiere: cantieri' },
+    ),
+    leggiTutto<TimbRow>(
+      (da, a) =>
+        sb
+          .from('timbrature' as never)
+          .select('tenant_id, dipendente_id, tipo, ts, pausa')
+          .in('tenant_id', ids)
+          .gte('ts', fromIso)
+          .lt('ts', toIso)
+          .order('ts', { ascending: true })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as Pagina<TimbRow>,
+      { contesto: 'super admin kantiere: timbrature di oggi' },
+    ),
   ]);
 
   const nDip = new Map<string, number>();
-  for (const d of (dipRes.data as { tenant_id: string; stato_attivo: boolean }[] | null) ?? []) {
+  for (const d of dipendenti) {
     if (d.stato_attivo) nDip.set(d.tenant_id, (nDip.get(d.tenant_id) ?? 0) + 1);
   }
   const nCant = new Map<string, number>();
-  for (const c of (cantRes.data as { tenant_id: string }[] | null) ?? []) {
+  for (const c of cantieri) {
     nCant.set(c.tenant_id, (nCant.get(c.tenant_id) ?? 0) + 1);
   }
 
   // Eventi di oggi per (tenant, dipendente) → stato live pausa-aware.
-  const oggi = (oggiRes.data as TimbRow[] | null) ?? [];
   const perTenant = new Map<string, { count: number; ultima: string | null; eventiDip: Map<string, TimbRow[]> }>();
   for (const r of oggi) {
     let bucket = perTenant.get(r.tenant_id);
@@ -183,15 +212,19 @@ export async function statKontabilitaPerTenant(range?: {
 
   const ids = rilevanti.map((t) => t.id);
 
-  let q = sb
-    .from('spese' as never)
-    .select('tenant_id, cantiere_id, importo_totale, importo_iva, data_scontrino, created_at')
-    .in('tenant_id', ids);
-  if (range?.da) q = q.gte('data_scontrino', range.da);
-  if (range?.a) q = q.lte('data_scontrino', `${range.a}T23:59:59.999`);
-
-  const { data: speseRaw } = (await q) as unknown as { data: SpesaAggrRow[] | null };
-  const spese = (speseRaw as SpesaAggrRow[] | null) ?? [];
+  // Totali su tutte le spese: a pagine, oltre le 1000 righe per richiesta.
+  const spese = await leggiTutto<SpesaAggrRow>(
+    (da, a) => {
+      let q = sb
+        .from('spese' as never)
+        .select('tenant_id, cantiere_id, importo_totale, importo_iva, data_scontrino, created_at')
+        .in('tenant_id', ids);
+      if (range?.da) q = q.gte('data_scontrino', range.da);
+      if (range?.a) q = q.lte('data_scontrino', `${range.a}T23:59:59.999`);
+      return q.order('id').range(da, a) as unknown as Pagina<SpesaAggrRow>;
+    },
+    { contesto: 'super admin kontabilità: spese' },
+  );
 
   type Agg = {
     numSpese: number;

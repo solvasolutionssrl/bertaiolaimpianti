@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+import { leggiRighePerId } from '@/app/_lib/letture-complete';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import {
@@ -19,6 +21,8 @@ import { OreCostiClient } from './_components/ore-costi-client';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Kantiere · Ore e costi' };
+
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 // ── Tipi righe DB ─────────────────────────────────────────────────────────
 type RegolaRow = {
@@ -192,51 +196,60 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
       params: r.params ?? {},
     }));
 
-  // Carica rapportini inviati/approvati nel range
-  const { data: rapData } = (await supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .in('stato', ['inviato', 'approvato'])
-    .limit(2000)) as { data: RapportinoRow[] | null };
-  const rapportini = rapData ?? [];
+  // Rapportini inviati/approvati nel range: tutti, oltre il tetto di 1000 righe
+  // del database, con le liste di id a gruppi. Costi su righe mancanti sarebbero
+  // sbagliati senza avvisi: un errore di lettura mostra la pagina d'errore.
+  const rapportini = await leggiTutto<RapportinoRow>(
+    (da, a) =>
+      supabase
+        .from('rapportini' as never)
+        .select('id, dipendente_id, data, stato')
+        .eq('tenant_id', ctx.tenantId)
+        .gte('data', from)
+        .lte('data', to)
+        .in('stato', ['inviato', 'approvato'])
+        .order('data')
+        .order('id')
+        .range(da, a) as unknown as Pagina<RapportinoRow>,
+    { contesto: 'ore e costi: giornate' },
+  );
 
   const rapMeta = new Map<string, { dipendente_id: string; data: string }>(
     rapportini.map((r) => [r.id, { dipendente_id: r.dipendente_id, data: r.data }]),
   );
   const rapportinoIds = rapportini.map((r) => r.id);
 
-  let righeData: RigaRow[] = [];
-  if (rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti')
-      .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
-    righeData = data ?? [];
-  }
+  const righeData = await leggiRighePerId<RigaRow>(
+    supabase,
+    'rapportino_righe',
+    'rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti',
+    'rapportino_id',
+    rapportinoIds,
+    'ore e costi: righe',
+  );
 
   // Titoli commesse
   const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
+  const commesse = await leggiRighePerId<CommessaRow>(
+    supabase,
+    'commesse',
+    'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
+    'id',
+    commessaIds,
+    'ore e costi: commesse',
+  );
   const commesseTitoloMap = new Map<string, string>();
-  if (commessaIds.length > 0) {
-    const { data } = (await supabase
-      .from('commesse' as never)
-      .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
-      .in('id', commessaIds)) as { data: CommessaRow[] | null };
-    for (const c of data ?? []) {
-      commesseTitoloMap.set(
-        c.id,
-        risolviTitoloCommessa({
-          descrizione_ai_finale: c.descrizione_ai_finale,
-          descrizione_ai_proposta: c.descrizione_ai_proposta,
-          note_iniziali: c.note_iniziali,
-          nome_cartella: c.nome_cartella,
-          codice_interno: c.codice_interno,
-        }) || c.codice_interno || c.id,
-      );
-    }
+  for (const c of commesse) {
+    commesseTitoloMap.set(
+      c.id,
+      risolviTitoloCommessa({
+        descrizione_ai_finale: c.descrizione_ai_finale,
+        descrizione_ai_proposta: c.descrizione_ai_proposta,
+        note_iniziali: c.note_iniziali,
+        nome_cartella: c.nome_cartella,
+        codice_interno: c.codice_interno,
+      }) || c.codice_interno || c.id,
+    );
   }
 
   // Cache % viaggio per (dipendente|cantiere) — via vecchio solver per rispettare ambiti

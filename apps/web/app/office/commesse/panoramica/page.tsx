@@ -1,7 +1,11 @@
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerGruppi, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContextCached as requireTenantContext } from '../../../_lib/tenant-cache';
 import { risolviTitoloCommessa } from '../../../_lib/commessa-display';
 import { PanoramicaClient, type PanoramicaRow } from './_components/panoramica-client';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const metadata = { title: 'Panoramica commesse' };
 export const dynamic = 'force-dynamic';
@@ -27,7 +31,11 @@ export default async function PanoramicaCommessePage() {
     .eq('id', ctx.tenantId)
     .maybeSingle();
 
-  const commesseQ = supabase
+  // Tutte le commesse del giro (a pagine): con più di 1000 il tabellone stampato
+  // perdeva le più vecchie senza dirlo.
+  const commesseQ = leggiTutto<any>(
+    (da, a) =>
+      supabase
     .from('commesse')
     .select(
       `
@@ -47,7 +55,10 @@ export default async function PanoramicaCommessePage() {
     .in('stato', ['aperta', 'in_corso', 'collaudo', 'completata'])
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
-    .limit(1000);
+    .order('id')
+    .range(da, a) as unknown as PromiseLike<EsitoPagina<any>>,
+    { contesto: 'panoramica commesse' },
+  );
 
   const [tenantR, commesseR] = await Promise.all([tenantQ, commesseQ]);
   const tenant = (tenantR.data ?? null) as {
@@ -55,19 +66,29 @@ export default async function PanoramicaCommessePage() {
     logo_url: string | null;
     brand_color: string | null;
   } | null;
-  const commesse = (commesseR.data ?? []) as Array<any>;
+  const commesse = commesseR as Array<any>;
 
   // "Creato da" dal log audit (evento create). Fallback: responsabile.
   const creatoreById = new Map<string, string>();
   const ids = commesse.map((c) => c.id as string);
   if (ids.length > 0) {
-    const { data: eventi } = await supabase
-      .from('audit_events')
-      .select('entity_id, actor_user_id, created_at')
-      .eq('entity_type', 'commessa')
-      .eq('action', 'create')
-      .in('entity_id', ids)
-      .order('created_at', { ascending: true });
+    // Fino a 1000 commesse: gli id vanno a gruppi (URL) e ogni gruppo a pagine.
+    type Evento = { entity_id: string | null; actor_user_id: string | null; created_at: string };
+    const eventi = await leggiPerGruppi(ids, (gruppo) =>
+      leggiTutto<Evento>(
+        (da, a) =>
+          supabase
+            .from('audit_events')
+            .select('entity_id, actor_user_id, created_at')
+            .eq('entity_type', 'commessa')
+            .eq('action', 'create')
+            .in('entity_id', gruppo)
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true })
+            .range(da, a) as unknown as Pagina<Evento>,
+        { contesto: 'panoramica: autori delle commesse' },
+      ),
+    );
 
     const attoreByCommessa = new Map<string, string>();
     for (const e of (eventi ?? []) as Array<any>) {

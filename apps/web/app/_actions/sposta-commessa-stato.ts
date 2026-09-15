@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import type { StatoCommessa } from '@kommessa/api/types';
@@ -18,6 +19,9 @@ import {
   cloudFolderForStato,
   extractStatusFolder,
 } from '../_lib/commessa-stato-folder';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * Cambia lo stato di una commessa e sposta atomicamente la cartella
@@ -214,27 +218,52 @@ export async function spostaCommessaInStato(
     return { ok: false, error: `Update commessa fallito: ${commUpd.message}` };
   }
 
-  // file_refs.path: tutte le righe con prefix = oldCloudPath → sostituisci con newCloudPath
-  // Usiamo SQL diretto via rpc per UPDATE in massa con REPLACE.
-  // In assenza di una RPC, facciamo SELECT + UPDATE in batch.
-  const { data: refs } = await supabase
-    .from('file_refs')
-    .select('id, path')
-    .eq('commessa_id', commessaId)
-    .like('path', `${oldCloudPath.replace(/^\/+/, '')}/%`);
+  // file_refs.path: tutte le righe con prefisso = oldCloudPath → newCloudPath.
+  // Prima si leggono TUTTE (a pagine: oltre 1000 file il database ne
+  // restituirebbe solo 1000 e i percorsi degli altri resterebbero rotti), poi
+  // si aggiornano: aggiornando mentre si pagina, le righe uscirebbero dal filtro
+  // e se ne salterebbero.
+  const vecchioPrefisso = oldCloudPath.replace(/^\/+/, '');
+  const nuovoPrefisso = newCloudPath.replace(/^\/+/, '');
+  type RigaFile = { id: string; path: string | null };
+  let refs: RigaFile[] = [];
+  let erroreLettura: string | null = null;
+  try {
+    refs = await leggiTutto<RigaFile>(
+      (da, a) =>
+        supabase
+          .from('file_refs')
+          .select('id, path')
+          .eq('commessa_id', commessaId)
+          .like('path', `${vecchioPrefisso}/%`)
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as Pagina<RigaFile>,
+      { contesto: 'percorsi dei file della commessa' },
+    );
+  } catch (e) {
+    erroreLettura = e instanceof Error ? e.message : String(e);
+    console.error('[sposta-commessa-stato] file della commessa non letti:', commessaId, erroreLettura);
+  }
 
   let movedFiles = 0;
-  for (const r of refs ?? []) {
-    if (!r.path) continue;
-    const newPath = r.path.replace(
-      oldCloudPath.replace(/^\/+/, ''),
-      newCloudPath.replace(/^\/+/, ''),
+  const nonAggiornati: string[] = [];
+  const IN_PARALLELO = 10;
+  for (let i = 0; i < refs.length; i += IN_PARALLELO) {
+    await Promise.all(
+      refs.slice(i, i + IN_PARALLELO).map(async (r) => {
+        if (!r.path) return;
+        const newPath = r.path.replace(vecchioPrefisso, nuovoPrefisso);
+        const { error: fUpd } = await supabase
+          .from('file_refs')
+          .update({ path: newPath })
+          .eq('id', r.id);
+        if (fUpd) nonAggiornati.push(r.id);
+        else movedFiles++;
+      }),
     );
-    const { error: fUpd } = await supabase
-      .from('file_refs')
-      .update({ path: newPath })
-      .eq('id', r.id);
-    if (!fUpd) movedFiles++;
+  }
+  if (nonAggiornati.length > 0) {
+    console.error('[sposta-commessa-stato] percorsi non aggiornati:', commessaId, nonAggiornati.length);
   }
 
   // 5) Audit + revalidate
@@ -244,6 +273,8 @@ export async function spostaCommessaInStato(
     from_path: oldCloudPath,
     to_path: newCloudPath,
     moved_files: movedFiles,
+    failed_files: nonAggiornati.length,
+    ...(erroreLettura ? { path_read_error: erroreLettura } : {}),
     moved: true,
   });
 
@@ -252,6 +283,20 @@ export async function spostaCommessaInStato(
   revalidatePath('/office/commesse');
   revalidatePath('/mobile');
 
+  // La cartella è già stata spostata: se i percorsi non sono tutti allineati lo
+  // si dice, invece di dichiarare un successo con file irraggiungibili.
+  if (erroreLettura) {
+    return {
+      ok: false,
+      error: `La cartella è stata spostata, ma i percorsi dei file non sono stati letti (${erroreLettura}): vanno riallineati.`,
+    };
+  }
+  if (nonAggiornati.length > 0) {
+    return {
+      ok: false,
+      error: `La cartella è stata spostata, ma ${nonAggiornati.length} file su ${refs.length} hanno ancora il percorso vecchio: vanno riallineati.`,
+    };
+  }
   return { ok: true, newCloudFolderPath: newCloudFolderPathSlash, movedFiles };
 }
 

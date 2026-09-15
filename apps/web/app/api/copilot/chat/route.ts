@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
 import {
@@ -12,6 +13,9 @@ import {
 } from '../../../_lib/openai';
 import { segnalaAiNonDisponibile } from '../../../_lib/ai-alert';
 import { MSG_AI_NON_DISPONIBILE } from '../../../_lib/ai-messages';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * POST /api/copilot/chat
@@ -62,24 +66,34 @@ export async function POST(req: NextRequest) {
 
   // ---- Grounding context ----
   const supabase = createServerSupabase();
-  const [auditRes, commesseRes, ticketsRes] = await Promise.all([
+  // Conteggi per stato su tutte le righe (a pagine: `.limit(2000)` ne dava al
+  // massimo 1000). È contesto di comodo per l'assistente: se la lettura fallisce
+  // si va avanti senza conteggi invece di bloccare la chat.
+  const statiDi = (tabella: 'commesse' | 'tickets') =>
+    leggiTutto<{ stato: string }>(
+      (da, a) =>
+        supabase
+          .from(tabella as never)
+          .select('stato')
+          .order('id')
+          .range(da, a) as unknown as Pagina<{ stato: string }>,
+      { contesto: `copilot: stati ${tabella}` },
+    ).catch((e: unknown) => {
+      console.error('[copilot] conteggi non letti:', tabella, e);
+      return [] as { stato: string }[];
+    });
+  const [auditRes, commesseStati, ticketsStati] = await Promise.all([
     supabase
       .from('audit_events')
       .select('entity_type, action, created_at, metadata')
       .order('created_at', { ascending: false })
       .limit(30),
-    supabase.from('commesse').select('stato').limit(2000),
-    supabase.from('tickets').select('stato').limit(2000),
+    statiDi('commesse'),
+    statiDi('tickets'),
   ]);
 
-  const commesseByStato = countBy(
-    (commesseRes.data as { stato: string }[] | null) ?? [],
-    (r) => r.stato,
-  );
-  const ticketsByStato = countBy(
-    (ticketsRes.data as { stato: string }[] | null) ?? [],
-    (r) => r.stato,
-  );
+  const commesseByStato = countBy(commesseStati, (r) => r.stato);
+  const ticketsByStato = countBy(ticketsStati, (r) => r.stato);
   const auditDigest = ((auditRes.data as any[]) ?? [])
     .map(
       (e) =>

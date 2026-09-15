@@ -3,6 +3,7 @@ import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 import { orarioOrdinarioValido } from '@kommessa/api/kantiere-quote';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto } from '@kommessa/api/pagine';
 
 type Supa = ReturnType<typeof createServerSupabase>;
 
@@ -263,25 +264,31 @@ export async function giornateOltreSoglia(
 ): Promise<GiornateOltreSoglia> {
   const vuoto: GiornateOltreSoglia = { giornate: 0, oreTotali: '0:00', chi: '' };
   try {
-    const { data } = await supabase
-      .from('rapportini' as never)
-      .select(
-        'id, data, dipendente_id, righe:rapportino_righe(ore_ordinarie, ore_straordinarie),' +
-          ' dipendente:dipendenti(cognome)',
-      )
-      .eq('tenant_id', tenantId)
-      .eq('stato', 'bozza')
-      // Oggi no: un turno ancora in corso non "aspetta un controllo", aspetta
-      // solo di finire. Segnalarlo sarebbe gridare al lupo.
-      .lt('data', oggiIso);
-
-    const righe = (data ?? []) as unknown as {
+    // Letture a pagine: oltre 1000 righe il conteggio risultava più basso del vero.
+    const righe = await leggiTutto<{
       id: string;
       data: string;
       dipendente_id: string;
       righe: { ore_ordinarie: number | null; ore_straordinarie: number | null }[] | null;
       dipendente: { cognome: string | null } | null;
-    }[];
+    }>(
+      (da, a) =>
+        supabase
+          .from('rapportini' as never)
+          .select(
+            'id, data, dipendente_id, righe:rapportino_righe(ore_ordinarie, ore_straordinarie),' +
+              ' dipendente:dipendenti(cognome)',
+          )
+          .eq('tenant_id', tenantId)
+          .eq('stato', 'bozza')
+          // Oggi no: un turno ancora in corso non "aspetta un controllo", aspetta
+          // solo di finire. Segnalarlo sarebbe gridare al lupo.
+          .lt('data', oggiIso)
+          .order('data')
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'giornate oltre soglia' },
+    );
 
     const candidate = righe
       .map((r) => ({
@@ -301,18 +308,21 @@ export async function giornateOltreSoglia(
     // problema diverso, e ha la sua pagina: qui si contano solo quelle chiuse
     // che il freno delle ore tiene ferme.
     const date = [...new Set(candidate.map((r) => r.data))].sort();
-    const { data: timbRaw } = await supabase
-      .from('timbrature' as never)
-      .select('dipendente_id, tipo, ts')
-      .eq('tenant_id', tenantId)
-      .gte('ts', `${date[0]}T00:00:00Z`);
+    const timb = await leggiTutto<{ dipendente_id: string; tipo: string; ts: string }>(
+      (da, a) =>
+        supabase
+          .from('timbrature' as never)
+          .select('dipendente_id, tipo, ts')
+          .eq('tenant_id', tenantId)
+          .gte('ts', `${date[0]}T00:00:00Z`)
+          .order('ts')
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'timbrature delle giornate oltre soglia' },
+    );
 
     const bilancio = new Map<string, number>();
-    for (const tb of (timbRaw ?? []) as unknown as {
-      dipendente_id: string;
-      tipo: string;
-      ts: string;
-    }[]) {
+    for (const tb of timb) {
       const giorno = new Date(tb.ts).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' });
       const k = `${tb.dipendente_id}|${giorno}`;
       bilancio.set(k, (bilancio.get(k) ?? 0) + (tb.tipo === 'ingresso' ? 1 : -1));

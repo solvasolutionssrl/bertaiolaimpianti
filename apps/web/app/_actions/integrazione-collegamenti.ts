@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import {
   duplicati,
@@ -12,6 +13,9 @@ import {
   type CandidatoEsterno,
   type CandidatoNostro,
 } from '@kommessa/api/integrazione-abbina';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * Collegamento delle anagrafiche fra Kommessa e il gestionale del cliente.
@@ -148,6 +152,17 @@ async function contesto() {
 }
 
 export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
+  // Le letture a pagine si interrompono con un errore invece di restituire dati
+  // a metà: qui diventa il messaggio della pagina.
+  try {
+    return await leggiCollegamentiPagina();
+  } catch (e) {
+    console.error('[integrazione-collegamenti] lettura non riuscita:', e);
+    return { ...VUOTO, ok: false, error: 'Lettura dei collegamenti non riuscita. Riprova.' };
+  }
+}
+
+async function leggiCollegamentiPagina(): Promise<DatiCollegamenti> {
   const c = await contesto();
   if (!c) {
     return { ...VUOTO, ok: false, error: 'Integrazione non attiva o permessi mancanti.' };
@@ -157,18 +172,29 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
   // Nel mondo Kantiere l'unita' di lavoro sta in `cantieri`, altrove in
   // `commesse`. E' l'unico punto della pagina che deve saperlo.
   const inKantiere = mondo !== 'kommessa';
-  const { data: nostriRaw } = inKantiere
-    ? await service
-        .from('cantieri' as never)
-        .select('id, nome, codice_commessa, cliente_nome')
-        .eq('tenant_id', ctx.tenantId)
-        .order('nome')
-    : await service
-        .from('commesse')
-        .select('id, nome_cartella, codice_interno, descrizione_ai_finale')
-        .eq('tenant_id', ctx.tenantId)
-        .not('stato', 'in', '(archiviata)')
-        .order('codice_interno', { ascending: false });
+  // Tutte le righe, a pagine: FPM ha già centinaia di cantieri e il database ne
+  // restituisce al massimo 1000 per richiesta, senza avvisare.
+  type Nostro = Record<string, string | null>;
+  const nostriRaw = await leggiTutto<Nostro>(
+    (da, a) =>
+      inKantiere
+        ? (service
+            .from('cantieri' as never)
+            .select('id, nome, codice_commessa, cliente_nome')
+            .eq('tenant_id', ctx.tenantId)
+            .order('nome')
+            .order('id')
+            .range(da, a) as unknown as Pagina<Nostro>)
+        : (service
+            .from('commesse')
+            .select('id, nome_cartella, codice_interno, descrizione_ai_finale')
+            .eq('tenant_id', ctx.tenantId)
+            .not('stato', 'in', '(archiviata)')
+            .order('codice_interno', { ascending: false })
+            .order('id')
+            .range(da, a) as unknown as Pagina<Nostro>),
+    { contesto: 'collegamenti: record di Kommessa' },
+  );
 
   const nostri: CandidatoNostro[] = ((nostriRaw ?? []) as unknown as Record<string, string | null>[]).map(
     (r) => ({
@@ -182,35 +208,55 @@ export async function caricaCollegamenti(): Promise<DatiCollegamenti> {
 
   // I clienti servono solo per mostrare il committente accanto alla commessa e
   // per rafforzare l'abbinamento quando i nomi si somigliano.
-  const { data: clientiRaw } = await service
-    .from('integrazione_staging' as never)
-    .select('external_id, nome')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('sistema', sistema)
-    .eq('entita', 'cliente');
+  type ClienteStaging = { external_id: string; nome: string | null };
+  const clientiRaw = await leggiTutto<ClienteStaging>(
+    (da, a) =>
+      service
+        .from('integrazione_staging' as never)
+        .select('external_id, nome')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('sistema', sistema)
+        .eq('entita', 'cliente')
+        .order('id')
+        .range(da, a) as unknown as Pagina<ClienteStaging>,
+    { contesto: 'collegamenti: clienti del gestionale' },
+  );
   const nomiCliente = new Map(
     ((clientiRaw ?? []) as unknown as { external_id: string; nome: string | null }[])
       .filter((r) => r.nome)
       .map((r) => [r.external_id, r.nome!]),
   );
 
-  const { data: stagingRaw } = await service
-    .from('integrazione_staging' as never)
-    .select(COLONNE_STAGING)
-    .eq('tenant_id', ctx.tenantId)
-    .eq('sistema', sistema)
-    .eq('entita', 'commessa');
+  const stagingRaw = await leggiTutto<RigaStaging>(
+    (da, a) =>
+      service
+        .from('integrazione_staging' as never)
+        .select(COLONNE_STAGING)
+        .eq('tenant_id', ctx.tenantId)
+        .eq('sistema', sistema)
+        .eq('entita', 'commessa')
+        .order('id')
+        .range(da, a) as unknown as Pagina<RigaStaging>,
+    { contesto: 'collegamenti: commesse del gestionale' },
+  );
 
   const esterni: CandidatoEsterno[] = (
     (stagingRaw ?? []) as unknown as RigaStaging[]
   ).map((r) => daStaging(r, nomiCliente));
 
-  const { data: mapRaw } = await service
-    .from('integrazione_mappature' as never)
-    .select('entita_id, external_id')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('sistema', sistema)
-    .in('entita', ['cantiere', 'commessa']);
+  type Mappatura = { entita_id: string; external_id: string };
+  const mapRaw = await leggiTutto<Mappatura>(
+    (da, a) =>
+      service
+        .from('integrazione_mappature' as never)
+        .select('entita_id, external_id')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('sistema', sistema)
+        .in('entita', ['cantiere', 'commessa'])
+        .order('id')
+        .range(da, a) as unknown as Pagina<Mappatura>,
+    { contesto: 'collegamenti: abbinamenti confermati' },
+  );
 
   const gia = ((mapRaw ?? []) as unknown as { entita_id: string; external_id: string }[]).map(
     (m) => ({ nostroId: m.entita_id, externalId: m.external_id }),
@@ -328,13 +374,44 @@ export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> 
     };
   }
 
-  const { data: stagingRaw } = await service
-    .from('integrazione_staging' as never)
-    .select(COLONNE_STAGING)
-    .eq('tenant_id', ctx.tenantId)
-    .eq('sistema', sistema)
-    .eq('entita', 'commessa')
-    .in('external_id', parsed.data.externalIds);
+  // Fino a 500 id scelti: a gruppi (URL) e a pagine.
+  let stagingRaw: RigaStaging[];
+  let mapEsistenti: { external_id: string }[];
+  try {
+    [stagingRaw, mapEsistenti] = await Promise.all([
+      leggiPerId(
+        parsed.data.externalIds,
+        (gruppo, da, a) =>
+          service
+            .from('integrazione_staging' as never)
+            .select(COLONNE_STAGING)
+            .eq('tenant_id', ctx.tenantId)
+            .eq('sistema', sistema)
+            .eq('entita', 'commessa')
+            .in('external_id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<RigaStaging>,
+        { contesto: 'creazione dal gestionale: commesse' },
+      ),
+      leggiPerId(
+        parsed.data.externalIds,
+        (gruppo, da, a) =>
+          service
+            .from('integrazione_mappature' as never)
+            .select('external_id')
+            .eq('tenant_id', ctx.tenantId)
+            .eq('sistema', sistema)
+            .eq('entita', 'cantiere')
+            .in('external_id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<{ external_id: string }>,
+        { contesto: 'creazione dal gestionale: già collegati' },
+      ),
+    ]);
+  } catch (e) {
+    console.error('[integrazione-collegamenti] lettura per la creazione non riuscita:', e);
+    return { ok: false, error: 'Lettura dal gestionale non riuscita. Riprova.', creati: 0, saltati: [] };
+  }
 
   // Qui serve la riga intera, non solo i quattro campi dell'abbinamento:
   // categoria e indirizzo si scrivono sul cantiere nuovo.
@@ -345,13 +422,6 @@ export async function creaDaGestionale(input: unknown): Promise<EsitoCreazione> 
   }));
 
   // Chi e' gia' collegato non si ricrea: sarebbe un doppione silenzioso.
-  const { data: mapEsistenti } = await service
-    .from('integrazione_mappature' as never)
-    .select('external_id')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('sistema', sistema)
-    .eq('entita', 'cantiere')
-    .in('external_id', parsed.data.externalIds);
   const gia = new Set(
     ((mapEsistenti ?? []) as unknown as { external_id: string }[]).map((m) => m.external_id),
   );

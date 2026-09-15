@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { Truck } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { leggiTutto } from '@kommessa/api/pagine';
 import { Card, CardContent, CardHeader, CardTitle } from '@kommessa/ui';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { BarsOrizzontali } from '../_components/charts';
@@ -47,28 +48,33 @@ export default async function MezziPage() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
 
-  const [mezziRes, viaggiRes] = await Promise.all([
+  const [mezziRes, viaggi] = await Promise.all([
     supabase
       .from('mezzi' as never)
       .select('id, tipo, targa, modello, attivo, note')
       .eq('tenant_id', ctx.tenantId)
       .order('tipo')
       .order('targa') as unknown as Promise<{ data: MezzoRow[] | null }>,
-    supabase
-      .from('timbratura_viaggio' as never)
-      .select('mezzo_id, distanza_km, da_cantiere_id')
-      .eq('tenant_id', ctx.tenantId)
-      .eq('autista', true) // solo chi ha davvero guidato il mezzo
-      .not('mezzo_id', 'is', null) as unknown as Promise<{
-      data: { mezzo_id: string; distanza_km: number | null; da_cantiere_id: string | null }[] | null;
-    }>,
+    // Km di sempre per mezzo: letti a pagine, oltre il tetto di 1000 righe.
+    leggiTutto<{ mezzo_id: string; distanza_km: number | null; da_cantiere_id: string | null }>(
+      (da, a) =>
+        supabase
+          .from('timbratura_viaggio' as never)
+          .select('mezzo_id, distanza_km, da_cantiere_id')
+          .eq('tenant_id', ctx.tenantId)
+          .eq('autista', true) // solo chi ha davvero guidato il mezzo
+          .not('mezzo_id', 'is', null)
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'km dei mezzi' },
+    ),
   ]);
 
   const mezzi: MezzoView[] = mezziRes.data ?? [];
 
   // Aggrega km e n. viaggi per mezzo lato server
   const statsMap = new Map<string, MezzoStats>();
-  for (const v of viaggiRes.data ?? []) {
+  for (const v of viaggi) {
     if (!v.mezzo_id) continue;
     const cur = statsMap.get(v.mezzo_id) ?? { kmTotali: 0, nViaggi: 0 };
     cur.kmTotali += v.distanza_km ?? 0;

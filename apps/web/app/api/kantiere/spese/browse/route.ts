@@ -1,8 +1,12 @@
 import { type NextRequest } from 'next/server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 
 import { r2SpeseContext, isErr, dentroBase } from '../_lib/r2-spese';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const dynamic = 'force-dynamic';
 
@@ -57,13 +61,28 @@ export async function GET(request: NextRequest) {
     }
   >();
   if (fileKeys.length > 0) {
-    const { data: spese } = await service
-      .from('spese' as never)
-      .select('id, r2_key, ragione_sociale, importo_totale, valuta, categoria, dipendente_id, data_scontrino')
-      .eq('tenant_id', c.tenantId)
-      .in('r2_key', fileKeys);
+    // Chiavi a gruppi: fino a 1000 file di un mese, con chiavi lunghe, non stanno
+    // in un URL solo. Ogni gruppo si legge a pagine.
+    let spese: Array<Record<string, unknown>>;
+    try {
+      spese = await leggiPerId(
+        fileKeys,
+        (gruppo, da, a) =>
+          service
+            .from('spese' as never)
+            .select('id, r2_key, ragione_sociale, importo_totale, valuta, categoria, dipendente_id, data_scontrino')
+            .eq('tenant_id', c.tenantId)
+            .in('r2_key', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Record<string, unknown>>,
+        { contesto: 'ricevute: spese collegate', perGruppo: 40 },
+      );
+    } catch (e) {
+      console.error('[spese/browse]', e);
+      return Response.json({ ok: false, code: 'LETTURA_SPESE_FALLITA' }, { status: 500 });
+    }
     const dipIds = new Set<string>();
-    for (const s of (spese as Array<Record<string, unknown>> | null) ?? []) {
+    for (const s of spese) {
       const key = s.r2_key as string | null;
       if (!key) continue;
       const dipId = (s.dipendente_id as string | null) ?? null;

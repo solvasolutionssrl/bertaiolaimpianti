@@ -1,8 +1,12 @@
 import 'server-only';
 
 import type { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 
 type Supa = ReturnType<typeof createServerSupabase>;
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * Quali dei nostri lavori sono collegati al gestionale del cliente.
@@ -64,17 +68,29 @@ export async function leggiCollegamenti(
       return { attiva: true, sistema, externalPerId: new Map() };
     }
 
-    let q = supabase
-      .from('integrazione_mappature' as never)
-      .select('entita_id, external_id')
-      .eq('tenant_id', tenantId)
-      .eq('sistema', sistema)
-      .in('entita', ['cantiere', 'commessa']);
-    if (idNostri) q = q.in('entita_id', idNostri);
-
-    const { data } = await q;
+    // Tutte le righe, a pagine; con gli id a schermo (centinaia di cantieri)
+    // anche a gruppi, perché non stanno in un URL solo.
+    type Mappatura = { entita_id: string; external_id: string };
+    const base = () =>
+      supabase
+        .from('integrazione_mappature' as never)
+        .select('entita_id, external_id')
+        .eq('tenant_id', tenantId)
+        .eq('sistema', sistema)
+        .in('entita', ['cantiere', 'commessa']);
+    const data = idNostri
+      ? await leggiPerId(
+          idNostri,
+          (gruppo, da, a) =>
+            base().in('entita_id', gruppo).order('id').range(da, a) as unknown as Pagina<Mappatura>,
+          { contesto: 'collegamenti al gestionale' },
+        )
+      : await leggiTutto<Mappatura>(
+          (da, a) => base().order('id').range(da, a) as unknown as Pagina<Mappatura>,
+          { contesto: 'collegamenti al gestionale' },
+        );
     const externalPerId = new Map(
-      ((data ?? []) as unknown as { entita_id: string; external_id: string }[]).map((m) => [
+      data.map((m) => [
         m.entita_id,
         m.external_id,
       ]),
@@ -112,20 +128,29 @@ export async function leggiEsportazioni(
   const out = new Map<string, EsportazioneRiga[]>();
   if (idNostri.length === 0) return out;
   try {
-    const { data } = await supabase
-      .from('integrazione_scritture' as never)
-      .select('risorsa_id, esito, scritto_at, external_ref, errore')
-      .eq('tenant_id', tenantId)
-      .eq('risorsa', risorsa)
-      .in('risorsa_id', idNostri);
-
-    for (const r of (data ?? []) as unknown as {
+    type Scrittura = {
       risorsa_id: string;
       esito: string;
       scritto_at: string;
       external_ref: unknown;
       errore: string | null;
-    }[]) {
+    };
+    // Id a gruppi (un lotto può avere centinaia di righe) e ogni gruppo a pagine.
+    const data = await leggiPerId(
+      idNostri,
+      (gruppo, da, a) =>
+        supabase
+          .from('integrazione_scritture' as never)
+          .select('risorsa_id, esito, scritto_at, external_ref, errore')
+          .eq('tenant_id', tenantId)
+          .eq('risorsa', risorsa)
+          .in('risorsa_id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<Scrittura>,
+      { contesto: 'scritture sul gestionale' },
+    );
+
+    for (const r of data) {
       const lista = out.get(r.risorsa_id) ?? [];
       lista.push({
         esito: r.esito,

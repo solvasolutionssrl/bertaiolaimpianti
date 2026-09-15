@@ -1,9 +1,13 @@
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { MezzoStoricoClient } from './_components/mezzo-storico-client';
 import type { TrattaView, MezzoStorico, TotaliStorico } from './_components/mezzo-storico-client';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const dynamic = 'force-dynamic';
 
@@ -78,34 +82,56 @@ export default async function MezzoStoricoPage({ params }: PageProps) {
   const sedeIds = [...new Set(tratte.map((t) => t.sede_id).filter((id): id is string => id != null))];
 
   const dipMap = new Map<string, string>();
+  // Fino a 500 tratte: id a gruppi (URL) e ogni gruppo a pagine.
   if (dipIds.length > 0) {
-    const { data } = (await supabase
-      .from('dipendenti' as never)
-      .select('id, nome, cognome')
-      .in('id', dipIds)) as { data: DipendenteRow[] | null };
-    for (const d of data ?? []) {
+    const data = await leggiPerId(
+      dipIds,
+      (gruppo, da, a) =>
+        supabase
+          .from('dipendenti' as never)
+          .select('id, nome, cognome')
+          .in('id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<DipendenteRow>,
+      { contesto: 'storico mezzo: dipendenti' },
+    );
+    for (const d of data) {
       dipMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
     }
   }
 
   const cantiereMap = new Map<string, string>();
   if (cantiereIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', cantiereIds)) as { data: CantiereRow[] | null };
-    for (const c of data ?? []) {
+    const data = await leggiPerId(
+      cantiereIds,
+      (gruppo, da, a) =>
+        supabase
+          .from('cantieri' as never)
+          .select('id, nome, codice')
+          .in('id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<CantiereRow>,
+      { contesto: 'storico mezzo: cantieri' },
+    );
+    for (const c of data) {
       cantiereMap.set(c.id, c.nome || c.codice || c.id);
     }
   }
 
   const sedeMap = new Map<string, string>();
   if (sedeIds.length > 0) {
-    const { data } = (await supabase
-      .from('sedi' as never)
-      .select('id, nome')
-      .in('id', sedeIds)) as { data: SedeRow[] | null };
-    for (const s of data ?? []) {
+    const data = await leggiPerId(
+      sedeIds,
+      (gruppo, da, a) =>
+        supabase
+          .from('sedi' as never)
+          .select('id, nome')
+          .in('id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<SedeRow>,
+      { contesto: 'storico mezzo: sedi' },
+    );
+    for (const s of data) {
       sedeMap.set(s.id, s.nome);
     }
   }

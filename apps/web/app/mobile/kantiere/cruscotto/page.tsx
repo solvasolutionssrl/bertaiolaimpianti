@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -29,6 +30,9 @@ import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
 import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
 import { NuovaSpesa } from '../spese/_components/nuova-spesa';
 import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const metadata: Metadata = { title: 'Cruscotto Kantiere' };
 export const dynamic = 'force-dynamic';
@@ -125,30 +129,45 @@ export default async function CruscottoKantierePage({
   const isOggi = giorno === oggi;
   const { fromIso, toIso } = romeDayBoundsUtc(giorno);
 
-  const [dipRes, cantRes, timbRes] = await Promise.all([
-    supabase.from('dipendenti' as never).select('id, nome, cognome, user_id').eq('tenant_id', ctx.tenantId),
-    supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice, codice_commessa')
-      .eq('tenant_id', ctx.tenantId),
-    supabase
-      .from('timbrature' as never)
-      .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da, auto_chiusa')
-      .eq('tenant_id', ctx.tenantId)
-      .gte('ts', fromIso)
-      .lt('ts', toIso)
-      .order('ts', { ascending: true }),
+  // A pagine: in un tenant grande dipendenti, cantieri e timbrature del giorno
+  // superano le 1000 righe che il database restituisce per richiesta.
+  type Dip = { id: string; nome: string; cognome: string; user_id: string | null };
+  type Cant = { id: string; nome: string | null; codice: string | null; codice_commessa: string | null };
+  const [dipendenti, cantieri, timbRows] = await Promise.all([
+    leggiTutto<Dip>(
+      (da, a) =>
+        supabase
+          .from('dipendenti' as never)
+          .select('id, nome, cognome, user_id')
+          .eq('tenant_id', ctx.tenantId)
+          .order('id')
+          .range(da, a) as unknown as Pagina<Dip>,
+      { contesto: 'cruscotto: dipendenti' },
+    ),
+    leggiTutto<Cant>(
+      (da, a) =>
+        supabase
+          .from('cantieri' as never)
+          .select('id, nome, codice, codice_commessa')
+          .eq('tenant_id', ctx.tenantId)
+          .order('id')
+          .range(da, a) as unknown as Pagina<Cant>,
+      { contesto: 'cruscotto: cantieri' },
+    ),
+    leggiTutto<TimbRow>(
+      (da, a) =>
+        supabase
+          .from('timbrature' as never)
+          .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da, auto_chiusa')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('ts', fromIso)
+          .lt('ts', toIso)
+          .order('ts', { ascending: true })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as Pagina<TimbRow>,
+      { contesto: 'cruscotto: timbrature del giorno' },
+    ),
   ]);
-
-  const dipendenti = (dipRes.data as { id: string; nome: string; cognome: string; user_id: string | null }[] | null) ?? [];
-  const cantieri =
-    (cantRes.data as {
-      id: string;
-      nome: string | null;
-      codice: string | null;
-      codice_commessa: string | null;
-    }[] | null) ?? [];
-  const timbRows = (timbRes.data as TimbRow[] | null) ?? [];
 
   const dipMap = new Map(dipendenti.map((d) => [d.id, titoloCase(`${d.nome} ${d.cognome}`)]));
   const cantLabel = (c: {
@@ -195,23 +214,36 @@ export default async function CruscottoKantierePage({
     'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, da_cantiere_id, distanza_km, durata_confermata_min, autista';
   const dipIds = dipendenti.map((d) => d.id);
   const viaggioRows: ViaggioRow[] = [];
-  if (timbRows.length > 0) {
-    const { data } = (await supabase
-      .from('timbratura_viaggio' as never)
-      .select(VIAGGIO_COLS)
-      .in('timbratura_id', timbRows.map((t) => t.id))) as { data: ViaggioRow[] | null };
-    viaggioRows.push(...(data ?? []));
+  // Id a gruppi (URL) e ogni gruppo a pagine.
+  for (const r of await leggiPerId(
+    timbRows.map((t) => t.id),
+    (gruppo, da, a) =>
+      supabase
+        .from('timbratura_viaggio' as never)
+        .select(VIAGGIO_COLS)
+        .in('timbratura_id', gruppo)
+        .order('id')
+        .range(da, a) as unknown as Pagina<ViaggioRow>,
+    { contesto: 'cruscotto: viaggi delle timbrature' },
+  )) {
+    viaggioRows.push(r);
   }
   // Righe viaggio senza timbratura: ore scritte a mano e trasferimenti fra
   // cantieri, che sono viaggio come ogni altra tratta.
-  if (dipIds.length > 0) {
-    const { data } = (await supabase
-      .from('timbratura_viaggio' as never)
-      .select(VIAGGIO_COLS)
-      .in('dipendente_id', dipIds)
-      .is('timbratura_id', null)
-      .eq('data', giorno)) as { data: ViaggioRow[] | null };
-    viaggioRows.push(...(data ?? []));
+  for (const r of await leggiPerId(
+    dipIds,
+    (gruppo, da, a) =>
+      supabase
+        .from('timbratura_viaggio' as never)
+        .select(VIAGGIO_COLS)
+        .in('dipendente_id', gruppo)
+        .is('timbratura_id', null)
+        .eq('data', giorno)
+        .order('id')
+        .range(da, a) as unknown as Pagina<ViaggioRow>,
+    { contesto: 'cruscotto: viaggi senza timbratura' },
+  )) {
+    viaggioRows.push(r);
   }
   const sediNomeMap = new Map<string, string>();
   const sedeIds = [...new Set(viaggioRows.map((v) => v.sede_id).filter((id): id is string => id != null))];

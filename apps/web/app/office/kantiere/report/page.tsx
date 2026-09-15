@@ -1,4 +1,6 @@
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+import { leggiRighePerId } from '@/app/_lib/letture-complete';
 import { COLONNE_QUOTE, quoteDaRiga, quoteOre, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { aggregaOre, type RigaAgg } from '@kommessa/api/kantiere-report';
@@ -20,6 +22,8 @@ export type ViaggioRigaMezzo = {
 };
 
 export const dynamic = 'force-dynamic';
+
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 type RapportinoRow = {
   id: string;
@@ -137,112 +141,99 @@ export default async function ReportPage({ searchParams }: PageProps) {
   // Per default include sia inviato che approvato
   const statoParam = searchParams.stato ?? '';
 
-  // Carica rapportini nel range (inviato + approvato di default)
-  let rapQuery = supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .limit(1000);
-
-  if (statoParam) {
-    rapQuery = rapQuery.eq('stato', statoParam);
-  } else {
-    rapQuery = rapQuery.in('stato', ['inviato', 'approvato']);
-  }
-
-  // Carica viaggi nel range (in parallelo)
-  const viaggiPromise = (supabase
-    .from('timbratura_viaggio' as never)
-    .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min, autista, da_cantiere_id')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .limit(5000) as unknown) as Promise<{ data: ViaggioRow[] | null }>;
-
-  const [rapportiniRes, viaggiRes] = await Promise.all([rapQuery, viaggiPromise]);
-
-  const { data: rapportiniData } = rapportiniRes as { data: RapportinoRow[] | null };
-  const rapportini = rapportiniData ?? [];
+  // Tutto il periodo, oltre il tetto di 1000 righe del database; le liste di id
+  // vanno a gruppi. Un errore di lettura mostra la pagina d'errore invece di
+  // totali calcolati su dati a metà.
+  const [rapportini, viaggi] = await Promise.all([
+    // Inviato + approvato di default
+    leggiTutto<RapportinoRow>(
+      (da, a) => {
+        const q = supabase
+          .from('rapportini' as never)
+          .select('id, dipendente_id, data, stato')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('data', from)
+          .lte('data', to);
+        return (statoParam ? q.eq('stato', statoParam) : q.in('stato', ['inviato', 'approvato']))
+          .order('data')
+          .order('id')
+          .range(da, a) as unknown as Pagina<RapportinoRow>;
+      },
+      { contesto: 'report ore: giornate' },
+    ),
+    // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio.
+    leggiTutto<ViaggioRow>(
+      (da, a) =>
+        supabase
+          .from('timbratura_viaggio' as never)
+          .select('dipendente_id, mezzo_id, distanza_km, durata_confermata_min, autista, da_cantiere_id')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('data', from)
+          .lte('data', to)
+          .order('data')
+          .order('id')
+          .range(da, a) as unknown as Pagina<ViaggioRow>,
+      { contesto: 'report ore: viaggi' },
+    ),
+  ]);
 
   const rapportinoIds = rapportini.map((r) => r.id);
   const dipIds = [...new Set(rapportini.map((r) => r.dipendente_id))];
 
-  // Batch-load righe
-  let righeData: RigaRow[] = [];
-  if (rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
-      .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
-    righeData = data ?? [];
-  }
+  const righeData = await leggiRighePerId<RigaRow>(
+    supabase,
+    'rapportino_righe',
+    `rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`,
+    'rapportino_id',
+    rapportinoIds,
+    'report ore: righe',
+  );
 
   const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
   const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
 
-  // Calcola dipendenti ids dai viaggi per il batch-load (unione con quelli dei rapportini)
-  // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio.
-  const viaggi: ViaggioRow[] = viaggiRes.data ?? [];
+  // Dipendenti dei rapportini e dei viaggi.
   const viaggiDipIds = [...new Set(viaggi.map((v) => v.dipendente_id))];
   const tuttiDipIds = [...new Set([...dipIds, ...viaggiDipIds])];
+  const mezziIds = [...new Set(viaggi.map((v) => v.mezzo_id).filter((id): id is string => id != null))];
 
-  // Batch-load dipendenti
+  const [dipendenti, commesse, cantieri, mezzi] = await Promise.all([
+    leggiRighePerId<DipendenteRow>(supabase, 'dipendenti', 'id, nome, cognome', 'id', tuttiDipIds, 'report ore: dipendenti'),
+    leggiRighePerId<CommessaRow>(
+      supabase,
+      'commesse',
+      'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
+      'id',
+      commessaIds,
+      'report ore: commesse',
+    ),
+    leggiRighePerId<CantiereRow>(supabase, 'cantieri', 'id, nome, codice', 'id', cantiereIds, 'report ore: cantieri'),
+    leggiRighePerId<MezzoLightRow>(supabase, 'mezzi', 'id, targa, modello', 'id', mezziIds, 'report ore: mezzi'),
+  ]);
+
   const dipendentiMap = new Map<string, string>();
-  if (tuttiDipIds.length > 0) {
-    const { data } = (await supabase
-      .from('dipendenti' as never)
-      .select('id, nome, cognome')
-      .in('id', tuttiDipIds)) as { data: DipendenteRow[] | null };
-    for (const d of data ?? []) {
-      dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
-    }
+  for (const d of dipendenti) {
+    dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
   }
-
-  // Batch-load commesse
   const commesseTitoloMap = new Map<string, string>();
-  if (commessaIds.length > 0) {
-    const { data } = (await supabase
-      .from('commesse' as never)
-      .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
-      .in('id', commessaIds)) as { data: CommessaRow[] | null };
-    for (const c of data ?? []) {
-      const titolo =
-        risolviTitoloCommessa({
+  for (const c of commesse) {
+    const titolo =
+      risolviTitoloCommessa({
           descrizione_ai_finale: c.descrizione_ai_finale,
           descrizione_ai_proposta: c.descrizione_ai_proposta,
           note_iniziali: c.note_iniziali,
           nome_cartella: c.nome_cartella,
           codice_interno: c.codice_interno,
         }) || c.codice_interno || c.id;
-      commesseTitoloMap.set(c.id, titolo);
-    }
+    commesseTitoloMap.set(c.id, titolo);
   }
-
-  // Batch-load cantieri
   const cantieriNomeMap = new Map<string, string>();
-  if (cantiereIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', cantiereIds)) as { data: CantiereRow[] | null };
-    for (const k of data ?? []) {
-      cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
-    }
+  for (const k of cantieri) {
+    cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
   }
-
-  // Batch-load mezzi (per i viaggi)
-  const mezziIds = [...new Set(viaggi.map((v) => v.mezzo_id).filter((id): id is string => id != null))];
   const mezziMap = new Map<string, { targa: string; modello: string | null }>();
-  if (mezziIds.length > 0) {
-    const { data } = (await supabase
-      .from('mezzi' as never)
-      .select('id, targa, modello')
-      .in('id', mezziIds)) as { data: MezzoLightRow[] | null };
-    for (const m of data ?? []) {
-      mezziMap.set(m.id, { targa: m.targa, modello: m.modello });
-    }
+  for (const m of mezzi) {
+    mezziMap.set(m.id, { targa: m.targa, modello: m.modello });
   }
 
   // Mappa rapportino_id -> dipendente_id

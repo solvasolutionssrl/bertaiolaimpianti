@@ -17,6 +17,7 @@ import {
 import { coppiaPausaCentrata } from '@/app/_actions/_lib/viaggio-timbra';
 import { aggiornaRigheGiornata } from '@/app/_actions/_lib/righe-giornata';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
+import { leggiTutto } from '@kommessa/api/pagine';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -315,20 +316,33 @@ export async function giornateAperte(
   const past = new Date(Date.now() - n * 24 * 3600 * 1000);
   const { fromIso } = romeDayBoundsUtc(romeDay(past));
 
-  const { data: timbRaw } = await supabase
-    .from('timbrature' as never)
-    .select('dipendente_id, commessa_id, cantiere_id, tipo, ts, pausa')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', fromIso)
-    .order('ts', { ascending: true });
-  const timb = (timbRaw as {
+  type TimbraturaAperta = {
     dipendente_id: string;
     commessa_id: string | null;
     cantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
     pausa: boolean | null;
-  }[] | null) ?? [];
+  };
+  // Tutte le timbrature del periodo, a pagine: oltre 1000 righe la lettura
+  // unica si fermava e le giornate più recenti sparivano dal promemoria.
+  let timb: TimbraturaAperta[];
+  try {
+    timb = await leggiTutto<TimbraturaAperta>(
+      (da, a) =>
+        supabase
+          .from('timbrature' as never)
+          .select('dipendente_id, commessa_id, cantiere_id, tipo, ts, pausa')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('ts', fromIso)
+          .order('ts', { ascending: true })
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'giornate aperte' },
+    );
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 
   // Pairing per (dipendente, giorno italiano, target). L'uscita di pausa non
   // chiude il turno: resta "aperto" finché non arriva la fine turno.
@@ -430,14 +444,27 @@ export async function ricalcolaPresenzePeriodo(
   const fromIso = romeDayBoundsUtc(da).fromIso;
   const toIso = romeDayBoundsUtc(a).toIso;
 
-  const { data: timbRaw } = await supabase
-    .from('timbrature' as never)
-    .select('dipendente_id, ts')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', fromIso)
-    .lt('ts', toIso)
-    .limit(20000);
-  const righe = (timbRaw as { dipendente_id: string; ts: string }[] | null) ?? [];
+  // Tutte le timbrature del periodo, a pagine: un `.limit(20000)` restituiva
+  // comunque al massimo 1000 righe e il ricalcolo saltava giornate in silenzio.
+  let righe: { dipendente_id: string; ts: string }[];
+  try {
+    righe = await leggiTutto<{ dipendente_id: string; ts: string }>(
+      (da, a) =>
+        supabase
+          .from('timbrature' as never)
+          .select('dipendente_id, ts')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('ts', fromIso)
+          .lt('ts', toIso)
+          .order('ts')
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'ricalcolo presenze' },
+    );
+  } catch (e) {
+    console.error('[ricalcolaPresenzePeriodo]', (e as Error).message);
+    return { ok: false, error: 'LETTURA_TIMBRATURE' };
+  }
 
   // coppie distinte (dipendente, giorno italiano)
   const coppie = new Map<string, { dipId: string; giorno: string }>();

@@ -9,6 +9,7 @@ import {
 } from '@kommessa/ui';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { createServiceSupabase } from '@kommessa/api/service';
+import { leggiRighePerId } from '@/app/_lib/letture-complete';
 import { SectionHeader } from '../../_components/section-header';
 import { mascheraToken, statoQr } from '@kommessa/api/kantiere-qr';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
@@ -102,11 +103,16 @@ export default async function KantiereQrPage() {
   };
   const commessaMap = new Map<string, CommessaRow>();
   if (commessaIds.length > 0) {
-    const { data: commesse } = (await supabase
-      .from('commesse' as never)
-      .select('id, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella, codice_interno')
-      .in('id', commessaIds)) as { data: CommessaRow[] | null };
-    for (const c of commesse ?? []) {
+    // Commesse con QR di tutti i tenant: a gruppi di id, la lista cresce.
+    const commesse = await leggiRighePerId<CommessaRow>(
+      supabase,
+      'commesse',
+      'id, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, nome_cartella, codice_interno',
+      'id',
+      commessaIds,
+      'commesse dei QR',
+    );
+    for (const c of commesse) {
       commessaMap.set(c.id, c);
     }
   }

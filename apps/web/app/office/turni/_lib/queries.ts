@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export interface TurnoRow {
   id: string;
@@ -46,29 +50,36 @@ export async function fetchInterventi(
 ): Promise<TurnoRow[]> {
   const supabase = createServerSupabase();
 
-  let q = supabase
-    .from('interventi')
-    .select(
-      `
-        id, user_id, start_at, end_at, duration_minutes, commessa_id,
-        utente:users!interventi_user_id_fkey ( display_name ),
-        commessa:commesse!inner ( codice_interno )
-      `,
-    )
-    .gte('start_at', input.from.toISOString())
-    .lt('start_at', input.to.toISOString())
-    .order('start_at', { ascending: true })
-    .limit(2000);
-
-  if (input.userId) q = q.eq('user_id', input.userId);
-  if (input.commessaId) q = q.eq('commessa_id', input.commessaId);
-
-  const { data, error } = await q;
-  if (error) {
+  // A pagine: `.limit(2000)` restituiva comunque al massimo 1000 interventi.
+  let data: any[];
+  try {
+    data = await leggiTutto<any>(
+      (da, a) => {
+        let q = supabase
+          .from('interventi')
+          .select(
+            `
+              id, user_id, start_at, end_at, duration_minutes, commessa_id,
+              utente:users!interventi_user_id_fkey ( display_name ),
+              commessa:commesse!inner ( codice_interno )
+            `,
+          )
+          .gte('start_at', input.from.toISOString())
+          .lt('start_at', input.to.toISOString());
+        if (input.userId) q = q.eq('user_id', input.userId);
+        if (input.commessaId) q = q.eq('commessa_id', input.commessaId);
+        return q
+          .order('start_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as Pagina<any>;
+      },
+      { contesto: 'turni: interventi' },
+    );
+  } catch (error) {
     console.error('[fetchInterventi]', error);
     return [];
   }
-  return ((data as any[]) ?? []).map((r) => {
+  return data.map((r) => {
     const utente = Array.isArray(r.utente) ? r.utente[0] : r.utente;
     const commessa = Array.isArray(r.commessa) ? r.commessa[0] : r.commessa;
     return {

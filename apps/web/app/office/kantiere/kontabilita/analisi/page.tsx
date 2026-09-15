@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+import { leggiRighePerId } from '@/app/_lib/letture-complete';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDayBoundsUtc, romeDay } from '@kommessa/api/rome-time';
 import { CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
@@ -9,6 +11,8 @@ import { AnalisiClient } from './_components/analisi-client';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Kantiere · Analisi dei costi' };
+
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 type SpesaRow = {
   id: string;
@@ -39,47 +43,37 @@ export default async function AnalisiPage({ searchParams }: PageProps) {
   const aFilter = searchParams.a || undefined;
   const cantiereFilter = searchParams.cantiere || undefined;
 
-  // Solo spese confermate (le analitiche escludono le bozze).
-  let query = supabase
-    .from('spese' as never)
-    .select('id, dipendente_id, cantiere_id, categoria, importo_totale, importo_iva, data_scontrino')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('stato', 'confermata')
-    .limit(5000);
-
-  if (cantiereFilter) query = query.eq('cantiere_id', cantiereFilter);
-  if (daFilter) {
-    const { fromIso } = romeDayBoundsUtc(daFilter);
-    query = query.gte('data_scontrino', fromIso);
-  }
-  if (aFilter) {
-    const { toIso } = romeDayBoundsUtc(aFilter);
-    query = query.lt('data_scontrino', toIso);
-  }
-
-  const { data: speseData } = (await query) as { data: SpesaRow[] | null };
-  const spese = speseData ?? [];
+  // Solo spese confermate (le analitiche escludono le bozze). Tutte, oltre il
+  // tetto di 1000 righe del database: un totale su dati a metà non avvisa.
+  const daIso = daFilter ? romeDayBoundsUtc(daFilter).fromIso : null;
+  const aIso = aFilter ? romeDayBoundsUtc(aFilter).toIso : null;
+  const spese = await leggiTutto<SpesaRow>(
+    (da, a) => {
+      let q = supabase
+        .from('spese' as never)
+        .select('id, dipendente_id, cantiere_id, categoria, importo_totale, importo_iva, data_scontrino')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('stato', 'confermata');
+      if (cantiereFilter) q = q.eq('cantiere_id', cantiereFilter);
+      if (daIso) q = q.gte('data_scontrino', daIso);
+      if (aIso) q = q.lt('data_scontrino', aIso);
+      return q.order('data_scontrino').order('id').range(da, a) as unknown as Pagina<SpesaRow>;
+    },
+    { contesto: 'analisi spese' },
+  );
 
   // Mappe di display.
   const dipIds = [...new Set(spese.map((s) => s.dipendente_id).filter((x): x is string => !!x))];
   const cantIds = [...new Set(spese.map((s) => s.cantiere_id).filter((x): x is string => !!x))];
 
+  const [dipendenti, cantieriSpese] = await Promise.all([
+    leggiRighePerId<DipendenteRow>(supabase, 'dipendenti', 'id, nome, cognome', 'id', dipIds, 'analisi spese: dipendenti'),
+    leggiRighePerId<CantiereRow>(supabase, 'cantieri', 'id, nome, codice', 'id', cantIds, 'analisi spese: cantieri'),
+  ]);
   const dipendentiMap = new Map<string, string>();
-  if (dipIds.length > 0) {
-    const { data } = (await supabase
-      .from('dipendenti' as never)
-      .select('id, nome, cognome')
-      .in('id', dipIds)) as { data: DipendenteRow[] | null };
-    for (const d of data ?? []) dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
-  }
+  for (const d of dipendenti) dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
   const cantieriMap = new Map<string, string>();
-  if (cantIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', cantIds)) as { data: CantiereRow[] | null };
-    for (const k of data ?? []) cantieriMap.set(k.id, k.nome || k.codice || k.id);
-  }
+  for (const k of cantieriSpese) cantieriMap.set(k.id, k.nome || k.codice || k.id);
 
   // Opzioni del filtro cantiere (tutti i cantieri del tenant).
   const { data: tuttiCantieri } = (await supabase

@@ -7,6 +7,7 @@ import { qrUrl } from '@kommessa/api/kantiere-qr';
 import { giornateIncomplete, aggregaOre, type TimbraturaGiorno, type RigaAgg } from '@kommessa/api/kantiere-report';
 import { statoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { leggiTutto } from '@kommessa/api/pagine';
 import { appOrigin } from '@/app/_lib/app-origin';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { leggiCollegamenti } from '@/app/_lib/integrazione/collegati';
@@ -131,13 +132,19 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     .eq('tenant_id', ctx.tenantId);
 
   // 7. Commesse disponibili per il link
-  const { data: commesseRaw } = await supabase
-    .from('commesse')
-    .select(
-      'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
-    )
-    .eq('tenant_id', ctx.tenantId)
-    .order('codice_interno');
+  const commesseRaw = await leggiTutto<unknown>(
+    (da, a) =>
+      supabase
+        .from('commesse')
+        .select(
+          'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
+        )
+        .eq('tenant_id', ctx.tenantId)
+        .order('codice_interno')
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'commesse del tenant' },
+  );
 
   const commesse = ((commesseRaw ?? []) as {
     id: string;
@@ -176,38 +183,37 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
     stato: string;
   };
 
-  const { data: righeRapRaw } = (await supabase
-    .from('rapportino_righe' as never)
-    .select(`rapportino_id, ${COLONNE_QUOTE}`)
-    .eq('cantiere_id', params.id)
-    .limit(5000)) as { data: RigaRapRow[] | null };
-
-  const righeRapAll = righeRapRaw ?? [];
-  const rapportinoIds = [...new Set(righeRapAll.map((r) => r.rapportino_id))];
-
   // Limite inferiore del periodo come data calendario Rome (YYYY-MM-DD).
   const oggiRome = romeDay(new Date());
   const dataDa = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(
     new Date(Date.now() - (giorni - 1) * 24 * 60 * 60 * 1000),
   );
 
-  let rapportiniRows: RapportinoRow[] = [];
-  if (rapportinoIds.length > 0) {
-    const { data: rapRaw } = (await supabase
-      .from('rapportini' as never)
-      .select('id, dipendente_id, data, stato')
-      .in('id', rapportinoIds)
-      .gte('data', dataDa)
-      .order('data', { ascending: false })) as { data: RapportinoRow[] | null };
-    rapportiniRows = rapRaw ?? [];
-  }
+  // Righe del cantiere con la loro giornata, già limitate al periodo dal
+  // database (join interno) e lette a pagine. Prima si leggevano le prime 5000
+  // righe di sempre e si filtrava dopo: sui cantieri più vecchi lo storico
+  // recente poteva restare fuori.
+  const righeConGiornata = await leggiTutto<RigaRapRow & { rapportini: RapportinoRow }>(
+    (da, a) =>
+      supabase
+        .from('rapportino_righe' as never)
+        .select(`rapportino_id, ${COLONNE_QUOTE}, rapportini!inner(id, dipendente_id, data, stato)`)
+        .eq('cantiere_id', params.id)
+        .gte('rapportini.data', dataDa)
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'storico presenze del cantiere' },
+  );
 
   // Mappa rapportino -> meta (dipendente + data), solo quelli nel periodo.
   const rapMetaById = new Map<string, RapportinoRow>();
-  for (const r of rapportiniRows) rapMetaById.set(r.id, r);
+  for (const r of righeConGiornata) rapMetaById.set(r.rapportini.id, r.rapportini);
+  const rapportiniRows = [...rapMetaById.values()].sort((x, y) =>
+    x.data < y.data ? 1 : x.data > y.data ? -1 : 0,
+  );
 
-  // Righe del periodo (filtrate ai rapportini caricati = già dentro il range).
-  const righeRapPeriodo = righeRapAll.filter((r) => rapMetaById.has(r.rapportino_id));
+  // Righe del periodo (il join le ha già limitate alle giornate del periodo).
+  const righeRapPeriodo: RigaRapRow[] = righeConGiornata;
 
   // Risolvi nomi dipendenti per i rapportini del periodo.
   const rapDipIds = [...new Set(rapportiniRows.map((r) => r.dipendente_id))];
@@ -226,18 +232,24 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // (da timbratura_viaggio, cantiere_id + data popolati). `percorsi` = tutti i km,
   // `guidati` = solo quando era l'autista.
   const kmPerDip = new Map<string, { percorsi: number; guidati: number }>();
-  const { data: viaRaw } = (await supabase
-    .from('timbratura_viaggio' as never)
-    .select('dipendente_id, distanza_km, autista, da_cantiere_id')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('cantiere_id', params.id)
-    .gte('data', dataDa)
-    .limit(10000)) as {
-    data:
-      | { dipendente_id: string; distanza_km: number | null; autista: boolean | null; da_cantiere_id: string | null }[]
-      | null;
-  };
-  for (const v of viaRaw ?? []) {
+  const viaRaw = await leggiTutto<{
+    dipendente_id: string;
+    distanza_km: number | null;
+    autista: boolean | null;
+    da_cantiere_id: string | null;
+  }>(
+    (da, a) =>
+      supabase
+        .from('timbratura_viaggio' as never)
+        .select('dipendente_id, distanza_km, autista, da_cantiere_id')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('cantiere_id', params.id)
+        .gte('data', dataDa)
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'km del cantiere' },
+  );
+  for (const v of viaRaw) {
     if (!v.dipendente_id) continue;
     const km = Number(v.distanza_km) || 0;
     const cur = kmPerDip.get(v.dipendente_id) ?? { percorsi: 0, guidati: 0 };
@@ -352,17 +364,19 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
 
   // ── 11. ANOMALIE (giornate incomplete sul periodo) ──────────────────────────
   const fromTs = new Date(Date.now() - giorni * 24 * 60 * 60 * 1000).toISOString();
-  const { data: timbRaw } = (await supabase
-    .from('timbrature' as never)
-    .select('dipendente_id, tipo, ts')
-    .eq('cantiere_id', params.id)
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', fromTs)
-    .limit(5000)) as {
-    data: { dipendente_id: string; tipo: string; ts: string }[] | null;
-  };
-
-  const timbRows = timbRaw ?? [];
+  const timbRows = await leggiTutto<{ dipendente_id: string; tipo: string; ts: string }>(
+    (da, a) =>
+      supabase
+        .from('timbrature' as never)
+        .select('dipendente_id, tipo, ts')
+        .eq('cantiere_id', params.id)
+        .eq('tenant_id', ctx.tenantId)
+        .gte('ts', fromTs)
+        .order('ts')
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'timbrature del cantiere' },
+  );
   const timbraturePerFn: TimbraturaGiorno[] = timbRows
     .filter((t) => t.tipo === 'ingresso' || t.tipo === 'uscita')
     .map((t) => ({

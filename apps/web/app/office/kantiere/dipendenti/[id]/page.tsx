@@ -1,12 +1,16 @@
 import { notFound, redirect } from 'next/navigation';
 import { COLONNE_QUOTE, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const dynamic = 'force-dynamic';
 
@@ -96,25 +100,28 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   const from90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
   // ── 3. Timbrature ultimi ~45 giorni ───────────────────────────────────────
-  const { data: timbRaw } = (await supabase
-    .from('timbrature' as never)
-    .select('tipo, ts, cantiere_id, commessa_id, pausa')
-    .eq('dipendente_id', params.id)
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', from45)
-    .order('ts', { ascending: true })
-    .limit(3000)) as {
-    data:
-      | {
-          tipo: string;
-          ts: string;
-          cantiere_id: string | null;
-          commessa_id: string | null;
-          pausa: boolean | null;
-        }[]
-      | null;
+  // A pagine: `.limit(3000)` non basta, il database ne restituisce al massimo 1000.
+  type Timb = {
+    tipo: string;
+    ts: string;
+    cantiere_id: string | null;
+    commessa_id: string | null;
+    pausa: boolean | null;
   };
-  const timbRows = (timbRaw ?? []).filter(
+  const timbRaw = await leggiTutto<Timb>(
+    (da, a) =>
+      supabase
+        .from('timbrature' as never)
+        .select('tipo, ts, cantiere_id, commessa_id, pausa')
+        .eq('dipendente_id', params.id)
+        .eq('tenant_id', ctx.tenantId)
+        .gte('ts', from45)
+        .order('ts', { ascending: true })
+        .order('id', { ascending: true })
+        .range(da, a) as unknown as Pagina<Timb>,
+    { contesto: 'scheda dipendente: timbrature' },
+  );
+  const timbRows = timbRaw.filter(
     (t) => t.tipo === 'ingresso' || t.tipo === 'uscita',
   );
 
@@ -171,12 +178,18 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   };
   let righeRap: RigaRap[] = [];
   if (rapportinoIds.length > 0) {
-    const { data: righeRaw } = (await supabase
-      .from('rapportino_righe' as never)
-      .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
-      .in('rapportino_id', rapportinoIds)
-      .limit(4000)) as { data: RigaRap[] | null };
-    righeRap = righeRaw ?? [];
+    // Fino a 400 giornate: id a gruppi (URL) e ogni gruppo a pagine.
+    righeRap = await leggiPerId(
+      rapportinoIds,
+      (gruppo, da, a) =>
+        supabase
+          .from('rapportino_righe' as never)
+          .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
+          .in('rapportino_id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<RigaRap>,
+      { contesto: 'scheda dipendente: righe delle giornate' },
+    );
   }
 
   // Somma ore per rapportino, poi mappa per giornata.
@@ -206,27 +219,28 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   }
 
   // ── 5. Viaggi (timbratura_viaggio) ultimi ~90 giorni ──────────────────────
-  const { data: viaggiRaw } = (await supabase
-    .from('timbratura_viaggio' as never)
-    .select('data, direzione, distanza_km, durata_confermata_min, autista, mezzo_id, da_cantiere_id')
-    .eq('dipendente_id', params.id)
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', tsToGiornoRome(from90))
-    .limit(3000)) as {
-    data:
-      | {
-          data: string | null;
-          direzione: string | null;
-          distanza_km: number | null;
-          durata_confermata_min: number | null;
-          autista: boolean | null;
-          mezzo_id: string | null;
-          da_cantiere_id: string | null;
-        }[]
-      | null;
+  type Viaggio = {
+    data: string | null;
+    direzione: string | null;
+    distanza_km: number | null;
+    durata_confermata_min: number | null;
+    autista: boolean | null;
+    mezzo_id: string | null;
+    da_cantiere_id: string | null;
   };
-  // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio.
-  const viaggi = viaggiRaw ?? [];
+  // Tutte le tratte, trasferimenti fra cantieri compresi: sono viaggio. A pagine.
+  const viaggi = await leggiTutto<Viaggio>(
+    (da, a) =>
+      supabase
+        .from('timbratura_viaggio' as never)
+        .select('data, direzione, distanza_km, durata_confermata_min, autista, mezzo_id, da_cantiere_id')
+        .eq('dipendente_id', params.id)
+        .eq('tenant_id', ctx.tenantId)
+        .gte('data', tsToGiornoRome(from90))
+        .order('id')
+        .range(da, a) as unknown as Pagina<Viaggio>,
+    { contesto: 'scheda dipendente: viaggi' },
+  );
 
   // (a) Mezzi guidati (autista = true, mezzo_id valorizzato)
   const mezzoAggMap = new Map<string, { viaggi: number; km: number }>();

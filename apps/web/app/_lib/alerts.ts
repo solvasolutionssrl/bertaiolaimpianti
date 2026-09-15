@@ -1,6 +1,10 @@
 import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * Avvisi computati on-the-fly dai dati. Non sono righe in `notifiche`
@@ -179,17 +183,22 @@ export async function computeAlerts(tenantId: string): Promise<AlertItem[]> {
       .limit(100);
     const ids = ((aperte ?? []) as Array<{ id: string }>).map((c) => c.id);
     if (ids.length > 0) {
-      const { data: fotoCount } = await supabase
-        .from('file_refs')
-        .select('commessa_id, mime, momento')
-        .in('commessa_id', ids)
-        .eq('momento', 'sopralluogo')
-        .like('mime', 'image/%');
-      const haveFoto = new Set(
-        ((fotoCount ?? []) as Array<{ commessa_id: string }>).map(
-          (r) => r.commessa_id,
-        ),
+      // Tutte le foto delle commesse, a pagine: 100 commesse con qualche decina
+      // di foto l'una superano le 1000 righe e alcune risulterebbero senza foto.
+      const fotoCount = await leggiPerId(
+        ids,
+        (gruppo, da, a) =>
+          supabase
+            .from('file_refs')
+            .select('commessa_id')
+            .in('commessa_id', gruppo)
+            .eq('momento', 'sopralluogo')
+            .like('mime', 'image/%')
+            .order('id')
+            .range(da, a) as unknown as Pagina<{ commessa_id: string }>,
+        { contesto: 'avvisi: foto di sopralluogo' },
       );
+      const haveFoto = new Set(fotoCount.map((r) => r.commessa_id));
       for (const c of (aperte ?? []) as Array<{
         id: string;
         codice_interno: string;

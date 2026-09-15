@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+import { leggiRighePerId } from '@/app/_lib/letture-complete';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
@@ -18,6 +20,8 @@ import { CostoCantiereClient } from './_components/costo-cantiere-client';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Kantiere · Costo cantiere' };
+
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 // ── Tipi righe DB (mirror di ore-costi/page.tsx) ────────────────────────────
 type RegolaRow = {
@@ -151,29 +155,39 @@ export default async function CostoCantierePage({ searchParams }: PageProps) {
     }));
 
   // ── Rapportini inviati/approvati nel range ────────────────────────────────
-  const { data: rapData } = (await supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .in('stato', ['inviato', 'approvato'])
-    .limit(5000)) as { data: RapportinoRow[] | null };
-  const rapportini = rapData ?? [];
+  // Tutti, oltre il tetto di 1000 righe del database, con le liste di id a
+  // gruppi: un errore di lettura mostra la pagina d'errore invece di costi
+  // calcolati su dati a metà.
+  const rapportini = await leggiTutto<RapportinoRow>(
+    (da, a) =>
+      supabase
+        .from('rapportini' as never)
+        .select('id, dipendente_id, data, stato')
+        .eq('tenant_id', ctx.tenantId)
+        .gte('data', from)
+        .lte('data', to)
+        .in('stato', ['inviato', 'approvato'])
+        .order('data')
+        .order('id')
+        .range(da, a) as unknown as Pagina<RapportinoRow>,
+    { contesto: 'costo cantiere: giornate' },
+  );
   const rapMeta = new Map<string, { dipendente_id: string; data: string }>(
     rapportini.map((r) => [r.id, { dipendente_id: r.dipendente_id, data: r.data }]),
   );
   const rapportinoIds = rapportini.map((r) => r.id);
 
-  let righeData: RigaRow[] = [];
-  if (rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select('rapportino_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti')
-      .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
-    // Solo le righe imputate a un cantiere (le commesse non rientrano qui).
-    righeData = (data ?? []).filter((r) => r.cantiere_id != null);
-  }
+  // Solo le righe imputate a un cantiere (le commesse non rientrano qui).
+  const righeData = (
+    await leggiRighePerId<RigaRow>(
+      supabase,
+      'rapportino_righe',
+      'rapportino_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti',
+      'rapportino_id',
+      rapportinoIds,
+      'costo cantiere: righe',
+    )
+  ).filter((r) => r.cantiere_id != null);
 
   // Cache % viaggio per (dipendente|cantiere) via vecchio solver (rispetta ambiti).
   const pctViaggioCache = new Map<string, number>();
@@ -231,19 +245,22 @@ export default async function CostoCantierePage({ searchParams }: PageProps) {
   }
 
   // ── Spese confermate per cantiere nel range ───────────────────────────────
-  let speseQuery = supabase
-    .from('spese' as never)
-    .select('cantiere_id, importo_totale')
-    .eq('tenant_id', ctx.tenantId)
-    .eq('stato', 'confermata')
-    .limit(5000);
-  {
-    const { fromIso } = romeDayBoundsUtc(from);
-    const { toIso } = romeDayBoundsUtc(to);
-    speseQuery = speseQuery.gte('data_scontrino', fromIso).lt('data_scontrino', toIso);
-  }
-  const { data: speseData } = (await speseQuery) as { data: SpesaRow[] | null };
-  const spese = speseData ?? [];
+  const { fromIso: speseDa } = romeDayBoundsUtc(from);
+  const { toIso: speseA } = romeDayBoundsUtc(to);
+  const spese = await leggiTutto<SpesaRow>(
+    (da, a) =>
+      supabase
+        .from('spese' as never)
+        .select('cantiere_id, importo_totale')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('stato', 'confermata')
+        .gte('data_scontrino', speseDa)
+        .lt('data_scontrino', speseA)
+        .order('data_scontrino')
+        .order('id')
+        .range(da, a) as unknown as Pagina<SpesaRow>,
+    { contesto: 'costo cantiere: spese' },
+  );
 
   const spesePerCantiere = new Map<string, number>(); // '' = Da assegnare
   for (const s of spese) {

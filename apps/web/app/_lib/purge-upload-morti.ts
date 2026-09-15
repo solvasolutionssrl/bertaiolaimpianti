@@ -153,12 +153,14 @@ export async function purgeUploadMorti(opzioni?: {
   }
 
   if (!dryRun && daEliminare.length > 0) {
-    const { error: delErr } = await service
-      .from('file_refs')
-      .delete()
-      .in('id', daEliminare);
-    if (delErr) esito.errori.push(`cancellazione righe: ${delErr.message}`);
-    else esito.righeEliminate = daEliminare.length;
+    // A gruppi da 100 id: con `max` fino a 200 la lista intera nell'URL
+    // arriverebbe al limite del gateway.
+    for (let i = 0; i < daEliminare.length; i += 100) {
+      const gruppo = daEliminare.slice(i, i + 100);
+      const { error: delErr } = await service.from('file_refs').delete().in('id', gruppo);
+      if (delErr) esito.errori.push(`cancellazione righe: ${delErr.message}`);
+      else esito.righeEliminate += gruppo.length;
+    }
   }
 
   return esito;

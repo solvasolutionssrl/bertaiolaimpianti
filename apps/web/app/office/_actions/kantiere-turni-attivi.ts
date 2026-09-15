@@ -1,9 +1,13 @@
 'use server';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
  * Turni attivi = dipendenti con un INGRESSO aperto su un cantiere (hanno
@@ -54,15 +58,26 @@ export async function turniAttivi(): Promise<Result> {
   // Finestra ampia (20h) per coprire i turni iniziati in giornata, evitando
   // ambiguità di fuso sul confine giorno. Solo timbrature su CANTIERE.
   const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
-  const { data: timbRaw } = await supabase
-    .from('timbrature' as never)
-    .select('id, dipendente_id, cantiere_id, tipo, ts, pausa')
-    .eq('tenant_id', ctx.tenantId)
-    .not('cantiere_id', 'is', null)
-    .gte('ts', since)
-    .order('ts', { ascending: true });
-
-  const righe = (timbRaw as TimbRow[] | null) ?? [];
+  // A pagine: con molti dipendenti 20 ore di timbrature superano le 1000 righe.
+  let righe: TimbRow[];
+  try {
+    righe = await leggiTutto<TimbRow>(
+      (da, a) =>
+        supabase
+          .from('timbrature' as never)
+          .select('id, dipendente_id, cantiere_id, tipo, ts, pausa')
+          .eq('tenant_id', ctx.tenantId)
+          .not('cantiere_id', 'is', null)
+          .gte('ts', since)
+          .order('ts', { ascending: true })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as Pagina<TimbRow>,
+      { contesto: 'turni attivi: timbrature' },
+    );
+  } catch (e) {
+    console.error('[turni-attivi]', e);
+    return { ok: false, error: 'LETTURA_FALLITA' };
+  }
 
   // Per ogni (dipendente, cantiere): il turno resta "aperto" finché non arriva
   // un'uscita di FINE turno. L'uscita di pausa lo mantiene aperto ("in pausa").
@@ -101,23 +116,6 @@ export async function turniAttivi(): Promise<Result> {
   const cantIds = [...new Set(attivi.map((a) => a.cantId))];
   const ingressoIds = attivi.map((a) => a.ingressoId);
 
-  const [dipRes, cantRes, viaRes] = await Promise.all([
-    supabase.from('dipendenti' as never).select('id, nome, cognome').in('id', dipIds),
-    supabase.from('cantieri' as never).select('id, nome, codice').in('id', cantIds),
-    supabase
-      .from('timbratura_viaggio' as never)
-      .select('timbratura_id, sede_id, distanza_km, durata_confermata_min, autista, mezzo_id')
-      .in('timbratura_id', ingressoIds),
-  ]);
-
-  const dipMap = new Map<string, string>();
-  for (const d of (dipRes.data as { id: string; nome: string; cognome: string }[] | null) ?? [])
-    dipMap.set(d.id, titoloCase(`${d.nome} ${d.cognome}`));
-
-  const cantMap = new Map<string, string>();
-  for (const c of (cantRes.data as { id: string; nome: string | null; codice: string | null }[] | null) ?? [])
-    cantMap.set(c.id, titoloCase(c.nome || c.codice || c.id));
-
   type ViaRow = {
     timbratura_id: string;
     sede_id: string | null;
@@ -126,7 +124,58 @@ export async function turniAttivi(): Promise<Result> {
     autista: boolean;
     mezzo_id: string | null;
   };
-  const viaRows = (viaRes.data as ViaRow[] | null) ?? [];
+  type Dip = { id: string; nome: string; cognome: string };
+  type Cant = { id: string; nome: string | null; codice: string | null };
+  // Id a gruppi (URL) e ogni gruppo a pagine.
+  let dipRows: Dip[];
+  let cantRows: Cant[];
+  let viaRows: ViaRow[];
+  try {
+    [dipRows, cantRows, viaRows] = await Promise.all([
+      leggiPerId(
+        dipIds,
+        (gruppo, da, a) =>
+          supabase
+            .from('dipendenti' as never)
+            .select('id, nome, cognome')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Dip>,
+        { contesto: 'turni attivi: dipendenti' },
+      ),
+      leggiPerId(
+        cantIds,
+        (gruppo, da, a) =>
+          supabase
+            .from('cantieri' as never)
+            .select('id, nome, codice')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Cant>,
+        { contesto: 'turni attivi: cantieri' },
+      ),
+      leggiPerId(
+        ingressoIds,
+        (gruppo, da, a) =>
+          supabase
+            .from('timbratura_viaggio' as never)
+            .select('timbratura_id, sede_id, distanza_km, durata_confermata_min, autista, mezzo_id')
+            .in('timbratura_id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<ViaRow>,
+        { contesto: 'turni attivi: viaggi' },
+      ),
+    ]);
+  } catch (e) {
+    console.error('[turni-attivi]', e);
+    return { ok: false, error: 'LETTURA_FALLITA' };
+  }
+
+  const dipMap = new Map<string, string>();
+  for (const d of dipRows) dipMap.set(d.id, titoloCase(`${d.nome} ${d.cognome}`));
+
+  const cantMap = new Map<string, string>();
+  for (const c of cantRows) cantMap.set(c.id, titoloCase(c.nome || c.codice || c.id));
   const viaByIngresso = new Map<string, ViaRow>();
   for (const v of viaRows) viaByIngresso.set(v.timbratura_id, v);
 

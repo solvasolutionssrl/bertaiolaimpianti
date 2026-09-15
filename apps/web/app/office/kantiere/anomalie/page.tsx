@@ -2,6 +2,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { giornateIncomplete, type TimbraturaGiorno } from '@kommessa/api/kantiere-report';
 import { eFestivo, eWeekend } from '@kommessa/api/kantiere-costi';
+import { leggiPerGruppi, leggiTutto } from '@kommessa/api/pagine';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { AnomalieClient } from './_components/anomalie-client';
 
@@ -211,14 +212,19 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // ----------------------------------------------------------------
   let timbraturaRows: TimbraturaRow[] = [];
   if (attivi.incomplete) {
-    const { data: timbRaw } = (await supabase
-      .from('timbrature' as never)
-      .select('dipendente_id, commessa_id, cantiere_id, tipo, ts')
-      .eq('tenant_id', ctx.tenantId)
-      .gte('ts', `${from}T00:00:00.000Z`)
-      .lt('ts', `${dayAfterTo}T00:00:00.000Z`)
-      .limit(5000)) as { data: TimbraturaRow[] | null };
-    timbraturaRows = timbRaw ?? [];
+    timbraturaRows = await leggiTutto<TimbraturaRow>(
+      (da, a) =>
+        supabase
+          .from('timbrature' as never)
+          .select('dipendente_id, commessa_id, cantiere_id, tipo, ts')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('ts', `${from}T00:00:00.000Z`)
+          .lt('ts', `${dayAfterTo}T00:00:00.000Z`)
+          .order('ts')
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'timbrature del periodo' },
+    );
   }
 
   // Usa targetKey come commessa_id sintetico per giornateIncomplete (per-target grouping)
@@ -249,15 +255,19 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   let dipIdsInPeriod: string[] = [];
 
   if (needRapportini) {
-    const { data: rapRaw } = (await supabase
-      .from('rapportini' as never)
-      .select('id, dipendente_id, data, stato, inviato_at, updated_at')
-      .eq('tenant_id', ctx.tenantId)
-      .gte('data', from)
-      .lte('data', to)
-      .limit(2000)) as { data: RapportinoRow[] | null };
-
-    rapportini = rapRaw ?? [];
+    rapportini = await leggiTutto<RapportinoRow>(
+      (da, a) =>
+        supabase
+          .from('rapportini' as never)
+          .select('id, dipendente_id, data, stato, inviato_at, updated_at')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('data', from)
+          .lte('data', to)
+          .order('data')
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'giornate del periodo' },
+    );
     rapportinoIds = rapportini.map((r) => r.id);
     dipIdsInPeriod = [...new Set(rapportini.map((r) => r.dipendente_id))];
   }
@@ -265,22 +275,36 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // Righe per straordinario
   let righeConStraord: RigaStraordRow[] = [];
   if (attivi.straordinari && rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, cantiere_id, ore_straordinarie')
-      .in('rapportino_id', rapportinoIds)
-      .gt('ore_straordinarie', 0)) as { data: RigaStraordRow[] | null };
-    righeConStraord = data ?? [];
+    righeConStraord = await leggiPerGruppi(rapportinoIds, (gruppo) =>
+      leggiTutto<RigaStraordRow>(
+        (da, a) =>
+          supabase
+            .from('rapportino_righe' as never)
+            .select('rapportino_id, commessa_id, cantiere_id, ore_straordinarie')
+            .in('rapportino_id', gruppo)
+            .gt('ore_straordinarie', 0)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'righe con straordinari' },
+      ),
+    );
   }
 
   // Righe per festivo/weekend/ore_eccessive
   let righeOre: RigaOreRow[] = [];
   if ((attivi.festivo || attivi.weekend || attivi.ore_eccessive) && rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
-      .in('rapportino_id', rapportinoIds)) as { data: RigaOreRow[] | null };
-    righeOre = data ?? [];
+    righeOre = await leggiPerGruppi(rapportinoIds, (gruppo) =>
+      leggiTutto<RigaOreRow>(
+        (da, a) =>
+          supabase
+            .from('rapportino_righe' as never)
+            .select('rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+            .in('rapportino_id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'righe delle giornate' },
+      ),
+    );
   }
 
   const straordCommessaIds = [...new Set(righeConStraord.map((r) => r.commessa_id).filter((id): id is string => id != null))];
@@ -330,14 +354,22 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   const allCommessaIds = [...new Set([...timbCommessaIds, ...straordCommessaIds, ...oreCommessaIds])];
 
   const commesseTitoloMap = new Map<string, string>();
-  if (allCommessaIds.length > 0) {
-    const { data } = (await supabase
-      .from('commesse' as never)
-      .select(
-        'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
-      )
-      .in('id', allCommessaIds)) as { data: CommessaRow[] | null };
-    for (const c of data ?? []) {
+  {
+    const commesseLette = await leggiPerGruppi(allCommessaIds, (gruppo) =>
+      leggiTutto<CommessaRow>(
+        (da, a) =>
+          supabase
+            .from('commesse' as never)
+            .select(
+              'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
+            )
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'commesse delle anomalie' },
+      ),
+    );
+    for (const c of commesseLette) {
       const titolo =
         risolviTitoloCommessa({
           descrizione_ai_finale: c.descrizione_ai_finale,
@@ -357,12 +389,20 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   const allCantiereIds = [...new Set([...timbCantiereIds, ...straordCantiereIds, ...oreCantiereIds])];
 
   const cantieriNomeMap = new Map<string, string>();
-  if (allCantiereIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', allCantiereIds)) as { data: CantiereRow[] | null };
-    for (const k of data ?? []) {
+  {
+    const cantieriLetti = await leggiPerGruppi(allCantiereIds, (gruppo) =>
+      leggiTutto<CantiereRow>(
+        (da, a) =>
+          supabase
+            .from('cantieri' as never)
+            .select('id, nome, codice')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'cantieri delle anomalie' },
+      ),
+    );
+    for (const k of cantieriLetti) {
       cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
     }
   }
@@ -424,18 +464,23 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // ----------------------------------------------------------------
   let modificati: ModificatoDopoInvioRow[] = [];
   if (attivi.modificato && rapportini.length > 0) {
-    const { data: vmodRaw } = await supabase
-      .from('rapportino_versioni' as never)
-      .select('rapportino_id')
-      .eq('tenant_id', ctx.tenantId)
-      .eq('azione', 'modifica_tecnico')
-      .in(
-        'rapportino_id',
-        rapportini.map((r) => r.id),
-      );
-    const modIds = new Set(
-      ((vmodRaw as { rapportino_id: string }[] | null) ?? []).map((v) => v.rapportino_id),
+    const vmod = await leggiPerGruppi(
+      rapportini.map((r) => r.id),
+      (gruppo) =>
+        leggiTutto<{ rapportino_id: string }>(
+          (da, a) =>
+            supabase
+              .from('rapportino_versioni' as never)
+              .select('rapportino_id')
+              .eq('tenant_id', ctx.tenantId)
+              .eq('azione', 'modifica_tecnico')
+              .in('rapportino_id', gruppo)
+              .order('id')
+              .range(da, a) as never,
+          { contesto: 'modifiche dei tecnici' },
+        ),
     );
+    const modIds = new Set(vmod.map((v) => v.rapportino_id));
     modificati = rapportini
       .filter((r) => modIds.has(r.id))
       .map((r) => ({

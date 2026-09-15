@@ -3,6 +3,8 @@ import { COLONNE_QUOTE, quoteDaRiga, quoteOre } from '@kommessa/api/kantiere-quo
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+import { leggiRighePerId } from '@/app/_lib/letture-complete';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 /**
@@ -11,6 +13,8 @@ import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
  * Restituisce un CSV dettagliato (una riga per rapportino_riga).
  * Delimitatore `;` + BOM per compatibilita` Excel italiano.
  */
+
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 type RapportinoRow = {
   id: string;
@@ -119,63 +123,68 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServerSupabase();
 
-  // Carica rapportini
-  let rapQuery = supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .limit(2000);
-
-  if (stato) {
-    rapQuery = rapQuery.eq('stato', stato);
-  } else {
-    rapQuery = rapQuery.in('stato', ['inviato', 'approvato']);
-  }
-  if (dipendenteFilter) {
-    rapQuery = rapQuery.eq('dipendente_id', dipendenteFilter);
-  }
-
-  const { data: rapportiniData } = (await rapQuery) as { data: RapportinoRow[] | null };
-  const rapportini = rapportiniData ?? [];
-
-  const rapportinoIds = rapportini.map((r) => r.id);
-  const dipIds = [...new Set(rapportini.map((r) => r.dipendente_id))];
-
-  // Batch-load righe
-  let righeData: RigaRow[] = [];
-  if (rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select(`rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`)
-      .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
-    righeData = data ?? [];
-  }
-
-  const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
-  const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
-
-  // Batch-load dipendenti
+  // Tutto il periodo, oltre il tetto di 1000 righe del database, con le liste
+  // di id a gruppi. Un export paghe con righe mancanti sarebbe peggio di un
+  // errore: se una lettura fallisce si risponde 500.
+  let rapportini: RapportinoRow[];
+  let righeData: RigaRow[];
   const dipendentiMap = new Map<string, string>();
-  if (dipIds.length > 0) {
-    const { data } = (await supabase
-      .from('dipendenti' as never)
-      .select('id, nome, cognome')
-      .in('id', dipIds)) as { data: DipendenteRow[] | null };
-    for (const d of data ?? []) {
+  const commesseTitoloMap = new Map<string, string>();
+  const cantieriNomeMap = new Map<string, string>();
+  try {
+    rapportini = await leggiTutto<RapportinoRow>(
+      (da, a) => {
+        let q = supabase
+          .from('rapportini' as never)
+          .select('id, dipendente_id, data, stato')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('data', from)
+          .lte('data', to);
+        q = stato ? q.eq('stato', stato) : q.in('stato', ['inviato', 'approvato']);
+        if (dipendenteFilter) q = q.eq('dipendente_id', dipendenteFilter);
+        return q.order('data').order('id').range(da, a) as unknown as Pagina<RapportinoRow>;
+      },
+      { contesto: 'export presenze: giornate' },
+    );
+
+    const rapportinoIds = rapportini.map((r) => r.id);
+    const dipIds = [...new Set(rapportini.map((r) => r.dipendente_id))];
+
+    // Righe nell'ordine delle giornate (data, poi id).
+    const ordineGiornata = new Map(rapportini.map((r, i) => [r.id, i]));
+    righeData = (
+      await leggiRighePerId<RigaRow>(
+        supabase,
+        'rapportino_righe',
+        `rapportino_id, commessa_id, cantiere_id, ${COLONNE_QUOTE}`,
+        'rapportino_id',
+        rapportinoIds,
+        'export presenze: righe',
+      )
+    ).sort(
+      (x, y) => (ordineGiornata.get(x.rapportino_id) ?? 0) - (ordineGiornata.get(y.rapportino_id) ?? 0),
+    );
+
+    const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
+    const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
+
+    const [dipendenti, commesse, cantieri] = await Promise.all([
+      leggiRighePerId<DipendenteRow>(supabase, 'dipendenti', 'id, nome, cognome', 'id', dipIds, 'export presenze: dipendenti'),
+      leggiRighePerId<CommessaRow>(
+        supabase,
+        'commesse',
+        'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali',
+        'id',
+        commessaIds,
+        'export presenze: commesse',
+      ),
+      leggiRighePerId<CantiereRow>(supabase, 'cantieri', 'id, nome, codice', 'id', cantiereIds, 'export presenze: cantieri'),
+    ]);
+
+    for (const d of dipendenti) {
       dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
     }
-  }
-
-  // Batch-load commesse
-  const commesseTitoloMap = new Map<string, string>();
-  if (commessaIds.length > 0) {
-    const { data } = (await supabase
-      .from('commesse' as never)
-      .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
-      .in('id', commessaIds)) as { data: CommessaRow[] | null };
-    for (const c of data ?? []) {
+    for (const c of commesse) {
       const titolo =
         risolviTitoloCommessa({
           descrizione_ai_finale: c.descrizione_ai_finale,
@@ -186,18 +195,14 @@ export async function GET(req: NextRequest) {
         }) || c.codice_interno || c.id;
       commesseTitoloMap.set(c.id, titolo);
     }
-  }
-
-  // Batch-load cantieri
-  const cantieriNomeMap = new Map<string, string>();
-  if (cantiereIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', cantiereIds)) as { data: CantiereRow[] | null };
-    for (const k of data ?? []) {
+    for (const k of cantieri) {
       cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
     }
+  } catch (e) {
+    console.error('[rapportini/export] lettura interrotta:', e instanceof Error ? e.message : e);
+    return new NextResponse('Export non riuscito: la lettura dei dati si è interrotta. Riprova.', {
+      status: 500,
+    });
   }
 
   // Mappa rapportino_id -> (dipendente_id, data, stato)

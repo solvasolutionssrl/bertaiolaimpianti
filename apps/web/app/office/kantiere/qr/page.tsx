@@ -1,6 +1,7 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { mascheraToken } from '@kommessa/api/kantiere-qr';
+import { leggiPerGruppi, leggiTutto } from '@kommessa/api/pagine';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { QrClient } from './_components/qr-client';
 
@@ -37,7 +38,6 @@ type QrDbRow = {
 type TimbraturaScan = {
   commessa_id: string | null;
   cantiere_id: string | null;
-  ts: string;
 };
 
 // ── Tipo pubblico esposto al client ─────────────────────────────────────────
@@ -73,60 +73,82 @@ export default async function QrPage() {
   const supabase = createServerSupabase();
 
   // 1. Tutti i QR del tenant (attivi + revocati), ordinati per created_at desc
-  const { data: qrRows } = (await supabase
-    .from('cantiere_qr' as never)
-    .select('id, commessa_id, cantiere_id, token, attivo, created_at, revoked_at')
-    .eq('tenant_id', ctx.tenantId)
-    .order('created_at', { ascending: false })) as { data: QrDbRow[] | null };
-
-  const allQr = qrRows ?? [];
+  const allQr = await leggiTutto<QrDbRow>(
+    (da, a) =>
+      supabase
+        .from('cantiere_qr' as never)
+        .select('id, commessa_id, cantiere_id, token, attivo, created_at, revoked_at')
+        .eq('tenant_id', ctx.tenantId)
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'QR del tenant' },
+  );
 
   // 2. Raccoglie gli id target per batch-load
   const commessaIds = [...new Set(allQr.map((r) => r.commessa_id).filter((x): x is string => x !== null))];
   const cantiereIds = [...new Set(allQr.map((r) => r.cantiere_id).filter((x): x is string => x !== null))];
 
-  const commessePromise =
-    commessaIds.length > 0
-      ? supabase
+  const commessePromise = leggiPerGruppi(commessaIds, (gruppo) =>
+    leggiTutto<CommessaRow>(
+      (da, a) =>
+        supabase
           .from('commesse' as never)
-          .select(
-            'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, created_at',
-          )
+          .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, created_at')
           .eq('tenant_id', ctx.tenantId)
-          .in('id', commessaIds)
-      : Promise.resolve({ data: [] });
+          .in('id', gruppo)
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'commesse dei QR' },
+    ),
+  );
 
-  const cantieriPromise =
-    cantiereIds.length > 0
-      ? supabase
+  const cantieriPromise = leggiPerGruppi(cantiereIds, (gruppo) =>
+    leggiTutto<CantiereRow>(
+      (da, a) =>
+        supabase
           .from('cantieri' as never)
           .select('id, nome, codice')
           .eq('tenant_id', ctx.tenantId)
-          .in('id', cantiereIds)
-      : Promise.resolve({ data: [] });
+          .in('id', gruppo)
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'cantieri dei QR' },
+    ),
+  );
 
   // 3. Tutte le commesse del tenant (per la sezione "genera per commessa")
-  const allCommessePromise = supabase
-    .from('commesse' as never)
-    .select(
-      'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, created_at',
-    )
-    .eq('tenant_id', ctx.tenantId)
-    .order('created_at', { ascending: false });
+  const allCommessePromise = leggiTutto<CommessaRow>(
+    (da, a) =>
+      supabase
+        .from('commesse' as never)
+        .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, created_at')
+        .eq('tenant_id', ctx.tenantId)
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'commesse del tenant' },
+  );
 
-  // 4. Timbrature (per conteggio scansioni)
-  const timbraturePromise = supabase
-    .from('timbrature' as never)
-    .select('commessa_id, cantiere_id, ts')
-    .eq('tenant_id', ctx.tenantId);
+  // 4. Timbrature per il conteggio delle scansioni: tutte, a pagine (servono
+  //    solo i riferimenti a cantiere e commessa).
+  const timbraturePromise = leggiTutto<TimbraturaScan>(
+    (da, a) =>
+      supabase
+        .from('timbrature' as never)
+        .select('commessa_id, cantiere_id')
+        .eq('tenant_id', ctx.tenantId)
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'scansioni dei QR' },
+  );
 
-  const [{ data: commesseRaw }, { data: cantieriRaw }, { data: allCommesseRaw }, { data: timbratureRaw }] =
-    await Promise.all([commessePromise, cantieriPromise, allCommessePromise, timbraturePromise]);
-
-  const commesse = (commesseRaw ?? []) as CommessaRow[];
-  const cantieri = (cantieriRaw ?? []) as CantiereRow[];
-  const allCommesse = (allCommesseRaw ?? []) as CommessaRow[];
-  const timbrature = (timbratureRaw ?? []) as TimbraturaScan[];
+  const [commesse, cantieri, allCommesse, timbrature] = await Promise.all([
+    commessePromise,
+    cantieriPromise,
+    allCommessePromise,
+    timbraturePromise,
+  ]);
 
   // 5. Lookup maps
   const commesseMap = new Map<string, CommessaRow>(commesse.map((c) => [c.id, c]));

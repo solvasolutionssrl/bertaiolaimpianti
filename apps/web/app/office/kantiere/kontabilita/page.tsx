@@ -4,6 +4,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { leggiMetodiAttivi } from '@/app/_lib/metodi-pagamento';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { CATEGORIE_SPESA, type CategoriaSpesa } from '@kommessa/api/spese';
@@ -72,35 +73,39 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   const daFilter = searchParams.da || undefined;
   const aFilter = searchParams.a || undefined;
 
-  // Query spese del tenant con filtri condizionali.
-  let query = supabase
-    .from('spese' as never)
-    .select(
-      'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key, numero_persone, stato',
-    )
-    .eq('tenant_id', ctx.tenantId)
-    .limit(1000);
+  // Spese del tenant con filtri condizionali, tutte (a pagine): elenco, totali e
+  // riepiloghi le usano per intero. Prima si fermavano a 1000 senza dirlo.
+  const costruisciQuery = () => {
+    let query = supabase
+      .from('spese' as never)
+      .select(
+        'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key, numero_persone, stato',
+      )
+      .eq('tenant_id', ctx.tenantId);
 
-  if (cantiereFilter) query = query.eq('cantiere_id', cantiereFilter);
-  if (dipendenteFilter) query = query.eq('dipendente_id', dipendenteFilter);
-  if (categoriaFilter) query = query.eq('categoria', categoriaFilter);
-  // da/a sono giorni calendario (Europe/Rome): li converto in confini UTC esatti
-  // sulla colonna timestamptz data_scontrino.
-  if (daFilter) {
-    const { fromIso } = romeDayBoundsUtc(daFilter);
-    query = query.gte('data_scontrino', fromIso);
-  }
-  if (aFilter) {
-    const { toIso } = romeDayBoundsUtc(aFilter);
-    query = query.lt('data_scontrino', toIso);
-  }
+    if (cantiereFilter) query = query.eq('cantiere_id', cantiereFilter);
+    if (dipendenteFilter) query = query.eq('dipendente_id', dipendenteFilter);
+    if (categoriaFilter) query = query.eq('categoria', categoriaFilter);
+    // da/a sono giorni calendario (Europe/Rome): li converto in confini UTC esatti
+    // sulla colonna timestamptz data_scontrino.
+    if (daFilter) {
+      const { fromIso } = romeDayBoundsUtc(daFilter);
+      query = query.gte('data_scontrino', fromIso);
+    }
+    if (aFilter) {
+      const { toIso } = romeDayBoundsUtc(aFilter);
+      query = query.lt('data_scontrino', toIso);
+    }
 
-  query = query
-    .order('data_scontrino', { ascending: false, nullsFirst: false })
-    .order('created_at', { ascending: false });
-
-  const { data: speseData } = (await query) as { data: SpesaRow[] | null };
-  const spese = speseData ?? [];
+    return query
+      .order('data_scontrino', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
+  };
+  const spese = await leggiTutto<SpesaRow>(
+    (da, a) => costruisciQuery().range(da, a) as unknown as PromiseLike<EsitoPagina<SpesaRow>>,
+    { contesto: 'spese di Kontabilità' },
+  );
 
   // Mappe di display per i dipendenti e i cantieri referenziati.
   const dipIds = [...new Set(spese.map((s) => s.dipendente_id).filter((x): x is string => !!x))];

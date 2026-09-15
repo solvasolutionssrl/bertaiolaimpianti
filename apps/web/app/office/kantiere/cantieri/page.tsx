@@ -1,9 +1,13 @@
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { leggiCollegamenti } from '@/app/_lib/integrazione/collegati';
 import { GIORNI_ETICHETTA_NUOVO } from '@/app/_lib/integrazione/promuovi';
 import { CantieriClient } from './_components/cantieri-client';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const dynamic = 'force-dynamic';
 
@@ -40,15 +44,23 @@ export default async function CantieriPage() {
   const supabase = createServerSupabase();
 
   // 1. Carica tutti i cantieri del tenant
-  const { data: cantieriRaw } = await supabase
-    .from('cantieri' as never)
-    .select(
-      'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato, commessa_id, origine_gestionale_al',
-    )
-    .eq('tenant_id', ctx.tenantId)
-    .order('codice');
+  // Tutti, a pagine: i cantieri creati dal gestionale crescono e il database ne
+  // restituisce al massimo 1000 per richiesta, senza avvisare.
+  const cantieriRaw = await leggiTutto<Record<string, unknown>>(
+    (da, a) =>
+      supabase
+        .from('cantieri' as never)
+        .select(
+          'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato, commessa_id, origine_gestionale_al',
+        )
+        .eq('tenant_id', ctx.tenantId)
+        .order('codice')
+        .order('id')
+        .range(da, a) as unknown as Pagina<Record<string, unknown>>,
+    { contesto: 'cantieri: elenco' },
+  );
 
-  const cantieri = (cantieriRaw ?? []) as {
+  const cantieri = cantieriRaw as unknown as {
     id: string;
     codice: string;
     codice_commessa: string | null;
@@ -68,11 +80,20 @@ export default async function CantieriPage() {
   // 2. Batch: conteggio persone per cantiere
   const personeCounts: Record<string, number> = {};
   if (ids.length > 0) {
-    const { data: squadra } = await supabase
-      .from('cantiere_squadra' as never)
-      .select('cantiere_id')
-      .in('cantiere_id', ids);
-    for (const r of (squadra ?? []) as { cantiere_id: string }[]) {
+    // Id di tutti i cantieri: a gruppi (URL) e ogni gruppo a pagine.
+    const squadra = await leggiPerId(
+      ids,
+      (gruppo, da, a) =>
+        supabase
+          .from('cantiere_squadra' as never)
+          .select('cantiere_id')
+          .in('cantiere_id', gruppo)
+          .order('cantiere_id')
+          .order('dipendente_id')
+          .range(da, a) as unknown as Pagina<{ cantiere_id: string }>,
+      { contesto: 'cantieri: squadre' },
+    );
+    for (const r of squadra) {
       personeCounts[r.cantiere_id] = (personeCounts[r.cantiere_id] ?? 0) + 1;
     }
   }
@@ -80,12 +101,19 @@ export default async function CantieriPage() {
   // 3. Batch: set di cantiere_id con QR attivo
   const qrSet = new Set<string>();
   if (ids.length > 0) {
-    const { data: qrRows } = await supabase
-      .from('cantiere_qr' as never)
-      .select('cantiere_id')
-      .eq('attivo', true)
-      .in('cantiere_id', ids);
-    for (const r of (qrRows ?? []) as { cantiere_id: string }[]) {
+    const qrRows = await leggiPerId(
+      ids,
+      (gruppo, da, a) =>
+        supabase
+          .from('cantiere_qr' as never)
+          .select('cantiere_id')
+          .eq('attivo', true)
+          .in('cantiere_id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<{ cantiere_id: string }>,
+      { contesto: 'cantieri: QR attivi' },
+    );
+    for (const r of qrRows) {
       qrSet.add(r.cantiere_id);
     }
   }
@@ -93,11 +121,18 @@ export default async function CantieriPage() {
   // 4. Batch: titoli commesse collegate
   const commessaTitoliMap: Record<string, string> = {};
   if (commessaIds.length > 0) {
-    const { data: commesseRaw } = await supabase
-      .from('commesse')
-      .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
-      .in('id', commessaIds);
-    for (const c of (commesseRaw ?? []) as {
+    const commesseRaw = await leggiPerId(
+      commessaIds,
+      (gruppo, da, a) =>
+        supabase
+          .from('commesse')
+          .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
+          .in('id', gruppo)
+          .order('id')
+          .range(da, a) as unknown as Pagina<Record<string, unknown>>,
+      { contesto: 'cantieri: commesse collegate' },
+    );
+    for (const c of commesseRaw as unknown as {
       id: string;
       codice_interno: string | null;
       nome_cartella: string | null;
@@ -117,14 +152,20 @@ export default async function CantieriPage() {
   }
 
   // 5. Carica commesse disponibili per il picker nel dialog di creazione
-  const { data: commesseDisp } = await supabase
-    .from('commesse')
-    .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
-    .eq('tenant_id', ctx.tenantId)
-    .order('codice_interno');
+  const commesseDisp = await leggiTutto<Record<string, unknown>>(
+    (da, a) =>
+      supabase
+        .from('commesse')
+        .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
+        .eq('tenant_id', ctx.tenantId)
+        .order('codice_interno')
+        .order('id')
+        .range(da, a) as unknown as Pagina<Record<string, unknown>>,
+    { contesto: 'cantieri: commesse per il collegamento' },
+  );
 
   const commesse: CommessaOption[] = (
-    (commesseDisp ?? []) as {
+    commesseDisp as unknown as {
       id: string;
       codice_interno: string | null;
       nome_cartella: string | null;

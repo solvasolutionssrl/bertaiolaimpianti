@@ -54,6 +54,12 @@ export function AuditToolbar({ tenants, initial }: Props) {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      if (!res.completo) {
+        await showAlert({
+          title: 'Export parziale',
+          body: `Il file contiene le prime ${res.righe} righe: ce ne sono altre. Restringi periodo o filtri per averle tutte.`,
+        });
+      }
     });
   }
 

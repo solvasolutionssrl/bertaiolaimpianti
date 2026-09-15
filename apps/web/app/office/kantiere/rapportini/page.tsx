@@ -3,6 +3,7 @@ import { COLONNE_QUOTE, quoteDaRiga, quoteOre, sommaQuote, type RigaRapportinoLe
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { minutiPerCommessa } from '@kommessa/api/kantiere-ore';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { leggiPerGruppi, leggiTutto } from '@kommessa/api/pagine';
 import {
   affidabilitaGiornata,
   riassuntoVersioni,
@@ -128,38 +129,40 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const statoFilter = searchParams.stato ?? '';
   const dipendenteFilter = searchParams.dipendente ?? '';
 
-  // Carica rapportini nel range
-  let query = supabase
-    .from('rapportini' as never)
-    .select('id, dipendente_id, data, stato, inviato_at, approvato_da, note, auto_compilato')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', from)
-    .lte('data', to)
-    .order('data', { ascending: false })
-    .limit(500);
-
-  if (statoFilter) {
-    query = query.eq('stato', statoFilter);
-  }
-  if (dipendenteFilter) {
-    query = query.eq('dipendente_id', dipendenteFilter);
-  }
-
-  const { data: rapportiniData } = (await query) as { data: RapportinoRow[] | null };
-  const rapportini = rapportiniData ?? [];
+  // Carica tutti i rapportini nel range, a pagine: il database restituisce al
+  // massimo 1000 righe per richiesta (prima un .limit(500) tagliava in silenzio
+  // i periodi lunghi).
+  const rapportini = await leggiTutto<RapportinoRow>(
+    (da, a) => {
+      let query = supabase
+        .from('rapportini' as never)
+        .select('id, dipendente_id, data, stato, inviato_at, approvato_da, note, auto_compilato')
+        .eq('tenant_id', ctx.tenantId)
+        .gte('data', from)
+        .lte('data', to);
+      if (statoFilter) query = query.eq('stato', statoFilter);
+      if (dipendenteFilter) query = query.eq('dipendente_id', dipendenteFilter);
+      return query.order('data', { ascending: false }).order('id').range(da, a) as never;
+    },
+    { contesto: 'giornate del periodo' },
+  );
 
   // Batch-load righe
   const rapportinoIds = rapportini.map((r) => r.id);
   const dipIds = [...new Set(rapportini.map((r) => r.dipendente_id))];
 
-  let righeData: RigaRow[] = [];
-  if (rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_righe' as never)
-      .select(`id, rapportino_id, commessa_id, cantiere_id, note, ${COLONNE_QUOTE}`)
-      .in('rapportino_id', rapportinoIds)) as { data: RigaRow[] | null };
-    righeData = data ?? [];
-  }
+  const righeData = await leggiPerGruppi(rapportinoIds, (gruppo) =>
+    leggiTutto<RigaRow>(
+      (da, a) =>
+        supabase
+          .from('rapportino_righe' as never)
+          .select(`id, rapportino_id, commessa_id, cantiere_id, note, ${COLONNE_QUOTE}`)
+          .in('rapportino_id', gruppo)
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'righe delle giornate' },
+    ),
+  );
 
   const commessaIdsFromRighe = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
   const cantiereIdsFromRighe = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];
@@ -184,21 +187,27 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     string,
     { versione: number; azione: string; quando: string; chi: string | null; snapshot: SnapshotGiornata | null }[]
   >();
-  if (rapportinoIds.length > 0) {
-    const { data } = (await supabase
-      .from('rapportino_versioni' as never)
-      .select('rapportino_id, versione, azione, modificato_da_nome, created_at, snapshot')
-      .in('rapportino_id', rapportinoIds)) as {
-      data: {
+  {
+    const versioni = await leggiPerGruppi(rapportinoIds, (gruppo) =>
+      leggiTutto<{
         rapportino_id: string;
         versione: number;
         azione: string;
         modificato_da_nome: string | null;
         created_at: string;
         snapshot: SnapshotGiornata | null;
-      }[] | null;
-    };
-    for (const v of data ?? []) {
+      }>(
+        (da, a) =>
+          supabase
+            .from('rapportino_versioni' as never)
+            .select('rapportino_id, versione, azione, modificato_da_nome, created_at, snapshot')
+            .in('rapportino_id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'versioni delle giornate' },
+      ),
+    );
+    for (const v of versioni) {
       const arr = versioniPerRapportino.get(v.rapportino_id) ?? [];
       arr.push({ versione: v.versione, azione: v.azione, quando: v.created_at, chi: v.modificato_da_nome, snapshot: v.snapshot });
       versioniPerRapportino.set(v.rapportino_id, arr);
@@ -214,15 +223,24 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     // UTC: un T00:00:00Z taglierebbe via le timbrature notturne del primo giorno).
     const { fromIso: tsFrom } = romeDayBoundsUtc(from);
     const { toIso: tsTo } = romeDayBoundsUtc(to);
-    const { data } = (await supabase
-      .from('timbrature' as never)
-      .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa, modalita, geo_lat')
-      .eq('tenant_id', ctx.tenantId)
-      .in('dipendente_id', dipIds)
-      .gte('ts', tsFrom)
-      .lt('ts', tsTo)
-      .order('ts', { ascending: true })) as { data: TimbratureRow[] | null };
-    timbratureData = data ?? [];
+    timbratureData = await leggiPerGruppi(dipIds, (gruppo) =>
+      leggiTutto<TimbratureRow>(
+        (da, a) =>
+          supabase
+            .from('timbrature' as never)
+            .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa, modalita, geo_lat')
+            .eq('tenant_id', ctx.tenantId)
+            .in('dipendente_id', gruppo)
+            .gte('ts', tsFrom)
+            .lt('ts', tsTo)
+            .order('ts', { ascending: true })
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'timbrature del periodo' },
+      ),
+    );
+    // Con più gruppi di dipendenti l'ordine si ricompone qui: per ora, poi id.
+    timbratureData.sort((x, y) => (x.ts < y.ts ? -1 : x.ts > y.ts ? 1 : x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
     for (const t of timbratureData) {
       if (t.commessa_id) timbratureCommessaIds.add(t.commessa_id);
     }
@@ -237,12 +255,20 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
 
   // Batch-load commesse (per titolo)
   const commesseTitoloMap = new Map<string, string>();
-  if (allCommessaIds.length > 0) {
-    const { data } = (await supabase
-      .from('commesse' as never)
-      .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
-      .in('id', allCommessaIds)) as { data: CommessaRow[] | null };
-    for (const c of data ?? []) {
+  {
+    const commesseLette = await leggiPerGruppi(allCommessaIds, (gruppo) =>
+      leggiTutto<CommessaRow>(
+        (da, a) =>
+          supabase
+            .from('commesse' as never)
+            .select('id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'commesse delle giornate' },
+      ),
+    );
+    for (const c of commesseLette) {
       const titolo =
         risolviTitoloCommessa({
           descrizione_ai_finale: c.descrizione_ai_finale,
@@ -257,12 +283,20 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
 
   // Batch-load cantieri (per nome)
   const cantieriNomeMap = new Map<string, string>();
-  if (allCantiereIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', allCantiereIds)) as { data: CantiereRow[] | null };
-    for (const k of data ?? []) {
+  {
+    const cantieriLetti = await leggiPerGruppi(allCantiereIds, (gruppo) =>
+      leggiTutto<CantiereRow>(
+        (da, a) =>
+          supabase
+            .from('cantieri' as never)
+            .select('id, nome, codice')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'cantieri delle giornate' },
+      ),
+    );
+    for (const k of cantieriLetti) {
       cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
     }
   }
@@ -364,24 +398,42 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const timbIdToKey = new Map<string, string>();
   for (const t of timbratureData) timbIdToKey.set(t.id, `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`);
   const viaggioRows: ViaggioRow[] = [];
-  if (timbratureData.length > 0) {
-    const { data } = (await supabase
-      .from('timbratura_viaggio' as never)
-      .select(VIAGGIO_COLS)
-      .in('timbratura_id', timbratureData.map((t) => t.id))) as { data: ViaggioRow[] | null };
-    viaggioRows.push(...(data ?? []));
+  {
+    const legate = await leggiPerGruppi(
+      timbratureData.map((t) => t.id),
+      (gruppo) =>
+        leggiTutto<ViaggioRow>(
+          (da, a) =>
+            supabase
+              .from('timbratura_viaggio' as never)
+              .select(VIAGGIO_COLS)
+              .in('timbratura_id', gruppo)
+              .order('id')
+              .range(da, a) as never,
+          { contesto: 'viaggi delle timbrature' },
+        ),
+    );
+    for (const v of legate) viaggioRows.push(v);
   }
   // Righe viaggio senza timbratura: ore scritte a mano e trasferimenti fra
   // cantieri, che sono viaggio come ogni altra tratta.
-  if (dipIds.length > 0) {
-    const { data } = (await supabase
-      .from('timbratura_viaggio' as never)
-      .select(VIAGGIO_COLS)
-      .in('dipendente_id', dipIds)
-      .is('timbratura_id', null)
-      .gte('data', from)
-      .lte('data', to)) as { data: ViaggioRow[] | null };
-    viaggioRows.push(...(data ?? []));
+  {
+    const senzaTimbratura = await leggiPerGruppi(dipIds, (gruppo) =>
+      leggiTutto<ViaggioRow>(
+        (da, a) =>
+          supabase
+            .from('timbratura_viaggio' as never)
+            .select(VIAGGIO_COLS)
+            .in('dipendente_id', gruppo)
+            .is('timbratura_id', null)
+            .gte('data', from)
+            .lte('data', to)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'viaggi senza timbratura' },
+      ),
+    );
+    for (const v of senzaTimbratura) viaggioRows.push(v);
   }
   // Nomi sedi citate nei viaggi + cantieri non già risolti.
   const sediNomeMap = new Map<string, string>();
@@ -395,12 +447,20 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const viaggioCantIds = [
     ...new Set(viaggioRows.map((v) => v.cantiere_id).filter((id): id is string => id != null && !cantieriNomeMap.has(id))),
   ];
-  if (viaggioCantIds.length > 0) {
-    const { data } = (await supabase
-      .from('cantieri' as never)
-      .select('id, nome, codice')
-      .in('id', viaggioCantIds)) as { data: CantiereRow[] | null };
-    for (const k of data ?? []) cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
+  {
+    const cantieriViaggi = await leggiPerGruppi(viaggioCantIds, (gruppo) =>
+      leggiTutto<CantiereRow>(
+        (da, a) =>
+          supabase
+            .from('cantieri' as never)
+            .select('id, nome, codice')
+            .in('id', gruppo)
+            .order('id')
+            .range(da, a) as never,
+        { contesto: 'cantieri dei viaggi' },
+      ),
+    );
+    for (const k of cantieriViaggi) cantieriNomeMap.set(k.id, k.nome || k.codice || k.id);
   }
   const viaggioKmByKey = new Map<string, number>();
   const viaggiByKey = new Map<string, ViaggioTratta[]>();
@@ -559,13 +619,19 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   }));
 
   // Carica cantieri attivi per il dialog "Registra ore"
-  const { data: cantieriRaw } = (await supabase
-    .from('cantieri' as never)
-    .select('id, nome, codice')
-    .eq('tenant_id', ctx.tenantId)
-    .order('nome')) as { data: CantiereRow[] | null };
+  const cantieriRaw = await leggiTutto<CantiereRow>(
+    (da, a) =>
+      supabase
+        .from('cantieri' as never)
+        .select('id, nome, codice')
+        .eq('tenant_id', ctx.tenantId)
+        .order('nome')
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'cantieri del tenant' },
+  );
 
-  const cantieriPicker: CantierePickerItem[] = (cantieriRaw ?? []).map((k) => ({
+  const cantieriPicker: CantierePickerItem[] = cantieriRaw.map((k) => ({
     id: k.id,
     nome: k.nome || k.codice || k.id,
   }));

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { COLONNE_QUOTE, quoteDaRiga, quoteOre, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiPerGruppi, leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { sogliaAnomaliaTurnoOre, giornateOltreSoglia } from '@/app/_lib/kantiere-config';
 import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
@@ -31,6 +32,8 @@ export const dynamic = 'force-dynamic';
 /* ------------------------------------------------------------------ */
 /* Local types                                                          */
 /* ------------------------------------------------------------------ */
+
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 type RapportinoInviatoRow = {
   id: string;
@@ -130,30 +133,45 @@ export default async function KantierePanoramica() {
 
   // ===== KPI 5: ore settimana =====
   const da7gg = settimanaDa();
-  const { data: rapportiniSettimana } = (await supabase
-    .from('rapportini' as never)
-    .select('id')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', da7gg)
-    .in('stato', ['inviato', 'approvato'])
-    .limit(500)) as { data: { id: string }[] | null };
+  // Tutte le giornate e le righe della settimana, oltre il tetto di 1000 righe
+  // del database e con gli id a gruppi: è un totale, a metà sarebbe sbagliato.
+  const rapportiniSettimana = await leggiTutto<{ id: string }>(
+    (da, a) =>
+      supabase
+        .from('rapportini' as never)
+        .select('id')
+        .eq('tenant_id', ctx.tenantId)
+        .gte('data', da7gg)
+        .in('stato', ['inviato', 'approvato'])
+        .order('data')
+        .order('id')
+        .range(da, a) as unknown as Pagina<{ id: string }>,
+    { contesto: 'panoramica: giornate della settimana' },
+  );
+  const righeSettimana = await leggiPerGruppi(
+    rapportiniSettimana.map((r) => r.id),
+    (gruppo) =>
+      leggiTutto<RigaOreRow>(
+        (da, a) =>
+          supabase
+            .from('rapportino_righe' as never)
+            .select(COLONNE_QUOTE)
+            .in('rapportino_id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<RigaOreRow>,
+        { contesto: 'panoramica: righe della settimana' },
+      ),
+  );
 
   let oreOrd = 0;
   let oreStraord = 0;
   let oreViaggio = 0;
-  const idsSettimana = (rapportiniSettimana ?? []).map((r) => r.id);
-  if (idsSettimana.length > 0) {
-    const { data: righe } = (await supabase
-      .from('rapportino_righe' as never)
-      .select(COLONNE_QUOTE)
-      .in('rapportino_id', idsSettimana)) as { data: RigaOreRow[] | null };
-    // Ordinarie = lavoro e viaggio entro l'orario; viaggio = solo l'eccedente.
-    for (const r of righe ?? []) {
-      const q = quoteOre(quoteDaRiga(r));
-      oreOrd += q.ordinarie;
-      oreStraord += q.straordinarie;
-      oreViaggio += q.viaggioEccedente;
-    }
+  // Ordinarie = lavoro e viaggio entro l'orario; viaggio = solo l'eccedente.
+  for (const r of righeSettimana) {
+    const q = quoteOre(quoteDaRiga(r));
+    oreOrd += q.ordinarie;
+    oreStraord += q.straordinarie;
+    oreViaggio += q.viaggioEccedente;
   }
   const oreSettimana = oreOrd + oreStraord + oreViaggio;
 
@@ -173,15 +191,18 @@ export default async function KantierePanoramica() {
     .gte('ts', `${da7gg}T00:00:00.000Z`);
 
   // ===== Timbrature di oggi per analisi presenze =====
-  const { data: timbOggiRaw } = (await supabase
-    .from('timbrature' as never)
-    .select('dipendente_id, cantiere_id, tipo, ts')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', inizioOggi)
-    .order('ts', { ascending: true })
-    .limit(1000)) as { data: TimbraturaRow[] | null };
-
-  const timbOggi = timbOggiRaw ?? [];
+  const timbOggi = await leggiTutto<TimbraturaRow>(
+    (da, a) =>
+      supabase
+        .from('timbrature' as never)
+        .select('dipendente_id, cantiere_id, tipo, ts')
+        .eq('tenant_id', ctx.tenantId)
+        .gte('ts', inizioOggi)
+        .order('ts', { ascending: true })
+        .order('id')
+        .range(da, a) as unknown as Pagina<TimbraturaRow>,
+    { contesto: 'panoramica: timbrature di oggi' },
+  );
 
   // ===== Turni attivi (live) — fonte unica per "in cantiere" e "in pausa" =====
   // Derivare i conteggi dai turni APERTI (logica pausa-aware di `turniAttivi`)
@@ -242,18 +263,24 @@ export default async function KantierePanoramica() {
   const topCantieri = presenzaCantiereList.slice(0, 6);
 
   // Presenze per giorno ultimi 7 giorni (per grafico trend)
-  const { data: rapportiniUltimi7 } = (await supabase
-    .from('rapportini' as never)
-    .select('dipendente_id, data')
-    .eq('tenant_id', ctx.tenantId)
-    .gte('data', da7gg)
-    .lte('data', oggiRome())
-    .in('stato', ['inviato', 'approvato'])
-    .limit(2000)) as { data: { dipendente_id: string; data: string }[] | null };
+  const rapportiniUltimi7 = await leggiTutto<{ dipendente_id: string; data: string }>(
+    (da, a) =>
+      supabase
+        .from('rapportini' as never)
+        .select('dipendente_id, data')
+        .eq('tenant_id', ctx.tenantId)
+        .gte('data', da7gg)
+        .lte('data', oggiRome())
+        .in('stato', ['inviato', 'approvato'])
+        .order('data')
+        .order('id')
+        .range(da, a) as unknown as Pagina<{ dipendente_id: string; data: string }>,
+    { contesto: 'panoramica: presenze degli ultimi 7 giorni' },
+  );
 
   // Dipendenti unici per giorno (presenti = hanno rapportino)
   const presenzePerGiorno = new Map<string, Set<string>>();
-  for (const r of rapportiniUltimi7 ?? []) {
+  for (const r of rapportiniUltimi7) {
     const existing = presenzePerGiorno.get(r.data);
     if (existing) {
       existing.add(r.dipendente_id);

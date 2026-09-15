@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, MapPin, Navigation, Users, User, AlertTriangle } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { romeDay } from '@kommessa/api/rome-time';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -26,6 +27,9 @@ import {
 import { TurnoAzioniCantiere } from '../../_components/turno-azioni-cantiere';
 import { ChiInCantiere, type PersonaDentro } from './_components/chi-in-cantiere';
 import { AnaliticaCantiere, type AnaliticaCantiereDati } from './_components/analitica-cantiere';
+
+/** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
+type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 export const metadata: Metadata = {
   title: 'Cantiere',
@@ -161,22 +165,36 @@ export default async function CantiereMobileDetailPage({
     // ── Ultimi 7 giorni (incluso oggi): ore da rapportini, km guidati da viaggi ──
     const da7gg = romeDay(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
     // Ore: righe di rapportino del cantiere, con rapportino nel range di date.
-    const { data: rapRows } = await supabase
-      .from('rapportini' as never)
-      .select('id')
-      .eq('tenant_id', ctx.tenantId)
-      .gte('data', da7gg)
-      .lte('data', oggiData);
-    const rapIds = ((rapRows as { id: string }[] | null) ?? []).map((r) => r.id);
+    // Le giornate di 7 giorni di tutto il tenant: a pagine, e i loro id a gruppi
+    // (qualche centinaio di id non sta in un URL).
+    const rapRows = await leggiTutto<{ id: string }>(
+      (da, a) =>
+        supabase
+          .from('rapportini' as never)
+          .select('id')
+          .eq('tenant_id', ctx.tenantId)
+          .gte('data', da7gg)
+          .lte('data', oggiData)
+          .order('id')
+          .range(da, a) as unknown as Pagina<{ id: string }>,
+      { contesto: 'scheda cantiere: giornate di 7 giorni' },
+    );
+    const rapIds = rapRows.map((r) => r.id);
     let ore7gg = 0;
     if (rapIds.length > 0) {
-      const { data: righeRows } = await supabase
-        .from('rapportino_righe' as never)
-        .select('ore_ordinarie, ore_straordinarie')
-        .eq('cantiere_id', c.id)
-        .in('rapportino_id', rapIds);
-      const righe =
-        (righeRows as { ore_ordinarie: number | null; ore_straordinarie: number | null }[] | null) ?? [];
+      type Riga = { ore_ordinarie: number | null; ore_straordinarie: number | null };
+      const righe = await leggiPerId(
+        rapIds,
+        (gruppo, da, a) =>
+          supabase
+            .from('rapportino_righe' as never)
+            .select('ore_ordinarie, ore_straordinarie')
+            .eq('cantiere_id', c.id)
+            .in('rapportino_id', gruppo)
+            .order('id')
+            .range(da, a) as unknown as Pagina<Riga>,
+        { contesto: 'scheda cantiere: ore di 7 giorni' },
+      );
       for (const r of righe) {
         ore7gg += Number(r.ore_ordinarie ?? 0) + Number(r.ore_straordinarie ?? 0);
       }
