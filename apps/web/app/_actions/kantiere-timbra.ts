@@ -832,7 +832,8 @@ async function registraTrasferimentiCantiere(
     tenantId: string;
     dipendenteId: string;
     data: string;
-    pairs: { da: string; a: string }[];
+    /** Coppie di cantieri; `autista`/`mezzoId` per coppia vincono su quelli della giornata. */
+    pairs: { da: string; a: string; autista?: boolean; mezzoId?: string | null }[];
     /**
      * Chi guidava e con che mezzo, quando la giornata lo dice («Registra
      * giornata»: si indica una volta e vale per tutte le tratte). Negli altri
@@ -874,6 +875,8 @@ async function registraTrasferimentiCantiere(
         stima = await stimaConCache(provider, a, b);
       }
       if (!stima) continue;
+      const guidava = p.autista ?? opts.autista ?? false;
+      const mezzo = p.autista !== undefined ? (p.mezzoId ?? null) : (opts.mezzoId ?? null);
       inserendi.push({
         tenant_id: opts.tenantId,
         timbratura_id: null,
@@ -886,8 +889,8 @@ async function registraTrasferimentiCantiere(
         durata_stimata_min: Math.round(stima.minuti),
         durata_confermata_min: arrotondaA(Math.round(stima.minuti), stepViaggio),
         distanza_km: stima.km,
-        autista: opts.autista ?? false,
-        mezzo_id: opts.autista ? (opts.mezzoId ?? null) : null,
+        autista: guidava,
+        mezzo_id: guidava ? mezzo : null,
       });
     }
     if (inserendi.length > 0) {
@@ -925,6 +928,9 @@ async function registraPassaggiDaSede(
       senzaVersoSede?: boolean;
       /** Sul cantiere di arrivo si lavora in quella sede: nessuna tratta dalla sede. */
       senzaDallaSede?: boolean;
+      /** Chi guidava su questo passaggio; senza, vale quello della giornata. */
+      autista?: boolean;
+      mezzoId?: string | null;
     }[];
     /** Stime già calcolate (chiave `da>a`, id di cantiere o sede). */
     stime?: Map<string, { minuti: number; km: number | null } | null>;
@@ -976,8 +982,9 @@ async function registraPassaggiDaSede(
         sedeId: p.sedeId,
         durataStimataMin: s ? s.minuti : null,
         durataConfermataMin: s ? arrotondaA(s.minuti, stepViaggio) : 0,
-        autista: opts.autista,
-        mezzoId: opts.mezzoId,
+        autista: p.autista ?? opts.autista,
+        mezzoId:
+          (p.autista ?? opts.autista) ? (p.autista !== undefined ? (p.mezzoId ?? null) : opts.mezzoId) : null,
         distanzaKm: s?.km ?? null,
       });
       const comune = { tenantId: opts.tenantId, dipendenteId: opts.dipendenteId };
@@ -1409,12 +1416,19 @@ export async function elencoCantieriTurno(): Promise<
 // guidava e con che mezzo, come è passato da un cantiere all'altro. Regole in
 // `@kommessa/api/kantiere-percorso`. Senza percorso (client vecchio) = come prima.
 
+/** Chi guidava su una tratta: Registra giornata lo chiede per tratta. */
+const GuidaTratta = {
+  autista: z.boolean().optional(),
+  mezzoId: z.string().uuid().nullable().optional(),
+};
+
 const TrattaGiornataSchema = z.object({
   sedeId: z.string().uuid(),
   durataStimataMin: z.number().int().nonnegative().nullable(),
   durataConfermataMin: z.number().int().nonnegative(),
   giustificazione: z.string().max(500).optional(),
   distanzaKm: z.number().nonnegative().max(100000).nullable().optional(),
+  ...GuidaTratta,
 });
 type TrattaGiornata = z.infer<typeof TrattaGiornataSchema>;
 
@@ -1423,9 +1437,12 @@ const PercorsoGiornataSchema = z.object({
   andata: TrattaGiornataSchema.nullable(),
   /** null = rientrato a casa. */
   ritorno: TrattaGiornataSchema.nullable(),
-  /** Si dice una volta e vale per tutte le tratte della giornata. */
-  autista: z.boolean(),
-  mezzoId: z.string().uuid().nullable(),
+  /**
+   * Chi guidava per tutta la giornata: vale per le tratte che non lo dicono da
+   * sole (app non aggiornate). Oggi si dice tratta per tratta.
+   */
+  autista: z.boolean().optional(),
+  mezzoId: z.string().uuid().nullable().optional(),
   /** Come si è passati da un cantiere al successivo; una coppia assente è diretta. */
   passaggi: z
     .array(
@@ -1433,6 +1450,7 @@ const PercorsoGiornataSchema = z.object({
         da: z.string().uuid(),
         a: z.string().uuid(),
         via: z.union([z.literal('diretto'), z.literal('casa'), z.string().uuid()]),
+        ...GuidaTratta,
       }),
     )
     .max(12)
@@ -1532,7 +1550,14 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   const percorso = parsed.data.percorso ?? null;
   const autista = percorso?.autista ?? false;
   const mezzoId = autista ? (percorso?.mezzoId ?? null) : null;
-  const conGuida = (t: TrattaGiornata): ViaggioInput => ({ ...t, autista, mezzoId });
+  // Chi guidava si dice per tratta; il valore della giornata resta per le
+  // tratte che non lo dicono.
+  const guidaTratta = (g?: { autista?: boolean; mezzoId?: string | null }) => {
+    const guidava = g?.autista ?? autista;
+    const mezzo = g?.autista !== undefined ? (g.mezzoId ?? null) : mezzoId;
+    return { autista: guidava, mezzoId: guidava ? mezzo : null };
+  };
+  const conGuida = (t: TrattaGiornata): ViaggioInput => ({ ...t, ...guidaTratta(t) });
   const andata = percorso?.andata ? conGuida(percorso.andata) : null;
   const ritorno = percorso?.ritorno ? conGuida(percorso.ritorno) : null;
   if (andata) {
@@ -1542,15 +1567,6 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   if (ritorno) {
     const v = await validaViaggio(supabase, ritorno, ultimoCantiere);
     if (!v.ok) return { ok: false, error: v.error };
-  }
-  if (mezzoId && !andata && !ritorno) {
-    // Solo tratte fra cantieri: il mezzo non passa da validaViaggio.
-    const { data: mezzoOk } = await supabase
-      .from('mezzi' as never)
-      .select('id')
-      .eq('id', mezzoId)
-      .maybeSingle();
-    if (!mezzoOk) return { ok: false, error: 'MEZZO_NON_VALIDO' };
   }
   const intermedie = tratteIntermedie(
     trasferimentiDaSegmenti(parsed.data.split),
@@ -1563,6 +1579,19 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
       (await sedeAmmessaPerCantiere(supabase, t.sedeId, t.da)) &&
       (await sedeAmmessaPerCantiere(supabase, t.sedeId, t.a));
     if (!ammessa) return { ok: false, error: 'SEDE_NON_VALIDA' };
+  }
+  // Chi guidava su ogni tratta fra cantieri; i mezzi di andata e ritorno li
+  // controlla già validaViaggio, questi si controllano qui.
+  const guidePassaggi = new Map((percorso?.passaggi ?? []).map((p) => [chiaveCoppia(p), guidaTratta(p)]));
+  const guidaCoppia = (c: { da: string; a: string }) => guidePassaggi.get(chiaveCoppia(c)) ?? guidaTratta();
+  const mezziTratte = [
+    ...new Set(intermedie.map((t) => guidaCoppia(t).mezzoId).filter((x): x is string => !!x)),
+  ];
+  if (mezziTratte.length > 0) {
+    const { data: mezziOk } = await supabase.from('mezzi' as never).select('id').in('id', mezziTratte);
+    if (((mezziOk as { id: string }[] | null) ?? []).length !== mezziTratte.length) {
+      return { ok: false, error: 'MEZZO_NON_VALIDO' };
+    }
   }
 
   // ── Strada fra un cantiere e l'altro: è viaggio, non lavoro ─────────────────
@@ -1723,10 +1752,8 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     ...comune,
     data: oggi,
     pairs: intermedie.flatMap((t) =>
-      t.tipo === 'diretta' && luogo(t.da) !== luogo(t.a) ? [{ da: t.da, a: t.a }] : [],
+      t.tipo === 'diretta' && luogo(t.da) !== luogo(t.a) ? [{ da: t.da, a: t.a, ...guidaCoppia(t) }] : [],
     ),
-    autista,
-    mezzoId,
     stime: stimePerCantieri,
   });
   // Dalla sede: legate al cambio di cantiere. Passando da casa non si scrive niente.
@@ -1747,6 +1774,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
           sedeId: t.sedeId,
           uscita: c.uscita,
           ingresso: c.ingresso,
+          ...guidaCoppia(t),
           senzaVersoSede: luogo(t.da) === t.sedeId,
           senzaDallaSede: luogo(t.a) === t.sedeId,
         },

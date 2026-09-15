@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 
 import {
   chiaveCoppia,
-  ciSonoViaggi,
   confiniFraCantieri,
   datiMancanti,
+  guidaDi,
+  tratteConStrada,
+  type IdTratta,
   MEZZO_NON_IN_ELENCO,
   minutiTratta,
   passaggioDaVia,
@@ -112,15 +114,15 @@ describe('confiniFraCantieri', () => {
 });
 
 describe('datiMancanti', () => {
-  const base = { intermedie: [], autista: false, mezzo: null, mezziDisponibili: 5 };
+  const base = { conStrada: [] as IdTratta[], guida: () => null, mezziDisponibili: 5 };
 
   it('pagina appena aperta: mancano partenza e rientro', () => {
     expect(datiMancanti({ ...base, andata: nonIndicata, ritorno: nonIndicata })).toEqual(['partenza', 'rientro']);
   });
 
   it('da casa a casa su un cantiere solo: niente viaggio, niente da chiedere', () => {
-    expect(datiMancanti({ ...base, andata: casa, ritorno: casa, autista: true })).toEqual([]);
-    expect(ciSonoViaggi({ andata: casa, ritorno: casa, intermedie: [] })).toBe(false);
+    expect(tratteConStrada({ andata: casa, ritorno: casa, intermedie: [] })).toEqual([]);
+    expect(datiMancanti({ ...base, andata: casa, ritorno: casa })).toEqual([]);
   });
 
   it('dalla sede senza stima: serve il tempo; con la stima in arrivo si aspetta', () => {
@@ -137,25 +139,47 @@ describe('datiMancanti', () => {
     expect(datiMancanti({ ...base, andata: casa, ritorno: sede(40, { minutiCorretti: 40 }) })).toEqual([]);
   });
 
-  it('chi guida sceglie il mezzo, anche «non in elenco»; senza parco mezzi non si chiede', () => {
-    const p = { ...base, andata: sede(30), ritorno: sede(30), autista: true };
-    expect(datiMancanti(p)).toEqual(['mezzo']);
-    expect(datiMancanti({ ...p, mezzo: MEZZO_NON_IN_ELENCO })).toEqual([]);
-    expect(datiMancanti({ ...p, mezziDisponibili: 0 })).toEqual([]);
-    expect(datiMancanti({ ...p, autista: false })).toEqual([]);
+  it('chi guidava si chiede sulle tratte con strada, non su quelle da casa', () => {
+    const conStrada = tratteConStrada({ andata: casa, ritorno: sede(30), intermedie: [] });
+    expect(conStrada).toEqual(['ritorno']);
+    expect(datiMancanti({ ...base, andata: casa, ritorno: sede(30), conStrada })).toEqual(['guida:ritorno']);
   });
 
-  it('da casa a casa ma due cantieri: il trasferimento è un viaggio, il mezzo serve', () => {
-    const p = {
-      ...base,
-      andata: casa,
-      ritorno: casa,
-      autista: true,
-      intermedie: tratteIntermedie([{ da: 'A', a: 'B' }], {}),
-    };
-    expect(datiMancanti(p)).toEqual(['mezzo']);
+  it('chi guida sceglie il mezzo, anche «non in elenco»; senza parco mezzi non si chiede', () => {
+    const p = { ...base, andata: sede(30), ritorno: sede(30), conStrada: ['andata', 'ritorno'] as IdTratta[] };
+    const guidavo = (mezzo: string | null) => () => ({ autista: true as const, mezzo });
+    expect(datiMancanti({ ...p, guida: guidavo(null) })).toEqual(['mezzo:andata', 'mezzo:ritorno']);
+    expect(datiMancanti({ ...p, guida: guidavo(MEZZO_NON_IN_ELENCO) })).toEqual([]);
+    expect(datiMancanti({ ...p, guida: guidavo(null), mezziDisponibili: 0 })).toEqual([]);
+    expect(datiMancanti({ ...p, guida: () => ({ autista: false as const }) })).toEqual([]);
+  });
+
+  it('da casa a casa ma due cantieri: si chiede chi guidava sulla tratta fra i due', () => {
+    const intermedie = tratteIntermedie([{ da: 'A', a: 'B' }], {});
+    const conStrada = tratteConStrada({ andata: casa, ritorno: casa, intermedie });
+    expect(conStrada).toEqual(['tratta:A>B']);
+    expect(datiMancanti({ ...base, andata: casa, ritorno: casa, conStrada })).toEqual(['guida:tratta:A>B']);
     // …a meno che fra i due sia passato da casa.
-    expect(datiMancanti({ ...p, intermedie: tratteIntermedie([{ da: 'A', a: 'B' }], { 'A>B': 'casa' }) })).toEqual([]);
+    expect(
+      tratteConStrada({ andata: casa, ritorno: casa, intermedie: tratteIntermedie([{ da: 'A', a: 'B' }], { 'A>B': 'casa' }) }),
+    ).toEqual([]);
+  });
+
+  it('nell’ordine della pagina: andata, tratte fra cantieri, ritorno', () => {
+    const intermedie = tratteIntermedie([{ da: 'A', a: 'B' }], {});
+    const conStrada = tratteConStrada({ andata: sede(30), ritorno: sede(30), intermedie });
+    expect(datiMancanti({ ...base, andata: sede(30), ritorno: sede(30), conStrada })).toEqual([
+      'guida:andata',
+      'guida:tratta:A>B',
+      'guida:ritorno',
+    ]);
+  });
+
+  it('una tratta non toccata prende l’ultima scelta, una scelta vince sempre', () => {
+    const ultima = { autista: true as const, mezzo: 'M1' };
+    expect(guidaDi('ritorno', { andata: ultima }, ultima)).toEqual(ultima);
+    expect(guidaDi('ritorno', { ritorno: { autista: false } }, ultima)).toEqual({ autista: false });
+    expect(guidaDi('andata', {}, null)).toBeNull();
   });
 
   it('i minuti: la correzione vince sulla stima, casa vale zero', () => {
@@ -170,17 +194,22 @@ describe('lavoro dalla sede', () => {
     const t = sede(null, { senzaViaggio: true });
     expect(minutiTratta(t)).toBe(0);
     expect(trattaModificata({ ...t, stimaMin: 30, minutiCorretti: 20 })).toBe(false);
-    expect(ciSonoViaggi({ andata: t, ritorno: casa, intermedie: [] })).toBe(false);
-    expect(
-      datiMancanti({ andata: t, ritorno: casa, intermedie: [], autista: true, mezzo: null, mezziDisponibili: 3 }),
-    ).toEqual([]);
+    const conStrada = tratteConStrada({ andata: t, ritorno: casa, intermedie: [] });
+    expect(conStrada).toEqual([]);
+    expect(datiMancanti({ andata: t, ritorno: casa, conStrada, guida: () => null, mezziDisponibili: 3 })).toEqual([]);
   });
 
   it('una sede diversa da quella di lavoro resta una tratta normale', () => {
     const t = sede(null, { senzaViaggio: false });
-    expect(datiMancanti({ andata: t, ritorno: casa, intermedie: [], autista: false, mezzo: null, mezziDisponibili: 0 })).toEqual([
+    const conStrada = tratteConStrada({ andata: t, ritorno: casa, intermedie: [] });
+    expect(datiMancanti({ andata: t, ritorno: casa, conStrada, guida: () => ({ autista: false }), mezziDisponibili: 0 })).toEqual([
       'tempo_andata',
     ]);
+  });
+
+  it('fra due cantieri seguiti dalla stessa sede non si chiede chi guidava', () => {
+    const intermedie = tratteIntermedie([{ da: 'A', a: 'B' }], {});
+    expect(tratteConStrada({ andata: casa, ritorno: casa, intermedie, strada: () => false })).toEqual([]);
   });
 });
 

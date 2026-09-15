@@ -44,7 +44,6 @@ interface OreClientProps {
   /** Registra giornata senza timbrature attiva (impostazione ufficio). */
   registraGiornataAttivo: boolean;
   /** Tolleranza (min) sulla somma. */
-  tolleranzaChiusuraMin: number;
   /** Passo (min) degli stepper. */
   passoMinuti: number;
   /** Arrotondamento del tempo di viaggio (min), per Registra giornata. */
@@ -102,7 +101,6 @@ export function OreClient({
   ultimoMezzoId,
   turnoInCorso,
   registraGiornataAttivo,
-  tolleranzaChiusuraMin,
   passoMinuti,
   stepViaggio,
 }: OreClientProps) {
@@ -281,7 +279,6 @@ export function OreClient({
       <RegistraGiornataDialog
         open={registraOpen}
         onClose={() => setRegistraOpen(false)}
-        tolleranzaMin={tolleranzaChiusuraMin}
         passoMinuti={passoMinuti}
         stepViaggio={stepViaggio}
         sedi={sediDisponibili}

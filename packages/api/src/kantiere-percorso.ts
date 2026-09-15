@@ -8,7 +8,8 @@
  *
  * Regole decise con il cliente (14/09/2026):
  * - **partenza e rientro** sono gli estremi della giornata e si dicono una volta;
- * - **guida e mezzo** si dicono una volta e valgono per tutte le tratte;
+ * - **chi guidava** si dice per ogni tratta con strada (non da e verso casa),
+ *   in modo compatto; una tratta non toccata prende l'ultima scelta (15/09/2026);
  * - le **tratte fra cantieri** le costruisce il sistema, l'utente le corregge;
  * - andata e ritorno sono **tempo di viaggio** fuori dall'orario di lavoro
  *   dichiarato; le tratte in mezzo stanno **dentro** quell'orario ma sono
@@ -118,14 +119,28 @@ export interface TrattaEstrema {
 /** Il mezzo è stato scelto ma non è nel parco mezzi (auto propria, noleggio). */
 export const MEZZO_NON_IN_ELENCO = 'non_in_elenco';
 
+/** Una tratta con strada: andata, ritorno o una tratta fra due cantieri (`tratta:A>B`). */
+export type IdTratta = 'andata' | 'ritorno' | `tratta:${string}`;
+
+/**
+ * Chi guidava su una tratta. `mezzo`: id del mezzo, `MEZZO_NON_IN_ELENCO`,
+ * oppure null = non ancora scelto.
+ */
+export type Guida = { autista: false } | { autista: true; mezzo: string | null };
+
 export type DatoMancante =
   | 'partenza'
   | 'tempo_andata'
   | 'motivo_andata'
-  | 'mezzo'
   | 'rientro'
   | 'tempo_ritorno'
-  | 'motivo_ritorno';
+  | 'motivo_ritorno'
+  | `guida:${IdTratta}`
+  | `mezzo:${IdTratta}`;
+
+export function idTrattaFraCantieri(c: CoppiaCantieri): IdTratta {
+  return `tratta:${chiaveCoppia(c)}`;
+}
 
 /** Minuti di viaggio della tratta: la correzione vince sulla stima. Casa = 0. */
 export function minutiTratta(t: TrattaEstrema): number {
@@ -144,30 +159,54 @@ export function trattaModificata(t: TrattaEstrema): boolean {
   );
 }
 
-/** C'è almeno un tragitto di lavoro, quindi ha senso chiedere chi guidava. */
-export function ciSonoViaggi(p: {
+/**
+ * Le tratte con strada, nell'ordine della pagina: andata, tratte fra cantieri,
+ * ritorno. Sono le sole su cui si chiede chi guidava: da e verso l'abitazione
+ * privata non c'è viaggio di lavoro, e nella stessa sede nemmeno. `strada` dice
+ * se una tratta fra cantieri ha strada (la pagina conosce i luoghi in cui si
+ * lavora); passando da casa non ne ha mai.
+ */
+export function tratteConStrada(p: {
   andata: TrattaEstrema;
   ritorno: TrattaEstrema;
   intermedie: readonly TrattaIntermedia[];
-}): boolean {
-  return (
-    (p.andata.luogo?.tipo === 'sede' && !p.andata.senzaViaggio) ||
-    (p.ritorno.luogo?.tipo === 'sede' && !p.ritorno.senzaViaggio) ||
-    p.intermedie.some((t) => t.tipo !== 'via_casa')
-  );
+  strada?: (t: TrattaIntermedia) => boolean;
+}): IdTratta[] {
+  const estremo = (t: TrattaEstrema) => t.luogo?.tipo === 'sede' && !t.senzaViaggio;
+  const out: IdTratta[] = [];
+  if (estremo(p.andata)) out.push('andata');
+  for (const t of p.intermedie) {
+    if (t.tipo === 'via_casa' || (p.strada && !p.strada(t))) continue;
+    out.push(idTrattaFraCantieri(t));
+  }
+  if (estremo(p.ritorno)) out.push('ritorno');
+  return out;
+}
+
+/**
+ * Chi guidava su una tratta: la scelta fatta su quella tratta o, se non è stata
+ * toccata, l'ultima scelta fatta su un'altra (di solito il mezzo è lo stesso
+ * tutto il giorno). null = non ancora detto.
+ */
+export function guidaDi(
+  id: IdTratta,
+  scelte: Readonly<Partial<Record<IdTratta, Guida>>>,
+  ultima: Guida | null,
+): Guida | null {
+  return scelte[id] ?? ultima;
 }
 
 /**
  * I dati obbligatori che mancano, nell'ordine in cui compaiono sulla pagina
- * (partenza e mezzo in alto, rientro in fondo). Vuoto = si può registrare.
+ * (partenza in alto, poi le tratte, rientro in fondo). Vuoto = si può registrare.
+ * Chi guidava e il mezzo si chiedono per ogni tratta con strada.
  */
 export function datiMancanti(p: {
   andata: TrattaEstrema;
   ritorno: TrattaEstrema;
-  intermedie: readonly TrattaIntermedia[];
-  autista: boolean;
-  /** id del mezzo, `MEZZO_NON_IN_ELENCO`, oppure null = non ancora scelto. */
-  mezzo: string | null;
+  /** Da `tratteConStrada`. */
+  conStrada: readonly IdTratta[];
+  guida: (id: IdTratta) => Guida | null;
   mezziDisponibili: number;
 }): DatoMancante[] {
   const out: DatoMancante[] = [];
@@ -180,9 +219,17 @@ export function datiMancanti(p: {
     if (minutiTratta(t) <= 0) out.push(tempo);
     else if (trattaModificata(t) && t.motivo.trim().length < 3) out.push(motivo);
   };
+  const chiGuida = (id: IdTratta) => {
+    if (!p.conStrada.includes(id)) return;
+    const g = p.guida(id);
+    if (!g) out.push(`guida:${id}`);
+    else if (g.autista && p.mezziDisponibili > 0 && g.mezzo == null) out.push(`mezzo:${id}`);
+  };
   estremo(p.andata, 'partenza', 'tempo_andata', 'motivo_andata');
-  if (p.autista && p.mezziDisponibili > 0 && p.mezzo == null && ciSonoViaggi(p)) out.push('mezzo');
+  chiGuida('andata');
+  for (const id of p.conStrada) if (id !== 'andata' && id !== 'ritorno') chiGuida(id);
   estremo(p.ritorno, 'rientro', 'tempo_ritorno', 'motivo_ritorno');
+  chiGuida('ritorno');
   return out;
 }
 

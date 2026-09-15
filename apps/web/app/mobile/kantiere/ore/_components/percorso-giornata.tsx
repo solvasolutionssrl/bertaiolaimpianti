@@ -1,25 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import {
-  BedDouble,
-  Building2,
-  Car,
-  Check,
-  CheckCircle2,
-  ChevronDown,
-  Home,
-  Loader2,
-  MapPin,
-  Minus,
-  Plus,
-} from 'lucide-react';
+import { BedDouble, Building2, Car, Check, ChevronDown, Coffee, Home, Loader2, MapPin, Minus, Plus } from 'lucide-react';
 
-import { MEZZO_NON_IN_ELENCO, type Estremo, type SegmentoBarra } from '@kommessa/api/kantiere-percorso';
+import { MEZZO_NON_IN_ELENCO, type Estremo, type Guida, type SegmentoBarra } from '@kommessa/api/kantiere-percorso';
 
 /**
- * I pezzi del percorso di «Registra giornata»: partenza e rientro, guida e
- * mezzo, le tratte fra cantieri, la barra dei tempi.
+ * I pezzi del percorso di «Registra giornata»: partenza e rientro, chi
+ * guidava su ogni tratta, le tratte fra cantieri, la barra dei tempi.
  *
  * Solo presentazione. Lo stato vive nel dialog, che usa questi pezzi due volte
  * con gli stessi dati: nella pagina e nel foglio «Il viaggio». Quello che si
@@ -425,126 +413,173 @@ export function CardEstremo({
   );
 }
 
-// ── guida e mezzo ───────────────────────────────────────────────────────────
+// ── chi guidava ─────────────────────────────────────────────────────────────
 
 /**
- * «Guidavo io» e il mezzo: si dicono una volta e valgono per tutte le tratte
- * della giornata. Il mezzo si sceglie con il selettore del telefono (sull'iPhone
- * la rotella), che con quindici furgoni è più comodo di qualsiasi elenco.
+ * Chi guidava su una tratta: un'etichetta compatta che si apre come un menu.
+ * Compare solo sulle tratte con strada (da e verso l'abitazione privata non c'è
+ * viaggio di lavoro). Il mezzo si sceglie con il selettore del telefono
+ * (sull'iPhone la rotella), più comodo di un elenco con quindici furgoni.
  */
-export function RigaGuida({
-  autista,
-  mezzo,
+export function ChipGuida({
+  id,
+  guida,
+  aperto,
   mezzi,
   ultimoMezzoId,
-  mancaMezzo,
+  mancante,
   evidenza,
   disabled,
-  onAutista,
-  onMezzo,
+  inCard = false,
+  onApri,
+  onScegli,
 }: {
-  autista: boolean;
-  mezzo: string | null;
+  /** La tratta (`andata`, `ritorno`, `tratta:A>B`): serve a chi la cerca nella pagina. */
+  id: string;
+  guida: Guida | null;
+  aperto: boolean;
   mezzi: MezzoOpzione[];
   ultimoMezzoId: string | null;
-  mancaMezzo: boolean;
+  mancante: 'guida' | 'mezzo' | null;
   /**
    * Ancora della conferma «hai viaggiato da passeggero?» e se evidenziare la
    * riga. L'alone è interno: un anello esterno verrebbe tagliato dalla card.
    */
   evidenza?: { ref: React.Ref<HTMLDivElement>; attiva: boolean };
   disabled?: boolean;
-  onAutista: (on: boolean) => void;
-  onMezzo: (id: string | null) => void;
+  /** Dentro la card di partenza o rientro (bordo in alto), invece che sotto una tratta. */
+  inCard?: boolean;
+  onApri: () => void;
+  onScegli: (g: Guida) => void;
 }) {
-  const scelto = mezzi.find((m) => m.id === mezzo);
-  const etichetta =
-    mezzo === MEZZO_NON_IN_ELENCO
-      ? 'Mezzo non in elenco'
-      : scelto
-        ? `${scelto.targa}${scelto.modello ? ` · ${scelto.modello}` : ''}`
-        : 'Scegli il mezzo';
+  const scelto = guida?.autista ? mezzi.find((m) => m.id === guida.mezzo) : undefined;
+  const testo = !guida
+    ? 'Chi guidava?'
+    : !guida.autista
+      ? 'Passeggero'
+      : guida.mezzo === MEZZO_NON_IN_ELENCO
+        ? 'Guidavo io · mezzo non in elenco'
+        : scelto
+          ? `Guidavo io · ${scelto.targa}`
+          : mezzi.length > 0
+            ? 'Guidavo io · scegli il mezzo'
+            : 'Guidavo io';
+  const allarme = mancante != null;
   return (
     <div
       ref={evidenza?.ref}
-      className={`border-t border-border/70 px-3 pb-1 transition-colors ${
+      className={`${inCard ? 'border-t border-border/70 px-3' : 'ml-1.5 rounded-lg px-1'} pb-1 transition-colors ${
         evidenza?.attiva ? 'bg-amber-50 shadow-[inset_0_0_0_2px_#f59e0b]' : ''
       }`}
     >
       <button
         type="button"
-        role="switch"
-        aria-checked={autista}
+        data-guida={id}
+        onClick={onApri}
         disabled={disabled}
-        onClick={() => onAutista(!autista)}
-        className="flex min-h-[42px] w-full items-center gap-2 text-left"
+        aria-expanded={aperto}
+        aria-label={`Chi guidava: ${testo}`}
+        className="flex min-h-[36px] w-full items-center gap-2 text-left disabled:opacity-60"
       >
         <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition-colors ${
-            autista ? 'bg-sky-100 text-sky-700' : 'bg-muted text-muted-foreground'
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+            guida?.autista
+              ? 'bg-sky-100 text-sky-700'
+              : allarme
+                ? 'bg-amber-100 text-amber-700'
+                : 'bg-muted text-muted-foreground'
           }`}
         >
           <Car className="h-3.5 w-3.5" aria-hidden="true" />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-semibold text-foreground">Guidavo io</span>
-          <span className="block truncate text-[11px] leading-tight text-muted-foreground">
-            {autista ? 'Vale per tutte le tratte della giornata' : 'Spento: risulti passeggero'}
-          </span>
-        </span>
         <span
-          aria-hidden="true"
-          className={`relative inline-flex h-6 w-[42px] shrink-0 items-center rounded-full transition-colors ${
-            autista ? 'bg-sky-600' : 'bg-muted-foreground/30'
+          className={`min-w-0 flex-1 truncate text-xs ${
+            allarme ? 'font-semibold text-amber-700' : guida ? 'font-medium text-foreground' : 'text-muted-foreground'
           }`}
         >
-          <span
-            className={`inline-block h-[18px] w-[18px] rounded-full bg-white shadow transition-transform ${
-              autista ? 'translate-x-[21px]' : 'translate-x-[3px]'
-            }`}
-          />
+          {testo}
         </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${aperto ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
       </button>
 
-      {autista && mezzi.length > 0 ? (
-        <div className="relative mb-2">
-          <div
-            aria-hidden="true"
-            className={`flex min-h-[40px] items-center gap-2 rounded-xl border px-3 text-[13px] ${
-              mancaMezzo
-                ? 'border-amber-400 bg-amber-50 font-medium text-amber-800'
-                : scelto || mezzo === MEZZO_NON_IN_ELENCO
-                  ? 'border-border bg-background font-medium text-foreground'
-                  : 'border-dashed border-muted-foreground/40 bg-background text-muted-foreground'
-            }`}
-          >
-            <span className="min-w-0 flex-1 truncate">{etichetta}</span>
-            {scelto && scelto.id === ultimoMezzoId ? (
-              <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                Ultimo usato
-              </span>
-            ) : null}
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+      {aperto ? (
+        <div className="animate-fade-up mb-1.5 space-y-2">
+          <div className="grid grid-cols-2 gap-1.5" role="listbox" aria-label="Chi guidava">
+            {[
+              { autista: false, titolo: 'Ero passeggero' },
+              { autista: true, titolo: 'Guidavo io' },
+            ].map((o) => {
+              const sel = guida != null && guida.autista === o.autista;
+              return (
+                <button
+                  key={o.titolo}
+                  type="button"
+                  role="option"
+                  aria-selected={sel}
+                  disabled={disabled}
+                  onClick={() =>
+                    onScegli(o.autista ? { autista: true, mezzo: guida?.autista ? guida.mezzo : null } : { autista: false })
+                  }
+                  className={`min-h-[38px] rounded-lg border px-2 text-[13px] font-semibold transition-colors active:scale-[0.98] ${
+                    sel ? 'border-sky-500 bg-sky-50 text-sky-800' : 'border-border bg-background text-foreground'
+                  }`}
+                >
+                  {o.titolo}
+                </button>
+              );
+            })}
           </div>
-          <select
-            value={mezzo ?? ''}
-            disabled={disabled}
-            onChange={(e) => onMezzo(e.target.value || null)}
-            aria-label="Mezzo"
-            className="absolute inset-0 h-full w-full cursor-pointer text-base opacity-0"
-          >
-            <option value="" disabled>
-              Scegli il mezzo
-            </option>
-            {mezzi.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.targa}
-                {m.modello ? ` · ${m.modello}` : ''}
-                {m.id === ultimoMezzoId ? ' (ultimo usato)' : ''}
-              </option>
-            ))}
-            <option value={MEZZO_NON_IN_ELENCO}>Mezzo non in elenco</option>
-          </select>
+
+          {guida?.autista && mezzi.length > 0 ? (
+            <div className="relative">
+              <div
+                aria-hidden="true"
+                className={`flex min-h-[40px] items-center gap-2 rounded-xl border px-3 text-[13px] ${
+                  mancante === 'mezzo'
+                    ? 'border-amber-400 bg-amber-50 font-medium text-amber-800'
+                    : scelto || guida.mezzo === MEZZO_NON_IN_ELENCO
+                      ? 'border-border bg-background font-medium text-foreground'
+                      : 'border-dashed border-muted-foreground/40 bg-background text-muted-foreground'
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">
+                  {guida.mezzo === MEZZO_NON_IN_ELENCO
+                    ? 'Mezzo non in elenco'
+                    : scelto
+                      ? `${scelto.targa}${scelto.modello ? ` · ${scelto.modello}` : ''}`
+                      : 'Scegli il mezzo'}
+                </span>
+                {scelto && scelto.id === ultimoMezzoId ? (
+                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Ultimo usato
+                  </span>
+                ) : null}
+                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </div>
+              <select
+                value={guida.mezzo ?? ''}
+                disabled={disabled}
+                onChange={(e) => onScegli({ autista: true, mezzo: e.target.value || null })}
+                aria-label="Mezzo"
+                className="absolute inset-0 h-full w-full cursor-pointer text-base opacity-0"
+              >
+                <option value="" disabled>
+                  Scegli il mezzo
+                </option>
+                {mezzi.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.targa}
+                    {m.modello ? ` · ${m.modello}` : ''}
+                    {m.id === ultimoMezzoId ? ' (ultimo usato)' : ''}
+                  </option>
+                ))}
+                <option value={MEZZO_NON_IN_ELENCO}>Mezzo non in elenco</option>
+              </select>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -563,12 +598,15 @@ export function TrattaFraCantieri({
   disabled,
   onApri,
   onScegli,
+  children,
 }: {
   vista: VistaTratta;
   aperto: boolean;
   disabled?: boolean;
   onApri: () => void;
   onScegli: (via: string) => void;
+  /** Sotto la riga: chi guidava, se la tratta ha strada. */
+  children?: React.ReactNode;
 }) {
   const s = vista.stima;
   const destra =
@@ -601,6 +639,7 @@ export function TrattaFraCantieri({
           aria-hidden="true"
         />
       </button>
+      {children}
       {aperto ? (
         <div className="animate-fade-up mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-[0_8px_22px_-10px_rgba(20,40,90,0.35)]">
           <p className="line-clamp-2 px-3 pb-1 pt-2.5 text-[11px] leading-snug text-muted-foreground">
@@ -646,39 +685,24 @@ export function TrattaFraCantieri({
 
 // ── la barra dei tempi ──────────────────────────────────────────────────────
 
-export type StatoLavoro = 'vuoto' | 'completa' | 'restano' | 'troppo';
-
-/** "45 min" / "1 h" / "1 h 30 min", per il residuo da assegnare. */
-function fmtDurataUmana(min: number): string {
-  const tot = Math.max(0, Math.round(min));
-  const h = Math.floor(tot / 60);
-  const m = tot % 60;
-  if (h === 0) return `${m} min`;
-  if (m === 0) return `${h} h`;
-  return `${h} h ${m} min`;
-}
-
 /**
  * La giornata da un capo all'altro: viaggio d'andata, lavoro sui cantieri con
- * la pausa, viaggio di ritorno. Sotto, gli orari agli estremi: partenza e
- * rientro quando il viaggio c'è, inizio e fine lavoro altrimenti.
+ * la pausa (arancione) e le tratte, viaggio di ritorno. Sopra, le ore di lavoro
+ * e la pausa; sotto, gli orari agli estremi: partenza e rientro quando il
+ * viaggio c'è, inizio e fine lavoro altrimenti.
  */
 export function BarraGiornata({
   segmenti,
-  assegnatoMin,
-  nettoMin,
-  stato,
-  restanoMin,
+  lavoroMin,
+  pausaMin,
   viaggioMin,
   viaggioNoto,
   sinistra,
   destra,
 }: {
   segmenti: SegmentoBarra[];
-  assegnatoMin: number;
-  nettoMin: number;
-  stato: StatoLavoro;
-  restanoMin: number;
+  lavoroMin: number;
+  pausaMin: number;
   viaggioMin: number;
   viaggioNoto: boolean;
   sinistra: { etichetta: string; ora: string };
@@ -687,34 +711,33 @@ export function BarraGiornata({
   return (
     <div className="space-y-1.5 rounded-xl border border-border bg-card px-2.5 py-2 shadow-[0_6px_18px_-5px_rgba(20,40,90,0.28)]">
       <div className="flex items-center justify-between gap-2">
-        <p className="flex min-w-0 items-baseline gap-1.5">
-          <span className="text-sm font-bold tabular-nums text-foreground">{fmtHM(assegnatoMin)}</span>
-          <span className="truncate text-xs text-muted-foreground">di {fmtHM(Math.max(0, nettoMin))} di lavoro</span>
-        </p>
-        {stato === 'vuoto' ? (
-          <span className="shrink-0 text-xs font-semibold text-muted-foreground">Assegna le ore</span>
-        ) : stato === 'completa' ? (
-          <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-600">
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Completa
-          </span>
-        ) : stato === 'restano' ? (
-          <span className="shrink-0 text-xs font-semibold text-amber-600">Restano {fmtDurataUmana(restanoMin)}</span>
+        {lavoroMin > 0 ? (
+          <p className="flex min-w-0 items-baseline gap-1.5">
+            <span className="text-sm font-bold tabular-nums text-foreground">{fmtHM(lavoroMin)}</span>
+            <span className="truncate text-xs text-muted-foreground">di lavoro</span>
+          </p>
         ) : (
-          <span className="shrink-0 text-xs font-semibold text-amber-600">{fmtDurataUmana(-restanoMin)} di troppo</span>
+          <p className="truncate text-xs font-semibold text-muted-foreground">Indica le ore dei cantieri</p>
         )}
+        {pausaMin > 0 ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-800">
+            <Coffee className="h-3 w-3" aria-hidden="true" /> Pausa {fmtHM(pausaMin)}
+          </span>
+        ) : null}
       </div>
 
       <div className="flex h-2.5 w-full items-stretch gap-[2px] overflow-hidden rounded-full bg-muted" aria-hidden="true">
         {segmenti.map((s, i) => (
           <span
             key={i}
+            data-segmento={s.tipo}
             className={`min-w-[3px] ${
               s.tipo === 'cantiere'
                 ? coloreCantiere(s.indice).bar
                 : s.tipo === 'pausa'
-                  ? 'bg-slate-300'
+                  ? 'bg-amber-300'
                   : s.tipo === 'da_assegnare'
-                    ? 'rounded-sm border border-dashed border-amber-400 bg-amber-50'
+                    ? 'bg-muted-foreground/20'
                     : ''
             }`}
             style={{

@@ -7,19 +7,23 @@ import { AlertCircle, CalendarClock, Car, CheckCircle2, Clock, Coffee, Loader2, 
 import {
   MEZZO_NON_IN_ELENCO,
   chiaveCoppia,
-  ciSonoViaggi,
   datiMancanti,
+  guidaDi,
   minutiTratta,
   passaggioDaVia,
   segmentiBarraGiornata,
   spostaOrario,
   trattaModificata,
+  tratteConStrada,
   tratteIntermedie,
   viaggioFraCantieri,
   type DatoMancante,
   type Estremo,
+  type Guida,
+  type IdTratta,
   type Passaggio,
   type TrattaEstrema,
+  type TrattaIntermedia,
 } from '@kommessa/api/kantiere-percorso';
 import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { Portal } from '@/app/mobile/_components/portal';
@@ -31,11 +35,11 @@ import { registraGiornataDaZero, elencoCantieriTurno } from '@/app/_actions/kant
 import {
   BarraGiornata,
   CardEstremo,
+  ChipGuida,
   NodoAggiungi,
   NodoCantiere,
   NodoLuogo,
   NodoTratta,
-  RigaGuida,
   Tappa,
   TrattaFraCantieri,
   coloreCantiere,
@@ -43,7 +47,6 @@ import {
   fmtKm,
   type MezzoOpzione,
   type OpzioneLuogo,
-  type StatoLavoro,
   type StatoStima,
   type VistaEstremo,
   type VistaTratta,
@@ -62,7 +65,7 @@ function messaggioErrore(code: string): string {
     case 'GIORNATA_NON_VUOTA':
       return 'Hai già delle timbrature di oggi: qui si registra solo una giornata senza timbrature.';
     case 'ORA_NON_VALIDA':
-      return 'Controlla inizio e fine: devono essere di oggi e la fine dopo l’inizio.';
+      return 'Controlla l’ora di inizio: la giornata deve iniziare e finire oggi.';
     case 'SPLIT_SOMMA':
     case 'SPLIT_NETTO':
       return 'Le ore dei cantieri non tornano con il totale della giornata.';
@@ -86,18 +89,17 @@ function messaggioErrore(code: string): string {
   }
 }
 
-const PAROLE_MANCANTI: Record<DatoMancante, string> = {
-  partenza: 'la partenza',
-  rientro: 'il rientro',
-  tempo_andata: 'il tempo di viaggio',
-  tempo_ritorno: 'il tempo di viaggio',
-  motivo_andata: 'il motivo della modifica del tempo',
-  motivo_ritorno: 'il motivo della modifica del tempo',
-  mezzo: 'il mezzo',
-};
+function parolaMancante(m: DatoMancante): string {
+  if (m.startsWith('guida:')) return 'chi guidava';
+  if (m.startsWith('mezzo:')) return 'il mezzo';
+  if (m === 'partenza') return 'la partenza';
+  if (m === 'rientro') return 'il rientro';
+  if (m === 'tempo_andata' || m === 'tempo_ritorno') return 'il tempo di viaggio';
+  return 'il motivo della modifica del tempo';
+}
 
 function testoMancanti(m: DatoMancante[]): string {
-  const parole = [...new Set(m.map((x) => PAROLE_MANCANTI[x]))];
+  const parole = [...new Set(m.map(parolaMancante))];
   const elenco = parole.length > 1 ? `${parole.slice(0, -1).join(', ')} e ${parole[parole.length - 1]}` : parole[0];
   return `Per registrare indica ${elenco}.`;
 }
@@ -163,12 +165,12 @@ function TimeField({
   disabled?: boolean;
 }) {
   return (
-    <div className="min-w-0 space-y-1">
+    <div className="min-w-0 space-y-0.5">
       <label className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{label}</label>
       <div className="relative">
         <div
           aria-hidden="true"
-          className={`pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2 py-2 text-[15px] font-semibold tabular-nums ${
+          className={`pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 text-[15px] font-semibold tabular-nums ${
             disabled ? 'opacity-50' : 'text-foreground'
           }`}
         >
@@ -183,6 +185,24 @@ function TimeField({
           aria-label={label}
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
         />
+      </div>
+    </div>
+  );
+}
+
+/** La fine del lavoro: si legge come un campo, ma la calcola la pagina. */
+function FineCalcolata({ ora }: { ora: string | null }) {
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+        Fine lavoro · calcolata
+      </span>
+      <div
+        aria-label="Fine lavoro calcolata"
+        className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/30 bg-primary/[0.04] px-2 py-1.5 text-[15px] font-semibold tabular-nums"
+      >
+        <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className={ora ? 'text-foreground' : 'text-muted-foreground'}>{ora ?? '--:--'}</span>
       </div>
     </div>
   );
@@ -208,7 +228,7 @@ type SceltaEstremo = {
   correzione: { chiave: string; minuti: number; motivo: string } | null;
 };
 
-type Apribile = 'partenza' | 'rientro' | `tratta:${string}`;
+type Apribile = 'partenza' | 'rientro' | `tratta:${string}` | `guida:${IdTratta}`;
 
 /** Dove si trova fisicamente la persona: una sede o un cantiere. */
 type Luogo = { tipo: 'sede' | 'cantiere'; id: string };
@@ -232,18 +252,18 @@ const stessoLuogo = (a: Estremo | null, b: Estremo | null) =>
 const tipoLuogoSede = (tipo: string | undefined) => (tipo === 'hotel' ? 'hotel' : 'sede') as 'hotel' | 'sede';
 
 /**
- * Registra una giornata SENZA timbrature: orario, pausa, cantieri con le ore e
- * il percorso (partenza, tratte fra cantieri, rientro, guida e mezzo).
+ * Registra una giornata SENZA timbrature: ora di inizio, pausa, cantieri con le
+ * ore e il percorso (partenza, tratte fra cantieri, rientro, chi guidava).
  *
- * La pagina è per chi vuole compilare tutto in un colpo. Chi salta il percorso
- * non viene bloccato: premendo «Registra giornata» sale il foglio «Il viaggio»,
- * che chiede solo quello che manca, con la barra dei tempi sempre visibile sotto.
+ * Si indica solo l'inizio: la fine si calcola da ore dei cantieri, pausa e
+ * tratte, così non ci sono due totali da far quadrare. Chi salta il percorso non
+ * viene bloccato: premendo «Registra giornata» sale il foglio «Il viaggio», che
+ * chiede solo quello che manca, con la barra dei tempi sempre visibile sotto.
  * Regole del percorso in `@kommessa/api/kantiere-percorso`.
  */
 export function RegistraGiornataDialog({
   open,
   onClose,
-  tolleranzaMin,
   passoMinuti,
   stepViaggio,
   sedi,
@@ -253,7 +273,6 @@ export function RegistraGiornataDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  tolleranzaMin: number;
   passoMinuti: number;
   /** Arrotondamento del tempo di viaggio (min): lo stesso che applica il server. */
   stepViaggio: number;
@@ -268,7 +287,6 @@ export function RegistraGiornataDialog({
   const passeggero = useConfermaPasseggero();
 
   const [inizio, setInizio] = useState('08:00');
-  const [fine, setFine] = useState('17:00');
   const [pausaMin, setPausaMin] = useState(60);
   const [righe, setRighe] = useState<RigaCantiere[]>([]);
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(null);
@@ -279,8 +297,10 @@ export function RegistraGiornataDialog({
   const [partenza, setPartenza] = useState<SceltaEstremo>({ luogo: null, correzione: null });
   const [rientro, setRientro] = useState<SceltaEstremo>({ luogo: null, correzione: null });
   const [rientroToccato, setRientroToccato] = useState(false);
-  const [autista, setAutista] = useState(false);
-  const [mezzo, setMezzo] = useState<string | null>(null);
+  // Chi guidava: la scelta fatta su ogni tratta e l'ultima scelta, che vale per
+  // le tratte non ancora toccate.
+  const [guide, setGuide] = useState<Partial<Record<IdTratta, Guida>>>({});
+  const [ultimaGuida, setUltimaGuida] = useState<Guida | null>(null);
   const [passaggi, setPassaggi] = useState<Record<string, Passaggio>>({});
   const [stime, setStime] = useState<Record<string, StatoStima>>({});
   const [aperto, setAperto] = useState<Apribile | null>(null);
@@ -301,9 +321,6 @@ export function RegistraGiornataDialog({
     if (open) setFatto(false);
   }, [open]);
 
-  // ── orario e ore ─────────────────────────────────────────────────────────────
-  const grossMin = Math.max(0, Math.round((Date.parse(isoOggi(fine)) - Date.parse(isoOggi(inizio))) / 60000));
-  const nettoMin = grossMin - pausaMin;
   const assegnato = righe.reduce((a, r) => a + r.minuti, 0);
   const disponibili = (cantieri ?? []).filter((c) => !righe.some((r) => r.cantiereId === c.id));
 
@@ -386,26 +403,23 @@ export function RegistraGiornataDialog({
     passaggiValidi[k] = p;
   }
   const intermedie = tratteIntermedie(coppie, passaggiValidi);
-  // Fra due cantieri seguiti dalla stessa sede non c'è strada.
-  const intermedieConStrada = intermedie.filter(
-    (t) => t.tipo === 'via_sede' || !stessoPosto(luogoDi(t.da), luogoDi(t.a)),
-  );
 
-  const conViaggi = ciSonoViaggi({ andata: teAndata, ritorno: teRitorno, intermedie: intermedieConStrada });
-  // La riga guida sparisce solo quando è sicuro che viaggi non ce ne sono.
-  const mostraGuida = !(
-    (luogoAndata?.tipo === 'casa' || teAndata.senzaViaggio) &&
-    (luogoRitorno?.tipo === 'casa' || teRitorno.senzaViaggio) &&
-    !intermedieConStrada.some((t) => t.tipo !== 'via_casa')
-  );
+  // Le tratte con strada sono quelle su cui si chiede chi guidava: da e verso
+  // casa no, e nemmeno fra due cantieri seguiti dalla stessa sede.
+  const stradaFra = (t: TrattaIntermedia) =>
+    t.tipo === 'via_sede'
+      ? !(stessoPosto(luogoDi(t.da), inSede(t.sedeId)) && stessoPosto(luogoDi(t.a), inSede(t.sedeId)))
+      : !stessoPosto(luogoDi(t.da), luogoDi(t.a));
+  const conStrada = tratteConStrada({ andata: teAndata, ritorno: teRitorno, intermedie, strada: stradaFra });
+  const guida = (id: IdTratta) => guidaDi(id, guide, ultimaGuida);
   const mancanti = datiMancanti({
     andata: teAndata,
     ritorno: teRitorno,
-    intermedie: intermedieConStrada,
-    autista,
-    mezzo: autista ? mezzo : null,
+    conStrada,
+    guida,
     mezziDisponibili: mezzi.length,
   });
+  const primoPasseggero = conStrada.find((id) => guida(id)?.autista === false) ?? null;
 
   // ── stime km e tempo, chieste mentre si compila ─────────────────────────────
   const richieste: [string, Record<string, string>][] = [];
@@ -450,10 +464,9 @@ export function RegistraGiornataDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, firmaRichieste]);
 
-  // ── lavoro da assegnare ──────────────────────────────────────────────────────
-  // Le tratte fra cantieri stanno dentro l'orario ma sono viaggio, non lavoro:
-  // si tolgono dalle ore da assegnare. Stesse stime e stesso arrotondamento del
-  // server (`viaggioFraCantieri`), così le ore coincidono.
+  // ── orario ───────────────────────────────────────────────────────────────────
+  // Le tratte fra cantieri stanno dentro l'orario ma sono viaggio, non lavoro.
+  // Stesse stime e stesso arrotondamento del server (`viaggioFraCantieri`).
   const minutiTra = (da: Luogo, a: Luogo): number | null => {
     if (stessoPosto(da, a)) return 0;
     const s = stime[chiaveTra(da, a)];
@@ -471,11 +484,12 @@ export function RegistraGiornataDialog({
           : minutiTra(inSede(pezzo.sedeId), luogoDi(pezzo.cantiereId)),
   );
   const trasferimentiMin = fraCantieri.totale;
-  const lavoroMin = nettoMin - trasferimentiMin;
-  const restano = lavoroMin - assegnato;
-  const entroTolleranza = Math.abs(restano) <= tolleranzaMin;
-  const statoLavoro: StatoLavoro =
-    righe.length === 0 || assegnato === 0 ? 'vuoto' : entroTolleranza ? 'completa' : restano > 0 ? 'restano' : 'troppo';
+  // Si indica solo l'inizio: la fine è inizio + ore dei cantieri + pausa + tratte.
+  const [hhInizio, mmInizio] = inizio.split(':').map((x) => parseInt(x, 10));
+  const inizioMin = (hhInizio ?? 0) * 60 + (mmInizio ?? 0);
+  const durataMin = assegnato + pausaMin + trasferimentiMin;
+  const fine = spostaOrario(inizio, durataMin);
+  const oltreMezzanotte = assegnato > 0 && inizioMin + durataMin >= 24 * 60;
 
   // ── barra dei tempi ──────────────────────────────────────────────────────────
   const andataMin = minutiTratta(teAndata);
@@ -487,7 +501,7 @@ export function RegistraGiornataDialog({
     minutiCantieri: righe.map((r) => r.minuti),
     trasferimentiMin: fraCantieri.prima,
     pausaMin,
-    nettoMin: Math.max(0, lavoroMin),
+    nettoMin: assegnato,
   });
   const viaggioNoto =
     luogoAndata != null && luogoRitorno != null && !teAndata.inArrivo && !teRitorno.inArrivo && !fraCantieri.inArrivo;
@@ -619,11 +633,21 @@ export function RegistraGiornataDialog({
     });
   }
 
-  function cambiaAutista(on: boolean) {
+  function scegliGuida(id: IdTratta, scelta: Guida) {
     passeggero.spegniEvidenza();
-    setAutista(on);
-    if (on && mezzo == null && ultimoMezzoId && mezzi.some((m) => m.id === ultimoMezzoId)) {
-      setMezzo(ultimoMezzoId);
+    setErrore(null);
+    let valore = scelta;
+    // Chi dice «guidavo io» ritrova il mezzo appena scelto, o l'ultimo guidato.
+    if (scelta.autista && scelta.mezzo == null) {
+      const precedente = ultimaGuida?.autista ? ultimaGuida.mezzo : null;
+      const ultimoValido = ultimoMezzoId && mezzi.some((m) => m.id === ultimoMezzoId) ? ultimoMezzoId : null;
+      valore = { autista: true, mezzo: precedente ?? ultimoValido };
+    }
+    setGuide((p) => ({ ...p, [id]: valore }));
+    setUltimaGuida(valore);
+    // Scelta completa: il menu si chiude. Se manca il mezzo resta aperto sul selettore.
+    if (!valore.autista || valore.mezzo != null || mezzi.length === 0) {
+      setAperto((a) => (a === `guida:${id}` ? null : a));
     }
   }
 
@@ -643,26 +667,20 @@ export function RegistraGiornataDialog({
   async function salva() {
     setErrore(null);
     if (righe.length === 0) return setErrore('Aggiungi almeno un cantiere.');
-    if (nettoMin <= 0) return setErrore('La fine del lavoro deve essere dopo l’inizio, pausa esclusa.');
     if (righe.some((r) => r.minuti <= 0)) return setErrore('Ogni cantiere deve avere delle ore.');
-    // Le ore da assegnare dipendono dalle tratte: prima si aspettano le stime.
+    // La fine dipende dalle tratte: prima si aspettano le stime.
     if (teAndata.inArrivo || teRitorno.inArrivo || fraCantieri.inArrivo) {
       return setErrore('Calcolo dei tempi di viaggio in corso: riprova tra un istante.');
     }
-    if (lavoroMin <= 0) {
-      return setErrore('Il viaggio fra i cantieri occupa tutto l’orario: controlla inizio, fine e tratte.');
-    }
-    if (!entroTolleranza) {
-      return setErrore(restano > 0 ? `Restano ${fmtHM(restano)} da assegnare.` : `${fmtHM(-restano)} di troppo.`);
-    }
+    if (oltreMezzanotte) return setErrore('La giornata supera la mezzanotte: controlla l’ora di inizio e le ore.');
 
     // Quello che manca si chiede nel foglio «Il viaggio», aperto sul primo punto.
     if (mancanti.length > 0) {
       const primoMancante = mancanti[0]!;
       setEvidenzia(true);
       setAperto(
-        primoMancante === 'mezzo'
-          ? null
+        primoMancante.startsWith('guida:') || primoMancante.startsWith('mezzo:')
+          ? (`guida:${primoMancante.slice(6)}` as Apribile)
           : primoMancante === 'partenza' || primoMancante.endsWith('andata')
             ? 'partenza'
             : 'rientro',
@@ -671,10 +689,19 @@ export function RegistraGiornataDialog({
       return;
     }
 
-    // Chi non guidava conferma di essere passeggero: i km contano a chi guida.
-    if (conViaggi && !autista && !(await passeggero.conferma(false))) return;
+    // Chi era passeggero su una tratta lo conferma: i km contano a chi guida.
+    if (primoPasseggero && !(await passeggero.conferma(false))) {
+      setAperto(`guida:${primoPasseggero}`);
+      return;
+    }
 
-    const trattaPayload = (te: TrattaEstrema, chiave: string | null) => {
+    const guidaPayload = (id: IdTratta) => {
+      const g = guida(id);
+      return g?.autista
+        ? { autista: true, mezzoId: g.mezzo && g.mezzo !== MEZZO_NON_IN_ELENCO ? g.mezzo : null }
+        : { autista: false, mezzoId: null };
+    };
+    const trattaPayload = (te: TrattaEstrema, chiave: string | null, id: IdTratta) => {
       if (te.luogo?.tipo !== 'sede' || te.senzaViaggio) return null;
       const s = chiave ? stime[chiave] : undefined;
       return {
@@ -683,9 +710,9 @@ export function RegistraGiornataDialog({
         durataConfermataMin: minutiTratta(te),
         giustificazione: trattaModificata(te) ? te.motivo.trim() : undefined,
         distanzaKm: s?.stato === 'ok' ? s.km : null,
+        ...guidaPayload(id),
       };
     };
-    const guida = conViaggi && autista;
 
     startTransition(async () => {
       const res = await registraGiornataDaZero({
@@ -694,14 +721,13 @@ export function RegistraGiornataDialog({
         pausaMin,
         split: righe.map((r) => ({ cantiereId: r.cantiereId, minuti: r.minuti, daSede: r.daSede || undefined })),
         percorso: {
-          andata: trattaPayload(teAndata, chiaveAndata),
-          ritorno: trattaPayload(teRitorno, chiaveRitorno),
-          autista: guida,
-          mezzoId: guida && mezzo && mezzo !== MEZZO_NON_IN_ELENCO ? mezzo : null,
+          andata: trattaPayload(teAndata, chiaveAndata, 'andata'),
+          ritorno: trattaPayload(teRitorno, chiaveRitorno, 'ritorno'),
           passaggi: intermedie.map((t) => ({
             da: t.da,
             a: t.a,
             via: t.tipo === 'diretta' ? 'diretto' : t.tipo === 'via_casa' ? 'casa' : t.sedeId,
+            ...guidaPayload(`tratta:${chiaveCoppia(t)}`),
           })),
         },
       });
@@ -735,9 +761,36 @@ export function RegistraGiornataDialog({
    * cantieri sono una riga sola (le ore si danno nella pagina).
    */
   function percorso(compatto: boolean) {
-    // L'alone della conferma passeggero va sulla riga visibile, non su quella coperta.
-    const evidenzaGuida =
-      compatto === foglio ? { ref: passeggero.propsEvidenza.ref, attiva: passeggero.evidenzia } : undefined;
+    // L'alone della conferma passeggero va sulla copia visibile, non su quella coperta.
+    const visibile = compatto === foglio;
+    const chipGuida = (id: IdTratta, inCard: boolean) =>
+      conStrada.includes(id) ? (
+        <ChipGuida
+          id={id}
+          guida={guida(id)}
+          aperto={aperto === `guida:${id}`}
+          mezzi={mezziOrdinati}
+          ultimoMezzoId={ultimoMezzoId}
+          mancante={
+            !evidenzia
+              ? null
+              : mancanti.includes(`guida:${id}`)
+                ? 'guida'
+                : mancanti.includes(`mezzo:${id}`)
+                  ? 'mezzo'
+                  : null
+          }
+          evidenza={
+            visibile && id === primoPasseggero
+              ? { ref: passeggero.propsEvidenza.ref, attiva: passeggero.evidenzia }
+              : undefined
+          }
+          disabled={pending}
+          inCard={inCard}
+          onApri={() => apriChiudi(`guida:${id}`)}
+          onScegli={(g) => scegliGuida(id, g)}
+        />
+      ) : null;
     return (
       <ol>
         <Tappa inizio nodoTop={14} nodo={<NodoLuogo tipo={vistaPartenza.tipo} allarme={vistaPartenza.mancante != null} />}>
@@ -750,19 +803,7 @@ export function RegistraGiornataDialog({
             onMinuti={(m) => correggi('partenza', { minuti: m })}
             onMotivo={(t) => correggi('partenza', { motivo: t })}
           >
-            {mostraGuida ? (
-              <RigaGuida
-                autista={autista}
-                mezzo={mezzo}
-                mezzi={mezziOrdinati}
-                ultimoMezzoId={ultimoMezzoId}
-                mancaMezzo={evidenzia && mancanti.includes('mezzo')}
-                evidenza={evidenzaGuida}
-                disabled={pending}
-                onAutista={cambiaAutista}
-                onMezzo={setMezzo}
-              />
-            ) : null}
+            {chipGuida('andata', true)}
           </CardEstremo>
         </Tappa>
 
@@ -845,7 +886,9 @@ export function RegistraGiornataDialog({
                       setAperto(null);
                       setPassaggi((p) => ({ ...p, [tratta.chiave]: passaggioDaVia(via) }));
                     }}
-                  />
+                  >
+                    {chipGuida(`tratta:${tratta.chiave}`, false)}
+                  </TrattaFraCantieri>
                 </Tappa>
               ) : null}
             </Fragment>
@@ -874,7 +917,9 @@ export function RegistraGiornataDialog({
             onScegli={(l) => scegliLuogo('rientro', l)}
             onMinuti={(m) => correggi('rientro', { minuti: m })}
             onMotivo={(t) => correggi('rientro', { motivo: t })}
-          />
+          >
+            {chipGuida('ritorno', true)}
+          </CardEstremo>
         </Tappa>
       </ol>
     );
@@ -882,6 +927,7 @@ export function RegistraGiornataDialog({
 
   const conPartenza = andataMin > 0;
   const conRientro = ritornoMin > 0;
+  const fineMostrata = assegnato > 0 ? fine : null;
 
   return (
     <Portal>
@@ -920,35 +966,43 @@ export function RegistraGiornataDialog({
             </div>
           ) : (
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-2.5">
-              {/* ── La giornata: orari + pausa + netto ───────────────────────── */}
-              <section className="space-y-2.5 rounded-2xl border-2 border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent p-3 shadow-soft">
+              {/* ── La giornata: inizio, fine calcolata, pausa ─────────────────── */}
+              <section className="space-y-2 rounded-2xl border-2 border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent px-3 py-2.5 shadow-soft">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary">
-                      <CalendarClock className="h-4 w-4" aria-hidden="true" />
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/12 text-primary">
+                      <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
                     </span>
                     <span className="text-sm font-semibold text-foreground">La giornata</span>
                   </span>
-                  <span className="flex flex-col items-end leading-none">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Ore nette</span>
-                    <span className="mt-0.5 font-mono text-base font-bold tabular-nums text-primary">{fmtHM(Math.max(0, nettoMin))}</span>
-                    {trasferimentiMin > 0 ? (
-                      <span className="mt-1 text-[10px] font-medium tabular-nums text-sky-700">
-                        di cui viaggio {fmtHM(trasferimentiMin)}
-                      </span>
-                    ) : null}
+                  <span className="flex items-baseline gap-1.5 leading-none">
+                    <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Lavoro</span>
+                    <span className="font-mono text-base font-bold tabular-nums text-primary">{fmtHM(assegnato)}</span>
                   </span>
                 </div>
 
                 {/* Inizio / Fine: 2 colonne 50/50 (min-w-0 sui grid item, così il
                     time nativo iOS non allarga la traccia). */}
-                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2.5">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
                   <TimeField label="Inizio lavoro" value={inizio} onChange={setInizio} disabled={pending} />
-                  <TimeField label="Fine lavoro" value={fine} onChange={setFine} disabled={pending} />
+                  <FineCalcolata ora={fineMostrata} />
                 </div>
+                <p className="-mt-0.5 text-[11px] leading-snug text-muted-foreground" aria-live="polite">
+                  {fineMostrata ? (
+                    <>
+                      <span className="tabular-nums">{inizio}</span> + {fmtHM(assegnato)} di lavoro
+                      {pausaMin > 0 ? <> + <span className="text-amber-700">{fmtHM(pausaMin)} di pausa</span></> : null}
+                      {trasferimentiMin > 0 ? <> + <span className="text-sky-700">{fmtHM(trasferimentiMin)} di tratte</span></> : null}
+                      {' = '}
+                      <span className="font-semibold tabular-nums text-foreground">{fineMostrata}</span>
+                    </>
+                  ) : (
+                    'La fine si calcola dalle ore dei cantieri, dalla pausa e dalle tratte fra cantieri.'
+                  )}
+                </p>
 
-                <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+                <div className="space-y-1">
+                  <label className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-amber-700">
                     <Coffee className="h-3 w-3" aria-hidden="true" /> Pausa pranzo
                   </label>
                   <div className="grid grid-cols-4 gap-1.5">
@@ -959,11 +1013,12 @@ export function RegistraGiornataDialog({
                           key={p.min}
                           type="button"
                           disabled={pending}
+                          aria-pressed={attivo}
                           onClick={() => setPausaMin(p.min)}
-                          className={`rounded-lg border px-1 py-1.5 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50 ${
+                          className={`rounded-lg border px-1 py-1 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50 ${
                             attivo
-                              ? 'border-primary bg-primary text-primary-foreground shadow-soft'
-                              : 'border-border bg-background text-foreground hover:bg-muted/40'
+                              ? 'border-amber-400 bg-amber-100 text-amber-900 shadow-soft'
+                              : 'border-border bg-background text-foreground hover:bg-amber-50'
                           }`}
                         >
                           {p.label}
@@ -1007,9 +1062,7 @@ export function RegistraGiornataDialog({
                     <div className="min-w-0 flex-1">
                       <h3 className="text-[15px] font-semibold leading-tight text-foreground">Il viaggio</h3>
                       <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                        {righe.length > 1
-                          ? 'Partenza, rientro e mezzo. Le tratte fra i cantieri sono già calcolate.'
-                          : 'Partenza, rientro e mezzo della giornata.'}
+                        Partenza, rientro e chi guidava su ogni tratta.
                       </p>
                     </div>
                     <button
@@ -1041,14 +1094,18 @@ export function RegistraGiornataDialog({
           <div className="relative z-30 shrink-0 border-t border-emerald-600/15 bg-emerald-50 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
             <BarraGiornata
               segmenti={segmenti}
-              assegnatoMin={assegnato}
-              nettoMin={lavoroMin}
-              stato={statoLavoro}
-              restanoMin={restano}
+              lavoroMin={assegnato}
+              pausaMin={pausaMin}
               viaggioMin={viaggioTotaleMin}
               viaggioNoto={viaggioNoto}
               sinistra={conPartenza ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) } : { etichetta: 'Inizio', ora: inizio }}
-              destra={conRientro ? { etichetta: 'Rientro', ora: spostaOrario(fine, ritornoMin) } : { etichetta: 'Fine', ora: fine }}
+              destra={
+                !fineMostrata
+                  ? { etichetta: 'Fine', ora: '--:--' }
+                  : conRientro
+                    ? { etichetta: 'Rientro', ora: spostaOrario(fineMostrata, ritornoMin) }
+                    : { etichetta: 'Fine', ora: fineMostrata }
+              }
             />
             {errore ? (
               <p role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs leading-snug text-destructive">

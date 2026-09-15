@@ -1,14 +1,17 @@
 /**
- * Banco: «Registra giornata» con il percorso (partenza, tratte, rientro, mezzo).
+ * Banco: «Registra giornata» con il percorso (partenza, tratte, rientro, chi guidava).
  *
- * iPhone emulato, tecnico demo (DEMOC). Fotografa la pagina e il foglio «Il
- * viaggio» nei casi che contano: un cantiere, due cantieri, la tratta aperta,
- * il passaggio dalla sede, la guida, il lavoro dalla sede sul progetto. Misura
- * che la barra dei tempi resti visibile sotto il foglio, che la tratta fra i
- * cantieri si tolga dalle ore da assegnare e che niente sbordi di lato.
+ * iPhone emulato, tecnico demo (DEMOC). Controlla le regole del 15/09/2026:
+ * - si indica solo l'ora di inizio, la fine si calcola e la pagina mostra il conto;
+ * - la pausa pranzo è arancione (tasti e barra);
+ * - da e verso l'abitazione privata non si chiede chi guidava;
+ * - sulle tratte con strada «Chi guidava?» è un'etichetta compatta che si apre,
+ *   e se manca la chiede il foglio «Il viaggio» all'invio;
+ * - chi era passeggero conferma, e «No, guidavo io» riapre quella tratta.
+ * Misura anche che il foglio stia sopra la barra dei tempi e che niente sbordi.
  *
- * Non registra niente: preme «Registra giornata» solo quando manca la
- * partenza, cioè quando il tasto apre il foglio invece di salvare.
+ * Senza BANCO_SALVA non registra niente. Con BANCO_SALVA=1 registra la giornata
+ * sul tenant demo: da ripulire dopo.
  *
  *   node scripts/banco-ui/registra-giornata.mjs
  */
@@ -31,9 +34,11 @@ const AIUTI = `
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
   };
+  const chip = (radice, prefisso) => [...(radice?.querySelectorAll('button[data-guida]') ?? [])].find((b) => b.dataset.guida.startsWith(prefisso));
+  const cardDi = (radice, titolo) => [...(radice?.querySelectorAll('button[aria-expanded]') ?? [])].find((b) => new RegExp('^' + titolo, 'i').test(t(b.textContent)))?.parentElement;
 `;
 
-/** Clicca l'elemento visibile più in alto (l'ultimo nel DOM) che corrisponde. */
+/** Clicca l'elemento visibile più in basso nel DOM che corrisponde. */
 async function clicca(cdp, re, { dentro = 'document' } = {}) {
   const r = await valuta(
     cdp,
@@ -53,7 +58,7 @@ async function clicca(cdp, re, { dentro = 'document' } = {}) {
     })()`,
   );
   if (r !== 'ok') console.log(`  · clic su /${re}/: ${r}`);
-  await pausa(350);
+  await pausa(400);
   return r === 'ok';
 }
 
@@ -102,44 +107,6 @@ async function ore(cdp, indice, h) {
   await pausa(250);
 }
 
-/** Minuti del cantiere n, scritti in ore e minuti. */
-async function impostaMinuti(cdp, indice, totale) {
-  for (const [campo, v] of [['ore', Math.floor(totale / 60)], ['minuti', totale % 60]]) {
-    await valuta(
-      cdp,
-      `(() => {
-        ${AIUTI}
-        const c = [...pagina().querySelectorAll('input[aria-label="${campo}"]')][${indice}];
-        if (c) setValore(c, '${v}');
-        return !!c;
-      })()`,
-    );
-    await pausa(200);
-  }
-}
-
-/**
- * Assegna all'ultimo cantiere quello che resta: le ore da assegnare cambiano con
- * le tratte fra cantieri (sono viaggio), quindi il banco le rilegge dalla barra.
- */
-async function pareggia(cdp) {
-  const testo = await valuta(cdp, `(() => { ${AIUTI} return t(tastoRegistra()?.parentElement?.innerText); })()`);
-  const m = /di (\d+):(\d\d) di lavoro/.exec(testo ?? '');
-  if (!m) return null;
-  const lavoro = Number(m[1]) * 60 + Number(m[2]);
-  const primo = await valuta(
-    cdp,
-    `(() => {
-      ${AIUTI}
-      const h = [...pagina().querySelectorAll('input[aria-label="ore"]')][0];
-      const mi = [...pagina().querySelectorAll('input[aria-label="minuti"]')][0];
-      return h ? Number(h.value) * 60 + Number(mi.value) : 0;
-    })()`,
-  );
-  await impostaMinuti(cdp, 1, lavoro - primo);
-  return { lavoro, primo, ultimo: lavoro - primo };
-}
-
 async function scorri(cdp, dove) {
   await valuta(
     cdp,
@@ -160,17 +127,41 @@ async function misura(cdp) {
       ${AIUTI}
       const f = foglio()?.getBoundingClientRect();
       const piede = tastoRegistra()?.parentElement?.getBoundingClientRect();
-      const barra = tastoRegistra()?.parentElement?.firstElementChild?.getBoundingClientRect();
+      const card = pagina()?.querySelector('section.border-2')?.getBoundingClientRect();
       return {
         vh: innerHeight,
         sbordo: document.documentElement.scrollWidth > innerWidth || (pagina()?.scrollWidth ?? 0) > innerWidth,
         foglio: f ? { top: Math.round(f.top), bottom: Math.round(f.bottom) } : null,
         piede: piede ? { top: Math.round(piede.top), bottom: Math.round(piede.bottom) } : null,
-        barra: barra ? { top: Math.round(barra.top), bottom: Math.round(barra.bottom) } : null,
+        altezzaCard: card ? Math.round(card.height) : null,
         testoPiede: t(tastoRegistra()?.parentElement?.innerText),
+        fine: t(pagina()?.querySelector('[aria-label="Fine lavoro calcolata"]')?.textContent),
+        conto: t(pagina()?.querySelector('[aria-live="polite"]')?.textContent),
       };
     })()`,
   );
+}
+
+/** «Guidavo io» nel menu aperto dentro `dentro`, e il mezzo se non è già proposto. */
+async function guidavoIo(cdp, dentro) {
+  const ok = await clicca(cdp, '^Guidavo io$', {
+    dentro: `[...(${dentro})?.querySelectorAll('[role="listbox"][aria-label="Chi guidava"]') ?? []].filter(visibile).pop()`,
+  });
+  await pausa(400);
+  const mezzo = await valuta(
+    cdp,
+    `(() => {
+      ${AIUTI}
+      const sel = [...((${dentro})?.querySelectorAll('select[aria-label="Mezzo"]') ?? [])].filter(visibile).pop();
+      if (!sel) return 'proposto';
+      if (sel.value) return sel.value;
+      const opz = [...sel.options].find((o) => o.value && !o.disabled && o.value !== 'non_in_elenco');
+      setValore(sel, opz.value);
+      return opz.textContent;
+    })()`,
+  );
+  await pausa(400);
+  return { ok, mezzo };
 }
 
 const { cdp, chiudi } = await apriChrome({ mobile: true });
@@ -192,200 +183,146 @@ try {
     cosa: 'tasto Registra giornata',
     timeoutMs: 30_000,
   });
-  // Il vecchio inserimento «Ore su un cantiere, con viaggio» non c'è più.
   esito(
     !(await valuta(cdp, `/Ore su un cantiere/.test(document.body.innerText)`)),
     'la tab Ore offre solo «Registra giornata»',
   );
-  await foto(cdp, 'rg-00-tab-ore');
   await clicca(cdp, 'Registra giornata');
   await finoA(cdp, `!!document.querySelector('[role="dialog"][aria-label="Registra giornata"]')`, { cosa: 'pagina' });
   await pausa(900);
   await foto(cdp, 'rg-01-vuota');
 
+  // ── L'orario: solo l'inizio, la fine si calcola ─────────────────────────
+  let m = await misura(cdp);
+  esito(
+    !(await valuta(cdp, `(() => { ${AIUTI} return !!pagina().querySelector('input[type=time][aria-label="Fine lavoro"]'); })()`)),
+    'non si chiede più l’ora di fine',
+  );
+  esito(m.fine === '--:--', 'senza ore la fine non è ancora calcolata', m.fine);
+  console.log(`  · altezza della card «La giornata»: ${m.altezzaCard}px`);
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return [...pagina().querySelectorAll('button[aria-pressed="true"]')].some((b) => /1 h/.test(b.textContent) && b.className.includes('bg-amber-100')); })()`),
+    'la pausa pranzo scelta è arancione',
+  );
+
   // ── Un cantiere ─────────────────────────────────────────────────────────
   esito(await aggiungiCantiere(cdp, 'Aurora'), 'aggiunge un cantiere dalla ricerca');
   await ore(cdp, 0, 8);
+  m = await misura(cdp);
+  esito(m.fine === '17:00', 'la fine si calcola: 08:00 + 8:00 di lavoro + 1:00 di pausa', m.fine);
+  esito(/= 17:00/.test(m.conto), 'la pagina mostra il conto della fine', m.conto);
+  esito(/8:00 di lavoro/.test(m.testoPiede), 'la barra conta le ore di lavoro', m.testoPiede.slice(0, 50));
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return !!tastoRegistra()?.parentElement?.querySelector('[data-segmento="pausa"].bg-amber-300'); })()`),
+    'nella barra la pausa è arancione',
+  );
+  esito(!m.sbordo, 'la pagina non sborda di lato');
   await foto(cdp, 'rg-02-un-cantiere');
 
-  let m = await misura(cdp);
-  esito(!m.sbordo, 'la pagina non sborda di lato');
-  esito(/8:00\s*di 8:00/.test(m.testoPiede), 'la barra conta le ore assegnate', m.testoPiede.slice(0, 60));
-
-  // Manca la partenza: il tasto apre il foglio, non salva.
-  await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
-  await pausa(700);
-  m = await misura(cdp);
-  esito(!!m.foglio, 'senza partenza, «Registra giornata» apre il foglio «Il viaggio»');
-  esito(!!m.foglio && !!m.piede && m.foglio.bottom <= m.piede.top + 1, 'il foglio si ferma sopra la barra dei tempi', JSON.stringify({ foglio: m.foglio, piede: m.piede }));
-  esito(!!m.piede && m.piede.bottom <= m.vh + 1 && m.piede.top < m.vh, 'la barra dei tempi resta visibile');
+  // ── Partenza da casa: niente «chi guidava» ───────────────────────────────
+  await clicca(cdp, '^Partenza', { dentro: 'pagina()' });
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return !!foglio()?.querySelector('[role="listbox"][aria-label="Partenza"]'); })()`),
-    'il foglio si apre già sulle scelte della partenza',
+    await clicca(cdp, 'Abitazione privata', { dentro: `pagina().querySelector('[role="listbox"][aria-label="Partenza"]')` }),
+    'si sceglie la partenza da casa',
   );
-  await foto(cdp, 'rg-03-foglio-un-cantiere');
+  await pausa(500);
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return !chip(pagina(), 'andata') && !/Chi guidava|Guidavo io/.test(cardDi(pagina(), 'Partenza')?.textContent || ''); })()`),
+    'partendo da casa non si chiede chi guidava',
+  );
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return !chip(pagina(), 'ritorno'); })()`),
+    'nemmeno al rientro a casa',
+  );
+  await foto(cdp, 'rg-03-da-casa');
 
-  // ── Due cantieri, prima di scegliere la partenza ────────────────────────
-  await clicca(cdp, 'Torna alla giornata');
+  // ── Due cantieri: la tratta chiede chi guidava ───────────────────────────
   esito(await aggiungiCantiere(cdp, 'Logistica'), 'aggiunge il secondo cantiere');
   await ore(cdp, 0, 4);
   await ore(cdp, 1, 4);
-  await pausa(2500);
+  await pausa(3000);
   await scorri(cdp, 'fondo');
-  await foto(cdp, 'rg-04-due-cantieri');
-
-  // La tratta fra i due cantieri è viaggio: si toglie dalle ore da assegnare.
   m = await misura(cdp);
-  const daAssegnare = /di (\d+):(\d\d) di lavoro/.exec(m.testoPiede);
-  const minutiDaAssegnare = daAssegnare ? Number(daAssegnare[1]) * 60 + Number(daAssegnare[2]) : null;
-  esito(
-    minutiDaAssegnare != null && minutiDaAssegnare < 480,
-    'la tratta fra i cantieri si toglie dalle ore da assegnare',
-    m.testoPiede.slice(0, 48),
-  );
-  esito(
-    await valuta(cdp, `(() => { ${AIUTI} return /di cui viaggio \\d+:\\d\\d/.test(pagina().innerText); })()`),
-    'la giornata dice quanto viaggio c’è fra i cantieri',
-  );
-  esito(
-    await valuta(
-      cdp,
-      `(() => { ${AIUTI} return [...(tastoRegistra()?.parentElement?.querySelectorAll('[aria-hidden="true"] > span') ?? [])].some((s) => /repeating-linear-gradient/.test(s.style.backgroundImage)); })()`,
-    ),
-    'la barra disegna la tratta con il tratteggio del viaggio',
-  );
-  const pari = await pareggia(cdp);
-  m = await misura(cdp);
-  esito(/Completa/.test(m.testoPiede), 'assegnate le ore rimaste, la giornata torna completa', pari ? JSON.stringify(pari) : '');
-
   const tratta = await valuta(
     cdp,
     `(() => { ${AIUTI} const b = [...pagina().querySelectorAll('button[aria-expanded]')].find((x) => /^Diretta/.test(t(x.textContent))); return b ? t(b.textContent) : null; })()`,
   );
-  esito(!!tratta, 'fra i due cantieri compare la tratta, diretta, con km e tempo', tratta ?? '');
-
-  await clicca(cdp, '^Diretta', { dentro: 'pagina()' });
-  await foto(cdp, 'rg-05-menu-tratta');
-  esito(await clicca(cdp, '^Passando da Sede', { dentro: 'pagina()' }), 'la tratta si cambia in «passando dalla sede»');
-  await pausa(2500);
-  await pareggia(cdp);
-  await scorri(cdp, 'fondo');
-  await foto(cdp, 'rg-06-via-sede');
-
-  // Manca ancora la partenza: foglio con due cantieri.
-  await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
-  await pausa(700);
-  await foto(cdp, 'rg-07-foglio-due-cantieri');
-
-  // La scelta dentro il menu della partenza, non la tratta «passando da Sede Nordest».
+  esito(!!tratta, 'fra i due cantieri compare la tratta, con km e tempo', tratta ?? '');
   esito(
-    await clicca(cdp, 'Sede Nordest', { dentro: `foglio()?.querySelector('[role="listbox"][aria-label="Partenza"]')` }),
-    'nel foglio si sceglie la partenza con un tocco',
+    await valuta(cdp, `(() => { ${AIUTI} return /Chi guidava\\?/.test(chip(pagina(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
+    'sulla tratta c’è l’etichetta compatta «Chi guidava?»',
+  );
+  esito(m.fine !== '17:00' && /di tratte/.test(m.conto), 'la fine comprende la tratta fra i cantieri', m.conto);
+  await foto(cdp, 'rg-04-due-cantieri');
+
+  // Manca chi guidava: «Registra giornata» apre il foglio sulla tratta.
+  await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
+  await pausa(800);
+  m = await misura(cdp);
+  esito(!!m.foglio, 'senza «chi guidava» si apre il foglio «Il viaggio»');
+  esito(!!m.foglio && !!m.piede && m.foglio.bottom <= m.piede.top + 1, 'il foglio si ferma sopra la barra dei tempi', JSON.stringify({ foglio: m.foglio, piede: m.piede }));
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return !!foglio()?.querySelector('[role="listbox"][aria-label="Chi guidava"]'); })()`),
+    'il foglio si apre già sul menu di chi guidava',
+  );
+  await foto(cdp, 'rg-05-foglio-chi-guidava');
+  const scelta = await guidavoIo(cdp, 'foglio()');
+  esito(scelta.ok, 'nel foglio si sceglie «Guidavo io»', `mezzo: ${scelta.mezzo}`);
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(foglio(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
+    'l’etichetta dice chi guidava',
+  );
+  await clicca(cdp, 'Torna alla giornata');
+
+  // ── Rientro in sede: prende l'ultima scelta, poi si cambia ────────────────
+  await clicca(cdp, '^Rientro', { dentro: 'pagina()' });
+  esito(
+    await clicca(cdp, 'Sede Nordest', { dentro: `pagina().querySelector('[role="listbox"][aria-label="Rientro"]')` }),
+    'si sceglie il rientro in sede',
   );
   await pausa(3000);
-  const rientro = await valuta(
-    cdp,
-    `(() => { ${AIUTI} const b = [...foglio().querySelectorAll('button[aria-expanded]')].find((x) => /^Rientro/i.test(t(x.textContent))); return b ? t(b.textContent) : null; })()`,
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
+    'il rientro prende l’ultima scelta di chi guidava',
   );
-  esito(/Sede Nordest/.test(rientro ?? ''), 'il rientro prende la stessa sede della partenza', rientro ?? '');
-  await foto(cdp, 'rg-08-foglio-partenza');
-
-  await clicca(cdp, 'Guidavo io', { dentro: 'foglio()' });
-  await pausa(400);
-  await foto(cdp, 'rg-09-foglio-guida');
-
+  await clicca(cdp, 'Chi guidava: Guidavo io', { dentro: `cardDi(pagina(), 'Rientro')` });
+  await clicca(cdp, '^Ero passeggero$', { dentro: `cardDi(pagina(), 'Rientro')` });
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return /Passeggero/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
+    'sul rientro si indica «Passeggero»',
+  );
   m = await misura(cdp);
-  esito(/Viaggio \d+:\d\d/.test(m.testoPiede), 'la barra somma il tempo di viaggio', m.testoPiede);
-  esito(/Partenza \d\d:\d\d/.test(m.testoPiede) && /Rientro \d\d:\d\d/.test(m.testoPiede), 'la barra mostra partenza e rientro');
-
-  await clicca(cdp, 'Torna alla giornata');
-  await scorri(cdp, 'inizio');
-  await foto(cdp, 'rg-10-pagina-completa-alto');
+  esito(/Rientro \d\d:\d\d/.test(m.testoPiede) && /Viaggio \d+:\d\d/.test(m.testoPiede), 'la barra mostra viaggio e rientro', m.testoPiede);
   await scorri(cdp, 'fondo');
-  await foto(cdp, 'rg-11-pagina-completa-fondo');
+  await foto(cdp, 'rg-06-rientro-passeggero');
 
-  // ── Passeggero: la conferma resta sempre ────────────────────────────────
-  await scorri(cdp, 'inizio');
-  await clicca(cdp, 'Guidavo io', { dentro: 'pagina()' }); // la spegne
+  // ── Passeggero: conferma, e «No, guidavo io» riapre quella tratta ─────────
   await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
   await pausa(700);
-  const conferma = await valuta(
-    cdp,
-    `(() => { ${AIUTI} return /Hai viaggiato da passeggero/.test(pagina()?.innerText || ''); })()`,
-  );
-  esito(conferma, 'chi non guidava conferma di essere passeggero');
-  await foto(cdp, 'rg-12-conferma-passeggero');
+  const conferma = await valuta(cdp, `(() => { ${AIUTI} return /Hai viaggiato da passeggero/.test(pagina()?.innerText || ''); })()`);
+  esito(conferma, 'chi era passeggero su una tratta lo conferma');
+  await foto(cdp, 'rg-07-conferma-passeggero');
   if (conferma) {
     await clicca(cdp, 'No, guidavo io', { dentro: 'pagina()' });
-    await pausa(800);
-    await foto(cdp, 'rg-13-guida-evidenziata');
+    await pausa(900);
+    esito(
+      await valuta(cdp, `(() => { ${AIUTI} const c = cardDi(pagina(), 'Rientro'); return !!c?.querySelector('[role="listbox"][aria-label="Chi guidava"]'); })()`),
+      '«No, guidavo io» riapre chi guidava sul rientro',
+    );
+    await foto(cdp, 'rg-08-rientro-riaperto');
+    const r = await guidavoIo(cdp, `cardDi(pagina(), 'Rientro')`);
+    esito(r.ok, 'sul rientro si corregge in «Guidavo io»', `mezzo: ${r.mezzo}`);
   }
-
-  // ── Lavoro dalla sede sul progetto ──────────────────────────────────────
-  // Sul primo cantiere si lavora dalla sede predefinita, che è anche la
-  // partenza: niente andata, e la tratta verso il secondo parte dalla sede.
-  await scorri(cdp, 'inizio');
-  const spuntato = await valuta(
-    cdp,
-    `(() => {
-      ${AIUTI}
-      const cb = [...pagina().querySelectorAll('label')]
-        .filter((l) => /Lavoro dalla sede sul progetto/.test(l.textContent))
-        .map((l) => l.querySelector('input[type=checkbox]'))[0];
-      if (!cb) return false;
-      cb.scrollIntoView({ block: 'center' });
-      cb.click();
-      return cb.checked;
-    })()`,
-  );
-  esito(spuntato, 'sul primo cantiere si indica «Lavoro dalla sede sul progetto»');
-  await pausa(3000);
-  const cardPartenza = await valuta(
-    cdp,
-    `(() => { ${AIUTI} const b = [...pagina().querySelectorAll('button[aria-expanded]')].find((x) => /^Partenza/i.test(t(x.textContent))); return b ? t(b.textContent) : null; })()`,
-  );
-  esito(/Nessun viaggio/.test(cardPartenza ?? ''), 'partendo dalla sede in cui si lavora non c’è andata', cardPartenza ?? '');
-  await pareggia(cdp);
-  m = await misura(cdp);
-  esito(/Inizio \d\d:\d\d/.test(m.testoPiede), 'senza andata la barra parte dall’inizio del lavoro', m.testoPiede);
-  esito(/Completa/.test(m.testoPiede), 'con la tratta ricalcolata la giornata resta completa');
-  await foto(cdp, 'rg-14-lavoro-da-sede');
 
   // ── Salvataggio vero, solo se richiesto (tenant demo, da ripulire dopo) ──
   if (process.env.BANCO_SALVA === '1') {
-    await clicca(cdp, 'Guidavo io', { dentro: 'pagina()' }); // la riaccende
-    await pareggia(cdp);
-    const senzaMezzo = await valuta(
-      cdp,
-      `(() => { ${AIUTI} const sel = [...pagina().querySelectorAll('select[aria-label="Mezzo"]')].pop(); return !sel || !sel.value; })()`,
-    );
-    if (senzaMezzo) {
-      await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
-      await pausa(700);
-      esito(
-        await valuta(cdp, `(() => { ${AIUTI} return !!foglio(); })()`),
-        'chi guida senza aver scelto il mezzo se lo vede chiedere nel foglio',
-      );
-      await foto(cdp, 'rg-15-foglio-mezzo');
-      const mezzo = await valuta(
-        cdp,
-        `(() => { ${AIUTI}
-          const sel = [...pagina().querySelectorAll('select[aria-label="Mezzo"]')].pop();
-          const opz = [...sel.options].find((o) => o.value && !o.disabled && o.value !== 'non_in_elenco');
-          setValore(sel, opz.value);
-          return opz.textContent;
-        })()`,
-      );
-      console.log(`  · mezzo scelto: ${mezzo}`);
-      await pausa(400);
-    }
     await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
     await finoA(cdp, `/Giornata registrata/.test(document.body.innerText)`, {
       cosa: 'giornata registrata',
       timeoutMs: 45_000,
     });
     esito(true, 'la giornata si registra');
-    await foto(cdp, 'rg-16-registrata');
+    await foto(cdp, 'rg-09-registrata');
     await pausa(1500);
   }
   esito(erroriBrowser.length === 0, 'nessun errore nel browser', erroriBrowser.length ? `${erroriBrowser.length}` : '');

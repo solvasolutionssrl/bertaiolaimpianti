@@ -218,7 +218,6 @@ export default async function MobileOrePage() {
         ultimoMezzoId={ultimoMezzoId}
         turnoInCorso={!!turno}
         registraGiornataAttivo={impTurno.registraGiornataAttivo}
-        tolleranzaChiusuraMin={impTurno.tolleranzaChiusuraMin}
         passoMinuti={impTurno.passoMinuti}
         stepViaggio={arrotondamenti.viaggioMin}
       />
