@@ -31,6 +31,10 @@ const nextConfig = {
     serverComponentsExternalPackages: ['archiver'],
   },
   images: {
+    // Niente ottimizzatore (/_next/image): le miniature arrivano già a 400px
+    // webp da /api/photo, e l'endpoint dell'ottimizzatore è quello colpito
+    // dalle vulnerabilità note di Next 14 che si chiudono solo con Next 15.
+    unoptimized: true,
     remotePatterns: [
       { protocol: 'https', hostname: '**.supabase.co' },
       { protocol: 'https', hostname: '**.hetzner.cloud' },

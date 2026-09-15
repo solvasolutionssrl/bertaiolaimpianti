@@ -29,7 +29,8 @@
     "./integrazione-mappa": "./src/integrazione-mappa.ts",
     "./integrazione-abbina": "./src/integrazione-abbina.ts",
     "./integrazione-salute": "./src/integrazione-salute.ts",
-    "./categorie-smistamento": "./src/categorie-smistamento.ts"
+    "./categorie-smistamento": "./src/categorie-smistamento.ts",
+    "./pagine": "./src/pagine.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -39,7 +40,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "~2.45.4",
-    "next": "14.2.15"
+    "next": "14.2.35"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",

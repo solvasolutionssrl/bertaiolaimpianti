@@ -129,7 +129,8 @@ async function caricaLogo(url?: string | null): Promise<{ dataUrl: string; ratio
  * lo salva. Il caricamento del logo è best-effort (null in ambienti senza DOM).
  */
 export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
-  const { default: JsPDF } = await import('jspdf');
+  // Import nominato: jsPDF non garantisce l'export default fra le versioni.
+  const { jsPDF: JsPDF } = await import('jspdf');
   const brand = hexToRgb(opts.brandColor);
   const logo = await caricaLogo(opts.logoUrl);
 
