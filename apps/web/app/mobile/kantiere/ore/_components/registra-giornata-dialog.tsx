@@ -694,6 +694,31 @@ export function RegistraGiornataDialog({
             })()
           : 0;
     const corr = correzioneDi(t);
+    // La seconda scelta: passando dalla sede predefinita (o da quella già scelta,
+    // o dalla prima sede ammessa per entrambi i cantieri). Non c'è se uno dei due
+    // cantieri si segue già da quella sede.
+    const comuni = sediComuni(t.da, t.a);
+    const sedeTappa = stessaSede
+      ? undefined
+      : ((t.tipo === 'via_sede' ? comuni.find((s) => s.id === t.sedeId) : undefined) ??
+        comuni.find((s) => s.isDefault) ??
+        comuni[0]);
+    const tappa =
+      sedeTappa && !stessoPosto(daL, inSede(sedeTappa.id)) && !stessoPosto(aL, inSede(sedeTappa.id))
+        ? sedeTappa
+        : undefined;
+    const viaTappa = ((): StatoStima | undefined => {
+      if (!tappa) return undefined;
+      const s1 = stimaTra(daL, inSede(tappa.id));
+      const s2 = stimaTra(inSede(tappa.id), aL);
+      if (s1?.stato !== 'ok' || s2?.stato !== 'ok' || s1.minuti == null || s2.minuti == null)
+        return undefined;
+      return {
+        stato: 'ok',
+        minuti: s1.minuti + s2.minuti,
+        km: s1.km != null && s2.km != null ? s1.km + s2.km : null,
+      };
+    })();
     return {
       minuti: corr ? corr.minuti : (stimaMin ?? 0),
       corretta: corr != null && conStima && corr.minuti !== stimaMin,
@@ -719,12 +744,16 @@ export function RegistraGiornataDialog({
           titolo: 'Diretta',
           dettaglio: stessaSede ? 'Nessun viaggio' : kmTempo(diretta),
         },
-        ...sediComuni(t.da, t.a).map((s) => ({
-          via: s.id,
-          titolo: `Passando da ${s.nome}`,
-          dettaglio: s.tipo === 'hotel' ? 'Hotel' : 'Sede',
-        })),
-        { via: 'casa', titolo: 'Passando da casa', dettaglio: 'Nessun viaggio di lavoro' },
+        ...(tappa
+          ? [
+              {
+                via: tappa.id,
+                titolo: 'Passando da',
+                sottotitolo: tappa.nome,
+                dettaglio: kmTempo(viaTappa) || (tappa.tipo === 'hotel' ? 'Hotel' : 'Sede'),
+              },
+            ]
+          : []),
       ],
     };
   });
@@ -1270,7 +1299,7 @@ export function RegistraGiornataDialog({
                   <FineCalcolata ora={fineMostrata} />
                 </div>
                 <p
-                  className="text-muted-foreground -mt-0.5 text-[11px] leading-snug"
+                  className="text-muted-foreground -mt-0.5 line-clamp-2 h-[2.75em] text-[11px] leading-snug"
                   aria-live="polite"
                 >
                   {fineMostrata ? (

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { BedDouble, Building2, Car, Check, ChevronDown, Coffee, Home, Loader2, MapPin, Minus, Plus } from 'lucide-react';
+import { ArrowRight, BedDouble, Building2, Car, Check, ChevronDown, Coffee, Home, Loader2, MapPin, Minus, Plus } from 'lucide-react';
 
 import { MEZZO_NON_IN_ELENCO, type Estremo, type Guida, type SegmentoBarra } from '@kommessa/api/kantiere-percorso';
 
@@ -95,7 +95,8 @@ export interface VistaTratta {
   scelta: string;
   titolo: string;
   stima: StatoStima;
-  opzioni: { via: string; titolo: string; dettaglio: string }[];
+  /** Due scelte affiancate: diretta, o passando dalla sede. */
+  opzioni: { via: string; titolo: string; sottotitolo?: string; dettaglio: string }[];
   /** Minuti che verranno registrati (la correzione vince sulla stima). */
   minuti: number;
   corretta: boolean;
@@ -666,33 +667,44 @@ export function TrattaFraCantieri({
             Da <span className="font-semibold text-foreground">{vista.daNome}</span> a{' '}
             <span className="font-semibold text-foreground">{vista.aNome}</span>
           </p>
-          <ul className="pb-1" role="listbox" aria-label="Come sei passato da un cantiere all'altro">
+          <div
+            className="grid grid-cols-2 gap-2 px-3 pb-2.5 pt-1"
+            role="radiogroup"
+            aria-label="Come sei passato da un cantiere all'altro"
+          >
             {vista.opzioni.map((o) => {
               const sel = o.via === vista.scelta;
+              const Icona = o.via === 'diretto' ? ArrowRight : Building2;
               return (
-                <li key={o.via}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={sel}
-                    disabled={disabled}
-                    onClick={() => onScegli(o.via)}
-                    className="flex min-h-[42px] w-full items-center gap-2 px-3 text-left transition-colors active:bg-muted/60"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-[13px] text-foreground ${sel ? 'font-semibold' : 'font-medium'}`}>
-                        {o.titolo}
-                      </span>
-                      {o.dettaglio ? (
-                        <span className="block truncate text-[11px] text-muted-foreground">{o.dettaglio}</span>
-                      ) : null}
-                    </span>
-                    <Check className={`h-4 w-4 shrink-0 text-primary ${sel ? '' : 'invisible'}`} aria-hidden="true" />
-                  </button>
-                </li>
+                <button
+                  key={o.via}
+                  type="button"
+                  role="radio"
+                  aria-checked={sel}
+                  disabled={disabled}
+                  onClick={() => onScegli(o.via)}
+                  className={`relative flex min-h-[62px] min-w-0 flex-col justify-center rounded-xl border px-2.5 py-2 text-left transition-[opacity,background-color] duration-150 active:scale-[0.98] ${
+                    sel ? 'border-primary/60 bg-primary/[0.06] shadow-soft' : 'border-border bg-background opacity-60'
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5 pr-4">
+                    <Icona
+                      className={`h-3.5 w-3.5 shrink-0 ${sel ? 'text-primary' : 'text-muted-foreground'}`}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate text-[13px] font-semibold text-foreground">{o.titolo}</span>
+                  </span>
+                  {o.sottotitolo ? (
+                    <span className="mt-0.5 truncate text-xs font-medium text-foreground">{o.sottotitolo}</span>
+                  ) : null}
+                  {o.dettaglio ? (
+                    <span className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground">{o.dettaglio}</span>
+                  ) : null}
+                  {sel ? <Check className="absolute right-2 top-2 h-3.5 w-3.5 text-primary" aria-hidden="true" /> : null}
+                </button>
               );
             })}
-          </ul>
+          </div>
           {vista.modificabile ? (
             <EditorTempo vista={vista} disabled={disabled} onMinuti={onMinuti} onMotivo={onMotivo} />
           ) : null}

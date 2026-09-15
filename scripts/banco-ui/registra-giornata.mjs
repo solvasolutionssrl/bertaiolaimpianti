@@ -202,6 +202,7 @@ try {
   );
   esito(m.fine === '--:--', 'senza ore la fine non è ancora calcolata', m.fine);
   console.log(`  · altezza della card «La giornata»: ${m.altezzaCard}px`);
+  const altezze = [m.altezzaCard];
   esito(
     await valuta(cdp, `(() => { ${AIUTI} return [...pagina().querySelectorAll('button[aria-pressed="true"]')].some((b) => /1 h/.test(b.textContent) && b.className.includes('bg-amber-100')); })()`),
     'la pausa pranzo scelta è arancione',
@@ -219,6 +220,7 @@ try {
     'nella barra la pausa è arancione',
   );
   esito(!m.sbordo, 'la pagina non sborda di lato');
+  altezze.push(m.altezzaCard);
   await foto(cdp, 'rg-02-un-cantiere');
 
   // ── Partenza e rientro: di default la sede, niente abitazione privata ────
@@ -264,6 +266,12 @@ try {
     'sulla tratta c’è l’etichetta compatta «Chi guidava?»',
   );
   esito(m.fine !== '17:00' && /di tratte/.test(m.conto), 'la fine comprende la tratta fra i cantieri', m.conto);
+  altezze.push(m.altezzaCard);
+  esito(
+    altezze.every((h) => h != null && h === altezze[0]),
+    'la card «La giornata» resta alta uguale con ore, pausa e tratte: le card sotto non si spostano',
+    altezze.join(' · '),
+  );
   await foto(cdp, 'rg-04-due-cantieri');
 
   // Manca chi guidava: «Registra giornata» apre il foglio sul primo punto, la partenza.
@@ -294,6 +302,29 @@ try {
     await valuta(cdp, `(() => { ${AIUTI} return !!(${pannello})?.querySelector('button[aria-label="Più 5 minuti"]'); })()`),
     'anche la tratta fra cantieri ha il tempo modificabile',
   );
+  const radio = `[...pagina().querySelectorAll('[role="radiogroup"] [role="radio"]')]`;
+  const scelte = await valuta(
+    cdp,
+    `(() => { ${AIUTI} return ${radio}.map((r) => ({ testo: t(r.textContent), scelta: r.getAttribute('aria-checked') === 'true', tenue: r.className.includes('opacity-60'), larghezza: Math.round(r.getBoundingClientRect().width) })); })()`,
+  );
+  esito(
+    scelte.length === 2 &&
+      scelte[0].scelta && /^Diretta/.test(scelte[0].testo) &&
+      !scelte[1].scelta && scelte[1].tenue && /^Passando da.*Sede Nordest/.test(scelte[1].testo) &&
+      Math.abs(scelte[0].larghezza - scelte[1].larghezza) <= 1 &&
+      !scelte.some((s) => /casa/i.test(s.testo)),
+    'due card affiancate e larghe uguali: «Diretta» scelta, «Passando da» la sede più tenue, niente casa',
+    JSON.stringify(scelte),
+  );
+  await foto(cdp, 'rg-05a-scelte-tratta');
+  await valuta(cdp, `(() => { ${AIUTI} ${radio}[1]?.click(); return true; })()`);
+  await pausa(500);
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return ${radio}[1]?.getAttribute('aria-checked') === 'true' && [...pagina().querySelectorAll('button[aria-expanded="true"]')].some((b) => /^Passando da/.test(t(b.textContent))); })()`),
+    'con un tocco la tratta passa dalla sede',
+  );
+  await valuta(cdp, `(() => { ${AIUTI} ${radio}[0]?.click(); return true; })()`);
+  await pausa(500);
   esito(await clicca(cdp, 'Più 5 minuti', { dentro: pannello }), 'si aggiungono 5 minuti alla tratta');
   m = await misura(cdp);
   esito(!!finePrima && m.fine !== finePrima, 'la fine si sposta con il tempo della tratta', `${finePrima} → ${m.fine}`);

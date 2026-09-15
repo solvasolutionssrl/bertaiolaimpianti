@@ -393,7 +393,7 @@ pilota FPM).
 |---|---|
 | Partenza e rientro | Agli estremi, **di default la sede predefinita**; si può scegliere una sede del cantiere (§4). In Registra giornata **non c'è l'abitazione privata** (15/09/2026). Chi non tocca il rientro se lo trova uguale alla partenza. Se tutti i cantieri sono «Lavoro dalla sede sul progetto», partenza e rientro **non si chiedono**. |
 | Chi guidava | Per **ogni tratta con strada** (sede → cantiere, cantiere → cantiere, cantiere → sede), con un'etichetta compatta che si apre: «Ero passeggero» / «Guidavo io» e il mezzo. Dove non c'è strada (stessa sede, tutto il giorno in sede) **non si chiede**. Una tratta non toccata prende l'ultima scelta, ma cambiare una tratta non cambia quelle prima, che tengono quello che mostravano; si propone l'ultimo mezzo guidato, c'è anche «Mezzo non in elenco» (15/09/2026). |
-| Tratte fra cantieri | Le costruisce il sistema, **dirette**, con km e tempo stimati. Toccandole si cambiano in «passando da una sede» (sedi ammesse per entrambi i cantieri) o «passando da casa» (nessun viaggio di lavoro). Dallo stesso menu si **corregge il tempo** della tratta, come per partenza e rientro, con un motivo se si scosta dalla stima (15/09/2026). |
+| Tratte fra cantieri | Le costruisce il sistema, **dirette**, con km e tempo stimati. Toccandole compaiono **due scelte affiancate**: «Diretta» e «Passando da» la sede predefinita (o un'altra sede ammessa per entrambi i cantieri), più tenue finché non si sceglie. «Passando da casa» non si propone più (15/09/2026). Dallo stesso menu si **corregge il tempo** della tratta, come per partenza e rientro, con un motivo se si scosta dalla stima (15/09/2026). |
 | Obbligatori | Tempo della tratta se la stima non c'è, motivo se il tempo è diverso dalla stima, chi guidava e il mezzo su ogni tratta con strada. Quello che manca lo chiede il foglio «Il viaggio» quando si preme «Registra giornata». |
 | Passeggero | Se su una tratta si è indicato «Ero passeggero» compare la conferma «Hai viaggiato da passeggero?» (§7.4); «No, guidavo io» riapre chi guidava su quella tratta. |
 
@@ -402,7 +402,8 @@ pilota FPM).
 - **Si indica solo l'inizio del lavoro** (15/09/2026): la fine si calcola, inizio + ore dei
   cantieri + pausa + tratte fra cantieri, e la pagina mostra il conto. Prima inizio e
   fine andavano fatti quadrare con le ore dei cantieri. La pausa pranzo è arancione
-  nei tasti e nella barra, come nel resto dell'app.
+  nei tasti e nella barra, come nel resto dell'app. La card «La giornata» ha altezza
+  fissa (il conto occupa sempre due righe): con + e − le card sotto non si spostano.
 - **Inizio e fine lavoro** sono l'orario in cantiere. **Andata e ritorno** stanno
   fuori: il loro tempo confermato va in `ore_viaggio`, come per le timbrature QR.
   La barra in basso mostra la giornata intera: partenza (= inizio − andata),
@@ -430,7 +431,7 @@ pilota FPM).
 | Ritorno | legata all'**ultima uscita** |
 | Diretta A → B | trasferimento (`da_cantiere_id` = A, `cantiere_id` = B), con chi guidava su quella tratta e il tempo corretto a mano, se c'è |
 | Passando dalla sede | due righe legate al cambio di cantiere: A → sede sull'uscita da A, sede → B sull'ingresso in B; tempo confermato = stima arrotondata, o il tempo corretto diviso fra le due righe in proporzione alle stime |
-| Passando da casa | nessuna riga |
+| Passando da casa | nessuna riga (non più proposta dal 15/09/2026; il server la accetta ancora dalle app non aggiornate) |
 
 Andata e ritorno entrano **insieme**: se l'inserimento fallisce si tolgono le
 timbrature appena scritte (le tratte se ne vanno con loro) e la giornata non resta
