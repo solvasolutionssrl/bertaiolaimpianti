@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
 import { requirePlatformAdmin } from '../_lib/guard';
 
 /**
@@ -525,9 +526,11 @@ export async function impersonateUser(opts: {
     return { ok: false as const, error: 'Sessione admin non leggibile' };
   }
 
+  // Firmato dal server: chi lo legge (fine impersonation, azioni riservate al
+  // super admin) verifica firma e scadenza.
   cookieStore.set({
-    name: 'shadow_admin',
-    value: JSON.stringify({
+    name: SHADOW_COOKIE,
+    value: firmaShadow({
       refresh_token: adminSession.session.refresh_token,
       admin_email: ctx.email,
       admin_user_id: ctx.userId,
@@ -535,12 +538,13 @@ export async function impersonateUser(opts: {
       target_user_id: targetUserId,
       tenant_label: `${tenant.nome} (${tenant.slug})`,
       started_at: new Date().toISOString(),
+      scade_at: Date.now() + SHADOW_DURATA_S * 1000,
     }),
     httpOnly: true,
     sameSite: 'lax',
     path: '/',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 4, // 4h max
+    maxAge: SHADOW_DURATA_S, // 4h max
   });
 
   // 3. Genera magic-link e verifica server-side → swap dei cookie sb-*
@@ -613,7 +617,7 @@ export async function endImpersonation() {
   const { createServerSupabase } = await import('@kommessa/api/server');
   const cookieStore = cookies();
 
-  const shadowRaw = cookieStore.get('shadow_admin')?.value;
+  const shadowRaw = cookieStore.get(SHADOW_COOKIE)?.value;
   if (!shadowRaw) {
     // Nessuno shadow → niente da ripristinare. Solo cleanup banner + go home.
     cookieStore.delete('impersonating_tenant_id');
@@ -622,19 +626,17 @@ export async function endImpersonation() {
     redirect('/admin');
   }
 
-  let shadow: {
-    refresh_token: string;
-    admin_email: string;
-    admin_user_id: string;
-    target_user_id?: string;
-    tenant_label?: string;
-  };
-  try {
-    shadow = JSON.parse(shadowRaw);
-  } catch {
-    cookieStore.delete('shadow_admin');
+  const shadow = leggiShadow(shadowRaw);
+  if (!shadow) {
+    // Scaduto, rovinato o non firmato dal server: niente sessione da
+    // ripristinare e niente audit a nome di un super admin non verificato.
+    // Si esce dalla sessione impersonata e si rientra dal login.
+    cookieStore.delete(SHADOW_COOKIE);
     cookieStore.delete('impersonating_label');
-    redirect('/admin');
+    cookieStore.delete('impersonating_tenant_id');
+    cookieStore.delete('impersonating_tenant_label');
+    await createServerSupabase().auth.signOut();
+    redirect('/login?reason=shadow_expired');
   }
 
   // Ripristina sessione admin: refreshSession con il refresh_token salvato.
@@ -662,7 +664,7 @@ export async function endImpersonation() {
     } as Record<string, unknown>,
   } as never);
 
-  cookieStore.delete('shadow_admin');
+  cookieStore.delete(SHADOW_COOKIE);
   cookieStore.delete('impersonating_label');
   // legacy cleanup, se presenti
   cookieStore.delete('impersonating_tenant_id');

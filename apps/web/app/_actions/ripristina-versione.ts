@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { requireTenantContext } from '@kommessa/api/tenant';
 import type { Json } from '@kommessa/api';
 
 import { isSuperadminActor } from '../admin/_lib/guard';
@@ -49,6 +50,16 @@ export async function ripristinaVersione(
   }
   const email = attore.email ?? 'superadmin';
 
+  // In ufficio il super admin agisce impersonando un utente del tenant: il
+  // ripristino resta dentro il tenant di quella sessione, anche con il client
+  // di servizio.
+  let tenantId: string;
+  try {
+    tenantId = (await requireTenantContext()).tenantId;
+  } catch {
+    return { ok: false, error: 'Sessione non valida' };
+  }
+
   const service = createServiceSupabase();
 
   // 1) Carica la versione da ripristinare
@@ -56,6 +67,7 @@ export async function ripristinaVersione(
     .from('commessa_versioni' as never)
     .select('id, tenant_id, commessa_id, snapshot')
     .eq('id', versioneId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (verErr || !verRaw) return { ok: false, error: 'Versione non trovata' };
   const ver = verRaw as unknown as {
@@ -75,10 +87,11 @@ export async function ripristinaVersione(
       'descrizione_ai_finale, cliente_indirizzo_cantiere, note_iniziali, is_critica, stato, responsabile_id, cliente_id',
     )
     .eq('id', commessaId)
+    .eq('tenant_id', tenantId)
     .maybeSingle();
   if (comErr || !comRaw) return { ok: false, error: 'Commessa non trovata' };
   const com = comRaw as unknown as Parameters<typeof buildSnapshot>[0];
-  const referentiPrima = await caricaReferenti(service, commessaId);
+  const referentiPrima = await caricaReferenti(service, commessaId, tenantId);
   const snapshotPrima = buildSnapshot(com, referentiPrima);
 
   // 3) Applica i contenuti della versione (NO voci, NO campi congelati).
@@ -95,11 +108,17 @@ export async function ripristinaVersione(
   const { error: updErr } = await service
     .from('commesse')
     .update(updatePatch)
-    .eq('id', commessaId);
+    .eq('id', commessaId)
+    .eq('tenant_id', tenantId);
   if (updErr) return { ok: false, error: `Ripristino fallito: ${updErr.message}` };
 
   // 4) Referenti scope-commessa = quelli dello snapshot
-  await service.from('contatto_cliente' as never).delete().eq('commessa_id', commessaId);
+  const { error: delErr } = await service
+    .from('contatto_cliente' as never)
+    .delete()
+    .eq('commessa_id', commessaId)
+    .eq('tenant_id', tenantId);
+  if (delErr) return { ok: false, error: `Ripristino referenti fallito: ${delErr.message}` };
   const toInsert = (target.referenti ?? [])
     .filter((r) => r.nome && r.nome.trim().length > 0)
     .map((r, idx) => ({
@@ -114,7 +133,8 @@ export async function ripristinaVersione(
       ordine: idx,
     }));
   if (toInsert.length > 0) {
-    await service.from('contatto_cliente' as never).insert(toInsert as never);
+    const { error: insErr } = await service.from('contatto_cliente' as never).insert(toInsert as never);
+    if (insErr) return { ok: false, error: `Ripristino referenti fallito: ${insErr.message}` };
   }
 
   // 5) Nuova versione 'ripristino'
@@ -164,11 +184,13 @@ export async function ripristinaVersione(
 async function caricaReferenti(
   service: ReturnType<typeof createServiceSupabase>,
   commessaId: string,
+  tenantId: string,
 ) {
   const { data } = await service
     .from('contatto_cliente' as never)
     .select('nome, ruolo, telefono, email')
-    .eq('commessa_id', commessaId);
+    .eq('commessa_id', commessaId)
+    .eq('tenant_id', tenantId);
   return (data ?? []) as unknown as Array<{
     nome: string;
     ruolo: string | null;

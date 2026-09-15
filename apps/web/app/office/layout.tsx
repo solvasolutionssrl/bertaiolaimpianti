@@ -9,6 +9,7 @@ import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { tenantFeatureEnabled } from '../_lib/tenant-features';
 import { OfficeShellClient } from './_components/office-shell-client';
+import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { ImpersonationBanner } from './_components/impersonation-banner';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
@@ -149,7 +150,7 @@ export default async function OfficeLayout({
   // Nuovo formato (JWT shadow): cookie `shadow_admin` (httpOnly) presente +
   // `impersonating_label` (visibile al banner client).
   // Legacy v1 (solo cookie tenant): impersonating_tenant_id.
-  const hasShadow = cookieJar.get('shadow_admin') !== undefined;
+  const hasShadow = leggiShadow(cookieJar.get(SHADOW_COOKIE)?.value) !== null;
   const legacyTenantId = cookieJar.get('impersonating_tenant_id')?.value ?? null;
   const impersonatingLabel =
     cookieJar.get('impersonating_label')?.value ??

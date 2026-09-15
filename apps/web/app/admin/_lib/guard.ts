@@ -2,6 +2,9 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
+
+import { leggiShadow, SHADOW_COOKIE } from './shadow';
 
 /**
  * Contesto autenticato di un platform admin SOLVA.
@@ -81,15 +84,20 @@ export async function isSuperadminActor(): Promise<{
   ok: boolean;
   email: string | null;
 }> {
-  // 1) Impersonation attiva (shadow_admin httpOnly)
-  const shadow = cookies().get('shadow_admin')?.value;
+  // 1) Impersonation attiva: vale solo un cookie firmato dal server, non
+  //    scaduto, di un utente che nel database è ancora super admin. Un cookie
+  //    con quel nome impostato a mano non basta più.
+  const shadow = leggiShadow(cookies().get(SHADOW_COOKIE)?.value);
   if (shadow) {
-    try {
-      const parsed = JSON.parse(shadow) as { admin_email?: string };
-      return { ok: true, email: parsed.admin_email ?? null };
-    } catch {
-      return { ok: true, email: null };
+    const { data } = await createServiceSupabase()
+      .from('users')
+      .select('is_platform_admin')
+      .eq('id', shadow.admin_user_id)
+      .maybeSingle();
+    if ((data as { is_platform_admin?: boolean } | null)?.is_platform_admin === true) {
+      return { ok: true, email: shadow.admin_email };
     }
+    return { ok: false, email: null };
   }
   // 2) Superadmin nativo (non in impersonation)
   const check = await checkPlatformAdmin();
