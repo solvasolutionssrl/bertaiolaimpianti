@@ -1,6 +1,6 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.5
+**Versione**: 1.6
 **Stato**: Attivo (in produzione)
 **Ultimo aggiornamento**: 15/09/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
@@ -120,14 +120,14 @@ Per un cantiere, alla timbratura/fine turno si propongono **solo**:
 
 1. la **sede predefinita** del tenant (`is_default` — proposta **sempre**, non serve collegarla);
 2. le **sedi collegate a quel cantiere** (righe di `cantiere_sede`);
-3. l'**abitazione privata** a fine turno (opzione sintetica, 0 km / 0 tempo).
+3. l'**abitazione privata** a fine turno (opzione sintetica, 0 km / 0 tempo). Non in «Registra giornata», dove partenza e rientro sono sempre una sede (§7.6).
 
 **Non** compaiono le sedi collegate ad **altri** cantieri. *Esempio: "Hotel Excelsior", collegato solo al cantiere Monfalcone, non appare nei cantieri non collegati.*
 
 ### Dove è applicata (UI + dati)
 
-- **UI**: scansione QR (`/t/[token]`), fine turno/pausa in app (`turno-azioni-contesto`), wizard caposquadra (`gestione-squadra`), **inserimento manuale ore** (il dialog filtra le sedi in base al cantiere scelto).
-- **Dati (server)**: la regola è **rivalidata lato server** da `sedeAmmessaPerCantiere` in `validaViaggio` e in `registraOreManuali` → una sede non predefinita e non associata al cantiere viene **rifiutata** (`SEDE_NON_VALIDA`), anche se forzata da client.
+- **UI**: scansione QR (`/t/[token]`), fine turno/pausa in app (`turno-azioni-contesto`), wizard caposquadra (`gestione-squadra`), **Registra giornata** (filtra le sedi in base ai cantieri della giornata).
+- **Dati (server)**: la regola è **rivalidata lato server** da `sedeAmmessaPerCantiere` in `validaViaggio` (anche per partenza e rientro di `registraGiornataDaZero`, e per le sue tratte via sede) → una sede non predefinita e non associata al cantiere viene **rifiutata** (`SEDE_NON_VALIDA`), anche se forzata da client.
 
 ### Gestione lato ufficio
 
@@ -183,7 +183,7 @@ Tutte in `tenant_modules.config` (per-tenant), pagina **Impostazioni → Kantier
 | `sede_partenza_default` | vuoto | Indirizzo proposto come sede di partenza ai cantieri nuovi. Sede predefinita e sedi collegate si gestiscono nella pagina Sedi (§4). |
 | `routing_provider` | free | Provider di stima e geocoding (§5), scelto dal super admin. |
 
-La pagina riporta anche le regole fisse: andata e ritorno fuori dall'orario, tratte fra cantieri come viaggio (§3.1), lavoro dalla sede (§3.2), abitazione privata senza viaggio.
+La pagina riporta anche le regole fisse: andata e ritorno fuori dall'orario, tratte fra cantieri come viaggio (§3.1), lavoro dalla sede (§3.2), partenza e rientro (in Registra giornata sempre una sede, di default la predefinita; l'abitazione privata, senza viaggio, solo avviando o chiudendo il turno dall'app).
 
 ### Approvazione giornate e anomalie
 | Chiave | Default | Effetto |
@@ -391,10 +391,10 @@ pilota FPM).
 
 | Punto | Regola |
 |---|---|
-| Partenza e rientro | Si indicano una volta, agli estremi: abitazione privata (nessun viaggio), sede predefinita, sedi del cantiere (§4). Chi non tocca il rientro se lo trova uguale alla partenza. |
-| Chi guidava | Per **ogni tratta con strada** (sede → cantiere, cantiere → cantiere, cantiere → sede), con un'etichetta compatta che si apre: «Ero passeggero» / «Guidavo io» e il mezzo. Da e verso l'abitazione privata **non si chiede**. Una tratta non toccata prende l'ultima scelta; si propone l'ultimo mezzo guidato, c'è anche «Mezzo non in elenco» (15/09/2026). |
-| Tratte fra cantieri | Le costruisce il sistema, **dirette**, con km e tempo stimati. Toccandole si cambiano in «passando da una sede» (sedi ammesse per entrambi i cantieri) o «passando da casa» (nessun viaggio di lavoro). |
-| Obbligatori | Partenza, rientro, tempo della tratta se la stima non c'è, motivo se il tempo è diverso dalla stima, chi guidava e il mezzo su ogni tratta con strada. Quello che manca lo chiede il foglio «Il viaggio» quando si preme «Registra giornata». |
+| Partenza e rientro | Agli estremi, **di default la sede predefinita**; si può scegliere una sede del cantiere (§4). In Registra giornata **non c'è l'abitazione privata** (15/09/2026). Chi non tocca il rientro se lo trova uguale alla partenza. Se tutti i cantieri sono «Lavoro dalla sede sul progetto», partenza e rientro **non si chiedono**. |
+| Chi guidava | Per **ogni tratta con strada** (sede → cantiere, cantiere → cantiere, cantiere → sede), con un'etichetta compatta che si apre: «Ero passeggero» / «Guidavo io» e il mezzo. Dove non c'è strada (stessa sede, tutto il giorno in sede) **non si chiede**. Una tratta non toccata prende l'ultima scelta, ma cambiare una tratta non cambia quelle prima, che tengono quello che mostravano; si propone l'ultimo mezzo guidato, c'è anche «Mezzo non in elenco» (15/09/2026). |
+| Tratte fra cantieri | Le costruisce il sistema, **dirette**, con km e tempo stimati. Toccandole si cambiano in «passando da una sede» (sedi ammesse per entrambi i cantieri) o «passando da casa» (nessun viaggio di lavoro). Dallo stesso menu si **corregge il tempo** della tratta, come per partenza e rientro, con un motivo se si scosta dalla stima (15/09/2026). |
+| Obbligatori | Tempo della tratta se la stima non c'è, motivo se il tempo è diverso dalla stima, chi guidava e il mezzo su ogni tratta con strada. Quello che manca lo chiede il foglio «Il viaggio» quando si preme «Registra giornata». |
 | Passeggero | Se su una tratta si è indicato «Ero passeggero» compare la conferma «Hai viaggiato da passeggero?» (§7.4); «No, guidavo io» riapre chi guidava su quella tratta. |
 
 **Tempo di viaggio e ore**
@@ -408,10 +408,12 @@ pilota FPM).
   La barra in basso mostra la giornata intera: partenza (= inizio − andata),
   lavoro con la pausa, rientro (= fine + ritorno).
 - Le **tratte fra cantieri** stanno **dentro** l'orario dichiarato e sono
-  **viaggio** (dal 15/09/2026, §3.1): le ore da assegnare ai cantieri sono
-  (fine − inizio) − pausa − tratte, e fra l'uscita da un cantiere e l'ingresso nel
+  **viaggio** (dal 15/09/2026, §3.1): la fine si calcola come inizio + ore +
+  pausa + tratte, e fra l'uscita da un cantiere e l'ingresso nel
   successivo resta un buco pari alla tratta. `durata_confermata_min` = stima
-  arrotondata. Pagina e server calcolano le tratte con la stessa funzione pura
+  arrotondata, o il tempo corretto a mano dal menu della tratta (con motivo in
+  `giustificazione` se si scosta dalla stima; passando da una sede il tempo corretto
+  si divide fra le due righe in proporzione alle stime). Pagina e server calcolano le tratte con la stessa funzione pura
   (`viaggioFraCantieri`): il salvataggio aspetta le stime, la barra mostra le
   tratte con il tratteggio del viaggio e il totale del viaggio le comprende.
 - Se la pausa cadrebbe sullo stesso cambio di una tratta, va dopo 30 minuti sul
@@ -426,8 +428,8 @@ pilota FPM).
 |---|---|
 | Andata | legata alla **prima entrata** (sede, stima, tempo confermato, km, autista, mezzo) |
 | Ritorno | legata all'**ultima uscita** |
-| Diretta A → B | trasferimento (`da_cantiere_id` = A, `cantiere_id` = B), con autista e mezzo della giornata |
-| Passando dalla sede | due righe legate al cambio di cantiere: A → sede sull'uscita da A, sede → B sull'ingresso in B; tempo confermato = stima arrotondata |
+| Diretta A → B | trasferimento (`da_cantiere_id` = A, `cantiere_id` = B), con chi guidava su quella tratta e il tempo corretto a mano, se c'è |
+| Passando dalla sede | due righe legate al cambio di cantiere: A → sede sull'uscita da A, sede → B sull'ingresso in B; tempo confermato = stima arrotondata, o il tempo corretto diviso fra le due righe in proporzione alle stime |
 | Passando da casa | nessuna riga |
 
 Andata e ritorno entrano **insieme**: se l'inserimento fallisce si tolgono le

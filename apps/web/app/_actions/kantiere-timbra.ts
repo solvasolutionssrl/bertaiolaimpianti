@@ -833,7 +833,15 @@ async function registraTrasferimentiCantiere(
     dipendenteId: string;
     data: string;
     /** Coppie di cantieri; `autista`/`mezzoId` per coppia vincono su quelli della giornata. */
-    pairs: { da: string; a: string; autista?: boolean; mezzoId?: string | null }[];
+    pairs: {
+      da: string;
+      a: string;
+      autista?: boolean;
+      mezzoId?: string | null;
+      /** Tempo corretto a mano (min): vince sulla stima; la tratta si scrive anche senza stima. */
+      minuti?: number;
+      giustificazione?: string;
+    }[];
     /**
      * Chi guidava e con che mezzo, quando la giornata lo dice («Registra
      * giornata»: si indica una volta e vale per tutte le tratte). Negli altri
@@ -871,10 +879,10 @@ async function registraTrasferimentiCantiere(
       if (stima === undefined) {
         const a = coord.get(p.da);
         const b = coord.get(p.a);
-        if (!a || !b) continue; // coordinate mancanti → tratta saltata (best-effort)
-        stima = await stimaConCache(provider, a, b);
+        stima = a && b ? await stimaConCache(provider, a, b) : null;
       }
-      if (!stima) continue;
+      // Senza stima e senza un tempo indicato a mano la tratta si salta (best-effort).
+      if (!stima && p.minuti == null) continue;
       const guidava = p.autista ?? opts.autista ?? false;
       const mezzo = p.autista !== undefined ? (p.mezzoId ?? null) : (opts.mezzoId ?? null);
       inserendi.push({
@@ -886,9 +894,10 @@ async function registraTrasferimentiCantiere(
         data: opts.data,
         direzione: 'andata',
         sede_id: null,
-        durata_stimata_min: Math.round(stima.minuti),
-        durata_confermata_min: arrotondaA(Math.round(stima.minuti), stepViaggio),
-        distanza_km: stima.km,
+        durata_stimata_min: stima ? Math.round(stima.minuti) : null,
+        durata_confermata_min: p.minuti ?? (stima ? arrotondaA(Math.round(stima.minuti), stepViaggio) : 0),
+        distanza_km: stima?.km ?? null,
+        giustificazione: p.giustificazione ?? null,
         autista: guidava,
         mezzo_id: guidava ? mezzo : null,
       });
@@ -931,6 +940,9 @@ async function registraPassaggiDaSede(
       /** Chi guidava su questo passaggio; senza, vale quello della giornata. */
       autista?: boolean;
       mezzoId?: string | null;
+      /** Tempo dell'intero passaggio corretto a mano (min), diviso fra le due tratte. */
+      minuti?: number;
+      giustificazione?: string;
     }[];
     /** Stime già calcolate (chiave `da>a`, id di cantiere o sede). */
     stime?: Map<string, { minuti: number; km: number | null } | null>;
@@ -978,10 +990,27 @@ async function registraPassaggiDaSede(
         p.senzaVersoSede ? null : stima(p.uscita.cantiereId, p.sedeId),
         p.senzaDallaSede ? null : stima(p.sedeId, p.ingresso.cantiereId),
       ]);
-      const tratta = (s: { minuti: number; km: number | null } | null): ViaggioInput => ({
+      // Tempo corretto a mano: si divide fra verso la sede e dalla sede in
+      // proporzione alle stime (a metà se non ci sono).
+      let minutiVerso = versoSede ? arrotondaA(versoSede.minuti, stepViaggio) : 0;
+      let minutiDalla = dallaSede ? arrotondaA(dallaSede.minuti, stepViaggio) : 0;
+      if (p.minuti != null) {
+        const totale = minutiVerso + minutiDalla;
+        const quota = p.senzaVersoSede
+          ? 0
+          : p.senzaDallaSede
+            ? p.minuti
+            : totale > 0
+              ? Math.round((p.minuti * minutiVerso) / totale)
+              : Math.round(p.minuti / 2);
+        minutiVerso = quota;
+        minutiDalla = p.minuti - quota;
+      }
+      const tratta = (s: { minuti: number; km: number | null } | null, minuti: number): ViaggioInput => ({
         sedeId: p.sedeId,
         durataStimataMin: s ? s.minuti : null,
-        durataConfermataMin: s ? arrotondaA(s.minuti, stepViaggio) : 0,
+        durataConfermataMin: minuti,
+        ...(p.giustificazione ? { giustificazione: p.giustificazione } : {}),
         autista: p.autista ?? opts.autista,
         mezzoId:
           (p.autista ?? opts.autista) ? (p.autista !== undefined ? (p.mezzoId ?? null) : opts.mezzoId) : null,
@@ -996,7 +1025,7 @@ async function registraPassaggiDaSede(
             timbraturaId: p.uscita.id,
             ts: p.uscita.ts,
             tipo: 'uscita',
-            viaggio: tratta(versoSede),
+            viaggio: tratta(versoSede, minutiVerso),
           }),
         );
       }
@@ -1008,7 +1037,7 @@ async function registraPassaggiDaSede(
             timbraturaId: p.ingresso.id,
             ts: p.ingresso.ts,
             tipo: 'ingresso',
-            viaggio: tratta(dallaSede),
+            viaggio: tratta(dallaSede, minutiDalla),
           }),
         );
       }
@@ -1451,6 +1480,9 @@ const PercorsoGiornataSchema = z.object({
         a: z.string().uuid(),
         via: z.union([z.literal('diretto'), z.literal('casa'), z.string().uuid()]),
         ...GuidaTratta,
+        /** Tempo della tratta corretto a mano (min); con un motivo se si scosta dalla stima. */
+        durataConfermataMin: z.number().int().nonnegative().max(1440).optional(),
+        giustificazione: z.string().max(500).optional(),
       }),
     )
     .max(12)
@@ -1620,6 +1652,17 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     const st = stimeTratte.get(`${da}>${a}`);
     return st ? arrotondaA(Math.round(st.minuti), stepViaggio) : 0;
   };
+  // Tempo delle tratte fra cantieri corretto a mano: vince sulla stima.
+  const correzioniTratte = new Map<string, { durataConfermataMin: number; giustificazione?: string }>();
+  for (const p of percorso?.passaggi ?? []) {
+    if (p.durataConfermataMin != null) {
+      correzioniTratte.set(chiaveCoppia(p), { durataConfermataMin: p.durataConfermataMin, giustificazione: p.giustificazione });
+    }
+  }
+  const correzioneCoppia = (c: { da: string; a: string }) => {
+    const x = correzioniTratte.get(chiaveCoppia(c));
+    return x ? { minuti: x.durataConfermataMin, giustificazione: x.giustificazione?.trim() || undefined } : {};
+  };
   const { prima: viaggioPrima } = viaggioFraCantieri(
     parsed.data.split.map((s) => s.cantiereId),
     intermedie,
@@ -1629,6 +1672,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
         : pezzo.tipo === 'verso_sede'
           ? minutiStima(luogo(pezzo.cantiereId), pezzo.sedeId)
           : minutiStima(pezzo.sedeId, luogo(pezzo.cantiereId)),
+    (t) => correzioniTratte.get(chiaveCoppia(t))?.durataConfermataMin ?? null,
   );
   // Le stesse stime per chi scrive le tratte, con le chiavi dei cantieri. Fra
   // due luoghi uguali (la stessa sede) la tratta vale zero.
@@ -1642,6 +1686,24 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
       stimePerCantieri.set(`${t.sedeId}>${t.a}`, stimaTra(t.sedeId, luogo(t.a)));
     }
   }
+  // Un tempo che si scosta dalla stima vuole un motivo (stessa regola di validaViaggio).
+  const stimaServer = (t: (typeof intermedie)[number]): number | null => {
+    const tratto = (da: string, a: string) => (da === a ? 0 : stimeTratte.get(`${da}>${a}`) ? minutiStima(da, a) : null);
+    if (t.tipo === 'diretta') return tratto(luogo(t.da), luogo(t.a));
+    if (t.tipo !== 'via_sede') return null;
+    const x = tratto(luogo(t.da), t.sedeId);
+    const y = tratto(t.sedeId, luogo(t.a));
+    return x == null || y == null ? null : x + y;
+  };
+  for (const t of intermedie) {
+    const c = correzioniTratte.get(chiaveCoppia(t));
+    if (!c || t.tipo === 'via_casa') continue;
+    const stima = stimaServer(t);
+    if (stima != null && stima !== c.durataConfermataMin && (c.giustificazione ?? '').trim().length < 3) {
+      return { ok: false, error: 'GIUSTIFICAZIONE_RICHIESTA' };
+    }
+  }
+
   const calcConStrada = calcolaSegmentiSplit({
     ingressoMs: Date.parse(inizioIso),
     uscitaMs: Date.parse(fineIso),
@@ -1752,7 +1814,9 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     ...comune,
     data: oggi,
     pairs: intermedie.flatMap((t) =>
-      t.tipo === 'diretta' && luogo(t.da) !== luogo(t.a) ? [{ da: t.da, a: t.a, ...guidaCoppia(t) }] : [],
+      t.tipo === 'diretta' && luogo(t.da) !== luogo(t.a)
+        ? [{ da: t.da, a: t.a, ...guidaCoppia(t), ...correzioneCoppia(t) }]
+        : [],
     ),
     stime: stimePerCantieri,
   });
@@ -1775,6 +1839,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
           uscita: c.uscita,
           ingresso: c.ingresso,
           ...guidaCoppia(t),
+          ...correzioneCoppia(t),
           senzaVersoSede: luogo(t.da) === t.sedeId,
           senzaDallaSede: luogo(t.a) === t.sedeId,
         },

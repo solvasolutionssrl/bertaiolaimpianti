@@ -96,6 +96,13 @@ export interface VistaTratta {
   titolo: string;
   stima: StatoStima;
   opzioni: { via: string; titolo: string; dettaglio: string }[];
+  /** Minuti che verranno registrati (la correzione vince sulla stima). */
+  minuti: number;
+  corretta: boolean;
+  motivo: string;
+  mancante: 'motivo' | null;
+  /** La tratta ha strada: il tempo si può correggere. */
+  modificabile: boolean;
 }
 
 export interface MezzoOpzione {
@@ -131,7 +138,15 @@ export function Tappa({
       <span
         aria-hidden="true"
         className="absolute left-[10px] border-l-2 border-dashed border-sky-300"
-        style={inizio ? { top: centro, bottom: 0 } : fine ? { top: 0, height: centro } : { top: 0, bottom: 0 }}
+        style={
+          inizio && fine
+            ? { display: 'none' }
+            : inizio
+              ? { top: centro, bottom: 0 }
+              : fine
+                ? { top: 0, height: centro }
+                : { top: 0, bottom: 0 }
+        }
       />
       <span className="absolute left-0" style={{ top: nodoTop }}>
         {nodo}
@@ -242,7 +257,7 @@ function EditorTempo({
   onMinuti,
   onMotivo,
 }: {
-  vista: VistaEstremo;
+  vista: Pick<VistaEstremo, 'stima' | 'minuti' | 'corretta' | 'motivo'> & { mancante: string | null };
   disabled?: boolean;
   onMinuti: (m: number) => void;
   onMotivo: (t: string) => void;
@@ -310,7 +325,7 @@ function EditorTempo({
 
 /**
  * Partenza o rientro: una card che si apre come un menu. Dentro, i luoghi
- * ammessi (abitazione privata, sede predefinita, sedi del cantiere) e, per una
+ * ammessi (sede predefinita e sedi del cantiere) e, per una
  * sede, il tempo di viaggio con la stima.
  */
 export function CardEstremo({
@@ -590,7 +605,8 @@ export function ChipGuida({
 
 /**
  * La tratta fra due cantieri: una riga piccola con km e tempo calcolati, che si
- * apre come un menu per dire che non era diretta. La useranno in pochi.
+ * apre come un menu per dire che non era diretta e per correggere il tempo,
+ * come la partenza e il rientro.
  */
 export function TrattaFraCantieri({
   vista,
@@ -598,6 +614,8 @@ export function TrattaFraCantieri({
   disabled,
   onApri,
   onScegli,
+  onMinuti,
+  onMotivo,
   children,
 }: {
   vista: VistaTratta;
@@ -605,6 +623,8 @@ export function TrattaFraCantieri({
   disabled?: boolean;
   onApri: () => void;
   onScegli: (via: string) => void;
+  onMinuti: (m: number) => void;
+  onMotivo: (t: string) => void;
   /** Sotto la riga: chi guidava, se la tratta ha strada. */
   children?: React.ReactNode;
 }) {
@@ -614,11 +634,11 @@ export function TrattaFraCantieri({
       <span className="text-muted-foreground">Nessun viaggio</span>
     ) : s.stato === 'arrivo' ? (
       <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Stima in corso" />
-    ) : s.minuti == null ? (
-      <span className="text-muted-foreground">Senza stima</span>
+    ) : s.minuti == null && vista.minuti <= 0 ? (
+      <span className={vista.mancante ? 'font-semibold text-amber-700' : 'text-muted-foreground'}>Senza stima</span>
     ) : (
-      <span className="font-semibold tabular-nums text-sky-700">
-        {[fmtKm(s.km), fmtHM(s.minuti)].filter(Boolean).join(' · ')}
+      <span className={`font-semibold tabular-nums ${vista.mancante ? 'text-amber-700' : 'text-sky-700'}`}>
+        {[fmtKm(s.km), fmtHM(vista.minuti), vista.corretta ? 'modificato' : null].filter(Boolean).join(' · ')}
       </span>
     );
   return (
@@ -673,9 +693,11 @@ export function TrattaFraCantieri({
               );
             })}
           </ul>
+          {vista.modificabile ? (
+            <EditorTempo vista={vista} disabled={disabled} onMinuti={onMinuti} onMotivo={onMotivo} />
+          ) : null}
           <p className="border-t border-border/70 bg-muted/25 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-            Il tempo della tratta conta come viaggio: è dentro l&apos;orario di lavoro e si toglie dalle ore da
-            assegnare ai cantieri.
+            Il tempo della tratta conta come viaggio: allunga la giornata e sposta la fine del lavoro.
           </p>
         </div>
       ) : null}

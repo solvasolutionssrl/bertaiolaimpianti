@@ -25,7 +25,7 @@ interface Props {
   festivo: FestivoRow[];
   weekend: WeekendRow[];
   oreEccessive: OreEccessiveRow[];
-  anomalie_ore_max: number;
+  sogliaVerificaOre: number;
   attivi: AnomalieAttivi;
   filtri: { from: string; to: string };
 }
@@ -47,7 +47,7 @@ export function AnomalieClient({
   festivo,
   weekend,
   oreEccessive,
-  anomalie_ore_max,
+  sogliaVerificaOre,
   attivi,
   filtri,
 }: Props) {
@@ -358,7 +358,7 @@ export function AnomalieClient({
         <Card>
           <CardHeader className="p-4 pb-2 sm:p-4 sm:pb-2">
             <CardTitle className="text-base">
-              Turno oltre soglia (&gt;{anomalie_ore_max}h){' '}
+              Turno oltre soglia (&gt;{sogliaVerificaOre}h){' '}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
                 ({oreEccessive.length})
               </span>
@@ -366,7 +366,7 @@ export function AnomalieClient({
           </CardHeader>
           <CardContent className="p-4 pt-0 sm:p-4 sm:pt-0">
             <p className="mb-3 text-xs text-muted-foreground">
-              Giornate con più di {anomalie_ore_max} ore lavorate (ordinarie più
+              Giornate con più di {sogliaVerificaOre} ore lavorate (ordinarie più
               straordinarie). Sono le giornate che restano da verificare invece di
               essere approvate in automatico.
             </p>
@@ -413,7 +413,7 @@ export function AnomalieClient({
           dipendenteNome={correggiFor.dipendenteNome}
           data={correggiFor.data}
           oreLavorate={correggiFor.ore_totali}
-          sogliaOre={anomalie_ore_max}
+          sogliaOre={sogliaVerificaOre}
           righe={[]}
         />
       ) : null}

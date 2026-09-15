@@ -7,7 +7,7 @@ import type { AppRole } from '@kommessa/api';
  * Visibilità cantieri per i tecnici — ramo "avvio turno NON libero".
  *
  * È l'implementazione del caso `avvio_turno_libero = off` (impostazione ufficio
- * "Turni & calcoli", reader `leggiImpostazioniTurno`): quando **off**, i tecnici
+ * «Turni», reader `leggiImpostazioniTurno`): quando **off**, i tecnici
  * vedono SOLO i cantieri "timbrabili" (con QR cantiere attivo); quando **on**
  * (default) vedono TUTTI i cantieri e questo helper non viene usato. **Admin e
  * office vedono sempre TUTTO.**

@@ -3,8 +3,10 @@
  *
  * iPhone emulato, tecnico demo (DEMOC). Controlla le regole del 15/09/2026:
  * - si indica solo l'ora di inizio, la fine si calcola e la pagina mostra il conto;
+ * - partenza e rientro sono di default la sede predefinita, senza abitazione
+ *   privata; tutto il giorno in sede = né partenza né rientro;
+ * - il tempo di ogni tratta fra cantieri si corregge dal suo menu, con un motivo;
  * - la pausa pranzo è arancione (tasti e barra);
- * - da e verso l'abitazione privata non si chiede chi guidava;
  * - sulle tratte con strada «Chi guidava?» è un'etichetta compatta che si apre,
  *   e se manca la chiede il foglio «Il viaggio» all'invio;
  * - chi era passeggero conferma, e «No, guidavo io» riapre quella tratta.
@@ -219,22 +221,31 @@ try {
   esito(!m.sbordo, 'la pagina non sborda di lato');
   await foto(cdp, 'rg-02-un-cantiere');
 
-  // ── Partenza da casa: niente «chi guidava» ───────────────────────────────
+  // ── Partenza e rientro: di default la sede, niente abitazione privata ────
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return /Sede Nordest/.test(cardDi(pagina(), 'Partenza')?.textContent || '') && /Sede Nordest/.test(cardDi(pagina(), 'Rientro')?.textContent || ''); })()`),
+    'partenza e rientro sono già la sede predefinita',
+  );
   await clicca(cdp, '^Partenza', { dentro: 'pagina()' });
   esito(
-    await clicca(cdp, 'Abitazione privata', { dentro: `pagina().querySelector('[role="listbox"][aria-label="Partenza"]')` }),
-    'si sceglie la partenza da casa',
+    await valuta(cdp, `(() => { ${AIUTI} const l = pagina().querySelector('[role="listbox"][aria-label="Partenza"]'); return !!l && !/Abitazione privata/.test(l.textContent); })()`),
+    'fra le partenze non c’è l’abitazione privata',
   );
-  await pausa(500);
+  await clicca(cdp, '^Partenza', { dentro: 'pagina()' });
+  esito(await valuta(cdp, `(() => { ${AIUTI} return !!chip(pagina(), 'andata'); })()`), 'dalla sede al cantiere si chiede chi guidava');
+  await foto(cdp, 'rg-03-default-sede');
+
+  // ── Tutto il giorno in sede: né partenza né rientro ───────────────────────
+  const spuntaSede = `(() => { ${AIUTI} const cb = [...pagina().querySelectorAll('label')].filter((l) => /Lavoro dalla sede sul progetto/.test(l.textContent)).map((l) => l.querySelector('input[type=checkbox]'))[0]; if (!cb) return null; cb.click(); return cb.checked; })()`;
+  esito((await valuta(cdp, spuntaSede)) === true, 'si indica il lavoro dalla sede tutto il giorno');
+  await pausa(700);
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return !chip(pagina(), 'andata') && !/Chi guidava|Guidavo io/.test(cardDi(pagina(), 'Partenza')?.textContent || ''); })()`),
-    'partendo da casa non si chiede chi guidava',
+    await valuta(cdp, `(() => { ${AIUTI} return !cardDi(pagina(), 'Partenza') && !cardDi(pagina(), 'Rientro') && /tutto il giorno in/.test(pagina().innerText) && !pagina().querySelector('button[data-guida]'); })()`),
+    'tutto il giorno in sede: partenza, rientro e chi guidava non si chiedono',
   );
-  esito(
-    await valuta(cdp, `(() => { ${AIUTI} return !chip(pagina(), 'ritorno'); })()`),
-    'nemmeno al rientro a casa',
-  );
-  await foto(cdp, 'rg-03-da-casa');
+  await foto(cdp, 'rg-03b-tutto-in-sede');
+  esito((await valuta(cdp, spuntaSede)) === false, 'tolta la sede tornano partenza e rientro');
+  await pausa(700);
 
   // ── Due cantieri: la tratta chiede chi guidava ───────────────────────────
   esito(await aggiungiCantiere(cdp, 'Logistica'), 'aggiunge il secondo cantiere');
@@ -255,7 +266,7 @@ try {
   esito(m.fine !== '17:00' && /di tratte/.test(m.conto), 'la fine comprende la tratta fra i cantieri', m.conto);
   await foto(cdp, 'rg-04-due-cantieri');
 
-  // Manca chi guidava: «Registra giornata» apre il foglio sulla tratta.
+  // Manca chi guidava: «Registra giornata» apre il foglio sul primo punto, la partenza.
   await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
   await pausa(800);
   m = await misura(cdp);
@@ -269,18 +280,43 @@ try {
   const scelta = await guidavoIo(cdp, 'foglio()');
   esito(scelta.ok, 'nel foglio si sceglie «Guidavo io»', `mezzo: ${scelta.mezzo}`);
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(foglio(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
-    'l’etichetta dice chi guidava',
+    await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(foglio(), 'andata')?.getAttribute('aria-label') || '') && /Guidavo io/.test(chip(foglio(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
+    'l’etichetta dice chi guidava, e la tratta dopo prende la stessa scelta',
   );
   await clicca(cdp, 'Torna alla giornata');
 
-  // ── Rientro in sede: prende l'ultima scelta, poi si cambia ────────────────
-  await clicca(cdp, '^Rientro', { dentro: 'pagina()' });
+  // ── Tempo della tratta fra cantieri: si corregge dal suo menu ─────────────
+  m = await misura(cdp);
+  const finePrima = m.fine;
+  await clicca(cdp, '^Diretta', { dentro: 'pagina()' });
+  const pannello = `[...pagina().querySelectorAll('button[aria-expanded="true"]')].find((b) => /^Diretta/.test(t(b.textContent)))?.parentElement`;
   esito(
-    await clicca(cdp, 'Sede Nordest', { dentro: `pagina().querySelector('[role="listbox"][aria-label="Rientro"]')` }),
-    'si sceglie il rientro in sede',
+    await valuta(cdp, `(() => { ${AIUTI} return !!(${pannello})?.querySelector('button[aria-label="Più 5 minuti"]'); })()`),
+    'anche la tratta fra cantieri ha il tempo modificabile',
   );
-  await pausa(3000);
+  esito(await clicca(cdp, 'Più 5 minuti', { dentro: pannello }), 'si aggiungono 5 minuti alla tratta');
+  m = await misura(cdp);
+  esito(!!finePrima && m.fine !== finePrima, 'la fine si sposta con il tempo della tratta', `${finePrima} → ${m.fine}`);
+  esito(
+    await valuta(cdp, `(() => { ${AIUTI} return /modificato/.test(t([...pagina().querySelectorAll('button[aria-expanded]')].find((b) => /^Diretta/.test(t(b.textContent)))?.textContent)); })()`),
+    'la tratta risulta modificata',
+  );
+  await foto(cdp, 'rg-05b-tratta-modificata');
+  // Si chiude dal titolo: con il menu aperto «Diretta» è anche un'opzione.
+  await valuta(cdp, `(() => { ${AIUTI} [...pagina().querySelectorAll('button[aria-expanded="true"]')].find((b) => /^Diretta/.test(t(b.textContent)))?.click(); return true; })()`);
+  await pausa(400);
+  await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
+  await pausa(800);
+  const motivoTratta = await valuta(
+    cdp,
+    `(() => { ${AIUTI} const i = [...(foglio()?.querySelectorAll('input[placeholder^="Motivo della modifica"]') ?? [])].filter(visibile).pop(); if (!i) return false; setValore(i, 'traffico in tangenziale'); return true; })()`,
+  );
+  esito(motivoTratta, 'senza motivo il foglio apre la tratta e lo chiede');
+  await pausa(400);
+  await clicca(cdp, 'Torna alla giornata');
+
+  // ── Rientro in sede (predefinito): prende l'ultima scelta, poi si cambia ──
+  await pausa(500);
   esito(
     await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
     'il rientro prende l’ultima scelta di chi guidava',

@@ -193,7 +193,7 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
   // Soglia "turno oltre soglia": allineata all'auto-approvazione delle giornate
   // (config `anomalia_turno_ore_max`, default 10). Così la vista Anomalie mostra
   // esattamente le giornate che vengono marcate "da verificare".
-  const anomalie_ore_max =
+  const sogliaVerificaOre =
     typeof modConfig.anomalia_turno_ore_max === 'number' ? modConfig.anomalia_turno_ore_max : 10;
 
   const def = defaultRange();
@@ -510,7 +510,7 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
       aggregato.set(chiave, cur);
     }
     for (const agg of aggregato.values()) {
-      if (agg.ore > anomalie_ore_max) {
+      if (agg.ore > sogliaVerificaOre) {
         oreEccessive.push({
           dipendente_id: agg.dipendente_id,
           dipendenteNome: dipendentiMap.get(agg.dipendente_id) ?? agg.dipendente_id,
@@ -538,7 +538,7 @@ export default async function AnomaliePageWrapper({ searchParams }: PageProps) {
         festivo={festivo}
         weekend={weekend}
         oreEccessive={oreEccessive}
-        anomalie_ore_max={anomalie_ore_max}
+        sogliaVerificaOre={sogliaVerificaOre}
         attivi={attivi}
         filtri={{ from, to }}
       />

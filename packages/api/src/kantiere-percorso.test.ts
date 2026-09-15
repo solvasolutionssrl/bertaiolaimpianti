@@ -18,6 +18,8 @@ import {
   type PezzoTratta,
   type TrattaEstrema,
   trattaModificata,
+  scegliGuidaTratta,
+  type Guida,
 } from './kantiere-percorso';
 import { calcolaSegmentiSplit, trasferimentiDaSegmenti } from './kantiere-split';
 
@@ -165,6 +167,17 @@ describe('datiMancanti', () => {
     ).toEqual([]);
   });
 
+  it('tempo di una tratta fra cantieri cambiato: serve il motivo', () => {
+    const intermedie = tratteIntermedie([{ da: 'A', a: 'B' }], {});
+    const conStrada = tratteConStrada({ andata: casa, ritorno: casa, intermedie });
+    const p = { ...base, andata: casa, ritorno: casa, conStrada, guida: () => ({ autista: false as const }) };
+    expect(datiMancanti({ ...p, modificheTratte: [{ id: 'tratta:A>B', modificata: true, motivo: '' }] })).toEqual([
+      'motivo:tratta:A>B',
+    ]);
+    expect(datiMancanti({ ...p, modificheTratte: [{ id: 'tratta:A>B', modificata: true, motivo: 'traffico' }] })).toEqual([]);
+    expect(datiMancanti({ ...p, modificheTratte: [{ id: 'tratta:A>B', modificata: false, motivo: '' }] })).toEqual([]);
+  });
+
   it('nell’ordine della pagina: andata, tratte fra cantieri, ritorno', () => {
     const intermedie = tratteIntermedie([{ da: 'A', a: 'B' }], {});
     const conStrada = tratteConStrada({ andata: sede(30), ritorno: sede(30), intermedie });
@@ -180,6 +193,19 @@ describe('datiMancanti', () => {
     expect(guidaDi('ritorno', { andata: ultima }, ultima)).toEqual(ultima);
     expect(guidaDi('ritorno', { ritorno: { autista: false } }, ultima)).toEqual({ autista: false });
     expect(guidaDi('andata', {}, null)).toBeNull();
+  });
+
+  it('scegliere una tratta non cambia quelle prima; quelle dopo prendono la nuova scelta', () => {
+    const io: Guida = { autista: true, mezzo: 'm1' };
+    const ordine: IdTratta[] = ['andata', 'tratta:a>b' as IdTratta, 'ritorno'];
+    // Andata «guidavo io», la tratta la eredita; poi il rientro «passeggero».
+    const scelte = scegliGuidaTratta(ordine, { andata: io }, io, 'ritorno', { autista: false });
+    expect(guidaDi('tratta:a>b' as IdTratta, scelte, { autista: false })).toEqual(io);
+    expect(scelte.ritorno).toEqual({ autista: false });
+    // Prima scelta della giornata: niente da fissare, le altre la ereditano.
+    const prima = scegliGuidaTratta(ordine, {}, null, 'andata', io);
+    expect(prima).toEqual({ andata: io });
+    expect(guidaDi('ritorno', prima, io)).toEqual(io);
   });
 
   it('i minuti: la correzione vince sulla stima, casa vale zero', () => {
@@ -342,6 +368,12 @@ describe('viaggioFraCantieri', () => {
     const intermedie = [{ tipo: 'diretta', da: 'A', a: 'B' } as const];
     expect(viaggioFraCantieri(['A', 'B'], intermedie, () => null)).toEqual({ prima: [0, 0], totale: 0, inArrivo: true });
     expect(viaggioFraCantieri(['A', 'B'], intermedie, () => 0)).toEqual({ prima: [0, 0], totale: 0, inArrivo: false });
+  });
+
+  it('un tempo corretto a mano vince sulla stima e non aspetta che arrivi', () => {
+    const intermedie = [{ tipo: 'diretta', da: 'A', a: 'B' } as const];
+    expect(viaggioFraCantieri(['A', 'B'], intermedie, () => null, () => 45)).toEqual({ prima: [0, 45], totale: 45, inArrivo: false });
+    expect(viaggioFraCantieri(['A', 'B'], intermedie, () => 30, () => null)).toEqual({ prima: [0, 30], totale: 30, inArrivo: false });
   });
 
   it('un solo cantiere: nessuna tratta', () => {

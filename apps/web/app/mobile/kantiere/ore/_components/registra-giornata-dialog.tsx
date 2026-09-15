@@ -1,14 +1,26 @@
 'use client';
 
-import { Fragment, useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, CalendarClock, Car, CheckCircle2, Clock, Coffee, Loader2, Minus, Plus, X } from 'lucide-react';
+import {
+  AlertCircle,
+  CalendarClock,
+  Car,
+  CheckCircle2,
+  Clock,
+  Coffee,
+  Loader2,
+  Minus,
+  Plus,
+  X,
+} from 'lucide-react';
 
 import {
   MEZZO_NON_IN_ELENCO,
   chiaveCoppia,
   datiMancanti,
   guidaDi,
+  scegliGuidaTratta,
   minutiTratta,
   passaggioDaVia,
   segmentiBarraGiornata,
@@ -100,7 +112,10 @@ function parolaMancante(m: DatoMancante): string {
 
 function testoMancanti(m: DatoMancante[]): string {
   const parole = [...new Set(m.map(parolaMancante))];
-  const elenco = parole.length > 1 ? `${parole.slice(0, -1).join(', ')} e ${parole[parole.length - 1]}` : parole[0];
+  const elenco =
+    parole.length > 1
+      ? `${parole.slice(0, -1).join(', ')} e ${parole[parole.length - 1]}`
+      : parole[0];
   return `Per registrare indica ${elenco}.`;
 }
 
@@ -126,21 +141,54 @@ function StepperMin({
 }) {
   const h = Math.floor(minuti / 60);
   const m = minuti % 60;
-  const set = (nh: number, nm: number) => onChange(Math.max(0, Math.min(23 * 60 + 59, nh * 60 + nm)));
+  const set = (nh: number, nm: number) =>
+    onChange(Math.max(0, Math.min(23 * 60 + 59, nh * 60 + nm)));
   const inputCls =
     'w-8 rounded border border-border bg-background px-0.5 py-1 text-center font-mono text-sm font-semibold tabular-nums focus:border-primary focus:outline-none disabled:opacity-50';
   const btnCls =
     'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground active:scale-95 disabled:opacity-40';
   return (
-    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-background/70 p-1">
-      <button type="button" disabled={disabled || minuti <= 0} onClick={() => onChange(Math.max(0, minuti - passo))} className={btnCls} aria-label={`Meno ${passo} minuti`}>
+    <div className="border-border bg-background/70 flex shrink-0 items-center gap-1 rounded-lg border p-1">
+      <button
+        type="button"
+        disabled={disabled || minuti <= 0}
+        onClick={() => onChange(Math.max(0, minuti - passo))}
+        className={btnCls}
+        aria-label={`Meno ${passo} minuti`}
+      >
         <Minus className="h-4 w-4" />
       </button>
-      <input type="number" inputMode="numeric" min={0} max={23} value={h} disabled={disabled} onChange={(e) => set(parseInt(e.target.value, 10) || 0, m)} aria-label="ore" className={inputCls} />
-      <span className="text-[11px] font-semibold text-muted-foreground">h</span>
-      <input type="number" inputMode="numeric" min={0} max={59} value={String(m).padStart(2, '0')} disabled={disabled} onChange={(e) => set(h, Math.min(59, parseInt(e.target.value, 10) || 0))} aria-label="minuti" className={inputCls} />
-      <span className="text-[11px] font-semibold text-muted-foreground">min</span>
-      <button type="button" disabled={disabled} onClick={() => onChange(minuti + passo)} className={btnCls} aria-label={`Più ${passo} minuti`}>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={23}
+        value={h}
+        disabled={disabled}
+        onChange={(e) => set(parseInt(e.target.value, 10) || 0, m)}
+        aria-label="ore"
+        className={inputCls}
+      />
+      <span className="text-muted-foreground text-[11px] font-semibold">h</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={59}
+        value={String(m).padStart(2, '0')}
+        disabled={disabled}
+        onChange={(e) => set(h, Math.min(59, parseInt(e.target.value, 10) || 0))}
+        aria-label="minuti"
+        className={inputCls}
+      />
+      <span className="text-muted-foreground text-[11px] font-semibold">min</span>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(minuti + passo)}
+        className={btnCls}
+        aria-label={`Più ${passo} minuti`}
+      >
         <Plus className="h-4 w-4" />
       </button>
     </div>
@@ -166,15 +214,17 @@ function TimeField({
 }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <label className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{label}</label>
+      <label className="text-muted-foreground block font-mono text-[9px] uppercase tracking-[0.14em]">
+        {label}
+      </label>
       <div className="relative">
         <div
           aria-hidden="true"
-          className={`pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2 py-1.5 text-[15px] font-semibold tabular-nums ${
+          className={`border-border bg-background pointer-events-none flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[15px] font-semibold tabular-nums ${
             disabled ? 'opacity-50' : 'text-foreground'
           }`}
         >
-          <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Clock className="text-muted-foreground h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span className="min-w-0 truncate">{value}</span>
         </div>
         <input
@@ -194,14 +244,14 @@ function TimeField({
 function FineCalcolata({ ora }: { ora: string | null }) {
   return (
     <div className="min-w-0 space-y-0.5">
-      <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">
+      <span className="text-muted-foreground block font-mono text-[9px] uppercase tracking-[0.14em]">
         Fine lavoro · calcolata
       </span>
       <div
         aria-label="Fine lavoro calcolata"
-        className="flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-primary/30 bg-primary/[0.04] px-2 py-1.5 text-[15px] font-semibold tabular-nums"
+        className="border-primary/30 bg-primary/[0.04] flex items-center justify-center gap-1.5 rounded-lg border border-dashed px-2 py-1.5 text-[15px] font-semibold tabular-nums"
       >
-        <Clock className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Clock className="text-muted-foreground h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span className={ora ? 'text-foreground' : 'text-muted-foreground'}>{ora ?? '--:--'}</span>
       </div>
     </div>
@@ -216,7 +266,13 @@ export interface SedeOpzione {
 }
 
 /** `daSede` = «Lavoro dalla sede sul progetto»: ore del cantiere, luogo la sede predefinita. */
-type RigaCantiere = { cantiereId: string; nome: string; codice: string | null; minuti: number; daSede: boolean };
+type RigaCantiere = {
+  cantiereId: string;
+  nome: string;
+  codice: string | null;
+  minuti: number;
+  daSede: boolean;
+};
 
 /**
  * Partenza o rientro come li ha scelti l'utente. La correzione del tempo vale
@@ -240,7 +296,8 @@ const chiaveTra = (da: Luogo, a: Luogo) =>
 /** Il corpo della richiesta a `/api/routing/stima` per una tratta. */
 function corpoStima(da: Luogo, a: Luogo): Record<string, string> {
   if (da.tipo === 'sede' && a.tipo === 'sede') return { daSedeId: da.id, aSedeId: a.id };
-  if (da.tipo === 'cantiere' && a.tipo === 'cantiere') return { daCantiereId: da.id, aCantiereId: a.id };
+  if (da.tipo === 'cantiere' && a.tipo === 'cantiere')
+    return { daCantiereId: da.id, aCantiereId: a.id };
   return da.tipo === 'sede'
     ? { sedeId: da.id, cantiereId: a.id, direzione: 'andata' }
     : { sedeId: a.id, cantiereId: da.id, direzione: 'ritorno' };
@@ -249,7 +306,8 @@ function corpoStima(da: Luogo, a: Luogo): Record<string, string> {
 const stessoLuogo = (a: Estremo | null, b: Estremo | null) =>
   a?.tipo === b?.tipo && (a?.tipo !== 'sede' || (b?.tipo === 'sede' && a.sedeId === b.sedeId));
 
-const tipoLuogoSede = (tipo: string | undefined) => (tipo === 'hotel' ? 'hotel' : 'sede') as 'hotel' | 'sede';
+const tipoLuogoSede = (tipo: string | undefined) =>
+  (tipo === 'hotel' ? 'hotel' : 'sede') as 'hotel' | 'sede';
 
 /**
  * Registra una giornata SENZA timbrature: ora di inizio, pausa, cantieri con le
@@ -302,6 +360,11 @@ export function RegistraGiornataDialog({
   const [guide, setGuide] = useState<Partial<Record<IdTratta, Guida>>>({});
   const [ultimaGuida, setUltimaGuida] = useState<Guida | null>(null);
   const [passaggi, setPassaggi] = useState<Record<string, Passaggio>>({});
+  // Tempo delle tratte fra cantieri corretto a mano. `firma` = la tratta su cui è
+  // stato corretto: cambiando via o luoghi torna la stima.
+  const [correzioniTratte, setCorrezioniTratte] = useState<
+    Record<string, { firma: string; minuti: number; motivo: string }>
+  >({});
   const [stime, setStime] = useState<Record<string, StatoStima>>({});
   const [aperto, setAperto] = useState<Apribile | null>(null);
   const [foglio, setFoglio] = useState(false);
@@ -330,36 +393,59 @@ export function RegistraGiornataDialog({
     const assoc = new Set(cantiereId ? (sediPerCantiere[cantiereId] ?? []) : []);
     return sedi
       .filter((s) => s.isDefault || assoc.has(s.id))
-      .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.nome.localeCompare(b.nome, 'it'));
+      .sort(
+        (a, b) => Number(b.isDefault) - Number(a.isDefault) || a.nome.localeCompare(b.nome, 'it'),
+      );
   };
   const primo = righe[0]?.cantiereId ?? null;
   const ultimo = righe.length > 0 ? righe[righe.length - 1]!.cantiereId : null;
   const sediAndata = sediAmmesse(primo);
   const sediRitorno = sediAmmesse(ultimo);
 
-  /** Una sede che il cantiere non ammette più (cantieri cambiati) va riscelta. */
-  const luogoValido = (l: Estremo | null, ammesse: SedeOpzione[]): Estremo | null => {
-    if (ammesse.length === 0) return { tipo: 'casa' }; // nessuna sede: resta solo casa
-    if (l?.tipo === 'sede' && !ammesse.some((s) => s.id === l.sedeId)) return null;
-    return l;
-  };
-  const luogoAndata = luogoValido(partenza.luogo, sediAndata);
-  const luogoRitorno = luogoValido(rientro.luogo, sediRitorno);
-
   // Dove si lavora su ogni cantiere: in cantiere, oppure nella sede predefinita
   // con «Lavoro dalla sede sul progetto». Le tratte partono e arrivano da lì.
   const sedeDefault = sedi.find((s) => s.isDefault) ?? null;
+  const sedeDefaultLuogo: Estremo | null = sedeDefault
+    ? { tipo: 'sede', sedeId: sedeDefault.id }
+    : null;
+  // Tutto il giorno dalla sede: partenza e rientro non si chiedono.
+  const tuttoInSede = righe.length > 0 && sedeDefault != null && righe.every((r) => r.daSede);
+  const mostraPartenza = !tuttoInSede && sediAndata.length > 0;
+  const mostraRientro = !tuttoInSede && sediRitorno.length > 0;
+
+  /**
+   * Partenza e rientro: di default la sede predefinita (in Registra giornata non
+   * c'è l'abitazione privata). Una sede che il cantiere non ammette più torna
+   * alla predefinita. Quando l'estremo non si mostra non c'è viaggio da indicare.
+   */
+  const luogoEstremo = (
+    scelto: Estremo | null,
+    ammesse: SedeOpzione[],
+    mostra: boolean,
+  ): Estremo => {
+    const predefinito: Estremo = sedeDefaultLuogo ?? { tipo: 'casa' };
+    if (!mostra) return predefinito;
+    if (scelto?.tipo === 'sede' && ammesse.some((s) => s.id === scelto.sedeId)) return scelto;
+    return predefinito;
+  };
+  const luogoAndata = luogoEstremo(partenza.luogo, sediAndata, mostraPartenza);
+  const luogoRitorno = luogoEstremo(rientro.luogo ?? partenza.luogo, sediRitorno, mostraRientro);
   const luogoCantiere = new Map<string, Luogo>(
     righe.map((r) => [
       r.cantiereId,
       r.daSede && sedeDefault ? inSede(sedeDefault.id) : { tipo: 'cantiere', id: r.cantiereId },
     ]),
   );
-  const luogoDi = (cantiereId: string): Luogo => luogoCantiere.get(cantiereId) ?? { tipo: 'cantiere', id: cantiereId };
+  const luogoDi = (cantiereId: string): Luogo =>
+    luogoCantiere.get(cantiereId) ?? { tipo: 'cantiere', id: cantiereId };
   const andataSenzaViaggio =
-    luogoAndata?.tipo === 'sede' && primo != null && stessoPosto(inSede(luogoAndata.sedeId), luogoDi(primo));
+    luogoAndata?.tipo === 'sede' &&
+    primo != null &&
+    stessoPosto(inSede(luogoAndata.sedeId), luogoDi(primo));
   const ritornoSenzaViaggio =
-    luogoRitorno?.tipo === 'sede' && ultimo != null && stessoPosto(luogoDi(ultimo), inSede(luogoRitorno.sedeId));
+    luogoRitorno?.tipo === 'sede' &&
+    ultimo != null &&
+    stessoPosto(luogoDi(ultimo), inSede(luogoRitorno.sedeId));
   const chiaveAndata =
     luogoAndata?.tipo === 'sede' && primo && !andataSenzaViaggio
       ? chiaveTra(inSede(luogoAndata.sedeId), luogoDi(primo))
@@ -376,7 +462,8 @@ export function RegistraGiornataDialog({
     senzaViaggio: boolean,
   ): TrattaEstrema => {
     const s = chiave ? stime[chiave] : undefined;
-    const corr = scelta.correzione && scelta.correzione.chiave === chiave ? scelta.correzione : null;
+    const corr =
+      scelta.correzione && scelta.correzione.chiave === chiave ? scelta.correzione : null;
     return {
       luogo,
       stimaMin: s?.stato === 'ok' ? s.minuti : null,
@@ -408,17 +495,18 @@ export function RegistraGiornataDialog({
   // casa no, e nemmeno fra due cantieri seguiti dalla stessa sede.
   const stradaFra = (t: TrattaIntermedia) =>
     t.tipo === 'via_sede'
-      ? !(stessoPosto(luogoDi(t.da), inSede(t.sedeId)) && stessoPosto(luogoDi(t.a), inSede(t.sedeId)))
+      ? !(
+          stessoPosto(luogoDi(t.da), inSede(t.sedeId)) &&
+          stessoPosto(luogoDi(t.a), inSede(t.sedeId))
+        )
       : !stessoPosto(luogoDi(t.da), luogoDi(t.a));
-  const conStrada = tratteConStrada({ andata: teAndata, ritorno: teRitorno, intermedie, strada: stradaFra });
-  const guida = (id: IdTratta) => guidaDi(id, guide, ultimaGuida);
-  const mancanti = datiMancanti({
+  const conStrada = tratteConStrada({
     andata: teAndata,
     ritorno: teRitorno,
-    conStrada,
-    guida,
-    mezziDisponibili: mezzi.length,
+    intermedie,
+    strada: stradaFra,
   });
+  const guida = (id: IdTratta) => guidaDi(id, guide, ultimaGuida);
   const primoPasseggero = conStrada.find((id) => guida(id)?.autista === false) ?? null;
 
   // ── stime km e tempo, chieste mentre si compila ─────────────────────────────
@@ -426,8 +514,10 @@ export function RegistraGiornataDialog({
   const chiedi = (da: Luogo, a: Luogo) => {
     if (!stessoPosto(da, a)) richieste.push([chiaveTra(da, a), corpoStima(da, a)]);
   };
-  if (chiaveAndata && luogoAndata?.tipo === 'sede' && primo) chiedi(inSede(luogoAndata.sedeId), luogoDi(primo));
-  if (chiaveRitorno && luogoRitorno?.tipo === 'sede' && ultimo) chiedi(luogoDi(ultimo), inSede(luogoRitorno.sedeId));
+  if (chiaveAndata && luogoAndata?.tipo === 'sede' && primo)
+    chiedi(inSede(luogoAndata.sedeId), luogoDi(primo));
+  if (chiaveRitorno && luogoRitorno?.tipo === 'sede' && ultimo)
+    chiedi(luogoDi(ultimo), inSede(luogoRitorno.sedeId));
   for (const t of intermedie) {
     chiedi(luogoDi(t.da), luogoDi(t.a));
     if (t.tipo === 'via_sede') {
@@ -448,7 +538,9 @@ export function RegistraGiornataDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-        .then((r) => r.json() as Promise<{ ok?: boolean; minuti?: number | null; km?: number | null }>)
+        .then(
+          (r) => r.json() as Promise<{ ok?: boolean; minuti?: number | null; km?: number | null }>,
+        )
         .then((j) => ({
           stato: 'ok' as const,
           minuti: j.ok && typeof j.minuti === 'number' ? j.minuti : null,
@@ -473,6 +565,13 @@ export function RegistraGiornataDialog({
     if (!s || s.stato === 'arrivo') return null;
     return s.stato === 'ok' && s.minuti != null ? arrotondaA(Math.round(s.minuti), stepViaggio) : 0;
   };
+  /** L'identità di una tratta fra cantieri: via e luoghi in cui si lavora. */
+  const firmaTratta = (t: TrattaIntermedia) =>
+    `${t.tipo === 'via_sede' ? t.sedeId : t.tipo}|${chiaveTra(luogoDi(t.da), luogoDi(t.a))}`;
+  const correzioneDi = (t: TrattaIntermedia) => {
+    const c = correzioniTratte[chiaveCoppia(t)];
+    return c && c.firma === firmaTratta(t) ? c : null;
+  };
   const fraCantieri = viaggioFraCantieri(
     righe.map((r) => r.cantiereId),
     intermedie,
@@ -482,6 +581,7 @@ export function RegistraGiornataDialog({
         : pezzo.tipo === 'verso_sede'
           ? minutiTra(luogoDi(pezzo.cantiereId), inSede(pezzo.sedeId))
           : minutiTra(inSede(pezzo.sedeId), luogoDi(pezzo.cantiereId)),
+    (t) => correzioneDi(t)?.minuti ?? null,
   );
   const trasferimentiMin = fraCantieri.totale;
   // Si indica solo l'inizio: la fine è inizio + ore dei cantieri + pausa + tratte.
@@ -504,7 +604,11 @@ export function RegistraGiornataDialog({
     nettoMin: assegnato,
   });
   const viaggioNoto =
-    luogoAndata != null && luogoRitorno != null && !teAndata.inArrivo && !teRitorno.inArrivo && !fraCantieri.inArrivo;
+    luogoAndata != null &&
+    luogoRitorno != null &&
+    !teAndata.inArrivo &&
+    !teRitorno.inArrivo &&
+    !fraCantieri.inArrivo;
 
   // ── viste ────────────────────────────────────────────────────────────────────
   const nomeSede = (id: string) => sedi.find((s) => s.id === id);
@@ -525,15 +629,12 @@ export function RegistraGiornataDialog({
           : mancanti.includes(isP ? 'motivo_andata' : 'motivo_ritorno')
             ? 'motivo'
             : null;
-    const opzioni: OpzioneLuogo[] = [
-      { valore: 'casa', luogo: { tipo: 'casa' }, nome: 'Abitazione privata', tipo: 'casa' },
-      ...ammesse.map((s) => ({
-        valore: s.id,
-        luogo: { tipo: 'sede' as const, sedeId: s.id },
-        nome: s.nome,
-        tipo: tipoLuogoSede(s.tipo),
-      })),
-    ];
+    const opzioni: OpzioneLuogo[] = ammesse.map((s) => ({
+      valore: s.id,
+      luogo: { tipo: 'sede' as const, sedeId: s.id },
+      nome: s.nome,
+      tipo: tipoLuogoSede(s.tipo),
+    }));
     return {
       titolo: isP ? 'Partenza' : 'Rientro',
       segnaposto: isP ? 'Indica la partenza' : 'Indica il rientro',
@@ -559,9 +660,12 @@ export function RegistraGiornataDialog({
       stessoPosto(da, a) ? { stato: 'ok', minuti: 0, km: 0 } : stime[chiaveTra(da, a)];
     const diretta = stessaSede ? undefined : stimaTra(daL, aL);
     const kmTempo = (s: StatoStima | undefined) =>
-      s?.stato === 'ok' && s.minuti != null ? [fmtKm(s.km), fmtHM(s.minuti)].filter(Boolean).join(' · ') : '';
+      s?.stato === 'ok' && s.minuti != null
+        ? [fmtKm(s.km), fmtHM(s.minuti)].filter(Boolean).join(' · ')
+        : '';
     let stima: StatoStima;
-    if (t.tipo === 'diretta') stima = stessaSede ? { stato: 'nessuna' } : (diretta ?? { stato: 'arrivo' });
+    if (t.tipo === 'diretta')
+      stima = stessaSede ? { stato: 'nessuna' } : (diretta ?? { stato: 'arrivo' });
     else if (t.tipo === 'via_casa') stima = { stato: 'nessuna' };
     else {
       const s1 = stimaTra(daL, inSede(t.sedeId));
@@ -575,7 +679,27 @@ export function RegistraGiornataDialog({
         };
     }
     const sedeScelta = t.tipo === 'via_sede' ? nomeSede(t.sedeId) : undefined;
+    // Minuti stimati (arrotondati come sul server) e correzione a mano.
+    const conStima = stima.stato === 'ok' && stima.minuti != null;
+    const stimaMin =
+      t.tipo === 'diretta'
+        ? stessaSede
+          ? 0
+          : minutiTra(daL, aL)
+        : t.tipo === 'via_sede'
+          ? (() => {
+              const x = minutiTra(daL, inSede(t.sedeId));
+              const y = minutiTra(inSede(t.sedeId), aL);
+              return x == null || y == null ? null : x + y;
+            })()
+          : 0;
+    const corr = correzioneDi(t);
     return {
+      minuti: corr ? corr.minuti : (stimaMin ?? 0),
+      corretta: corr != null && conStima && corr.minuti !== stimaMin,
+      motivo: corr?.motivo ?? '',
+      mancante: null,
+      modificabile: t.tipo !== 'via_casa' && stradaFra(t),
       chiave: chiaveCoppia(t),
       daNome: righe[i]?.nome ?? '',
       aNome: righe[i + 1]?.nome ?? '',
@@ -590,7 +714,11 @@ export function RegistraGiornataDialog({
             : `Passando da ${sedeScelta?.nome ?? 'sede'}`,
       stima,
       opzioni: [
-        { via: 'diretto', titolo: 'Diretta', dettaglio: stessaSede ? 'Nessun viaggio' : kmTempo(diretta) },
+        {
+          via: 'diretto',
+          titolo: 'Diretta',
+          dettaglio: stessaSede ? 'Nessun viaggio' : kmTempo(diretta),
+        },
         ...sediComuni(t.da, t.a).map((s) => ({
           via: s.id,
           titolo: `Passando da ${s.nome}`,
@@ -599,6 +727,21 @@ export function RegistraGiornataDialog({
         { via: 'casa', titolo: 'Passando da casa', dettaglio: 'Nessun viaggio di lavoro' },
       ],
     };
+  });
+
+  const mancanti = datiMancanti({
+    andata: teAndata,
+    ritorno: teRitorno,
+    conStrada,
+    guida,
+    mezziDisponibili: mezzi.length,
+    modificheTratte: vistaTratte
+      .filter((v) => v.modificabile)
+      .map((v) => ({
+        id: `tratta:${v.chiave}` as IdTratta,
+        modificata: v.corretta,
+        motivo: v.motivo,
+      })),
   });
 
   const mezziOrdinati = ultimoMezzoId
@@ -614,7 +757,10 @@ export function RegistraGiornataDialog({
     setAperto(null);
     setErrore(null);
     if (quale === 'partenza') {
-      setPartenza((p) => ({ luogo, correzione: stessoLuogo(p.luogo, luogo) ? p.correzione : null }));
+      setPartenza((p) => ({
+        luogo,
+        correzione: stessoLuogo(p.luogo, luogo) ? p.correzione : null,
+      }));
       // Chi non ha ancora toccato il rientro di solito torna da dove è partito.
       if (!rientroToccato) setRientro({ luogo, correzione: null });
     } else {
@@ -628,8 +774,22 @@ export function RegistraGiornataDialog({
     if (!chiave) return;
     const attuali = minutiTratta(quale === 'partenza' ? teAndata : teRitorno);
     (quale === 'partenza' ? setPartenza : setRientro)((p) => {
-      const base = p.correzione?.chiave === chiave ? p.correzione : { chiave, minuti: attuali, motivo: '' };
+      const base =
+        p.correzione?.chiave === chiave ? p.correzione : { chiave, minuti: attuali, motivo: '' };
       return { ...p, correzione: { ...base, ...patch } };
+    });
+  }
+
+  function correggiTratta(chiave: string, patch: { minuti?: number; motivo?: string }) {
+    const t = intermedie.find((x) => chiaveCoppia(x) === chiave);
+    const v = vistaTratte.find((x) => x.chiave === chiave);
+    if (!t || !v) return;
+    const firma = firmaTratta(t);
+    setErrore(null);
+    setCorrezioniTratte((p) => {
+      const base =
+        p[chiave]?.firma === firma ? p[chiave]! : { firma, minuti: v.minuti, motivo: '' };
+      return { ...p, [chiave]: { ...base, ...patch } };
     });
   }
 
@@ -640,10 +800,11 @@ export function RegistraGiornataDialog({
     // Chi dice «guidavo io» ritrova il mezzo appena scelto, o l'ultimo guidato.
     if (scelta.autista && scelta.mezzo == null) {
       const precedente = ultimaGuida?.autista ? ultimaGuida.mezzo : null;
-      const ultimoValido = ultimoMezzoId && mezzi.some((m) => m.id === ultimoMezzoId) ? ultimoMezzoId : null;
+      const ultimoValido =
+        ultimoMezzoId && mezzi.some((m) => m.id === ultimoMezzoId) ? ultimoMezzoId : null;
       valore = { autista: true, mezzo: precedente ?? ultimoValido };
     }
-    setGuide((p) => ({ ...p, [id]: valore }));
+    setGuide((p) => scegliGuidaTratta(conStrada, p, ultimaGuida, id, valore));
     setUltimaGuida(valore);
     // Scelta completa: il menu si chiude. Se manca il mezzo resta aperto sul selettore.
     if (!valore.autista || valore.mezzo != null || mezzi.length === 0) {
@@ -659,7 +820,10 @@ export function RegistraGiornataDialog({
     setRighe((prev) =>
       prev.some((r) => r.cantiereId === id)
         ? prev
-        : [...prev, { cantiereId: id, nome, codice: codiceCantiereMostrato(c), minuti: 0, daSede: false }],
+        : [
+            ...prev,
+            { cantiereId: id, nome, codice: codiceCantiereMostrato(c), minuti: 0, daSede: false },
+          ],
     );
     setErrore(null);
   }
@@ -672,7 +836,8 @@ export function RegistraGiornataDialog({
     if (teAndata.inArrivo || teRitorno.inArrivo || fraCantieri.inArrivo) {
       return setErrore('Calcolo dei tempi di viaggio in corso: riprova tra un istante.');
     }
-    if (oltreMezzanotte) return setErrore('La giornata supera la mezzanotte: controlla l’ora di inizio e le ore.');
+    if (oltreMezzanotte)
+      return setErrore('La giornata supera la mezzanotte: controlla l’ora di inizio e le ore.');
 
     // Quello che manca si chiede nel foglio «Il viaggio», aperto sul primo punto.
     if (mancanti.length > 0) {
@@ -681,9 +846,11 @@ export function RegistraGiornataDialog({
       setAperto(
         primoMancante.startsWith('guida:') || primoMancante.startsWith('mezzo:')
           ? (`guida:${primoMancante.slice(6)}` as Apribile)
-          : primoMancante === 'partenza' || primoMancante.endsWith('andata')
-            ? 'partenza'
-            : 'rientro',
+          : primoMancante.startsWith('motivo:')
+            ? (primoMancante.slice(7) as Apribile)
+            : primoMancante === 'partenza' || primoMancante.endsWith('andata')
+              ? 'partenza'
+              : 'rientro',
       );
       setFoglio(true);
       return;
@@ -719,7 +886,11 @@ export function RegistraGiornataDialog({
         inizioIso: isoOggi(inizio),
         fineIso: isoOggi(fine),
         pausaMin,
-        split: righe.map((r) => ({ cantiereId: r.cantiereId, minuti: r.minuti, daSede: r.daSede || undefined })),
+        split: righe.map((r) => ({
+          cantiereId: r.cantiereId,
+          minuti: r.minuti,
+          daSede: r.daSede || undefined,
+        })),
         percorso: {
           andata: trattaPayload(teAndata, chiaveAndata, 'andata'),
           ritorno: trattaPayload(teRitorno, chiaveRitorno, 'ritorno'),
@@ -728,6 +899,16 @@ export function RegistraGiornataDialog({
             a: t.a,
             via: t.tipo === 'diretta' ? 'diretto' : t.tipo === 'via_casa' ? 'casa' : t.sedeId,
             ...guidaPayload(`tratta:${chiaveCoppia(t)}`),
+            ...(() => {
+              const c = correzioneDi(t);
+              const v = vistaTratte.find((x) => x.chiave === chiaveCoppia(t));
+              return c && v?.modificabile
+                ? {
+                    durataConfermataMin: c.minuti,
+                    giustificazione: v.corretta ? c.motivo.trim() : undefined,
+                  }
+                : {};
+            })(),
           })),
         },
       });
@@ -791,9 +972,29 @@ export function RegistraGiornataDialog({
           onScegli={(g) => scegliGuida(id, g)}
         />
       ) : null;
-    return (
-      <ol>
-        <Tappa inizio nodoTop={14} nodo={<NodoLuogo tipo={vistaPartenza.tipo} allarme={vistaPartenza.mancante != null} />}>
+
+    const tappe: { key: string; nodo: ReactNode; nodoTop: number; contenuto: ReactNode }[] = [];
+    if (tuttoInSede) {
+      tappe.push({
+        key: 'in-sede',
+        nodo: <NodoLuogo tipo="sede" />,
+        nodoTop: 8,
+        contenuto: (
+          <p className="border-border bg-card text-muted-foreground flex min-h-[38px] items-center rounded-xl border px-3 text-xs leading-snug">
+            <span className="min-w-0 truncate">
+              <span className="text-foreground font-semibold">{sedeDefault?.nome ?? 'Sede'}</span> ·
+              tutto il giorno in sede, nessun viaggio
+            </span>
+          </p>
+        ),
+      });
+    }
+    if (mostraPartenza) {
+      tappe.push({
+        key: 'partenza',
+        nodo: <NodoLuogo tipo={vistaPartenza.tipo} allarme={vistaPartenza.mancante != null} />,
+        nodoTop: 14,
+        contenuto: (
           <CardEstremo
             vista={vistaPartenza}
             aperto={aperto === 'partenza'}
@@ -805,110 +1006,145 @@ export function RegistraGiornataDialog({
           >
             {chipGuida('andata', true)}
           </CardEstremo>
-        </Tappa>
-
-        {righe.map((r, i) => {
-          const colore = coloreCantiere(i);
-          const tratta = vistaTratte[i];
-          return (
-            <Fragment key={r.cantiereId}>
-              <Tappa nodoTop={compatto ? 8 : 7} nodo={<NodoCantiere indice={i} />}>
-                {compatto ? (
-                  <div
-                    className={`flex min-h-[38px] items-center gap-2 rounded-xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3`}
-                  >
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground">{r.nome}</span>
-                    {r.daSede ? (
-                      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-primary">In sede</span>
-                    ) : null}
-                    <span className="shrink-0 font-mono text-xs font-semibold tabular-nums text-muted-foreground">
-                      {fmtHM(r.minuti)}
-                    </span>
-                  </div>
-                ) : (
-                  <section
-                    className={`rounded-2xl border border-border border-l-4 ${colore.border} ${colore.tint} px-3 py-2 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]`}
-                  >
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="truncate text-sm font-semibold leading-tight text-foreground">{r.nome}</p>
-                        {r.codice ? (
-                          <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">{r.codice}</p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRighe((prev) => prev.filter((_, j) => j !== i));
-                          setAperto(null);
-                        }}
-                        disabled={pending}
-                        aria-label={`Rimuovi ${r.nome}`}
-                        className="-mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-destructive active:scale-95 disabled:opacity-40"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-muted-foreground">Ore lavorate</span>
-                      <StepperMin
-                        minuti={r.minuti}
-                        passo={passoMinuti}
-                        disabled={pending}
-                        onChange={(m) => setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, minuti: m } : x)))}
-                      />
-                    </div>
-                    {sedeDefault ? (
-                      <label className="mt-1.5 flex cursor-pointer items-center gap-2 select-none">
-                        <input
-                          type="checkbox"
-                          checked={r.daSede}
-                          disabled={pending}
-                          onChange={(e) =>
-                            setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, daSede: e.target.checked } : x)))
-                          }
-                          className="h-4 w-4 rounded border-input accent-primary"
-                        />
-                        <span className="text-xs text-muted-foreground">Lavoro dalla sede sul progetto</span>
-                      </label>
-                    ) : null}
-                  </section>
-                )}
-              </Tappa>
-              {tratta ? (
-                <Tappa nodoTop={10} nodo={<NodoTratta />}>
-                  <TrattaFraCantieri
-                    vista={tratta}
-                    aperto={aperto === `tratta:${tratta.chiave}`}
-                    disabled={pending}
-                    onApri={() => apriChiudi(`tratta:${tratta.chiave}`)}
-                    onScegli={(via) => {
-                      setAperto(null);
-                      setPassaggi((p) => ({ ...p, [tratta.chiave]: passaggioDaVia(via) }));
-                    }}
-                  >
-                    {chipGuida(`tratta:${tratta.chiave}`, false)}
-                  </TrattaFraCantieri>
-                </Tappa>
-              ) : null}
-            </Fragment>
-          );
-        })}
-
-        {!compatto && disponibili.length > 0 ? (
-          <Tappa nodoTop={8} nodo={<NodoAggiungi />}>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
+        ),
+      });
+    }
+    righe.forEach((r, i) => {
+      const colore = coloreCantiere(i);
+      tappe.push({
+        key: `cantiere:${r.cantiereId}`,
+        nodo: <NodoCantiere indice={i} />,
+        nodoTop: compatto ? 8 : 7,
+        contenuto: compatto ? (
+          <div
+            className={`border-border flex min-h-[38px] items-center gap-2 rounded-xl border border-l-4 ${colore.border} ${colore.tint} px-3`}
+          >
+            <span className="text-foreground min-w-0 flex-1 truncate text-[13px] font-semibold">
+              {r.nome}
+            </span>
+            {r.daSede ? (
+              <span className="text-primary shrink-0 text-[10px] font-semibold uppercase tracking-wide">
+                In sede
+              </span>
+            ) : null}
+            <span className="text-muted-foreground shrink-0 font-mono text-xs font-semibold tabular-nums">
+              {fmtHM(r.minuti)}
+            </span>
+          </div>
+        ) : (
+          <section
+            className={`border-border rounded-2xl border border-l-4 ${colore.border} ${colore.tint} px-3 py-2 shadow-[0_4px_16px_-6px_rgba(20,40,90,0.20)]`}
+          >
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-foreground truncate text-sm font-semibold leading-tight">
+                  {r.nome}
+                </p>
+                {r.codice ? (
+                  <p className="text-muted-foreground mt-0.5 truncate font-mono text-[11px]">
+                    {r.codice}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRighe((prev) => prev.filter((_, j) => j !== i));
+                  setAperto(null);
+                }}
+                disabled={pending}
+                aria-label={`Rimuovi ${r.nome}`}
+                className="text-muted-foreground hover:bg-muted hover:text-destructive -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full active:scale-95 disabled:opacity-40"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-2">
+              <span className="text-muted-foreground text-xs font-medium">Ore lavorate</span>
+              <StepperMin
+                minuti={r.minuti}
+                passo={passoMinuti}
+                disabled={pending}
+                onChange={(m) =>
+                  setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, minuti: m } : x)))
+                }
+              />
+            </div>
+            {sedeDefault ? (
+              <label className="mt-1.5 flex cursor-pointer select-none items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={r.daSede}
+                  disabled={pending}
+                  onChange={(e) =>
+                    setRighe((prev) =>
+                      prev.map((x, j) => (j === i ? { ...x, daSede: e.target.checked } : x)),
+                    )
+                  }
+                  className="border-input accent-primary h-4 w-4 rounded"
+                />
+                <span className="text-muted-foreground text-xs">
+                  Lavoro dalla sede sul progetto
+                </span>
+              </label>
+            ) : null}
+          </section>
+        ),
+      });
+      const tratta = vistaTratte[i];
+      if (tratta) {
+        tappe.push({
+          key: `tratta:${tratta.chiave}`,
+          nodo: <NodoTratta />,
+          nodoTop: 10,
+          contenuto: (
+            <TrattaFraCantieri
+              vista={{
+                ...tratta,
+                mancante:
+                  evidenzia && mancanti.includes(`motivo:tratta:${tratta.chiave}`)
+                    ? 'motivo'
+                    : null,
+              }}
+              aperto={aperto === `tratta:${tratta.chiave}`}
               disabled={pending}
-              className="flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-muted-foreground/30 bg-muted/30 text-sm font-medium text-muted-foreground hover:bg-muted/50 active:scale-[0.99] disabled:opacity-50"
+              onApri={() => apriChiudi(`tratta:${tratta.chiave}`)}
+              onScegli={(via) => {
+                setPassaggi((p) => ({ ...p, [tratta.chiave]: passaggioDaVia(via) }));
+              }}
+              onMinuti={(m) => correggiTratta(tratta.chiave, { minuti: m })}
+              onMotivo={(t) => correggiTratta(tratta.chiave, { motivo: t })}
             >
-              <Plus className="h-4 w-4" /> {righe.length === 0 ? 'Aggiungi il cantiere' : 'Aggiungi cantiere'}
-            </button>
-          </Tappa>
-        ) : null}
-
-        <Tappa fine nodoTop={14} nodo={<NodoLuogo tipo={vistaRientro.tipo} allarme={vistaRientro.mancante != null} />}>
+              {chipGuida(`tratta:${tratta.chiave}`, false)}
+            </TrattaFraCantieri>
+          ),
+        });
+      }
+    });
+    if (!compatto && disponibili.length > 0) {
+      tappe.push({
+        key: 'aggiungi',
+        nodo: <NodoAggiungi />,
+        nodoTop: 8,
+        contenuto: (
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            disabled={pending}
+            className="border-muted-foreground/30 bg-muted/30 text-muted-foreground hover:bg-muted/50 flex min-h-[38px] w-full items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm font-medium active:scale-[0.99] disabled:opacity-50"
+          >
+            <Plus className="h-4 w-4" />{' '}
+            {righe.length === 0 ? 'Aggiungi il cantiere' : 'Aggiungi cantiere'}
+          </button>
+        ),
+      });
+    }
+    if (mostraRientro) {
+      tappe.push({
+        key: 'rientro',
+        nodo: <NodoLuogo tipo={vistaRientro.tipo} allarme={vistaRientro.mancante != null} />,
+        nodoTop: 14,
+        contenuto: (
           <CardEstremo
             vista={vistaRientro}
             aperto={aperto === 'rientro'}
@@ -920,7 +1156,23 @@ export function RegistraGiornataDialog({
           >
             {chipGuida('ritorno', true)}
           </CardEstremo>
-        </Tappa>
+        ),
+      });
+    }
+
+    return (
+      <ol>
+        {tappe.map((tp, i) => (
+          <Tappa
+            key={tp.key}
+            inizio={i === 0}
+            fine={i === tappe.length - 1}
+            nodoTop={tp.nodoTop}
+            nodo={tp.nodo}
+          >
+            {tp.contenuto}
+          </Tappa>
+        ))}
       </ol>
     );
   }
@@ -931,15 +1183,27 @@ export function RegistraGiornataDialog({
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-[80] flex flex-col overflow-hidden bg-background" role="dialog" aria-modal="true" aria-label="Registra giornata">
+      <div
+        className="bg-background fixed inset-0 z-[80] flex flex-col overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Registra giornata"
+      >
         <div className="relative flex min-h-0 flex-1 flex-col">
-          <header className="flex shrink-0 items-center gap-2 border-b border-border px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-            <button type="button" onClick={onClose} aria-label="Chiudi" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95">
+          <header className="border-border flex shrink-0 items-center gap-2 border-b px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Chiudi"
+              className="text-muted-foreground hover:bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-full active:scale-95"
+            >
               <X className="h-[18px] w-[18px]" />
             </button>
             <div className="min-w-0">
-              <h2 className="text-[15px] font-semibold leading-tight tracking-tight">Registra giornata</h2>
-              <p className="truncate text-[11px] leading-tight text-muted-foreground first-letter:uppercase">
+              <h2 className="text-[15px] font-semibold leading-tight tracking-tight">
+                Registra giornata
+              </h2>
+              <p className="text-muted-foreground truncate text-[11px] leading-tight first-letter:uppercase">
                 {oggiEsteso} · senza timbrature
               </p>
             </div>
@@ -949,16 +1213,25 @@ export function RegistraGiornataDialog({
             /* ── Conferma "premium" ─────────────────────────────────────────── */
             <div className="flex flex-1 flex-col items-center justify-center gap-5 px-6 text-center">
               <span className="relative flex h-16 w-16 items-center justify-center">
-                <span aria-hidden="true" className="animate-success-glow absolute inset-[-45%] rounded-full bg-emerald-400/30 blur-xl" />
-                <span aria-hidden="true" className="animate-success-ring absolute inset-0 rounded-full bg-emerald-400/40" />
-                <span aria-hidden="true" className="animate-success-ring absolute inset-0 rounded-full border-2 border-emerald-500/50 [animation-delay:0.16s]" />
+                <span
+                  aria-hidden="true"
+                  className="animate-success-glow absolute inset-[-45%] rounded-full bg-emerald-400/30 blur-xl"
+                />
+                <span
+                  aria-hidden="true"
+                  className="animate-success-ring absolute inset-0 rounded-full bg-emerald-400/40"
+                />
+                <span
+                  aria-hidden="true"
+                  className="animate-success-ring absolute inset-0 rounded-full border-2 border-emerald-500/50 [animation-delay:0.16s]"
+                />
                 <span className="animate-success-pop relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 shadow-[0_8px_24px_-6px_rgba(16,185,129,0.5)]">
                   <CheckCircle2 className="h-9 w-9" aria-hidden="true" />
                 </span>
               </span>
               <div className="animate-fade-up space-y-1">
-                <p className="text-lg font-semibold text-foreground">Giornata registrata</p>
-                <p className="text-sm tabular-nums text-muted-foreground">
+                <p className="text-foreground text-lg font-semibold">Giornata registrata</p>
+                <p className="text-muted-foreground text-sm tabular-nums">
                   Lavoro {fmtHM(assegnato)}
                   {viaggioTotaleMin > 0 ? ` · Viaggio ${fmtHM(viaggioTotaleMin)}` : ''}
                 </p>
@@ -967,34 +1240,59 @@ export function RegistraGiornataDialog({
           ) : (
             <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overflow-x-hidden px-4 pb-5 pt-2.5">
               {/* ── La giornata: inizio, fine calcolata, pausa ─────────────────── */}
-              <section className="space-y-2 rounded-2xl border-2 border-primary/25 bg-gradient-to-b from-primary/[0.06] to-transparent px-3 py-2.5 shadow-soft">
+              <section className="border-primary/25 from-primary/[0.06] shadow-soft space-y-2 rounded-2xl border-2 bg-gradient-to-b to-transparent px-3 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/12 text-primary">
+                    <span className="bg-primary/12 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded-md">
                       <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
                     </span>
-                    <span className="text-sm font-semibold text-foreground">La giornata</span>
+                    <span className="text-foreground text-sm font-semibold">La giornata</span>
                   </span>
                   <span className="flex items-baseline gap-1.5 leading-none">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Lavoro</span>
-                    <span className="font-mono text-base font-bold tabular-nums text-primary">{fmtHM(assegnato)}</span>
+                    <span className="text-muted-foreground font-mono text-[9px] uppercase tracking-[0.14em]">
+                      Lavoro
+                    </span>
+                    <span className="text-primary font-mono text-base font-bold tabular-nums">
+                      {fmtHM(assegnato)}
+                    </span>
                   </span>
                 </div>
 
                 {/* Inizio / Fine: 2 colonne 50/50 (min-w-0 sui grid item, così il
                     time nativo iOS non allarga la traccia). */}
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
-                  <TimeField label="Inizio lavoro" value={inizio} onChange={setInizio} disabled={pending} />
+                  <TimeField
+                    label="Inizio lavoro"
+                    value={inizio}
+                    onChange={setInizio}
+                    disabled={pending}
+                  />
                   <FineCalcolata ora={fineMostrata} />
                 </div>
-                <p className="-mt-0.5 text-[11px] leading-snug text-muted-foreground" aria-live="polite">
+                <p
+                  className="text-muted-foreground -mt-0.5 text-[11px] leading-snug"
+                  aria-live="polite"
+                >
                   {fineMostrata ? (
                     <>
                       <span className="tabular-nums">{inizio}</span> + {fmtHM(assegnato)} di lavoro
-                      {pausaMin > 0 ? <> + <span className="text-amber-700">{fmtHM(pausaMin)} di pausa</span></> : null}
-                      {trasferimentiMin > 0 ? <> + <span className="text-sky-700">{fmtHM(trasferimentiMin)} di tratte</span></> : null}
+                      {pausaMin > 0 ? (
+                        <>
+                          {' '}
+                          + <span className="text-amber-700">{fmtHM(pausaMin)} di pausa</span>
+                        </>
+                      ) : null}
+                      {trasferimentiMin > 0 ? (
+                        <>
+                          {' '}
+                          +{' '}
+                          <span className="text-sky-700">{fmtHM(trasferimentiMin)} di tratte</span>
+                        </>
+                      ) : null}
                       {' = '}
-                      <span className="font-semibold tabular-nums text-foreground">{fineMostrata}</span>
+                      <span className="text-foreground font-semibold tabular-nums">
+                        {fineMostrata}
+                      </span>
                     </>
                   ) : (
                     'La fine si calcola dalle ore dei cantieri, dalla pausa e dalle tratte fra cantieri.'
@@ -1017,7 +1315,7 @@ export function RegistraGiornataDialog({
                           onClick={() => setPausaMin(p.min)}
                           className={`rounded-lg border px-1 py-1 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50 ${
                             attivo
-                              ? 'border-amber-400 bg-amber-100 text-amber-900 shadow-soft'
+                              ? 'shadow-soft border-amber-400 bg-amber-100 text-amber-900'
                               : 'border-border bg-background text-foreground hover:bg-amber-50'
                           }`}
                         >
@@ -1031,7 +1329,7 @@ export function RegistraGiornataDialog({
 
               {/* ── Il percorso: partenza, cantieri e tratte, rientro ────────── */}
               <section className="space-y-2" aria-label="Il percorso">
-                <p className="px-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                <p className="text-muted-foreground px-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em]">
                   Il percorso
                 </p>
                 {percorso(false)}
@@ -1051,17 +1349,22 @@ export function RegistraGiornataDialog({
               <section
                 role="dialog"
                 aria-label="Il viaggio"
-                className="animate-sheet-up relative flex max-h-[calc(100%-2.5rem)] flex-col overflow-hidden rounded-t-[28px] bg-background shadow-[0_-24px_48px_-16px_rgba(15,23,42,0.45)]"
+                className="animate-sheet-up bg-background relative flex max-h-[calc(100%-2.5rem)] flex-col overflow-hidden rounded-t-[28px] shadow-[0_-24px_48px_-16px_rgba(15,23,42,0.45)]"
               >
                 <div className="shrink-0 px-4 pb-2.5 pt-2">
-                  <span aria-hidden="true" className="mx-auto mb-2 block h-1 w-10 rounded-full bg-muted-foreground/25" />
+                  <span
+                    aria-hidden="true"
+                    className="bg-muted-foreground/25 mx-auto mb-2 block h-1 w-10 rounded-full"
+                  />
                   <div className="flex items-start gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
                       <Car className="h-[18px] w-[18px]" aria-hidden="true" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-[15px] font-semibold leading-tight text-foreground">Il viaggio</h3>
-                      <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                      <h3 className="text-foreground text-[15px] font-semibold leading-tight">
+                        Il viaggio
+                      </h3>
+                      <p className="text-muted-foreground mt-0.5 text-xs leading-snug">
                         Partenza, rientro e chi guidava su ogni tratta.
                       </p>
                     </div>
@@ -1069,13 +1372,13 @@ export function RegistraGiornataDialog({
                       type="button"
                       onClick={() => setFoglio(false)}
                       aria-label="Torna alla giornata"
-                      className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted active:scale-95"
+                      className="text-muted-foreground hover:bg-muted -mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full active:scale-95"
                     >
                       <X className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t border-border/70 px-4 pb-4 pt-3">
+                <div className="border-border/70 min-h-0 flex-1 overflow-y-auto overflow-x-hidden border-t px-4 pb-4 pt-3">
                   {percorso(true)}
                   {evidenzia && mancanti.length > 0 ? (
                     <p className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-snug text-amber-800">
@@ -1091,14 +1394,18 @@ export function RegistraGiornataDialog({
 
         {/* ── Footer: la barra dei tempi + il tasto, visibili anche col foglio aperto ── */}
         {!fatto ? (
-          <div className="relative z-30 shrink-0 border-t border-emerald-600/15 bg-emerald-50 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
+          <div className="relative z-30 shrink-0 border-t border-emerald-600/15 bg-emerald-50 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-10px_28px_-14px_rgba(20,40,90,0.35)]">
             <BarraGiornata
               segmenti={segmenti}
               lavoroMin={assegnato}
               pausaMin={pausaMin}
               viaggioMin={viaggioTotaleMin}
               viaggioNoto={viaggioNoto}
-              sinistra={conPartenza ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) } : { etichetta: 'Inizio', ora: inizio }}
+              sinistra={
+                conPartenza
+                  ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) }
+                  : { etichetta: 'Inizio', ora: inizio }
+              }
               destra={
                 !fineMostrata
                   ? { etichetta: 'Fine', ora: '--:--' }
@@ -1108,7 +1415,10 @@ export function RegistraGiornataDialog({
               }
             />
             {errore ? (
-              <p role="alert" className="mt-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs leading-snug text-destructive">
+              <p
+                role="alert"
+                className="border-destructive/30 bg-destructive/10 text-destructive mt-2 rounded-lg border px-3 py-1.5 text-xs leading-snug"
+              >
                 {errore}
               </p>
             ) : null}
@@ -1118,7 +1428,11 @@ export function RegistraGiornataDialog({
               disabled={pending}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-[15px] font-semibold text-white shadow-[0_8px_24px_-8px_rgba(16,185,129,0.6)] transition-transform hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
             >
-              {pending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />}
+              {pending ? (
+                <Loader2 className="h-[18px] w-[18px] animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />
+              )}
               Registra giornata
             </button>
           </div>

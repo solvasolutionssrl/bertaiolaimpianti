@@ -548,7 +548,7 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                   id="registra-giornata"
                   etichetta="Registrazione della giornata senza timbrature"
                   predefinito="attivo"
-                  descrizione="Attivo: dall’app si può registrare una giornata senza timbrature, indicando orario, pausa, cantieri e percorso."
+                  descrizione="Attivo: dall’app si può registrare una giornata senza timbrature, indicando ora di inizio, pausa, cantieri e percorso; la fine si calcola."
                 >
                   <Interruttore
                     id="registra-giornata"
@@ -561,7 +561,7 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                   etichetta="Tolleranza sulla ripartizione"
                   predefinito="5 min"
                   errore={erroreDi('tolleranzaChiusuraMin')}
-                  descrizione="Differenza massima ammessa tra le ore assegnate ai cantieri e le ore da assegnare. Entro la tolleranza il salvataggio è consentito e l’ultimo cantiere assorbe la differenza."
+                  descrizione="Alla chiusura del turno con le ore ripartite su più cantieri: differenza massima ammessa tra le ore assegnate e quelle del turno. Entro la tolleranza il salvataggio è consentito e l’ultimo cantiere assorbe la differenza."
                 >
                   <Numero
                     id="tolleranza"
@@ -666,16 +666,18 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                     dell’inizio e dopo la fine del lavoro.
                   </li>
                   <li>
-                    <span className="font-medium text-foreground">Tratte fra cantieri</span>: tempo di viaggio compreso
-                    nell’orario, sottratto alle ore di lavoro; i chilometri vanno al cantiere di destinazione.
+                    <span className="font-medium text-foreground">Tratte fra cantieri</span>: tempo di viaggio, non di
+                    lavoro; i chilometri vanno al cantiere di destinazione. In Registra giornata il tempo di ogni tratta
+                    si può correggere, con un motivo se si scosta dalla stima.
                   </li>
                   <li>
                     <span className="font-medium text-foreground">Lavoro dalla sede sul progetto</span>: le ore sono del
                     cantiere; le tratte partono e arrivano alla sede predefinita.
                   </li>
                   <li>
-                    <span className="font-medium text-foreground">Abitazione privata</span>: nessun tempo di viaggio e
-                    nessun chilometro.
+                    <span className="font-medium text-foreground">Partenza e rientro</span>: in Registra giornata sono
+                    sempre una sede, di default la predefinita; chi lavora tutto il giorno dalla sede non li indica. Avviando
+                    o chiudendo il turno dall’app è ammessa anche l’abitazione privata, senza tempo né chilometri.
                   </li>
                 </ul>
               </div>

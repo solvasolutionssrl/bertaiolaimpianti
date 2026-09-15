@@ -136,7 +136,8 @@ export type DatoMancante =
   | 'tempo_ritorno'
   | 'motivo_ritorno'
   | `guida:${IdTratta}`
-  | `mezzo:${IdTratta}`;
+  | `mezzo:${IdTratta}`
+  | `motivo:${IdTratta}`;
 
 export function idTrattaFraCantieri(c: CoppiaCantieri): IdTratta {
   return `tratta:${chiaveCoppia(c)}`;
@@ -197,6 +198,30 @@ export function guidaDi(
 }
 
 /**
+ * Chi guidava, scelto su una tratta. Le tratte prima di quella non toccate
+ * tengono quello che mostravano (l'ultima scelta ereditata): indicare
+ * «passeggero» sul rientro non cambia l'andata. Quelle dopo, non toccate,
+ * prendono la nuova scelta. `ordine` = `tratteConStrada`.
+ */
+export function scegliGuidaTratta(
+  ordine: readonly IdTratta[],
+  scelte: Readonly<Partial<Record<IdTratta, Guida>>>,
+  ultima: Guida | null,
+  id: IdTratta,
+  scelta: Guida,
+): Partial<Record<IdTratta, Guida>> {
+  const out: Partial<Record<IdTratta, Guida>> = { ...scelte };
+  if (ultima) {
+    for (const altra of ordine) {
+      if (altra === id) break;
+      if (out[altra] == null) out[altra] = ultima;
+    }
+  }
+  out[id] = scelta;
+  return out;
+}
+
+/**
  * I dati obbligatori che mancano, nell'ordine in cui compaiono sulla pagina
  * (partenza in alto, poi le tratte, rientro in fondo). Vuoto = si può registrare.
  * Chi guidava e il mezzo si chiedono per ogni tratta con strada.
@@ -208,6 +233,8 @@ export function datiMancanti(p: {
   conStrada: readonly IdTratta[];
   guida: (id: IdTratta) => Guida | null;
   mezziDisponibili: number;
+  /** Tratte fra cantieri con il tempo cambiato a mano: se si scosta dalla stima serve un motivo. */
+  modificheTratte?: readonly { id: IdTratta; modificata: boolean; motivo: string }[];
 }): DatoMancante[] {
   const out: DatoMancante[] = [];
   const estremo = (t: TrattaEstrema, luogo: DatoMancante, tempo: DatoMancante, motivo: DatoMancante) => {
@@ -227,7 +254,12 @@ export function datiMancanti(p: {
   };
   estremo(p.andata, 'partenza', 'tempo_andata', 'motivo_andata');
   chiGuida('andata');
-  for (const id of p.conStrada) if (id !== 'andata' && id !== 'ritorno') chiGuida(id);
+  for (const id of p.conStrada) {
+    if (id === 'andata' || id === 'ritorno') continue;
+    const modifica = p.modificheTratte?.find((x) => x.id === id);
+    if (modifica?.modificata && modifica.motivo.trim().length < 3) out.push(`motivo:${id}`);
+    chiGuida(id);
+  }
   estremo(p.ritorno, 'rientro', 'tempo_ritorno', 'motivo_ritorno');
   chiGuida('ritorno');
   return out;
@@ -258,6 +290,8 @@ export function viaggioFraCantieri(
   cantieri: readonly string[],
   intermedie: readonly TrattaIntermedia[],
   minuti: (pezzo: PezzoTratta) => number | null,
+  /** Minuti corretti a mano per una tratta: vincono sulla stima. null = si tiene la stima. */
+  corretti?: (t: TrattaIntermedia) => number | null,
 ): { prima: number[]; totale: number; inArrivo: boolean } {
   let inArrivo = false;
   const leggi = (pezzo: PezzoTratta) => {
@@ -273,6 +307,8 @@ export function viaggioFraCantieri(
     const da = cantieri[j - 1]!;
     const t = intermedie.find((x) => x.da === da && x.a === a);
     if (!t || t.tipo === 'via_casa') return 0;
+    const corretto = corretti?.(t);
+    if (corretto != null && Number.isFinite(corretto)) return Math.max(0, Math.round(corretto));
     if (t.tipo === 'diretta') return leggi({ tipo: 'fra_cantieri', da, a });
     return (
       leggi({ tipo: 'verso_sede', cantiereId: da, sedeId: t.sedeId }) +
