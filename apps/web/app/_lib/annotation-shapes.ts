@@ -151,31 +151,6 @@ export const HIGHLIGHT_STROKE_MULTIPLIER: number = 4;
 // Type guards
 // ---------------------------------------------------------------------
 
-export function isLine(s: Shape): s is LineShape {
-  return s.type === 'line';
-}
-export function isArrow(s: Shape): s is ArrowShape {
-  return s.type === 'arrow';
-}
-export function isRect(s: Shape): s is RectShape {
-  return s.type === 'rect';
-}
-export function isEllipse(s: Shape): s is EllipseShape {
-  return s.type === 'ellipse';
-}
-export function isText(s: Shape): s is TextShape {
-  return s.type === 'text';
-}
-export function isHighlight(s: Shape): s is HighlightShape {
-  return s.type === 'highlight';
-}
-export function isPdfTextRange(s: Shape): s is PdfTextRangeShape {
-  return (
-    s.type === 'highlight-text' ||
-    s.type === 'underline-text' ||
-    s.type === 'strike-text'
-  );
-}
 export function isComment(s: Shape): s is CommentShape {
   return s.type === 'comment';
 }

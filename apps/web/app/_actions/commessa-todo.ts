@@ -353,55 +353,6 @@ export async function aggiungiNotaTodo(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
-export async function eliminaNotaTodo(input: unknown): Promise<Result> {
-  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  const ctx = await safeCtx();
-  if (!ctx) return { ok: false, error: 'Sessione non valida' };
-
-  const supabase = createServerSupabase();
-  // RLS controlla: l'autore o admin/office
-  const { error } = await supabase
-    .from('commessa_todo_nota' as never)
-    .delete()
-    .eq('id', parsed.data.id);
-  if (error) return { ok: false, error: `Eliminazione nota fallita: ${error.message}` };
-
-  return { ok: true };
-}
-
-// ────────────────────────────────────────────────────────────
-// ALLEGATI (link a file_refs già esistenti)
-// ────────────────────────────────────────────────────────────
-
-const AttachInput = z.object({
-  todoId: z.string().uuid(),
-  fileRefId: z.string().uuid(),
-});
-
-export async function allegaFileTodo(input: unknown): Promise<Result> {
-  const parsed = AttachInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  const ctx = await safeCtx();
-  if (!ctx) return { ok: false, error: 'Sessione non valida' };
-
-  const supabase = createServerSupabase();
-  const { error } = await supabase
-    .from('commessa_todo_allegato' as never)
-    .upsert(
-      {
-        tenant_id: ctx.tenantId,
-        todo_id: parsed.data.todoId,
-        file_ref_id: parsed.data.fileRefId,
-      } as never,
-      { onConflict: 'todo_id,file_ref_id' },
-    );
-  if (error) return { ok: false, error: `Allegato fallito: ${error.message}` };
-  return { ok: true };
-}
-
 // ────────────────────────────────────────────────────────────
 // helpers
 // ────────────────────────────────────────────────────────────

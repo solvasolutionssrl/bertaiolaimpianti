@@ -9,7 +9,6 @@
     "./server": "./src/server.ts",
     "./service": "./src/service.ts",
     "./types": "./src/types/index.ts",
-    "./schemas": "./src/schemas/index.ts",
     "./tenant": "./src/tenant.ts",
     "./modules": "./src/modules.ts",
     "./kantiere": "./src/kantiere.ts",
@@ -33,7 +32,6 @@
     "./categorie-smistamento": "./src/categorie-smistamento.ts"
   },
   "scripts": {
-    "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -41,8 +39,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
     "@supabase/supabase-js": "~2.45.4",
-    "next": "14.2.15",
-    "zod": "^3.23.8"
+    "next": "14.2.15"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",

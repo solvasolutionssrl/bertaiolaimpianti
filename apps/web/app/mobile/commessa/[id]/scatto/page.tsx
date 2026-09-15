@@ -18,7 +18,7 @@ export const metadata = {
  *  - radio momento (Sopralluogo / In corso / Fine)
  *  - geo-tag automatico + timestamp
  *  - nota opzionale
- *  - upload via Server Action `uploadFotoFromForm`
+ *  - upload con il motore unico dei caricamenti (`/api/upload/media`)
  *  - durante upload, progress via `useFormStatus`
  *  - sotto: grid "Ultime caricate oggi" (max 8)
  */

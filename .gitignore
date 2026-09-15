@@ -45,3 +45,7 @@ scripts/.migrate-freshdesk-report.csv
 
 # Claude local state
 .claude/
+
+# Python
+__pycache__/
+*.pyc

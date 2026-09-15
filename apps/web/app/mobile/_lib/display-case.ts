@@ -83,12 +83,3 @@ export function titoloCase(input: string | null | undefined): string {
     })
     .join('');
 }
-
-/**
- * Variante con fallback: se il valore è vuoto ritorna il fallback (non
- * title-cased). Comodità per i template JSX.
- */
-export function titoloCaseOr(input: string | null | undefined, fallback: string): string {
-  const out = titoloCase(input);
-  return out || fallback;
-}

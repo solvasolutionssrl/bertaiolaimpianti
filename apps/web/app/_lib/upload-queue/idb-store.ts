@@ -121,12 +121,3 @@ export async function getAllJobs(): Promise<UploadJob[]> {
   for (const id of orfani) void deleteJob(id);
   return validi;
 }
-
-export async function clearAllJobs(): Promise<void> {
-  await tx(STORE_JOBS, 'readwrite', (s) => s.clear());
-  try {
-    await tx(STORE_BLOBS, 'readwrite', (s) => s.clear());
-  } catch {
-    /* noop */
-  }
-}

@@ -488,7 +488,7 @@ export type InputCostoCond = {
  * comprende il viaggio ordinario e `ore_viaggio` è il viaggio eccedente.
  * Righe precedenti alla regola (senza quote di viaggio): tutto il viaggio a parte.
  * Il notturno per fascia oraria è applicato solo se a monte si passano ore
- * notturne (qui ctx.notturno=false: predisposto, vedi TODO).
+ * notturne (qui ctx.notturno=false: predisposto, vedi la nota NB sul notturno più sopra).
  */
 export function calcolaCostoGiornataCond(input: InputCostoCond): RigaCosto {
   const conQuote = input.ore_viaggio_ordinarie != null || input.ore_viaggio_eccedenti != null;

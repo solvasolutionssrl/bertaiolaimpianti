@@ -110,9 +110,3 @@ export function codiceDaNome(nome: string): string {
     .slice(0, 40);
   return base.length >= 2 ? base : `metodo_${Date.now().toString(36).slice(-6)}`;
 }
-
-/** L'etichetta da mostrare per un codice salvato su una spesa. */
-export function nomeMetodo(metodi: MetodoPagamento[], codice: string | null): string {
-  if (!codice) return '—';
-  return metodi.find((m) => m.codice === codice)?.nome ?? codice;
-}

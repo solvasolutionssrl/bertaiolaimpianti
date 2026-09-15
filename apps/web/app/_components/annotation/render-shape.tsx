@@ -3,7 +3,7 @@
 /**
  * RenderShape — riproduzione vettoriale di una `Shape` su Konva.
  *
- * Estratto dal vecchio `photo-annotation-editor.tsx` per essere riusato
+ * Estratto dal vecchio editor delle annotazioni sulle foto (rimosso) per essere riusato
  * sia da PhotoCanvas sia da PdfCanvas (overlay sopra pagina pdf.js).
  *
  * I tipi PDF-specifici (`highlight-text` / `underline-text` / `strike-text`

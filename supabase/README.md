@@ -6,7 +6,7 @@
 Tutto il backend di Kommessa vive su Supabase Pro, region **Frankfurt EU** (GDPR). Questo folder contiene:
 
 - `migrations/` — schema SQL versionato. Una migrazione = un cambio strutturale. **Mai modificare** migrazioni già pushate.
-- `functions/` — Edge Functions Deno (webhook inbound email, notifyOnEvent, ...). TBD.
+- `functions/` — Edge Functions Deno (convert-ticket, inbound-email, notify-event, …).
 - `seed.sql` — dati di bootstrap per ambiente locale (tenant `bertaiola`, utenti demo, voci catalogo).
 - `config.toml` — config CLI Supabase per ambiente locale.
 

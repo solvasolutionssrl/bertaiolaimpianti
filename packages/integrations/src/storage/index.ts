@@ -69,20 +69,3 @@ export function getStorageProvider(config: StorageProviderConfig): StorageProvid
     }
   }
 }
-
-/**
- * Default storage provider derivato da env, per Edge Functions
- * o codice non a conoscenza del tenant. **Non** preferire in prodotto:
- * usa `getStorageProvider` con la config del tenant.
- */
-export function getDefaultStorageProvider(): StorageProvider {
-  const provider = (process.env.STORAGE_PROVIDER as StorageProviderName) ?? 'supabase';
-  if (provider === 'nextcloud') {
-    return new NextcloudStorageProvider({
-      baseUrl: process.env.NEXTCLOUD_BASE_URL!,
-      user: process.env.NEXTCLOUD_USER!,
-      appPassword: process.env.NEXTCLOUD_APP_PASSWORD!,
-    });
-  }
-  return new SupabaseStorageProvider({ bucket: 'commesse' });
-}

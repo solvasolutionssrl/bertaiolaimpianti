@@ -8,10 +8,7 @@
  * (il server ha già il fileRefId in stato uploading, è idempotente).
  */
 
-import {
-  MAX_TENTATIVI,
-  RITARDI_RETRY_MS,
-} from '@kommessa/api/upload-queue-policy';
+import { MAX_TENTATIVI } from '@kommessa/api/upload-queue-policy';
 
 import type { Momento } from '../media-upload-types';
 
@@ -85,7 +82,6 @@ export interface UploadJob {
 // Fonte unica di verità: la policy pura in @kommessa/api (unit-testata).
 // Qui restano solo gli alias storici usati dalla UI.
 export const MAX_ATTEMPTS = MAX_TENTATIVI;
-export const RETRY_DELAYS_MS = RITARDI_RETRY_MS;
 
 /** Limite client-side per video (richiesto da Bertaiola: 500 MB). */
 export const VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024;

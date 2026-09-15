@@ -28,12 +28,6 @@ const SingleInput = z.object({
   userId: z.string().uuid(),
 });
 
-const SetInput = z.object({
-  commessaId: z.string().uuid(),
-  /** Lista completa dei tecnici dopo la modifica (replace-all semantics). */
-  userIds: z.array(z.string().uuid()),
-});
-
 export type AssignResult = { ok: true } | { ok: false; error: string };
 
 /** Assegna un singolo tecnico a una commessa (idempotente). */
@@ -136,97 +130,6 @@ export async function rimuoviTecnico(input: unknown): Promise<AssignResult> {
     metadata: {
       commessa_id: parsed.data.commessaId,
       tecnico_user_id: parsed.data.userId,
-    } as unknown as never,
-  });
-
-  revalidatePath(`/office/commesse/${parsed.data.commessaId}`);
-  revalidatePath(`/mobile/commessa/${parsed.data.commessaId}`);
-  return { ok: true };
-}
-
-/**
- * Replace-all: imposta la lista completa dei tecnici di una commessa.
- * Usata dalla UI multi-select.
- */
-export async function impostaTecniciCommessa(
-  input: unknown,
-): Promise<AssignResult> {
-  const parsed = SetInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  let ctx;
-  try {
-    ctx = await requireTenantContext();
-  } catch {
-    return { ok: false, error: 'Sessione non valida' };
-  }
-  if (!ASSIGN_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono modificare le assegnazioni' };
-  }
-
-  const supabase = createServerSupabase();
-
-  // Verifica che tutti gli userIds siano tecnici del tenant
-  if (parsed.data.userIds.length > 0) {
-    const { data: users } = await supabase
-      .from('users')
-      .select('id, role, tenant_id, attivo')
-      .in('id', parsed.data.userIds);
-    const invalid = parsed.data.userIds.find((id) => {
-      const u = users?.find((x) => x.id === id);
-      return !u || u.tenant_id !== ctx.tenantId || u.role !== 'tecnico' || !u.attivo;
-    });
-    if (invalid) {
-      return { ok: false, error: 'Uno o più utenti non sono tecnici validi del tenant' };
-    }
-  }
-
-  // Delta calc: current vs desired
-  const { data: currentRows } = await supabase
-    .from('commessa_tecnici')
-    .select('user_id')
-    .eq('commessa_id', parsed.data.commessaId);
-  const current = new Set((currentRows ?? []).map((r) => r.user_id as string));
-  const desired = new Set(parsed.data.userIds);
-  const toAdd = parsed.data.userIds.filter((id) => !current.has(id));
-  const toRemove = [...current].filter((id) => !desired.has(id));
-
-  // INSERT new
-  if (toAdd.length > 0) {
-    const rows = toAdd.map((uid) => ({
-      commessa_id: parsed.data.commessaId,
-      user_id: uid,
-      tenant_id: ctx.tenantId,
-      assegnato_da: ctx.userId,
-    }));
-    const { error } = await supabase
-      .from('commessa_tecnici')
-      .upsert(rows, { onConflict: 'commessa_id,user_id' });
-    if (error) return { ok: false, error: `Add fallito: ${error.message}` };
-  }
-
-  // DELETE removed
-  if (toRemove.length > 0) {
-    const { error } = await supabase
-      .from('commessa_tecnici')
-      .delete()
-      .eq('commessa_id', parsed.data.commessaId)
-      .in('user_id', toRemove);
-    if (error) return { ok: false, error: `Remove fallito: ${error.message}` };
-  }
-
-  await supabase.from('audit_events').insert({
-    tenant_id: ctx.tenantId,
-    actor_user_id: ctx.userId,
-    actor_role: ctx.role,
-    entity_type: 'commessa_tecnico',
-    entity_id: parsed.data.commessaId,
-    action: 'commessa.tecnici.set',
-    metadata: {
-      commessa_id: parsed.data.commessaId,
-      added: toAdd,
-      removed: toRemove,
-      total: parsed.data.userIds.length,
     } as unknown as never,
   });
 

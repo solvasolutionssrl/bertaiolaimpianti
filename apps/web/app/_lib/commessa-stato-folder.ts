@@ -67,17 +67,6 @@ export function extractStatusFolder(cloudFolderPath: string): string | null {
 }
 
 /**
- * Costruisce un cloud_folder_path completo dato lo stato e il nome cartella.
- *   buildCloudFolderPath('bozza', 'BER-26-007_X') → '/01_Richieste/BER-26-007_X/'
- */
-export function buildCloudFolderPath(
-  stato: StatoCommessa,
-  nomeCartella: string,
-): string {
-  return `/${cloudFolderForStato(stato)}/${nomeCartella}/`;
-}
-
-/**
  * Inizializza le 4 cartelle di stato sotto la macro-cartella del tenant.
  * Idempotente: createFolder Nextcloud restituisce 405/409 se esistono già
  * e l'errore viene swallow-ato dallo storage provider.

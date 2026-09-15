@@ -34,29 +34,3 @@ export async function sendEmail(input: SendEmailInput) {
   } as CreateEmailOptions;
   return client().emails.send(payload);
 }
-
-/** Parsing minimal di una webhook payload Resend "email.received" → ticket draft. */
-export interface InboundEmail {
-  from: string;
-  to: string[];
-  subject: string;
-  text?: string;
-  html?: string;
-  threadId?: string;
-  attachments?: Array<{ filename: string; contentType: string; url: string }>;
-}
-
-export function parseResendInbound(payload: unknown): InboundEmail | null {
-  const data = (payload as { data?: Record<string, unknown> })?.data ?? payload;
-  if (!data || typeof data !== 'object') return null;
-  const d = data as Record<string, unknown>;
-  return {
-    from: String(d.from ?? d.from_email ?? ''),
-    to: Array.isArray(d.to) ? (d.to as string[]) : [String(d.to ?? '')],
-    subject: String(d.subject ?? ''),
-    text: typeof d.text === 'string' ? d.text : undefined,
-    html: typeof d.html === 'string' ? d.html : undefined,
-    threadId: typeof d.message_id === 'string' ? d.message_id : undefined,
-    attachments: Array.isArray(d.attachments) ? (d.attachments as InboundEmail['attachments']) : [],
-  };
-}

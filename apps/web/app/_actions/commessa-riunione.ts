@@ -190,42 +190,6 @@ export async function eliminaRiunione(input: unknown): Promise<Result> {
   return { ok: true };
 }
 
-// ─── ALLEGATO ───────────────────────────────────────────────────────
-
-const AllegatoInput = z.object({
-  riunioneId: z.string().uuid(),
-  fileRefId: z.string().uuid(),
-  kind: z.enum(['foto', 'pdf_acquisito']),
-});
-
-export async function aggiungiAllegatoRiunione(
-  input: unknown,
-): Promise<Result> {
-  const parsed = AllegatoInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'Input non valido' };
-
-  const ctx = await safeCtx();
-  if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono allegare' };
-  }
-
-  const supabase = createServerSupabase();
-  const { error } = await supabase
-    .from('commessa_riunione_allegato' as never)
-    .upsert(
-      {
-        tenant_id: ctx.tenantId,
-        riunione_id: parsed.data.riunioneId,
-        file_ref_id: parsed.data.fileRefId,
-        kind: parsed.data.kind,
-      } as never,
-      { onConflict: 'riunione_id,file_ref_id' },
-    );
-  if (error) return { ok: false, error: `Allegato fallito: ${error.message}` };
-  return { ok: true };
-}
-
 // ─── AI REPORT + TODO EXTRACTION ─────────────────────────────────────
 
 export interface TodoProposto {

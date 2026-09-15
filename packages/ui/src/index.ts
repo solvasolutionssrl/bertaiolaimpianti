@@ -1,10 +1,10 @@
 export { cn } from './lib/cn';
 
-export { Button, buttonVariants } from './components/button';
-export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './components/card';
+export { Button } from './components/button';
+export { Card, CardHeader, CardTitle, CardDescription, CardContent } from './components/card';
 export { Input } from './components/input';
 export { Label } from './components/label';
-export { Badge, badgeVariants } from './components/badge';
+export { Badge } from './components/badge';
 export { StatoBadge } from './components/stato-badge';
 export { StatoLed } from './components/stato-led';
 export type { StatoLedKind, StatoLedProps } from './components/stato-led';
@@ -23,7 +23,6 @@ export {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from './components/dialog';
 export {
   DropdownMenu,
@@ -34,7 +33,6 @@ export {
   DropdownMenuSeparator,
 } from './components/dropdown-menu';
 export { Skeleton } from './components/skeleton';
-export { Spinner } from './components/spinner';
 
 export { OfficeShell, DEFAULT_OFFICE_NAV } from './components/app-shell-office';
 export type {
@@ -42,10 +40,7 @@ export type {
   OfficeNavItem,
   OfficeUser,
 } from './components/app-shell-office';
-export {
-  MobileBottomNav,
-  DEFAULT_MOBILE_TABS,
-} from './components/mobile-bottom-nav';
+export { MobileBottomNav } from './components/mobile-bottom-nav';
 export type {
   MobileBottomNavProps,
   MobileTab,

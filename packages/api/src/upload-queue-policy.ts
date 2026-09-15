@@ -111,12 +111,3 @@ export function esitoTentativoFallito(opzioni: {
     60_000;
   return { status: 'queued', attempt, nextAttemptAt: ora + ritardo };
 }
-
-/**
- * Un job che è stato ripreso da IndexedDB dopo la chiusura dell'app è
- * "in ripresa": l'utente aveva già iniziato a caricarlo in una sessione
- * precedente. Serve alla UI per distinguerlo dai file appena aggiunti.
- */
-export function eInRipresa(job: { ripreso?: boolean | null }): boolean {
-  return job.ripreso === true;
-}

@@ -44,13 +44,6 @@ export function statoDaEventi(eventi: EventoOggi[]): StatoPresenza {
   return statoTurno(eventi).stato;
 }
 
-/** Cantiere corrente (id) se il turno è aperto, altrimenti null. */
-export function cantiereDaEventi(eventi: EventoOggi[]): string | null {
-  if (statoTurno(eventi).stato === 'idle') return null;
-  const ultimo = eventi[eventi.length - 1];
-  return ultimo?.cantiere_id ?? null;
-}
-
 /** Dettaglio presenza "di oggi" pronto per il render. */
 export function dettaglioPresenza(eventi: EventoOggi[]): DettaglioPresenza {
   const info = statoTurno(eventi);
@@ -70,32 +63,6 @@ export function dettaglioPresenza(eventi: EventoOggi[]): DettaglioPresenza {
       uscita: c.uscita ? fmtOra(c.uscita) : null,
     })),
   };
-}
-
-/** Eventi di oggi raggruppati per dipendente, per un insieme di dipendenti. */
-export async function eventiOggiPerDip(
-  supabase: ReturnType<typeof createServerSupabase>,
-  tenantId: string,
-  dipIds: string[],
-): Promise<Map<string, EventoOggi[]>> {
-  const out = new Map<string, EventoOggi[]>();
-  if (dipIds.length === 0) return out;
-  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
-  const { data } = await supabase
-    .from('timbrature' as never)
-    .select('dipendente_id, tipo, ts, pausa, cantiere_id')
-    .eq('tenant_id', tenantId)
-    .in('dipendente_id', dipIds)
-    .gte('ts', fromIso)
-    .lt('ts', toIso)
-    .order('ts', { ascending: true });
-  const rows = (data as (EventoOggi & { dipendente_id: string })[] | null) ?? [];
-  for (const r of rows) {
-    const arr = out.get(r.dipendente_id) ?? [];
-    arr.push({ tipo: r.tipo, ts: r.ts, pausa: r.pausa, cantiere_id: r.cantiere_id });
-    out.set(r.dipendente_id, arr);
-  }
-  return out;
 }
 
 /** Eventi di oggi su UN cantiere, raggruppati per dipendente. */

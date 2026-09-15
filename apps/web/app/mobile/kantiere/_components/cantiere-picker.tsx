@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Search, ChevronDown, Check, X, MapPin } from 'lucide-react';
+import { Search, Check, X, MapPin } from 'lucide-react';
 
 import { Portal } from '@/app/mobile/_components/portal';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -13,14 +13,12 @@ import {
 
 /**
  * Pacchetto ricerca cantiere riusabile ovunque serva SCEGLIERE un cantiere
- * (dialog ore a mano, avvio turno, cambio cantiere). Tre esportazioni:
+ * (avvio turno, cambio cantiere, Registra giornata). Due esportazioni:
  *
  *  - `CantiereSearchList` — casella di ricerca + lista filtrata (codice cliente,
  *    codice interno, nome, cliente, indirizzo). Card COMPATTE (2 righe, font
  *    piccolo) così ne stanno di più del solito. Presentazionale: `onPick(id)`.
  *  - `CantiereSearchSheet` — foglio full-screen in Portal (flussi standalone).
- *  - `CantierePicker` — controllo da FORM: bottone-trigger + pannello dropdown
- *    INLINE (dentro il dialog: niente Portal annidato che Radix chiuderebbe).
  *
  * REGOLE ANTI-OVERFLOW (il bug del "form gigante"): la lista scrolla SOLO in
  * verticale (`overflow-y-auto overflow-x-hidden`); tutta la catena ha `min-w-0`
@@ -263,86 +261,5 @@ export function CantiereSearchSheet({
         <div aria-hidden className="shrink-0 bg-background" style={{ height: kbH }} />
       </div>
     </Portal>
-  );
-}
-
-// ── controllo da FORM (trigger + dropdown INLINE) ────────────────────────────
-
-export function CantierePicker({
-  cantieri,
-  value,
-  onChange,
-  placeholder = 'Scegli cantiere',
-  disabled = false,
-}: {
-  cantieri: PickerCantiere[];
-  value: string | null;
-  onChange: (id: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const selected = value ? cantieri.find((c) => c.id === value) ?? null : null;
-  const codice = selected ? codiceCantiereMostrato(selected) : null;
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, [open]);
-
-  return (
-    <div ref={wrapRef} className="relative w-full min-w-0">
-      <button
-        type="button"
-        onClick={() => !disabled && setOpen((v) => !v)}
-        disabled={disabled}
-        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/40 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
-      >
-        <span className="min-w-0 flex-1 overflow-hidden">
-          {selected ? (
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium text-foreground">
-                {titoloCase(selected.nome ?? '') || codice || 'Cantiere'}
-              </span>
-              {codice ? (
-                <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-primary">
-                  {codice}
-                </span>
-              ) : null}
-            </span>
-          ) : (
-            <span className="truncate text-muted-foreground">{placeholder}</span>
-          )}
-        </span>
-        <ChevronDown
-          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
-          aria-hidden="true"
-        />
-      </button>
-
-      {/* Dropdown ASSOLUTO: si sovrappone ai campi sotto (non allunga il dialog).
-          Altezza DEFINITA (~4 card con indirizzo, poi scorre) — non max-h, che
-          romperebbe il flex-1+scroll interno. z-30 sopra i campi seguenti.
-          Sfondo azzurrino (non bianco) → si capisce che è un dropdown e stacca
-          dal modulo; le card bianche dentro risaltano. */}
-      {open ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1.5 h-[24rem] w-full min-w-0 overflow-hidden rounded-xl border border-sky-200 bg-sky-50 shadow-xl dark:border-sky-800 dark:bg-sky-950/50">
-          <CantiereSearchList
-            cantieri={cantieri}
-            selectedId={value}
-            autoFocus={false}
-            onPick={(id) => {
-              onChange(id);
-              setOpen(false);
-            }}
-          />
-        </div>
-      ) : null}
-    </div>
   );
 }

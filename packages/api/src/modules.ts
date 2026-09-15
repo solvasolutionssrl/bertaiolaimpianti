@@ -29,13 +29,6 @@ export const MODULE_CODES: ModuleCode[] = [
   'integrazione',
 ];
 
-/** Moduli che richiedono una riga esplicita in `tenant_modules` per attivarsi. */
-export const OPTIONAL_MODULE_CODES: Exclude<ModuleCode, 'base'>[] = [
-  'kantiere',
-  'dipendenti',
-  'integrazione',
-];
-
 export interface TenantModuleRow {
   module_code: string;
   attivo: boolean;

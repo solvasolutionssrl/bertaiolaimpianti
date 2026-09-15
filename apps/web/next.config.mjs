@@ -23,7 +23,6 @@ const nextConfig = {
     optimizePackageImports: [
       '@kommessa/ui',
       'lucide-react',
-      'date-fns',
     ],
     // archiver (zip cartelle ricevute) e' una lib Node lato server: una sua
     // dipendenza ha un `exports` che webpack 5 rifiuta ("Default condition

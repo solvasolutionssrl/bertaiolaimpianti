@@ -19,7 +19,6 @@ const MANAGE_ROLES = new Set<AppRole>(['admin', 'office']);
 type OkResult = { ok: true } | { ok: false; error: string };
 
 export type TipoMezzo = 'autocarro' | 'autovettura' | 'altro';
-export const TIPI_MEZZO: TipoMezzo[] = ['autocarro', 'autovettura', 'altro'];
 
 const TipoMezzoEnum = z.enum(['autocarro', 'autovettura', 'altro']);
 

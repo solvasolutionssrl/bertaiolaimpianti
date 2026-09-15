@@ -415,7 +415,7 @@ deve chiudere.
 
 - `apps/web/app/_lib/upload-queue/engine.ts` — motore R2 (init → parti → complete)
 - `apps/web/app/_lib/upload-queue/idb-store.ts` — persistenza IndexedDB
-- `apps/web/app/_lib/upload-queue/types.ts` — `MAX_ATTEMPTS`, `RETRY_DELAYS_MS`
+- `apps/web/app/_lib/upload-queue/types.ts` — `MAX_ATTEMPTS` (i ritardi di retry sono `RITARDI_RETRY_MS` in `packages/api/src/upload-queue-policy.ts`)
 - `apps/web/app/_components/upload-queue-provider.tsx` — pool, retry, wake lock
 - `apps/web/app/_components/upload-tray.tsx` — UI progresso
 - `apps/web/app/office/commesse/nuova/_lib/upload-media.ts` — secondo motore

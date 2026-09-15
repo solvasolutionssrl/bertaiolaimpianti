@@ -43,7 +43,7 @@ export interface MobileTab {
   cornerBadge?: string;
 }
 
-export const DEFAULT_MOBILE_TABS: MobileTab[] = [
+const DEFAULT_MOBILE_TABS: MobileTab[] = [
   { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
   { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
   {
