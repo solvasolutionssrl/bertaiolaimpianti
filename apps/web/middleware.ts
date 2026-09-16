@@ -1,4 +1,4 @@
-import { updateSession, resolveMobileLanding } from '@kommessa/api/server';
+import { updateSession, resolveMobileLanding, resolveOfficeLanding } from '@kommessa/api/server';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
@@ -51,6 +51,29 @@ export async function middleware(req: NextRequest) {
         url.pathname = landing;
         const redirect = NextResponse.redirect(url);
         // Preserva i cookie di sessione appena rifreshati da updateSession.
+        for (const cookie of response.cookies.getAll()) {
+          redirect.cookies.set(cookie);
+        }
+        return redirect;
+      }
+    } catch {
+      // fail-soft: prosegue con la response normale.
+    }
+  }
+
+  // Stessa cosa per l'ufficio: un tenant puro-Kantiere che apre /office va
+  // sulla Panoramica Kantiere. Il redirect stava in `office/page.tsx`, che ha
+  // un `loading.tsx` accanto (quindi gira sotto <Suspense>): stesso bug #63121.
+  // Scoped al SOLO percorso esatto /office — le altre pagine ufficio non
+  // pagano nessuna query in più. Fail-soft: se qualcosa va storto resta la
+  // dashboard commesse, vuota per quel tenant ma mai un blocco.
+  if (req.nextUrl.pathname === '/office') {
+    try {
+      const landing = await resolveOfficeLanding(req);
+      if (landing) {
+        const url = req.nextUrl.clone();
+        url.pathname = landing;
+        const redirect = NextResponse.redirect(url);
         for (const cookie of response.cookies.getAll()) {
           redirect.cookies.set(cookie);
         }

@@ -3,6 +3,7 @@ import type { CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from './types/database.generated';
+import { isModuleActive, type TenantModuleRow } from './modules';
 
 /**
  * Supabase client for Server Components / Route Handlers / Server Actions.
@@ -146,4 +147,65 @@ export async function resolveMobileLanding(req: NextRequest): Promise<string | n
 
   const isManager = u.role === 'admin' || u.role === 'office';
   return isManager ? '/mobile/kantiere/cruscotto' : '/mobile/kantiere/cantieri';
+}
+
+/**
+ * Landing dell'ufficio per i tenant puro-Kantiere, risolta nel MIDDLEWARE
+ * (redirect HTTP, PRIMA del render React) — gemella di `resolveMobileLanding`.
+ *
+ * Perché qui e non con `redirect()` in `office/page.tsx`: quella pagina ha un
+ * `loading.tsx` accanto, quindi gira sotto <Suspense>, e un `redirect()` lì
+ * dentro innesca il bug Next.js #63121 → React #310 transitorio (schermata
+ * «errore critico» all'avvio a freddo). È la landing di ogni utente ufficio di
+ * un tenant Kantiere, quindi il caso peggiore.
+ *
+ * Ritorna `/office/kantiere` solo per `app_mode = 'kantiere'` CON il modulo
+ * Kantiere attivo — la stessa condizione di `getAppModeCached`, che senza il
+ * modulo torna a 'kommessa' per non rimbalzare fra le due aree. In ogni altro
+ * caso (utente anonimo, tenant commesse, dati mancanti) ritorna `null` e la
+ * dashboard commesse resta quella di sempre.
+ */
+export async function resolveOfficeLanding(req: NextRequest): Promise<string | null> {
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        // Nessuna rotazione cookie qui: l'ha già fatta updateSession.
+        setAll() {},
+      },
+    },
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: urow } = await supabase
+    .from('users')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .maybeSingle();
+  const tenantId = (urow as { tenant_id: string | null } | null)?.tenant_id ?? null;
+  if (!tenantId) return null;
+
+  const { data: trow } = await supabase
+    .from('tenants')
+    .select('app_mode')
+    .eq('id', tenantId)
+    .maybeSingle();
+  const appMode = (trow as { app_mode?: string | null } | null)?.app_mode ?? null;
+  if (appMode !== 'kantiere') return null;
+
+  const { data: mrows } = await supabase
+    .from('tenant_modules' as never)
+    .select('module_code, attivo')
+    .eq('tenant_id', tenantId);
+  if (!isModuleActive((mrows ?? []) as unknown as TenantModuleRow[], 'kantiere')) return null;
+
+  return '/office/kantiere';
 }

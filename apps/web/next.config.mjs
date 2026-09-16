@@ -2,12 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@kommessa/ui', '@kommessa/api', '@kommessa/integrations'],
-  // ESLint solo in dev/CI dedicato; in build skip per evitare blocchi su
-  // cosmetiche (apostrofi non-escaped, rule plugin mancanti).
-  eslint: { ignoreDuringBuilds: true },
-  // Stessa logica per type-check: i tipi Supabase generati a volte
-  // perdono il legame e Next non distingue runtime da editor.
-  typescript: { ignoreBuildErrors: true },
   // In prod rimuoviamo i `console.log/info/debug` per ridurre il bundle e
   // il rumore in produzione; manteniamo `error` e `warn` per il triage.
   compiler: {
@@ -61,6 +55,24 @@ const nextConfig = {
       ];
     }
     return config;
+  },
+  async redirects() {
+    return [
+      {
+        // Vecchi link (es. la schermata di timbratura /t/[token]): «Le mie ore»
+        // vive sotto la shell Kantiere. Redirect qui e non con una pagina che
+        // chiama `redirect()`: sotto <Suspense> darebbe il React #310 transitorio.
+        source: '/mobile/ore',
+        destination: '/mobile/kantiere/ore',
+        permanent: false,
+      },
+      {
+        // Impostazioni non ha una pagina propria: si apre sulla prima scheda.
+        source: '/office/impostazioni',
+        destination: '/office/impostazioni/profilo',
+        permanent: false,
+      },
+    ];
   },
   async headers() {
     return [

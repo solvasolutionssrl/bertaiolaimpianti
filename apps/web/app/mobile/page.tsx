@@ -351,7 +351,7 @@ async function CampoOggi({
           />
           {hasKantiere ? (
             <QuickAction
-              href="/mobile/ore"
+              href="/mobile/kantiere/ore"
               icon={Clock}
               label="Le mie ore"
               hint="rapportino di oggi"

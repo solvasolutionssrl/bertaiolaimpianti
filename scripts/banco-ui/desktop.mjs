@@ -183,9 +183,13 @@ async function main() {
       const t0 = Date.now();
       let arrivato = false;
       try {
-        await finoA(cdp, `location.pathname === ${JSON.stringify(v.href)}`, {
-          timeoutMs: 20_000, ogniMs: 60, cosa: `arrivo su ${v.href}`,
-        });
+        // Arrivo = la voce o una sua sotto-pagina: «Impostazioni» apre la prima
+        // scheda con un redirect di configurazione (16/09/2026).
+        await finoA(
+          cdp,
+          `location.pathname === ${JSON.stringify(v.href)} || location.pathname.startsWith(${JSON.stringify(v.href + '/')})`,
+          { timeoutMs: 20_000, ogniMs: 60, cosa: `arrivo su ${v.href}` },
+        );
         arrivato = true;
       } catch { /* rimasto fermo */ }
       const ms = Date.now() - t0;

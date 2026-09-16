@@ -1,9 +1,7 @@
 import { Suspense } from 'react';
 import { Skeleton } from '@kommessa/ui';
 import { Activity, Briefcase, Camera, Clock, FileWarning } from 'lucide-react';
-import { redirect } from 'next/navigation';
 import { requireTenantContextCached as requireTenantContext } from '../_lib/tenant-cache';
-import { getAppModeCached } from '../_lib/app-mode';
 import { getDashboardKpis } from './_lib/queries';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import {
@@ -31,11 +29,10 @@ function salutoOrario(d: Date): string {
 
 export default async function DashboardPage() {
   const ctx = await requireTenantContext();
-  // Tenant puro-Kantiere (app_mode='kantiere'): la dashboard commessa non ha
-  // senso → atterra sulla Panoramica Kantiere. Bertaiola ('kommessa') invariata.
-  if ((await getAppModeCached()) === 'kantiere') {
-    redirect('/office/kantiere');
-  }
+  // I tenant puro-Kantiere non arrivano qui: il middleware li manda sulla
+  // Panoramica Kantiere con un redirect HTTP, prima del render (`resolveOfficeLanding`).
+  // Farlo qui, sotto il <Suspense> del loading.tsx, dava la schermata
+  // «errore critico» transitoria (Next #63121 → React #310).
   const now = new Date();
   const nome = ctx.email ? ctx.email.split('@')[0] : '';
   const oggi = now.toLocaleDateString('it-IT', {
