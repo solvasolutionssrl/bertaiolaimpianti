@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { percorsoInterno } from '@/app/_lib/percorso-sicuro';
+import { portaleClientiAttivo } from '../../_lib/portale-attivo';
 
 /**
  * Callback magic-link.
@@ -38,6 +39,11 @@ export async function GET(req: NextRequest) {
   // Validazione di tenancy: l'utente DEVE essere mappato in external_users.
   const claims = (data.user.app_metadata ?? {}) as Record<string, unknown>;
   const isExternal = claims.external === true;
+  // Portale chiuso: nessun accesso, nemmeno con un link valido.
+  if (!(await portaleClientiAttivo((claims.tenant_id as string | undefined) ?? null))) {
+    await supabase.auth.signOut();
+    return NextResponse.redirect(new URL('/login?error=portale_chiuso', req.url));
+  }
   if (!isExternal) {
     await supabase.auth.signOut();
     return NextResponse.redirect(

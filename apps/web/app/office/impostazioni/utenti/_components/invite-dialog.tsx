@@ -94,7 +94,6 @@ export function InviteDialog({
               <option value="office">Office — ufficio / segreteria</option>
               <option value="capo">Capo — capo cantiere</option>
               <option value="tecnico">Tecnico — operativo PWA</option>
-              <option value="cliente">Cliente — portale read-only</option>
             </select>
           </div>
 

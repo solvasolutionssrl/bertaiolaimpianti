@@ -6,7 +6,7 @@
  * e leggi `tenantFeatureEnabled(key, kommessaWorld)` dove serve il gate.
  */
 
-export type FeatureKey = 'voci_catalogo' | 'preset_lavoro';
+export type FeatureKey = 'voci_catalogo' | 'preset_lavoro' | 'portale_clienti';
 
 export interface FeatureDef {
   key: FeatureKey;
@@ -18,6 +18,8 @@ export interface FeatureDef {
    * Se false, il default è sempre attiva.
    */
   defaultKommessaOnly: boolean;
+  /** Spenta per tutti finché non la si accende a mano (funzione non finita). */
+  defaultSpenta?: boolean;
 }
 
 export const FEATURE_REGISTRY: FeatureDef[] = [
@@ -33,9 +35,18 @@ export const FEATURE_REGISTRY: FeatureDef[] = [
     descrizione: 'Impostazioni → combinazioni di voci riutilizzabili (mondo commesse).',
     defaultKommessaOnly: true,
   },
+  {
+    key: 'portale_clienti',
+    label: 'Portale clienti',
+    descrizione:
+      'Accesso dei clienti finali (documenti, stato lavori, richieste). Chiuso: il portale non è finito e sul database il ruolo cliente non accede.',
+    defaultKommessaOnly: true,
+    defaultSpenta: true,
+  },
 ];
 
 /** Default effettivo di una funzione quando non c'è override esplicito. */
 export function featureDefault(def: FeatureDef, kommessaWorld: boolean): boolean {
+  if (def.defaultSpenta) return false;
   return def.defaultKommessaOnly ? kommessaWorld : true;
 }

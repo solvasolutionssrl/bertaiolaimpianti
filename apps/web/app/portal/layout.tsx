@@ -4,7 +4,10 @@ import { headers } from 'next/headers';
 
 import { TenantBranding } from '@kommessa/ui';
 
+import { notFound } from 'next/navigation';
+
 import { getPortalContextOrNull } from './_lib/portal-context';
+import { portaleClientiAttivo } from './_lib/portale-attivo';
 import { LogoutButton } from './_components/logout-button';
 
 export const metadata: Metadata = {
@@ -46,6 +49,8 @@ export default async function PortalLayout({
   // ma vogliamo comunque l'header brand. Caso particolare: se l'utente
   // è già loggato e atterra su /login, la page stessa farà redirect.
   const ctx = await getPortalContextOrNull();
+  // Portale chiuso (funzione `portale_clienti` spenta): le pagine non esistono.
+  if (!(await portaleClientiAttivo(ctx?.tenantId))) notFound();
 
   const brandColor = ctx?.tenant.brandColor ?? null;
   const logoUrl = ctx?.tenant.logoUrl ?? null;

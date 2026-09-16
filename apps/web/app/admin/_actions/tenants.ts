@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { FEATURE_REGISTRY, type FeatureKey } from '@/app/_lib/tenant-features-registry';
 import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
 import { requirePlatformAdmin } from '../_lib/guard';
 
@@ -1052,9 +1053,12 @@ export async function aggiornaAppModeTenant(input: {
 // Funzioni office per-tenant (override visibilità — tab "Funzioni")
 // ---------------------------------------------------------------------
 
+// Le chiavi arrivano dal registro delle funzioni: aggiungerne una lì basta.
+const CHIAVI_FUNZIONI = FEATURE_REGISTRY.map((f) => f.key) as [FeatureKey, ...FeatureKey[]];
+
 const FUNZIONE_SCHEMA = z.object({
   tenantId: z.string().uuid(),
-  key: z.enum(['voci_catalogo', 'preset_lavoro']),
+  key: z.enum(CHIAVI_FUNZIONI),
   // true = forza mostra · false = forza nascondi · null = torna al predefinito
   value: z.union([z.boolean(), z.null()]),
 });
@@ -1066,7 +1070,7 @@ const FUNZIONE_SCHEMA = z.object({
  */
 export async function aggiornaFunzioneTenant(input: {
   tenantId: string;
-  key: 'voci_catalogo' | 'preset_lavoro';
+  key: FeatureKey;
   value: boolean | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();

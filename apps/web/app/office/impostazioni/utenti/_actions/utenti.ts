@@ -8,7 +8,8 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
 
-const ROLE_VALUES = ['admin', 'office', 'tecnico', 'cliente'] as const;
+// Niente 'cliente': il portale clienti è chiuso (vedi migration 20260916090000).
+const ROLE_VALUES = ['admin', 'office', 'tecnico'] as const;
 
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email('Email non valida'),
@@ -85,6 +86,21 @@ export async function invitaUtente(
     return {
       status: 'error',
       message: errInv?.message ?? 'Invio invito fallito.',
+    };
+  }
+
+  // Se quell'email è già una persona di un altro spazio di lavoro, l'invito si
+  // ferma qui: cambiarle i claims la sposterebbe di tenant.
+  const { data: giaEsistente } = await admin
+    .from('users')
+    .select('tenant_id')
+    .eq('id', invited.user.id)
+    .maybeSingle();
+  const tenantEsistente = (giaEsistente as { tenant_id?: string } | null)?.tenant_id ?? null;
+  if (tenantEsistente && tenantEsistente !== ctx.tenantId) {
+    return {
+      status: 'error',
+      message: 'Questa email appartiene già a un altro spazio di lavoro.',
     };
   }
 

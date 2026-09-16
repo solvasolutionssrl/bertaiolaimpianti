@@ -121,6 +121,11 @@ export async function creaUtenteDipendente(
   const parsed = CreaUtenteSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
   const ctx = await guard();
+  // Un utente 'office' crea accessi per i tecnici; gli account d'ufficio, che
+  // vedono tutto il tenant, restano agli amministratori (come gli inviti).
+  if (parsed.data.role === 'office' && ctx.role !== 'admin') {
+    return { ok: false, error: 'Solo un amministratore può creare un account ufficio.' };
+  }
 
   let admin;
   try {

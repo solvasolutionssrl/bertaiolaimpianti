@@ -47,7 +47,6 @@ const ROLE_OPTS: { value: AppRole; label: string; hint?: string }[] = [
   { value: 'admin', label: 'Admin', hint: 'Boss / gestione completa del tenant' },
   { value: 'office', label: 'Office', hint: 'Ufficio / backoffice' },
   { value: 'tecnico', label: 'Tecnico', hint: 'Operativo in cantiere' },
-  { value: 'cliente', label: 'Cliente', hint: 'Portale white-label (non attivo)' },
 ];
 
 const ROLE_VARIANT: Record<AppRole, 'default' | 'secondary' | 'outline'> = {
