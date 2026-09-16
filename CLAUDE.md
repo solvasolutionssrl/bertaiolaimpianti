@@ -190,6 +190,19 @@ Working language for the app UI is **Italian**. Preserve it.
 - Migration **`20260915180000_sicurezza_privilegi_utenti_tenant`**: autorizzata da Luca il 15/09, provata in transazione annullata. Punti ancora aperti → memoria `project-audit-generale-2026-09-15`.
 - **Portale clienti chiuso** (16/09, migration `20260916090000`): il ruolo `cliente` non accede a nessuna tabella dello staff (policy RESTRITTIVE `*_no_cliente`), le pagine `/portal` esistono solo con la funzione per-tenant `portale_clienti` accesa (spenta per tutti) e l'invito non propone più quel ruolo. Per riaprirlo servono policy per-tabella scritte apposta: vedi la testa della migration.
 
+### Personalizzazioni: export paghe verso il consulente del lavoro (16/09/2026)
+
+Area office **Personalizzazioni** = funzioni su misura per un singolo cliente, gated dal modulo per-tenant **`paghe`** (Bertaiola non ha la riga → non vede niente). Prima funzione: **Export paghe** (`/office/personalizzazioni/paghe`), che produce `DatiMese.txt`, il file a lunghezza fissa che il consulente del lavoro importa nel suo programma paghe. Manuale: `documentazione_generale/08_LOGICHE/Logiche_Export_Paghe.md`.
+
+- **Si esportano solo le variazioni** rispetto all'orario teorico: straordinari, assenze, maggiorazioni. Le ore ordinarie **no** (confermato dal consulente: l'azienda ha un orario settimanale fisso e il programma paghe conosce il teorico). Una giornata normale non produce nessuna riga.
+- **Niente si congela**: il mese si ricostruisce a ogni apertura da rapportini **approvati** + `permesso_richieste` **approvate** + le variazioni scritte a mano in `paghe_eventi` (per chi non usa ancora l'app). Le giornate in bozza restano fuori e la pagina le elenca.
+- ⭐ **`dipendenti.codice_interno` è già il codice paghe dello Studio** (verificato sui dati FPM). Non confonderlo con l'id del gestionale, che non si guarda mai.
+- **Record 12 (periodo) obbligatorio** per malattia, maternità, infortunio e congedi; tutto il resto va nel record 14 (giornaliero, ore obbligatorie). **Ore in centesimi**: `001,50` è un'ora e mezza.
+- **Il PUC non si inventa**: se manca, il file esce lo stesso con avviso evidente e lo Studio lo inserisce a mano. Numero e documento del medico stanno in `paghe_certificati` (allegato su R2, non viene mandato allo Studio).
+- Logica **pura e testata** in `@kommessa/api/paghe-essepaghe` (record composti dichiarando le posizioni del manuale), `paghe-causali` (le 233 causali dello Studio, **generate dal CSV**: rigenerare, non modificare a mano), `paghe-mappatura` (corrispondenze, festività, taglio dei periodi). ⚠️ Un test riproduce **carattere per carattere** il fac-simile approvato dal consulente: se cambia, è cambiato il tracciato.
+- Il **dizionario è dato, non codice**: codice ditta, corrispondenze e causali aggiunte dal cliente vivono in `tenant_modules.config`. Le corrispondenze ambigue (visita medica, congedo matrimoniale, congedo parentale) restano **da decidere** di proposito: sceglierle al posto del consulente sarebbe decidere sulla busta paga.
+- Ordine di affidabilità delle fonti: **conferma del consulente > manuale > Excel storico > esempi > nostre deduzioni.**
+
 ### Infrastruttura produzione
 
 | Servizio | Dettaglio |
