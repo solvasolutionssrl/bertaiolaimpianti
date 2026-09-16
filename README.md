@@ -24,7 +24,7 @@ Repository del progetto di digitalizzazione gestione documenti e lavori per Bert
 ├── packages/
 │   ├── api/                        → @impiantixplus/api — client Supabase, schemas zod, tenant utils
 │   ├── ui/                         → @impiantixplus/ui — design system (Radix + Tailwind)
-│   └── integrations/               → @impiantixplus/integrations — storage, email, push, AI, freshdesk
+│   └── integrations/               → @kommessa/integrations — storage, email
 │
 ├── supabase/                       → migrazioni SQL + Edge Functions — vedi supabase/README.md
 │   ├── migrations/                 → schema versionato (estensioni → tenants → users → ... → RLS)
@@ -32,7 +32,7 @@ Repository del progetto di digitalizzazione gestione documenti e lavori per Bert
 │   ├── seed.sql                    → dati di bootstrap per dev locale
 │   └── config.toml                 → config CLI Supabase
 │
-├── scripts/                        → script one-time (migrazione Freshdesk, ...) — vedi scripts/README.md
+├── scripts/                        → script operativi e banchi di prova — vedi scripts/README.md
 │
 └── documentazione_generale/        → 📚 background pre-sviluppo (lavoro precedente)
     │
@@ -76,7 +76,7 @@ Repository del progetto di digitalizzazione gestione documenti e lavori per Bert
 | Tema | Decisione |
 |---|---|
 | **Scope MVP** | Web ufficio · **PWA tecnici (installabile)** · Sync cartelle ufficio · Multitenancy · **Ticketing nativo base** |
-| **Freshdesk** | **Abbandonato dopo go-live** · migrazione one-time via API (Sprint 2) |
+| **Freshdesk** | **Abbandonato dopo go-live** · ticketing nativo; script di migrazione rimosso il 16/09/2026 |
 | **Storage file** | 🟡 **TBD** — decisione rimandata (opzioni: Hetzner Storage Share, alternative cloud da rivalutare insieme) |
 | **Backend** | Supabase Pro (Frankfurt EU) — Postgres + Auth + Realtime + Edge Functions |
 | **Web** | Next.js 14 su Vercel |
@@ -124,7 +124,6 @@ Altri script root utili:
 | `pnpm typecheck` | Typecheck di tutto il workspace |
 | `pnpm format` | Prettier su tutti i `.ts/.tsx/.md/.json` |
 | `pnpm supabase:stop` | Ferma i container Supabase locali |
-| `pnpm migrate:freshdesk` | Migrazione one-time Freshdesk (vedi sezione dedicata) |
 
 ---
 
@@ -163,7 +162,6 @@ supabase/
   seed.sql                      # dati di sviluppo locale
 
 scripts/
-  migrate-freshdesk.ts          # migrazione one-time (vedi sezione + scripts/README.md)
 ```
 
 Pacchetti workspace consumati come `@impiantixplus/*` (vedi `pnpm-workspace.yaml`).
@@ -187,7 +185,6 @@ Tutto in `.env.local` (non versionato). Schema completo in [`.env.example`](.env
 | `STORAGE_PROVIDER` | server | `supabase` (default dev) o `nextcloud` — TBD, vedi `CLAUDE.md` |
 | `NEXTCLOUD_*` | server | Solo se `STORAGE_PROVIDER=nextcloud` |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | server + web | Web Push |
-| `FRESHDESK_API_KEY` / `FRESHDESK_DOMAIN` | scripts | Solo per migrazione one-time |
 
 Per ambienti Vercel: configurare le stesse chiavi (con `NEXT_PUBLIC_` ben distinte) tramite `vercel env` o dashboard.
 
@@ -233,31 +230,6 @@ Region GDPR-compliant: Frankfurt EU. Tutto il dato cliente vive in UE.
 
 ---
 
-## 📥 Migrazione Freshdesk
-
-> **Una tantum.** Decisione v3 (vedi `CLAUDE.md`): Freshdesk viene **abbandonato dopo go-live**. Lo script importa tutto lo storico (ticket + conversazioni + allegati + clienti) nelle tabelle native, marcando le righe con `source='imported_from_freshdesk'` e `freshdesk_legacy_id`.
-
-```bash
-# Dry-run di validazione (primi 20 ticket, nessuna scrittura)
-pnpm migrate:freshdesk \
-  --tenant=bertaiola \
-  --api-key=<FD_API_KEY> \
-  --domain=bertaiolaimpianti \
-  --dry-run --limit=20
-
-# Migrazione completa
-pnpm migrate:freshdesk \
-  --tenant=bertaiola \
-  --api-key=<FD_API_KEY> \
-  --domain=bertaiolaimpianti
-```
-
-Dettaglio CLI, idempotenza, mapping enum e gestione rate limit: vedi [`scripts/README.md`](scripts/README.md).
-
-Spec di riferimento: `documentazione_generale/02_ARCHITETTURA/Architettura_Soluzione.md` §6.1 + `documentazione_generale/04_ROADMAP/Roadmap_Sprint.md` §"SPRINT 2".
-
----
-
 ## 🛠️ Come leggere questi documenti
 
 **Se sei nuovo al progetto**, leggi in ordine:
@@ -299,7 +271,6 @@ Spec di riferimento: `documentazione_generale/02_ARCHITETTURA/Architettura_Soluz
 - [ ] **Aggiornare `documentazione_generale/05_MOCKUP/Mockup_UI.md`** per riflettere modulo ticket nativo e PWA tecnici
 - [ ] **PPT commerciale** — esclusa esplicitamente, da produrre dopo validazione preventivo
 - [ ] Verifica WHOIS domini candidati (`impiantixplus.app`, `impiantixplus.it`, `impiantixplus.com`)
-- [ ] Audit account Freshdesk del cliente per stima dimensione migrazione
 - [ ] Brief grafico per logo impiantiXplus + icone PWA 192/512
 - [ ] Roadmap manutenzioni: modulo nativo o integrazione impiantix.app (post-MVP)
 

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import {
   Briefcase,
   Building2,
@@ -14,6 +15,8 @@ import {
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+
+import { getAppModeCached } from '@/app/_lib/app-mode';
 import { Card, CardContent, Input } from '@kommessa/ui';
 
 import { SectionHeader } from '../../_components/section-header';
@@ -49,6 +52,9 @@ export default async function CercaPage({
   searchParams: SearchParams;
 }) {
   await requireTenantContext();
+  // Cerca solo fra commesse, clienti, ticket, file e riunioni: per i tenant
+  // puro-Kantiere la pagina non ha niente da mostrare (come /office/tickets).
+  if ((await getAppModeCached()) === 'kantiere') redirect('/office/kantiere');
   const q = (searchParams.q ?? '').trim();
   const tagFilter = (searchParams.tag ?? '').trim().toLowerCase();
   const supabase = createServerSupabase();

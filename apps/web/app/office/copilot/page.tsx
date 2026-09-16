@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 
 import { Card, CardContent } from '@kommessa/ui';
 
 import { requireTenantContextCached as requireTenantContext } from '../../_lib/tenant-cache';
+import { getAppModeCached } from '../../_lib/app-mode';
 import { SectionHeader } from '../../_components/section-header';
 
 import { CopilotChat } from './_components/chat';
@@ -22,6 +24,9 @@ export const dynamic = 'force-dynamic';
  */
 export default async function CopilotPage() {
   await requireTenantContext();
+  // Il co-pilot ragiona su commesse e ticket: per i tenant puro-Kantiere non ha
+  // dati su cui lavorare (come /office/tickets).
+  if ((await getAppModeCached()) === 'kantiere') redirect('/office/kantiere');
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const isPreview =

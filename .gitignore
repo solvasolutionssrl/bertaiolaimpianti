@@ -39,9 +39,9 @@ supabase/.temp
 # Vercel
 .vercel
 
-# Output script one-time (audit Freshdesk, ecc.)
-scripts/.migrate-freshdesk-errors.json
-scripts/.migrate-freshdesk-report.csv
+# Output degli script operativi
+scripts/.*-errors.json
+scripts/.*-report.csv
 
 # Claude local state
 .claude/

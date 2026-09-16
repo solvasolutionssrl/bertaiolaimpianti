@@ -17,8 +17,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset",
-    "supabase:types": "supabase gen types typescript --local > packages/api/src/types/database.generated.ts",
-    "migrate:freshdesk": "tsx scripts/migrate-freshdesk.ts"
+    "supabase:types": "supabase gen types typescript --local > packages/api/src/types/database.generated.ts"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

@@ -25,7 +25,7 @@ This is the working repo for the **Bertaiola Impianti × SOLVA (Kommessa)** proj
    - `packages/api/`, `packages/ui/`, `packages/integrations/` — pacchetti workspace (`@kommessa/*`)
    - `supabase/migrations/` — schema versionato (55 migrazioni applicate al cloud al 18/06/2026)
    - `supabase/functions/` — Edge Functions (Deno)
-   - `scripts/` — script operativi (es. `reset-tenant-data.mjs`, `freshdesk-migration`)
+   - `scripts/` — script operativi (es. `reset-tenant-data.mjs`, banchi di prova UI in `banco-ui/`)
 2. **Documentazione di prodotto** sotto `documentazione_generale/` — kickoff, architettura, brand, roadmap, mockup, preventivo, presentazioni.
 
 ### Pipeline thumbnail foto (dal 28/05/2026 sera, 50ª migration)
@@ -188,6 +188,7 @@ Working language for the app UI is **Italian**. Preserve it.
 - **Impersonation**: il cookie `shadow_admin` è firmato (HMAC con chiave derivata dalla service role, `admin/_lib/shadow.ts`, scade con il cookie). `isSuperadminActor` accetta solo un cookie valido di un utente ancora super admin nel database; `ripristinaVersione` resta nel tenant della sessione. Mai leggere quel cookie con `JSON.parse`.
 - **Librerie** (15/09): Next 14.2.35, sharp 0.35, jsPDF 4 (import nominato `{ jsPDF }`), `pnpm.overrides` per le dipendenze indirette vulnerabili nella stessa major. Ottimizzatore immagini spento (`images.unoptimized`): è l'endpoint delle vulnerabilità di Next 14 chiuse solo da Next 15, che resta da pianificare (React 19, `cookies()`/`params` asincroni).
 - Migration **`20260915180000_sicurezza_privilegi_utenti_tenant`**: autorizzata da Luca il 15/09, provata in transazione annullata. Punti ancora aperti → memoria `project-audit-generale-2026-09-15`.
+- **Portale clienti chiuso** (16/09, migration `20260916090000`): il ruolo `cliente` non accede a nessuna tabella dello staff (policy RESTRITTIVE `*_no_cliente`), le pagine `/portal` esistono solo con la funzione per-tenant `portale_clienti` accesa (spenta per tutti) e l'invito non propone più quel ruolo. Per riaprirlo servono policy per-tabella scritte apposta: vedi la testa della migration.
 
 ### Infrastruttura produzione
 
@@ -232,7 +233,7 @@ These decisions evolved across versions — the current state is **v3** (commit 
 | Decision | Status |
 |---|---|
 | **Product name** | **Kommessa** (definitivo dal maggio 2026, rebrand da `impiantiXplus`). Legacy alternatives in `03_BRAND/` sono solo contesto storico. |
-| **Freshdesk** | **Abandoned** post go-live. One-time API migration script, then native ticketing in the new app. Do not describe it as "integrated". |
+| **Freshdesk** | **Abandoned** post go-live: ticketing nativo nell'app. Lo script di migrazione one-time è stato rimosso il 16/09/2026 (non funzionava più); resta solo l'enum storico `imported_from_freshdesk`. Do not describe it as "integrated". |
 | **Mobile tecnici** | **PWA** (Next.js + Service Worker + Web App Manifest). **Not** Expo, **not** React Native, **not** native iOS/Android. No App Store / Play Store. |
 | **Storage cloud** | ✅ **Nextcloud confirmed** (Hetzner Storage Share managed). Decisione chiusa: il cliente Bertaiola ha già acquistato e configurato Nextcloud, il file browser mobile vede i file reali. Mantenere comunque l'astrazione `StorageProvider` nel codice per supportare in futuro altri tenant con provider diversi. |
 | **Backend** | Supabase Pro, region **Frankfurt EU** (GDPR). Postgres + Auth + Realtime + Edge Functions. |

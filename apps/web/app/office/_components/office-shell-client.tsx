@@ -190,9 +190,9 @@ function buildNav(
         variant: 'section',
         defaultOpen: true,
         children: [
-          { id: 'ricerca', label: 'Ricerca', href: '/office/cerca' },
+          // Ricerca e Co-pilot lavorano solo su commesse, clienti e ticket:
+          // per un tenant puro-Kantiere sarebbero sempre vuoti.
           { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche' },
-          { id: 'copilot', label: 'Co-pilot', href: '/office/copilot' },
           { id: 'impostazioni', label: 'Impostazioni', href: '/office/impostazioni' },
         ],
       },

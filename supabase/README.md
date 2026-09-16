@@ -125,7 +125,7 @@ Tutte le tabelle hanno RLS abilitato (vedi `migrations/20260101001300_rls.sql`).
 Bypass RLS solo da:
 
 - Edge Functions con service-role key
-- Script one-time (vedi `scripts/migrate-freshdesk.ts` → usa `createServiceSupabase()`)
+- Script operativi sotto `scripts/` (usano `createServiceSupabase()`)
 
 Non importare mai `@kommessa/api/service` da componenti client.
 
