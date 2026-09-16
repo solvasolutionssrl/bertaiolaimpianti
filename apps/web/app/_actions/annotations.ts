@@ -3,16 +3,12 @@
 import { revalidatePath } from 'next/cache';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import type { Json } from '@kommessa/api';
-import {
-  getStorageProvider,
-  type StorageProvider,
-  type StorageProviderName,
-} from '@kommessa/integrations/storage';
+import type { AppRole, Json } from '@kommessa/api';
 
 import type { Shape } from '../_lib/annotation-shapes';
+import { canAccessFile } from '../_lib/file-authz';
+import { normalizePath } from '../_lib/folder-acl';
 
 /**
  * Server Actions per `file_annotations`.
@@ -32,6 +28,54 @@ import type { Shape } from '../_lib/annotation-shapes';
  */
 
 const LOCK_DURATION_MS = 5 * 60 * 1000; // 5 minuti
+
+// ---------------------------------------------------------------------
+// Autorizzazione condivisa
+// ---------------------------------------------------------------------
+
+interface RigaFile {
+  id: string;
+  tenant_id: string;
+  commessa_id: string | null;
+  path: string | null;
+  r2_key: string | null;
+  status: string | null;
+  deleted_at: string | null;
+}
+
+/**
+ * La riga `file_refs`, ma solo se il chiamante può davvero vedere quel file.
+ *
+ * La RLS di `file_refs` è tenant-wide: da sola lascerebbe a un tecnico le
+ * annotazioni (e l'URL) di una commessa a cui non è assegnato. `canAccessFile`
+ * aggiunge il livello per ruolo e per cartella, lo stesso che usano
+ * `/api/photo/[id]`, `/api/media/[id]` e `/api/cloud/file`.
+ *
+ * Il messaggio è identico per "non esiste" e "non ti spetta": non diciamo a chi
+ * non ha accesso che il file esiste.
+ */
+async function fileAutorizzato(
+  supabase: ReturnType<typeof createServerSupabase>,
+  ctx: { tenantId: string; userId: string; role: AppRole },
+  fileRefId: string,
+): Promise<{ ok: true; ref: RigaFile } | { ok: false; error: string }> {
+  if (!fileRefId) return { ok: false, error: 'fileRefId mancante' };
+
+  const { data, error } = await supabase
+    .from('file_refs')
+    .select('id, tenant_id, commessa_id, path, r2_key, status, deleted_at')
+    .eq('id', fileRefId)
+    .maybeSingle();
+
+  const ref = data as unknown as RigaFile | null;
+  if (error || !ref || ref.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'File non trovato o non accessibile' };
+  }
+  if (!(await canAccessFile(ctx, { commessaId: ref.commessa_id, path: ref.path }))) {
+    return { ok: false, error: 'File non trovato o non accessibile' };
+  }
+  return { ok: true, ref };
+}
 
 // ---------------------------------------------------------------------
 // Types
@@ -109,16 +153,10 @@ export async function salvaAnnotazione(
 
   const supabase = createServerSupabase();
 
-  // 1) Verifica che il file_ref esista e sia accessibile al tenant (RLS)
-  const { data: fileRef, error: frErr } = await supabase
-    .from('file_refs')
-    .select('id, tenant_id, commessa_id')
-    .eq('id', input.fileRefId)
-    .single();
-
-  if (frErr || !fileRef) {
-    return { ok: false, error: 'File non trovato o non accessibile' };
-  }
+  // 1) Il file esiste, è del tenant e il chiamante può vederlo (ruolo + cartella)
+  const autorizzato = await fileAutorizzato(supabase, ctx, input.fileRefId);
+  if (!autorizzato.ok) return { ok: false, error: autorizzato.error };
+  const fileRef = autorizzato.ref;
 
   // 2) Cerca riga max-version esistente per QUESTA pagina
   // (per kind=image page è NULL → filtra IS NULL; per kind=pdf filtra eq).
@@ -250,6 +288,17 @@ export async function acquisisciLock(
 
   const supabase = createServerSupabase();
 
+  // Nessun lock su un file che non si può nemmeno aprire. La forma della
+  // risposta resta quella del lock occupato: il client mostra il messaggio
+  // "riprova fra qualche minuto" senza dire se il file esiste.
+  const autorizzato = await fileAutorizzato(supabase, ctx, fileRefId);
+  if (!autorizzato.ok) {
+    return {
+      ok: false,
+      lockedBy: { userId: '', displayName: null, until: '', remainingSec: 0 },
+    };
+  }
+
   // Cerca riga corrente (max version)
   const { data: existing } = await supabase
     .from('file_annotations')
@@ -331,6 +380,9 @@ export async function rilasciaLock(fileRefId: string): Promise<{ ok: boolean }> 
   }
 
   const supabase = createServerSupabase();
+  const autorizzato = await fileAutorizzato(supabase, ctx, fileRefId);
+  if (!autorizzato.ok) return { ok: false };
+
   await supabase
     .from('file_annotations')
     .update({ editing_by: null, editing_until: null })
@@ -339,10 +391,6 @@ export async function rilasciaLock(fileRefId: string): Promise<{ ok: boolean }> 
 
   return { ok: true };
 }
-
-// ---------------------------------------------------------------------
-// Signed URL per la foto sorgente (usato dall'editor)
-// ---------------------------------------------------------------------
 
 // ---------------------------------------------------------------------
 // Risoluzione file_ref per i PDF letti dallo storage (documenti tab)
@@ -359,6 +407,10 @@ export async function rilasciaLock(fileRefId: string): Promise<{ ok: boolean }> 
  * sincronizzato/riletto).
  *
  * Idempotente: chiamabile più volte; secondo run ritorna la stessa id.
+ *
+ * ⚠️ Il `path` arriva dal client e la riga creata qui è quella di cui si fidano
+ * gli endpoint che servono i file: deve stare dentro la cartella della commessa
+ * indicata, e il chiamante deve poter vedere quella commessa.
  */
 export async function risolviFileRefPerPath(input: {
   commessaId: string;
@@ -380,6 +432,40 @@ export async function risolviFileRefPerPath(input: {
   }
 
   const supabase = createServerSupabase();
+
+  // Il percorso arriva dal client: deve stare DENTRO la cartella di QUESTA
+  // commessa. Senza questo controllo bastava chiedere una riga verso la
+  // cartella di un'altra commessa per poi farsela servire da /api/photo,
+  // /api/media o /api/cloud/file, che si fidano della riga `file_refs`.
+  const { data: comRaw } = await supabase
+    .from('commesse')
+    .select('id, cloud_folder_path, nome_cartella')
+    .eq('id', input.commessaId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  const commessa = comRaw as unknown as {
+    cloud_folder_path: string | null;
+    nome_cartella: string | null;
+  } | null;
+  if (!commessa) return { ok: false, error: 'Commessa non trovata' };
+
+  // `cloud_folder_path` è "01_Richieste/BER-26-007_X"; le commesse vecchie
+  // hanno solo `nome_cartella`. Si accetta l'una o l'altra radice.
+  const percorso = normalizePath(input.path);
+  const radici = [commessa.cloud_folder_path, commessa.nome_cartella]
+    .filter((r): r is string => typeof r === 'string' && r.trim().length > 0)
+    .map((r) => normalizePath(r))
+    .filter((r) => r.length > 0);
+  const dentroLaCommessa =
+    !percorso.includes('..') &&
+    radici.some((radice) => percorso === radice || percorso.startsWith(`${radice}/`));
+  if (!dentroLaCommessa) {
+    return { ok: false, error: 'Percorso non valido per questa commessa' };
+  }
+
+  if (!(await canAccessFile(ctx, { commessaId: input.commessaId, path: input.path }))) {
+    return { ok: false, error: 'File non trovato o non accessibile' };
+  }
 
   const { data: existing } = await supabase
     .from('file_refs')
@@ -429,13 +515,17 @@ export async function caricaAnnotazioniFile(
   | CaricaAnnotazioniFileResult
   | { ok: false; error: string }
 > {
+  let ctx;
   try {
-    await requireTenantContext();
+    ctx = await requireTenantContext();
   } catch {
     return { ok: false, error: 'Sessione non valida' };
   }
 
   const supabase = createServerSupabase();
+  const autorizzato = await fileAutorizzato(supabase, ctx, fileRefId);
+  if (!autorizzato.ok) return { ok: false, error: autorizzato.error };
+
   const { data, error } = await supabase
     .from('file_annotations')
     .select('layer_json, width_px, height_px, kind, page, version')
@@ -483,7 +573,11 @@ export async function caricaAnnotazioniFile(
 }
 
 // ---------------------------------------------------------------------
-// Signed URL per la foto/PDF sorgente (usato dall'editor)
+// Indirizzo della foto/PDF da aprire nell'editor
+//
+// Non è un URL firmato dello storage: è un indirizzo dell'app
+// (`/api/media/[id]` per i file su R2, `/api/cloud/file` per Nextcloud), che
+// ricontrolla la sessione e i permessi a ogni richiesta.
 // ---------------------------------------------------------------------
 
 export async function ottieniSignedUrl(
@@ -497,53 +591,23 @@ export async function ottieniSignedUrl(
   }
 
   const supabase = createServerSupabase();
-  const { data: ref, error } = await supabase
-    .from('file_refs')
-    .select('path')
-    .eq('id', fileRefId)
-    .single();
-  if (error || !ref) return { ok: false, error: 'File non trovato' };
+  const autorizzato = await fileAutorizzato(supabase, ctx, fileRefId);
+  if (!autorizzato.ok) return { ok: false, error: autorizzato.error };
+  const ref = autorizzato.ref;
 
-  try {
-    // Provider storage del tenant (Bertaiola: Nextcloud). Service-role per
-    // leggere `tenants.storage_config` bypassando RLS.
-    const service = createServiceSupabase();
-    const { data: tenantRow } = await service
-      .from('tenants')
-      .select('storage_provider, storage_config')
-      .eq('id', ctx.tenantId)
-      .maybeSingle();
+  if (ref.deleted_at) return { ok: false, error: 'File non disponibile' };
 
-    const providerName =
-      (tenantRow?.storage_provider as StorageProviderName) ?? 'supabase';
-    const cfg =
-      (tenantRow?.storage_config as Record<string, string> | null) ?? {};
+  // Al browser va l'indirizzo dell'app, non l'URL firmato dello storage: un
+  // URL WebDAV mostrerebbe host, utente e cartella base di Nextcloud, e
+  // varrebbe un'ora per chiunque lo riceva. `/api/media` e `/api/cloud/file`
+  // rifanno gli stessi controlli a ogni richiesta.
+  const suR2 =
+    !!ref.r2_key &&
+    ['uploaded', 'syncing', 'synced', 'sync_failed'].includes(ref.status ?? '');
+  if (suR2) return { ok: true, url: `/api/media/${ref.id}` };
 
-    let storage: StorageProvider;
-    if (providerName === 'nextcloud') {
-      if (!cfg.baseUrl || !cfg.user || !cfg.appPassword) {
-        return { ok: false, error: 'Storage Nextcloud non configurato' };
-      }
-      storage = getStorageProvider({
-        provider: 'nextcloud',
-        baseUrl: cfg.baseUrl,
-        user: cfg.user,
-        appPassword: cfg.appPassword,
-        basePath: typeof cfg.basePath === "string" ? cfg.basePath : undefined,
-      });
-    } else {
-      storage = getStorageProvider({
-        provider: 'supabase',
-        bucket: (cfg.bucket as string | undefined) ?? 'commesse',
-      });
-    }
-
-    const signed = await storage.getDownloadUrl(ref.path, 3600);
-    return { ok: true, url: signed.url };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : 'URL non disponibile',
-    };
+  if (ref.path) {
+    return { ok: true, url: `/api/cloud/file?path=${encodeURIComponent(ref.path)}` };
   }
+  return { ok: false, error: 'File non disponibile' };
 }
