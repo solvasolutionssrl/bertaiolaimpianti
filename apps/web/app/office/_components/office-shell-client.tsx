@@ -12,10 +12,12 @@ import {
   CalendarCheck,
   CalendarDays,
   Coins,
+  FileSpreadsheet,
   HardHat,
   LayoutDashboard,
   MapPin,
   ReceiptText,
+  SlidersHorizontal,
   Sparkles,
   Timer,
   Truck,
@@ -42,6 +44,8 @@ interface Props {
   hasPianificazione?: boolean;
   /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Analisi. */
   hasFerie?: boolean;
+  /** Modulo Paghe attivo → sezione "Personalizzazioni" con l'export paghe. */
+  hasPaghe?: boolean;
   /** Kontabilità attiva (modulo Kantiere): false toglie la voce dal menu. */
   hasKontabilita?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
@@ -370,6 +374,54 @@ function injectPersonale(
 }
 
 /**
+ * Sezione "Personalizzazioni": le funzioni scritte su misura per un singolo
+ * cliente. Sta in una sezione sua e non dentro Impostazioni perché non è
+ * configurazione: è lavoro che l'ufficio fa ogni mese. No-op se il modulo è
+ * spento, così chi non l'ha acquistata non ne vede traccia.
+ */
+function injectPersonalizzazioni(
+  nav: OfficeNavItem[],
+  hasPaghe?: boolean,
+): OfficeNavItem[] {
+  const voci: OfficeNavItem[] = [];
+  if (hasPaghe) {
+    voci.push({
+      id: 'paghe',
+      label: 'Export paghe',
+      href: '/office/personalizzazioni/paghe',
+      icon: FileSpreadsheet,
+    });
+  }
+  if (voci.length === 0) return nav;
+
+  const sezione: OfficeNavItem = {
+    id: 'sec-personalizzazioni',
+    label: 'Personalizzazioni',
+    href: '#',
+    icon: SlidersHorizontal,
+    variant: 'section',
+    defaultOpen: true,
+    children: voci,
+  };
+
+  // Dopo "Personale" se c'è, altrimenti appena prima di "Altro" (che chiude
+  // sempre la sidebar), altrimenti in coda.
+  const dopoPersonale = nav.findIndex((n) => n.id === 'sec-personale');
+  if (dopoPersonale >= 0) {
+    const out = [...nav];
+    out.splice(dopoPersonale + 1, 0, sezione);
+    return out;
+  }
+  const primaDiAltro = nav.findIndex((n) => n.id === 'sec-altro');
+  if (primaDiAltro >= 0) {
+    const out = [...nav];
+    out.splice(primaDiAltro, 0, sezione);
+    return out;
+  }
+  return [...nav, sezione];
+}
+
+/**
  * Deriva l'id della voce nav attiva dal pathname corrente. Logica:
  *  - match esatto su `href` ha priorità
  *  - altrimenti il primo `href` (non `/`) che è prefisso del pathname
@@ -405,6 +457,7 @@ export function OfficeShellClient({
   hasDipendenti,
   hasPianificazione,
   hasFerie,
+  hasPaghe,
   hasKontabilita,
   appMode,
   mondoRicerca,
@@ -416,11 +469,14 @@ export function OfficeShellClient({
     (item) => item.id !== 'kontabilita' || hasKontabilita !== false,
   );
   const nav = injectIntegrazione(
-    injectPersonale(navBase, {
-      hasDipendenti,
-      hasPianificazione,
-      hasFerie,
-    }),
+    injectPersonalizzazioni(
+      injectPersonale(navBase, {
+        hasDipendenti,
+        hasPianificazione,
+        hasFerie,
+      }),
+      hasPaghe,
+    ),
     hasIntegrazione,
   );
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);

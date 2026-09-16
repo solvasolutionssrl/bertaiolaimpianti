@@ -38,6 +38,7 @@ export function TabModuli({
   dipendentiAttivo,
   pianificazioneAttiva,
   ferieAttiva,
+  pagheAttivo,
   appMode: appModeIniziale,
   codiceAzienda: codiceIniziale,
 }: {
@@ -46,6 +47,7 @@ export function TabModuli({
   dipendentiAttivo: boolean;
   pianificazioneAttiva: boolean;
   ferieAttiva: boolean;
+  pagheAttivo: boolean;
   appMode: AppMode;
   codiceAzienda: string;
 }) {
@@ -90,6 +92,28 @@ export function TabModuli({
       const res = await aggiornaFlagDipendenti({ tenantId, key, value: next });
       if (!res.ok) {
         setter(prev);
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  // Personalizzazioni (salvataggio immediato, come il modulo Dipendenti).
+  const [paghe, setPaghe] = React.useState(pagheAttivo);
+  const [pendingPaghe, startPaghe] = React.useTransition();
+
+  const togglePaghe = (next: boolean) => {
+    const prev = paghe;
+    setPaghe(next);
+    startPaghe(async () => {
+      const res = await aggiornaModuloTenant({
+        tenantId,
+        moduleCode: 'paghe',
+        attivo: next,
+      });
+      if (!res.ok) {
+        setPaghe(prev);
         await showAlert({ title: 'Errore', body: res.error });
         return;
       }
@@ -227,6 +251,29 @@ export function TabModuli({
               </label>
             </div>
           ) : null}
+        </div>
+
+        {/* personalizzazioni: toggle */}
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Personalizzazioni</p>
+            <p className="text-[11px] text-muted-foreground">
+              Funzioni su misura per il cliente: oggi l&apos;export mensile
+              delle presenze verso il programma paghe del consulente del lavoro.
+            </p>
+          </div>
+          <label className="inline-flex shrink-0 cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              checked={paghe}
+              onChange={(e) => togglePaghe(e.target.checked)}
+              disabled={pendingPaghe}
+            />
+            <span className="text-xs text-muted-foreground">
+              {paghe ? 'Attivo' : 'Spento'}
+            </span>
+          </label>
         </div>
 
         {/* Codice azienda (login a 3 campi) */}

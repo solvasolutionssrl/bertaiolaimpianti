@@ -817,7 +817,7 @@ export async function creaUtenteTenant(input: {
 
 const TENANT_MODULE_SCHEMA = z.object({
   tenantId: z.string().uuid(),
-  moduleCode: z.enum(['kantiere', 'dipendenti']),
+  moduleCode: z.enum(['kantiere', 'dipendenti', 'paghe']),
   attivo: z.boolean(),
 });
 
@@ -827,7 +827,7 @@ const TENANT_MODULE_SCHEMA = z.object({
  */
 export async function aggiornaModuloTenant(input: {
   tenantId: string;
-  moduleCode: 'kantiere' | 'dipendenti';
+  moduleCode: 'kantiere' | 'dipendenti' | 'paghe';
   attivo: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();
@@ -863,7 +863,7 @@ export async function aggiornaModuloTenant(input: {
   // Cascata anti-stato-rotto: se spengo Kantiere mentre l'esperienza mobile è
   // 'kantiere' o 'full', riporto app_mode a 'kommessa' (altrimenti la PWA punta
   // a una shell senza modulo → utenti bloccati). Vale SOLO per kantiere:
-  // 'dipendenti' non tocca la shell mobile.
+  // gli altri moduli non toccano la shell mobile.
   if (!parsed.data.attivo && parsed.data.moduleCode === 'kantiere') {
     const { data: t } = await supabase
       .from('tenants')

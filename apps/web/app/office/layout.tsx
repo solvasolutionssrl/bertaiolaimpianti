@@ -119,6 +119,9 @@ export default async function OfficeLayout({
   // nessun tasto per lanciare una sincronizzazione a mano: è il gestionale
   // locale a leggere dalle nostre API quando gli serve.
   const hasIntegrazione = await tenantHasModule('integrazione');
+  // Area "Personalizzazioni": senza la riga di modulo attiva non compare nulla,
+  // quindi i tenant che non l'hanno acquistata restano invariati.
+  const hasPaghe = await tenantHasModule('paghe');
   // Sotto-flag del modulo Dipendenti (gating fine delle voci nav).
   const dipCfg = hasDipendenti ? await leggiConfigDipendenti(supabase, ctx.tenantId) : null;
   const hasPianificazione = hasDipendenti && (dipCfg?.pianificazioneAttiva ?? true);
@@ -172,6 +175,7 @@ export default async function OfficeLayout({
         hasDipendenti={hasDipendenti}
         hasPianificazione={hasPianificazione}
         hasFerie={hasFerie}
+        hasPaghe={hasPaghe}
         hasKontabilita={hasKontabilita}
         appMode={appMode}
         mondoRicerca={{

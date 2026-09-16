@@ -47,6 +47,7 @@ describe('isModuleActive', () => {
       'kantiere',
       'dipendenti',
       'integrazione',
+      'paghe',
     ]);
   });
 });

@@ -30,7 +30,10 @@
     "./integrazione-abbina": "./src/integrazione-abbina.ts",
     "./integrazione-salute": "./src/integrazione-salute.ts",
     "./categorie-smistamento": "./src/categorie-smistamento.ts",
-    "./pagine": "./src/pagine.ts"
+    "./pagine": "./src/pagine.ts",
+    "./paghe-causali": "./src/paghe-causali.ts",
+    "./paghe-essepaghe": "./src/paghe-essepaghe.ts",
+    "./paghe-mappatura": "./src/paghe-mappatura.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

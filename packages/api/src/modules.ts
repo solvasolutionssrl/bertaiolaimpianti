@@ -19,14 +19,23 @@
  *                  nell'agente. Si governa da `/admin/tenants/[id]` → tab
  *                  Integrazione.
  *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
+ * - `paghe`      : funzioni su misura per il consulente del lavoro del cliente
+ *                  (area "Personalizzazioni"). Oggi produce l'export mensile
+ *                  delle presenze nel tracciato del programma paghe. In
+ *                  `tenant_modules.config`: `codice_ditta`, `programma_paghe`,
+ *                  `regole_causali`. Ogni cliente ha il suo consulente, quindi
+ *                  le corrispondenze fra eventi e causali vivono nella config,
+ *                  non nel codice.
+ *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
  */
-export type ModuleCode = 'base' | 'kantiere' | 'dipendenti' | 'integrazione';
+export type ModuleCode = 'base' | 'kantiere' | 'dipendenti' | 'integrazione' | 'paghe';
 
 export const MODULE_CODES: ModuleCode[] = [
   'base',
   'kantiere',
   'dipendenti',
   'integrazione',
+  'paghe',
 ];
 
 export interface TenantModuleRow {
