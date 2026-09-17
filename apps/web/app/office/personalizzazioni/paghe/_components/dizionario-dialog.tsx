@@ -44,7 +44,7 @@ export interface DizionarioDialogProps {
   onSalvato: () => void;
 }
 
-type Scheda = 'corrispondenze' | 'tabella' | 'regole';
+type Scheda = 'file' | 'corrispondenze' | 'tabella' | 'regole';
 
 export function DizionarioDialog({
   catalogo,
@@ -60,8 +60,10 @@ export function DizionarioDialog({
   const showAlert = useAlert();
   const confirm = useConfirm();
   const [scheda, setScheda] = React.useState<Scheda>(
-    daDecidere.length > 0 ? 'corrispondenze' : 'tabella',
+    daDecidere.length > 0 ? 'corrispondenze' : 'file',
   );
+  const [ditta, setDitta] = React.useState(codiceDitta);
+  const [programma, setProgramma] = React.useState(programmaPresenze);
   const [inCorso, setInCorso] = React.useState(false);
   const [cerca, setCerca] = React.useState('');
 
@@ -135,8 +137,8 @@ export function DizionarioDialog({
   async function salvaRegole() {
     setInCorso(true);
     const res = await salvaImpostazioniPaghe({
-      codiceDitta,
-      programmaPresenze,
+      codiceDitta: ditta.trim(),
+      programmaPresenze: programma.trim() || 'Kommessa',
       arrotondamentoMinuti: Number(arrotondamento) || 0,
       straordinarioFeriale: feriale,
       straordinarioSabato: sabato,
@@ -163,12 +165,13 @@ export function DizionarioDialog({
     <Dialog open onOpenChange={(v) => (v ? undefined : onChiudi())}>
       <DialogContent className="grid-cols-[minmax(0,1fr)] overflow-x-hidden sm:max-w-[960px]">
         <DialogHeader>
-          <DialogTitle>Causali del consulente</DialogTitle>
+          <DialogTitle>Impostazioni dell'export</DialogTitle>
         </DialogHeader>
 
         <div className="inline-flex w-fit rounded-lg border border-border bg-card p-1">
           {(
             [
+              ['file', 'File'],
               ['corrispondenze', 'Corrispondenze'],
               ['tabella', 'Tabella causali'],
               ['regole', 'Regole'],
@@ -193,6 +196,59 @@ export function DizionarioDialog({
             </button>
           ))}
         </div>
+
+        {scheda === 'file' ? (
+          <div className="min-w-0 space-y-4">
+            <p className="text-[13px] leading-snug text-muted-foreground">
+              Come si presenta il file allo Studio. Sono due dati soli, ma senza il primo il file
+              non si genera.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="ditta">
+                  Codice ditta dello Studio
+                </label>
+                <Input
+                  id="ditta"
+                  value={ditta}
+                  maxLength={7}
+                  onChange={(e) => setDitta(e.target.value.toUpperCase())}
+                  className="mt-1 h-9 bg-background font-mono shadow-none"
+                />
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                  Va scritto come lo ha dato il consulente, gruppo compreso.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="programma">
+                  Nome del programma di rilevazione
+                </label>
+                <Input
+                  id="programma"
+                  value={programma}
+                  maxLength={15}
+                  onChange={(e) => setProgramma(e.target.value)}
+                  className="mt-1 h-9 bg-background shadow-none"
+                />
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                  Compare nell'intestazione del file. Si cambia solo se lo chiede lo Studio.
+                </p>
+              </div>
+            </div>
+            {!ditta.trim() ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-[12px] leading-snug text-amber-800">
+                Finche' il codice ditta e' vuoto il file non si puo' generare: un file consegnato
+                sulla ditta sbagliata sarebbe peggio di un file mancante.
+              </p>
+            ) : null}
+            <div className="flex justify-end">
+              <Button size="sm" onClick={salvaRegole} disabled={inCorso}>
+                {inCorso ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                Salva
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         {scheda === 'corrispondenze' ? (
           <div className="min-w-0">

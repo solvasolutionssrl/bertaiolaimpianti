@@ -162,7 +162,7 @@ function buildNav(
         href: '#',
         icon: Users,
         variant: 'section',
-        defaultOpen: true,
+        defaultOpen: false,
         children: [
           { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
           { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
@@ -175,7 +175,7 @@ function buildNav(
         href: '#',
         icon: HardHat,
         variant: 'module',
-        defaultOpen: true,
+        defaultOpen: false,
         children: [
           { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
           { id: 'kant-qr', label: 'QR code', href: '/office/kantiere/qr' },
@@ -198,7 +198,7 @@ function buildNav(
         href: '#',
         icon: Boxes,
         variant: 'section',
-        defaultOpen: true,
+        defaultOpen: false,
         children: [
           // Ricerca e Co-pilot lavorano solo su commesse, clienti e ticket:
           // per un tenant puro-Kantiere sarebbero sempre vuoti.
@@ -226,7 +226,7 @@ function buildNav(
       href: '#',
       icon: Users,
       variant: 'section',
-      defaultOpen: true,
+      defaultOpen: false,
       children: [
         { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
         { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
@@ -240,7 +240,7 @@ function buildNav(
       href: '#',
       icon: Briefcase,
       variant: 'module',
-      defaultOpen: true,
+      defaultOpen: false,
       children: [
         { id: 'commesse', label: 'Commesse', href: '/office/commesse' },
         { id: 'todo', label: 'Task', href: '/office/todo' },
@@ -253,7 +253,7 @@ function buildNav(
       href: '#',
       icon: HardHat,
       variant: 'module',
-      defaultOpen: true,
+      defaultOpen: false,
       children: [
         { id: 'kant-overview', label: 'Panoramica', href: '/office/kantiere' },
         { id: 'kant-cantieri', label: 'Cantieri', href: '/office/kantiere/cantieri' },
@@ -277,7 +277,7 @@ function buildNav(
       href: '#',
       icon: Boxes,
       variant: 'section',
-      defaultOpen: true,
+      defaultOpen: false,
       children: [
         { id: 'ricerca', label: 'Ricerca', href: '/office/cerca' },
         { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche' },
@@ -365,7 +365,7 @@ function injectPersonale(
     href: '#',
     icon: Users,
     variant: 'section',
-    defaultOpen: true,
+    defaultOpen: false,
     children: voci,
   };
 
@@ -424,17 +424,19 @@ function injectPersonalizzazioni(
     href: '#',
     icon: SlidersHorizontal,
     variant: 'section',
-    defaultOpen: true,
+    defaultOpen: false,
     children: voci,
   };
 
-  // Dopo "Personale" se c'è, altrimenti appena prima di "Altro" (che chiude
-  // sempre la sidebar), altrimenti in coda.
-  const dopoPersonale = nav.findIndex((n) => n.id === 'sec-personale');
-  if (dopoPersonale >= 0) {
-    const out = [...nav];
-    out.splice(dopoPersonale + 1, 0, sezione);
-    return out;
+  // Le funzioni su misura stanno in fondo alle aree di lavoro: dopo
+  // Kontabilita' se c'e', altrimenti dopo Kantiere, altrimenti dopo Personale.
+  for (const ancora of ['kontabilita', 'sec-kantiere', 'sec-personale']) {
+    const dove = nav.findIndex((n) => n.id === ancora);
+    if (dove >= 0) {
+      const out = [...nav];
+      out.splice(dove + 1, 0, sezione);
+      return out;
+    }
   }
   const primaDiAltro = nav.findIndex((n) => n.id === 'sec-altro');
   if (primaDiAltro >= 0) {

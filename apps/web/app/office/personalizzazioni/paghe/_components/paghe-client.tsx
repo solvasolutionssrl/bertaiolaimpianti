@@ -4,7 +4,6 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
-  BookOpen,
   CalendarDays,
   Check,
   ChevronDown,
@@ -13,22 +12,18 @@ import {
   Download,
   FileText,
   Info,
-  Loader2,
   Pencil,
   Plus,
+  Settings2,
   Stethoscope,
   Trash2,
   Users,
 } from 'lucide-react';
-import { Badge, Button, Card, CardContent, Input } from '@kommessa/ui';
+import { Badge, Button, Card, CardContent } from '@kommessa/ui';
 import type { CausaleEssePaghe } from '@kommessa/api/paghe-causali';
 
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
-import {
-  eliminaEventoPaghe,
-  salvaImpostazioniPaghe,
-  segnaStatoMese,
-} from '@/app/office/_actions/paghe';
+import { eliminaEventoPaghe, segnaStatoMese } from '@/app/office/_actions/paghe';
 import type {
   CertificatoMese,
   DipendenteMese,
@@ -177,11 +172,6 @@ export function PagheClient({
     al: string;
     esistente: CertificatoMese | null;
   } | null>(null);
-  const [codiceDitta, setCodiceDitta] = React.useState(mese.config.codiceDitta);
-  const [arrotondamento, setArrotondamento] = React.useState(
-    String(mese.config.regole.arrotondamentoMinuti),
-  );
-
   const perCodice = React.useMemo(
     () => new Map(catalogo.map((c) => [c.codice, c])),
     [catalogo],
@@ -237,29 +227,6 @@ export function PagheClient({
     });
   }
 
-  /** Salva le impostazioni della funzione, cambiando solo quella toccata. */
-  async function salvaImpostazioni(cambio: { codiceDitta?: string; arrotondamentoMinuti?: number }) {
-    setInCorso(true);
-    const res = await salvaImpostazioniPaghe({
-      codiceDitta: cambio.codiceDitta ?? mese.config.codiceDitta,
-      programmaPresenze: mese.config.programmaPresenze,
-      arrotondamentoMinuti:
-        cambio.arrotondamentoMinuti ?? mese.config.regole.arrotondamentoMinuti,
-      straordinarioFeriale: mese.config.regole.straordinarioFeriale,
-      straordinarioSabato: mese.config.regole.straordinarioSabato,
-      straordinarioFestivo: mese.config.regole.straordinarioFestivo,
-      viaggioEccedente: mese.config.regole.viaggioEccedente,
-    });
-    setInCorso(false);
-    if (!res.ok) await showAlert({ title: 'Non salvato', body: res.error });
-    else router.refresh();
-  }
-
-  async function cambiaArrotondamento(valore: string) {
-    setArrotondamento(valore);
-    await salvaImpostazioni({ arrotondamentoMinuti: Number(valore) || 0 });
-  }
-
   async function cambiaStato(consegnato: boolean) {
     setInCorso(true);
     const res = await segnaStatoMese({ periodo: mese.periodo, consegnato });
@@ -300,7 +267,8 @@ export function PagheClient({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+          {/* Stessa altezza dei tasti accanto: 40px, bordo compreso. */}
+          <div className="flex h-10 items-center gap-1 rounded-lg border border-border bg-card px-1">
             <Button
               variant="ghost"
               size="sm"
@@ -329,8 +297,8 @@ export function PagheClient({
             </Badge>
           ) : null}
           <Button size="sm" variant="outline" onClick={() => setDizionarioAperto(true)}>
-            <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-            Causali
+            <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+            Impostazioni
           </Button>
           <Button size="sm" asChild={scaricabile} disabled={!scaricabile}>
             {scaricabile ? (
@@ -493,80 +461,6 @@ export function PagheClient({
 
         {/* Sidebar di riepilogo */}
         <div className="space-y-3 xl:sticky xl:top-4 xl:self-start">
-          <Sezione icona={FileText} titolo="Impostazioni del file">
-            <label className="block text-xs font-medium text-muted-foreground" htmlFor="ditta">
-              Codice ditta dello Studio
-            </label>
-            <div className="mt-1 flex gap-2">
-              <Input
-                id="ditta"
-                value={codiceDitta}
-                maxLength={7}
-                onChange={(e) => setCodiceDitta(e.target.value.toUpperCase())}
-                className="h-9 bg-background font-mono shadow-none"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={inCorso || codiceDitta === mese.config.codiceDitta}
-                onClick={() => salvaImpostazioni({ codiceDitta })}
-              >
-                {inCorso ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-              </Button>
-            </div>
-            <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-              Va scritto come lo ha dato il consulente, gruppo compreso. Finche' e' vuoto il file
-              non si genera.
-            </p>
-            <div className="mt-3 border-t border-border pt-2.5">
-              <label
-                className="text-xs font-medium text-muted-foreground"
-                htmlFor="arrotondamento"
-              >
-                Arrotondamento di straordinari e viaggio
-              </label>
-              <select
-                id="arrotondamento"
-                value={arrotondamento}
-                disabled={inCorso}
-                onChange={(e) => cambiaArrotondamento(e.target.value)}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-[13px]"
-              >
-                <option value="0">Al minuto, come registrato</option>
-                <option value="5">Ai 5 minuti</option>
-                <option value="15">Al quarto d'ora</option>
-                <option value="30">Alla mezz'ora</option>
-              </select>
-              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                Si applica al totale del giorno, non alla singola timbratura, e vale dal prossimo
-                calcolo. Cambia quello che viene pagato: va deciso con il consulente.
-              </p>
-            </div>
-
-            <dl className="mt-3 space-y-1 border-t border-border pt-2 text-[12px]">
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Giornata piena</dt>
-                <dd className="font-medium text-foreground">{ore(mese.oreGiornataIntera)} ore</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Straordinario</dt>
-                <dd className="font-mono font-medium text-foreground">
-                  {mese.config.regole.straordinarioFeriale} · {mese.config.regole.straordinarioSabato}{' '}
-                  · {mese.config.regole.straordinarioFestivo}
-                </dd>
-              </div>
-            </dl>
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-3 w-full"
-              onClick={() => setDizionarioAperto(true)}
-            >
-              <BookOpen className="mr-1.5 h-3.5 w-3.5" />
-              Causali e corrispondenze
-            </Button>
-          </Sezione>
-
           {mese.giornateSospese.length > 0 ? (
             <Sezione icona={AlertTriangle} titolo="Giornate non approvate">
               <p className="text-[12px] leading-snug text-muted-foreground">
