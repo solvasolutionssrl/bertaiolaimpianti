@@ -246,19 +246,33 @@ function OfficeShell({
     const sectionClasses = cn(
       'relative flex w-full items-center gap-2 rounded-md px-2.5 min-h-[1.625rem] text-left',
       'text-[10.5px] font-bold uppercase tracking-[0.13em] transition-colors',
+      // Le intestazioni sono impalcatura: stessa voce tipografica per tutte, e
+      // nessun fondo pieno. Il pieno dice "sei qui" ed è già della voce attiva:
+      // usarlo anche per la categoria mette due significati a contendersi lo
+      // stesso segnale, e vince il più grande. Un modulo si riconosce da un
+      // segno, non da una massa.
       isModule
-        ? // Sfondo arancione vivo, scritta nera (solo lo sfondo è colorato)
-          cn(
-            '!bg-accent/[0.22] text-foreground hover:!bg-accent/[0.3]',
-            // Un modulo di una pagina sola è un link: da aperto deve vedersi.
-            exactActive && '!bg-accent/[0.42] ring-1 ring-accent/60',
+        ? cn(
+            'mt-1.5 text-foreground/75 hover:bg-accent/[0.07]',
+            // Un modulo di una pagina sola è un link: da aperto si tinge
+            // appena, come una riga attiva, senza diventare un blocco.
+            exactActive && 'bg-accent/[0.18] text-foreground',
           )
         : 'mt-1 text-muted-foreground/60 hover:text-muted-foreground/85',
     );
     const sectionInner = (
       <>
+        {exactActive ? (
+          // Stessa barretta delle righe attive, alone compreso: se "sei qui"
+          // si dice in un modo solo, si legge senza doverlo cercare.
+          <span
+            aria-hidden="true"
+            className="absolute -left-3 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-accent shadow-[0_0_10px_hsl(var(--accent)/0.65)]"
+          />
+        ) : null}
         {isModule ? (
-          <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          // Segno piccolo: dice "modulo aggiuntivo" senza fare da distintivo.
+          <Puzzle className="h-3 w-3 shrink-0 text-accent/70" aria-hidden="true" />
         ) : null}
         <span className="flex-1 truncate">{item.label}</span>
         {showLabel && hasChildren ? (
@@ -385,7 +399,13 @@ function OfficeShell({
             {hasChildren && isExpanded && (opts?.forceLabel || sidebarOpen) ? (
               <div
                 id={`nav-children-${item.id}`}
-                className="mt-0.5 flex flex-col gap-0.5 border-l border-primary/15 ml-4 pl-0 animate-fade-up"
+                className={cn(
+                  'mt-0.5 flex flex-col gap-0.5 border-l ml-4 pl-0 animate-fade-up',
+                  // La riga verticale porta l'appartenenza per tutta l'altezza
+                  // del gruppo: continua e calma, invece che concentrata in una
+                  // barra che grida una volta sola.
+                  item.variant === 'module' ? 'border-accent/30' : 'border-primary/15',
+                )}
               >
                 {item.children!.map((child) => (
                   <React.Fragment key={child.id}>
