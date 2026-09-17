@@ -34,6 +34,18 @@ Pagina: `/office/personalizzazioni/paghe` (admin e ufficio). Download: `/api/off
 
 **Le giornate non approvate restano fuori** e la pagina le elenca. Finche' una giornata e' in bozza le sue ore non si comunicano: il rapportino e' forma, ma l'approvazione e' il momento in cui l'ufficio se ne assume la responsabilita'.
 
+### Il foglio del mese (scheda «Foglio del mese»)
+
+E' il posto dove l'ufficio completa chi non usa ancora l'app, al posto del vecchio foglio Excel. Un **calendario per dipendente**, tre colonne: le persone (prima quelle senza giornate, marcate «vuoto»), il mese, e il pannello «Cosa e' successo».
+
+- Una casella per giorno; **sabati** («riposo») e **festivi** gia' marcati, come le sigle `RS` e `FG` del foglio di prima. I giorni normali non si scrivono: nel file vanno solo le variazioni.
+- Si sceglie la **causale una volta sola** e poi si cliccano i giorni: resta selezionata, e con Invio si conferma. E' questo che rende veloce un mese intero, non il numero di campi.
+- **«Ripeti fino al»** apre da sola una riga per ogni giorno del periodo, saltando sabati, domeniche e festivi (la spunta si puo' togliere per lo straordinario del sabato).
+- **Azzurro** = scritto a mano, si toglie con la ×. **Verde** = arriva dalle timbrature: si vede ma non si tocca da qui, si corregge nella giornata.
+- In alto a destra i totali della persona (assenza in ore e giorni, straordinario, viaggio), come la riga di totali in fondo al foglio Excel.
+
+> **Impaginazione**: su questa scheda la pagina va **a tutta larghezza**, senza la striscia dei numeri in alto e senza la colonna di destra. E' un banco di lavoro, non una scheda da leggere: lo spazio serve al calendario.
+
 ---
 
 ## 3. Il tracciato (manuale `InterfacciaPresenze`, versione 2026)

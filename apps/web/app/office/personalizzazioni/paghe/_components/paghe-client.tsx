@@ -31,6 +31,7 @@ import type {
   ModelloMese,
 } from '../_lib/dati-mese';
 import { EventoDialog } from './evento-dialog';
+import { FoglioMese } from './foglio-mese';
 import { DizionarioDialog } from './dizionario-dialog';
 import { CertificatoDialog } from './certificato-dialog';
 
@@ -254,7 +255,11 @@ export function PagheClient({
   const scaricabile = mese.esito.totali.eventi > 0 && Boolean(mese.config.codiceDitta);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-5 md:px-6">
+    // Il foglio del mese e' un banco di lavoro: si prende tutto lo schermo,
+    // perche' e' li' che si passa il tempo a compilare.
+    <div
+      className={`mx-auto w-full px-4 py-5 md:px-6 ${vista === 'completa' ? '' : 'max-w-[1600px]'}`}
+    >
       {/* Intestazione: mese, stato, azione principale. */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -317,7 +322,11 @@ export function PagheClient({
       </div>
 
       {/* Numeri del mese. */}
-      <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+      {/* Sul foglio del mese i numeri del mese non servono: li' si compila, e
+          lo spazio verticale serve tutto al calendario. */}
+      <div
+        className={`mb-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6 ${vista === 'completa' ? 'hidden' : ''}`}
+      >
         <Kpi
           etichetta="Nel file"
           valore={String(mese.esito.totali.dipendenti)}
@@ -393,7 +402,13 @@ export function PagheClient({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div
+        className={
+          vista === 'completa'
+            ? 'block'
+            : 'grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]'
+        }
+      >
         {/* Colonna principale */}
         <div className="min-w-0">
           <div className="mb-3 inline-flex rounded-lg border border-border bg-card p-1">
@@ -401,7 +416,7 @@ export function PagheClient({
               [
                 ['riepilogo', 'Riepilogo', Users],
                 ['calendario', 'Calendario', CalendarDays],
-                ['completa', 'Da completare', Plus],
+                ['completa', 'Foglio del mese', Plus],
                 ['file', 'Anteprima file', FileText],
               ] as const
             ).map(([id, label, Icona]) => (
@@ -449,10 +464,11 @@ export function PagheClient({
           ) : null}
 
           {vista === 'completa' ? (
-            <CompletaVista
+            <FoglioMese
               mese={mese}
               eventiPerDip={eventiPerDip}
-              onAggiungi={() => setEventoAperto('nuovo')}
+              catalogo={catalogo}
+              onAggiornato={() => router.refresh()}
             />
           ) : null}
 
@@ -460,7 +476,9 @@ export function PagheClient({
         </div>
 
         {/* Sidebar di riepilogo */}
-        <div className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+        <div
+          className={`space-y-3 xl:sticky xl:top-4 xl:self-start ${vista === 'completa' ? 'hidden' : ''}`}
+        >
           {mese.giornateSospese.length > 0 ? (
             <Sezione icona={AlertTriangle} titolo="Giornate non approvate">
               <p className="text-[12px] leading-snug text-muted-foreground">
@@ -891,75 +909,6 @@ function CalendarioVista({
         ) : null}
       </CardContent>
     </Card>
-  );
-}
-
-function CompletaVista({
-  mese,
-  eventiPerDip,
-  onAggiungi,
-}: {
-  mese: ModelloMese;
-  eventiPerDip: Map<string, EventoMese[]>;
-  onAggiungi: () => void;
-}) {
-  const fuori = mese.dipendenti.filter((d) => d.attivo && !d.usaKommessa);
-  const senzaNiente = fuori.filter((d) => !eventiPerDip.has(d.id));
-
-  return (
-    <div className="space-y-3">
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-foreground">
-              Variazioni di chi non usa ancora Kommessa
-            </p>
-            <p className="mt-0.5 text-[13px] text-muted-foreground">
-              Per chi timbra, straordinari e ore di viaggio arrivano da soli. Per gli altri si
-              scrivono qui, una volta sola: un periodo di ferie diventa da solo una riga per giorno
-              lavorativo.
-            </p>
-          </div>
-          <Button size="sm" onClick={onAggiungi}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Aggiungi variazione
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Sezione icona={Users} titolo={`Senza giornate in Kommessa (${fuori.length})`}>
-        {fuori.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            Tutti i dipendenti in forza hanno giornate registrate: il file si costruisce da solo.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-            {fuori.map((d) => {
-              const quanti = eventiPerDip.get(d.id)?.length ?? 0;
-              return (
-                <div
-                  key={d.id}
-                  className={`flex min-w-0 items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 ${quanti > 0 ? 'border-emerald-200 bg-emerald-50/50' : 'border-border bg-muted/20'}`}
-                >
-                  <span className="truncate text-[13px] text-foreground">
-                    {d.cognome} {d.nome}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {quanti > 0 ? `${quanti} righe` : 'niente'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {senzaNiente.length > 0 ? (
-          <p className="mt-3 border-t border-border pt-2 text-[12px] text-muted-foreground">
-            Se per qualcuno di loro il mese e' stato regolare, va bene cosi': una giornata normale
-            non si comunica.
-          </p>
-        ) : null}
-      </Sezione>
-    </div>
   );
 }
 
