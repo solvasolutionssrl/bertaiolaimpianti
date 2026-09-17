@@ -255,11 +255,10 @@ export function PagheClient({
   const scaricabile = mese.esito.totali.eventi > 0 && Boolean(mese.config.codiceDitta);
 
   return (
-    // Il foglio del mese e' un banco di lavoro: si prende tutto lo schermo,
-    // perche' e' li' che si passa il tempo a compilare.
-    <div
-      className={`mx-auto w-full px-4 py-5 md:px-6 ${vista === 'completa' ? '' : 'max-w-[1600px]'}`}
-    >
+    // Margini e larghezza massima li mette il guscio, come per ogni altra
+    // pagina dell'ufficio: qui non si aggiunge un secondo bordo, altrimenti il
+    // margine e' doppio e la pagina si stringe senza motivo.
+    <div className="w-full">
       {/* Intestazione: mese, stato, azione principale. */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">

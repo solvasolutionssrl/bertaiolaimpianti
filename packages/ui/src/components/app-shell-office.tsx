@@ -718,7 +718,7 @@ function OfficeShell({
         {/* La riserva per la barra di scorrimento sta qui, sull'elemento che
             scorre davvero: evita lo scatto fra schede di altezza diversa. */}
         <main className="relative flex min-w-0 flex-1 flex-col overflow-y-auto bg-canvas [scrollbar-gutter:stable]">
-          <div className="mx-auto w-full max-w-[1760px] flex-1 px-4 py-5 md:px-7 md:py-6">
+          <div className="mx-auto w-full max-w-[1760px] flex-1 px-3 py-4 md:px-5 md:py-4">
             {children}
           </div>
         </main>

@@ -214,10 +214,10 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
   return (
     // Le colonne laterali stanno strette apposta: il calendario e' il banco di
     // lavoro e si prende tutto quello che avanza.
-    <div className="grid grid-cols-1 gap-3 xl:grid-cols-[196px_minmax(0,1fr)_272px]">
+    <div className="grid grid-cols-1 gap-3 xl:grid-cols-[224px_minmax(0,1fr)_272px]">
       {/* 1. Chi: prima quelli da riempire. */}
       <Card className="xl:sticky xl:top-4 xl:self-start">
-        <CardContent className="p-2.5">
+        <CardContent className="p-3.5">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -239,7 +239,7 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
                     setDipendenteId(d.id);
                     setGiorno(null);
                   }}
-                  className={`flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left ${
+                  className={`flex w-full min-w-0 items-center gap-2 rounded-md px-2.5 py-1.5 text-left ${
                     scelto ? 'bg-primary text-primary-foreground' : 'hover:bg-primary/5'
                   }`}
                 >
