@@ -162,7 +162,7 @@ function buildNav(
         href: '#',
         icon: Users,
         variant: 'section',
-        defaultOpen: false,
+        defaultOpen: true,
         children: [
           { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
           { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
@@ -191,6 +191,9 @@ function buildNav(
         label: 'Kontabilità',
         href: '/office/kantiere/kontabilita',
         icon: ReceiptText,
+        // È un modulo come Kantiere, quindi porta la stessa etichetta a
+        // pastiglia. Non ha sotto-voci: resta un link, senza freccia.
+        variant: 'module',
       },
       {
         id: 'sec-altro',
@@ -226,7 +229,7 @@ function buildNav(
       href: '#',
       icon: Users,
       variant: 'section',
-      defaultOpen: false,
+      defaultOpen: true,
       children: [
         { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
         { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
@@ -270,6 +273,7 @@ function buildNav(
       label: 'Kontabilità',
       href: '/office/kantiere/kontabilita',
       icon: ReceiptText,
+      variant: 'module',
     },
     {
       id: 'sec-altro',
@@ -365,7 +369,7 @@ function injectPersonale(
     href: '#',
     icon: Users,
     variant: 'section',
-    defaultOpen: false,
+    defaultOpen: true,
     children: voci,
   };
 
@@ -423,7 +427,9 @@ function injectPersonalizzazioni(
     label: 'Personalizzazioni',
     href: '#',
     icon: SlidersHorizontal,
-    variant: 'section',
+    // Anche questa è un modulo per-tenant: stessa pastiglia di Kantiere e
+    // Kontabilità, così si legge a colpo d'occhio cosa è un add-on.
+    variant: 'module',
     defaultOpen: false,
     children: voci,
   };

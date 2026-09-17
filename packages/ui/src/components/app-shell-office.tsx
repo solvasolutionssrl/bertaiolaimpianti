@@ -95,6 +95,41 @@ export interface OfficeShellProps {
  * primary-soft + barra arancio sx + label primary. Footer "Made by SOLVA"
  * visibile sotto.
  */
+/**
+ * Le sezioni aperte in sidebar restano come le lascia chi lavora, per trenta
+ * giorni. Dopo una pausa lunga e' piu' utile ripartire dai valori di partenza
+ * che ritrovare una barra sistemata mesi prima e non ricordarsi perche'.
+ */
+const MEMORIA_SEZIONI = 'kommessa:nav-sezioni';
+const MEMORIA_DURATA_MS = 30 * 24 * 60 * 60 * 1000;
+
+function leggiSezioniSalvate(): string[] | null {
+  try {
+    const grezzo = window.localStorage.getItem(MEMORIA_SEZIONI);
+    if (!grezzo) return null;
+    const salvato = JSON.parse(grezzo) as { scadenza?: number; aperte?: string[] };
+    if (!salvato?.scadenza || salvato.scadenza < Date.now()) {
+      window.localStorage.removeItem(MEMORIA_SEZIONI);
+      return null;
+    }
+    return Array.isArray(salvato.aperte) ? salvato.aperte : null;
+  } catch {
+    // Navigazione privata o spazio esaurito: si resta ai valori di partenza.
+    return null;
+  }
+}
+
+function salvaSezioni(aperte: Set<string>): void {
+  try {
+    window.localStorage.setItem(
+      MEMORIA_SEZIONI,
+      JSON.stringify({ scadenza: Date.now() + MEMORIA_DURATA_MS, aperte: [...aperte] }),
+    );
+  } catch {
+    // Se non si puo' salvare, la sidebar funziona lo stesso.
+  }
+}
+
 function OfficeShell({
   tenant,
   user,
@@ -128,6 +163,18 @@ function OfficeShell({
   const [expanded, setExpanded] = React.useState<Set<string>>(
     () => new Set(navItems.filter((i) => i.defaultOpen).map((i) => i.id)),
   );
+
+  // Quello che si e' aperto o chiuso si applica DOPO il primo render: leggere
+  // il browser durante il render darebbe al server e al browser due alberi
+  // diversi, e l'idratazione salterebbe.
+  const sezioniRipristinate = React.useRef(false);
+  React.useEffect(() => {
+    if (sezioniRipristinate.current) return;
+    sezioniRipristinate.current = true;
+    const salvate = leggiSezioniSalvate();
+    if (salvate) setExpanded(new Set(salvate));
+  }, []);
+
   React.useEffect(() => {
     if (!activeNavId) return;
     const next = new Set(expanded);
@@ -149,6 +196,7 @@ function OfficeShell({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      salvaSezioni(next);
       return next;
     });
   };
@@ -168,9 +216,12 @@ function OfficeShell({
     const showLabel = opts?.forceLabel || sidebarOpen;
     const isChild = opts?.isChild ?? false;
     const isModule = !isChild && item.variant === 'module';
-    // Header di sezione/separatore (AZIENDA/ALTRO = section, KOMMESSA/KANTIERE = module)
+    // Header di sezione/separatore (AZIENDA/ALTRO = section, KOMMESSA/KANTIERE = module).
+    // Vale anche senza sotto-voci: un modulo di una pagina sola, come
+    // Kontabilita', porta la stessa etichetta a pastiglia degli altri e resta
+    // un link, senza freccia da aprire.
     const isSectionHeader =
-      !isChild && hasChildren && (item.variant === 'module' || item.variant === 'section');
+      !isChild && (item.variant === 'module' || item.variant === 'section');
 
     const exactActive = item.id === activeNavId;
 
@@ -197,7 +248,11 @@ function OfficeShell({
       'text-[10.5px] font-bold uppercase tracking-[0.13em] transition-colors',
       isModule
         ? // Sfondo arancione vivo, scritta nera (solo lo sfondo è colorato)
-          '!bg-accent/[0.22] text-foreground hover:!bg-accent/[0.3]'
+          cn(
+            '!bg-accent/[0.22] text-foreground hover:!bg-accent/[0.3]',
+            // Un modulo di una pagina sola è un link: da aperto deve vedersi.
+            exactActive && '!bg-accent/[0.42] ring-1 ring-accent/60',
+          )
         : 'mt-1 text-muted-foreground/60 hover:text-muted-foreground/85',
     );
     const sectionInner = (
@@ -206,7 +261,7 @@ function OfficeShell({
           <Puzzle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         ) : null}
         <span className="flex-1 truncate">{item.label}</span>
-        {showLabel ? (
+        {showLabel && hasChildren ? (
           <ChevronDown
             aria-hidden="true"
             className={cn(
@@ -295,18 +350,22 @@ function OfficeShell({
       );
     }
 
+    // A sidebar stretta restano solo le icone: l'etichetta a pastiglia, che e'
+    // fatta di testo, avrebbe senso solo con la barra aperta.
+    const comeSezione = isSectionHeader && showLabel;
     const linkProps = {
       href: item.href,
-      className: linkClasses,
+      className: comeSezione ? sectionClasses : linkClasses,
       'aria-current': exactActive ? ('page' as const) : undefined,
       title: !showLabel ? item.label : undefined,
       prefetch: true,
     };
+    const contenuto = comeSezione ? sectionInner : inner;
 
     return LinkComp ? (
-      <LinkComp {...linkProps}>{inner}</LinkComp>
+      <LinkComp {...linkProps}>{contenuto}</LinkComp>
     ) : (
-      <a {...linkProps}>{inner}</a>
+      <a {...linkProps}>{contenuto}</a>
     );
   };
 
