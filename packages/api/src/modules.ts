@@ -19,23 +19,30 @@
  *                  nell'agente. Si governa da `/admin/tenants/[id]` → tab
  *                  Integrazione.
  *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
- * - `paghe`      : funzioni su misura per il consulente del lavoro del cliente
- *                  (area "Personalizzazioni"). Oggi produce l'export mensile
- *                  delle presenze nel tracciato del programma paghe. In
- *                  `tenant_modules.config`: `codice_ditta`, `programma_paghe`,
- *                  `regole_causali`. Ogni cliente ha il suo consulente, quindi
- *                  le corrispondenze fra eventi e causali vivono nella config,
- *                  non nel codice.
+ * - `personalizzazioni`: area delle **funzioni su misura**. E' un contenitore,
+ *                  non una funzione: qualunque cliente puo' averla, e dentro ci
+ *                  si mettono i pezzi costruiti apposta per lui. In
+ *                  `tenant_modules.config`: `funzioni` (elenco delle chiavi
+ *                  accese, dal registro `personalizzazioni-registry`) e, sotto
+ *                  la chiave di ognuna, le sue impostazioni. La prima e'
+ *                  `export_paghe`, il file mensile per il consulente del
+ *                  lavoro: le corrispondenze fra eventi e causali vivono nella
+ *                  config perche' ogni cliente ha il suo consulente.
  *                  Opzionale: attivo solo se esiste una riga `attivo=true`.
  */
-export type ModuleCode = 'base' | 'kantiere' | 'dipendenti' | 'integrazione' | 'paghe';
+export type ModuleCode =
+  | 'base'
+  | 'kantiere'
+  | 'dipendenti'
+  | 'integrazione'
+  | 'personalizzazioni';
 
 export const MODULE_CODES: ModuleCode[] = [
   'base',
   'kantiere',
   'dipendenti',
   'integrazione',
-  'paghe',
+  'personalizzazioni',
 ];
 
 export interface TenantModuleRow {

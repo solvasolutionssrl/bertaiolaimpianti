@@ -124,7 +124,15 @@ function componiRecord(lunghezza: number, campi: readonly Campo[]): string {
     }
     fine = campo.a;
     const grezzo = campo.tipo === 'A' ? asciiPulito(campo.valore) : campo.valore.trim();
-    const tagliato = grezzo.slice(0, larghezza);
+    // Un alfanumerico troppo lungo si taglia (un cognome lungo resta
+    // riconoscibile); un numerico no. Tagliare un identificativo lo
+    // trasformerebbe in quello di qualcun altro, in silenzio.
+    if (campo.tipo === 'N' && grezzo.length > larghezza) {
+      throw new Error(
+        `valore troppo lungo per il campo numerico ${campo.da}-${campo.a}: "${grezzo}"`,
+      );
+    }
+    const tagliato = campo.tipo === 'A' ? grezzo.slice(0, larghezza) : grezzo;
     const riempito =
       campo.tipo === 'A' ? tagliato.padEnd(larghezza, ' ') : tagliato.padStart(larghezza, '0');
     for (let i = 0; i < larghezza; i++) buffer[campo.da - 1 + i] = riempito[i]!;
@@ -169,6 +177,18 @@ export interface DipendentePaghe {
   codicePaghe: string | null;
   cognome: string;
   nome: string;
+}
+
+/**
+ * Il codice delle paghe deve stare in sei cifre.
+ *
+ * In Kommessa il codice interno e' testo libero e puo' essere generato in
+ * automatico nella forma `DIP-001`: un codice cosi' non entra nel campo, e
+ * tagliarlo darebbe a nove persone diverse la stessa matricola. Meglio
+ * lasciarle fuori dal file e dirlo.
+ */
+export function codicePagheValido(codice: string | null | undefined): boolean {
+  return typeof codice === 'string' && /^\d{1,6}$/.test(codice.trim());
 }
 
 /** Record 10: apre il blocco di un dipendente. */
@@ -368,11 +388,11 @@ function verificaEvento(
       messaggio: `${chi}: l'evento ${evento.causale} finisce prima di cominciare.`,
     };
   }
-  if (!evento.dal.startsWith(periodo)) {
+  if (!evento.dal.startsWith(periodo) || !evento.al.startsWith(periodo)) {
     return {
       gravita: 'blocco',
       dipendenteId: dipendente.id,
-      messaggio: `${chi}: l'evento ${evento.causale} del ${giornoLeggibile(evento.dal)} e' fuori dal mese esportato.`,
+      messaggio: `${chi}: l'evento ${evento.causale} del ${giornoLeggibile(evento.dal)} esce dal mese esportato.`,
     };
   }
   if (evento.ore < 0) {
@@ -380,6 +400,13 @@ function verificaEvento(
       gravita: 'blocco',
       dipendenteId: dipendente.id,
       messaggio: `${chi}: ore negative sull'evento ${evento.causale}.`,
+    };
+  }
+  if (evento.ore > 999.99) {
+    return {
+      gravita: 'blocco',
+      dipendenteId: dipendente.id,
+      messaggio: `${chi}: l'evento ${evento.causale} ha ${evento.ore} ore, piu' di quante ne entrino nel campo.`,
     };
   }
   const tipo = evento.record ?? causale.record;
@@ -478,6 +505,15 @@ export function generaDatiMese(
       });
       continue;
     }
+    if (!codicePagheValido(dipendente.codicePaghe)) {
+      scartati += suoi.length;
+      avvisi.push({
+        gravita: 'blocco',
+        dipendenteId: dipendente.id,
+        messaggio: `${nomeCompleto(dipendente)} ha il codice paghe "${dipendente.codicePaghe}", che non e' un numero di sei cifre: correggilo in anagrafica, altrimenti le sue ${suoi.length} righe restano fuori.`,
+      });
+      continue;
+    }
 
     const validi: EventoPaghe[] = [];
     for (const evento of suoi) {
@@ -510,26 +546,38 @@ export function generaDatiMese(
 
     for (const evento of validi) {
       const tipo = evento.record ?? risolviCausale(evento.causale, opzioni.causaliExtra)!.record;
-      prog++;
-      if (tipo === '12') {
-        record12Contati++;
-        righe.push({
-          tipo: '12',
-          testo: record12(prog, evento),
-          glossa: glossaEvento(evento, dipendente, '12', opzioni.causaliExtra),
+      // Ultima rete: se un valore non entra nel suo campo si scarta la riga e
+      // si dice quale, invece di far cadere la pagina intera.
+      let testo: string;
+      try {
+        testo = tipo === '12' ? record12(prog + 1, evento) : record14(prog + 1, evento);
+      } catch (errore) {
+        scartati++;
+        avvisi.push({
+          gravita: 'blocco',
           dipendenteId: dipendente.id,
-          evento,
+          messaggio: `${nomeCompleto(dipendente)}: la riga ${evento.causale} del ${giornoLeggibile(evento.dal)} non entra nel tracciato (${errore instanceof Error ? errore.message : 'valore non valido'}).`,
         });
-      } else {
-        record14Contati++;
-        righe.push({
-          tipo: '14',
-          testo: record14(prog, evento),
-          glossa: glossaEvento(evento, dipendente, '14', opzioni.causaliExtra),
-          dipendenteId: dipendente.id,
-          evento,
-        });
+        continue;
       }
+      prog++;
+      if (tipo === '12') record12Contati++;
+      else record14Contati++;
+      righe.push({
+        tipo,
+        testo,
+        glossa: glossaEvento(evento, dipendente, tipo, opzioni.causaliExtra),
+        dipendenteId: dipendente.id,
+        evento,
+      });
+    }
+
+    // Se tutte le sue righe sono cadute, il dipendente resta nel file con il
+    // solo record 10: inutile e sospetto. Si toglie.
+    if (righe.at(-1)?.tipo === '10') {
+      righe.pop();
+      prog--;
+      dipendentiScritti--;
     }
   }
 

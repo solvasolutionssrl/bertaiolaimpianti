@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   asciiPulito,
+  codicePagheValido,
   dataCompatta,
   formattaOreEssePaghe,
   generaDatiMese,
@@ -18,6 +19,7 @@ import {
   eventiDaGiornata,
   estremiDelMese,
   festivoItaliano,
+  giorniDelPeriodo,
   limitaAlMese,
   regoleConfigurate,
   tipoGiorno,
@@ -242,7 +244,7 @@ describe('controlli prima di consegnare il file', () => {
       OPZIONI,
     );
     expect(esito.totali.scartati).toBe(1);
-    expect(esito.avvisi[0]!.messaggio).toContain('fuori dal mese');
+    expect(esito.avvisi[0]!.messaggio).toContain('esce dal mese');
   });
 
   it('un evento giornaliero senza ore e' + "' un errore: le ore sono obbligatorie", () => {
@@ -378,7 +380,7 @@ describe('dalle assenze Kommessa alla causale', () => {
         dal: '2026-06-08',
         al: '2026-06-12',
         tuttoIlGiorno: true,
-        puc: '234567890',
+        certificato: { tipoInfo: 'P', numero: '234567890' },
       },
       REGOLE_DEFAULT,
       opzioni,
@@ -523,5 +525,225 @@ describe('mese intero', () => {
     expect(causaleEssePaghe('L0')).toMatchObject({ famiglia: 'straordinario', record: '14' });
     expect(causaleEssePaghe('zz')).toMatchObject({ codice: 'ZZ' });
     expect(causaleEssePaghe('inesistente')).toBeUndefined();
+  });
+});
+
+describe('giorni contati bene', () => {
+  it('i mesi lunghi, corti e bisestili finiscono dove devono', () => {
+    expect(estremiDelMese('2026-01').al).toBe('2026-01-31');
+    expect(estremiDelMese('2026-04').al).toBe('2026-04-30');
+    expect(estremiDelMese('2026-12').al).toBe('2026-12-31');
+    expect(estremiDelMese('2028-02').al).toBe('2028-02-29');
+  });
+
+  it('il cambio dell' + "'ora non fa sparire ne' raddoppiare un giorno", () => {
+    // Ultima domenica di marzo e di ottobre 2026: le date sono trattate in UTC
+    // proprio per non dipendere dal fuso di chi guarda.
+    expect(giorniDelPeriodo('2026-03-28', '2026-03-30')).toEqual([
+      '2026-03-28',
+      '2026-03-29',
+      '2026-03-30',
+    ]);
+    expect(giorniDelPeriodo('2026-10-24', '2026-10-26')).toEqual([
+      '2026-10-24',
+      '2026-10-25',
+      '2026-10-26',
+    ]);
+  });
+
+  it('un periodo di un giorno solo resta un giorno', () => {
+    expect(giorniDelPeriodo('2026-06-15', '2026-06-15')).toEqual(['2026-06-15']);
+  });
+
+  it('un' + "'assenza a cavallo di capodanno si taglia sull'anno giusto", () => {
+    expect(limitaAlMese('2025-12-28', '2026-01-05', '2026-01')).toEqual({
+      dal: '2026-01-01',
+      al: '2026-01-05',
+    });
+    expect(limitaAlMese('2025-12-28', '2026-01-05', '2025-12')).toEqual({
+      dal: '2025-12-28',
+      al: '2025-12-31',
+    });
+  });
+
+  it('le ferie che sconfinano nel mese dopo si fermano al 30', () => {
+    const esito = eventiDaAssenza(
+      { dipendenteId: 'ben', tipo: 'ferie', dal: '2026-06-29', al: '2026-07-03', tuttoIlGiorno: true },
+      REGOLE_DEFAULT,
+      { periodo: '2026-06', oreGiornataIntera: 8 },
+    );
+    expect(esito.eventi.map((e) => e.dal)).toEqual(['2026-06-29', '2026-06-30']);
+  });
+});
+
+describe('un mese intero regge il tracciato', () => {
+  it('quaranta righe su due persone: lunghezze, progressivi e delimitatori', () => {
+    const eventi: EventoPaghe[] = [];
+    for (let giorno = 1; giorno <= 20; giorno++) {
+      const data = `2026-06-${String(giorno).padStart(2, '0')}`;
+      eventi.push(evento({ dipendenteId: 'ben', causale: 'S0', dal: data, ore: 1.25 }));
+      eventi.push(evento({ dipendenteId: 'val', causale: 'V1', dal: data, ore: 0.5 }));
+    }
+    const esito = generaDatiMese([BENEDETTI, VALBUSA], eventi, OPZIONI);
+
+    // Intestazione + due dipendenti + quaranta eventi.
+    expect(esito.righe).toHaveLength(43);
+    expect(esito.totali).toMatchObject({ dipendenti: 2, eventi: 40, scartati: 0 });
+    expect(validaTracciato(esito.testo)).toEqual([]);
+
+    // Il progressivo cresce di uno per riga, partendo da zero sull'intestazione.
+    const progressivi = esito.righe.map((r) => Number(r.testo.slice(3, 9)));
+    expect(progressivi).toEqual(progressivi.map((_, i) => i));
+
+    // Ogni riga finisce con CR LF, anche l'ultima.
+    expect(esito.testo.split('\r\n')).toHaveLength(44);
+    expect(esito.testo.endsWith('\r\n')).toBe(true);
+  });
+
+  it('i giorni sotto il dieci restano a due cifre', () => {
+    const esito = generaDatiMese(
+      [BENEDETTI],
+      [evento({ dipendenteId: 'ben', causale: 'FE', dal: '2026-06-03', ore: 8 })],
+      OPZIONI,
+    );
+    expect(esito.righe.at(-1)!.testo.slice(10, 12)).toBe('03');
+  });
+
+  it('senza eventi resta la sola intestazione', () => {
+    const esito = generaDatiMese([BENEDETTI], [], OPZIONI);
+    expect(esito.totali.eventi).toBe(0);
+    expect(esito.righe).toHaveLength(1);
+  });
+
+  it('se tutte le sue righe cadono, il dipendente non resta nel file da solo', () => {
+    const esito = generaDatiMese(
+      [BENEDETTI],
+      [evento({ dipendenteId: 'ben', causale: 'ZQ', dal: '2026-06-02', ore: 8 })],
+      OPZIONI,
+    );
+    expect(esito.righe).toHaveLength(1);
+    expect(esito.totali.dipendenti).toBe(0);
+  });
+
+  it('un periodo che finisce nel mese dopo viene scartato', () => {
+    const esito = generaDatiMese(
+      [VALBUSA],
+      [evento({ dipendenteId: 'val', causale: 'ML', dal: '2026-06-28', al: '2026-08-15' })],
+      OPZIONI,
+    );
+    expect(esito.totali.scartati).toBe(1);
+    expect(esito.avvisi[0]!.messaggio).toContain('esce dal mese');
+  });
+});
+
+describe('il codice paghe deve entrare nel campo', () => {
+  it('riconosce i codici che non ci stanno', () => {
+    expect(codicePagheValido('00003')).toBe(true);
+    expect(codicePagheValido('123456')).toBe(true);
+    expect(codicePagheValido('DIP-001')).toBe(false);
+    expect(codicePagheValido('1234567')).toBe(false);
+    expect(codicePagheValido(null)).toBe(false);
+  });
+
+  // Il codice interno di Kommessa e' testo libero e puo' nascere come
+  // "DIP-001": tagliato a sei caratteri darebbe a nove persone la stessa
+  // matricola, e nessuno se ne accorgerebbe.
+  it('un codice generato in automatico non entra nel file troncato', () => {
+    const esito = generaDatiMese(
+      [{ ...BENEDETTI, codicePaghe: 'DIP-001' }],
+      [evento({ dipendenteId: 'ben', causale: 'FE', dal: '2026-06-02', ore: 8 })],
+      OPZIONI,
+    );
+    expect(esito.totali.dipendenti).toBe(0);
+    expect(esito.totali.scartati).toBe(1);
+    expect(esito.avvisi[0]!.messaggio).toContain('DIP-001');
+    expect(esito.testo).not.toContain('DIP');
+  });
+
+  it('il record rifiuta un numerico troppo lungo invece di tagliarlo', () => {
+    expect(() =>
+      record10(1, '100145', { ...BENEDETTI, codicePaghe: '1234567' }),
+    ).toThrow('troppo lungo');
+  });
+});
+
+describe('attestati e periodi tagliati', () => {
+  const opzioni = { periodo: '2026-06', oreGiornataIntera: 8 };
+
+  it('il tipo di numero e' + "' quello dichiarato, non dedotto dalla causale", () => {
+    const esito = eventiDaAssenza(
+      {
+        dipendenteId: 'val',
+        tipo: 'malattia',
+        dal: '2026-06-08',
+        al: '2026-06-12',
+        tuttoIlGiorno: true,
+        certificato: { tipoInfo: 'M', numero: 'PROT-99' },
+      },
+      REGOLE_DEFAULT,
+      opzioni,
+    );
+    expect(esito.eventi[0]).toMatchObject({ tipoInfo: 'M', infoAggiuntiva: 'PROT-99' });
+  });
+
+  it('senza numero non si dichiara nemmeno il tipo', () => {
+    const esito = eventiDaAssenza(
+      { dipendenteId: 'val', tipo: 'malattia', dal: '2026-06-08', al: '2026-06-12', tuttoIlGiorno: true },
+      REGOLE_DEFAULT,
+      opzioni,
+    );
+    expect(esito.eventi[0]!.tipoInfo).toBeUndefined();
+  });
+
+  it('una malattia cominciata il mese prima porta con se' + "' la data vera", () => {
+    const esito = eventiDaAssenza(
+      { dipendenteId: 'val', tipo: 'malattia', dal: '2026-05-28', al: '2026-06-05', tuttoIlGiorno: true },
+      REGOLE_DEFAULT,
+      opzioni,
+    );
+    expect(esito.eventi[0]).toMatchObject({ dal: '2026-06-01', dataRiferimento: '2026-05-28' });
+    expect(esito.avvisi[0]!.messaggio).toContain('28/05');
+  });
+
+  it('con il numero dell' + "'attestato la data di inizio non serve piu'", () => {
+    const esito = eventiDaAssenza(
+      {
+        dipendenteId: 'val',
+        tipo: 'malattia',
+        dal: '2026-05-28',
+        al: '2026-06-05',
+        tuttoIlGiorno: true,
+        certificato: { tipoInfo: 'P', numero: '999' },
+      },
+      REGOLE_DEFAULT,
+      opzioni,
+    );
+    expect(esito.eventi[0]!.dataRiferimento).toBeUndefined();
+    expect(esito.avvisi).toHaveLength(1);
+  });
+
+  it('un' + "'assenza tutta nel fine settimana lo dice invece di sparire", () => {
+    const esito = eventiDaAssenza(
+      { dipendenteId: 'ben', tipo: 'ferie', dal: '2026-06-13', al: '2026-06-14', tuttoIlGiorno: true },
+      REGOLE_DEFAULT,
+      opzioni,
+    );
+    expect(esito.eventi).toEqual([]);
+    expect(esito.avvisi[0]!.messaggio).toContain('sabato, domenica e festivi');
+  });
+
+  it('i minuti azzerati dall' + "'arrotondamento vengono segnalati", () => {
+    const esito = traduciMese(
+      {
+        giornate: [
+          { dipendenteId: 'ben', data: '2026-06-15', minutiStraordinari: 7, minutiViaggioEccedente: 0 },
+        ],
+        assenze: [],
+      },
+      regoleConfigurate({ arrotondamentoMinuti: 15 }),
+      opzioni,
+    );
+    expect(esito.eventi).toEqual([]);
+    expect(esito.avvisi[0]!.messaggio).toContain('arrotondamento');
   });
 });

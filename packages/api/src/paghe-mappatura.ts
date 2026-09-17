@@ -14,7 +14,7 @@
  * diverse, e la regola e' esplicita e modificabile.
  */
 
-import type { CausaliExtra, EventoPaghe } from './paghe-essepaghe';
+import type { CausaliExtra, EventoPaghe, TipoInfoAggiuntiva } from './paghe-essepaghe';
 import { oreDaMinuti, risolviCausale } from './paghe-essepaghe';
 
 // ---------------------------------------------------------------------------
@@ -213,10 +213,13 @@ export interface AssenzaKommessa {
   tuttoIlGiorno: boolean;
   /** Ore dell'assenza quando non copre la giornata intera. */
   oreParziali?: number | null;
-  /** Numero dell'attestato telematico, per la malattia. */
-  puc?: string | null;
-  /** Codice fiscale dell'ente, per la donazione di sangue. */
-  codiceFiscaleEnte?: string | null;
+  /**
+   * L'attestato collegato, se c'e'. Il tipo lo dichiara chi lo ha inserito
+   * (attestato telematico, protocollo cartaceo, codice fiscale dell'ente) e
+   * non si deduce dalla causale: un cartaceo spacciato per telematico e' un
+   * dato falso.
+   */
+  certificato?: { tipoInfo: TipoInfoAggiuntiva; numero: string | null } | null;
 }
 
 export interface OpzioniTraduzione {
@@ -228,6 +231,12 @@ export interface OpzioniTraduzione {
   causaliExtra?: CausaliExtra;
 }
 
+/** Qualcosa che il file non dice e l'ufficio deve sapere. */
+export interface AvvisoTraduzione {
+  dipendenteId: string;
+  messaggio: string;
+}
+
 export interface EsitoTraduzione {
   eventi: EventoPaghe[];
   /**
@@ -235,6 +244,12 @@ export interface EsitoTraduzione {
    * una volta, sceglie, e la scelta resta.
    */
   causaliDaDecidere: string[];
+  /**
+   * Quello che e' stato tagliato o non e' diventato una riga. Un dato che
+   * sparisce in silenzio e' peggio di un dato sbagliato: almeno quello si
+   * vede.
+   */
+  avvisi: AvvisoTraduzione[];
 }
 
 function causaleStraordinario(giorno: string, regole: RegoleCausali): string {
@@ -306,11 +321,12 @@ export function eventiDaAssenza(
   const codice = aOre
     ? regole.assenzeAOre[assenza.tipo] ?? regole.assenze[assenza.tipo] ?? null
     : regole.assenze[assenza.tipo] ?? null;
-  if (!codice) return { eventi: [], causaliDaDecidere: [assenza.tipo] };
+  if (!codice) return { eventi: [], causaliDaDecidere: [assenza.tipo], avvisi: [] };
 
   const dentroIlMese = limitaAlMese(assenza.dal, assenza.al, opzioni.periodo);
-  if (!dentroIlMese) return { eventi: [], causaliDaDecidere: [] };
+  if (!dentroIlMese) return { eventi: [], causaliDaDecidere: [], avvisi: [] };
 
+  const avvisi: AvvisoTraduzione[] = [];
   const causale = risolviCausale(codice, opzioni.causaliExtra);
   const record = causale?.record ?? '14';
   const base = {
@@ -318,16 +334,22 @@ export function eventiDaAssenza(
     causale: codice,
     origine: 'manuale' as const,
   };
-  const info =
-    codice === 'ML'
-      ? { tipoInfo: 'P' as const, infoAggiuntiva: assenza.puc ?? null }
-      : codice === 'DS' && assenza.codiceFiscaleEnte
-        ? { tipoInfo: 'C' as const, infoAggiuntiva: assenza.codiceFiscaleEnte }
-        : {};
+  // Il numero dell'attestato viaggia con il tipo dichiarato da chi lo ha
+  // inserito. Senza numero non si dichiara nemmeno il tipo: un campo che dice
+  // "attestato telematico" e poi e' vuoto confonde e basta.
+  const numero = assenza.certificato?.numero?.trim() || null;
+  const info = numero
+    ? { tipoInfo: assenza.certificato!.tipoInfo, infoAggiuntiva: numero }
+    : {};
 
   if (record === '12') {
-    // Un periodo intero non porta ore; una frazione di giornata si comunica da
-    // sola, con le sue ore, come chiede il manuale.
+    const tagliatoAllInizio = dentroIlMese.dal !== assenza.dal;
+    if (tagliatoAllInizio) {
+      avvisi.push({
+        dipendenteId: assenza.dipendenteId,
+        messaggio: `L'assenza ${codice} era cominciata il ${assenza.dal.slice(8, 10)}/${assenza.dal.slice(5, 7)}, prima del mese esportato: nel file parte dal primo giorno del mese.`,
+      });
+    }
     return {
       eventi: [
         {
@@ -336,17 +358,30 @@ export function eventiDaAssenza(
           origine: 'kommessa',
           dal: dentroIlMese.dal,
           al: dentroIlMese.al,
+          // Un periodo intero non porta ore; una frazione di giornata si
+          // comunica da sola, con le sue ore, come chiede il manuale.
           ore: aOre ? assenza.oreParziali ?? 0 : 0,
           record: '12',
+          // Il manuale tiene il campo in coda per la data di inizio vera,
+          // quando il numero dell'attestato non si puo' dare: e' il solo modo
+          // di non perdere l'inizio di una malattia a cavallo di due mesi.
+          ...(tagliatoAllInizio && !numero ? { dataRiferimento: assenza.dal } : {}),
         },
       ],
       causaliDaDecidere: [],
+      avvisi,
     };
   }
 
   const giorni = giorniDelPeriodo(dentroIlMese.dal, dentroIlMese.al).filter(
     (g) => tipoGiorno(g) === 'feriale',
   );
+  if (giorni.length === 0) {
+    avvisi.push({
+      dipendenteId: assenza.dipendenteId,
+      messaggio: `L'assenza ${codice} del ${dentroIlMese.dal.slice(8, 10)}/${dentroIlMese.dal.slice(5, 7)} cade tutta fra sabato, domenica e festivi: non produce nessuna riga.`,
+    });
+  }
   const ore = aOre ? assenza.oreParziali ?? 0 : opzioni.oreGiornataIntera;
   return {
     eventi: giorni.map((g) => ({
@@ -359,6 +394,7 @@ export function eventiDaAssenza(
       record: '14' as const,
     })),
     causaliDaDecidere: [],
+    avvisi,
   };
 }
 
@@ -370,16 +406,28 @@ export function traduciMese(
 ): EsitoTraduzione {
   const eventi: EventoPaghe[] = [];
   const daDecidere = new Set<string>();
+  const avvisi: AvvisoTraduzione[] = [];
 
   for (const giornata of dati.giornate) {
     if (!giornata.data.startsWith(opzioni.periodo)) continue;
-    eventi.push(...eventiDaGiornata(giornata, regole));
+    const suoi = eventiDaGiornata(giornata, regole);
+    eventi.push(...suoi);
+    // L'arrotondamento puo' mangiarsi pochi minuti fino a farli sparire: e'
+    // una scelta legittima, ma va detta.
+    const minuti = giornata.minutiStraordinari + giornata.minutiViaggioEccedente;
+    if (minuti > 0 && suoi.length === 0) {
+      avvisi.push({
+        dipendenteId: giornata.dipendenteId,
+        messaggio: `Il ${giornata.data.slice(8, 10)}/${giornata.data.slice(5, 7)} ci sono ${minuti} minuti fra straordinario e viaggio, azzerati dall'arrotondamento di ${regole.arrotondamentoMinuti} minuti.`,
+      });
+    }
   }
   for (const assenza of dati.assenze) {
     const esito = eventiDaAssenza(assenza, regole, opzioni);
     eventi.push(...esito.eventi);
     for (const tipo of esito.causaliDaDecidere) daDecidere.add(tipo);
+    avvisi.push(...esito.avvisi);
   }
 
-  return { eventi, causaliDaDecidere: [...daDecidere] };
+  return { eventi, causaliDaDecidere: [...daDecidere], avvisi };
 }

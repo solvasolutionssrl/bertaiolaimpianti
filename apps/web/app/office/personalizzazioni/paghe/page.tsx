@@ -1,7 +1,10 @@
+import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
 import { CAUSALI_ESSEPAGHE } from '@kommessa/api/paghe-causali';
 import { PERMESSO_TIPI } from '@kommessa/api/permessi-tipi';
 
+import { leggiFunzioniPersonalizzate } from '@/app/_lib/personalizzazioni';
 import { caricaMese } from './_lib/dati-mese';
 import { PagheClient } from './_components/paghe-client';
 
@@ -33,6 +36,12 @@ export default async function ExportPaghePage({
   searchParams?: { mese?: string };
 }) {
   const ctx = await requireTenantContext();
+
+  // L'area puo' essere accesa senza questa funzione: il layout apre la porta
+  // dell'area, la singola funzione si controlla qui.
+  const attive = await leggiFunzioniPersonalizzate(createServerSupabase(), ctx.tenantId);
+  if (!attive.includes('export_paghe')) notFound();
+
   const richiesto = searchParams?.mese ?? '';
   const periodo = MESE_VALIDO.test(richiesto) ? richiesto : meseCorrente();
 

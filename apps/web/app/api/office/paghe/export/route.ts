@@ -1,9 +1,11 @@
 import { type NextRequest } from 'next/server';
 
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
 import { NOME_FILE, validaTracciato } from '@kommessa/api/paghe-essepaghe';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiFunzioniPersonalizzate } from '@/app/_lib/personalizzazioni';
 import { caricaMese } from '@/app/office/personalizzazioni/paghe/_lib/dati-mese';
 
 /**
@@ -22,7 +24,11 @@ export async function GET(req: NextRequest) {
   if (!['owner', 'admin', 'office'].includes(ctx.role)) {
     return Response.json({ ok: false, error: 'Non autorizzato.' }, { status: 403 });
   }
-  if (!(await tenantHasModule('paghe'))) {
+  if (!(await tenantHasModule('personalizzazioni'))) {
+    return Response.json({ ok: false, error: 'Funzione non attiva.' }, { status: 404 });
+  }
+  const attive = await leggiFunzioniPersonalizzate(createServerSupabase(), ctx.tenantId);
+  if (!attive.includes('export_paghe')) {
     return Response.json({ ok: false, error: 'Funzione non attiva.' }, { status: 404 });
   }
 
@@ -32,10 +38,14 @@ export async function GET(req: NextRequest) {
   }
 
   const mese = await caricaMese(ctx.tenantId, periodo);
-  if (!mese.esito.testo) {
-    const motivo = mese.config.codiceDitta
-      ? 'Non ci sono variazioni da comunicare per questo mese.'
-      : 'Manca il codice ditta dello Studio: impostalo prima di scaricare il file.';
+  // Un file con la sola intestazione e' tecnicamente valido e praticamente
+  // inutile: chi lo consegna crede di aver chiuso il mese. Meglio non darlo.
+  if (mese.esito.totali.eventi === 0) {
+    const motivo = !mese.config.codiceDitta
+      ? 'Manca il codice ditta dello Studio: impostalo prima di scaricare il file.'
+      : mese.esito.totali.scartati > 0
+        ? 'Nessuna riga puo' + "' essere comunicata: guarda gli avvisi della pagina."
+        : 'Non ci sono variazioni da comunicare per questo mese.';
     return Response.json({ ok: false, error: motivo }, { status: 409 });
   }
 

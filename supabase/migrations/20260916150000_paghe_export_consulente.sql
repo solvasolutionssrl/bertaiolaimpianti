@@ -149,18 +149,27 @@ drop policy if exists paghe_certificati_platform_admin_read on public.paghe_cert
 create policy paghe_certificati_platform_admin_read on public.paghe_certificati
   for select using (public.is_platform_admin());
 
--- ---------- accensione del modulo -------------------------------------
--- Il modulo nasce acceso solo per il cliente che lo ha chiesto, con il codice
--- ditta confermato dal consulente. Gli altri clienti non vedono nemmeno la
--- voce in menu finche' il super admin non la accende.
+-- ---------- accensione dell'area --------------------------------------
+-- `personalizzazioni` e' l'AREA delle funzioni su misura, non una funzione:
+-- qualunque cliente puo' averla, e dentro ci si mettono i pezzi costruiti
+-- apposta per lui. `funzioni` elenca quelle accese; sotto la chiave di ognuna
+-- stanno le sue impostazioni, cosi' due funzioni dello stesso cliente non si
+-- pestano i piedi.
+--
+-- Nasce accesa solo per il cliente che l'ha chiesta, con il codice ditta
+-- confermato dal consulente. Gli altri non vedono nemmeno la voce in menu
+-- finche' il super admin non la accende.
 insert into public.tenant_modules (tenant_id, module_code, attivo, config, configured_at)
 select t.id,
-       'paghe',
+       'personalizzazioni',
        true,
        jsonb_build_object(
-         'fornitore', 'essepaghe',
-         'codice_ditta', '100145',
-         'programma_presenze', 'Kommessa'
+         'funzioni', jsonb_build_array('export_paghe'),
+         'export_paghe', jsonb_build_object(
+           'fornitore', 'essepaghe',
+           'codice_ditta', '100145',
+           'programma_presenze', 'Kommessa'
+         )
        ),
        now()
 from public.tenants t

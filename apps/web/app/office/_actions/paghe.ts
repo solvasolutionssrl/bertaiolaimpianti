@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import {
   getR2ProviderFromEnv,
@@ -15,6 +16,7 @@ import { causaleEssePaghe } from '@kommessa/api/paghe-causali';
 import { estremiDelMese, giorniDelPeriodo, tipoGiorno } from '@kommessa/api/paghe-mappatura';
 
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiFunzioniPersonalizzate } from '@/app/_lib/personalizzazioni';
 import { configPagheDa } from '@/app/_lib/paghe-config';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 
@@ -42,33 +44,56 @@ const CODICE_CAUSALE = z
 
 type Service = ReturnType<typeof createServiceSupabase>;
 
+/** La funzione su misura a cui appartengono queste azioni. */
+const CHIAVE_FUNZIONE = 'export_paghe';
+const MODULO = 'personalizzazioni';
+
 async function contesto() {
   const ctx = await requireTenantContext();
   if (!['owner', 'admin', 'office'].includes(ctx.role)) return null;
-  if (!(await tenantHasModule('paghe'))) return null;
+  // Due porte: l'area delle funzioni su misura e questa funzione dentro l'area.
+  if (!(await tenantHasModule(MODULO))) return null;
+  const attive = await leggiFunzioniPersonalizzate(createServerSupabase(), ctx.tenantId);
+  if (!attive.includes(CHIAVE_FUNZIONE)) return null;
   return ctx;
 }
 
-async function configGrezza(service: Service, tenantId: string): Promise<Record<string, unknown>> {
+async function configIntera(service: Service, tenantId: string): Promise<Record<string, unknown>> {
   const { data } = await service
     .from('tenant_modules' as never)
     .select('config')
     .eq('tenant_id', tenantId)
-    .eq('module_code', 'paghe')
+    .eq('module_code', MODULO)
     .maybeSingle();
   return (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
 }
 
+/** Le impostazioni di questa funzione, sotto la sua chiave nella config dell'area. */
+async function configGrezza(service: Service, tenantId: string): Promise<Record<string, unknown>> {
+  const sua = (await configIntera(service, tenantId))[CHIAVE_FUNZIONE];
+  return sua && typeof sua === 'object' && !Array.isArray(sua)
+    ? (sua as Record<string, unknown>)
+    : {};
+}
+
+/**
+ * Riscrive solo il pezzo di questa funzione. L'elenco delle funzioni accese e
+ * le impostazioni delle altre restano dove sono: l'area e' condivisa.
+ */
 async function scriviConfig(
   service: Service,
   tenantId: string,
   config: Record<string, unknown>,
 ): Promise<string | null> {
+  const intera = await configIntera(service, tenantId);
   const { error } = await service
     .from('tenant_modules' as never)
-    .update({ config, configured_at: new Date().toISOString() } as never)
+    .update({
+      config: { ...intera, [CHIAVE_FUNZIONE]: config },
+      configured_at: new Date().toISOString(),
+    } as never)
     .eq('tenant_id', tenantId)
-    .eq('module_code', 'paghe');
+    .eq('module_code', MODULO);
   return error?.message ?? null;
 }
 
@@ -78,10 +103,20 @@ async function dipendenteDelTenant(
   tenantId: string,
   dipendenteId: string,
 ): Promise<boolean> {
+  return rigaDelTenant(service, 'dipendenti', tenantId, dipendenteId);
+}
+
+/** Vale per qualunque riga a cui ci si vuole collegare. */
+async function rigaDelTenant(
+  service: Service,
+  tabella: string,
+  tenantId: string,
+  id: string,
+): Promise<boolean> {
   const { data } = await service
-    .from('dipendenti' as never)
+    .from(tabella as never)
     .select('id, tenant_id')
-    .eq('id', dipendenteId)
+    .eq('id', id)
     .maybeSingle();
   return (data as { tenant_id: string } | null)?.tenant_id === tenantId;
 }
@@ -147,7 +182,7 @@ export async function salvaImpostazioniPaghe(
     tenantId: ctx.tenantId,
     actorUserId: ctx.userId,
     actorRole: ctx.role,
-    entityType: 'paghe',
+    entityType: 'export_paghe',
     action: 'paghe.impostazioni.update',
     before: { codiceDitta: prima.codiceDitta, regole: prima.regole },
     after: { codiceDitta: d.codiceDitta, regole },
@@ -201,7 +236,7 @@ export async function impostaCausaleAssenza(
     tenantId: ctx.tenantId,
     actorUserId: ctx.userId,
     actorRole: ctx.role,
-    entityType: 'paghe',
+    entityType: 'export_paghe',
     action: 'paghe.causale.assenza',
     after: { tipo: parsed.data.tipo, causale: parsed.data.causale || null },
   });
@@ -258,7 +293,7 @@ export async function aggiungiCausalePersonalizzata(
     tenantId: ctx.tenantId,
     actorUserId: ctx.userId,
     actorRole: ctx.role,
-    entityType: 'paghe',
+    entityType: 'export_paghe',
     action: 'paghe.causale.crea',
     after: parsed.data,
   });
@@ -276,6 +311,23 @@ export async function eliminaCausalePersonalizzata(codice: string): Promise<Esit
   const service = createServiceSupabase();
   const grezza = await configGrezza(service, ctx.tenantId);
   const config = configPagheDa(grezza);
+
+  // Togliere una causale ancora in uso farebbe cadere tutte le righe che la
+  // usano, il mese dopo e senza preavviso.
+  const inUso: (string | null)[] = [
+    config.regole.straordinarioFeriale,
+    config.regole.straordinarioSabato,
+    config.regole.straordinarioFestivo,
+    config.regole.viaggioEccedente,
+    ...Object.values(config.regole.assenze),
+  ];
+  if (inUso.includes(parsed.data)) {
+    return {
+      ok: false,
+      error: `La causale ${parsed.data} e' ancora usata in una corrispondenza: cambiala prima di toglierla.`,
+    };
+  }
+
   const extra = config.causaliExtra
     .filter((c) => c.codice !== parsed.data)
     .map((c) => ({
@@ -292,7 +344,7 @@ export async function eliminaCausalePersonalizzata(codice: string): Promise<Esit
     tenantId: ctx.tenantId,
     actorUserId: ctx.userId,
     actorRole: ctx.role,
-    entityType: 'paghe',
+    entityType: 'export_paghe',
     action: 'paghe.causale.elimina',
     before: { codice: parsed.data },
   });
@@ -365,12 +417,16 @@ export async function salvaEventoPaghe(input: z.input<typeof EventoSchema>): Pro
   };
 
   if (d.id) {
-    const { error } = await service
+    const { data: aggiornate, error } = await service
       .from('paghe_eventi' as never)
       .update({ ...base, dal: d.dal, al: record === '12' ? d.al : d.dal } as never)
       .eq('id', d.id)
-      .eq('tenant_id', ctx.tenantId);
+      .eq('tenant_id', ctx.tenantId)
+      .select('id');
     if (error) return { ok: false, error: error.message };
+    if (!aggiornate || aggiornate.length === 0) {
+      return { ok: false, error: 'Variazione non trovata.' };
+    }
     await auditTenant(service, {
       tenantId: ctx.tenantId,
       actorUserId: ctx.userId,
@@ -384,15 +440,25 @@ export async function salvaEventoPaghe(input: z.input<typeof EventoSchema>): Pro
     return { ok: true, id: d.id, quanti: 1 };
   }
 
+  const giorni = giorniDelPeriodo(d.dal, d.al);
+  // Su un giorno solo vale la scelta di chi scrive, anche se e' un sabato o un
+  // festivo: lo straordinario del sabato e la festivita' lavorata esistono, e
+  // sono proprio i casi che l'ufficio registra a mano.
+  const giorniScelti =
+    giorni.length === 1 || d.soloFeriali === false
+      ? giorni
+      : giorni.filter((g) => tipoGiorno(g) === 'feriale');
   const righe =
     record === '12'
       ? [{ ...base, dal: d.dal, al: d.al }]
-      : giorniDelPeriodo(d.dal, d.al)
-          .filter((g) => d.soloFeriali === false || tipoGiorno(g) === 'feriale')
-          .map((g) => ({ ...base, dal: g, al: g }));
+      : giorniScelti.map((g) => ({ ...base, dal: g, al: g }));
 
   if (righe.length === 0) {
-    return { ok: false, error: 'Nel periodo scelto non ci sono giorni lavorativi.' };
+    return {
+      ok: false,
+      error:
+        'Nel periodo scelto non ci sono giorni lavorativi. Togli la spunta se vuoi comunicare anche sabati, domeniche e festivi.',
+    };
   }
 
   const { data, error } = await service
@@ -481,6 +547,18 @@ export async function salvaCertificato(
   if (!(await dipendenteDelTenant(service, ctx.tenantId, d.dipendenteId))) {
     return { ok: false, error: 'Dipendente non valido.' };
   }
+  // I collegamenti devono puntare dentro casa propria: l'evento ha una
+  // cancellazione a cascata, e agganciarsi a quello di un altro cliente
+  // significherebbe fargli sparire il certificato quando cancella il suo.
+  if (d.eventoId && !(await rigaDelTenant(service, 'paghe_eventi', ctx.tenantId, d.eventoId))) {
+    return { ok: false, error: 'Variazione non valida.' };
+  }
+  if (
+    d.permessoId &&
+    !(await rigaDelTenant(service, 'permesso_richieste', ctx.tenantId, d.permessoId))
+  ) {
+    return { ok: false, error: 'Richiesta di assenza non valida.' };
+  }
 
   const riga = {
     tenant_id: ctx.tenantId,
@@ -496,12 +574,25 @@ export async function salvaCertificato(
   };
 
   if (d.id) {
-    const { error } = await service
+    const { data: aggiornate, error } = await service
       .from('paghe_certificati' as never)
       .update(riga as never)
       .eq('id', d.id)
-      .eq('tenant_id', ctx.tenantId);
+      .eq('tenant_id', ctx.tenantId)
+      .select('id');
     if (error) return { ok: false, error: error.message };
+    if (!aggiornate || aggiornate.length === 0) {
+      return { ok: false, error: 'Attestato non trovato.' };
+    }
+    await auditTenant(service, {
+      tenantId: ctx.tenantId,
+      actorUserId: ctx.userId,
+      actorRole: ctx.role,
+      entityType: 'paghe_certificato',
+      entityId: d.id,
+      action: 'paghe.certificato.modifica',
+      after: { dal: d.dal, al: d.al, tipoInfo: d.tipoInfo, conNumero: Boolean(riga.numero) },
+    });
     revalidatePath(PERCORSO);
     return { ok: true, id: d.id };
   }

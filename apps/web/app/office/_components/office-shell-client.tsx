@@ -9,10 +9,12 @@ import {
   BarChart3,
   Boxes,
   Briefcase,
+  Calculator,
   CalendarCheck,
   CalendarDays,
   Coins,
   FileSpreadsheet,
+  FileText,
   HardHat,
   LayoutDashboard,
   MapPin,
@@ -25,6 +27,7 @@ import {
   UsersRound,
   Plug,
 } from 'lucide-react';
+import { PERSONALIZZAZIONI } from '@/app/_lib/personalizzazioni-registry';
 import { NextLinkAdapter } from './link-next';
 import { CommandPalette, type MondoRicerca } from './command-palette';
 import { CommandPaletteTrigger } from './command-palette-trigger';
@@ -44,8 +47,11 @@ interface Props {
   hasPianificazione?: boolean;
   /** Modulo Dipendenti · sotto-flag Ferie attivo → voci Permessi/Gruppi/Analisi. */
   hasFerie?: boolean;
-  /** Modulo Paghe attivo → sezione "Personalizzazioni" con l'export paghe. */
-  hasPaghe?: boolean;
+  /**
+   * Chiavi delle funzioni su misura accese per il tenant (registro
+   * `personalizzazioni-registry`). Elenco vuoto o assente → nessuna sezione.
+   */
+  funzioniPersonalizzate?: string[];
   /** Kontabilità attiva (modulo Kantiere): false toglie la voce dal menu. */
   hasKontabilita?: boolean;
   /** Esperienza app del tenant. 'kantiere' = office puro-Kantiere (no commessa). */
@@ -374,24 +380,42 @@ function injectPersonale(
 }
 
 /**
+ * Il registro nomina l'icona di ogni funzione, non la porta con sé: un
+ * componente React non attraversa il confine fra server e client. Il nome
+ * diventa disegno qui, e un nome che non conosciamo prende quella dell'area.
+ */
+const ICONE_PERSONALIZZAZIONI: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = {
+  documento: FileText,
+  tabella: FileSpreadsheet,
+  calcolo: Calculator,
+};
+
+/**
  * Sezione "Personalizzazioni": le funzioni scritte su misura per un singolo
  * cliente. Sta in una sezione sua e non dentro Impostazioni perché non è
- * configurazione: è lavoro che l'ufficio fa ogni mese. No-op se il modulo è
- * spento, così chi non l'ha acquistata non ne vede traccia.
+ * configurazione: è lavoro che l'ufficio fa ogni mese.
+ *
+ * L'area è il contenitore, le voci arrivano dal registro: qui non si nomina
+ * nessuna funzione, così aggiungerne una domani non tocca la sidebar. Se il
+ * cliente non ne ha accesa nessuna la sezione non compare, e chi non ha l'area
+ * non ne vede traccia.
  */
 function injectPersonalizzazioni(
   nav: OfficeNavItem[],
-  hasPaghe?: boolean,
+  funzioniPersonalizzate?: string[],
 ): OfficeNavItem[] {
-  const voci: OfficeNavItem[] = [];
-  if (hasPaghe) {
-    voci.push({
-      id: 'paghe',
-      label: 'Export paghe',
-      href: '/office/personalizzazioni/paghe',
-      icon: FileSpreadsheet,
-    });
-  }
+  const accese = funzioniPersonalizzate ?? [];
+  const voci: OfficeNavItem[] = PERSONALIZZAZIONI.filter((p) =>
+    accese.includes(p.key),
+  ).map((p) => ({
+    id: p.key,
+    label: p.label,
+    href: p.href,
+    icon: ICONE_PERSONALIZZAZIONI[p.icona] ?? SlidersHorizontal,
+  }));
   if (voci.length === 0) return nav;
 
   const sezione: OfficeNavItem = {
@@ -457,7 +481,7 @@ export function OfficeShellClient({
   hasDipendenti,
   hasPianificazione,
   hasFerie,
-  hasPaghe,
+  funzioniPersonalizzate,
   hasKontabilita,
   appMode,
   mondoRicerca,
@@ -475,7 +499,7 @@ export function OfficeShellClient({
         hasPianificazione,
         hasFerie,
       }),
-      hasPaghe,
+      funzioniPersonalizzate,
     ),
     hasIntegrazione,
   );

@@ -178,6 +178,9 @@ export function PagheClient({
     esistente: CertificatoMese | null;
   } | null>(null);
   const [codiceDitta, setCodiceDitta] = React.useState(mese.config.codiceDitta);
+  const [arrotondamento, setArrotondamento] = React.useState(
+    String(mese.config.regole.arrotondamentoMinuti),
+  );
 
   const perCodice = React.useMemo(
     () => new Map(catalogo.map((c) => [c.codice, c])),
@@ -234,12 +237,14 @@ export function PagheClient({
     });
   }
 
-  async function salvaCodiceDitta() {
+  /** Salva le impostazioni della funzione, cambiando solo quella toccata. */
+  async function salvaImpostazioni(cambio: { codiceDitta?: string; arrotondamentoMinuti?: number }) {
     setInCorso(true);
     const res = await salvaImpostazioniPaghe({
-      codiceDitta,
+      codiceDitta: cambio.codiceDitta ?? mese.config.codiceDitta,
       programmaPresenze: mese.config.programmaPresenze,
-      arrotondamentoMinuti: mese.config.regole.arrotondamentoMinuti,
+      arrotondamentoMinuti:
+        cambio.arrotondamentoMinuti ?? mese.config.regole.arrotondamentoMinuti,
       straordinarioFeriale: mese.config.regole.straordinarioFeriale,
       straordinarioSabato: mese.config.regole.straordinarioSabato,
       straordinarioFestivo: mese.config.regole.straordinarioFestivo,
@@ -248,6 +253,11 @@ export function PagheClient({
     setInCorso(false);
     if (!res.ok) await showAlert({ title: 'Non salvato', body: res.error });
     else router.refresh();
+  }
+
+  async function cambiaArrotondamento(valore: string) {
+    setArrotondamento(valore);
+    await salvaImpostazioni({ arrotondamentoMinuti: Number(valore) || 0 });
   }
 
   async function cambiaStato(consegnato: boolean) {
@@ -499,7 +509,7 @@ export function PagheClient({
                 size="sm"
                 variant="outline"
                 disabled={inCorso || codiceDitta === mese.config.codiceDitta}
-                onClick={salvaCodiceDitta}
+                onClick={() => salvaImpostazioni({ codiceDitta })}
               >
                 {inCorso ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
               </Button>
@@ -508,18 +518,35 @@ export function PagheClient({
               Va scritto come lo ha dato il consulente, gruppo compreso. Finche' e' vuoto il file
               non si genera.
             </p>
+            <div className="mt-3 border-t border-border pt-2.5">
+              <label
+                className="text-xs font-medium text-muted-foreground"
+                htmlFor="arrotondamento"
+              >
+                Arrotondamento di straordinari e viaggio
+              </label>
+              <select
+                id="arrotondamento"
+                value={arrotondamento}
+                disabled={inCorso}
+                onChange={(e) => cambiaArrotondamento(e.target.value)}
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-[13px]"
+              >
+                <option value="0">Al minuto, come registrato</option>
+                <option value="5">Ai 5 minuti</option>
+                <option value="15">Al quarto d'ora</option>
+                <option value="30">Alla mezz'ora</option>
+              </select>
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                Si applica al totale del giorno, non alla singola timbratura, e vale dal prossimo
+                calcolo. Cambia quello che viene pagato: va deciso con il consulente.
+              </p>
+            </div>
+
             <dl className="mt-3 space-y-1 border-t border-border pt-2 text-[12px]">
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Giornata piena</dt>
                 <dd className="font-medium text-foreground">{ore(mese.oreGiornataIntera)} ore</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt className="text-muted-foreground">Arrotondamento</dt>
-                <dd className="font-medium text-foreground">
-                  {mese.config.regole.arrotondamentoMinuti > 0
-                    ? `${mese.config.regole.arrotondamentoMinuti} min`
-                    : 'al minuto'}
-                </dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-muted-foreground">Straordinario</dt>

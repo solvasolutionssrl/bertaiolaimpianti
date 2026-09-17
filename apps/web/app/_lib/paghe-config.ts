@@ -8,6 +8,8 @@ import {
 } from '@kommessa/api/paghe-mappatura';
 import type { CausaleEssePaghe } from '@kommessa/api/paghe-causali';
 
+import { leggiConfigFunzione } from './personalizzazioni';
+
 /**
  * Impostazioni dell'export verso il programma paghe (modulo `paghe`).
  *
@@ -61,7 +63,9 @@ function causaliExtraDa(valore: unknown): CausaleEssePaghe[] {
       descrizione: testo(c.descrizione, ''),
       famiglia: c.famiglia === 'straordinario' ? ('straordinario' as const) : ('evento' as const),
       record: c.record === '12' ? ('12' as const) : ('14' as const),
-      obbligatorioRecord12: c.record === '12',
+      // "Va comunicata a periodo" non e' "il consulente la impone a periodo":
+      // l'obbligo lo dichiara lo Studio, non chi aggiunge la voce.
+      obbligatorioRecord12: false,
       // Una causale aggiunta a mano serve a questo cliente: sta in cima.
       frequente: true,
     }))
@@ -88,12 +92,9 @@ export async function leggiConfigPaghe(
   supabase: Supa,
   tenantId: string,
 ): Promise<ConfigPaghe> {
-  const { data } = await supabase
-    .from('tenant_modules' as never)
-    .select('config')
-    .eq('tenant_id', tenantId)
-    .eq('module_code', 'paghe')
-    .maybeSingle();
-  const config = (data as { config: Record<string, unknown> | null } | null)?.config ?? {};
+  // Le impostazioni stanno sotto la chiave della funzione, dentro la config
+  // dell'area: cosi' due funzioni su misura dello stesso cliente non si
+  // pestano i piedi.
+  const config = await leggiConfigFunzione(supabase, tenantId, 'export_paghe');
   return configPagheDa(config);
 }

@@ -8,6 +8,7 @@ import { tenantHasModule } from '../_lib/modules';
 import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { tenantFeatureEnabled } from '../_lib/tenant-features';
+import { leggiFunzioniPersonalizzate } from '../_lib/personalizzazioni';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { ImpersonationBanner } from './_components/impersonation-banner';
@@ -119,9 +120,14 @@ export default async function OfficeLayout({
   // nessun tasto per lanciare una sincronizzazione a mano: è il gestionale
   // locale a leggere dalle nostre API quando gli serve.
   const hasIntegrazione = await tenantHasModule('integrazione');
-  // Area "Personalizzazioni": senza la riga di modulo attiva non compare nulla,
-  // quindi i tenant che non l'hanno acquistata restano invariati.
-  const hasPaghe = await tenantHasModule('paghe');
+  // Area "Personalizzazioni": il modulo apre il contenitore, la sua config dice
+  // quali funzioni su misura ci sono dentro. Senza la riga di modulo attiva non
+  // si legge niente e non compare niente, quindi i tenant che non l'hanno
+  // acquistata restano invariati.
+  const hasPersonalizzazioni = await tenantHasModule('personalizzazioni');
+  const funzioniPersonalizzate = hasPersonalizzazioni
+    ? await leggiFunzioniPersonalizzate(supabase, ctx.tenantId)
+    : [];
   // Sotto-flag del modulo Dipendenti (gating fine delle voci nav).
   const dipCfg = hasDipendenti ? await leggiConfigDipendenti(supabase, ctx.tenantId) : null;
   const hasPianificazione = hasDipendenti && (dipCfg?.pianificazioneAttiva ?? true);
@@ -175,7 +181,7 @@ export default async function OfficeLayout({
         hasDipendenti={hasDipendenti}
         hasPianificazione={hasPianificazione}
         hasFerie={hasFerie}
-        hasPaghe={hasPaghe}
+        funzioniPersonalizzate={funzioniPersonalizzate}
         hasKontabilita={hasKontabilita}
         appMode={appMode}
         mondoRicerca={{

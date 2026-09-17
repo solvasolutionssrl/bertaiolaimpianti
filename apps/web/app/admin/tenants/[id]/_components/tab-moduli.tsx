@@ -9,7 +9,9 @@ import {
   aggiornaAppModeTenant,
   aggiornaCodiceAzienda,
   aggiornaFlagDipendenti,
+  aggiornaFunzioniPersonalizzate,
 } from '../../../_actions/tenants';
+import { PERSONALIZZAZIONI } from '@/app/_lib/personalizzazioni-registry';
 import { useAlert } from '@/app/_components/confirm-provider';
 
 type AppMode = 'kommessa' | 'kantiere' | 'full';
@@ -38,7 +40,8 @@ export function TabModuli({
   dipendentiAttivo,
   pianificazioneAttiva,
   ferieAttiva,
-  pagheAttivo,
+  personalizzazioniAttivo,
+  funzioniPersonalizzate,
   appMode: appModeIniziale,
   codiceAzienda: codiceIniziale,
 }: {
@@ -47,7 +50,10 @@ export function TabModuli({
   dipendentiAttivo: boolean;
   pianificazioneAttiva: boolean;
   ferieAttiva: boolean;
-  pagheAttivo: boolean;
+  /** Area Personalizzazioni accesa: è il contenitore, non una funzione. */
+  personalizzazioniAttivo: boolean;
+  /** Chiavi delle funzioni su misura accese dentro l'area. */
+  funzioniPersonalizzate: string[];
   appMode: AppMode;
   codiceAzienda: string;
 }) {
@@ -100,20 +106,37 @@ export function TabModuli({
   };
 
   // Personalizzazioni (salvataggio immediato, come il modulo Dipendenti).
-  const [paghe, setPaghe] = React.useState(pagheAttivo);
-  const [pendingPaghe, startPaghe] = React.useTransition();
+  // L'area è il contenitore; le funzioni dentro si accendono una per una.
+  const [pers, setPers] = React.useState(personalizzazioniAttivo);
+  const [funzioni, setFunzioni] = React.useState<string[]>(funzioniPersonalizzate);
+  const [pendingPers, startPers] = React.useTransition();
 
-  const togglePaghe = (next: boolean) => {
-    const prev = paghe;
-    setPaghe(next);
-    startPaghe(async () => {
+  const toggleArea = (next: boolean) => {
+    const prev = pers;
+    setPers(next);
+    startPers(async () => {
       const res = await aggiornaModuloTenant({
         tenantId,
-        moduleCode: 'paghe',
+        moduleCode: 'personalizzazioni',
         attivo: next,
       });
       if (!res.ok) {
-        setPaghe(prev);
+        setPers(prev);
+        await showAlert({ title: 'Errore', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const toggleFunzione = (key: string, next: boolean) => {
+    const prev = funzioni;
+    const dopo = next ? [...funzioni, key] : funzioni.filter((k) => k !== key);
+    setFunzioni(dopo);
+    startPers(async () => {
+      const res = await aggiornaFunzioniPersonalizzate({ tenantId, funzioni: dopo });
+      if (!res.ok) {
+        setFunzioni(prev);
         await showAlert({ title: 'Errore', body: res.error });
         return;
       }
@@ -253,27 +276,52 @@ export function TabModuli({
           ) : null}
         </div>
 
-        {/* personalizzazioni: toggle */}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Personalizzazioni</p>
-            <p className="text-[11px] text-muted-foreground">
-              Funzioni su misura per il cliente: oggi l&apos;export mensile
-              delle presenze verso il programma paghe del consulente del lavoro.
-            </p>
+        {/* personalizzazioni: area + una casella per ogni funzione su misura */}
+        <div className="space-y-3 rounded-lg border border-border px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Personalizzazioni</p>
+              <p className="text-[11px] text-muted-foreground">
+                Area delle funzioni costruite su misura per questo cliente.
+              </p>
+            </div>
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={pers}
+                onChange={(e) => toggleArea(e.target.checked)}
+                disabled={pendingPers}
+              />
+              <span className="text-xs text-muted-foreground">
+                {pers ? 'Attivo' : 'Spento'}
+              </span>
+            </label>
           </div>
-          <label className="inline-flex shrink-0 cursor-pointer items-center gap-2">
-            <input
-              type="checkbox"
-              className="h-4 w-4"
-              checked={paghe}
-              onChange={(e) => togglePaghe(e.target.checked)}
-              disabled={pendingPaghe}
-            />
-            <span className="text-xs text-muted-foreground">
-              {paghe ? 'Attivo' : 'Spento'}
-            </span>
-          </label>
+          {pers ? (
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              {PERSONALIZZAZIONI.map((p) => (
+                <label
+                  key={p.key}
+                  className="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2"
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0"
+                    checked={funzioni.includes(p.key)}
+                    onChange={(e) => toggleFunzione(p.key, e.target.checked)}
+                    disabled={pendingPers}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium">{p.label}</span>
+                    <span className="block text-[11px] leading-snug text-muted-foreground">
+                      {p.descrizione}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {/* Codice azienda (login a 3 campi) */}

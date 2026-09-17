@@ -105,6 +105,13 @@ function sovrapposti(aDal: string, aAl: string, bDal: string, bAl: string): bool
   return aDal <= bAl && bDal <= aAl;
 }
 
+/** Una data spostata di N giorni, restando in UTC come il resto del calcolo. */
+function scostaGiorni(iso: string, giorni: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + giorni);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function caricaMese(tenantId: string, periodo: string): Promise<ModelloMese> {
   const supabase = createServerSupabase();
   const mese = estremiDelMese(periodo);
@@ -213,8 +220,11 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
               'id, dipendente_id, permesso_id, evento_id, dal, al, tipo_info, numero, r2_key, nome_file, nota',
             )
             .eq('tenant_id', tenantId)
-            .lte('dal', mese.al)
-            .gte('al', mese.dal)
+            // Finestra piu' larga del mese: un attestato puo' essere datato
+            // qualche giorno prima o dopo l'assenza a cui si riferisce, e
+            // cercarlo solo dentro il mese lo farebbe risultare mancante.
+            .lte('dal', scostaGiorni(mese.al, 60))
+            .gte('al', scostaGiorni(mese.dal, -60))
             .order('dal')
             .order('id')
             .range(da, a) as never,
@@ -287,16 +297,28 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
     permessoId: c.permesso_id,
   }));
 
-  // Il numero dell'attestato sta sul certificato, non sull'assenza: si
-  // riconosce dal dipendente e dal periodo che si sovrappongono.
-  function certificatoDiPeriodo(dipendenteId: string, dal: string, al: string) {
+  /**
+   * L'attestato di un'assenza. Prima si guarda il collegamento esplicito: e'
+   * l'unico modo sicuro quando nello stesso mese ci sono due malattie. Solo se
+   * manca si ripiega sulle date, escludendo i certificati gia' agganciati a
+   * un'altra assenza e quelli di tipo `C`, che portano il codice fiscale di un
+   * ente e non un numero di attestato.
+   */
+  function certificatoPerAssenza(permessoId: string, dipendenteId: string, dal: string, al: string) {
+    const collegato = certificati.find((c) => c.permessoId === permessoId);
+    if (collegato) return collegato;
     return certificati.find(
-      (c) => c.dipendenteId === dipendenteId && sovrapposti(c.dal, c.al, dal, al),
+      (c) =>
+        c.dipendenteId === dipendenteId &&
+        c.permessoId === null &&
+        c.eventoId === null &&
+        c.tipoInfo !== 'C' &&
+        sovrapposti(c.dal, c.al, dal, al),
     );
   }
 
   const assenze: AssenzaKommessa[] = permessi.map((p) => {
-    const certificato = certificatoDiPeriodo(p.dipendente_id, p.data_inizio, p.data_fine);
+    const certificato = certificatoPerAssenza(p.id, p.dipendente_id, p.data_inizio, p.data_fine);
     return {
       dipendenteId: p.dipendente_id,
       tipo: p.tipo,
@@ -304,7 +326,9 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
       al: p.data_fine,
       tuttoIlGiorno: p.tutto_il_giorno,
       oreParziali: oreFraOrari(p.ora_inizio, p.ora_fine),
-      puc: certificato?.numero ?? null,
+      certificato: certificato
+        ? { tipoInfo: certificato.tipoInfo, numero: certificato.numero }
+        : null,
     };
   });
 
@@ -356,12 +380,41 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
     nome: d.nome,
   }));
 
-  const esito = generaDatiMese(perGenerazione, eventi, {
+  const generato = generaDatiMese(perGenerazione, eventi, {
     periodo,
     codiceDitta: config.codiceDitta,
     programmaPresenze: config.programmaPresenze,
     causaliExtra: config.causaliExtra,
   });
+
+  // Quello che si e' perso per strada, detto con il nome della persona: un
+  // dato che sparisce in silenzio e' peggio di uno sbagliato.
+  const nomeDi = new Map(dipendenti.map((d) => [d.id, `${d.cognome} ${d.nome}`]));
+  const avvisiInPiu = tradotto.avvisi.map((a) => ({
+    gravita: 'attenzione' as const,
+    dipendenteId: a.dipendenteId,
+    messaggio: `${nomeDi.get(a.dipendenteId) ?? 'Dipendente'}: ${a.messaggio}`,
+  }));
+
+  // Doppioni fra un'assenza approvata e la stessa scritta a mano: succede nel
+  // passaggio dal foglio di prima, e raddoppierebbe le ore senza dire niente.
+  for (const riga of aMano) {
+    const gemella = daKommessa.find(
+      (k) =>
+        k.dipendenteId === riga.dipendenteId &&
+        k.causale === riga.causale &&
+        sovrapposti(k.dal, k.al, riga.dal, riga.al),
+    );
+    if (gemella) {
+      avvisiInPiu.push({
+        gravita: 'attenzione' as const,
+        dipendenteId: riga.dipendenteId,
+        messaggio: `${nomeDi.get(riga.dipendenteId) ?? 'Dipendente'}: ${riga.causale} del ${riga.dal.slice(8, 10)}/${riga.dal.slice(5, 7)} c'e' due volte, una da Kommessa e una scritta a mano. Nel file escono entrambe.`,
+      });
+    }
+  }
+
+  const esito = { ...generato, avvisi: [...avvisiInPiu, ...generato.avvisi] };
 
   const conteggioDaDecidere = new Map<string, number>();
   for (const tipo of tradotto.causaliDaDecidere) {

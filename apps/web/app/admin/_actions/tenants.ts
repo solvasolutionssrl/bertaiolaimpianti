@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 import { FEATURE_REGISTRY, type FeatureKey } from '@/app/_lib/tenant-features-registry';
+import { chiaviValide } from '@/app/_lib/personalizzazioni-registry';
 import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
 import { requirePlatformAdmin } from '../_lib/guard';
 
@@ -817,7 +818,7 @@ export async function creaUtenteTenant(input: {
 
 const TENANT_MODULE_SCHEMA = z.object({
   tenantId: z.string().uuid(),
-  moduleCode: z.enum(['kantiere', 'dipendenti', 'paghe']),
+  moduleCode: z.enum(['kantiere', 'dipendenti', 'personalizzazioni']),
   attivo: z.boolean(),
 });
 
@@ -827,7 +828,7 @@ const TENANT_MODULE_SCHEMA = z.object({
  */
 export async function aggiornaModuloTenant(input: {
   tenantId: string;
-  moduleCode: 'kantiere' | 'dipendenti' | 'paghe';
+  moduleCode: 'kantiere' | 'dipendenti' | 'personalizzazioni';
   attivo: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();
@@ -965,6 +966,75 @@ export async function aggiornaFlagDipendenti(input: {
     action: 'tenant.dipendenti_flag.update',
     before: { [parsed.data.key]: previous },
     after: { [parsed.data.key]: parsed.data.value },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------
+// Funzioni su misura dentro l'area "Personalizzazioni"
+// ---------------------------------------------------------------------
+
+const FUNZIONI_PERSONALIZZATE_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  funzioni: z.array(z.string()),
+});
+
+/**
+ * Decide quali funzioni su misura sono accese dentro l'area
+ * "Personalizzazioni" del tenant (`tenant_modules.config.funzioni`).
+ *
+ * Si riscrive SOLO la chiave `funzioni`: sotto la chiave di ogni funzione ci
+ * sono le sue impostazioni, e cambiare l'elenco non deve cancellarle. Le chiavi
+ * che il registro non conosce si scartano, così una funzione ritirata o un
+ * client vecchio non lasciano residui nella config.
+ */
+export async function aggiornaFunzioniPersonalizzate(input: {
+  tenantId: string;
+  funzioni: string[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const admin = await requirePlatformAdmin();
+  const parsed = FUNZIONI_PERSONALIZZATE_SCHEMA.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  const supabase = createServiceSupabase();
+
+  const { data: row } = await supabase
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'personalizzazioni')
+    .maybeSingle();
+  if (!row) {
+    return {
+      ok: false,
+      error: 'Area Personalizzazioni non attiva per questo tenant.',
+    };
+  }
+
+  const existing = ((row as { config: Record<string, unknown> | null }).config) ?? {};
+  const previous = chiaviValide(existing['funzioni']);
+  const funzioni = chiaviValide(parsed.data.funzioni);
+  const newConfig: Record<string, unknown> = { ...existing, funzioni };
+
+  const { error } = await supabase
+    .from('tenant_modules' as never)
+    .update({ config: newConfig } as never)
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'personalizzazioni');
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.personalizzazioni.update',
+    before: { funzioni: previous },
+    after: { funzioni },
   });
 
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);

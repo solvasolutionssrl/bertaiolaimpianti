@@ -29,6 +29,7 @@ import { TabIntegrazione } from './_components/tab-integrazione';
 import { fotoCollegamenti } from '../../_lib/integrazione/foto';
 import { leggiConfigIntegrazione } from '../../_lib/integrazione/config';
 import { googleRoutingDisponibile } from '@/app/_lib/routing';
+import { chiaviValide } from '@/app/_lib/personalizzazioni-registry';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,8 +145,14 @@ export default async function TenantDetailPage({
   );
   const dipendentiConfig = (moduli.find((m) => m.module_code === 'dipendenti')?.config ??
     {}) as Record<string, unknown>;
-  const pagheAttivo = moduli.some(
-    (m) => m.module_code === 'paghe' && m.attivo === true,
+  // Area Personalizzazioni: la riga dice se il contenitore è acceso, la sua
+  // config quali funzioni su misura ci sono dentro.
+  const rigaPersonalizzazioni = moduli.find(
+    (m) => m.module_code === 'personalizzazioni',
+  );
+  const personalizzazioniAttivo = rigaPersonalizzazioni?.attivo === true;
+  const funzioniPersonalizzate = chiaviValide(
+    ((rigaPersonalizzazioni?.config ?? {}) as Record<string, unknown>)['funzioni'],
   );
   const routingProvider: 'free' | 'google' =
     kantiereConfig['routing_provider'] === 'google' ? 'google' : 'free';
@@ -368,7 +375,8 @@ export default async function TenantDetailPage({
             dipendentiAttivo={dipendentiAttivo}
             pianificazioneAttiva={dipendentiConfig['pianificazione_attiva'] !== false}
             ferieAttiva={dipendentiConfig['ferie_attiva'] !== false}
-            pagheAttivo={pagheAttivo}
+            personalizzazioniAttivo={personalizzazioniAttivo}
+            funzioniPersonalizzate={funzioniPersonalizzate}
             appMode={
               tenant.app_mode === 'kantiere' || tenant.app_mode === 'full'
                 ? tenant.app_mode

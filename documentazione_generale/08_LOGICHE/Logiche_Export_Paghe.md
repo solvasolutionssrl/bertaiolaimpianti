@@ -2,7 +2,7 @@
 
 **Versione**: 1.0
 **Stato**: in produzione dal 16/09/2026
-**Ambito**: modulo per-tenant `paghe`. Attivo solo per i clienti che lo hanno chiesto; gli altri non vedono nemmeno la voce in menu.
+**Ambito**: funzione `export_paghe` dentro il modulo per-tenant `personalizzazioni`, l'area delle funzioni su misura. L'area puo' essere accesa per qualunque cliente; le funzioni attive stanno in `tenant_modules.config.funzioni` e l'elenco vive in `apps/web/app/_lib/personalizzazioni-registry.ts`. Chi non ha la riga non vede nemmeno la voce in menu.
 
 Registro delle regole e delle scelte operative dell'export mensile delle presenze verso il programma paghe del consulente del lavoro. Da tenere aggiornato come `Logiche_Kantiere.md`.
 
@@ -115,7 +115,7 @@ Sul file finito si ricontrollano lunghezza di ogni record, caratteri ASCII e del
 
 ---
 
-## 7. Impostazioni per cliente (`tenant_modules.config`, modulo `paghe`)
+## 7. Impostazioni per cliente (`tenant_modules.config.export_paghe`, modulo `personalizzazioni`)
 
 | Chiave | Significato |
 |---|---|
@@ -127,7 +127,9 @@ Sul file finito si ricontrollano lunghezza di ogni record, caratteri ASCII e del
 
 **Codice ditta**: confermato `100145` dal consulente. ⚠️ Il foglio presenze dello Studio in testata riporta `100.1045` e il fac-simile usava `1001045`: la differenza e' nota e la scelta segue l'ordine di affidabilita' (conferma del consulente prima di tutto). E' modificabile dalla pagina in un secondo, senza rilascio.
 
-**Arrotondamento** di straordinari e viaggio: di partenza **al minuto**, cioe' il dato come e' stato registrato. Si applica al totale del giorno. Cambia quello che viene pagato, quindi va deciso con il consulente.
+**Arrotondamento** di straordinari e viaggio: di partenza **al minuto**, cioe' il dato come e' stato registrato. Si applica al totale del giorno e si cambia dalle impostazioni della pagina. Cambia quello che viene pagato, quindi va deciso con il consulente. Se un arrotondamento azzera del tutto i minuti di una giornata, la pagina lo dice invece di lasciarli sparire.
+
+> ⚠️ **Le impostazioni si salvano riscrivendo la config dell'area.** Il pezzo di questa funzione e il resto (l'elenco delle funzioni accese, le impostazioni delle altre) stanno nella stessa riga `tenant_modules`, e ogni salvataggio rilegge e riscrive. Due salvataggi nello stesso istante, o un salvataggio mentre il super admin spegne la funzione, possono far vincere l'ultimo arrivato. La finestra e' di millisecondi e chi tocca queste impostazioni e' una persona sola, ma se un domani diventasse un problema la soluzione e' una funzione SQL che fonde solo la propria chiave.
 
 ---
 
