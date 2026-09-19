@@ -94,6 +94,13 @@ export async function esportazioniPerLotto(
  * si toglie una volta sola.
  */
 export function inviabile(ctx: ContestoApi, esternoCollegato: string | null): boolean {
+  // Gli esclusi vincono su tutto, anche a scritture aperte: e' la lista di chi
+  // resta fuori mentre il resto e' gia' andato. Serve quando si apre un cliente
+  // ma un lavoro preciso non deve ancora uscire (per esempio perche' ha mesi di
+  // ore ferme che prima vanno guardate). Sta per primo apposta: una lista di
+  // esclusione che si puo' scavalcare non e' un'esclusione.
+  if (esternoCollegato && ctx.esclusiEsterni.includes(esternoCollegato)) return false;
+
   if (ctx.modalita === 'attiva') return true;
   return !!esternoCollegato && ctx.collaudoEsterni.includes(esternoCollegato);
 }

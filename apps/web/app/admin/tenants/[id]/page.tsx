@@ -446,6 +446,7 @@ export default async function TenantDetailPage({
               sistema: cfgIntegrazione.sistema,
               modalita: cfgIntegrazione.modalita,
               collaudoEsterni: cfgIntegrazione.collaudoEsterni,
+              esclusiEsterni: cfgIntegrazione.esclusiEsterni,
               maxDescrizione: cfgIntegrazione.maxDescrizione,
               sogliaSilenzioOre: cfgIntegrazione.sogliaSilenzioOre,
               stato: collegamento?.diagnosi.stato ?? 'mai_visto',

@@ -18,6 +18,8 @@ export interface ConfigIntegrazione {
   sistema: string | null;
   modalita: 'simulazione' | 'attiva';
   collaudoEsterni: string[];
+  /** Lavori che restano fuori anche a scritture aperte. Vince su tutto. */
+  esclusiEsterni: string[];
   /** Tetto ai testi che l'agente compone per il gestionale. `null` = nessuno. */
   maxDescrizione: number | null;
   sogliaSilenzioOre: number;
@@ -33,6 +35,9 @@ export function leggiConfigIntegrazione(
     modalita: c.modalita === 'attiva' ? 'attiva' : 'simulazione',
     collaudoEsterni: Array.isArray(c.collaudo_esterni)
       ? (c.collaudo_esterni as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
+    esclusiEsterni: Array.isArray(c.esclusi_esterni)
+      ? (c.esclusi_esterni as unknown[]).filter((x): x is string => typeof x === 'string')
       : [],
     maxDescrizione:
       typeof c.max_descrizione === 'number' && Number.isFinite(c.max_descrizione)

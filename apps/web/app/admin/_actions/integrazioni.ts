@@ -357,6 +357,64 @@ export async function aggiornaCollaudoEsterni(input: {
   return { ok: true };
 }
 
+const ESCLUSI_SCHEMA = z.object({
+  tenantId: z.string().uuid(),
+  esterni: z.array(z.string().trim().min(1).max(80)).max(200),
+});
+
+/**
+ * Il contrario del recinto di collaudo: i lavori che restano **fuori** anche a
+ * scritture aperte.
+ *
+ * Serve al passaggio opposto, quando un cliente e' pronto per aprire tutto
+ * tranne un pezzo: tipicamente un cantiere con mesi di ore ancora da guardare,
+ * che non deve riversarsi nel gestionale il primo giorno. Le sue righe
+ * continuano a uscire dall'API, ma marcate `inviabile: false`.
+ *
+ * Non ha la ceremonia della modalita' perche' va nella direzione prudente:
+ * aggiungere un escluso restringe, non apre. Toglierlo invece libera davvero
+ * tutto l'arretrato di quel lavoro in un colpo solo.
+ */
+export async function aggiornaEsclusiEsterni(input: {
+  tenantId: string;
+  esterni: string[];
+}): Promise<Esito> {
+  const admin = await requirePlatformAdmin();
+  const parsed = ESCLUSI_SCHEMA.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido.' };
+
+  const { service, tenant, modulo } = await caricaModulo(parsed.data.tenantId);
+  if (!tenant) return { ok: false, error: 'Cliente inesistente.' };
+  if (!modulo) return { ok: false, error: 'Accendi prima il modulo integrazione.' };
+
+  const prima = leggiConfigIntegrazione(modulo.config);
+  const esterni = Array.from(new Set(parsed.data.esterni)).sort();
+
+  const { error } = await service
+    .from('tenant_modules' as never)
+    .update({
+      config: { ...(modulo.config ?? {}), esclusi_esterni: esterni },
+    } as never)
+    .eq('tenant_id', parsed.data.tenantId)
+    .eq('module_code', 'integrazione');
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.integrazione.esclusi',
+    before: { esclusi_esterni: prima.esclusiEsterni },
+    after: { esclusi_esterni: esterni },
+  });
+
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  revalidatePath('/admin/integrazioni');
+  return { ok: true };
+}
+
 // ---------------------------------------------------------------------------
 // Manutenzione
 // ---------------------------------------------------------------------------

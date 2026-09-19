@@ -60,6 +60,12 @@ export interface ContestoApi {
    * provare su un cantiere solo, senza aprire tutto il resto.
    */
   collaudoEsterni: string[];
+  /**
+   * Il contrario di `collaudoEsterni`: identificativi che restano **non**
+   * inviabili anche a scritture aperte. Vince su tutto il resto, perche' una
+   * lista di esclusione scavalcabile non esclude niente.
+   */
+  esclusiEsterni: string[];
 }
 
 export function erroreApi(
@@ -157,6 +163,11 @@ export async function autenticaApi(
       modalita: config.modalita === 'attiva' ? 'attiva' : 'simulazione',
       collaudoEsterni: Array.isArray(config.collaudo_esterni)
         ? (config.collaudo_esterni as unknown[]).filter(
+            (x): x is string => typeof x === 'string',
+          )
+        : [],
+      esclusiEsterni: Array.isArray(config.esclusi_esterni)
+        ? (config.esclusi_esterni as unknown[]).filter(
             (x): x is string => typeof x === 'string',
           )
         : [],

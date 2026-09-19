@@ -22,6 +22,7 @@ import { Badge, Button, Card, CardContent, Input, cn } from '@kommessa/ui';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import {
   aggiornaCollaudoEsterni,
+  aggiornaEsclusiEsterni,
   aggiornaImpostazioniIntegrazione,
   attivaIntegrazioneTenant,
   impostaModalitaIntegrazione,
@@ -60,6 +61,7 @@ export interface DatiTabIntegrazione {
   sistema: string | null;
   modalita: 'simulazione' | 'attiva';
   collaudoEsterni: string[];
+  esclusiEsterni: string[];
   maxDescrizione: number | null;
   sogliaSilenzioOre: number;
   stato: StatoCollegamento;
@@ -141,6 +143,8 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
   const [soglia, setSoglia] = React.useState(String(dati.sogliaSilenzioOre));
   const [esterni, setEsterni] = React.useState<string[]>(dati.collaudoEsterni);
   const [nuovoEsterno, setNuovoEsterno] = React.useState('');
+  const [esclusi, setEsclusi] = React.useState<string[]>(dati.esclusiEsterni);
+  const [nuovoEscluso, setNuovoEscluso] = React.useState('');
   const [conferma, setConferma] = React.useState('');
   const [svuotaAperto, setSvuotaAperto] = React.useState(false);
   const [confermaSvuota, setConfermaSvuota] = React.useState('');
@@ -152,6 +156,9 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
 
   const esterniDirty =
     JSON.stringify([...esterni].sort()) !== JSON.stringify([...dati.collaudoEsterni].sort());
+
+  const esclusiDirty =
+    JSON.stringify([...esclusi].sort()) !== JSON.stringify([...dati.esclusiEsterni].sort());
 
   const esegui = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     start(async () => {
@@ -652,6 +659,99 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
                     variant="ghost"
                     disabled={pending}
                     onClick={() => setEsterni(dati.collaudoEsterni)}
+                  >
+                    Annulla
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Il contrario del recinto: chi resta fuori anche ad aperto */}
+          <div className="space-y-2 border-t border-border/60 pt-3">
+            <p className="text-[11px] font-medium">
+              Lavori tenuti fuori{' '}
+              <span className="font-normal text-muted-foreground">
+                — restano non scrivibili anche a scritture aperte
+              </span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {esclusi.length === 0 ? (
+                <span className="text-[11px] text-muted-foreground">
+                  Nessuno. Ad aperto esce tutto.
+                </span>
+              ) : (
+                esclusi.map((e) => (
+                  <span
+                    key={e}
+                    className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/[0.07] px-2 py-0.5 font-mono text-[11px]"
+                  >
+                    {e}
+                    <button
+                      type="button"
+                      aria-label={`Togli ${e}`}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setEsclusi((v) => v.filter((x) => x !== e))}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Togliere un lavoro da qui libera in un colpo solo tutto il suo
+              arretrato: prima si guarda cosa ha in pancia.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                value={nuovoEscluso}
+                onChange={(e) => setNuovoEscluso(e.target.value)}
+                placeholder="es. 25098"
+                className="max-w-[180px] font-mono"
+                disabled={pending}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return;
+                  e.preventDefault();
+                  const v = nuovoEscluso.trim();
+                  if (v && !esclusi.includes(v)) setEsclusi((x) => [...x, v]);
+                  setNuovoEscluso('');
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={pending || !nuovoEscluso.trim()}
+                onClick={() => {
+                  const v = nuovoEscluso.trim();
+                  if (v && !esclusi.includes(v)) setEsclusi((x) => [...x, v]);
+                  setNuovoEscluso('');
+                }}
+              >
+                Aggiungi
+              </Button>
+              {esclusiDirty ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() =>
+                      esegui(() =>
+                        aggiornaEsclusiEsterni({ tenantId: dati.tenantId, esterni: esclusi }),
+                      )
+                    }
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Salva esclusi
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={pending}
+                    onClick={() => setEsclusi(dati.esclusiEsterni)}
                   >
                     Annulla
                   </Button>

@@ -46,6 +46,13 @@ export async function GET(request: NextRequest) {
     collaudoEsterni: ctx.collaudoEsterni,
 
     /**
+     * Lavori che restano fuori anche a scritture aperte: le loro righe arrivano
+     * con `inviabile: false`. Si dice qui in chiaro cosi' chi installa l'agente
+     * capisce perche' certe righe non si muovono, invece di cercare un guasto.
+     */
+    esclusiEsterni: ctx.esclusiEsterni,
+
+    /**
      * Regole di merito che dipendono dalla configurazione del cliente, e che
      * il client non deve dedurre. Come `inviabile`: gliele diciamo noi.
      */
