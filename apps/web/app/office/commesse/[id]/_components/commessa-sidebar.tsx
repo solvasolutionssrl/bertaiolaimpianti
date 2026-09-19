@@ -36,6 +36,8 @@ interface Props {
     presets: TipologiaPreset[];
     canEdit: boolean;
   };
+  /** Commessa completata o archiviata: si consulta, non si modifica. */
+  soloLettura?: boolean;
   /** Gating modulo kantiere — se false, nessun pannello squadra viene renderizzato. */
   hasKantiere?: boolean;
   /** Squadra assegnata alla commessa (solo se hasKantiere). */
@@ -65,6 +67,7 @@ export function CommessaSidebar({
   tecniciTenant,
   canManageTecnici,
   tipologie,
+  soloLettura = false,
   hasKantiere = false,
   squadra = [],
   dipendentiDisponibili = [],
@@ -91,7 +94,7 @@ export function CommessaSidebar({
         vociPresenti={tipologie.vociPresenti}
         voci={tipologie.voci}
         presets={tipologie.presets}
-        canEdit={tipologie.canEdit}
+        canEdit={tipologie.canEdit && !soloLettura}
       />
 
       {/* Card tecnici */}
@@ -99,7 +102,7 @@ export function CommessaSidebar({
         commessaId={commessaId}
         assigned={tecniciAssegnati}
         available={tecniciTenant}
-        canManage={canManageTecnici}
+        canManage={canManageTecnici && !soloLettura}
       />
 
       {/* Card squadra kantiere — visibile SOLO se il modulo è attivo.

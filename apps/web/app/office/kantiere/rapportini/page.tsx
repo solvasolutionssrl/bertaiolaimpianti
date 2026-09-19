@@ -77,6 +77,8 @@ type CantiereRow = {
   id: string;
   nome: string;
   codice: string | null;
+  /** Serve al menu «Registra ore» per segnare i chiusi e chiedere conferma. */
+  stato?: string | null;
 };
 
 /** Etichetta display: titolo commessa o nome cantiere */
@@ -618,12 +620,16 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       c.id,
   }));
 
-  // Carica cantieri attivi per il dialog "Registra ore"
+  // Cantieri per il dialog "Registra ore". Qui NON si filtrano i chiusi:
+  // l'ufficio deve poter registrare sempre, anche su un lavoro finito (il caso
+  // «ha lavorato ieri su una commessa chiusa stanotte» e' reale). Si porta
+  // dietro lo stato, cosi' il menu li segna come chiusi e chiede conferma
+  // prima di scrivere. Il divieto secco vale solo per l'app.
   const cantieriRaw = await leggiTutto<CantiereRow>(
     (da, a) =>
       supabase
         .from('cantieri' as never)
-        .select('id, nome, codice')
+        .select('id, nome, codice, stato')
         .eq('tenant_id', ctx.tenantId)
         .order('nome')
         .order('id')
@@ -634,6 +640,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const cantieriPicker: CantierePickerItem[] = cantieriRaw.map((k) => ({
     id: k.id,
     nome: k.nome || k.codice || k.id,
+    stato: k.stato ?? null,
   }));
 
   // Giornate passate rimaste aperte (uscita mancante) → promemoria ufficio.

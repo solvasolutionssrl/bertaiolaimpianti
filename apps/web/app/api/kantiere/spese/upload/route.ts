@@ -12,6 +12,7 @@ import {
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
+import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 
 export const maxDuration = 60;
@@ -82,18 +83,16 @@ export async function POST(request: NextRequest) {
   // 4. Cantiere scelto: validalo nel tenant e ricava la commessa collegata.
   let cantiereId: string | null = null;
   let commessaId: string | null = null;
+  // Questa e' la strada dell'app: su un cantiere chiuso non si scrive, e non
+  // c'e' forzatura. Chi e' in cantiere non deve poter decidere questo: se la
+  // spesa va messa lo stesso, la registra l'ufficio da computer.
   if (cantiereIdInput) {
-    const { data: cant } = await service
-      .from('cantieri' as never)
-      .select('id, tenant_id, commessa_id')
-      .eq('id', cantiereIdInput)
-      .maybeSingle();
-    const cantRow = cant as { id: string; tenant_id: string; commessa_id: string | null } | null;
-    if (!cantRow || cantRow.tenant_id !== ctx.tenantId) {
-      return Response.json({ ok: false, code: 'CANTIERE_NON_VALIDO' }, { status: 400 });
+    const scrivibile = await cantiereScrivibile(service, cantiereIdInput, ctx.tenantId);
+    if (!scrivibile.ok) {
+      return Response.json({ ok: false, code: scrivibile.error }, { status: 400 });
     }
-    cantiereId = cantRow.id;
-    commessaId = cantRow.commessa_id ?? null;
+    cantiereId = cantiereIdInput;
+    commessaId = scrivibile.commessaId ?? null;
   }
 
   // 5. Downscale di sicurezza lato server (max 2048px, JPEG q88). I PDF intatti.

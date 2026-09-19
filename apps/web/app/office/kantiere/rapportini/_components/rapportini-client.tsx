@@ -20,6 +20,8 @@ import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogH
 import { registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
 import { BollinoAffidabilita, CronologiaGiornataPannello } from '../../_components/cronologia-giornata';
 import type { Affidabilita } from '@kommessa/api/kantiere-cronologia';
+import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
+import { useConfirm } from '@/app/_components/confirm-provider';
 import {
   TimbratureRiepilogo,
   TimbratureSommario,
@@ -113,7 +115,8 @@ export type FiltriRapportini = {
 
 export type DipendenteItem = { id: string; nome: string };
 export type CommessaPickerItem = { id: string; titolo: string };
-export type CantierePickerItem = { id: string; nome: string };
+/** `stato` serve solo a segnare i chiusi e a chiedere conferma prima di scrivere. */
+export type CantierePickerItem = { id: string; nome: string; stato?: string | null };
 
 // Giorno corrente in formato YYYY-MM-DD (client-side, fuso locale) — per il dialog "Registra ore".
 function oggiLocale(): string {
@@ -426,6 +429,7 @@ export function RapportiniClient({
   const [regNote, setRegNote] = React.useState('');
   const [regError, setRegError] = React.useState('');
   const [isRegPending, startRegAction] = React.useTransition();
+  const chiediConferma = useConfirm();
 
   // Ricalcolo presenze dalle timbrature (riparazione giornate bloccate)
   const [isRicalcolo, startRicalcolo] = React.useTransition();
@@ -452,6 +456,20 @@ export function RapportiniClient({
     const targetId = regTarget.slice(2);
 
     startRegAction(async () => {
+      // Su un cantiere chiuso l'ufficio puo' scrivere lo stesso, ma lo deve
+      // sapere: si chiede una volta e si passa `forzato`. Dall'app la stessa
+      // scrittura viene rifiutata e basta.
+      const cantiereScelto = isCantiere ? cantieri.find((k) => k.id === targetId) : undefined;
+      const forzato = !!cantiereScelto && !cantiereImputabile(cantiereScelto.stato);
+      if (forzato) {
+        const procedi = await chiediConferma({
+          title: 'Il cantiere è chiuso',
+          description: `"${cantiereScelto!.nome}" non è più in lavorazione. Registro comunque le ore?`,
+          confirmLabel: 'Registra',
+        });
+        if (!procedi) return;
+      }
+
       const res = await registraOrePerDipendente({
         dipendenteId: regDipendenteId,
         commessaId: isCommessa ? targetId : undefined,
@@ -460,6 +478,7 @@ export function RapportiniClient({
         ore_lavoro: regLavoro,
         ore_viaggio: regViaggio,
         note: regNote.trim() || undefined,
+        ...(forzato ? { forzato: true } : {}),
       });
       if (!res.ok) {
         setRegError(res.error);
@@ -927,8 +946,12 @@ export function RapportiniClient({
                 )}
                 {cantieri.length > 0 && (
                   <optgroup label="Cantieri">
+                    {/* I chiusi restano scegliibili (l'ufficio puo' sempre
+                        registrare) ma si vedono: al salvataggio si conferma. */}
                     {cantieri.map((k) => (
-                      <option key={k.id} value={`c:${k.id}`}>{k.nome}</option>
+                      <option key={k.id} value={`c:${k.id}`}>
+                        {cantiereImputabile(k.stato) ? k.nome : `${k.nome} · chiuso`}
+                      </option>
                     ))}
                   </optgroup>
                 )}

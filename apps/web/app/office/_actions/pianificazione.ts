@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
 import type { AppRole } from '@kommessa/api';
 import {
   risolviFascia,
@@ -297,6 +298,16 @@ export async function creaBlocco(input: unknown): Promise<SalvaResult> {
       nomiMezzo: await nomiMezzi(supabase, ctx.tenantId),
     });
     if (conflitti.length > 0) return { ok: false, conflitti };
+  }
+
+  // Il cantiere deve essere di questo tenant e ancora aperto. Fino a oggi qui
+  // non si controllava nulla, nemmeno l'appartenenza: bastava un id per
+  // pianificare sul cantiere di un altro cliente. Pianificare lavoro FUTURO su
+  // un cantiere chiuso non ha senso in nessun caso, quindi qui non esiste
+  // forzatura: se il lavoro riparte, il cantiere si riapre.
+  if (data.tipo === 'cantiere' && data.cantiereId) {
+    const aperto = await cantiereScrivibile(supabase, data.cantiereId, ctx.tenantId);
+    if (!aperto.ok) return { ok: false, error: aperto.error };
   }
 
   // Insert blocco → membri → mezzi (cleanup best-effort se figli falliscono).

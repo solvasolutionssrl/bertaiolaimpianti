@@ -480,7 +480,66 @@ Quando la giornata è senza timbrature, la tab Ore offre **Registra giornata**, 
 
 ---
 
-## 10. File chiave nel codice (per manutenzione / AI)
+## 10. Quando un cantiere si chiude (dal 19/09/2026)
+
+Un lavoro finito **non si cancella mai**: restano le ore, le spese, le foto, i
+QR, lo storico. Cambia solo cosa se ne può fare.
+
+**La regola, in una riga**: `chiuso` vuol dire fuori dai giri. Sparisce da ogni
+punto di **scelta** e dalla ricerca, resta nella lista grande dei cantieri con
+l'interruttore «Mostra anche i chiusi», è grigio dove compare, e **non accetta
+più scritture nuove**.
+
+### Il divieto lo dice il server, non l'elenco
+
+Fino al 19/09/2026 la difesa stava solo nei filtri di alcune liste, cioè da
+nessuna parte: **ogni** punto di scrittura verificava il tenant e mai lo stato,
+quindi bastava un id per registrare ore, spese o timbrature su un lavoro finito.
+Con le commesse chiuse in arrivo dal gestionale (centinaia in una notte) sarebbe
+diventato il caso normale.
+
+Oggi esiste un guardiano solo: `cantiereScrivibile` / `cantieriScrivibili` in
+`apps/web/app/_actions/_lib/lavoro-aperto.ts`, sopra il modulo puro
+`@kommessa/api/stato-lavoro` (testato). **Chi aggiunge un flusso domani passa di
+lì e eredita la regola.** È agganciato a: timbratura QR, avvio turno, cambio
+cantiere, split di fine turno, Registra giornata, opzioni di partenza, spese da
+app, spese da ufficio, riassegnazione spesa, «Registra ore» dell'ufficio,
+pianificazione.
+
+### Chi può forzare, e chi no
+
+| Chi | Cosa succede |
+|---|---|
+| **Tecnico da app** (QR, turno, spese) | Divieto secco. Nessuna forzatura: chi è in cantiere non deve poter decidere questo. Se la registrazione va fatta lo stesso, la fa l'ufficio. |
+| **Ufficio da computer** (registra ore, spese, riassegnazione) | Può **sempre** scrivere. Il cantiere chiuso resta scegliibile, marcato «· chiuso» e in fondo all'elenco; al salvataggio si chiede conferma e si passa `forzato: true`. |
+| **Pianificazione** | Divieto secco anche per l'ufficio: programmare lavoro **futuro** su un cantiere chiuso non ha senso. Se il lavoro riparte, si riapre il cantiere. |
+
+Il caso che giustifica la forzatura è reale: «ha lavorato ieri su una commessa
+chiusa stanotte». A saperlo è l'ufficio, non chi timbra.
+
+### Un turno già aperto si chiude sempre
+
+Il guardiano si mette sull'**apertura** di qualcosa di nuovo, **mai sulla
+chiusura**. Chi ha un turno aperto su un cantiere che nel frattempo è stato
+chiuso lo termina normalmente, pausa e ripresa comprese: lasciare a metà una
+giornata vera sarebbe il danno peggiore.
+
+### Il QR di un cantiere chiuso
+
+Il cartello resta appeso anche quando il lavoro finisce. Chi lo scansiona vede
+una **pagina comune a tutti i clienti** («Cantiere chiuso, qui non si timbra
+più, dillo all'ufficio»), servita da `apps/web/app/t/[token]/page.tsx` insieme
+alle altre schermate del QR. Meglio dirlo lì, in chiaro, che far fallire la
+timbratura dopo, con la persona che ha il telefono in mano e non capisce.
+
+### Dove i chiusi restano visibili, di proposito
+
+Non tutto è un punto di scelta. Restano **completi di chiusi** i filtri e i
+prospetti di sola consultazione: analisi spese, costo cantiere, ore e costi,
+filtro cantiere in Kontabilità. Una spesa di sei mesi fa sta su un lavoro che
+intanto è finito, e l'ufficio deve poterla filtrare e leggerne il nome.
+
+## 11. File chiave nel codice (per manutenzione / AI)
 
 | Area | File |
 |---|---|

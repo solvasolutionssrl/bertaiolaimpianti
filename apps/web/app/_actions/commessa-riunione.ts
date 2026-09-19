@@ -20,6 +20,7 @@ import {
   cleanupAllegatoFiles,
   getRiunioneFileRefIds,
 } from './_lib/storage-cleanup';
+import { commessaScrivibile } from './_lib/lavoro-aperto';
 
 /**
  * Server actions per le RIUNIONI di una commessa.
@@ -63,6 +64,17 @@ export async function creaRiunione(
   }
 
   const supabase = createServerSupabase();
+
+  // Una commessa chiusa non accetta riunioni nuove: si consulta soltanto.
+  const scrivibile = await commessaScrivibile(
+    supabase,
+    parsed.data.commessaId,
+    ctx.tenantId,
+  );
+  if (!scrivibile.ok) {
+    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
+  }
+
   const { data, error } = await supabase
     .from('commessa_riunione' as never)
     .insert({
@@ -397,6 +409,17 @@ export async function materializzaTodoDaRiunione(
   }
 
   const supabase = createServerSupabase();
+
+  // I TODO proposti dall'AI restano proposte: su una commessa chiusa non si
+  // materializzano.
+  const scrivibile = await commessaScrivibile(
+    supabase,
+    parsed.data.commessaId,
+    ctx.tenantId,
+  );
+  if (!scrivibile.ok) {
+    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
+  }
 
   // Determina sort_order base
   const { data: maxRow } = await supabase

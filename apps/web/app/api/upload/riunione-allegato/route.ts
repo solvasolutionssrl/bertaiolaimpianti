@@ -3,6 +3,7 @@ import { type NextRequest } from 'next/server';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 import {
   getStorageProvider,
   type StorageProviderName,
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
 
   const { data: com } = await service
     .from('commesse')
-    .select('id, nome_cartella, cloud_folder_path, tenant_id')
+    .select('id, nome_cartella, cloud_folder_path, tenant_id, stato')
     .eq('id', commessaId)
     .maybeSingle();
   if (!com || !com.cloud_folder_path) {
@@ -103,6 +104,10 @@ export async function POST(request: NextRequest) {
   }
   if (com.tenant_id !== ctx.tenantId) {
     return Response.json({ error: 'Commessa di un altro tenant' }, { status: 403 });
+  }
+  // Una commessa chiusa si consulta: niente allegati nuovi alle riunioni.
+  if (!commessaImputabile(com.stato)) {
+    return Response.json({ error: motivoCommessaChiusa(com.stato) }, { status: 409 });
   }
 
   // 4. Body file

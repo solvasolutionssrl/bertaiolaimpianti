@@ -1,5 +1,6 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 
 import { elencaTecniciTenant } from '../../../../_actions/commessa-tecnici';
 import { loadCommessa } from '../_lib/get-commessa';
@@ -17,7 +18,11 @@ export async function LavoriSection({ id }: { id: string }) {
   const c = await loadCommessa(id);
   const supabase = createServerSupabase();
 
-  const canWrite = ctx.role === 'admin' || ctx.role === 'office';
+  // Su una commessa chiusa restano lo storico e le note gia' scritte, ma i
+  // tasti "nuovo TODO" e "nuova riunione" spariscono: si consulta soltanto.
+  const canWrite =
+    (ctx.role === 'admin' || ctx.role === 'office') &&
+    !commessaSoloLettura(c.stato as string | null);
 
   const [todoRes, riuRes, auditRes, fileRes, tecniciTenant] =
     await Promise.all([

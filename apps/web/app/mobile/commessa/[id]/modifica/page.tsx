@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 import { guardMobile } from '../../../_lib/guard';
 import { EditWizardMobile } from './_components/edit-wizard';
 import type {
@@ -46,6 +47,12 @@ export default async function ModificaCommessaMobilePage({
     responsabile_id: string | null;
     cliente: { ragione_sociale: string | null } | { ragione_sociale: string | null }[] | null;
   };
+  // Una commessa chiusa non si modifica: al wizard ci si arriva anche col
+  // link diretto, quindi il controllo sta qui e non solo sul tasto.
+  if (commessaSoloLettura(com.stato)) {
+    redirect(`/mobile/commessa/${params.id}`);
+  }
+
   const cliente = Array.isArray(com.cliente) ? com.cliente[0] : com.cliente;
 
   const [referentiRes, vociRes, catalogoRes, presetRes, utentiRes] =

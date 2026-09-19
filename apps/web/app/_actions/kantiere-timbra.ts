@@ -20,6 +20,7 @@ import {
   viaggioFraCantieri,
 } from '@kommessa/api/kantiere-percorso';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
+import { cantiereScrivibile, cantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
   leggiArrotondamenti,
@@ -239,6 +240,14 @@ export async function timbra(input: unknown): Promise<Result> {
   // Anti doppio-tap / retry su rete lenta (stessa azione, < 25s).
   if (recente(tipo, pausa)) {
     return { ok: true, tipo, pausa, ts: ultima!.ts };
+  }
+
+  // Un cantiere chiuso non apre piu' turni, anche se il cartello con il QR e'
+  // rimasto appeso. Chiudere e riprendere restano sempre possibili: una
+  // giornata vera non si lascia a meta' per colpa di un cambio di stato.
+  if (target.tipo === 'cantiere' && tipo === 'ingresso' && !pausa) {
+    const aperto = await cantiereScrivibile(supabase, target.id, ctx.tenantId);
+    if (!aperto.ok) return { ok: false, error: aperto.error };
   }
 
   const ts = new Date().toISOString();
@@ -531,16 +540,12 @@ async function terminaConSplit(
     return { ok: false, error: 'SPLIT_PRIMO_CANTIERE' };
   }
 
-  // 3. Tutti i cantieri appartengono al tenant.
+  // 3. Tutti i cantieri appartengono al tenant e accettano scritture. Basta
+  //    uno chiuso per fermare tutto: meglio non partire che scrivere meta'
+  //    giornata e lasciare l'altra meta' per strada.
   const ids = [...new Set(opts.split.map((s) => s.cantiereId))];
-  const { data: ccRows } = await supabase
-    .from('cantieri' as never)
-    .select('id')
-    .in('id', ids)
-    .eq('tenant_id', tenantId);
-  if (((ccRows as { id: string }[] | null)?.length ?? 0) !== ids.length) {
-    return { ok: false, error: 'CANTIERE_NON_VALIDO' };
-  }
+  const cc = await cantieriScrivibili(supabase, ids, tenantId);
+  if (!cc.ok) return { ok: false, error: cc.error };
 
   // 4. Sintesi segmenti (pura, unit-testata).
   const calc = calcolaSegmentiSplit({
@@ -1122,14 +1127,10 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
     return { ok: false, error: 'TURNO_GIA_APERTO' };
   }
 
-  // Il cantiere deve appartenere al tenant.
-  const { data: cant } = await supabase
-    .from('cantieri' as never)
-    .select('id')
-    .eq('id', parsed.data.cantiereId)
-    .eq('tenant_id', ctx.tenantId)
-    .maybeSingle();
-  if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+  // Il cantiere deve appartenere al tenant e accettare ancora scritture: su un
+  // cantiere chiuso non si apre un turno nuovo.
+  const apribile = await cantiereScrivibile(supabase, parsed.data.cantiereId, ctx.tenantId);
+  if (!apribile.ok) return { ok: false, error: apribile.error };
 
   const sedeLavoroId = parsed.data.daSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
   if (parsed.data.daSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
@@ -1214,14 +1215,10 @@ export async function opzioniViaggioPartenza(input: unknown): Promise<
   const { ctx } = r;
 
   const supabase = createServerSupabase();
-  // Difensivo: il cantiere deve appartenere al tenant.
-  const { data: cant } = await supabase
-    .from('cantieri' as never)
-    .select('id')
-    .eq('id', parsed.data.cantiereId)
-    .eq('tenant_id', ctx.tenantId)
-    .maybeSingle();
-  if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+  // Difensivo: il cantiere deve appartenere al tenant ed essere ancora aperto
+  // (queste sono le opzioni per partire, non per chiudere).
+  const aperto = await cantiereScrivibile(supabase, parsed.data.cantiereId, ctx.tenantId);
+  if (!aperto.ok) return { ok: false, error: aperto.error };
 
   const az = await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, parsed.data.cantiereId);
   return { ok: true, sedi: az.sedi, sedeDefaultId: az.sedeDefaultId, mezzi: az.mezzi };
@@ -1263,14 +1260,10 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   if (info.stato === 'idle') return { ok: false, error: 'NESSUN_TURNO_APERTO' };
   if (info.stato === 'pausa') return { ok: false, error: 'IN_PAUSA' };
 
-  // Il cantiere di destinazione deve appartenere al tenant.
-  const { data: dest } = await supabase
-    .from('cantieri' as never)
-    .select('id')
-    .eq('id', parsed.data.aCantiereId)
-    .eq('tenant_id', ctx.tenantId)
-    .maybeSingle();
-  if (!dest) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+  // Il cantiere di destinazione deve appartenere al tenant ed essere aperto:
+  // spostarsi su un cantiere chiuso e' comunque aprire del lavoro nuovo.
+  const dest = await cantiereScrivibile(supabase, parsed.data.aCantiereId, ctx.tenantId);
+  if (!dest.ok) return { ok: false, error: dest.error };
 
   // Dove si lavorava e dove si lavorerà: la sede del flag o il cantiere.
   const sedeDa = await sedeLavoroAperta(supabase, me.id, parsed.data.daCantiereId);
@@ -1481,16 +1474,10 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     .lt('ts', toIso);
   if ((count ?? 0) !== 0) return { ok: false, error: 'GIORNATA_NON_VUOTA' };
 
-  // Cantieri del tenant.
+  // Cantieri del tenant, e ancora aperti.
   const ids = [...new Set(parsed.data.split.map((s) => s.cantiereId))];
-  const { data: ccRows } = await supabase
-    .from('cantieri' as never)
-    .select('id')
-    .in('id', ids)
-    .eq('tenant_id', ctx.tenantId);
-  if (((ccRows as { id: string }[] | null)?.length ?? 0) !== ids.length) {
-    return { ok: false, error: 'CANTIERE_NON_VALIDO' };
-  }
+  const cc = await cantieriScrivibili(supabase, ids, ctx.tenantId);
+  if (!cc.ok) return { ok: false, error: cc.error };
 
   // «Lavoro dalla sede sul progetto»: sui cantieri segnati si lavora nella sede
   // predefinita. Le ore restano del cantiere; le tratte partono e arrivano lì.

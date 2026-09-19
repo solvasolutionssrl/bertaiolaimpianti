@@ -9,6 +9,8 @@ import type { AppRole, Json } from '@kommessa/api';
 import type { Shape } from '../_lib/annotation-shapes';
 import { canAccessFile } from '../_lib/file-authz';
 import { normalizePath } from '../_lib/folder-acl';
+import { commessaScrivibile } from './_lib/lavoro-aperto';
+import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 
 /**
  * Server Actions per `file_annotations`.
@@ -157,6 +159,19 @@ export async function salvaAnnotazione(
   const autorizzato = await fileAutorizzato(supabase, ctx, input.fileRefId);
   if (!autorizzato.ok) return { ok: false, error: autorizzato.error };
   const fileRef = autorizzato.ref;
+
+  // 1-bis) Su una commessa chiusa la foto resta, il segno nuovo no. I file
+  // senza commessa (bozze) non hanno niente da chiudere.
+  if (fileRef.commessa_id) {
+    const scrivibile = await commessaScrivibile(
+      supabase,
+      fileRef.commessa_id,
+      ctx.tenantId,
+    );
+    if (!scrivibile.ok) {
+      return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
+    }
+  }
 
   // 2) Cerca riga max-version esistente per QUESTA pagina
   // (per kind=image page è NULL → filtra IS NULL; per kind=pdf filtra eq).
@@ -439,15 +454,21 @@ export async function risolviFileRefPerPath(input: {
   // /api/media o /api/cloud/file, che si fidano della riga `file_refs`.
   const { data: comRaw } = await supabase
     .from('commesse')
-    .select('id, cloud_folder_path, nome_cartella')
+    .select('id, cloud_folder_path, nome_cartella, stato')
     .eq('id', input.commessaId)
     .eq('tenant_id', ctx.tenantId)
     .maybeSingle();
   const commessa = comRaw as unknown as {
     cloud_folder_path: string | null;
     nome_cartella: string | null;
+    stato: string | null;
   } | null;
   if (!commessa) return { ok: false, error: 'Commessa non trovata' };
+
+  // Su una commessa chiusa non si creano righe file nuove da annotare.
+  if (!commessaImputabile(commessa.stato)) {
+    return { ok: false, error: motivoCommessaChiusa(commessa.stato) };
+  }
 
   // `cloud_folder_path` è "01_Richieste/BER-26-007_X"; le commesse vecchie
   // hanno solo `nome_cartella`. Si accetta l'una o l'altra radice.

@@ -385,10 +385,13 @@ export function CommandPalette({ open, onOpenChange, onLogout, mondo = MONDO_COM
     Promise.all([
       supabase
         .from('commesse_con_cliente')
-        .select('id, codice_interno, nome_cartella, cliente_ragione_sociale')
+        .select('id, codice_interno, nome_cartella, cliente_ragione_sociale, stato')
         .or(
           `codice_interno.ilike.${pattern},nome_cartella.ilike.${pattern},cliente_ragione_sociale.ilike.${pattern}`,
         )
+        // Archiviata vuol dire tolta di mezzo: non la si propone piu' qui.
+        // Le completate restano, perche' si consultano ancora.
+        .neq('stato', 'archiviata')
         .limit(5)
         .abortSignal(controller.signal),
       supabase
@@ -413,6 +416,7 @@ export function CommandPalette({ open, onOpenChange, onLogout, mondo = MONDO_COM
             codice_interno: string | null;
             nome_cartella: string | null;
             cliente_ragione_sociale: string | null;
+            stato: string | null;
           }>).map((row) => ({
             id: `commessa-${row.id}`,
             kind: 'nav' as const,
@@ -420,7 +424,15 @@ export function CommandPalette({ open, onOpenChange, onLogout, mondo = MONDO_COM
             title: row.codice_interno
               ? `${row.codice_interno} · ${row.nome_cartella ?? ''}`.trim()
               : row.nome_cartella ?? row.id,
-            subtitle: row.cliente_ragione_sociale ?? undefined,
+            // Una completata si apre ancora, ma si deve vedere subito che
+            // il lavoro e' finito: chi cerca non deve aprirla per scoprirlo.
+            subtitle:
+              [
+                row.cliente_ragione_sociale,
+                row.stato === 'completata' ? 'Completata' : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || undefined,
             href: `/office/commesse/${row.id}`,
             icon: Briefcase,
           })),

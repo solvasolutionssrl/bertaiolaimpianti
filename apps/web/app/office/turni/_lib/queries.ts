@@ -128,6 +128,9 @@ export async function fetchCommesseTenant(): Promise<CommessaOpt[]> {
   const { data, error } = await supabase
     .from('commesse')
     .select('id, codice_interno')
+    // E' il filtro del foglio ore, non un punto di scelta: le completate
+    // restano (le loro ore vanno ancora lette), le archiviate no.
+    .neq('stato', 'archiviata')
     .order('data_apertura', { ascending: false })
     .limit(500);
   if (error) {

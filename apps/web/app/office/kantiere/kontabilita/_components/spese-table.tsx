@@ -48,7 +48,7 @@ export type SpesaRiga = {
   esportazioni?: Esportazione[];
 };
 
-export type CantiereOption = { id: string; nome: string };
+export type CantiereOption = { id: string; nome: string; stato?: string | null };
 export type DipendenteOption = { id: string; nome: string };
 
 /**

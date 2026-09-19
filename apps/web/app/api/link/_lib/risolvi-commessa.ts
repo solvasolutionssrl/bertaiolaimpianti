@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { createServiceSupabase } from '@kommessa/api/service';
 
+import { commessaImputabile } from '@kommessa/api/stato-lavoro';
+
 import { etichettaCommessa } from '../../../_lib/link-etichetta';
 
 /**
@@ -28,7 +30,7 @@ interface RigaEstesa extends RigaCommessa {
 }
 
 const CAMPI =
-  'id, codice_interno, nome_cartella, cloud_folder_path, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, cliente:clienti(ragione_sociale)';
+  'id, codice_interno, nome_cartella, cloud_folder_path, stato, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, cliente:clienti(ragione_sociale)';
 
 export async function risolviCommessa(
   service: ReturnType<typeof createServiceSupabase>,
@@ -44,7 +46,11 @@ export async function risolviCommessa(
       .eq('id', come.commessaId)
       .eq('tenant_id', tenantId)
       .maybeSingle();
-    return (data as unknown as RigaCommessa | null) ?? null;
+    const riga = data as unknown as (RigaCommessa & { stato: string | null }) | null;
+    // Stesso filtro del ramo per etichetta, che le chiuse le saltava gia':
+    // qui si passava per id e lo stato non lo guardava nessuno.
+    if (!riga || !commessaImputabile(riga.stato)) return null;
+    return riga;
   }
 
   const etichetta = (come.etichetta ?? '').trim();

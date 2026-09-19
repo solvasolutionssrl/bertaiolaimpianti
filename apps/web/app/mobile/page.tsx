@@ -85,7 +85,9 @@ async function GestioneDashboard({
         cliente:clienti ( id, ragione_sociale )
       `,
     )
-    .in('stato', ['aperta', 'in_corso', 'collaudo'])
+    // Le completate restano: per il tecnico questa lista e' l'unico modo di
+    // riaprire da telefono il lavoro di ieri. Fuori solo le archiviate.
+    .in('stato', ['aperta', 'in_corso', 'collaudo', 'completata'])
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
     .limit(5);
@@ -230,7 +232,9 @@ async function CampoOggi({
         `,
       )
       .in('id', assignedIds)
-      .in('stato', ['aperta', 'in_corso', 'collaudo'])
+      // Le completate restano: per il tecnico questa lista e' l'unico modo di
+    // riaprire da telefono il lavoro di ieri. Fuori solo le archiviate.
+    .in('stato', ['aperta', 'in_corso', 'collaudo', 'completata'])
       .order('data_apertura', { ascending: false })
       .order('codice_interno', { ascending: false })
       .limit(30),

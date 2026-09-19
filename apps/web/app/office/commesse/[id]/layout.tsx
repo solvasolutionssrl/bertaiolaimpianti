@@ -3,9 +3,12 @@ import { ArrowLeft, FileText } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 import type { StatoCommessa } from '@kommessa/api/types';
 
+import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
+
 import { loadCommessa } from './_lib/get-commessa';
 import { CommessaTabs } from './_components/commessa-tabs';
 import { CommessaSidebar } from './_components/commessa-sidebar';
+import { CommessaSolaLettura } from '../../../_components/commessa-sola-lettura';
 import {
   elencaTecniciAssegnati,
   elencaTecniciTenant,
@@ -35,6 +38,9 @@ export default async function CommessaLayout({
   const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
+  // Completata o archiviata: la scheda si consulta e basta. Lo stato resta
+  // modificabile dalla sidebar, che e' la via per riaprirla.
+  const soloLettura = commessaSoloLettura(c.stato as string | null);
 
   // ── Modulo kantiere: check una volta, zero query se disattivato ──────────
   const hasKantiere = await tenantHasModule('kantiere');
@@ -143,6 +149,12 @@ export default async function CommessaLayout({
           Sidebar 340px su xl, 300px su lg per dare più respiro al main. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px] xl:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4 lg:order-1">
+          {soloLettura ? (
+            <CommessaSolaLettura
+              stato={c.stato as string | null}
+              nota="Per riprendere il lavoro cambia lo stato nella colonna a destra."
+            />
+          ) : null}
           <CommessaTabs id={params.id} />
           <div>{children}</div>
         </div>
@@ -159,6 +171,7 @@ export default async function CommessaLayout({
             tecniciAssegnati={tecniciAssegnati}
             tecniciTenant={tecniciTenant}
             canManageTecnici={canManageTecnici}
+            soloLettura={soloLettura}
             tipologie={{
               vociPresenti,
               voci: catalogoVoci,

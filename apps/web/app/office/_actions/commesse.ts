@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { aggiungiVociEProvisiona } from '../../_actions/_lib/aggiungi-voci';
+import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 
 /**
  * Server Actions per la gestione delle voci di una commessa esistente.
@@ -26,14 +27,17 @@ export async function aggiungiVoce(input: z.infer<typeof aggiungiInput>) {
   // (prima questa action inseriva solo la riga DB → cartella mancante).
   const { data: comRaw } = await supabase
     .from('commesse')
-    .select('nome_cartella, cloud_folder_path')
+    .select('nome_cartella, cloud_folder_path, stato')
     .eq('id', parsed.commessaId)
     .maybeSingle();
   const com = comRaw as unknown as {
     nome_cartella: string;
     cloud_folder_path: string | null;
+    stato: string | null;
   } | null;
   if (!com) throw new Error('Commessa non trovata');
+  // Aggiungere una fase crea cartelle su Nextcloud: su un lavoro chiuso no.
+  if (!commessaImputabile(com.stato)) throw new Error(motivoCommessaChiusa(com.stato));
 
   const res = await aggiungiVociEProvisiona({
     tenantId: ctx.tenantId,

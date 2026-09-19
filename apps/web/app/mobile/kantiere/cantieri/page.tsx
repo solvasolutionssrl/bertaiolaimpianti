@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { MapPin } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { STATI_CANTIERE_VIVI } from '@kommessa/api/stato-lavoro';
 
 import { guardMobile } from '../../_lib/guard';
 import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
@@ -31,6 +32,9 @@ export default async function CantieriMobilePage() {
         'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato',
       )
       .eq('tenant_id', ctx.tenantId)
+      // I cantieri chiusi non compaiono in app: questo e' l'elenco di chi sta
+      // lavorando adesso. Restano consultabili dall'ufficio, nella sua lista.
+      .in('stato', STATI_CANTIERE_VIVI as unknown as string[])
       .order('stato', { ascending: true })
       .order('nome', { ascending: true }),
     mioTurnoAttivo(),

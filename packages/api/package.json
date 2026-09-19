@@ -12,6 +12,7 @@
     "./tenant": "./src/tenant.ts",
     "./modules": "./src/modules.ts",
     "./kantiere": "./src/kantiere.ts",
+    "./stato-lavoro": "./src/stato-lavoro.ts",
     "./kantiere-qr": "./src/kantiere-qr.ts",
     "./kantiere-ore": "./src/kantiere-ore.ts",
     "./kantiere-cronologia": "./src/kantiere-cronologia.ts",

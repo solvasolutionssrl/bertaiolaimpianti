@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation';
 import { Check, ChevronDown, Loader2, MapPin, Search } from 'lucide-react';
 import { Input, cn } from '@kommessa/ui';
 import { aggiornaSpesa } from '@/app/_actions/kantiere-spese';
+import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
+import { useConfirm } from '@/app/_components/confirm-provider';
 
-export type CantiereOption = { id: string; nome: string };
+export type CantiereOption = { id: string; nome: string; stato?: string | null };
 
 interface Props {
   spesaId: string;
@@ -29,6 +31,7 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
   const [aperto, setAperto] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [pending, startTransition] = React.useTransition();
+  const chiediConferma = useConfirm();
   const [pos, setPos] = React.useState<{ top: number; left: number; sopra: boolean } | null>(null);
   const btnRef = React.useRef<HTMLButtonElement>(null);
   const popRef = React.useRef<HTMLDivElement>(null);
@@ -38,9 +41,14 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
   const etichetta = cantiereNome?.trim() || 'Da assegnare';
 
   const filtrati = React.useMemo(() => {
+    // I chiusi restano scegliibili, perche' l'ufficio deve poter assegnare
+    // sempre. Vanno pero' in fondo e si riconoscono a vista: la conferma
+    // arriva al momento della scelta, non nascondendo la voce.
     const q = query.trim().toLowerCase();
-    if (!q) return cantieri;
-    return cantieri.filter((k) => k.nome.toLowerCase().includes(q));
+    const base = q ? cantieri.filter((k) => k.nome.toLowerCase().includes(q)) : cantieri;
+    return [...base].sort(
+      (a, b) => Number(!cantiereImputabile(a.stato)) - Number(!cantiereImputabile(b.stato)),
+    );
   }, [cantieri, query]);
 
   const riposiziona = React.useCallback(() => {
@@ -91,11 +99,26 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
       setAperto(false);
       if (nuovoId === (cantiereId ?? null)) return;
       startTransition(async () => {
-        const res = await aggiornaSpesa({ id: spesaId, cantiereId: nuovoId });
+        // Assegnare a un cantiere chiuso si puo', ma una volta va detto.
+        const scelto = cantieri.find((k) => k.id === nuovoId);
+        const forzato = !!scelto && !cantiereImputabile(scelto.stato);
+        if (forzato) {
+          const procedi = await chiediConferma({
+            title: 'Il cantiere è chiuso',
+            description: `"${scelto!.nome}" non è più in lavorazione. Assegno comunque la spesa?`,
+            confirmLabel: 'Assegna',
+          });
+          if (!procedi) return;
+        }
+        const res = await aggiornaSpesa({
+          id: spesaId,
+          cantiereId: nuovoId,
+          ...(forzato ? { forzato: true } : {}),
+        });
         if (res.ok) router.refresh();
       });
     },
-    [cantiereId, spesaId, router],
+    [cantiereId, spesaId, router, cantieri, chiediConferma],
   );
 
   return (
@@ -175,7 +198,12 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
                           selezionato && 'font-medium',
                         )}
                       >
-                        <span className="truncate">{k.nome}</span>
+                        <span className="truncate">
+                          {k.nome}
+                          {cantiereImputabile(k.stato) ? null : (
+                            <span className="ml-1.5 text-xs text-muted-foreground">· chiuso</span>
+                          )}
+                        </span>
                         {selezionato ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
                       </button>
                     </li>

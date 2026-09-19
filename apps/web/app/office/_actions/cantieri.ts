@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
+import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import { prossimoCodiceCantiere } from '@kommessa/api/kantiere';
@@ -330,8 +331,17 @@ export async function generaQrCantiere(input: unknown): Promise<QrResult> {
 
   const supabase = createServerSupabase();
 
-  if (!(await cantiereDelTenant(supabase, ctx.tenantId, parsed.data.cantiereId))) {
-    return { ok: false, error: 'Cantiere non trovato per questo tenant' };
+  // Su un cantiere chiuso non si stampa un QR nuovo: sarebbe una porta aperta
+  // su un lavoro finito, e i cartelli in cantiere restano appesi per mesi.
+  const aperto = await cantiereScrivibile(supabase, parsed.data.cantiereId, ctx.tenantId);
+  if (!aperto.ok) {
+    return {
+      ok: false,
+      error:
+        aperto.error === 'CANTIERE_CHIUSO'
+          ? 'Il cantiere è chiuso: non si generano QR nuovi.'
+          : 'Cantiere non trovato per questo tenant',
+    };
   }
 
   // Idempotente: se esiste già un QR attivo per questo cantiere, restituiscilo
@@ -441,8 +451,17 @@ export async function rigeneraQrCantiere(input: unknown): Promise<QrResult> {
 
   const supabase = createServerSupabase();
 
-  if (!(await cantiereDelTenant(supabase, ctx.tenantId, parsed.data.cantiereId))) {
-    return { ok: false, error: 'Cantiere non trovato per questo tenant' };
+  // Stessa regola della generazione: un cantiere chiuso non riceve QR nuovi.
+  // Revocare quello vecchio resta possibile dalla scheda del cantiere.
+  const ancoraAperto = await cantiereScrivibile(supabase, parsed.data.cantiereId, ctx.tenantId);
+  if (!ancoraAperto.ok) {
+    return {
+      ok: false,
+      error:
+        ancoraAperto.error === 'CANTIERE_CHIUSO'
+          ? 'Il cantiere è chiuso: non si generano QR nuovi.'
+          : 'Cantiere non trovato per questo tenant',
+    };
   }
 
   // Revoca QR attivo esistente

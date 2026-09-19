@@ -36,7 +36,9 @@ export default async function MobileCommessePage() {
         responsabile:responsabile_id ( id, display_name )
       `,
     )
-    .in('stato', ['aperta', 'in_corso', 'collaudo', 'bozza'])
+    // Le completate restano consultabili anche dal telefono: il lavoro e'
+    // finito ma la scheda si guarda ancora. Fuori solo le archiviate.
+    .in('stato', ['aperta', 'in_corso', 'collaudo', 'bozza', 'completata'])
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
     .limit(120);

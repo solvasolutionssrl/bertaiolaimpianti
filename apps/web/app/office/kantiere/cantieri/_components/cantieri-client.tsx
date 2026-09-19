@@ -16,6 +16,7 @@ import {
   Input,
   Label,
 } from '@kommessa/ui';
+import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import { useAlert } from '@/app/_components/confirm-provider';
 import { AddressAutocomplete } from '@/app/_components/address-autocomplete';
 import {
@@ -112,6 +113,10 @@ export function CantieriClient({
   // Ricerca + filtro tipologia
   const [q, setQ] = React.useState('');
   const [cat, setCat] = React.useState<string | null>(null);
+  // Questa e' la lista grande, l'unico posto dove i cantieri chiusi restano
+  // raggiungibili. Di default pero' non ingombrano: sono lo storico, non il
+  // lavoro di oggi, e con il gestionale collegato diventano la maggioranza.
+  const [mostraChiusi, setMostraChiusi] = React.useState(false);
 
   const categorie = React.useMemo(
     () =>
@@ -124,14 +129,16 @@ export function CantieriClient({
   const filtered = React.useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
+      if (!mostraChiusi && !cantiereImputabile(r.stato)) return false;
       if (cat && r.categoria !== cat) return false;
       if (!needle) return true;
       return [r.nome, r.codice_commessa, r.codice, r.cliente_nome, r.indirizzo]
         .filter(Boolean)
         .some((v) => (v as string).toLowerCase().includes(needle));
     });
-  }, [rows, q, cat]);
+  }, [rows, q, cat, mostraChiusi]);
 
+  const nChiusi = rows.filter((r) => !cantiereImputabile(r.stato)).length;
   const filtroAttivo = q.trim() !== '' || cat !== null;
 
   function openNew() {
@@ -179,20 +186,32 @@ export function CantieriClient({
     });
   }
 
-  const nAttivi = rows.filter((r) => r.stato === 'attivo').length;
-
   return (
     <>
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3">
+        {/* Il conteggio dice quello che si sta guardando davvero: prima
+            annunciava tutti i cantieri e ne elencava un sottoinsieme. */}
         <p className="text-sm text-muted-foreground">
           {rows.length === 0
             ? 'Nessun cantiere registrato.'
             : filtroAttivo
               ? `${filtered.length} risultat${filtered.length === 1 ? 'o' : 'i'} su ${rows.length}`
-              : `${rows.length} cantier${rows.length === 1 ? 'e' : 'i'} · ${nAttivi} attiv${nAttivi === 1 ? 'o' : 'i'}`}
+              : `${filtered.length} cantier${filtered.length === 1 ? 'e' : 'i'}${
+                  nChiusi > 0 && !mostraChiusi ? ` · ${nChiusi} chius${nChiusi === 1 ? 'o' : 'i'} nascost${nChiusi === 1 ? 'o' : 'i'}` : ''
+                }`}
         </p>
         <div className="flex shrink-0 items-center gap-2">
+          {nChiusi > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setMostraChiusi((v) => !v)}
+              aria-pressed={mostraChiusi}
+            >
+              {mostraChiusi ? 'Nascondi i chiusi' : 'Mostra anche i chiusi'}
+            </Button>
+          ) : null}
           <Button size="sm" variant="outline" asChild>
             <Link href="/office/kantiere/categorie">
               <Tags className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -266,7 +285,12 @@ export function CantieriClient({
                     filtered.map((row) => (
                       <tr
                         key={row.id}
-                        className="group cursor-pointer border-b border-border transition-colors hover:bg-muted/40"
+                        // Un cantiere chiuso resta leggibile ma spento, come un
+                        // utente disattivato: si vede che c'e' e che non e' piu'
+                        // in gioco, senza doverlo cercare nella colonna stato.
+                        className={`group cursor-pointer border-b border-border transition-colors hover:bg-muted/40${
+                          cantiereImputabile(row.stato) ? '' : ' opacity-60'
+                        }`}
                         onClick={() => router.push(`/office/kantiere/cantieri/${row.id}`)}
                       >
                         <td className="px-3 py-2">

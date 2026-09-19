@@ -25,9 +25,17 @@ interface Props {
   sopralluogo: FotoItem[];
   inCorso: FotoItem[];
   finali: FotoItem[];
+  /** Commessa chiusa: la galleria resta, i modi per aggiungere spariscono. */
+  soloLettura?: boolean;
 }
 
-export function FotoTab({ commessaId, sopralluogo, inCorso, finali }: Props) {
+export function FotoTab({
+  commessaId,
+  sopralluogo,
+  inCorso,
+  finali,
+  soloLettura = false,
+}: Props) {
   const [showUpload, setShowUpload] = React.useState(false);
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
 
@@ -67,34 +75,38 @@ export function FotoTab({ commessaId, sopralluogo, inCorso, finali }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* Azioni principali affiancate */}
-      <div className="grid grid-cols-2 gap-2">
-        <Link href={`/mobile/commessa/${commessaId}/scatto`} className="block">
-          <Button
-            variant="outline"
-            size="lg"
-            className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]"
-          >
-            <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
-            Scatta dal vivo
-          </Button>
-        </Link>
-        <Button
-          variant={showUpload ? 'default' : 'outline'}
-          size="lg"
-          className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]"
-          onClick={() => setShowUpload((v) => !v)}
-        >
-          <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
-          {showUpload ? 'Chiudi' : 'Dalla galleria'}
-        </Button>
-      </div>
+      {/* Azioni principali affiancate — su una commessa chiusa non ci sono */}
+      {soloLettura ? null : (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <Link href={`/mobile/commessa/${commessaId}/scatto`} className="block">
+              <Button
+                variant="outline"
+                size="lg"
+                className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]"
+              >
+                <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                Scatta dal vivo
+              </Button>
+            </Link>
+            <Button
+              variant={showUpload ? 'default' : 'outline'}
+              size="lg"
+              className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]"
+              onClick={() => setShowUpload((v) => !v)}
+            >
+              <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              {showUpload ? 'Chiudi' : 'Dalla galleria'}
+            </Button>
+          </div>
 
-      {/* Upload section inline */}
-      {showUpload && (
-        <div className="rounded-xl border border-border bg-card/50 p-3">
-          <AddMediaSection commessaId={commessaId} />
-        </div>
+          {/* Upload section inline */}
+          {showUpload && (
+            <div className="rounded-xl border border-border bg-card/50 p-3">
+              <AddMediaSection commessaId={commessaId} />
+            </div>
+          )}
+        </>
       )}
 
       {/* Galleria per momenti */}

@@ -53,6 +53,8 @@ export default async function PortalHomePage() {
       'id, codice_interno, nome_cartella, stato, data_apertura, cliente_indirizzo_cantiere',
     )
     .eq('cliente_id', ctx.clienteId)
+    // Archiviata vuol dire tolta di mezzo: al cliente non la si propone.
+    .neq('stato', 'archiviata')
     .order('data_apertura', { ascending: false })
     .returns<CommessaRow[]>();
 

@@ -131,14 +131,19 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
 
   // Liste opzioni per i filtri e per la riassegnazione: tutti i cantieri +
   // tutti i dipendenti del tenant.
+  // Qui servono TUTTI i cantieri, chiusi compresi: una spesa di sei mesi fa sta
+  // su un lavoro che intanto e' finito, e l'ufficio deve poterla filtrare e
+  // leggerne il nome. A vietare la riassegnazione su un cantiere chiuso pensa
+  // il menu della tabella, che riceve lo stato e lo usa.
   const { data: tuttiCantieri } = (await supabase
     .from('cantieri' as never)
-    .select('id, nome, codice')
+    .select('id, nome, codice, stato')
     .eq('tenant_id', ctx.tenantId)
     .order('nome')) as { data: CantiereRow[] | null };
   const cantieriOptions: CantiereOption[] = (tuttiCantieri ?? []).map((k) => ({
     id: k.id,
     nome: k.nome || k.codice || k.id,
+    stato: (k as { stato?: string | null }).stato ?? null,
   }));
 
   const { data: tuttiDipendenti } = (await supabase

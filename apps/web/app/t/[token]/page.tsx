@@ -17,6 +17,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext } from '@kommessa/api/tenant';
 import { prossimoTipoTimbratura, statoTurno } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
+import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -50,6 +51,7 @@ type CantiereRow = {
   id: string;
   nome: string;
   codice: string | null;
+  stato: string | null;
 };
 
 type SquadraCommessaRow = {
@@ -191,9 +193,28 @@ export default async function TokenPage({
   } else {
     const { data: cantiereRow } = await svc
       .from('cantieri' as never)
-      .select('id, nome, codice')
+      .select('id, nome, codice, stato')
       .eq('id', target.id)
       .maybeSingle<CantiereRow>();
+
+    // Il cartello con il QR resta appeso anche quando il lavoro finisce.
+    // Meglio dirlo qui, in chiaro, che lasciar fallire la timbratura dopo, con
+    // la persona che ha gia' il telefono in mano e non capisce perche'.
+    if (cantiereRow && !cantiereImputabile(cantiereRow.stato)) {
+      return (
+        <Schermo>
+          <IconaQr />
+          <h1 className="text-center text-lg font-semibold tracking-tight text-foreground">
+            Cantiere chiuso
+          </h1>
+          <p className="mt-2 text-center text-sm text-muted-foreground">
+            Qui non si timbra più. Se hai lavorato su questo cantiere, dillo
+            all&apos;ufficio: può registrare le ore per te.
+          </p>
+        </Schermo>
+      );
+    }
+
     if (cantiereRow) {
       titolo = titoloCase(cantiereRow.nome);
     }

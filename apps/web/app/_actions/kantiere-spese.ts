@@ -19,6 +19,7 @@ import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { chiaviSpeseValide } from '@/app/api/kantiere/spese/_lib/r2-spese';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 import { auditTenant } from '@/app/_actions/_lib/audit';
+import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
 import {
   buildSnapshotSpesa,
   diffSnapshotSpesa,
@@ -110,6 +111,12 @@ const CreaOfficeSchema = z.object({
   mime: z.string().min(1).max(127).nullable().optional(),
   sizeBytes: z.number().int().positive().max(20 * 1024 * 1024).nullable().optional(),
   aiRaw: z.unknown().optional(),
+  /**
+   * L'ufficio ha confermato di voler scrivere su un cantiere chiuso. Senza
+   * questo la scrittura viene rifiutata con `CANTIERE_CHIUSO`, cosi' la UI sa
+   * che deve chiedere conferma invece di mostrare un errore.
+   */
+  forzato: z.boolean().optional(),
 });
 
 /**
@@ -150,18 +157,15 @@ export async function creaSpesaOffice(
   }
 
   // cantiere (se scelto) deve appartenere al tenant → ricava commessa
+  // L'ufficio da computer puo' sempre registrare, anche su un cantiere chiuso:
+  // gli si chiede solo conferma (`forzato`). Dall'app questa strada non esiste.
   let commessaId: string | null = null;
   if (d.cantiereId) {
-    const { data: cant } = await service
-      .from('cantieri' as never)
-      .select('id, tenant_id, commessa_id')
-      .eq('id', d.cantiereId)
-      .maybeSingle();
-    const cantRow = cant as { id: string; tenant_id: string; commessa_id: string | null } | null;
-    if (!cantRow || cantRow.tenant_id !== ctx.tenantId) {
-      return { ok: false, error: 'CANTIERE_NON_VALIDO' };
-    }
-    commessaId = cantRow.commessa_id ?? null;
+    const scrivibile = await cantiereScrivibile(service, d.cantiereId, ctx.tenantId, {
+      forzato: d.forzato,
+    });
+    if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
+    commessaId = scrivibile.commessaId ?? null;
   }
 
   // Il codice del metodo deve stare nell'elenco di QUESTO cliente: lo schema
@@ -220,6 +224,8 @@ const AggiornaSchema = z.object({
   numeroPersone: z.number().int().positive().max(99).optional(),
   dataScontrino: z.string().datetime({ offset: true }).nullable().optional(),
   note: z.string().trim().max(2000).nullable().optional(),
+  /** Conferma dell'ufficio per riassegnare la spesa a un cantiere chiuso. */
+  forzato: z.boolean().optional(),
 });
 
 const SNAP_COLS =
@@ -273,14 +279,12 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
   // RLS-scoped → null se di un altro tenant), poi si scrive cantiere_id + la
   // commessa derivata. Evita di puntare la spesa al cantiere di un altro tenant.
   if (d.cantiereId) {
-    const { data: cant } = await supabase
-      .from('cantieri' as never)
-      .select('commessa_id')
-      .eq('id', d.cantiereId)
-      .maybeSingle();
-    if (!cant) return { ok: false, error: 'CANTIERE_NON_VALIDO' };
+    const scrivibile = await cantiereScrivibile(supabase, d.cantiereId, ctx.tenantId, {
+      forzato: d.forzato,
+    });
+    if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
     patch.cantiere_id = d.cantiereId;
-    patch.commessa_id = (cant as { commessa_id: string | null }).commessa_id ?? null;
+    patch.commessa_id = scrivibile.commessaId ?? null;
   } else if (d.cantiereId === null) {
     patch.cantiere_id = null;
     patch.commessa_id = null;

@@ -136,7 +136,9 @@ export default async function CercaPage({
           tags: [tagFilter],
         };
       })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      // Le archiviate sono state tolte di mezzo: non rientrano dal tag.
+      .filter((x) => x.stato !== 'archiviata');
   }
 
   // ─── Ricerca testuale ───────────────────────────────────────────────
@@ -160,6 +162,9 @@ export default async function CercaPage({
               `descrizione_ai_proposta.ilike.${pattern}`,
             ].join(','),
           )
+          // Le completate si cercano ancora (il lavoro e' finito, non
+          // sparito); le archiviate no, sono state tolte di mezzo apposta.
+          .neq('stato', 'archiviata')
           .limit(15),
         supabase
           .from('clienti')
@@ -210,6 +215,7 @@ export default async function CercaPage({
              cliente:clienti!inner ( ragione_sociale )`,
           )
           .ilike('cliente.ragione_sociale', pattern)
+          .neq('stato', 'archiviata')
           .limit(10),
       ]);
 

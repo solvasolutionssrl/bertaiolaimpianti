@@ -14,6 +14,8 @@ import {
 } from '@kommessa/ui';
 
 import type { CategoriaSpesa } from '@kommessa/api/spese';
+import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
+import { useConfirm } from '@/app/_components/confirm-provider';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
 import { creaSpesaOffice } from '@/app/_actions/kantiere-spese';
 
@@ -230,6 +232,7 @@ export function NuovaSpesaOffice({
   const router = useRouter();
   const [aperto, setAperto] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
+  const chiediConferma = useConfirm();
 
   const [fase, setFase] = React.useState<Fase>('scelta');
   const [errMsg, setErrMsg] = React.useState<string | null>(null);
@@ -369,9 +372,22 @@ export function NuovaSpesaOffice({
     const dataIso = dataLocal ? new Date(dataLocal).toISOString() : null;
 
     startTransition(async () => {
+      // Cantiere chiuso: si registra lo stesso, ma solo dopo una conferma.
+      const scelto = cantiereId ? cantieri.find((k) => k.id === cantiereId) : undefined;
+      const forzato = !!scelto && !cantiereImputabile(scelto.stato);
+      if (forzato) {
+        const procedi = await chiediConferma({
+          title: 'Il cantiere è chiuso',
+          description: `"${scelto!.nome}" non è più in lavorazione. Registro comunque la spesa?`,
+          confirmLabel: 'Registra',
+        });
+        if (!procedi) return;
+      }
+
       const res = await creaSpesaOffice({
         dipendenteId,
         cantiereId: cantiereId ? cantiereId : null,
+        ...(forzato ? { forzato: true } : {}),
         categoria,
         importoTotale: importoNum,
         importoIva: ivaNum != null && Number.isFinite(ivaNum) ? ivaNum : null,
@@ -402,6 +418,8 @@ export function NuovaSpesaOffice({
       chiudi();
     });
   }, [
+    cantieri,
+    chiediConferma,
     puoSalvare,
     dipendenteId,
     cantiereId,
@@ -539,9 +557,10 @@ export function NuovaSpesaOffice({
                     className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Da assegnare</option>
+                    {/* I chiusi ci sono ma si vedono: al salvataggio si conferma. */}
                     {cantieri.map((k) => (
                       <option key={k.id} value={k.id}>
-                        {k.nome}
+                        {cantiereImputabile(k.stato) ? k.nome : `${k.nome} · chiuso`}
                       </option>
                     ))}
                   </select>

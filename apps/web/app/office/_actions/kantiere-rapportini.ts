@@ -16,6 +16,7 @@ import {
 } from '@/app/_actions/_lib/ricomputa-rapportino';
 import { coppiaPausaCentrata } from '@/app/_actions/_lib/viaggio-timbra';
 import { aggiornaRigheGiornata } from '@/app/_actions/_lib/righe-giornata';
+import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 import { leggiTutto } from '@kommessa/api/pagine';
 
@@ -46,6 +47,12 @@ const RegistraOreSchema = z
     /** Ore di viaggio attribuite al cantiere. */
     ore_viaggio: z.number().min(0).max(24),
     note: z.string().max(1000).optional(),
+    /**
+     * L'ufficio ha confermato di voler registrare ore su un cantiere chiuso.
+     * Senza, la scrittura viene rifiutata con `CANTIERE_CHIUSO` e la UI chiede
+     * conferma. Dall'app questa strada non esiste.
+     */
+    forzato: z.boolean().optional(),
   })
   .refine(
     (d) => {
@@ -86,6 +93,17 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
     .eq('tenant_id', ctx.tenantId)
     .maybeSingle();
   if (dipErr || !dipRow) return { ok: false, error: 'Dipendente non trovato' };
+
+  // Cantiere chiuso: l'ufficio puo' scrivere lo stesso, ma solo dopo aver
+  // confermato. Il primo tentativo torna `CANTIERE_CHIUSO`, la UI chiede e
+  // rimanda con `forzato`. E' il caso «ho lavorato oggi su un lavoro chiuso
+  // ieri», che esiste davvero e lo sa l'ufficio, non chi sta in cantiere.
+  if (cantiereId) {
+    const scrivibile = await cantiereScrivibile(supabase, cantiereId, ctx.tenantId, {
+      forzato: parsed.data.forzato,
+    });
+    if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
+  }
 
   const now = new Date().toISOString();
 

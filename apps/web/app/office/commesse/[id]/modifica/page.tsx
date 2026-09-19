@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 
 import { loadCommessa } from '../_lib/get-commessa';
 import { CommessaEditClient } from './_components/edit-client';
@@ -30,6 +31,11 @@ export default async function ModificaCommessaPage({
   }
 
   const c = await loadCommessa(params.id);
+  // Una commessa chiusa non si modifica: nascondere il tasto non basta, qui
+  // ci si arriva anche col link diretto. Per riaprirla si cambia stato.
+  if (commessaSoloLettura(c.stato as string | null)) {
+    redirect(`/office/commesse/${params.id}`);
+  }
   const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
 

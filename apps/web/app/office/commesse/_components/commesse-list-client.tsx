@@ -196,11 +196,19 @@ export function CommesseListClient({ rows, responsabili }: Props) {
               <tbody>
                 {rows.map((c, i) => {
                   const sel = isSelected(c.id);
-                  const baseCls = sel
-                    ? 'cursor-pointer border-b border-primary/40 bg-primary-soft transition-colors hover:bg-primary-soft'
-                    : i % 2 === 0
-                      ? 'cursor-pointer border-b border-border transition-colors hover:bg-primary-soft/50'
-                      : 'cursor-pointer border-b border-border bg-muted/20 transition-colors hover:bg-primary-soft/50';
+                  // Archiviata: resta nella lista grande ma spenta, come gli
+                  // utenti disattivati. Si riconosce senza leggere lo stato.
+                  const spenta = c.stato === 'archiviata';
+                  const baseCls = [
+                    sel
+                      ? 'cursor-pointer border-b border-primary/40 bg-primary-soft transition-colors hover:bg-primary-soft'
+                      : i % 2 === 0
+                        ? 'cursor-pointer border-b border-border transition-colors hover:bg-primary-soft/50'
+                        : 'cursor-pointer border-b border-border bg-muted/20 transition-colors hover:bg-primary-soft/50',
+                    spenta ? 'opacity-60' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ');
                   const go = () => router.push(`/office/commesse/${c.id}`);
                   // Tastiera: Enter o Space → naviga. Le checkbox interne
                   // intercettano già il click e fanno stopPropagation sotto.

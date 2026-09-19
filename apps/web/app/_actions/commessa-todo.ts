@@ -11,6 +11,7 @@ import {
   cleanupAllegatoFiles,
   getTodoFileRefIds,
 } from './_lib/storage-cleanup';
+import { commessaScrivibile } from './_lib/lavoro-aperto';
 
 /**
  * Server actions per gestire i TODO di una commessa.
@@ -84,6 +85,16 @@ export async function creaTodo(
   }
 
   const supabase = createServerSupabase();
+
+  // Una commessa chiusa non accetta attivita' nuove: si consulta soltanto.
+  const scrivibile = await commessaScrivibile(
+    supabase,
+    parsed.data.commessaId,
+    ctx.tenantId,
+  );
+  if (!scrivibile.ok) {
+    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
+  }
 
   // sort_order = max+1 dei todo aperti della commessa
   const { data: maxRow } = await supabase
@@ -337,6 +348,12 @@ export async function aggiungiNotaTodo(input: unknown): Promise<Result> {
     .maybeSingle();
   if (!todo) return { ok: false, error: 'TODO non trovato' };
   const t = todo as { commessa_id: string };
+
+  // Anche una nota e' qualcosa che si attacca: su una commessa chiusa no.
+  const scrivibile = await commessaScrivibile(supabase, t.commessa_id, ctx.tenantId);
+  if (!scrivibile.ok) {
+    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
+  }
 
   const { error } = await supabase
     .from('commessa_todo_nota' as never)
