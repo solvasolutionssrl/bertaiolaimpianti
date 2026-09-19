@@ -40,6 +40,10 @@ export interface EsitoPromozione {
   categorieDaSmistare: number;
   cantieriCreati: number;
   cantieriSaltati: Array<{ externalId: string; motivo: string }>;
+  /** Cantieri che il gestionale dichiara chiusi e che abbiamo chiuso anche noi. */
+  cantieriChiusi?: number;
+  /** Cantieri tornati aperti sul gestionale e riaperti anche qui. */
+  cantieriRiaperti?: number;
 }
 
 const NULLA: EsitoPromozione = {
@@ -168,39 +172,32 @@ export async function promuoviDalGestionale(
     if (nome) nostroNomePerValore.set(chiaveCategoria(c.valoreEsterno), nome);
   }
 
-  if (!creaAutomatico) {
-    return {
-      ok: true,
-      motivo: 'creazione cantieri disattivata per questo cliente',
-      categorieCollegate: esito.daCollegare.length,
-      categorieDaSmistare: esito.daSmistare.length,
-      cantieriCreati: 0,
-      cantieriSaltati: [],
-    };
-  }
-
   // ---------------------------------------------------------------------
-  // 2. Cantieri nuovi
+  // 2. Cantieri: prima quelli che esistono gia', poi quelli nuovi
   // ---------------------------------------------------------------------
   const [{ data: mapRaw }, { data: nostriRaw }] = await Promise.all([
     service
       .from('integrazione_mappature' as never)
-      .select('external_id')
+      .select('external_id, entita_id')
       .eq('tenant_id', tenantId)
       .eq('sistema', sistema)
       .eq('entita', 'cantiere'),
     service
       .from('cantieri' as never)
-      .select('codice, codice_commessa')
+      .select('id, codice, codice_commessa, stato')
       .eq('tenant_id', tenantId),
   ]);
 
-  const giaCollegati = new Set(
-    ((mapRaw ?? []) as unknown as { external_id: string }[]).map((m) => m.external_id),
-  );
+  const mappature = (mapRaw ?? []) as unknown as {
+    external_id: string;
+    entita_id: string;
+  }[];
+  const giaCollegati = new Set(mappature.map((m) => m.external_id));
   const nostri = (nostriRaw ?? []) as unknown as {
+    id: string;
     codice: string | null;
     codice_commessa: string | null;
+    stato: string | null;
   }[];
   // Anche chi non e' ancora *mappato* ma ha lo stesso codice commessa esiste
   // gia': crearlo di nuovo sarebbe un doppione, e l'abbinamento lo sistema il
@@ -211,6 +208,73 @@ export async function promuoviDalGestionale(
       .map((c) => (c.codice_commessa ?? '').trim())
       .filter((c) => c !== ''),
   );
+
+  // ---------------------------------------------------------------------
+  // 2-bis. Con l'integrazione accesa, lo stato lo comanda il gestionale
+  // ---------------------------------------------------------------------
+  // Una commessa che si chiude la' si chiude anche qui la notte dopo, e se
+  // torna aperta si riapre: e' la scelta del cliente, «lo stato vive secondo
+  // quanto riporta il gestionale». Vale **solo** per chi ha il modulo
+  // integrazione acceso (questa funzione gira solo per loro) e **solo** per i
+  // cantieri che il gestionale nomina: quelli nati da noi non si toccano.
+  //
+  // Sta PRIMA del «niente da creare» di proposito: a regime i cantieri nuovi
+  // sono zero e le chiusure diventano l'unica cosa che arriva davvero.
+  const perId = new Map(nostri.map((c) => [c.id, c]));
+  const nostroPerExternal = new Map<string, { id: string; stato: string | null }>();
+  for (const m of mappature) {
+    const c = perId.get(m.entita_id);
+    if (c) nostroPerExternal.set(m.external_id, { id: c.id, stato: c.stato });
+  }
+  // Rete di riserva: chi non e' mappato ma porta lo stesso codice commessa e'
+  // lo stesso lavoro. Non sovrascrive la mappatura, che resta piu' affidabile.
+  for (const c of nostri) {
+    const cod = (c.codice_commessa ?? '').trim();
+    if (cod && !nostroPerExternal.has(cod)) {
+      nostroPerExternal.set(cod, { id: c.id, stato: c.stato });
+    }
+  }
+
+  const daChiudere: string[] = [];
+  const daRiaprire: string[] = [];
+  for (const s of staging) {
+    // `attiva` assente = il gestionale non si esprime: non si tocca niente.
+    if (s.attiva === null || s.attiva === undefined) continue;
+    const nostro = nostroPerExternal.get(s.external_id);
+    if (!nostro) continue;
+    if (s.attiva === false && nostro.stato !== 'chiuso') daChiudere.push(nostro.id);
+    if (s.attiva === true && nostro.stato === 'chiuso') daRiaprire.push(nostro.id);
+  }
+
+  /** A gruppi di 100: il primo giro puo' portarne centinaia in una volta. */
+  async function cambiaStato(ids: string[], stato: 'chiuso' | 'attivo'): Promise<void> {
+    for (let i = 0; i < ids.length; i += 100) {
+      await service
+        .from('cantieri' as never)
+        .update({ stato } as never)
+        .in('id', ids.slice(i, i + 100))
+        .eq('tenant_id', tenantId);
+    }
+  }
+  await cambiaStato(daChiudere, 'chiuso');
+  await cambiaStato(daRiaprire, 'attivo');
+
+  // Il freno `crea_cantieri_automatico` sta QUI e non piu' sopra: spegnere la
+  // creazione dei cantieri nuovi non deve spegnere anche l'allineamento dello
+  // stato di quelli che esistono gia'. Sono due decisioni diverse, e prima
+  // erano legate dall'ordine delle righe.
+  if (!creaAutomatico) {
+    return {
+      ok: true,
+      motivo: 'creazione cantieri disattivata per questo cliente',
+      categorieCollegate: esito.daCollegare.length,
+      categorieDaSmistare: esito.daSmistare.length,
+      cantieriCreati: 0,
+      cantieriSaltati: [],
+      cantieriChiusi: daChiudere.length,
+      cantieriRiaperti: daRiaprire.length,
+    };
+  }
 
   const daCreare = staging.filter(
     (s) => !giaCollegati.has(s.external_id) && !codiciNostri.has(s.external_id),
@@ -223,6 +287,8 @@ export async function promuoviDalGestionale(
       categorieDaSmistare: esito.daSmistare.length,
       cantieriCreati: 0,
       cantieriSaltati: [],
+      cantieriChiusi: daChiudere.length,
+      cantieriRiaperti: daRiaprire.length,
     };
   }
 
@@ -308,6 +374,8 @@ export async function promuoviDalGestionale(
     categorieDaSmistare: esito.daSmistare.length,
     cantieriCreati: creati,
     cantieriSaltati: saltati,
+    cantieriChiusi: daChiudere.length,
+    cantieriRiaperti: daRiaprire.length,
   };
 }
 
@@ -341,6 +409,8 @@ export async function promuoviERegistra(
       categorieCollegate: e.categorieCollegate,
       categorieDaSmistare: e.categorieDaSmistare,
       cantieriCreati: e.cantieriCreati,
+      cantieriChiusi: e.cantieriChiusi ?? 0,
+      cantieriRiaperti: e.cantieriRiaperti ?? 0,
       saltati: e.cantieriSaltati.length,
       // Un assaggio basta: se sono tanti il numero sopra dice comunque quanti.
       esempiSaltati: e.cantieriSaltati.slice(0, 10),

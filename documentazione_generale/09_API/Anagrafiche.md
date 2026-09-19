@@ -80,11 +80,37 @@ settimane nessuno lo guarderebbe più. Un avviso che suona sempre non è un avvi
 
 Ignorare non cancella niente e si disfa con un click.
 
-## 5. Lo stato «in forza» è nostro
+## 5. Chi comanda lo stato: dipende dall'entità
+
+Le due risposte sono diverse, ed è voluto: **la persona la governa l'ufficio, il
+lavoro lo governa il gestionale**.
+
+### Cantieri e commesse: comanda il gestionale (dal 19/09/2026)
+
+Se il modulo **integrazione** è acceso, `attiva` su `POST /letture` decide lo stato
+del cantiere, in tutte e due le direzioni:
+
+- una commessa che il gestionale dichiara chiusa **viene chiusa anche da noi** al
+  primo giro utile, anche se il cantiere esisteva già da prima;
+- se torna attiva sul gestionale, **si riapre** anche qui;
+- se `attiva` non arriva, non si tocca niente: il silenzio non è un ordine.
+
+Vale **solo** per i tenant con il modulo acceso, e **solo** per i cantieri che il
+gestionale nomina: quelli nati dentro Kommessa restano dell'ufficio. L'allineamento
+gira alla chiusura del giro di lettura, insieme alla creazione dei nuovi, e il
+conteggio finisce nel `dettaglio` dell'esecuzione (`cantieriChiusi`,
+`cantieriRiaperti`), visibile in `/admin/integrazioni`.
+
+> Cosa cambia per chi usa l'app: un cantiere chiuso sparisce dai punti di scelta e
+> non accetta più registrazioni (l'ufficio può forzare, il tecnico no). Il dettaglio
+> sta in `08_LOGICHE/Logiche_Kantiere.md` §10.
+
+### Dipendenti: lo stato «in forza» resta nostro
 
 Alcuni gestionali dicono chi è cessato, altri no. Il campo canonico esiste
 (`attiva` su `POST /letture`) e se arriva lo usiamo, ma **la fonte di verità resta
-Kommessa**: è l'ufficio a governare chi è in forza.
+Kommessa**: è l'ufficio a governare chi è in forza. Una persona è un contratto, una
+busta paga e un accesso all'app: non la si disattiva perché lo dice un ERP.
 
 Quando un cliente parte con un elenco già suo (un foglio del consulente del lavoro),
 `scripts/allinea-dipendenti-da-file.ts` lo importa una volta sola. Le colonne e il segno

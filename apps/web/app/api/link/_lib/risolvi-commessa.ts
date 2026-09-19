@@ -50,32 +50,42 @@ export async function risolviCommessa(
   const etichetta = (come.etichetta ?? '').trim();
   if (!etichetta) return null;
 
-  const { data } = await service
-    .from('commesse')
-    .select(CAMPI)
-    .eq('tenant_id', tenantId)
-    .not('stato', 'in', '(archiviata,completata)')
-    .order('codice_interno', { ascending: false, nullsFirst: false })
-    .limit(300);
+  /** Scorre le commesse e restituisce quella la cui etichetta combacia. */
+  async function cerca(soloAperte: boolean): Promise<RigaCommessa | null> {
+    let q = service
+      .from('commesse')
+      .select(CAMPI)
+      .eq('tenant_id', tenantId)
+      .order('codice_interno', { ascending: false, nullsFirst: false })
+      .limit(300);
+    if (soloAperte) q = q.not('stato', 'in', '(archiviata,completata)');
 
-  for (const r of (data ?? []) as unknown as RigaEstesa[]) {
-    const cliente = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
-    const etichettaRiga = etichettaCommessa({
-      codice_interno: r.codice_interno,
-      nome_cartella: r.nome_cartella,
-      descrizione_ai_finale: r.descrizione_ai_finale,
-      descrizione_ai_proposta: r.descrizione_ai_proposta,
-      note_iniziali: r.note_iniziali,
-      clienteNome: cliente?.ragione_sociale ?? null,
-    });
-    if (etichettaRiga === etichetta) {
-      return {
-        id: r.id,
+    const { data } = await q;
+    for (const r of (data ?? []) as unknown as RigaEstesa[]) {
+      const cliente = Array.isArray(r.cliente) ? r.cliente[0] : r.cliente;
+      const etichettaRiga = etichettaCommessa({
         codice_interno: r.codice_interno,
         nome_cartella: r.nome_cartella,
-        cloud_folder_path: r.cloud_folder_path,
-      };
+        descrizione_ai_finale: r.descrizione_ai_finale,
+        descrizione_ai_proposta: r.descrizione_ai_proposta,
+        note_iniziali: r.note_iniziali,
+        clienteNome: cliente?.ragione_sociale ?? null,
+      });
+      if (etichettaRiga === etichetta) {
+        return {
+          id: r.id,
+          codice_interno: r.codice_interno,
+          nome_cartella: r.nome_cartella,
+          cloud_folder_path: r.cloud_folder_path,
+        };
+      }
     }
+    return null;
   }
-  return null;
+
+  // Prima fra le commesse vive, poi fra tutte. Su una commessa chiusa si carica
+  // eccome (una foto o un documento che arrivano dopo la fine dei lavori sono
+  // la normalita'), ma a parita' di etichetta deve vincere quella aperta: e' la
+  // ragione di questi due giri invece di una query sola senza filtro.
+  return (await cerca(true)) ?? (await cerca(false));
 }
