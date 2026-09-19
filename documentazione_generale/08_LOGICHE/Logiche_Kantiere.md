@@ -539,6 +539,30 @@ prospetti di sola consultazione: analisi spese, costo cantiere, ore e costi,
 filtro cantiere in Kontabilità. Una spesa di sei mesi fa sta su un lavoro che
 intanto è finito, e l'ufficio deve poterla filtrare e leggerne il nome.
 
+### ⚠️ Nel mondo commesse la regola è OPPOSTA (dal 19/09/2026)
+
+Questo file parla di Kantiere, ma il punto va detto qui perché è qui che si
+presume la simmetria, e la simmetria non c'è.
+
+Su una **commessa** `completata` o `archiviata` **si aggiunge sempre**: foto,
+video, documenti, attività, riunioni, tag, tecnici, fasi, tipologie. Il server
+**non rifiuta mai**. L'interfaccia chiede una conferma, una sola per aggiunta
+(`apps/web/app/_components/conferma-commessa-chiusa.tsx`).
+
+Il divieto lato server **è stato provato e ritirato in giornata**: le foto
+arrivano anche dal Comando iOS e dalle API, dove un popup non esiste, quindi
+bloccare rompeva quelle strade in silenzio (per un'ora le commesse chiuse di
+Bertaiola hanno rifiutato gli upload con un 409, e dal telefono risultavano
+introvabili). Da lì la regola: **si vieta solo dove chi scrive può rispondere a
+una domanda.**
+
+Quindi `commessaImputabile()` dice **com'è messa** la commessa, non cosa è
+permesso: serve alla UI per decidere se chiedere conferma. Solo
+`cantiereImputabile()` è un divieto.
+
+Invariata la visibilità: archiviata fuori dal telefono, completata visibile
+ovunque, riga grigia nella lista dell'ufficio.
+
 ## 11. File chiave nel codice (per manutenzione / AI)
 
 | Area | File |
