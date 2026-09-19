@@ -9,10 +9,14 @@ import {
   type MediaFile,
 } from '../../../../office/commesse/nuova/_components/media-attach-section';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
+import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 import { preparaMedia } from '../../../../_lib/prepara-media';
 
 interface Props {
   commessaId: string;
+  /** Se la commessa e' chiusa, si chiede conferma prima di accodare. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
 /**
@@ -31,9 +35,10 @@ function toAllegatoKind(k: MediaFile['kind']): 'foto' | 'video' | 'pdf_acquisito
   return 'foto';
 }
 
-export function AddMediaSection({ commessaId }: Props) {
+export function AddMediaSection({ commessaId, statoCommessa, nomeCommessa }: Props) {
   const queue = useUploadQueue();
   const router = useRouter();
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
 
   // Lista transitoria: appena un file viene selezionato lo accodiamo e
   // svuotiamo la lista (il progresso è nel pannello in basso).
@@ -50,6 +55,9 @@ export function AddMediaSection({ commessaId }: Props) {
     // progresso nel pannello in basso).
     setFiles([]);
     if (daAccodare.length === 0) return;
+    // Su una commessa chiusa si aggiunge lo stesso, ma lo si conferma qui:
+    // e' il momento in cui i file partono davvero.
+    if (!(await chiediConferma())) return;
     daAccodare.forEach((f) => enqueuedIdsRef.current.add(f.id));
     setInviati((n) => n + daAccodare.length);
 

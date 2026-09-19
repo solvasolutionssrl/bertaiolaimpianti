@@ -39,6 +39,7 @@ import {
 import { eliminaRiunione } from '../../../../../_actions/commessa-riunione';
 import { eliminaMediaOffice } from '../../foto/_actions/media';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { useConfermaCommessaChiusa } from '@/app/_components/conferma-commessa-chiusa';
 import { useUploadQueue } from '@/app/_components/upload-queue-provider';
 import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
 import {
@@ -133,6 +134,9 @@ interface Props {
   commessaId: string;
   currentUserId: string;
   canWrite: boolean;
+  /** Se la commessa e' chiusa, le aggiunte chiedono conferma (non sono vietate). */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
   contestoCommessa: string;
   todos: TodoView[];
   note: NotaView[];
@@ -186,6 +190,8 @@ export function LavoriBoard({
   commessaId,
   currentUserId,
   canWrite,
+  statoCommessa,
+  nomeCommessa,
   contestoCommessa,
   todos,
   note,
@@ -197,6 +203,7 @@ export function LavoriBoard({
   const router = useRouter();
   const showAlert = useAlert();
   const askConfirm = useConfirm();
+  const chiediConfermaChiusa = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const [pending, start] = React.useTransition();
   const [filtro, setFiltro] = React.useState<
     'tutto' | 'riunioni' | 'todo' | 'stato'
@@ -403,11 +410,20 @@ export function LavoriBoard({
             {riunioni.length} riunioni
           </p>
           <div className="flex gap-2">
-            <Button onClick={() => setRiunioneOpen(true)} variant="outline">
+            <Button
+              onClick={async () => {
+                if (await chiediConfermaChiusa()) setRiunioneOpen(true);
+              }}
+              variant="outline"
+            >
               <Sparkles className="h-3.5 w-3.5" />
               Nuova riunione
             </Button>
-            <Button onClick={() => setTodoOpen(true)}>
+            <Button
+              onClick={async () => {
+                if (await chiediConfermaChiusa()) setTodoOpen(true);
+              }}
+            >
               <Plus className="h-3.5 w-3.5" />
               Nuovo TODO
             </Button>
@@ -538,6 +554,8 @@ export function LavoriBoard({
                     entry={e}
                     canWrite={canWrite}
                     commessaId={commessaId}
+                    statoCommessa={statoCommessa}
+                    nomeCommessa={nomeCommessa}
                     onDeleteRiunione={onDeleteRiunione}
                     onReopenTodo={onReopen}
                   />
@@ -1021,12 +1039,16 @@ function TimelineEntryRail({
   entry,
   canWrite,
   commessaId,
+  statoCommessa,
+  nomeCommessa,
   onDeleteRiunione,
   onReopenTodo,
 }: {
   entry: any;
   canWrite: boolean;
   commessaId: string;
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
   onDeleteRiunione: (r: RiunioneView) => void;
   onReopenTodo: (id: string) => void;
 }) {
@@ -1042,6 +1064,8 @@ function TimelineEntryRail({
           ts={ts}
           canWrite={canWrite}
           commessaId={commessaId}
+          statoCommessa={statoCommessa}
+          nomeCommessa={nomeCommessa}
           onDelete={() => onDeleteRiunione(r)}
         />
       </div>
@@ -1142,12 +1166,16 @@ function RiunioneTimelineEntry({
   ts,
   canWrite,
   commessaId,
+  statoCommessa,
+  nomeCommessa,
   onDelete,
 }: {
   r: RiunioneView;
   ts: string;
   canWrite: boolean;
   commessaId: string;
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
   onDelete: () => void;
 }) {
   const router = useRouter();
@@ -1380,6 +1408,8 @@ function RiunioneTimelineEntry({
               <RiunioneAllegatiAttacherDesktop
                 commessaId={commessaId}
                 riunioneId={r.id}
+                statoCommessa={statoCommessa}
+                nomeCommessa={nomeCommessa}
               />
               <div className="border-t border-border pt-2">
                 <button
@@ -1476,13 +1506,18 @@ function fmtGiorno(dateStr: string): string {
 function RiunioneAllegatiAttacherDesktop({
   commessaId,
   riunioneId,
+  statoCommessa,
+  nomeCommessa,
 }: {
   commessaId: string;
   riunioneId: string;
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }) {
   const queue = useUploadQueue();
   const router = useRouter();
   const showAlert = useAlert();
+  const chiediConfermaChiusa = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const galleryRef = React.useRef<HTMLInputElement | null>(null);
   const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
   const completedJobIdsRef = React.useRef<Set<string>>(new Set());
@@ -1538,7 +1573,9 @@ function RiunioneAllegatiAttacherDesktop({
         </p>
         <button
           type="button"
-          onClick={() => galleryRef.current?.click()}
+          onClick={async () => {
+            if (await chiediConfermaChiusa()) galleryRef.current?.click();
+          }}
           className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-card px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/5"
         >
           + Foto / video

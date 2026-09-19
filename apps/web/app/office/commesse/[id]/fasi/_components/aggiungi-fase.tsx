@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@kommessa/ui';
 import { aggiungiVoce } from '../../../../_actions/commesse';
+import { useConfermaCommessaChiusa } from '../../../../../_components/conferma-commessa-chiusa';
 
 interface VoceCatalogo {
   id: number;
@@ -26,14 +27,21 @@ interface VoceCatalogo {
 export function AggiungiFaseButton({
   commessaId,
   disponibili,
+  statoCommessa,
+  nomeCommessa,
 }: {
   commessaId: string;
   disponibili: VoceCatalogo[];
+  /** Se la commessa e' chiusa, aggiungere una fase chiede conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
 
-  const handle = (voceId: number) => {
+  const handle = async (voceId: number) => {
+    if (!(await chiediConferma())) return;
     start(async () => {
       await aggiungiVoce({ commessaId, voceId });
       router.refresh();
@@ -56,7 +64,7 @@ export function AggiungiFaseButton({
             key={v.id}
             onSelect={(e) => {
               e.preventDefault();
-              handle(v.id);
+              void handle(v.id);
             }}
           >
             <span className="flex-1 truncate">{v.nome}</span>

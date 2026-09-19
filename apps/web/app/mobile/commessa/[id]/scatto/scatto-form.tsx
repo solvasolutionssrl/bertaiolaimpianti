@@ -12,6 +12,7 @@ import {
 import { preparaMedia } from '../../../../_lib/prepara-media';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
+import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 
 export interface VoceOption {
   id: number;
@@ -22,6 +23,9 @@ export interface ScattoFormProps {
   commessaId: string;
   voci: VoceOption[];
   preselectedVoceId: number | null;
+  /** Se la commessa e' chiusa, si chiede conferma prima di caricare. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
 type Momento = 'sopralluogo' | 'in_corso' | 'finale';
@@ -49,8 +53,15 @@ function kindToAllegato(k: MediaFile['kind']): 'foto' | 'video' | 'pdf_acquisito
  * fase/momento/geo applicati all'intero gruppo. L'upload va in background
  * nella UploadQueue globale → il tecnico può continuare ad aggiungere.
  */
-export function ScattoForm({ commessaId, voci, preselectedVoceId }: ScattoFormProps) {
+export function ScattoForm({
+  commessaId,
+  voci,
+  preselectedVoceId,
+  statoCommessa,
+  nomeCommessa,
+}: ScattoFormProps) {
   const queue = useUploadQueue();
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
 
   const [files, setFiles] = React.useState<MediaFile[]>([]);
   const [voceId, setVoceId] = React.useState<string>(
@@ -93,6 +104,7 @@ export function ScattoForm({ commessaId, voci, preselectedVoceId }: ScattoFormPr
 
   const handleCarica = async () => {
     if (files.length === 0 || busy) return;
+    if (!(await chiediConferma())) return;
     setBusy(true);
     const daCaricare = files;
     const voceIdNum = voceId !== '' ? Number(voceId) : null;

@@ -3,11 +3,8 @@ import 'server-only';
 import type { createServerSupabase } from '@kommessa/api/server';
 import type { createServiceSupabase } from '@kommessa/api/service';
 import {
-  COMMESSA_CHIUSA,
   cantiereImputabile,
-  commessaImputabile,
   motivoCantiereChiuso,
-  motivoCommessaChiusa,
 } from '@kommessa/api/stato-lavoro';
 
 /**
@@ -136,74 +133,4 @@ export async function cantieriScrivibili(
   }
 
   return { ok: true };
-}
-
-/**
- * Lo stesso guardiano, per il mondo commesse.
- *
- * Valeva anche qui il difetto di partenza: ogni punto di scrittura guardava il
- * tenant e mai lo stato, quindi bastava tenere aperta la scheda di un lavoro
- * gia' chiuso per continuare ad attaccarci foto, attivita' e riunioni.
- *
- * `completata` e `archiviata` si consultano e basta. La differenza fra le due
- * e' **dove si vedono** (la seconda sparisce dal telefono), non cosa si puo'
- * farci: per scrivere sono chiuse allo stesso modo.
- *
- * Per riaprire una commessa si cambia stato, che e' un gesto esplicito e
- * tracciato: per questo `forzato` esiste solo per simmetria con i cantieri e
- * nessun flusso lo passa. Qui non c'e' il caso «l'ho fatto ieri».
- */
-export type EsitoCommessa =
-  | {
-      ok: true;
-      /** Lo stato letto: chi lo vuole mostrare non deve rileggerlo. */
-      stato?: string | null;
-    }
-  | {
-      ok: false;
-      /** Codice, non frase: la UI decide come dirlo. */
-      error: string;
-      /** Il motivo in italiano, pronto da mostrare quando serve il dettaglio. */
-      motivo?: string;
-      stato?: string | null;
-    };
-
-interface RigaCommessa {
-  id: string;
-  stato: string | null;
-}
-
-/**
- * Una commessa: esiste, e' di questo tenant, e accetta ancora scritture.
- *
- * Da usare quando si ha in mano solo un id. Dove la riga della commessa e'
- * gia' stata letta per altri motivi, si chiama direttamente `commessaImputabile`
- * sullo stato che si ha: una query in meno, stessa regola.
- */
-export async function commessaScrivibile(
-  supa: Supa,
-  commessaId: string,
-  tenantId: string,
-  opts: { forzato?: boolean } = {},
-): Promise<EsitoCommessa> {
-  const { data } = await supa
-    .from('commesse')
-    .select('id, stato')
-    .eq('id', commessaId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-
-  const riga = data as RigaCommessa | null;
-  if (!riga) return { ok: false, error: 'COMMESSA_NON_VALIDA' };
-
-  if (!opts.forzato && !commessaImputabile(riga.stato)) {
-    return {
-      ok: false,
-      error: COMMESSA_CHIUSA,
-      motivo: motivoCommessaChiusa(riga.stato),
-      stato: riga.stato,
-    };
-  }
-
-  return { ok: true, stato: riga.stato };
 }

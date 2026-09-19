@@ -8,7 +8,6 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import type { Json } from '@kommessa/api';
 
 import { aggiungiVociEProvisiona } from './_lib/aggiungi-voci';
-import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 import { buildSnapshot } from '../_lib/versioni/snapshot';
 import { scriviVersione, nomeUtente } from './_lib/scrivi-versione';
 
@@ -69,12 +68,6 @@ export async function aggiungiTipologie(input: unknown): Promise<AggiungiTipolog
     responsabile_id: string | null;
     cliente_id: string | null;
   };
-
-  // Append-only si', ma non su un lavoro chiuso: le cartelle sono fisiche e
-  // una commessa completata si consulta soltanto.
-  if (!commessaImputabile(com.stato)) {
-    return { ok: false, error: motivoCommessaChiusa(com.stato) };
-  }
 
   const res = await aggiungiVociEProvisiona({
     tenantId: ctx.tenantId,

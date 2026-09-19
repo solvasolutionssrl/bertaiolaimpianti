@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 import {
   getStorageProvider,
   type StorageProviderName,
@@ -60,17 +59,12 @@ export async function POST(request: NextRequest) {
   const supabase = createServerSupabase();
   const { data: commessa, error: cErr } = await supabase
     .from('commesse')
-    .select('id, cloud_folder_path, stato')
+    .select('id, cloud_folder_path')
     .eq('id', commessaId)
     .single();
 
   if (cErr || !commessa?.cloud_folder_path) {
     return Response.json({ error: 'Commessa non trovata o senza cartella cloud' }, { status: 404 });
-  }
-
-  // Una commessa chiusa si consulta: non ci si carica piu' niente dentro.
-  if (!commessaImputabile(commessa.stato)) {
-    return Response.json({ error: motivoCommessaChiusa(commessa.stato) }, { status: 409 });
   }
 
   // 4. Build storage path

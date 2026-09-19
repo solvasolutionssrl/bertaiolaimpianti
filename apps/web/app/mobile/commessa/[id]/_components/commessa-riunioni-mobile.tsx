@@ -18,6 +18,7 @@ import { MediaLightbox, type MediaItem } from '../../../../_components/media-lig
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
 import { VIDEO_MAX_SIZE_BYTES } from '../../../../_lib/upload-queue/types';
 import { useAlert } from '../../../../_components/confirm-provider';
+import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
 import { useAttesaPicker } from '../../../../_lib/use-attesa-picker';
 
@@ -49,9 +50,18 @@ interface Props {
   commessaId: string;
   /** Se true, mostra i bottoni "Aggiungi foto/video" e "Scatta" sull'espansione. */
   canUpload: boolean;
+  /** Se la commessa e' chiusa, allegare chiede conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
-export function CommessaRiunioniMobile({ riunioni, commessaId, canUpload }: Props) {
+export function CommessaRiunioniMobile({
+  riunioni,
+  commessaId,
+  canUpload,
+  statoCommessa,
+  nomeCommessa,
+}: Props) {
   // Auto-refresh quando gli allegati di una riunione finiscono di salire.
   // Il dialog di creazione accoda i job nella UploadQueue globale e si chiude
   // subito: senza questo watcher gli allegati non comparirebbero finché non si
@@ -96,7 +106,13 @@ export function CommessaRiunioniMobile({ riunioni, commessaId, canUpload }: Prop
             )}
             aria-hidden="true"
           />
-          <RiunioneCard r={r} commessaId={commessaId} canUpload={canUpload} />
+          <RiunioneCard
+            r={r}
+            commessaId={commessaId}
+            canUpload={canUpload}
+            statoCommessa={statoCommessa}
+            nomeCommessa={nomeCommessa}
+          />
         </div>
       ))}
     </div>
@@ -107,10 +123,14 @@ function RiunioneCard({
   r,
   commessaId,
   canUpload,
+  statoCommessa,
+  nomeCommessa,
 }: {
   r: RiunioneMobileRow;
   commessaId: string;
   canUpload: boolean;
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }) {
   const [open, setOpen] = React.useState(false);
   const [lightboxIdx, setLightboxIdx] = React.useState<number | null>(null);
@@ -306,7 +326,12 @@ function RiunioneCard({
           ) : null}
 
           {canUpload ? (
-            <AllegatiAttacher commessaId={commessaId} riunioneId={r.id} />
+            <AllegatiAttacher
+              commessaId={commessaId}
+              riunioneId={r.id}
+              statoCommessa={statoCommessa}
+              nomeCommessa={nomeCommessa}
+            />
           ) : null}
         </div>
       ) : null}
@@ -334,13 +359,18 @@ function RiunioneCard({
 function AllegatiAttacher({
   commessaId,
   riunioneId,
+  statoCommessa,
+  nomeCommessa,
 }: {
   commessaId: string;
   riunioneId: string;
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }) {
   const queue = useUploadQueue();
   const router = useRouter();
   const showAlert = useAlert();
+  const chiediConfermaChiusa = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const galleryRef = React.useRef<HTMLInputElement | null>(null);
   const cameraRef = React.useRef<HTMLInputElement | null>(null);
   const docRef = React.useRef<HTMLInputElement | null>(null);
@@ -354,6 +384,12 @@ function AllegatiAttacher({
     cameraRef,
     docRef,
   ]);
+
+  /** Su una commessa chiusa si allega lo stesso: prima pero' si conferma. */
+  const apriConConferma = async (ref: React.RefObject<HTMLInputElement>) => {
+    if (!(await chiediConfermaChiusa())) return;
+    apri(ref);
+  };
 
   // Rileva il done dei job di questa riunione → refresh server-side.
   React.useEffect(() => {
@@ -429,7 +465,7 @@ function AllegatiAttacher({
       <div className="grid grid-cols-2 gap-1.5">
         <button
           type="button"
-          onClick={() => apri(galleryRef)}
+          onClick={() => void apriConConferma(galleryRef)}
           className="flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-3 py-2.5 text-primary transition-colors hover:bg-primary/5 active:scale-[0.98]"
         >
           <ImagePlus className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -437,7 +473,7 @@ function AllegatiAttacher({
         </button>
         <button
           type="button"
-          onClick={() => apri(cameraRef)}
+          onClick={() => void apriConConferma(cameraRef)}
           aria-label="Scatta foto"
           className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
         >
@@ -446,7 +482,7 @@ function AllegatiAttacher({
         </button>
         <button
           type="button"
-          onClick={() => apri(docRef)}
+          onClick={() => void apriConConferma(docRef)}
           aria-label="Allega un file PDF"
           className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-foreground transition-colors hover:bg-muted/50 active:scale-[0.98]"
         >
@@ -455,7 +491,9 @@ function AllegatiAttacher({
         </button>
         <button
           type="button"
-          onClick={() => setScannerOpen(true)}
+          onClick={async () => {
+            if (await chiediConfermaChiusa()) setScannerOpen(true);
+          }}
           aria-label="Scansiona un PDF con la fotocamera"
           className="flex items-center justify-center gap-2 rounded-lg border border-sky-300 bg-sky-50/60 px-3 py-2.5 text-sky-700 transition-colors hover:bg-sky-50 active:scale-[0.98]"
         >

@@ -1,16 +1,17 @@
-import { Lock } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 /**
- * La riga che spiega perche' su questa commessa non si aggiunge piu' niente.
+ * La riga che dice come sta questa commessa: il lavoro e' finito.
  *
- * Togliere i tasti e basta lascia chi guarda a chiedersi se si e' rotto
- * qualcosa: il lavoro e' finito, non guasto. Per questo la scheda lo dice.
+ * Non e' un divieto. Su una commessa chiusa si aggiunge ancora — capita di
+ * avere una foto o un documento che arrivano dopo la fine dei lavori — e
+ * l'app si limita a chiedere conferma prima di scrivere.
  *
  * Le due diciture restano distinte perche' i due stati vogliono dire cose
  * diverse, e la differenza si vede dal telefono: una completata si consulta
  * anche da li', una archiviata no.
  */
-export function CommessaSolaLettura({
+export function CommessaChiusaNota({
   stato,
   nota,
   className,
@@ -23,8 +24,8 @@ export function CommessaSolaLettura({
   const archiviata = stato === 'archiviata';
   const titolo = archiviata ? 'Commessa archiviata.' : 'Commessa completata.';
   const corpo = archiviata
-    ? 'Si consulta soltanto: non si aggiungono foto, attività, riunioni, tag o tecnici. Dal telefono non compare.'
-    : 'Si consulta soltanto: non si aggiungono foto, attività, riunioni, tag o tecnici.';
+    ? 'Il lavoro è chiuso. Si può ancora aggiungere foto, documenti e attività: prima di scrivere viene chiesta conferma. Dal telefono non compare.'
+    : 'Il lavoro è chiuso. Si può ancora aggiungere foto, documenti e attività: prima di scrivere viene chiesta conferma.';
 
   return (
     <div
@@ -35,7 +36,7 @@ export function CommessaSolaLettura({
         .filter(Boolean)
         .join(' ')}
     >
-      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <p>
         <span className="font-medium text-foreground">{titolo}</span>{' '}
         {corpo}

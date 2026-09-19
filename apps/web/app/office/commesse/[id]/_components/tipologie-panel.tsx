@@ -18,12 +18,17 @@ export function TipologiePanel({
   voci,
   presets,
   canEdit,
+  statoCommessa,
+  nomeCommessa,
 }: {
   commessaId: string;
   vociPresenti: number[];
   voci: TipologiaVoce[];
   presets: TipologiaPreset[];
   canEdit: boolean;
+  /** Se la commessa e' chiusa l'aggiunta chiede conferma (non e' vietata). */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }) {
   const byId = new Map(voci.map((v) => [v.id, v]));
   return (
@@ -42,6 +47,8 @@ export function TipologiePanel({
               presets={presets}
               variant="dialog"
               triggerLabel="Aggiungi"
+              statoCommessa={statoCommessa}
+              nomeCommessa={nomeCommessa}
             />
           ) : null}
         </div>

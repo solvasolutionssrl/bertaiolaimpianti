@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@kommessa/api/server';
 import type { Json } from '@kommessa/api';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 
 /**
  * Server Action: salva un transcript di nota vocale legato a una commessa.
@@ -62,18 +61,13 @@ export async function salvaNotaVocale(
   // Verifichiamo che la commessa esista e appartenga al tenant
   const { data: commessa, error: cErr } = await supabase
     .from('commesse')
-    .select('id, codice_interno, stato')
+    .select('id, codice_interno')
     .eq('id', input.commessaId)
     .eq('tenant_id', ctx.tenantId)
     .maybeSingle();
 
   if (cErr || !commessa) {
     return { ok: false, error: 'Commessa non trovata.' };
-  }
-
-  // Una commessa chiusa si consulta: non ci si registra sopra altre note.
-  if (!commessaImputabile(commessa.stato)) {
-    return { ok: false, error: motivoCommessaChiusa(commessa.stato) };
   }
 
   const { data, error } = await supabase

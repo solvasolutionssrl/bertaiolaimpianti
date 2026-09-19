@@ -7,6 +7,7 @@ import { cn } from '@kommessa/ui';
 
 import { aggiungiTag, rimuoviTag } from '../_actions/commessa-tag';
 import { useAlert } from './confirm-provider';
+import { useConfermaCommessaChiusa } from './conferma-commessa-chiusa';
 
 interface Props {
   commessaId: string;
@@ -14,6 +15,9 @@ interface Props {
   /** Lista tag esistenti nel tenant per autocomplete (tag, conteggio uso). */
   tenantTags: Array<{ tag: string; usage_count: number }>;
   canEdit: boolean;
+  /** Se la commessa e' chiusa, aggiungere un tag chiede conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
 /**
@@ -28,9 +32,17 @@ interface Props {
  * Server-side validation in commessa-tag.ts (length 1-40, lowercase,
  * solo caratteri sicuri). Lato client mostriamo errori ricevuti.
  */
-export function TagEditor({ commessaId, initialTags, tenantTags, canEdit }: Props) {
+export function TagEditor({
+  commessaId,
+  initialTags,
+  tenantTags,
+  canEdit,
+  statoCommessa,
+  nomeCommessa,
+}: Props) {
   const router = useRouter();
   const showAlert = useAlert();
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const [tags, setTags] = React.useState(initialTags);
   const [adding, setAdding] = React.useState(false);
   const [draft, setDraft] = React.useState('');
@@ -58,6 +70,7 @@ export function TagEditor({ commessaId, initialTags, tenantTags, canEdit }: Prop
       setDraft('');
       return;
     }
+    if (!(await chiediConferma())) return;
     setPending(true);
     const res = await aggiungiTag({ commessaId, tag: t });
     setPending(false);

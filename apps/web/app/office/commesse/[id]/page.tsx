@@ -3,7 +3,6 @@ import { HardHat, MapPin, Pencil, User2, Calendar, FileText } from 'lucide-react
 import Link from 'next/link';
 
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 
 import { loadCommessa } from './_lib/get-commessa';
 import { fmtData } from '../../_lib/format';
@@ -43,10 +42,6 @@ export default async function CommessaTab({
   const titolo =
     (c.descrizione_ai_finale ?? c.descrizione_ai_proposta ?? '').trim() || null;
   const stato = (c.stato as string) ?? 'aperta';
-  // Completata o archiviata: niente piu' modifiche al contenuto. Lo stato si
-  // cambia comunque dalla sidebar, che e' il modo di riaprirla.
-  const soloLettura = commessaSoloLettura(stato);
-  const canEditContenuto = canEdit && !soloLettura;
 
   return (
     <div className="space-y-4">
@@ -67,7 +62,7 @@ export default async function CommessaTab({
                 )}
               </h2>
             </div>
-            {canEditContenuto ? (
+            {canEdit ? (
               <Button asChild variant="outline" size="sm" className="gap-1.5">
                 <Link href={`/office/commesse/${params.id}/modifica`}>
                   <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
@@ -114,7 +109,7 @@ export default async function CommessaTab({
             <DescrizioneCantiereEdit
               commessaId={params.id}
               initial={titolo}
-              canEdit={canEditContenuto}
+              canEdit={canEdit}
             />
           </div>
           {titolo ? (
@@ -148,7 +143,7 @@ export default async function CommessaTab({
           <DettagliEdit
             commessaId={params.id}
             initial={(c.note_iniziali as string | null) ?? null}
-            canEdit={canEditContenuto}
+            canEdit={canEdit}
           />
         </CardContent>
       </Card>

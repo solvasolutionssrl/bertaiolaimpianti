@@ -10,12 +10,16 @@ import {
   type TipologiaVoce,
   type TipologiaPreset,
 } from '../../../../_components/aggiungi-tipologie-dialog';
+import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 
 interface Props {
   commessaId: string;
   vociPresenti: number[];
   voci: TipologiaVoce[];
   presets: TipologiaPreset[];
+  /** Se la commessa e' chiusa, aggiungere tipologie chiede conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
 /**
@@ -23,9 +27,18 @@ interface Props {
  * secondarie — Modifica e Aggiungi tipologie — che prima stavano sparse nel
  * corpo dell'hero. Portalizzato su body perché l'Hero ha `overflow-hidden`.
  */
-export function HeroGestione({ commessaId, vociPresenti, voci, presets }: Props) {
+export function HeroGestione({
+  commessaId,
+  vociPresenti,
+  voci,
+  presets,
+  statoCommessa,
+  nomeCommessa,
+}: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [tipOpen, setTipOpen] = React.useState(false);
+  // Il dialog qui e' controllato da noi: la conferma la chiede chi apre.
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const btnRef = React.useRef<HTMLButtonElement>(null);
   const [pos, setPos] = React.useState<{ top: number; right: number } | null>(null);
 
@@ -73,9 +86,9 @@ export function HeroGestione({ commessaId, vociPresenti, voci, presets }: Props)
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => {
+                onClick={async () => {
                   setMenuOpen(false);
-                  setTipOpen(true);
+                  if (await chiediConferma()) setTipOpen(true);
                 }}
                 className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-muted active:bg-muted"
               >

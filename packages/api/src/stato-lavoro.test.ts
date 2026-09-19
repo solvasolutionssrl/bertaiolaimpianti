@@ -10,7 +10,6 @@ import {
   commessaSoloLettura,
   commessaVisibileSuMobile,
   motivoCantiereChiuso,
-  motivoCommessaChiusa,
 } from './stato-lavoro';
 
 describe('cantieri', () => {
@@ -46,7 +45,9 @@ describe('cantieri', () => {
 });
 
 describe('commesse', () => {
-  it('completata e archiviata non accettano piu\' niente', () => {
+  it('completata e archiviata contano come chiuse', () => {
+    // Non e' un divieto: sono le due su cui l'app chiede conferma prima di
+    // aggiungere. Il server non rifiuta (le foto arrivano anche dalle API).
     expect(commessaImputabile('completata')).toBe(false);
     expect(commessaImputabile('archiviata')).toBe(false);
   });
@@ -89,10 +90,5 @@ describe('messaggi', () => {
   it('il motivo del cantiere nomina il cantiere quando lo sappiamo', () => {
     expect(motivoCantiereChiuso('Fincantieri')).toContain('Fincantieri');
     expect(motivoCantiereChiuso(null)).toContain('chiuso');
-  });
-
-  it('il motivo della commessa distingue i due stati', () => {
-    expect(motivoCommessaChiusa('archiviata')).toContain('archiviata');
-    expect(motivoCommessaChiusa('completata')).toContain('completata');
   });
 });

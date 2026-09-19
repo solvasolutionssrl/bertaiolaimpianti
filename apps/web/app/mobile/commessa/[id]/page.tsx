@@ -52,7 +52,7 @@ import {
 } from '../../../_actions/commessa-tecnici';
 import { canView, loadFolderAclMap } from '../../../_lib/folder-acl';
 import { CloudRetry } from './_components/cloud-retry';
-import { CommessaSolaLettura } from '../../../_components/commessa-sola-lettura';
+import { CommessaChiusaNota } from '../../../_components/commessa-chiusa-nota';
 
 export async function generateMetadata({
   params,
@@ -412,9 +412,12 @@ export default async function CommessaDetailPage({
   const cloudFileCount = sortedCloudEntries.filter((e) => !e.isDirectory).length;
   const cliente = Array.isArray(commessa.cliente) ? commessa.cliente[0] : commessa.cliente;
   const stato = commessa.stato as StatoCommessa;
-  // Completata: dal telefono si consulta ancora (foto, file, storico), ma non
-  // ci si attacca piu' niente. Archiviata qui non ci si arriva dagli elenchi.
-  const soloLettura = commessaSoloLettura(stato);
+  // Completata: il lavoro e' finito ma la scheda resta viva. Si aggiunge
+  // ancora — foto, documenti, attivita' — con una conferma prima di scrivere.
+  // Archiviata qui non ci si arriva dagli elenchi.
+  const chiusa = commessaSoloLettura(stato);
+  const nomeCommessa =
+    titoloCase(pickCommessaTitolo(commessa)) || commessa.codice_interno;
 
   const tutteFoto = (fotoRes.data ?? []) as FotoItem[];
   const fotoSopralluogo = tutteFoto.filter((f) => f.momento === 'sopralluogo').reverse();
@@ -509,12 +512,14 @@ export default async function CommessaDetailPage({
                 }[stato] ?? stato}
               </span>
             </span>
-            {canEditCommessa && !soloLettura ? (
+            {canEditCommessa ? (
               <HeroGestione
                 commessaId={commessa.id}
                 vociPresenti={tipVociPresenti}
                 voci={tipVoci}
                 presets={tipPresets}
+                statoCommessa={stato}
+                nomeCommessa={nomeCommessa}
               />
             ) : null}
           </div>
@@ -677,7 +682,7 @@ export default async function CommessaDetailPage({
               commessaId={params.id}
               testo={dettagliTesto}
               initial={commessa.note_iniziali ?? dettagliTesto ?? null}
-              canEdit={canEditDettagli && !soloLettura}
+              canEdit={canEditDettagli}
             />
           ) : null}
         </div>
@@ -685,7 +690,7 @@ export default async function CommessaDetailPage({
 
       <div className="flex flex-col gap-5 px-4 pt-4">
 
-      {soloLettura ? <CommessaSolaLettura stato={stato} /> : null}
+      {chiusa ? <CommessaChiusaNota stato={stato} /> : null}
 
       {/* ── Tab principali — l'utente si muove qui dentro ─────────── */}
       <section className="animate-fade-up [animation-delay:60ms]">
@@ -748,7 +753,9 @@ export default async function CommessaDetailPage({
                 .filter(Boolean)
                 .join(' · ')}
               currentUserId={ctx.userId}
-              canWrite={canManageTecnici && !soloLettura}
+              canWrite={canManageTecnici}
+              statoCommessa={stato}
+              nomeCommessa={nomeCommessa}
               todos={todosMobile}
               riunioni={riunioniMobile}
               tecniciTenant={tecniciTenant}
@@ -762,7 +769,8 @@ export default async function CommessaDetailPage({
               sopralluogo={fotoSopralluogo}
               inCorso={fotoInCorso}
               finali={fotoFinali}
-              soloLettura={soloLettura}
+              statoCommessa={stato}
+              nomeCommessa={nomeCommessa}
             />
           </TabsContent>
 
@@ -830,7 +838,9 @@ export default async function CommessaDetailPage({
               commessaId={params.id}
               assigned={tecniciAssegnati}
               available={tecniciTenant}
-              canManage={canManageTecnici && !soloLettura}
+              canManage={canManageTecnici}
+              statoCommessa={stato}
+              nomeCommessa={nomeCommessa}
             />
           </TabsContent>
           </div>
@@ -839,20 +849,17 @@ export default async function CommessaDetailPage({
       </div>
 
       {/* FAB camera fisso — bottom calcolato per non sovrapporsi
-          al bottom-nav nemmeno con safe-area home indicator iPhone.
-          Su una commessa chiusa sparisce: non si scattano piu' foto. */}
-      {soloLettura ? null : (
-        <Link
-          href={`/mobile/commessa/${params.id}/scatto`}
-          aria-label="Scatta foto"
-          className="fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground shadow-glow-brand transition-transform active:scale-[0.92]"
-          style={{
-            bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)',
-          }}
-        >
-          <Camera className="h-6 w-6" aria-hidden="true" />
-        </Link>
-      )}
+          al bottom-nav nemmeno con safe-area home indicator iPhone */}
+      <Link
+        href={`/mobile/commessa/${params.id}/scatto`}
+        aria-label="Scatta foto"
+        className="fixed right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary text-primary-foreground shadow-glow-brand transition-transform active:scale-[0.92]"
+        style={{
+          bottom: 'calc(env(safe-area-inset-bottom, 0px) + 5.5rem)',
+        }}
+      >
+        <Camera className="h-6 w-6" aria-hidden="true" />
+      </Link>
     </div>
   );
 }

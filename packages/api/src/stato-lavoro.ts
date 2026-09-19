@@ -25,10 +25,15 @@
  * finora non aveva chiara:
  *
  * - `completata` = **il lavoro e' finito, ma si guarda ancora**. Resta visibile
- *   ovunque, anche da telefono, con l'etichetta bene in vista. In sola lettura:
- *   non ci si attacca piu' niente (foto, ore, todo, riunioni, documenti).
+ *   ovunque, anche da telefono, con l'etichetta bene in vista.
  * - `archiviata` = **finita e tolta di mezzo**. Dal telefono non si vede piu';
  *   da computer resta nella lista grande, spenta e filtrabile.
+ *
+ * Su una commessa chiusa **si aggiunge lo stesso**: una foto o un documento
+ * che arrivano dopo la fine dei lavori sono la normalita', e chi carica dal
+ * Comando iOS o dalle API non ha un popup a cui rispondere. Il divieto qui non
+ * c'e': l'app chiede conferma dove c'e' una persona davanti, e basta. Quindi
+ * `commessaImputabile` dice **com'e' messa**, non cosa e' permesso.
  *
  * Il precedente esisteva gia' in un posto solo (i solleciti automatici saltano
  * le completate e le archiviate): qui diventa la regola di tutti.
@@ -121,7 +126,6 @@ export function commessaSceglibile(stato: string | null | undefined): boolean {
  * qui c'e' solo il motivo, perche' lo stesso codice serve a chi indaga un log.
  */
 export const CANTIERE_CHIUSO = 'CANTIERE_CHIUSO' as const;
-export const COMMESSA_CHIUSA = 'COMMESSA_CHIUSA' as const;
 
 /**
  * Il perche' del rifiuto, in italiano, pronto da mostrare.
@@ -133,10 +137,4 @@ export function motivoCantiereChiuso(nome?: string | null): string {
   return nome
     ? `Il cantiere "${nome}" è chiuso: non accetta più registrazioni.`
     : 'Il cantiere è chiuso: non accetta più registrazioni.';
-}
-
-export function motivoCommessaChiusa(stato: string | null | undefined): string {
-  return stato === 'archiviata'
-    ? 'La commessa è archiviata: si può solo consultare.'
-    : 'La commessa è completata: si può solo consultare.';
 }

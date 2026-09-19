@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 import {
   buildR2Key,
   getR2ProviderFromEnv,
@@ -110,7 +109,7 @@ export async function POST(request: NextRequest) {
   } else {
     const { data: c, error: cErr } = await supabase
       .from('commesse')
-      .select('id, cloud_folder_path, codice_interno, nome_cartella, stato')
+      .select('id, cloud_folder_path, codice_interno, nome_cartella')
       .eq('id', body.commessaId as string)
       .single();
     if (cErr || !c?.cloud_folder_path) {
@@ -118,12 +117,6 @@ export async function POST(request: NextRequest) {
         { error: 'Commessa non trovata o senza cartella cloud' },
         { status: 404 },
       );
-    }
-    // Una commessa chiusa si consulta: niente upload nuovi. Le bozze non
-    // passano di qui (non hanno ancora uno stato da rispettare).
-    const statoCommessa = (c as unknown as { stato: string | null }).stato;
-    if (!commessaImputabile(statoCommessa)) {
-      return Response.json({ error: motivoCommessaChiusa(statoCommessa) }, { status: 409 });
     }
     commessa = c as unknown as typeof commessa;
   }

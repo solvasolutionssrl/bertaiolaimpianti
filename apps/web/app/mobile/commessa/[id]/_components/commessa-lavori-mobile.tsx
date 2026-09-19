@@ -14,12 +14,16 @@ import {
 } from './commessa-riunioni-mobile';
 import { CreaTodoDialog } from '../../../../office/commesse/[id]/lavori/_components/crea-todo-dialog';
 import { CreaRiunioneDialog } from '../../../../office/commesse/[id]/lavori/_components/crea-riunione-dialog';
+import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 
 interface Props {
   commessaId: string;
   contestoCommessa: string;
   currentUserId: string;
   canWrite: boolean;
+  /** Se la commessa e' chiusa, le aggiunte chiedono conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
   todos: TodoMobileRow[];
   riunioni: RiunioneMobileRow[];
   tecniciTenant: Array<{ id: string; display_name: string | null }>;
@@ -39,12 +43,15 @@ export function CommessaLavoriMobile({
   contestoCommessa,
   currentUserId,
   canWrite,
+  statoCommessa,
+  nomeCommessa,
   todos,
   riunioni,
   tecniciTenant,
 }: Props) {
   const [todoOpen, setTodoOpen] = React.useState(false);
   const [riunOpen, setRiunOpen] = React.useState(false);
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
 
   // Elenco completo: TODO (aperti/completati/annullati) + Riunioni. Il filtro
   // è stato rimosso (vedi nota in memoria): si mostra tutto in ordine.
@@ -57,7 +64,9 @@ export function CommessaLavoriMobile({
       {canWrite ? (
         <div className="mb-5 grid grid-cols-2 gap-2.5">
           <Button
-            onClick={() => setTodoOpen(true)}
+            onClick={async () => {
+              if (await chiediConferma()) setTodoOpen(true);
+            }}
             className="h-11 justify-center gap-1.5 rounded-xl text-[14px] font-semibold"
           >
             <Plus className="h-4 w-4" />
@@ -65,7 +74,9 @@ export function CommessaLavoriMobile({
           </Button>
           <Button
             variant="outline"
-            onClick={() => setRiunOpen(true)}
+            onClick={async () => {
+              if (await chiediConferma()) setRiunOpen(true);
+            }}
             className="h-11 justify-center gap-1.5 rounded-xl border-primary/40 text-[14px] font-semibold text-primary"
           >
             <Sparkles className="h-4 w-4" />
@@ -111,6 +122,8 @@ export function CommessaLavoriMobile({
               riunioni={riunioni}
               commessaId={commessaId}
               canUpload={canWrite}
+              statoCommessa={statoCommessa}
+              nomeCommessa={nomeCommessa}
             />
           </section>
         ) : null}

@@ -7,8 +7,6 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 
-import { commessaScrivibile } from './_lib/lavoro-aperto';
-
 /**
  * Server actions per la gestione dei tag liberi su una commessa.
  *
@@ -56,17 +54,6 @@ export async function aggiungiTag(input: unknown): Promise<TagResult> {
   }
 
   const supabase = createServerSupabase();
-
-  // Su una commessa chiusa i tag restano quelli che sono.
-  const scrivibile = await commessaScrivibile(
-    supabase,
-    parsed.data.commessaId,
-    ctx.tenantId,
-  );
-  if (!scrivibile.ok) {
-    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
-  }
-
   // ON CONFLICT (commessa_id, tag) DO NOTHING — idempotente
   const { error } = await supabase
     .from('commessa_tags')
@@ -104,17 +91,6 @@ export async function rimuoviTag(input: unknown): Promise<TagResult> {
   if (!tag) return { ok: false, error: 'Tag non valido' };
 
   const supabase = createServerSupabase();
-
-  // Su una commessa chiusa i tag restano quelli che sono.
-  const scrivibile = await commessaScrivibile(
-    supabase,
-    parsed.data.commessaId,
-    ctx.tenantId,
-  );
-  if (!scrivibile.ok) {
-    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
-  }
-
   const { error } = await supabase
     .from('commessa_tags')
     .delete()

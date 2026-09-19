@@ -15,6 +15,7 @@ import {
 
 import { Button, Input, cn } from '@kommessa/ui';
 import { aggiungiTipologie } from '../_actions/aggiungi-tipologie';
+import { useConfermaCommessaChiusa } from './conferma-commessa-chiusa';
 
 export interface TipologiaVoce {
   id: number;
@@ -48,6 +49,9 @@ interface Props {
   onOpenChange?: (v: boolean) => void;
   /** Se false, non renderizza il bottone trigger (utile in modalità controllata). */
   renderTrigger?: boolean;
+  /** Stato della commessa: se e' chiusa, il trigger chiede prima conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
 /**
@@ -69,12 +73,23 @@ export function AggiungiTipologieDialog({
   open: openProp,
   onOpenChange,
   renderTrigger = true,
+  statoCommessa,
+  nomeCommessa,
 }: Props) {
   const [openState, setOpenState] = React.useState(false);
   const open = openProp ?? openState;
   const setOpen = (v: boolean) => {
     if (onOpenChange) onOpenChange(v);
     else setOpenState(v);
+  };
+
+  // Su una commessa chiusa la domanda si fa qui, all'ingresso: dentro c'e'
+  // gia' lo step di conferma delle cartelle e due domande di fila sarebbero
+  // una di troppo. In modalita' controllata chiede il parent che apre.
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
+  const apri = async () => {
+    if (!(await chiediConferma())) return;
+    setOpen(true);
   };
 
   return (
@@ -85,7 +100,7 @@ export function AggiungiTipologieDialog({
           size={triggerSize}
           variant="outline"
           className={triggerClassName}
-          onClick={() => setOpen(true)}
+          onClick={() => void apri()}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           {triggerLabel}

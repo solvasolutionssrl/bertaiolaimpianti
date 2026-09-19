@@ -12,7 +12,6 @@ import {
   type AggiornaCommessaCompletaResult,
 } from './aggiorna-commessa-completa.schemas';
 import { aggiungiVociEProvisiona } from './_lib/aggiungi-voci';
-import { commessaImputabile, motivoCommessaChiusa } from '@kommessa/api/stato-lavoro';
 import { buildSnapshot, diffSnapshot } from '../_lib/versioni/snapshot';
 import { scriviVersione, nomeUtente } from './_lib/scrivi-versione';
 
@@ -70,13 +69,6 @@ export async function aggiornaCommessaCompleta(
     responsabile_id: string | null;
     cliente_id: string | null;
   };
-
-  // Una commessa chiusa si consulta. L'unica modifica che resta possibile e'
-  // riaprirla: senza questa via d'uscita si resterebbe chiusi per sempre.
-  const riapre = data.stato !== undefined && commessaImputabile(data.stato);
-  if (!commessaImputabile(com.stato) && !riapre) {
-    return { ok: false, error: motivoCommessaChiusa(com.stato) };
-  }
 
   const referentiPrima = await caricaReferentiCommessa(supabase, data.commessaId);
   const snapshotPrima = buildSnapshot(com, referentiPrima);

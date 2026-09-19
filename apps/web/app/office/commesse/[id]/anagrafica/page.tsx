@@ -4,7 +4,6 @@ import Link from 'next/link';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 
 import { loadCommessa } from '../_lib/get-commessa';
 import { elencaTagTenant } from '../../../../_actions/commessa-tag';
@@ -54,12 +53,7 @@ export default async function AnagraficaTab({
   const tags = ((tagsRes.data ?? []) as Array<{ tag: string }>)
     .map((t) => t.tag)
     .sort();
-  // I tag sono roba della commessa: su una chiusa restano quelli che sono.
-  // L'anagrafica del cliente invece resta modificabile: e' dato condiviso,
-  // non appartiene a questa commessa.
-  const canEditTags =
-    (ctx.role === 'admin' || ctx.role === 'office') &&
-    !commessaSoloLettura(c.stato as string | null);
+  const canEditTags = ctx.role === 'admin' || ctx.role === 'office';
   const canEditCliente = ctx.role === 'admin' || ctx.role === 'office';
 
   const telefoni = (cliente?.telefoni as string[] | null | undefined) ?? [];
@@ -181,6 +175,8 @@ export default async function AnagraficaTab({
             initialTags={tags}
             tenantTags={tenantTags}
             canEdit={canEditTags}
+            statoCommessa={c.stato as string | null}
+            nomeCommessa={c.codice_interno as string}
           />
         </CardContent>
       </Card>

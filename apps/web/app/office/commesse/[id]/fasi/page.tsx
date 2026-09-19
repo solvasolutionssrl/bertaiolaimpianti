@@ -1,5 +1,4 @@
 import { createServerSupabase } from '@kommessa/api/server';
-import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 import { Card, CardContent } from '@kommessa/ui';
 import { AlertTriangle, CheckCircle2, Circle, ListChecks, Loader2 } from 'lucide-react';
 import { EmptyState } from '../../../../_components/empty-state';
@@ -31,10 +30,9 @@ export default async function FasiTab({
   const supabase = createServerSupabase();
 
   // `loadCommessa` e' in React.cache: il layout l'ha gia' chiamata, qui non
-  // costa una query in piu'. Aggiungere una fase crea cartelle su Nextcloud,
-  // quindi su una commessa chiusa il tasto non si mostra.
+  // costa una query in piu'. Serve lo stato: aggiungere una fase crea cartelle
+  // su Nextcloud, e su una commessa chiusa lo si chiede prima di farlo.
   const commessa = await loadCommessa(params.id);
-  const soloLettura = commessaSoloLettura(commessa.stato as string | null);
 
   const [attiveRes, catalogoRes] = await Promise.all([
     supabase
@@ -126,12 +124,12 @@ export default async function FasiTab({
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Fasi non selezionate
           </h2>
-          {soloLettura ? null : (
-            <AggiungiFaseButton
-              commessaId={params.id}
-              disponibili={disponibili as any}
-            />
-          )}
+          <AggiungiFaseButton
+            commessaId={params.id}
+            disponibili={disponibili as any}
+            statoCommessa={commessa.stato as string | null}
+            nomeCommessa={commessa.codice_interno as string}
+          />
         </div>
         {disponibili.length === 0 ? (
           <p className="text-sm text-muted-foreground">

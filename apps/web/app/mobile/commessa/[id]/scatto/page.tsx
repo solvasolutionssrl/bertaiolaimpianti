@@ -2,10 +2,8 @@ import { notFound } from 'next/navigation';
 import { MobileBackButton } from '../../../_components/mobile-back-button';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { commessaSoloLettura } from '@kommessa/api/stato-lavoro';
 
 import { guardMobile } from '../../../_lib/guard';
-import { CommessaSolaLettura } from '../../../../_components/commessa-sola-lettura';
 import { ScattoForm, type VoceOption } from './scatto-form';
 
 export const metadata = {
@@ -51,11 +49,9 @@ export default async function ScattoPage({
 
   if (!commessa) notFound();
 
-  // Il tasto per arrivare qui sparisce gia' sulla scheda, ma l'indirizzo si
-  // puo' ancora aprire a mano: meglio dirlo che mostrare un modulo che al
-  // momento di salvare verrebbe rifiutato dal server.
+  // Serve al modulo: se la commessa e' chiusa si carica lo stesso, ma prima
+  // di far partire i file si chiede conferma.
   const statoCommessa = (commessa as { stato?: string | null }).stato;
-  const soloLettura = commessaSoloLettura(statoCommessa);
 
   const cliente = Array.isArray(commessa.cliente)
     ? (commessa.cliente[0] ?? null)
@@ -84,15 +80,13 @@ export default async function ScattoPage({
         </h1>
       </header>
 
-      {soloLettura ? (
-        <CommessaSolaLettura stato={statoCommessa} />
-      ) : (
-        <ScattoForm
-          commessaId={params.id}
-          voci={voci}
-          preselectedVoceId={preselectedVoceId}
-        />
-      )}
+      <ScattoForm
+        commessaId={params.id}
+        voci={voci}
+        preselectedVoceId={preselectedVoceId}
+        statoCommessa={statoCommessa}
+        nomeCommessa={commessa.codice_interno}
+      />
     </div>
   );
 }

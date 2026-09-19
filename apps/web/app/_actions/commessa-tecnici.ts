@@ -8,8 +8,6 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 
-import { commessaScrivibile } from './_lib/lavoro-aperto';
-
 /**
  * Server actions per assegnare/togliere tecnici alle commesse.
  *
@@ -48,16 +46,6 @@ export async function assegnaTecnico(input: unknown): Promise<AssignResult> {
   }
 
   const supabase = createServerSupabase();
-
-  // Su una commessa chiusa la squadra non si tocca piu'.
-  const scrivibile = await commessaScrivibile(
-    supabase,
-    parsed.data.commessaId,
-    ctx.tenantId,
-  );
-  if (!scrivibile.ok) {
-    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
-  }
 
   // Verifica che user appartenga al tenant e abbia ruolo "tecnico"
   const { data: user } = await supabase
@@ -124,17 +112,6 @@ export async function rimuoviTecnico(input: unknown): Promise<AssignResult> {
   }
 
   const supabase = createServerSupabase();
-
-  // Su una commessa chiusa la squadra non si tocca piu'.
-  const scrivibile = await commessaScrivibile(
-    supabase,
-    parsed.data.commessaId,
-    ctx.tenantId,
-  );
-  if (!scrivibile.ok) {
-    return { ok: false, error: scrivibile.motivo ?? 'Commessa non valida' };
-  }
-
   const { error } = await supabase
     .from('commessa_tecnici')
     .delete()

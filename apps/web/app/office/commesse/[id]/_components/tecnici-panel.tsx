@@ -16,6 +16,7 @@ import {
   assegnaTecnico,
   rimuoviTecnico,
 } from '../../../../_actions/commessa-tecnici';
+import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 
 export interface TecnicoTenant {
   id: string;
@@ -35,6 +36,9 @@ interface Props {
   available: TecnicoTenant[];
   /** Solo admin/office possono modificare. */
   canManage: boolean;
+  /** Se la commessa e' chiusa, assegnare chiede conferma. */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }
 
 /**
@@ -49,8 +53,11 @@ export function TecniciPanel({
   assigned,
   available,
   canManage,
+  statoCommessa,
+  nomeCommessa,
 }: Props) {
   const router = useRouter();
+  const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const [query, setQuery] = React.useState('');
   const [pendingId, setPendingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -70,6 +77,7 @@ export function TecniciPanel({
   }, [available, query]);
 
   const onAssign = async (userId: string) => {
+    if (!(await chiediConferma())) return;
     setPendingId(userId);
     setError(null);
     const r = await assegnaTecnico({ commessaId, userId });
