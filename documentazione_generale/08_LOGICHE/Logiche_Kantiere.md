@@ -506,6 +506,11 @@ cantiere, split di fine turno, Registra giornata, opzioni di partenza, spese da
 app, spese da ufficio, riassegnazione spesa, «Registra ore» dell'ufficio,
 pianificazione.
 
+**Due punti restano fuori di proposito**, e non è una svista: assegnare una
+**squadra** a un cantiere e collegargli una **sede** continuano a verificare solo
+il tenant. Non scrivono ore, spese o presenze: sono anagrafica, e impedirle su un
+lavoro finito darebbe fastidio senza proteggere niente.
+
 ### Chi può forzare, e chi no
 
 | Chi | Cosa succede |

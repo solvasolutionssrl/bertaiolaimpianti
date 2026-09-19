@@ -28,6 +28,8 @@ function messaggioErrore(code: string): string {
       return 'Hai già un turno aperto. Chiudilo o cambia cantiere.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
+    case 'CANTIERE_CHIUSO':
+      return 'Questo cantiere è chiuso: non si timbra più. Se ci hai lavorato, dillo all’ufficio.';
     case 'SEDE_NON_VALIDA':
       return 'Sede di partenza non valida. Riprova.';
     case 'SEDE_PREDEFINITA_MANCANTE':

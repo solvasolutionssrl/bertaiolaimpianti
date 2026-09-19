@@ -22,6 +22,8 @@ function messaggioErrore(code: string): string {
       return 'È lo stesso cantiere su cui stai già lavorando.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
+    case 'CANTIERE_CHIUSO':
+      return 'Quel cantiere è chiuso: non ci si può spostare. Se ci hai lavorato, dillo all’ufficio.';
     case 'ORA_NON_VALIDA':
       return 'Non è stato possibile registrare il cambio ora. Riprova.';
     case 'SEDE_PREDEFINITA_MANCANTE':

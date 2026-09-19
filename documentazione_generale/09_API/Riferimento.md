@@ -99,6 +99,7 @@ cambiare una regola senza rimettere mano ai client già installati.
   "contratto": 2, "prodotto": "Kommessa",
   "tenantId": "…", "sistema": "ergo",
   "modalita": "simulazione", "collaudoEsterni": ["26087"],
+  "esclusiEsterni": ["26090"],
   "risorse": {
     "lettura": ["ore","spese","viaggi","cantieri","dipendenti"],
     "scrittura": ["scritture","letture","esecuzioni"]
@@ -109,6 +110,13 @@ cambiare una regola senza rimettere mano ai client già installati.
   "vocabolari": { … }
 }
 ```
+
+`esclusiEsterni` è **la lista dei lavori che restano fuori anche a scritture aperte**:
+le loro righe arrivano con `inviabile: false` qualunque sia la `modalita`, e un annuncio
+su `POST /scritture` che li riguarda viene scartato dal server. È l'opposto di
+`collaudoEsterni`, che in `modalita: "simulazione"` è l'unico elenco che può uscire.
+Si dice qui in chiaro apposta: chi installa l'agente deve poter capire perché certe righe
+non si muovono, invece di cercare un guasto che non c'è.
 
 I vocabolari sono **chiusi**: se compare un valore che non c'è, stai parlando con una
 versione più nuova di Kommessa. Fermati e segnala, non inventare una traduzione — finisce

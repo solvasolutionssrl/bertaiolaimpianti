@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   STATI_CANTIERE_VIVI,
-  STATI_COMMESSA_VIVI,
+  STATI_COMMESSA_SU_MOBILE,
   cantiereImputabile,
-  cantiereSceglibile,
   commessaImputabile,
-  commessaSceglibile,
   commessaSoloLettura,
   commessaVisibileSuMobile,
   motivoCantiereChiuso,
 } from './stato-lavoro';
+
+/** Gli stati di una commessa su cui si lavora ancora. */
+const IN_LAVORAZIONE = ['bozza', 'aperta', 'in_corso', 'collaudo'] as const;
 
 describe('cantieri', () => {
   it('un cantiere chiuso non accetta piu\' registrazioni', () => {
@@ -36,12 +37,6 @@ describe('cantieri', () => {
     expect([...STATI_CANTIERE_VIVI]).toEqual(['attivo', 'sospeso']);
     for (const s of STATI_CANTIERE_VIVI) expect(cantiereImputabile(s)).toBe(true);
   });
-
-  it('sceglibile e imputabile dicono la stessa cosa', () => {
-    for (const s of ['attivo', 'sospeso', 'chiuso', null]) {
-      expect(cantiereSceglibile(s)).toBe(cantiereImputabile(s));
-    }
-  });
 });
 
 describe('commesse', () => {
@@ -53,7 +48,7 @@ describe('commesse', () => {
   });
 
   it('gli stati di lavorazione restano imputabili', () => {
-    for (const s of STATI_COMMESSA_VIVI) expect(commessaImputabile(s)).toBe(true);
+    for (const s of IN_LAVORAZIONE) expect(commessaImputabile(s)).toBe(true);
   });
 
   it('la differenza fra completata e archiviata sta nel telefono', () => {
@@ -64,11 +59,11 @@ describe('commesse', () => {
   });
 
   it('una commessa viva si vede sempre da telefono', () => {
-    for (const s of STATI_COMMESSA_VIVI) expect(commessaVisibileSuMobile(s)).toBe(true);
+    for (const s of IN_LAVORAZIONE) expect(commessaVisibileSuMobile(s)).toBe(true);
   });
 
   it('sola lettura e\' l\'esatto contrario di imputabile', () => {
-    for (const s of [...STATI_COMMESSA_VIVI, 'completata', 'archiviata', null]) {
+    for (const s of [...IN_LAVORAZIONE, 'completata', 'archiviata', null]) {
       expect(commessaSoloLettura(s)).toBe(!commessaImputabile(s));
     }
   });
@@ -79,10 +74,21 @@ describe('commesse', () => {
     expect(commessaVisibileSuMobile(null)).toBe(true);
   });
 
-  it('sceglibile e imputabile dicono la stessa cosa', () => {
-    for (const s of ['aperta', 'completata', 'archiviata', null]) {
-      expect(commessaSceglibile(s)).toBe(commessaImputabile(s));
+  it('la lista per gli elenchi mobile e\' la regola applicata, non un elenco a mano', () => {
+    // Il filtro delle pagine mobile e' lato query: serve una lista. Questa
+    // pero' si deriva dalla funzione, cosi' i due modi di dire la stessa
+    // regola non possono divergere.
+    expect([...STATI_COMMESSA_SU_MOBILE]).toEqual([
+      'bozza',
+      'aperta',
+      'in_corso',
+      'collaudo',
+      'completata',
+    ]);
+    for (const s of STATI_COMMESSA_SU_MOBILE) {
+      expect(commessaVisibileSuMobile(s)).toBe(true);
     }
+    expect(STATI_COMMESSA_SU_MOBILE).not.toContain('archiviata');
   });
 });
 

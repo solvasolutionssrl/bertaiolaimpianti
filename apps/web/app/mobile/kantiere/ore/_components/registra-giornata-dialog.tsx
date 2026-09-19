@@ -85,6 +85,8 @@ function messaggioErrore(code: string): string {
       return 'La registrazione giornata è disattivata dall’ufficio.';
     case 'CANTIERE_NON_VALIDO':
       return 'Un cantiere selezionato non è valido.';
+    case 'CANTIERE_CHIUSO':
+      return 'Uno dei cantieri scelti è chiuso: non accetta più ore. Se ci hai lavorato, dillo all’ufficio.';
     case 'SEDE_NON_VALIDA':
       return 'Una sede scelta non è ammessa per quel cantiere. Controlla partenza, rientro e tratte.';
     case 'SEDE_PREDEFINITA_MANCANTE':

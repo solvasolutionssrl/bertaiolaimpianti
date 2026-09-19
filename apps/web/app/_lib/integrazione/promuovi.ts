@@ -62,6 +62,8 @@ interface RigaStaging {
   categoria: string | null;
   indirizzo: string | null;
   attiva: boolean | null;
+  /** Quando il gestionale ci ha mandato QUESTA riga l'ultima volta. */
+  letto_at: string | null;
 }
 
 export async function promuoviDalGestionale(
@@ -101,7 +103,9 @@ export async function promuoviDalGestionale(
 
   const { data: stagingRaw } = await service
     .from('integrazione_staging' as never)
-    .select('external_id, nome, external_codice, cliente_nome, categoria, indirizzo, attiva')
+    .select(
+      'external_id, nome, external_codice, cliente_nome, categoria, indirizzo, attiva, letto_at',
+    )
     .eq('tenant_id', tenantId)
     .eq('sistema', sistema)
     .eq('entita', 'commessa');
@@ -235,29 +239,72 @@ export async function promuoviDalGestionale(
     }
   }
 
+  // Il deposito non si svuota mai: si aggiorna riga per riga. Quindi contiene
+  // anche commesse che il gestionale NON ha nominato in questo giro, con il
+  // valore congelato all'ultima volta che le ha mandate. Senza questo filtro un
+  // cantiere riaperto a mano dall'ufficio verrebbe richiuso alla prima
+  // esecuzione successiva, da un dato vecchio, e nessuno capirebbe perche'.
+  // Si considerano "di questo giro" le righe lette entro 6 ore dall'ultima.
+  const letturaPiuRecente = staging.reduce(
+    (max, s) => (s.letto_at && s.letto_at > max ? s.letto_at : max),
+    '',
+  );
+  const sogliaFreschezza = letturaPiuRecente
+    ? new Date(Date.parse(letturaPiuRecente) - 6 * 60 * 60 * 1000).toISOString()
+    : null;
+
   const daChiudere: string[] = [];
   const daRiaprire: string[] = [];
   for (const s of staging) {
     // `attiva` assente = il gestionale non si esprime: non si tocca niente.
     if (s.attiva === null || s.attiva === undefined) continue;
-    const nostro = nostroPerExternal.get(s.external_id);
+    // Riga vecchia = non nominata in questo giro: vale come silenzio.
+    if (sogliaFreschezza && (!s.letto_at || s.letto_at < sogliaFreschezza)) continue;
+    // L'aggancio prova ENTRAMBE le chiavi: `codice_commessa` da noi contiene
+    // `external_codice`, ma la mappatura e' su `external_id`. Sui gestionali
+    // dove i due valori differiscono, cercarne uno solo non trova mai niente.
+    const nostro =
+      nostroPerExternal.get(s.external_id) ??
+      (s.external_codice ? nostroPerExternal.get(s.external_codice.trim()) : undefined);
     if (!nostro) continue;
     if (s.attiva === false && nostro.stato !== 'chiuso') daChiudere.push(nostro.id);
     if (s.attiva === true && nostro.stato === 'chiuso') daRiaprire.push(nostro.id);
   }
 
-  /** A gruppi di 100: il primo giro puo' portarne centinaia in una volta. */
-  async function cambiaStato(ids: string[], stato: 'chiuso' | 'attivo'): Promise<void> {
+  /**
+   * A gruppi di 100: il primo giro puo' portarne centinaia in una volta.
+   *
+   * Torna quanti ne ha cambiati **davvero**. Contare le intenzioni invece delle
+   * righe scritte farebbe dire al diario «chiusi: 186» anche se non ne fosse
+   * passato uno, e quel numero serve proprio a fidarsi senza andare a guardare.
+   */
+  async function cambiaStato(ids: string[], stato: 'chiuso' | 'attivo'): Promise<number> {
+    let fatti = 0;
     for (let i = 0; i < ids.length; i += 100) {
-      await service
+      const { data, error } = await service
         .from('cantieri' as never)
         .update({ stato } as never)
         .in('id', ids.slice(i, i + 100))
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .select('id');
+      if (error) {
+        // Non si interrompe il giro per un gruppo andato storto: gli altri
+        // cambi sono comunque giusti. Lo scarto fra intenzione e conteggio e'
+        // il segnale che qualcosa non e' passato.
+        console.error('[promuovi] cambio stato non riuscito', {
+          tenantId,
+          stato,
+          quanti: ids.slice(i, i + 100).length,
+          errore: error.message,
+        });
+        continue;
+      }
+      fatti += ((data ?? []) as unknown[]).length;
     }
+    return fatti;
   }
-  await cambiaStato(daChiudere, 'chiuso');
-  await cambiaStato(daRiaprire, 'attivo');
+  const chiusi = await cambiaStato(daChiudere, 'chiuso');
+  const riaperti = await cambiaStato(daRiaprire, 'attivo');
 
   // Il freno `crea_cantieri_automatico` sta QUI e non piu' sopra: spegnere la
   // creazione dei cantieri nuovi non deve spegnere anche l'allineamento dello
@@ -271,8 +318,8 @@ export async function promuoviDalGestionale(
       categorieDaSmistare: esito.daSmistare.length,
       cantieriCreati: 0,
       cantieriSaltati: [],
-      cantieriChiusi: daChiudere.length,
-      cantieriRiaperti: daRiaprire.length,
+      cantieriChiusi: chiusi,
+      cantieriRiaperti: riaperti,
     };
   }
 
@@ -287,8 +334,8 @@ export async function promuoviDalGestionale(
       categorieDaSmistare: esito.daSmistare.length,
       cantieriCreati: 0,
       cantieriSaltati: [],
-      cantieriChiusi: daChiudere.length,
-      cantieriRiaperti: daRiaprire.length,
+      cantieriChiusi: chiusi,
+      cantieriRiaperti: riaperti,
     };
   }
 
@@ -336,7 +383,7 @@ export async function promuoviDalGestionale(
       saltati.push({
         externalId: s.external_id,
         motivo: error?.message.includes('duplicate')
-          ? `codice "${codice}" gia' usato`
+          ? `codice "${codice}" già usato`
           : (error?.message ?? 'creazione fallita'),
       });
       continue;
@@ -374,8 +421,8 @@ export async function promuoviDalGestionale(
     categorieDaSmistare: esito.daSmistare.length,
     cantieriCreati: creati,
     cantieriSaltati: saltati,
-    cantieriChiusi: daChiudere.length,
-    cantieriRiaperti: daRiaprire.length,
+    cantieriChiusi: chiusi,
+    cantieriRiaperti: riaperti,
   };
 }
 

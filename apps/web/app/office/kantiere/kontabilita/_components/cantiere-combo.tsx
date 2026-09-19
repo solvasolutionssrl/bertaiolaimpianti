@@ -7,9 +7,18 @@ import { Check, ChevronDown, Loader2, MapPin, Search } from 'lucide-react';
 import { Input, cn } from '@kommessa/ui';
 import { aggiornaSpesa } from '@/app/_actions/kantiere-spese';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
-import { useConfirm } from '@/app/_components/confirm-provider';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
 export type CantiereOption = { id: string; nome: string; stato?: string | null };
+
+/** I codici che torna `aggiornaSpesa`, detti in italiano. */
+const MESSAGGI: Record<string, string> = {
+  DATI_NON_VALIDI: 'I dati della spesa non sono validi.',
+  NON_AUTORIZZATO: 'Non hai i permessi per assegnare questa spesa.',
+  NON_TROVATA: 'La spesa non esiste più.',
+  CANTIERE_NON_VALIDO: 'Il cantiere scelto non è di questa azienda.',
+  CANTIERE_CHIUSO: 'Il cantiere è chiuso: non accetta più registrazioni.',
+};
 
 interface Props {
   spesaId: string;
@@ -32,6 +41,7 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
   const [query, setQuery] = React.useState('');
   const [pending, startTransition] = React.useTransition();
   const chiediConferma = useConfirm();
+  const mostraAvviso = useAlert();
   const [pos, setPos] = React.useState<{ top: number; left: number; sopra: boolean } | null>(null);
   const btnRef = React.useRef<HTMLButtonElement>(null);
   const popRef = React.useRef<HTMLDivElement>(null);
@@ -115,10 +125,19 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
           cantiereId: nuovoId,
           ...(forzato ? { forzato: true } : {}),
         });
-        if (res.ok) router.refresh();
+        if (res.ok) {
+          router.refresh();
+          return;
+        }
+        // Senza questo ramo un rifiuto del server era un clic a vuoto: la riga
+        // restava com'era e nessuno diceva perche'.
+        await mostraAvviso({
+          title: 'Spesa non assegnata',
+          body: MESSAGGI[res.error] ?? res.error,
+        });
       });
     },
-    [cantiereId, spesaId, router, cantieri, chiediConferma],
+    [cantiereId, spesaId, router, cantieri, chiediConferma, mostraAvviso],
   );
 
   return (

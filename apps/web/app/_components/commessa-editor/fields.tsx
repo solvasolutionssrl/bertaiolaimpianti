@@ -302,12 +302,23 @@ export function TipologieSection({
   voci,
   presets,
   variant = 'dialog',
+  statoCommessa,
+  nomeCommessa,
 }: {
   commessaId: string;
   vociPresenti: number[];
   voci: TipologiaVoce[];
   presets: TipologiaPreset[];
   variant?: 'dialog' | 'sheet';
+  /**
+   * Lo stato **salvato** della commessa, non quello scelto nella pagina: le
+   * tipologie si scrivono subito, con una loro azione, mentre il resto
+   * dell'editor e' ancora in bozza. Senza questo, dall'editor si creavano
+   * cartelle su Nextcloud di una commessa chiusa senza che nessuno chiedesse
+   * niente, mentre lo stesso gesto altrove la conferma la chiede.
+   */
+  statoCommessa?: string | null;
+  nomeCommessa?: string | null;
 }) {
   const byId = React.useMemo(() => new Map(voci.map((v) => [v.id, v])), [voci]);
   return (
@@ -323,6 +334,8 @@ export function TipologieSection({
           voci={voci}
           presets={presets}
           variant={variant}
+          statoCommessa={statoCommessa}
+          nomeCommessa={nomeCommessa}
         />
       </div>
       <div className="flex flex-wrap gap-1.5 text-xs">

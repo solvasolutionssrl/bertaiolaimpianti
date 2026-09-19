@@ -39,10 +39,13 @@
  * le completate e le archiviate): qui diventa la regola di tutti.
  */
 
+import type { StatoCommessa } from './types/domain';
+
 // ---------------------------------------------------------------------------
 // Cantieri
 // ---------------------------------------------------------------------------
 
+/** Il vocabolario degli stati di un cantiere: tipa la whitelist qui sotto. */
 export type StatoCantiere = 'attivo' | 'sospeso' | 'chiuso';
 
 /** Gli stati che un cantiere vivo puo' avere: la whitelist per gli elenchi. */
@@ -59,34 +62,20 @@ export function cantiereImputabile(stato: string | null | undefined): boolean {
   return stato !== 'chiuso';
 }
 
-/** Va mostrato nei punti di scelta (picker, selettori, ricerca)? */
-export function cantiereSceglibile(stato: string | null | undefined): boolean {
-  return cantiereImputabile(stato);
-}
-
 // ---------------------------------------------------------------------------
 // Commesse
 // ---------------------------------------------------------------------------
-
-export type StatoCommessa =
-  | 'bozza'
-  | 'aperta'
-  | 'in_corso'
-  | 'collaudo'
-  | 'completata'
-  | 'archiviata';
-
-/** Gli stati di una commessa su cui si lavora ancora. */
-export const STATI_COMMESSA_VIVI: readonly StatoCommessa[] = [
-  'bozza',
-  'aperta',
-  'in_corso',
-  'collaudo',
-];
+//
+// Il vocabolario degli stati sta in `./types/domain` (`StatoCommessa`) e non si
+// ricopia qui: due elenchi della stessa cosa divergono al primo stato nuovo.
 
 /**
- * Si puo' ancora attaccare qualcosa a questa commessa (foto, ore, todo,
- * riunioni, documenti)? No da `completata` in poi.
+ * La commessa e' ancora in lavorazione?
+ *
+ * ⚠️ **Non e' un permesso.** Su una commessa chiusa si aggiunge lo stesso (vedi
+ * l'intestazione del file): questa risponde a «com'e' messa», e serve alla UI
+ * per decidere se chiedere conferma prima di scrivere. Leggerla come un divieto
+ * e' esattamente l'errore che e' costato un'ora di upload bloccati.
  */
 export function commessaImputabile(stato: string | null | undefined): boolean {
   return stato !== 'completata' && stato !== 'archiviata';
@@ -112,20 +101,30 @@ export function commessaVisibileSuMobile(stato: string | null | undefined): bool
   return stato !== 'archiviata';
 }
 
-/** Va proposta nei punti di scelta (selettori, ricerca, ⌘K)? */
-export function commessaSceglibile(stato: string | null | undefined): boolean {
-  return commessaImputabile(stato);
-}
+/** Tutti gli stati, nell'ordine del ciclo di vita: serve a derivare le liste. */
+const STATI_COMMESSA: readonly StatoCommessa[] = [
+  'bozza',
+  'aperta',
+  'in_corso',
+  'collaudo',
+  'completata',
+  'archiviata',
+];
+
+/**
+ * Gli stati che il telefono mostra negli elenchi.
+ *
+ * E' `commessaVisibileSuMobile` applicata al vocabolario, non un elenco battuto
+ * a mano: il filtro degli elenchi mobile e' lato query — a PostgREST si passa
+ * una lista, non una funzione — e la stessa lista ricopiata in due pagine e' il
+ * modo classico di far divergere la regola dal codice che la applica.
+ */
+export const STATI_COMMESSA_SU_MOBILE: readonly StatoCommessa[] =
+  STATI_COMMESSA.filter(commessaVisibileSuMobile);
 
 // ---------------------------------------------------------------------------
 // Messaggi
 // ---------------------------------------------------------------------------
-
-/**
- * I codici che le azioni restituiscono. Il testo per l'utente sta nella UI,
- * qui c'e' solo il motivo, perche' lo stesso codice serve a chi indaga un log.
- */
-export const CANTIERE_CHIUSO = 'CANTIERE_CHIUSO' as const;
 
 /**
  * Il perche' del rifiuto, in italiano, pronto da mostrare.

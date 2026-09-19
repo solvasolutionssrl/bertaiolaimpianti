@@ -129,6 +129,7 @@ export default async function ModificaCommessaPage({
 
       <CommessaEditClient
         commessaId={params.id}
+        codiceInterno={c.codice_interno as string}
         nomeCartella={(c.nome_cartella as string | null) ?? ''}
         initial={initial}
         responsabili={responsabili}

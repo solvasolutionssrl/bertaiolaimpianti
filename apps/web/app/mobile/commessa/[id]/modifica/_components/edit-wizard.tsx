@@ -151,6 +151,10 @@ export function EditWizardMobile({
               voci={voci}
               presets={presets}
               variant="sheet"
+              // Lo stato salvato, non `value.stato`: le tipologie si scrivono
+              // subito, mentre il wizard e' ancora da confermare.
+              statoCommessa={initial.stato}
+              nomeCommessa={codiceInterno}
             />
           </section>
         ) : null}

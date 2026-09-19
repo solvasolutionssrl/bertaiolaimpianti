@@ -26,6 +26,7 @@ import { useOnline } from '../../../../../_lib/use-online';
 
 export function CommessaEditClient({
   commessaId,
+  codiceInterno,
   nomeCartella,
   initial,
   responsabili,
@@ -34,6 +35,7 @@ export function CommessaEditClient({
   presets,
 }: {
   commessaId: string;
+  codiceInterno: string;
   nomeCartella: string;
   initial: CommessaEditorValue;
   responsabili: ResponsabileOption[];
@@ -102,6 +104,10 @@ export function CommessaEditClient({
           voci={voci}
           presets={presets}
           variant="dialog"
+          // Lo stato salvato, non `value.stato`: le tipologie si scrivono
+          // subito, mentre il resto della pagina e' ancora da salvare.
+          statoCommessa={initial.stato}
+          nomeCommessa={codiceInterno}
         />
       </section>
 

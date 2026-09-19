@@ -209,6 +209,11 @@ function messaggioErrore(code: string): string {
       return 'Errore nella divisione. Ricarica la pagina e riprova.';
     case 'CANTIERE_NON_VALIDO':
       return 'Un cantiere selezionato non è valido. Riprova.';
+    // Difensivo: chiudere un turno gia' aperto e' sempre permesso, anche su un
+    // cantiere chiuso nel frattempo. Se il codice arriva qui, qualcosa e'
+    // cambiato sotto i piedi e la pagina va ricaricata.
+    case 'CANTIERE_CHIUSO':
+      return 'Un cantiere della giornata è stato chiuso nel frattempo. Ricarica la pagina e riprova.';
     default:
       return 'Operazione non riuscita. Riprova.';
   }

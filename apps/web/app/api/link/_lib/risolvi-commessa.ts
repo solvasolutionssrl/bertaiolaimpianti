@@ -57,7 +57,12 @@ export async function risolviCommessa(
       .select(CAMPI)
       .eq('tenant_id', tenantId)
       .order('codice_interno', { ascending: false, nullsFirst: false })
-      .limit(300);
+      // Il primo giro guarda solo le vive e 300 bastano. Il secondo pesca fra
+      // TUTTE, chiuse comprese, e li' 300 sarebbero pochi: su un archivio di
+      // anni una commessa chiusa vecchia resterebbe fuori e il comando iOS
+      // direbbe «non trovata», cioe' il difetto che questo giro deve chiudere.
+      // 999 e' il tetto di una pagina PostgREST (chiederne di piu' non serve).
+      .limit(soloAperte ? 300 : 999);
     if (soloAperte) q = q.not('stato', 'in', '(archiviata,completata)');
 
     const { data } = await q;

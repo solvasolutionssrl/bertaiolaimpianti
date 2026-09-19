@@ -490,7 +490,14 @@ function BloccoDialog({
           setConflitti(res.conflitti);
           return;
         }
-        await alert({ title: 'Non salvato', body: res.error });
+        await alert({
+        title: 'Non salvato',
+        // Il codice non si mostra: a leggerlo e' una persona.
+        body:
+          res.error === 'CANTIERE_CHIUSO'
+            ? 'Il cantiere è chiuso: non ci si pianifica sopra. Se il lavoro riparte, riaprilo dalla sua scheda.'
+            : res.error,
+      });
         return;
       }
 
@@ -504,7 +511,14 @@ function BloccoDialog({
         setConflitti(res.conflitti);
         return;
       }
-      await alert({ title: 'Non salvato', body: res.error });
+      await alert({
+        title: 'Non salvato',
+        // Il codice non si mostra: a leggerlo e' una persona.
+        body:
+          res.error === 'CANTIERE_CHIUSO'
+            ? 'Il cantiere è chiuso: non ci si pianifica sopra. Se il lavoro riparte, riaprilo dalla sua scheda.'
+            : res.error,
+      });
     });
   };
 

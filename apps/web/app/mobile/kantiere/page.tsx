@@ -4,6 +4,7 @@ import { QrCode, Clock, MapPin, HardHat, LayoutDashboard, ReceiptText, Users } f
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { STATI_CANTIERE_VIVI } from '@kommessa/api/stato-lavoro';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 
@@ -81,8 +82,10 @@ export default async function KantiereHomePage() {
       null;
   }
 
-  // Cantieri attivi recenti (lettura, max 4). Visibilità: "avvio libero" attivo
-  // (default) → tecnici vedono tutto; altrimenti solo i timbrabili (QR attivo).
+  // Cantieri recenti (lettura, max 4). Vivi = attivi + sospesi, come in tutti
+  // gli altri elenchi: un sospeso e' una pausa, non una fine, e chi ci lavora
+  // comunque deve ritrovarlo qui. Visibilità: "avvio libero" attivo (default)
+  // → tecnici vedono tutto; altrimenti solo i timbrabili (QR attivo).
   const { avvioLibero } = await leggiImpostazioniTurno(supabase, ctx.tenantId);
   const vedeTutto = vedeTuttiICantieri(ctx.role) || avvioLibero;
   const visibiliIds = vedeTutto ? null : [...(await cantieriVisibiliTecnicoIds(ctx.tenantId))];
@@ -98,7 +101,7 @@ export default async function KantiereHomePage() {
       .from('cantieri' as never)
       .select('id, nome, codice, codice_commessa')
       .eq('tenant_id', ctx.tenantId)
-      .eq('stato', 'attivo');
+      .in('stato', STATI_CANTIERE_VIVI as unknown as string[]);
     if (visibiliIds) query = query.in('id', visibiliIds);
     const { data: cantieriRaw } = await query
       .order('nome', { ascending: true })
@@ -256,7 +259,7 @@ export default async function KantiereHomePage() {
       {cantieri.length > 0 ? (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Cantieri attivi
+            Cantieri recenti
           </p>
           <div className="space-y-2">
             {cantieri.map((c) => (

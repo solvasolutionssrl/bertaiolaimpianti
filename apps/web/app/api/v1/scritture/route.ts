@@ -4,6 +4,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 
 import {
   CONTRATTO,
+  type ContestoApi,
   autenticaApi,
   erroreApi,
   impagina,
@@ -51,6 +52,69 @@ interface ScritturaIn {
   externalRiferimento?: unknown;
   /** Messaggio leggibile in ufficio. Niente tracce di stack. */
   errore?: string | null;
+}
+
+/** Dove sta il cantiere, per ogni risorsa che si puo' annunciare. */
+const TABELLA_PER_RISORSA: Record<string, string> = {
+  ore: 'rapportino_righe',
+  spese: 'spese',
+  viaggi: 'timbratura_viaggio',
+};
+
+type RigaRegistro = { risorsa: string; risorsa_id: string };
+
+/**
+ * Toglie dall'annuncio le righe che appartengono a un lavoro tenuto fuori.
+ *
+ * Non filtra per tenant sulle tabelle di dettaglio: non serve, perche' i
+ * cantieri esclusi sono gia' letti nello scope del tenant e un id di un altro
+ * cliente non puo' combaciare. Al massimo si sbaglia lasciando passare, mai
+ * leggendo dati altrui.
+ */
+async function togliEsclusi<T extends RigaRegistro>(
+  service: ReturnType<typeof createServiceSupabase>,
+  ctx: ContestoApi,
+  righe: T[],
+  scartate: Array<{ risorsaId: string; motivo: string }>,
+): Promise<T[]> {
+  const { data: mapRaw } = await service
+    .from('integrazione_mappature' as never)
+    .select('entita_id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('sistema', ctx.sistema!)
+    .eq('entita', 'cantiere')
+    .in('external_id', ctx.esclusiEsterni);
+
+  const cantieriEsclusi = new Set(
+    ((mapRaw ?? []) as unknown as { entita_id: string }[]).map((m) => m.entita_id),
+  );
+  if (cantieriEsclusi.size === 0) return righe;
+
+  const cantierePerRiga = new Map<string, string | null>();
+  for (const [risorsa, tabella] of Object.entries(TABELLA_PER_RISORSA)) {
+    const ids = righe.filter((r) => r.risorsa === risorsa).map((r) => r.risorsa_id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data } = await service
+        .from(tabella as never)
+        .select('id, cantiere_id')
+        .in('id', ids.slice(i, i + 100));
+      for (const x of (data ?? []) as unknown as { id: string; cantiere_id: string | null }[]) {
+        cantierePerRiga.set(x.id, x.cantiere_id);
+      }
+    }
+  }
+
+  return righe.filter((r) => {
+    const cantiere = cantierePerRiga.get(r.risorsa_id);
+    if (cantiere && cantieriEsclusi.has(cantiere)) {
+      scartate.push({
+        risorsaId: r.risorsa_id,
+        motivo: 'lavoro tenuto fuori dalle scritture',
+      });
+      return false;
+    }
+    return true;
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -114,19 +178,28 @@ export async function POST(request: NextRequest) {
       registrato_at: new Date().toISOString(),
     }));
 
-  if (righe.length === 0) {
+  const service = createServiceSupabase();
+
+  // I lavori tenuti fuori non si registrano, nemmeno se l'agente ci prova.
+  // Senza questo `esclusi_esterni` resterebbe solo un'etichetta: `inviabile:
+  // false` e' un consiglio dentro la risposta, e un agente che non lo guarda
+  // scriverebbe lo stesso su un gestionale che non lascia cancellare. Qui il
+  // rifiuto e' nostro, e non dipende da come e' fatto l'agente.
+  const ammesse = ctx.esclusiEsterni.length
+    ? await togliEsclusi(service, ctx, righe, scartate)
+    : righe;
+
+  if (ammesse.length === 0) {
     return erroreApi(400, 'nessuna_scrittura_valida', 'Nessuna riga utilizzabile.', {
       scartate,
     });
   }
-
-  const service = createServiceSupabase();
   // `onConflict` sulla chiave naturale: riannunciare la stessa scrittura non
   // crea un doppione. E' voluto — un agente che riparte dopo un guasto deve
   // poter ripetere gli annunci senza pensarci.
   const { data, error } = await service
     .from('integrazione_scritture' as never)
-    .upsert(righe as never, {
+    .upsert(ammesse as never, {
       onConflict: 'tenant_id,sistema,risorsa,risorsa_id,variante',
     })
     .select('id');

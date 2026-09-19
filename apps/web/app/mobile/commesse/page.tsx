@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { createServerSupabase } from '@kommessa/api/server';
 import type { StatoCommessa } from '@kommessa/api/types';
 import { getMobileShell } from '@kommessa/api/types';
+import { STATI_COMMESSA_SU_MOBILE } from '@kommessa/api/stato-lavoro';
 
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
@@ -37,8 +38,9 @@ export default async function MobileCommessePage() {
       `,
     )
     // Le completate restano consultabili anche dal telefono: il lavoro e'
-    // finito ma la scheda si guarda ancora. Fuori solo le archiviate.
-    .in('stato', ['aperta', 'in_corso', 'collaudo', 'bozza', 'completata'])
+    // finito ma la scheda si guarda ancora. Fuori solo le archiviate — la
+    // regola sta in `commessaVisibileSuMobile`, qui se ne usa la lista.
+    .in('stato', [...STATI_COMMESSA_SU_MOBILE])
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
     .limit(120);

@@ -39,10 +39,9 @@ type Supa = ReturnType<typeof createServerSupabase> | ReturnType<typeof createSe
  * codice c'e' davvero, e i chiamanti non devono difendersi da un `undefined`
  * che non puo' esistere.
  */
-export type EsitoCantiere =
+type EsitoCantiere =
   | {
       ok: true;
-      nome?: string;
       /** La commessa collegata, se il chiamante la stava gia' cercando. */
       commessaId?: string | null;
     }
@@ -52,7 +51,6 @@ export type EsitoCantiere =
       error: string;
       /** Il motivo in italiano, pronto da mostrare quando serve il dettaglio. */
       motivo?: string;
-      nome?: string;
     };
 
 interface RigaCantiere {
@@ -89,11 +87,10 @@ export async function cantiereScrivibile(
       ok: false,
       error: 'CANTIERE_CHIUSO',
       motivo: motivoCantiereChiuso(riga.nome),
-      nome: riga.nome ?? undefined,
     };
   }
 
-  return { ok: true, nome: riga.nome ?? undefined, commessaId: riga.commessa_id ?? null };
+  return { ok: true, commessaId: riga.commessa_id ?? null };
 }
 
 /**
@@ -128,7 +125,6 @@ export async function cantieriScrivibili(
       ok: false,
       error: 'CANTIERE_CHIUSO',
       motivo: motivoCantiereChiuso(chiuso.nome),
-      nome: chiuso.nome ?? undefined,
     };
   }
 

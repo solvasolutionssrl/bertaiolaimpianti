@@ -107,7 +107,9 @@ function messaggioErrore(code: string): string {
     case 'NON_AUTENTICATO':
       return 'Devi essere autenticato per timbrare.';
     case 'MODULO_OFF':
-      return 'Il modulo Kantiere non e abilitato per questo spazio.';
+      return 'Il modulo Kantiere non è abilitato per questo spazio.';
+    case 'CANTIERE_CHIUSO':
+      return 'Questo cantiere è chiuso: non si timbra più. Se ci hai lavorato, dillo all’ufficio.';
     case 'QR_NON_VALIDO':
       return 'QR non valido o revocato.';
     case 'QR_ALTRO_TENANT':

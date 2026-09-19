@@ -133,8 +133,11 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   // tutti i dipendenti del tenant.
   // Qui servono TUTTI i cantieri, chiusi compresi: una spesa di sei mesi fa sta
   // su un lavoro che intanto e' finito, e l'ufficio deve poterla filtrare e
-  // leggerne il nome. A vietare la riassegnazione su un cantiere chiuso pensa
-  // il menu della tabella, che riceve lo stato e lo usa.
+  // leggerne il nome. Riassegnare su un cantiere chiuso resta possibile — e'
+  // l'ufficio, da computer: il menu della tabella riceve lo stato, mette i
+  // chiusi in fondo marcandoli «chiuso» e chiede conferma prima di scrivere.
+  // Il rifiuto secco lo fa il server, e la conferma e' cio' che lo scavalca
+  // (`forzato: true`).
   const { data: tuttiCantieri } = (await supabase
     .from('cantieri' as never)
     .select('id, nome, codice, stato')

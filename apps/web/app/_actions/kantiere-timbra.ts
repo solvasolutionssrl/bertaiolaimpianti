@@ -540,11 +540,14 @@ async function terminaConSplit(
     return { ok: false, error: 'SPLIT_PRIMO_CANTIERE' };
   }
 
-  // 3. Tutti i cantieri appartengono al tenant e accettano scritture. Basta
-  //    uno chiuso per fermare tutto: meglio non partire che scrivere meta'
-  //    giornata e lasciare l'altra meta' per strada.
+  // 3. Tutti i cantieri appartengono al tenant. Lo stato qui NON si guarda, ed
+  //    e' voluto: questa e' la CHIUSURA di una giornata gia' lavorata. Se nel
+  //    frattempo uno dei cantieri e' stato chiuso (dall'ufficio o dal giro
+  //    notturno del gestionale), il tecnico si ritroverebbe a fine turno con la
+  //    giornata bloccata e nessun modo di uscire. Il divieto sta sull'apertura,
+  //    mai sull'uscita: e' la regola scritta in `lavoro-aperto.ts`.
   const ids = [...new Set(opts.split.map((s) => s.cantiereId))];
-  const cc = await cantieriScrivibili(supabase, ids, tenantId);
+  const cc = await cantieriScrivibili(supabase, ids, tenantId, { forzato: true });
   if (!cc.ok) return { ok: false, error: cc.error };
 
   // 4. Sintesi segmenti (pura, unit-testata).

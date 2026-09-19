@@ -81,6 +81,14 @@ non può stare solo su una macchina che può morire.
 `inviabile` non è una proprietà del dato: è una decisione di Kommessa, che dipende dalla
 configurazione. Chi legge non deve dedurre nulla — glielo diciamo riga per riga.
 
+Le sicure sono due, e `GET /info` le dichiara entrambe. `modalita: "simulazione"` con
+`collaudo_esterni` è **temporanea**: si legge tutto, esce solo il lavoro di prova, e si
+toglie una volta sola quando il cliente ha visto. `esclusi_esterni` è **permanente**: sono
+i lavori che restano fuori anche a scritture aperte, e le loro righe arrivano sempre con
+`inviabile: false`. Il rifiuto però non sta solo nell'etichetta — `POST /scritture` scarta
+gli annunci che li riguardano — perché su un gestionale che non lascia cancellare non si
+può far dipendere il danno dal fatto che l'agente legga il consiglio.
+
 Il valore prudente è sempre il predefinito. Se la configurazione manca o è storta, non si
 scrive niente da nessuna parte.
 

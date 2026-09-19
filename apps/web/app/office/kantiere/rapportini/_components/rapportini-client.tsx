@@ -481,7 +481,12 @@ export function RapportiniClient({
         ...(forzato ? { forzato: true } : {}),
       });
       if (!res.ok) {
-        setRegError(res.error);
+        // I codici non si mostrano a schermo: a leggerli e' una persona.
+        setRegError(
+          res.error === 'CANTIERE_CHIUSO'
+            ? 'Il cantiere è chiuso. Riprova: ti verrà chiesta conferma.'
+            : res.error,
+        );
         return;
       }
       setRegistraOpen(false);

@@ -22,6 +22,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { StatoLed } from '@kommessa/ui';
 import type { StatoCommessa } from '@kommessa/api/types';
 import { getMobileShell } from '@kommessa/api/types';
+import { STATI_COMMESSA_SU_MOBILE } from '@kommessa/api/stato-lavoro';
 
 import { guardMobile } from './_lib/guard';
 import { tenantHasModule } from '../_lib/modules';
@@ -86,8 +87,10 @@ async function GestioneDashboard({
       `,
     )
     // Le completate restano: per il tecnico questa lista e' l'unico modo di
-    // riaprire da telefono il lavoro di ieri. Fuori solo le archiviate.
-    .in('stato', ['aperta', 'in_corso', 'collaudo', 'completata'])
+    // riaprire da telefono il lavoro di ieri. Fuori le archiviate (la regola
+    // sta in `commessaVisibileSuMobile`) e le bozze, che hanno la loro
+    // sezione qui sotto.
+    .in('stato', STATI_COMMESSA_SU_MOBILE.filter((s) => s !== 'bozza'))
     .order('data_apertura', { ascending: false })
     .order('codice_interno', { ascending: false })
     .limit(5);
@@ -233,8 +236,10 @@ async function CampoOggi({
       )
       .in('id', assignedIds)
       // Le completate restano: per il tecnico questa lista e' l'unico modo di
-    // riaprire da telefono il lavoro di ieri. Fuori solo le archiviate.
-    .in('stato', ['aperta', 'in_corso', 'collaudo', 'completata'])
+      // riaprire da telefono il lavoro di ieri. Fuori le archiviate (la regola
+      // sta in `commessaVisibileSuMobile`) e le bozze, che non sono lavoro
+      // assegnato.
+      .in('stato', STATI_COMMESSA_SU_MOBILE.filter((s) => s !== 'bozza'))
       .order('data_apertura', { ascending: false })
       .order('codice_interno', { ascending: false })
       .limit(30),
