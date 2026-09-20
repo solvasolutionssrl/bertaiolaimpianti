@@ -5,7 +5,7 @@ import { ChevronDown, FileDown, Loader2, Users } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 import { NOMI_GIORNO_BREVI, settimanaISO, slugPianificazione } from '@kommessa/api/pianificazione';
 import type { BloccoView, AssenzaView } from '../_lib/query';
-import type { DipRow, CantRow, GruppoLite } from './pianificazione-client';
+import type { DipRow, CantRow, MezzoRow, GruppoLite } from './pianificazione-client';
 import {
   esportaPianificazionePDF,
   type RigaPdf,
@@ -42,6 +42,7 @@ export function ExportMenu({
   giorni,
   dipendenti,
   cantieri,
+  mezzi,
   blocchi,
   assenze,
   gruppi,
@@ -56,6 +57,7 @@ export function ExportMenu({
   giorni: string[];
   dipendenti: DipRow[];
   cantieri: CantRow[];
+  mezzi: MezzoRow[];
   blocchi: BloccoView[];
   assenze: AssenzaView[];
   gruppi: GruppoLite[];
@@ -86,6 +88,13 @@ export function ExportMenu({
     return m;
   }, [cantieri]);
 
+  // Sul blocco i mezzi sono id: per stampare la targa serve tradurli.
+  const targaMap = React.useMemo(() => {
+    const m = new Map<string, string>();
+    for (const x of mezzi) m.set(x.id, x.targa);
+    return m;
+  }, [mezzi]);
+
   const perCella = React.useMemo(() => {
     const m = new Map<string, BloccoView[]>();
     for (const b of blocchi)
@@ -112,20 +121,28 @@ export function ExportMenu({
   const rangeLabel = `${fmtGiornoLungo(giorni[0]!)} · ${fmtGiornoLungo(giorni[6]!, true)}`;
 
   function voceDaBlocco(b: BloccoView): VocePdf {
+    // Mezzi e nota valgono per ogni tipo di blocco: anche una formazione ha un
+    // furgone assegnato e un'istruzione dell'ufficio.
+    const targhe = b.mezzi.map((id) => targaMap.get(id)).filter((t): t is string => !!t);
+    const comune = {
+      bozza: b.stato === 'bozza',
+      ...(targhe.length > 0 ? { mezzi: targhe } : {}),
+      ...(b.note?.trim() ? { nota: b.note.trim() } : {}),
+    };
     if (b.tipo === 'cantiere') {
       const cod = b.cantiereId ? commessaMap.get(b.cantiereId) ?? null : null;
       return {
         testo: b.cantiereNome ?? 'Cantiere',
         sub: [cod, fasciaMarker(b)].filter(Boolean).join(' · '),
         tipo: 'cantiere',
-        bozza: b.stato === 'bozza',
+        ...comune,
       };
     }
     return {
       testo: b.titolo ?? (b.tipo === 'formazione' ? 'Formazione' : 'Evento'),
       sub: fasciaMarker(b),
       tipo: b.tipo,
-      bozza: b.stato === 'bozza',
+      ...comune,
     };
   }
 

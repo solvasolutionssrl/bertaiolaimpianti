@@ -22,6 +22,17 @@ export interface VocePdf {
   sub?: string;
   tipo: TipoVocePdf;
   bozza?: boolean;
+  /**
+   * Le targhe dei mezzi assegnati. Il foglio serve a chi parte la mattina:
+   * senza la targa deve chiedere all'ufficio quale furgone prendere.
+   */
+  mezzi?: string[];
+  /**
+   * La nota scritta dall'ufficio sul blocco. E' un'istruzione operativa
+   * («misure passerelle interne al locale per acquisto»), non un promemoria
+   * interno: si stampa per intero, mai tagliata.
+   */
+  nota?: string;
 }
 
 export interface RigaPdf {
@@ -61,6 +72,8 @@ const WEEKEND_BG: RGB = [248, 250, 252]; // slate-50
 const HEAD_BG: RGB = [241, 245, 249]; // slate-100
 const ROSE_BG: RGB = [255, 228, 230]; // rose-100
 const ROSE_INK: RGB = [159, 18, 57]; // rose-800
+const MEZZO_INK: RGB = [146, 64, 14]; // amber-800, la tinta dei mezzi anche a schermo
+const NOTA_INK: RGB = [71, 85, 105]; // slate-600
 const BRAND_FALLBACK: RGB = [19, 64, 166]; // #1340A6
 
 function hexToRgb(hex?: string | null): RGB {
@@ -244,17 +257,54 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
   // ── Misura l'altezza di una riga (in base al testo che va a capo) ──
   const PAD = 1.6;
   const LH_MAIN = 3.2; // interlinea riga principale
-  const LH_SUB = 2.7; // interlinea sub
+  const LH_SUB = 2.7; // interlinea delle righe piccole (sub, mezzi, nota)
+
+  /**
+   * Le righe di una voce, gia' spezzate alla larghezza della colonna.
+   *
+   * ⚠️ Misura e disegno devono vedere **le stesse identiche righe**: se la
+   * misura ne conta meno di quante il disegno ne scrive, la voce successiva
+   * finisce sopra la precedente. Per questo font e corpo si impostano qui
+   * dentro e non dal chiamante — `splitTextToSize` spezza in base al font
+   * corrente, quindi misurare in tondo e stampare in grassetto e' il modo
+   * classico di sbagliare di una riga.
+   */
+  const righeVoce = (v: VocePdf, w: number) => {
+    const larghezza = w - 3;
+    pdf.setFont('helvetica', v.tipo === 'assenza' ? 'bold' : 'normal');
+    pdf.setFontSize(7);
+    const testo = pdf.splitTextToSize(v.testo, larghezza) as string[];
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(5.6);
+    const sub = v.sub ? (pdf.splitTextToSize(v.sub, larghezza) as string[]) : [];
+    // La parola «Mezzo» davanti alla targa non e' decorazione: il foglio si
+    // stampa quasi sempre in bianco e nero, e senza di essa una targa sarebbe
+    // indistinguibile dal codice della commessa scritto una riga sopra.
+    pdf.setFont('helvetica', 'bold');
+    const mezzi = v.mezzi?.length
+      ? (pdf.splitTextToSize(
+          `${v.mezzi.length > 1 ? 'Mezzi' : 'Mezzo'} ${v.mezzi.join(' · ')}`,
+          larghezza,
+        ) as string[])
+      : [];
+    pdf.setFont('helvetica', 'italic');
+    const nota = v.nota?.trim() ? (pdf.splitTextToSize(v.nota.trim(), larghezza) as string[]) : [];
+    return { testo, sub, mezzi, nota };
+  };
+
+  /** Quanto e' alta una voce, righe piccole comprese. */
+  const altezzaVoce = (v: VocePdf, w: number): number => {
+    const r = righeVoce(v, w);
+    return (
+      Math.max(1, r.testo.length) * LH_MAIN +
+      (r.sub.length + r.mezzi.length + r.nota.length) * LH_SUB
+    );
+  };
+
   const misuraCella = (voci: VocePdf[]): number => {
     if (voci.length === 0) return 0;
     let h = 0;
-    pdf.setFontSize(7);
-    for (const v of voci) {
-      const linee = pdf.splitTextToSize(v.testo, dayColW - 3) as string[];
-      h += Math.max(1, linee.length) * LH_MAIN;
-      if (v.sub) h += LH_SUB;
-      h += 1.2; // gap tra voci
-    }
+    for (const v of voci) h += altezzaVoce(v, dayColW) + 1.2; // gap tra voci
     return h + PAD;
   };
   const misuraRiga = (r: RigaPdf): number => {
@@ -273,10 +323,9 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
     for (const v of voci) {
       const tint = tintaTipo(v.tipo, brand);
       const assenza = v.tipo === 'assenza';
-      pdf.setFontSize(7);
-      const linee = pdf.splitTextToSize(v.testo, w - 3) as string[];
-      const blockH =
-        Math.max(1, linee.length) * LH_MAIN + (v.sub ? LH_SUB : 0) + 0.8;
+      const r = righeVoce(v, w);
+      const nPiccole = r.sub.length + r.mezzi.length + r.nota.length;
+      const blockH = Math.max(1, r.testo.length) * LH_MAIN + nPiccole * LH_SUB + 0.8;
       // sfondo tinta per le assenze
       if (assenza) {
         setFill(ROSE_BG);
@@ -287,15 +336,33 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
       pdf.rect(x + 0.6, cy - 2.6, 0.9, blockH + 1.4, 'F');
       // testo principale
       pdf.setFont('helvetica', assenza ? 'bold' : 'normal');
+      pdf.setFontSize(7);
       setText(assenza ? ROSE_INK : INK);
-      pdf.text(linee, x + 2.4, cy);
-      cy += Math.max(1, linee.length) * LH_MAIN;
-      if (v.sub) {
+      pdf.text(r.testo, x + 2.4, cy);
+      cy += Math.max(1, r.testo.length) * LH_MAIN;
+      if (r.sub.length > 0) {
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(5.6);
         setText(assenza ? ROSE_INK : MUTED);
-        pdf.text(v.sub, x + 2.4, cy);
-        cy += LH_SUB;
+        pdf.text(r.sub, x + 2.4, cy);
+        cy += r.sub.length * LH_SUB;
+      }
+      // Il mezzo, in evidenza: e' la prima cosa che serve la mattina.
+      if (r.mezzi.length > 0) {
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(5.6);
+        setText(MEZZO_INK);
+        pdf.text(r.mezzi, x + 2.4, cy);
+        cy += r.mezzi.length * LH_SUB;
+      }
+      // La nota dell'ufficio, in corsivo: si riconosce anche su una stampa in
+      // bianco e nero, dove il colore non aiuta.
+      if (r.nota.length > 0) {
+        pdf.setFont('helvetica', 'italic');
+        pdf.setFontSize(5.6);
+        setText(assenza ? ROSE_INK : NOTA_INK);
+        pdf.text(r.nota, x + 2.4, cy);
+        cy += r.nota.length * LH_SUB;
       }
       // Il «bozza» NON si scrive qui. Stava in ogni casella, giorno per
       // giorno e persona per persona: ripetuto decine di volte sullo stesso

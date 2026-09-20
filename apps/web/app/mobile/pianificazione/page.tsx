@@ -8,6 +8,7 @@ import {
   ChevronRight,
   GraduationCap,
   HardHat,
+  StickyNote,
   Truck,
 } from 'lucide-react';
 
@@ -176,6 +177,17 @@ export default async function MiaSettimanaPage({
                             ) : null}
                             {colleghi.length > 0 ? <span>con {colleghi.join(', ')}</span> : null}
                           </div>
+                          {/* La nota che l'ufficio scrive sul blocco e'
+                              un'istruzione per chi va in cantiere («misure
+                              passerelle interne al locale»): finora restava
+                              nel database e non la leggeva nessuno. In
+                              risalto, perche' e' la cosa da non perdersi. */}
+                          {b.note?.trim() ? (
+                            <p className="ml-6 mt-1.5 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900">
+                              <StickyNote className="mt-px h-3 w-3 shrink-0" aria-hidden="true" />
+                              <span className="min-w-0">{b.note.trim()}</span>
+                            </p>
+                          ) : null}
                         </div>
                       );
                     })}

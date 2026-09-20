@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import type { AppRole } from '@kommessa/api';
 import {
   risolviFascia,
@@ -421,6 +422,15 @@ export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteR
   if ('errore' in orari) return { ok: false, error: orari.errore };
   if (data.dipendentiIds.length === 0) return { ok: false, error: 'Seleziona almeno un dipendente' };
 
+  // Lo stesso controllo della creazione singola. Mancava, e questa era la
+  // porta di servizio: bastava spuntare un secondo giorno per pianificare su
+  // un cantiere chiuso, o su quello di un altro cliente, dove il salvataggio
+  // normale rifiutava.
+  if (data.tipo === 'cantiere' && data.cantiereId) {
+    const aperto = await cantiereScrivibile(supabase, data.cantiereId, ctx.tenantId);
+    if (!aperto.ok) return { ok: false, error: aperto.error };
+  }
+
   const date = Array.from(new Set(data.date)).sort();
   const nomiDip = await nomiDipendenti(supabase, ctx.tenantId);
   const nomiMezzo = await nomiMezzi(supabase, ctx.tenantId);
@@ -485,7 +495,13 @@ export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteR
       } as never)
       .select('id')
       .single();
-    if (errBlocco || !bloccoRow) continue;
+    // Un errore qui finisce fra i «saltati», non nel nulla: senza, la
+    // ripetizione rispondeva `creati: 0, saltati: []` e l'ufficio chiudeva il
+    // dialog convinto di aver pianificato la settimana.
+    if (errBlocco || !bloccoRow) {
+      saltati.push({ data: giorno, motivo: 'errore nel salvataggio' });
+      continue;
+    }
     const bloccoId = (bloccoRow as unknown as { id: string }).id;
     const errFigli = await inserisciFigli(
       supabase,
@@ -496,6 +512,7 @@ export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteR
     );
     if (errFigli) {
       await supabase.from('pianificazione_blocchi' as never).delete().eq('id', bloccoId);
+      saltati.push({ data: giorno, motivo: 'errore nel salvataggio della squadra' });
       continue;
     }
     creati++;
@@ -569,6 +586,14 @@ export async function aggiornaBlocco(input: unknown): Promise<SalvaResult> {
       nomiMezzo: await nomiMezzi(supabase, ctx.tenantId),
     });
     if (conflitti.length > 0) return { ok: false, conflitti };
+  }
+
+  // Come in creazione: il cantiere dev'essere di questo tenant e ancora
+  // aperto. Senza, una modifica poteva spostare il blocco sul cantiere di un
+  // altro cliente (la chiave esterna non e' per tenant) o su uno gia' chiuso.
+  if (data.tipo === 'cantiere' && data.cantiereId) {
+    const aperto = await cantiereScrivibile(supabase, data.cantiereId, ctx.tenantId);
+    if (!aperto.ok) return { ok: false, error: aperto.error };
   }
 
   const { error: errUpd } = await supabase
@@ -848,6 +873,14 @@ export async function ripetiBlocco(
   const b = await caricaBloccoById(supabase, ctx.tenantId, parsed.data.id);
   if (!b) return { ok: false, error: 'Blocco non trovato' };
 
+  // Il cantiere puo' essersi chiuso dopo la creazione del blocco (il giro
+  // notturno del gestionale ne chiude anche a centinaia): allargare la card
+  // sui giorni dopo vorrebbe dire pianificare lavoro su un lavoro finito.
+  if (b.tipo === 'cantiere' && b.cantiereId) {
+    const aperto = await cantiereScrivibile(supabase, b.cantiereId, ctx.tenantId);
+    if (!aperto.ok) return { ok: false, error: aperto.error };
+  }
+
   const date = Array.from(new Set(parsed.data.date))
     .filter((d) => d !== b.data)
     .sort();
@@ -939,17 +972,22 @@ export async function ripetiBlocco(
         } as never)
         .select('id')
         .single();
-      if (error || !nuovo) return false;
+      if (error || !nuovo) return { giorno: dc.giorno, riuscito: false };
       const nuovoId = (nuovo as unknown as { id: string }).id;
       const errFigli = await inserisciFigli(supabase, ctx.tenantId, nuovoId, dc.membri, dc.mezzi);
       if (errFigli) {
         await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
-        return false;
+        return { giorno: dc.giorno, riuscito: false };
       }
-      return true;
+      return { giorno: dc.giorno, riuscito: true };
     }),
   );
-  const creati = esiti.filter(Boolean).length;
+  const creati = esiti.filter((e) => e.riuscito).length;
+  // Un giorno che non e' stato scritto va detto: prima spariva e il riepilogo
+  // finale raccontava una ripetizione andata a buon fine.
+  for (const e of esiti) {
+    if (!e.riuscito) saltati.push({ data: e.giorno, motivo: 'errore nel salvataggio' });
+  }
 
   if (creati > 0) {
     await auditTenant(supabase, {
@@ -1078,7 +1116,17 @@ const CopiaSchema = z.object({
   forza: z.boolean().optional(),
 });
 
-export async function copiaSettimanaPrecedente(input: unknown): Promise<SalvaResult> {
+/**
+ * L'esito della copia. Prima era un `{ ok: true }` secco: l'errore sul singolo
+ * blocco passava sotto silenzio e all'ufficio veniva detto «Copiata» anche
+ * quando non era stato copiato niente.
+ */
+export type CopiaResult =
+  | { ok: true; copiati: number; avvisi: string[] }
+  | { ok: false; error: string }
+  | { ok: false; conflitti: string[] };
+
+export async function copiaSettimanaPrecedente(input: unknown): Promise<CopiaResult> {
   const parsed = CopiaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
   let g;
@@ -1112,17 +1160,66 @@ export async function copiaSettimanaPrecedente(input: unknown): Promise<SalvaRes
   if (sorgente.length === 0)
     return { ok: false, error: 'La settimana precedente non ha blocchi da copiare' };
 
+  // Quali cantieri si sono chiusi nel frattempo: una domanda sola per tutta la
+  // copia, non una per blocco.
+  const idCantieri = [...new Set(sorgente.map((b) => b.cantiereId).filter((x): x is string => !!x))];
+  const chiusi = new Set<string>();
+  if (idCantieri.length > 0) {
+    const { data: righe } = await supabase
+      .from('cantieri' as never)
+      .select('id, stato')
+      .in('id', idCantieri)
+      .eq('tenant_id', ctx.tenantId);
+    for (const r of (righe ?? []) as unknown as { id: string; stato: string | null }[]) {
+      if (!cantiereImputabile(r.stato)) chiusi.add(r.id);
+    }
+  }
+
   let copiati = 0;
+  const avvisi: string[] = [];
   for (const b of sorgente) {
+    const nuovaData = addGiorni(b.data, 7);
+    const eti = b.tipo === 'cantiere' ? b.cantiereNome ?? 'cantiere' : b.titolo ?? 'evento';
+    const quando = `${giornoBreve(nuovaData)} · ${eti}`;
+
+    if (b.cantiereId && chiusi.has(b.cantiereId)) {
+      avvisi.push(`${quando}: cantiere chiuso`);
+      continue;
+    }
+
+    // Ferie = HARD anche qui. Era l'unico percorso che non le guardava: si
+    // copiava la settimana e la persona risultava in cantiere durante le
+    // ferie approvate, con tanto di notifica alla pubblicazione.
+    const assenti = await membriAssenti(
+      supabase,
+      ctx.tenantId,
+      nuovaData,
+      b.membri,
+      b.oraInizio,
+      b.oraFine,
+    );
+    const fuori = new Set(assenti.map((a) => a.id));
+    const membri = b.membri.filter((m) => !fuori.has(m));
+    if (membri.length === 0) {
+      avvisi.push(`${quando}: tutta la squadra in ferie o permesso`);
+      continue;
+    }
+    if (fuori.size > 0) avvisi.push(`${quando}: senza ${assenti.map((a) => a.label).join(', ')}`);
+
     const { data: nuovo, error } = await supabase
       .from('pianificazione_blocchi' as never)
       .insert({
         tenant_id: ctx.tenantId,
-        data: addGiorni(b.data, 7),
+        data: nuovaData,
         tipo: b.tipo,
         cantiere_id: b.cantiereId,
         titolo: b.titolo,
         luogo: b.luogo,
+        // Le coordinate si portano dietro: senza, una formazione con
+        // l'indirizzo agganciato alla mappa perdeva il collegamento in
+        // silenzio, tenendo solo il testo.
+        luogo_lat: b.luogoLat,
+        luogo_lng: b.luogoLng,
         fascia: b.fascia,
         ora_inizio: b.oraInizio,
         ora_fine: b.oraFine,
@@ -1132,9 +1229,28 @@ export async function copiaSettimanaPrecedente(input: unknown): Promise<SalvaRes
       } as never)
       .select('id')
       .single();
-    if (error || !nuovo) continue;
+    if (error || !nuovo) {
+      avvisi.push(`${quando}: errore nel salvataggio`);
+      continue;
+    }
     const nuovoId = (nuovo as unknown as { id: string }).id;
-    await inserisciFigli(supabase, ctx.tenantId, nuovoId, b.membri, b.mezzi);
+    // Il mezzo solo a squadra intera: su un blocco dimezzato risulterebbe
+    // impegnato due volte lo stesso giorno.
+    const errFigli = await inserisciFigli(
+      supabase,
+      ctx.tenantId,
+      nuovoId,
+      membri,
+      fuori.size === 0 ? b.mezzi : [],
+    );
+    if (errFigli) {
+      // Un blocco senza nessun membro non compare in griglia (i chip stanno
+      // sulle righe delle persone): resterebbe invisibile e incancellabile,
+      // contando pero' fra le bozze da pubblicare.
+      await supabase.from('pianificazione_blocchi' as never).delete().eq('id', nuovoId);
+      avvisi.push(`${quando}: errore nel salvataggio della squadra`);
+      continue;
+    }
     copiati++;
   }
 
@@ -1144,9 +1260,9 @@ export async function copiaSettimanaPrecedente(input: unknown): Promise<SalvaRes
     actorRole: ctx.role,
     entityType: 'pianificazione',
     action: 'pianificazione.copia_settimana',
-    after: { lunedi: parsed.data.lunediISO, copiati },
+    after: { lunedi: parsed.data.lunediISO, copiati, avvisi: avvisi.length },
   });
 
   revalidatePath(PATH);
-  return { ok: true };
+  return { ok: true, copiati, avvisi };
 }

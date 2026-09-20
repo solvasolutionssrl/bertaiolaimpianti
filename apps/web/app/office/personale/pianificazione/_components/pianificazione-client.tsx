@@ -110,6 +110,19 @@ function hueTipo(b: { tipo: TipoBlocco; cantiereId: string | null; id: string })
 function nomeDip(d: DipRow): string {
   return `${d.cognome} ${d.nome}`.trim();
 }
+
+/**
+ * I codici che tornano le action, detti in italiano. A leggerli e' una
+ * persona: un `CANTIERE_NON_VALIDO` a schermo non spiega niente.
+ */
+const MESSAGGI_SALVA: Record<string, string> = {
+  CANTIERE_CHIUSO:
+    'Il cantiere è chiuso: non ci si pianifica sopra. Se il lavoro riparte, riaprilo dalla sua scheda.',
+  CANTIERE_NON_VALIDO: 'Il cantiere scelto non esiste più, o non è di questa azienda.',
+};
+function messaggioSalva(code: string): string {
+  return MESSAGGI_SALVA[code] ?? code;
+}
 /** Etichetta di un blocco per l'anteprima/chip (nome cantiere o titolo). */
 function labelBlocco(b: BloccoView): string {
   return b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
@@ -314,7 +327,7 @@ function BloccoDialog({
   const [cercaCant, setCercaCant] = React.useState('');
   const [cercaDip, setCercaDip] = React.useState('');
   const [cercaMezzo, setCercaMezzo] = React.useState('');
-  const [gruppoDip, setGruppoDip] = React.useState('tutti'); // filtro gruppi: predisposto, non ancora attivo
+  const [gruppoDip, setGruppoDip] = React.useState('tutti'); // filtra per gruppo l'elenco dipendenti del dialog
   // "Ripeti su più giorni" (solo in creazione): giorni EXTRA oltre a f.data.
   const [ripeti, setRipeti] = React.useState<Set<string>>(() => new Set());
   // Scelta eliminazione per una card di squadra: tutta la squadra o solo la persona.
@@ -490,14 +503,7 @@ function BloccoDialog({
           setConflitti(res.conflitti);
           return;
         }
-        await alert({
-        title: 'Non salvato',
-        // Il codice non si mostra: a leggerlo e' una persona.
-        body:
-          res.error === 'CANTIERE_CHIUSO'
-            ? 'Il cantiere è chiuso: non ci si pianifica sopra. Se il lavoro riparte, riaprilo dalla sua scheda.'
-            : res.error,
-      });
+        await alert({ title: 'Non salvato', body: messaggioSalva(res.error) });
         return;
       }
 
@@ -511,14 +517,7 @@ function BloccoDialog({
         setConflitti(res.conflitti);
         return;
       }
-      await alert({
-        title: 'Non salvato',
-        // Il codice non si mostra: a leggerlo e' una persona.
-        body:
-          res.error === 'CANTIERE_CHIUSO'
-            ? 'Il cantiere è chiuso: non ci si pianifica sopra. Se il lavoro riparte, riaprilo dalla sua scheda.'
-            : res.error,
-      });
+      await alert({ title: 'Non salvato', body: messaggioSalva(res.error) });
     });
   };
 
@@ -1044,6 +1043,7 @@ function Chip({
   const label = b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
   const Icon = b.tipo === 'formazione' ? GraduationCap : b.tipo === 'evento' ? CalendarClock : null;
   const isSquad = b.membri.length > 1;
+  const nota = b.note?.trim() ?? '';
   const dragBlocco = { id: b.id, data: b.data, membri: b.membri, hue: h };
   return (
     <div className="group/chip relative">
@@ -1056,7 +1056,7 @@ function Chip({
         }}
         title={`${label} · ${b.oraInizio}-${b.oraFine}${b.stato === 'bozza' ? ' · bozza' : ''} · ${
           isSquad ? TIP.squadra(b.membri.length) : TIP.singolo
-        }${drag ? ` · ${TIP.chipAzioni}` : ''}`}
+        }${drag ? ` · ${TIP.chipAzioni}` : ''}${nota ? `\nNota: ${nota}` : ''}`}
         className={
           'flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition ' +
           (conflitto ? 'ring-1 ring-destructive ' : '') +
@@ -1071,6 +1071,12 @@ function Chip({
       >
         {Icon ? <Icon className="h-3 w-3 shrink-0" /> : null}
         <span className="min-w-0 flex-1 truncate">{label}</span>
+        {/* La nota viveva solo dentro il dialog: dalla griglia non si vedeva,
+            quindi l'ufficio non sapeva piu' di averla scritta. Il foglietto la
+            annuncia, il testo completo sta nel suggerimento del chip. */}
+        {nota ? (
+          <StickyNote className="h-2.5 w-2.5 shrink-0 opacity-70" aria-label="Con nota" />
+        ) : null}
         {/* Riconoscimento immediato: squadra = pill piena colorata 👥N;
             tecnico singolo = icona persona tenue. */}
         {isSquad ? (
@@ -1391,7 +1397,16 @@ export function PianificazioneClient({
         await alert({ title: 'Errore', body: 'error' in res ? res.error : 'Copia non riuscita' });
         return;
       }
-      await alert({ title: 'Copiata', body: 'Blocchi copiati dalla settimana precedente (come bozza).' });
+      // Si dice quanti ne sono arrivati davvero e cosa e' rimasto fuori:
+      // prima si annunciava «Copiata» anche con zero blocchi copiati.
+      await alert({
+        title: res.copiati === 0 ? 'Niente da copiare' : 'Copiata',
+        body:
+          (res.copiati === 0
+            ? 'Nessun blocco copiato.'
+            : `${res.copiati} ${res.copiati === 1 ? 'blocco copiato' : 'blocchi copiati'} come bozza.`) +
+          (res.avvisi.length > 0 ? ` ${res.avvisi.join('; ')}.` : ''),
+      });
       refresh();
     });
   };
@@ -1561,6 +1576,7 @@ export function PianificazioneClient({
             giorni={giorni}
             dipendenti={dipendenti}
             cantieri={cantieri}
+            mezzi={mezzi}
             blocchi={blocchi}
             assenze={assenze}
             gruppi={gruppi}

@@ -1,8 +1,8 @@
 # Logiche — Pianificazione settimanale (modulo Dipendenti)
 
-**Versione**: 1.1
+**Versione**: 1.2
 **Stato**: registro operativo vivo (aggiornare man mano)
-**Data**: 19/07/2026
+**Data**: 20/09/2026
 **Ambito**: `/office/personale/pianificazione` · gated modulo `dipendenti` + sotto-flag `pianificazione_attiva` (FPM attivo, Bertaiola nascosta)
 
 Registro di come funziona la Pianificazione e delle scelte prese, a supporto del manuale utente. Vedi anche `Dipendenti_Possibili_Aggiunte.md` (backlog) e la spec `docs/superpowers/specs/2026-07-19-pianificazione-multigiorno-export-ferie-design.md`.
@@ -50,7 +50,12 @@ Bottone **"Esporta PDF ▾"** (dropdown). Genera fisicamente il download di uno 
 - **Singolo gruppo** → un PDF di quel gruppo.
 - Se il **filtro gruppi** è attivo, in cima compare **"Esporta {gruppi filtrati}"** (auto-scope).
 
-**Formato**: A4 **verticale**, layout **per-dipendente** (righe dipendenti × giorni). Header con **logo/nome del tenant reale** (fallback tipografico se il logo non carica), "Settimana NN · YYYY" e range date. Le celle mostrano **nome cantiere + id commessa** piccolo + fascia; le assenze in tinta rosa; i blocchi in bozza sono marcati. Giorni mostrati = Lun–Ven + weekend solo se pieni. `NN` = **numero settimana ISO-8601**.
+**Formato**: A4 **verticale**, layout **per-dipendente** (righe dipendenti × giorni). Header con **logo/nome del tenant reale** (fallback tipografico se il logo non carica), "Settimana NN · YYYY" e range date. Le celle mostrano **nome cantiere + id commessa** piccolo + fascia, poi **il mezzo** e **la nota** dell'ufficio; le assenze in tinta rosa; i blocchi in bozza sono marcati. Giorni mostrati = Lun–Ven + weekend solo se pieni. `NN` = **numero settimana ISO-8601**.
+
+> **Mezzi e note sul foglio (dal 20/09/2026)**: prima il PDF non li stampava affatto, pur essendo compilati — su FPM **ogni** blocco ha un mezzo assegnato. Ora sotto il codice commessa compare **«Mezzo FP418XX»** (o «Mezzi …» con più targhe) e sotto ancora **la nota in corsivo, per intero e mai tagliata**: è un'istruzione per chi va in cantiere, non un promemoria interno.
+> ⚠️ La parola «Mezzo» davanti alla targa non è decorazione: il foglio si stampa quasi sempre in **bianco e nero**, dove il colore da solo non distinguerebbe la targa dal codice commessa scritto una riga sopra.
+> ⚠️ Chi tocca il disegno delle celle: misura e disegno devono spezzare il testo **con lo stesso font** (`righeVoce` in `export-pdf.ts` li imposta al suo interno). Misurare in tondo e stampare in grassetto sballa il conto delle righe e le voci si scrivono una sopra l'altra.
+> La nota si vede anche **nella griglia** (foglietto sul chip, testo intero nel suggerimento) e **sul telefono del tecnico** (riquadro ambra): prima viveva solo dentro il dialog di modifica e non la leggeva nessuno.
 
 Motore: `esportaPianificazionePDF` (jsPDF **vettoriale**, importato dinamicamente → fuori dal bundle iniziale). Nessuna dipendenza nuova.
 
