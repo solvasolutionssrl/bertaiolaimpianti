@@ -193,7 +193,9 @@ export function GiustificativoDialog({
               value={numero}
               maxLength={30}
               onChange={(e) => setNumero(e.target.value)}
-              placeholder="Come sta sul certificato"
+              // Nessun placeholder: il campo accetta un PUC numerico, un
+              // protocollo cartaceo o un codice fiscale, e un solo esempio ne
+              // farebbe sembrare sbagliati due su tre.
               className="mt-1 h-9 bg-background font-mono shadow-none"
             />
             {numero.trim() ? (
@@ -204,7 +206,7 @@ export function GiustificativoDialog({
             ) : (
               <p className="mt-1 text-[11px] leading-snug text-amber-700">
                 {numeroObbligatorio
-                  ? 'Obbligatorio per la malattia. Si legge sul certificato del medico.'
+                  ? 'Obbligatorio per la malattia.'
                   : 'Facoltativo per questo tipo di assenza.'}
               </p>
             )}

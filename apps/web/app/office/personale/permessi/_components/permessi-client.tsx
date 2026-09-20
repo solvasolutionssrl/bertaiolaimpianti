@@ -302,8 +302,13 @@ function NuovaRichiestaDialog({
   const alert = useAlert();
   const [pending, start] = React.useTransition();
   const tipiDisponibili = tipiOpzioni;
-  const [dipendenteId, setDipendenteId] = React.useState<string>(mioDip ?? dipendenti[0]?.id ?? '');
-  const [cercaDip, setCercaDip] = React.useState('');
+  const dipIniziale = mioDip ?? dipendenti[0]?.id ?? '';
+  const [dipendenteId, setDipendenteId] = React.useState<string>(dipIniziale);
+  // Il campo mostra chi e' selezionato: parte col nome, non vuoto.
+  const [cercaDip, setCercaDip] = React.useState(
+    dipendenti.find((d) => d.id === dipIniziale)?.nome ?? '',
+  );
+  const [dipAperto, setDipAperto] = React.useState(false);
   const [tipo, setTipo] = React.useState(tipiDisponibili[0]?.codice ?? 'ferie');
   const [tuttoIlGiorno, setTuttoIlGiorno] = React.useState(true);
   const [dataInizio, setDataInizio] = React.useState(oggiISO);
@@ -325,11 +330,14 @@ function NuovaRichiestaDialog({
   const tipoScelto = tipiDisponibili.find((t) => t.codice === tipo);
   const serveDoc = tipoScelto?.richiedeGiustificativo === true;
   const numeroObbligatorio = numeroAttestatoObbligatorio(tipo);
+  const nomeScelto = dipendenti.find((d) => d.id === dipendenteId)?.nome ?? '';
 
+  // Poche righe alla volta: la tendina si sovrappone al resto del modulo e non
+  // deve coprirlo tutto.
   const dipFiltrati = React.useMemo(() => {
     const q = cercaDip.trim().toLowerCase();
-    if (!q) return dipendenti;
-    return dipendenti.filter((d) => d.nome.toLowerCase().includes(q));
+    const base = q ? dipendenti.filter((d) => d.nome.toLowerCase().includes(q)) : dipendenti;
+    return base.slice(0, 6);
   }, [dipendenti, cercaDip]);
 
   const onTipo = (codice: string) => {
@@ -421,19 +429,22 @@ function NuovaRichiestaDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent
         className={
-          'max-h-[92vh] grid-cols-[minmax(0,1fr)] overflow-y-auto overflow-x-hidden ' +
+          // Intestazione ferma, corpo che scorre, tasti fermi in fondo: prima
+          // scorreva tutto il popup e Annulla/Salva finivano sotto il bordo.
+          'flex max-h-[92vh] flex-col overflow-hidden ' +
           // Il popup si allarga solo quando c'e' davvero una seconda colonna:
           // per delle ferie resta stretto com'era.
           (serveDoc ? 'sm:max-w-[920px]' : 'sm:max-w-lg')
         }
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0">
           <DialogTitle>{registraDiretta ? 'Registra assenza' : 'Nuova richiesta'}</DialogTitle>
         </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0.5">
         <div
           className={serveDoc ? 'grid min-w-0 gap-5 lg:grid-cols-3 lg:items-stretch' : 'min-w-0'}
         >
-        <div className={'min-w-0 space-y-4' + (serveDoc ? ' lg:col-span-2' : '')}>
+        <div className={'min-w-0 space-y-3' + (serveDoc ? ' lg:col-span-2' : '')}>
           {/* E' la prima decisione, non una casella in fondo: da come si
               risponde qui dipende se l'assenza nasce da approvare o gia'
               approvata. Segmentata piena, come le altre scelte dell'ufficio. */}
@@ -454,14 +465,14 @@ function NuovaRichiestaDialog({
                     onClick={() => setRegistraDiretta(o.diretta)}
                     className={
                       attivo
-                        ? 'rounded-md bg-primary px-2.5 py-2 text-left text-primary-foreground'
-                        : 'rounded-md border border-border bg-card px-2.5 py-2 text-left hover:border-primary/40'
+                        ? 'rounded-md bg-primary px-2.5 py-1.5 text-left text-primary-foreground'
+                        : 'rounded-md border border-border bg-card px-2.5 py-1.5 text-left hover:border-primary/40'
                     }
                   >
-                    <span className="block text-[13px] font-semibold">{o.titolo}</span>
+                    <span className="block text-[13px] font-semibold leading-tight">{o.titolo}</span>
                     <span
                       className={
-                        'mt-0.5 block text-[11px] leading-snug ' +
+                        'block text-[10px] leading-snug ' +
                         (attivo ? 'text-primary-foreground/80' : 'text-muted-foreground')
                       }
                     >
@@ -473,37 +484,57 @@ function NuovaRichiestaDialog({
             </div>
           </div>
 
-          {/* Dipendente */}
+          {/* Dipendente: solo ricerca con tendina, come il cantiere in
+              pianificazione. L'elenco sempre aperto rubava 170px di altezza e
+              spingeva i tasti sotto il bordo del popup. */}
           <div className="text-sm">
             <span className="mb-1 block text-xs font-medium text-muted-foreground">Per chi</span>
-            <div className="relative mb-1">
+            <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={cercaDip}
-                onChange={(e) => setCercaDip(e.target.value)}
-                placeholder="Cerca dipendente…"
+                onChange={(e) => {
+                  setCercaDip(e.target.value);
+                  setDipAperto(true);
+                }}
+                onFocus={() => setDipAperto(true)}
+                // Il ritardo lascia arrivare il clic sulla voce: senza, la
+                // tendina si chiude prima che la scelta venga registrata.
+                onBlur={() => setTimeout(() => setDipAperto(false), 120)}
+                placeholder="Cerca dipendente"
                 className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
               />
+              {dipAperto && dipFiltrati.length > 0 ? (
+                <div className="absolute left-0 right-0 top-[calc(100%+2px)] z-20 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                  {dipFiltrati.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => {
+                        setDipendenteId(d.id);
+                        setCercaDip(d.nome);
+                        setDipAperto(false);
+                      }}
+                      className={
+                        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-muted ' +
+                        (dipendenteId === d.id ? 'font-medium' : '')
+                      }
+                    >
+                      <span className="min-w-0 flex-1 truncate">{d.nome}</span>
+                      {mioDip === d.id ? (
+                        <span className="shrink-0 text-[10px] text-muted-foreground">tu</span>
+                      ) : null}
+                      {dipendenteId === d.id ? (
+                        <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
-            <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border border-border p-1">
-              {dipFiltrati.map((d) => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => setDipendenteId(d.id)}
-                  className={
-                    'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm ' +
-                    (dipendenteId === d.id ? 'bg-primary/10 font-medium' : 'hover:bg-muted/50')
-                  }
-                >
-                  <span className="min-w-0 flex-1 truncate">{d.nome}</span>
-                  {mioDip === d.id ? (
-                    <span className="shrink-0 text-[10px] text-muted-foreground">tu</span>
-                  ) : null}
-                  {dipendenteId === d.id ? <Check className="h-3.5 w-3.5 shrink-0 text-primary" /> : null}
-                </button>
-              ))}
-            </div>
+            {nomeScelto ? null : (
+              <p className="mt-1 text-[11px] text-amber-700">Nessun dipendente scelto.</p>
+            )}
           </div>
 
           {/* Tipo */}
@@ -522,14 +553,14 @@ function NuovaRichiestaDialog({
             </select>
           </label>
 
-          <label className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-            <span className="font-medium">Tutto il giorno</span>
+          <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="checkbox"
               className="h-4 w-4"
               checked={tuttoIlGiorno}
               onChange={(e) => setTuttoIlGiorno(e.target.checked)}
             />
+            <span className="font-medium">Tutto il giorno</span>
           </label>
 
           {tuttoIlGiorno ? (
@@ -656,15 +687,20 @@ function NuovaRichiestaDialog({
                 value={numero}
                 maxLength={30}
                 onChange={(e) => setNumero(e.target.value)}
-                placeholder="Come sta sul certificato"
+                // Nessun placeholder: il campo accetta un PUC numerico, un
+                // protocollo cartaceo o un codice fiscale, e un solo esempio ne
+                // farebbe sembrare sbagliati due su tre.
                 className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm focus:border-primary focus:outline-none"
               />
             </label>
-            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-              {numeroObbligatorio
-                ? 'Si legge sul certificato del medico.'
-                : 'Facoltativo per questo tipo di assenza.'}
-            </p>
+            {/* Quando e' obbligatorio lo dice gia' l'etichetta, in rosso:
+                una seconda riga che spiega dove andare a guardare e'
+                chiacchiera, e chi compila ha il certificato in mano. */}
+            {numeroObbligatorio ? null : (
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                Facoltativo per questo tipo di assenza.
+              </p>
+            )}
 
             <span className="mb-1.5 mt-4 block text-xs font-medium text-muted-foreground">
               Documento
@@ -684,7 +720,8 @@ function NuovaRichiestaDialog({
           </div>
         ) : null}
         </div>
-        <DialogFooter>
+        </div>
+        <DialogFooter className="shrink-0">
           <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
             Annulla
           </Button>

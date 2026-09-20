@@ -59,6 +59,31 @@ const LEGGI_POPUP = `(() => {
   };
 })()`;
 
+/**
+ * Il popup ci sta in altezza e i tasti si vedono?
+ *
+ * La domanda nasce da un difetto vero: scorreva l'intero popup, cosi' Annulla
+ * e Salva finivano sotto il bordo e bisognava scorrere per trovarli. Deve
+ * scorrere il CORPO, non il popup.
+ */
+const MISURA_ALTEZZA = `(() => {
+  const d = document.querySelector('[role=dialog]');
+  if (!d) return null;
+  const r = d.getBoundingClientRect();
+  const tasto = [...d.querySelectorAll('button')].find((b) => {
+    const t = (b.textContent || '').trim();
+    return t.startsWith('Crea richiesta') || t.startsWith('Registra assenza');
+  });
+  const tr = tasto ? tasto.getBoundingClientRect() : null;
+  return {
+    altezzaPopup: Math.round(r.height),
+    altezzaFinestra: window.innerHeight,
+    dentroLaFinestra: r.top >= -1 && r.bottom <= window.innerHeight + 1,
+    tastoVisibile: !!tr && tr.bottom <= window.innerHeight + 1 && tr.top >= 0,
+    popupScorre: d.scrollHeight > d.clientHeight + 1,
+  };
+})()`;
+
 const CHIUDI = `(() => {
   const b = [...document.querySelectorAll('[role=dialog] button')]
     .find((x) => (x.textContent || '').trim() === 'Annulla');
@@ -101,6 +126,13 @@ try {
   const largoPrima = stretto?.larghezza ?? 0;
   await foto(cdp, 'assenza-popup-stretto');
 
+  const altStretto = await valuta(cdp, MISURA_ALTEZZA);
+  esito(
+    altStretto?.tastoVisibile === true,
+    'col popup stretto i tasti si vedono senza scorrere',
+    `popup ${altStretto?.altezzaPopup}px su finestra ${altStretto?.altezzaFinestra}px`,
+  );
+
   const scelta = await valuta(cdp, scegliTipo('malattia'));
   if (scelta !== true) {
     esito(false, 'il tipo «Malattia» e\' fra quelli attivi', String(scelta));
@@ -118,6 +150,20 @@ try {
     );
     esito(largo?.sbordaInOrizzontale === false, 'il popup non sborda in orizzontale');
     await foto(cdp, 'assenza-popup-malattia');
+
+    const alt = await valuta(cdp, MISURA_ALTEZZA);
+    esito(
+      alt?.dentroLaFinestra === true,
+      'il popup ci sta tutto nella finestra',
+      `${alt?.altezzaPopup}px su ${alt?.altezzaFinestra}px`,
+    );
+    esito(alt?.tastoVisibile === true, 'Annulla e Salva restano visibili senza scorrere');
+    esito(
+      alt?.popupScorre === false,
+      'scorre il corpo, non tutto il popup',
+      alt?.popupScorre ? 'scorre il popup intero: i tasti se ne vanno sotto' : '',
+    );
+
     console.log(`\n  Testo del popup: ${largo?.testo ?? '(vuoto)'}\n`);
   }
 
