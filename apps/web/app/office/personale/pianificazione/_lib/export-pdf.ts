@@ -23,8 +23,10 @@ export interface VocePdf {
   tipo: TipoVocePdf;
   bozza?: boolean;
   /**
-   * Le targhe dei mezzi assegnati. Il foglio serve a chi parte la mattina:
-   * senza la targa deve chiedere all'ufficio quale furgone prendere.
+   * Un mezzo per voce, gia' scritto per esteso: «targa · nome» (la targa e'
+   * l'unica cosa univoca — FPM ha tre «Ford Transit Connect» — ma il nome e'
+   * quello con cui il furgone lo chiamano davvero). Il foglio serve a chi
+   * parte la mattina: senza, deve chiedere all'ufficio quale mezzo prendere.
    */
   mezzi?: string[];
   /**
@@ -257,7 +259,12 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
   // ── Misura l'altezza di una riga (in base al testo che va a capo) ──
   const PAD = 1.6;
   const LH_MAIN = 3.2; // interlinea riga principale
-  const LH_SUB = 2.7; // interlinea delle righe piccole (sub, mezzi, nota)
+  const LH_SUB = 2.7; // interlinea delle righe piccole (sub, mezzi)
+  // La nota ha un corpo suo, un filo piu' grande: il foglio viene esportato e
+  // mandato ai ragazzi su WhatsApp, quindi si legge dal telefono, ed e' l'unica
+  // istruzione dell'ufficio che arriva fino in cantiere.
+  const FONT_NOTA = 6.2;
+  const LH_NOTA = 3;
 
   /**
    * Le righe di una voce, gia' spezzate alla larghezza della colonna.
@@ -281,25 +288,36 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
     // stampa quasi sempre in bianco e nero, e senza di essa una targa sarebbe
     // indistinguibile dal codice della commessa scritto una riga sopra.
     pdf.setFont('helvetica', 'bold');
-    const mezzi = v.mezzi?.length
-      ? (pdf.splitTextToSize(
-          `${v.mezzi.length > 1 ? 'Mezzi' : 'Mezzo'} ${v.mezzi.join(' · ')}`,
-          larghezza,
-        ) as string[])
-      : [];
+    pdf.setFontSize(5.6);
+    const mezzi: string[] = [];
+    if (v.mezzi?.length) {
+      // Un mezzo per riga, con l'etichetta solo sul primo: due mezzi per
+      // esteso sulla stessa riga non ci stanno, e andando a capo da soli non
+      // si capirebbe dove finisce l'uno e comincia l'altro.
+      const etichetta = v.mezzi.length > 1 ? 'Mezzi' : 'Mezzo';
+      v.mezzi.forEach((m, i) => {
+        const riga = i === 0 ? `${etichetta} ${m}` : m;
+        mezzi.push(...(pdf.splitTextToSize(riga, larghezza) as string[]));
+      });
+    }
     pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(FONT_NOTA);
     const nota = v.nota?.trim() ? (pdf.splitTextToSize(v.nota.trim(), larghezza) as string[]) : [];
     return { testo, sub, mezzi, nota };
   };
 
-  /** Quanto e' alta una voce, righe piccole comprese. */
-  const altezzaVoce = (v: VocePdf, w: number): number => {
-    const r = righeVoce(v, w);
-    return (
-      Math.max(1, r.testo.length) * LH_MAIN +
-      (r.sub.length + r.mezzi.length + r.nota.length) * LH_SUB
-    );
-  };
+  type RigheVoce = ReturnType<typeof righeVoce>;
+
+  /**
+   * L'altezza di una voce a partire dalle sue righe. Formula UNICA: la usano
+   * sia la misura sia il disegno, cosi' non possono divergere.
+   */
+  const altezzaRighe = (r: RigheVoce): number =>
+    Math.max(1, r.testo.length) * LH_MAIN +
+    (r.sub.length + r.mezzi.length) * LH_SUB +
+    r.nota.length * LH_NOTA;
+
+  const altezzaVoce = (v: VocePdf, w: number): number => altezzaRighe(righeVoce(v, w));
 
   const misuraCella = (voci: VocePdf[]): number => {
     if (voci.length === 0) return 0;
@@ -324,8 +342,7 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
       const tint = tintaTipo(v.tipo, brand);
       const assenza = v.tipo === 'assenza';
       const r = righeVoce(v, w);
-      const nPiccole = r.sub.length + r.mezzi.length + r.nota.length;
-      const blockH = Math.max(1, r.testo.length) * LH_MAIN + nPiccole * LH_SUB + 0.8;
+      const blockH = altezzaRighe(r) + 0.8;
       // sfondo tinta per le assenze
       if (assenza) {
         setFill(ROSE_BG);
@@ -359,10 +376,10 @@ export async function costruisciDocumentoPdf(opts: EsportaPdfOpts) {
       // bianco e nero, dove il colore non aiuta.
       if (r.nota.length > 0) {
         pdf.setFont('helvetica', 'italic');
-        pdf.setFontSize(5.6);
+        pdf.setFontSize(FONT_NOTA);
         setText(assenza ? ROSE_INK : NOTA_INK);
         pdf.text(r.nota, x + 2.4, cy);
-        cy += r.nota.length * LH_SUB;
+        cy += r.nota.length * LH_NOTA;
       }
       // Il «bozza» NON si scrive qui. Stava in ogni casella, giorno per
       // giorno e persona per persona: ripetuto decine di volte sullo stesso

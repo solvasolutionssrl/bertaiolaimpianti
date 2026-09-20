@@ -88,10 +88,14 @@ export function ExportMenu({
     return m;
   }, [cantieri]);
 
-  // Sul blocco i mezzi sono id: per stampare la targa serve tradurli.
-  const targaMap = React.useMemo(() => {
+  // Sul blocco i mezzi sono id: per stamparli serve tradurli. Targa E nome:
+  // la targa e' l'unica cosa univoca (in flotta ci sono tre «Ford Transit
+  // Connect»), il nome e' come il mezzo lo chiamano davvero.
+  const mezzoMap = React.useMemo(() => {
     const m = new Map<string, string>();
-    for (const x of mezzi) m.set(x.id, x.targa);
+    for (const x of mezzi) {
+      m.set(x.id, [x.targa, x.modello?.trim()].filter(Boolean).join(' · '));
+    }
     return m;
   }, [mezzi]);
 
@@ -123,10 +127,10 @@ export function ExportMenu({
   function voceDaBlocco(b: BloccoView): VocePdf {
     // Mezzi e nota valgono per ogni tipo di blocco: anche una formazione ha un
     // furgone assegnato e un'istruzione dell'ufficio.
-    const targhe = b.mezzi.map((id) => targaMap.get(id)).filter((t): t is string => !!t);
+    const mezziBlocco = b.mezzi.map((id) => mezzoMap.get(id)).filter((t): t is string => !!t);
     const comune = {
       bozza: b.stato === 'bozza',
-      ...(targhe.length > 0 ? { mezzi: targhe } : {}),
+      ...(mezziBlocco.length > 0 ? { mezzi: mezziBlocco } : {}),
       ...(b.note?.trim() ? { nota: b.note.trim() } : {}),
     };
     if (b.tipo === 'cantiere') {
