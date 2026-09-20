@@ -1,16 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import {
-  Download,
-  Eye,
-  FileText,
-  Loader2,
-  Paperclip,
-  ShieldCheck,
-  Trash2,
-  UploadCloud,
-} from 'lucide-react';
+import { Download, Eye, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -27,31 +18,23 @@ import {
   eliminaGiustificativo,
   salvaGiustificativo,
 } from '@/app/office/_actions/ferie-permessi';
+import { AreaDocumento, type FaseDocumento } from './area-documento';
 
 /**
- * Il giustificativo di un'assenza: il numero dell'attestato e il documento.
+ * Il giustificativo di un'assenza gia' registrata: numero dell'attestato e
+ * documento del medico.
  *
- * Il numero non si inventa mai. Per la malattia e' obbligatorio — senza, il
- * consulente del lavoro non chiude la busta — e allora lo si chiede qui, dove
- * c'e' il certificato davanti, invece di lasciare un campo vuoto che sembra
- * una dimenticanza.
- *
- * Il documento archiviato si **riscarica**: un archivio da cui non si estrae
- * niente non serve a nessuno.
+ * Il gemello di questo popup e' la colonna dentro «Nuova richiesta», che fa la
+ * stessa cosa nello stesso gesto che crea l'assenza. Questo serve dopo: per
+ * correggere un numero, sostituire il documento o allegarlo quando arriva in
+ * ritardo. L'area di caricamento e' la stessa di la', apposta.
  */
 
 const TIPI = [
-  { codice: 'P' as const, titolo: 'PUC', descrizione: 'Certificato telematico del medico. È il caso normale.' },
-  { codice: 'M' as const, titolo: 'Protocollo', descrizione: 'Numero di protocollo del certificato cartaceo.' },
-  {
-    codice: 'C' as const,
-    titolo: 'Codice fiscale',
-    descrizione: 'Dell’ente, per la donazione di sangue.',
-  },
+  { codice: 'P' as const, titolo: 'PUC', descrizione: 'Certificato telematico inviato dal medico.' },
+  { codice: 'M' as const, titolo: 'Protocollo', descrizione: 'Certificato consegnato su carta.' },
+  { codice: 'C' as const, titolo: 'Codice fiscale', descrizione: 'Ente della donazione di sangue.' },
 ];
-
-const MIME_AMMESSI = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'];
-const MAX_BYTE = 15 * 1024 * 1024;
 
 export interface GiustificativoEsistente {
   id: string;
@@ -75,12 +58,6 @@ interface Props {
   onSalvato: () => void;
 }
 
-function pesoLeggibile(bytes: number | null): string {
-  if (!bytes || bytes <= 0) return '';
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-}
-
 export function GiustificativoDialog({
   permessoId,
   dipendenteNome,
@@ -97,40 +74,14 @@ export function GiustificativoDialog({
   const [numero, setNumero] = React.useState(esistente?.numero ?? '');
   const [nota, setNota] = React.useState(esistente?.nota ?? '');
   const [file, setFile] = React.useState<File | null>(null);
-  const [sopra, setSopra] = React.useState(false);
+  const [fase, setFase] = React.useState<FaseDocumento>('idle');
   const [inCorso, setInCorso] = React.useState(false);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const numeroMancante = numeroObbligatorio && !numero.trim();
-
-  /** Controlla qui quello che il server ricontrolla: l'errore si vede subito. */
-  const accetta = React.useCallback(
-    async (scelto: File | null | undefined) => {
-      if (!scelto) return;
-      if (scelto.size > MAX_BYTE) {
-        await mostraAvviso({
-          title: 'File troppo grande',
-          body: `"${scelto.name}" pesa ${pesoLeggibile(scelto.size)}. Il limite è 15 MB.`,
-        });
-        return;
-      }
-      if (!MIME_AMMESSI.includes(scelto.type)) {
-        await mostraAvviso({
-          title: 'Formato non ammesso',
-          body: 'Si può allegare un PDF o una foto del certificato.',
-        });
-        return;
-      }
-      setFile(scelto);
-    },
-    [mostraAvviso],
-  );
 
   async function salva() {
-    if (numeroMancante) {
+    if (numeroObbligatorio && !numero.trim()) {
       await mostraAvviso({
         title: 'Manca il numero',
-        body: 'Per la malattia il numero dell’attestato è obbligatorio. Se il certificato è cartaceo, scegli «Protocollo».',
+        body: 'Il numero dell’attestato è obbligatorio per la malattia. Se il certificato è cartaceo, scegli «Protocollo».',
       });
       return;
     }
@@ -148,17 +99,21 @@ export function GiustificativoDialog({
     }
 
     if (file) {
+      setFase('carico');
       const dati = new FormData();
       dati.set('giustificativoId', res.id);
       dati.set('file', file);
       const caricato = await caricaGiustificativo(dati);
       if (!caricato.ok) {
+        setFase('idle');
         setInCorso(false);
-        // Il numero è comunque salvato: dirlo evita che si ricominci da capo.
-        await mostraAvviso({ title: 'Numero salvato, documento no', body: caricato.error });
+        // Il numero è comunque salvato: dirlo evita di ricominciare da capo.
+        await mostraAvviso({ title: 'Documento non caricato', body: caricato.error });
         onSalvato();
         return;
       }
+      setFase('fatto');
+      await new Promise((r) => setTimeout(r, 900));
     }
 
     setInCorso(false);
@@ -181,7 +136,7 @@ export function GiustificativoDialog({
     else onSalvato();
   }
 
-  const urlFile = esistente ? `/api/personale/giustificativo/${esistente.id}` : null;
+  const urlFile = esistente?.haAllegato ? `/api/personale/giustificativo/${esistente.id}` : null;
 
   return (
     <Dialog open onOpenChange={(v) => (v ? undefined : onChiudi())}>
@@ -226,7 +181,12 @@ export function GiustificativoDialog({
 
           <div>
             <label className="text-xs font-medium text-muted-foreground" htmlFor="numero-giust">
-              Numero {numeroObbligatorio ? <span className="text-rose-600">obbligatorio</span> : '(se c’è)'}
+              Numero{' '}
+              {numeroObbligatorio ? (
+                <span className="text-rose-600">obbligatorio</span>
+              ) : (
+                '(facoltativo)'
+              )}
             </label>
             <Input
               id="numero-giust"
@@ -239,31 +199,28 @@ export function GiustificativoDialog({
             {numero.trim() ? (
               <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Finirà nel file per il consulente, accanto al periodo di assenza.
+                Registrato sull&apos;assenza.
               </p>
             ) : (
               <p className="mt-1 text-[11px] leading-snug text-amber-700">
                 {numeroObbligatorio
-                  ? 'Senza numero il consulente deve inseguirlo a mano. Leggilo sul certificato: non va inventato.'
+                  ? 'Obbligatorio per la malattia. Si legge sul certificato del medico.'
                   : 'Facoltativo per questo tipo di assenza.'}
               </p>
             )}
           </div>
 
           <div>
-            <span className="text-xs font-medium text-muted-foreground">Documento</span>
-
-            {esistente?.haAllegato && !file ? (
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-2">
-                <FileText className="h-4 w-4 shrink-0 text-emerald-700" />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-emerald-900">
-                  {esistente.nomeFile ?? 'Documento archiviato'}
-                  {esistente.sizeBytes ? (
-                    <span className="ml-1.5 text-emerald-700">{pesoLeggibile(esistente.sizeBytes)}</span>
-                  ) : null}
-                </span>
-                {urlFile ? (
-                  <span className="flex shrink-0 items-center gap-1">
+            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Documento</span>
+            <AreaDocumento
+              file={file}
+              onFile={setFile}
+              fase={fase}
+              nomeArchiviato={esistente?.haAllegato ? esistente.nomeFile ?? 'Documento archiviato' : null}
+              onErrore={(title, body) => void mostraAvviso({ title, body })}
+              azioni={
+                urlFile ? (
+                  <>
                     <a
                       href={`${urlFile}?vista=1`}
                       target="_blank"
@@ -278,65 +235,11 @@ export function GiustificativoDialog({
                     >
                       <Download className="h-3.5 w-3.5" /> Scarica
                     </a>
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-
-            {/* L'area di caricamento: si trascina il file o si sceglie. */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setSopra(true);
-              }}
-              onDragLeave={() => setSopra(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setSopra(false);
-                void accetta(e.dataTransfer.files?.[0]);
-              }}
-              onClick={() => inputRef.current?.click()}
-              className={
-                'mt-1.5 flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed px-3 py-5 text-center transition ' +
-                (sopra
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border bg-muted/20 hover:border-primary/40 hover:bg-muted/40')
+                  </>
+                ) : null
               }
-            >
-              {file ? (
-                <>
-                  <Paperclip className="h-5 w-5 text-primary" />
-                  <span className="min-w-0 max-w-full truncate text-[13px] font-medium text-foreground">
-                    {file.name}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {pesoLeggibile(file.size)} · si carica al salvataggio
-                  </span>
-                </>
-              ) : (
-                <>
-                  <UploadCloud
-                    className={'h-6 w-6 ' + (sopra ? 'text-primary' : 'text-muted-foreground')}
-                  />
-                  <span className="text-[13px] font-medium text-foreground">
-                    {esistente?.haAllegato ? 'Sostituisci il documento' : 'Trascina qui il certificato'}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    oppure clicca per sceglierlo · PDF o foto, fino a 15 MB
-                  </span>
-                </>
-              )}
-              <input
-                ref={inputRef}
-                type="file"
-                accept="application/pdf,image/*"
-                className="hidden"
-                onChange={(e) => void accetta(e.target.files?.[0])}
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Resta in archivio, non viene mandato a nessuno.
-            </p>
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">Il documento resta in archivio.</p>
           </div>
 
           <div>

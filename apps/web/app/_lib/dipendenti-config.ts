@@ -70,6 +70,9 @@ export async function leggiTipiRichiedibili(
     codice: t.codice,
     label: t.label,
     unita: t.unita,
+    // Il catalogo sa gia' quali assenze vogliono un documento: portarselo
+    // dietro evita che chi disegna un form debba ricordarselo a memoria.
+    richiedeGiustificativo: t.richiedeGiustificativo,
   }));
   return [...builtin, ...custom];
 }

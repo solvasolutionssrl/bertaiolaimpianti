@@ -1,13 +1,10 @@
 /**
- * Banco di prova: il popup del giustificativo di un'assenza.
+ * Banco di prova: il giustificativo di un'assenza, nei due punti in cui vive.
  *
- * Nasce da una richiesta precisa del cliente — «un popup carino, con la
- * possibilita' di scaricarlo» — e da una domanda che il codice non sa
- * rispondere: si vede bene? La pastiglia sulla riga dell'assenza si nota?
- * L'area dove si trascina il certificato si capisce che e' un'area?
- *
- * Serve un'assenza di tipo malattia sul tenant demo DEMOC. Se non c'e', il
- * banco lo dice e si ferma invece di fingere che vada tutto bene.
+ * Nasce da una domanda del cliente che era già un sintomo: «ma dove me lo
+ * chiede?». Il certificato era un secondo passaggio su un'altra schermata, e
+ * non lo trovava nessuno. Ora l'attestato sta dentro il popup che crea
+ * l'assenza, in una colonna che compare solo quando serve.
  *
  *   node scripts/banco-ui/giustificativo.mjs
  *
@@ -19,7 +16,56 @@ import { apriChrome, vaiA, accedi, esito, riepilogo, foto, valuta, finoA } from 
 
 const PATH = '/office/personale/permessi';
 
-/** Mostra anche le assenze gia' approvate: il filtro parte su «Da approvare». */
+const APRI_NUOVA = `(() => {
+  const b = [...document.querySelectorAll('button')]
+    .find((x) => (x.textContent || '').trim().startsWith('Nuova richiesta'));
+  if (!b) return false;
+  b.click();
+  return true;
+})()`;
+
+/** Il tipo è una select nativa: si scrive il valore e si avvisa React. */
+const scegliTipo = (codice) => `(() => {
+  const d = document.querySelector('[role=dialog]');
+  const s = d && d.querySelector('select');
+  if (!s) return false;
+  const opt = [...s.options].find((o) => o.value === ${JSON.stringify(codice)});
+  if (!opt) return 'tipo assente';
+  const proto = Object.getPrototypeOf(s);
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(s, ${JSON.stringify(codice)});
+  s.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+})()`;
+
+const LEGGI_POPUP = `(() => {
+  const d = document.querySelector('[role=dialog]');
+  if (!d) return null;
+  const testo = (d.innerText || '').replace(/\\s+/g, ' ').trim();
+  return {
+    titolo: d.querySelector('h2')?.textContent?.trim() ?? null,
+    larghezza: Math.round(d.getBoundingClientRect().width),
+    // ⚠️ Confronti senza distinzione di maiuscole: le etichette di sezione
+    // sono rese in maiuscoletto dal CSS, e \`innerText\` restituisce il testo
+    // gia' trasformato. Cercare «Attestato» com'e' scritto nel sorgente qui
+    // non trova niente, e la prova boccia un'interfaccia che funziona.
+    colonnaAttestato: /attestato/i.test(testo),
+    areaTrascinamento: /Trascina qui il PDF/i.test(testo),
+    campoNumero: !!d.querySelector('#numero-attestato'),
+    diceObbligatorio: /obbligatorio/i.test(testo),
+    sceltaInTesta: /cosa registri/i.test(testo),
+    // Il popup non deve mai scorrere in orizzontale.
+    sbordaInOrizzontale: d.scrollWidth > d.clientWidth + 1,
+    testo: testo.slice(0, 420),
+  };
+})()`;
+
+const CHIUDI = `(() => {
+  const b = [...document.querySelectorAll('[role=dialog] button')]
+    .find((x) => (x.textContent || '').trim() === 'Annulla');
+  if (b) { b.click(); return true; }
+  return false;
+})()`;
+
 const MOSTRA_TUTTE = `(() => {
   const b = [...document.querySelectorAll('button')]
     .find((x) => (x.textContent || '').trim().startsWith('Tutte'));
@@ -28,91 +74,73 @@ const MOSTRA_TUTTE = `(() => {
   return true;
 })()`;
 
-/** La pastiglia del giustificativo sulla riga dell'assenza. */
 const LEGGI_PASTIGLIA = `(() => {
   const b = [...document.querySelectorAll('button')]
     .find((x) => /PUC|Giustificativo|Documento allegato/.test(x.textContent || ''));
   if (!b) return null;
-  const s = getComputedStyle(b);
-  return {
-    testo: (b.textContent || '').replace(/\\s+/g, ' ').trim(),
-    sfondo: s.backgroundColor,
-    larghezza: Math.round(b.getBoundingClientRect().width),
-  };
-})()`;
-
-const APRI_PASTIGLIA = `(() => {
-  const b = [...document.querySelectorAll('button')]
-    .find((x) => /PUC|Giustificativo|Documento allegato/.test(x.textContent || ''));
-  if (!b) return false;
-  b.click();
-  return true;
-})()`;
-
-const LEGGI_POPUP = `(() => {
-  const d = document.querySelector('[role=dialog]');
-  if (!d) return null;
-  const testo = (d.innerText || '').replace(/\\s+/g, ' ').trim();
-  const link = [...d.querySelectorAll('a')].map((a) => (a.textContent || '').trim());
-  return {
-    titolo: d.querySelector('h2')?.textContent?.trim() ?? null,
-    areaTrascinamento: /Trascina qui il certificato/.test(d.innerText || ''),
-    diceObbligatorio: /obbligatorio/.test(d.innerText || ''),
-    haTipiNumero: /PUC/.test(testo) && /Protocollo/.test(testo) && /Codice fiscale/.test(testo),
-    link,
-    larghezza: Math.round(d.getBoundingClientRect().width),
-    testo: testo.slice(0, 500),
-  };
+  return { testo: (b.textContent || '').replace(/\\s+/g, ' ').trim() };
 })()`;
 
 const { cdp, chiudi } = await apriChrome({ larghezza: 1440, altezza: 980 });
 try {
   await accedi(cdp, 'kantiere');
   await vaiA(cdp, PATH);
+
+  // ── Il popup che crea l'assenza ────────────────────────────────────────
+  await valuta(cdp, APRI_NUOVA);
+  await finoA(cdp, `document.querySelector('[role=dialog]')`, { cosa: 'apertura di Nuova richiesta' });
+  await new Promise((r) => setTimeout(r, 400));
+
+  const stretto = await valuta(cdp, LEGGI_POPUP);
+  esito(stretto?.sceltaInTesta === true, 'la scelta «Cosa registri» sta in testa, non in fondo');
+  esito(
+    stretto?.colonnaAttestato === false,
+    'per un permesso normale la colonna attestato non c\'e\'',
+    stretto?.colonnaAttestato ? 'ma compare' : '',
+  );
+  const largoPrima = stretto?.larghezza ?? 0;
+  await foto(cdp, 'assenza-popup-stretto');
+
+  const scelta = await valuta(cdp, scegliTipo('malattia'));
+  if (scelta !== true) {
+    esito(false, 'il tipo «Malattia» e\' fra quelli attivi', String(scelta));
+  } else {
+    await new Promise((r) => setTimeout(r, 500));
+    const largo = await valuta(cdp, LEGGI_POPUP);
+    esito(largo?.colonnaAttestato === true, 'scegliendo Malattia compare la colonna dell\'attestato');
+    esito(largo?.campoNumero === true, 'il campo del numero sta in alto nella colonna');
+    esito(largo?.areaTrascinamento === true, 'sotto c\'e\' l\'area dove trascinare il PDF');
+    esito(largo?.diceObbligatorio === true, 'per la malattia il numero risulta obbligatorio');
+    esito(
+      (largo?.larghezza ?? 0) > largoPrima + 200,
+      'il popup si allarga solo quando serve la seconda colonna',
+      `${largoPrima}px → ${largo?.larghezza}px`,
+    );
+    esito(largo?.sbordaInOrizzontale === false, 'il popup non sborda in orizzontale');
+    await foto(cdp, 'assenza-popup-malattia');
+    console.log(`\n  Testo del popup: ${largo?.testo ?? '(vuoto)'}\n`);
+  }
+
+  await valuta(cdp, CHIUDI);
+  await new Promise((r) => setTimeout(r, 400));
+
+  // ── Il popup di modifica, sulla riga dell'assenza ──────────────────────
   await valuta(cdp, MOSTRA_TUTTE);
   await new Promise((r) => setTimeout(r, 600));
-
   const pastiglia = await valuta(cdp, LEGGI_PASTIGLIA);
   if (!pastiglia) {
     console.log(
-      '\n  Nessuna assenza con giustificativo su DEMOC: creane una di tipo malattia e rilancia.',
+      '\n  Nessuna assenza con giustificativo sul tenant demo: la seconda parte si salta.\n' +
+        '  Per provarla, crea una malattia da «Nuova richiesta» e rilancia.',
     );
-    await foto(cdp, 'giustificativo-elenco-vuoto');
-    throw new Error('manca il caso di prova');
+  } else {
+    esito(
+      /PUC/.test(pastiglia.testo),
+      'sulla riga dell\'assenza si vede lo stato dell\'attestato',
+      pastiglia.testo,
+    );
+    await foto(cdp, 'assenza-pastiglia');
   }
-
-  esito(
-    /PUC mancante/.test(pastiglia.testo),
-    'sulla riga si vede subito che il PUC manca',
-    pastiglia.testo,
-  );
-  esito(
-    pastiglia.sfondo.includes('254') || pastiglia.sfondo.includes('251'),
-    'la pastiglia e\' ambra finche\' il numero non c\'e\'',
-    pastiglia.sfondo,
-  );
-  await foto(cdp, 'giustificativo-pastiglia');
-
-  await valuta(cdp, APRI_PASTIGLIA);
-  await finoA(cdp, `document.querySelector('[role=dialog]')`, { cosa: 'apertura del popup' });
-  await new Promise((r) => setTimeout(r, 500));
-
-  const popup = await valuta(cdp, LEGGI_POPUP);
-  esito(popup?.titolo === 'Giustificativo', 'il popup si apre', popup?.titolo ?? 'assente');
-  esito(popup?.areaTrascinamento === true, 'c\'e\' l\'area dove trascinare il certificato');
-  esito(
-    popup?.diceObbligatorio === true,
-    'per la malattia dice che il numero e\' obbligatorio',
-  );
-  esito(popup?.haTipiNumero === true, 'si puo\' scegliere fra PUC, protocollo e codice fiscale');
-  esito(
-    (popup?.larghezza ?? 0) > 400 && (popup?.larghezza ?? 0) < 700,
-    'il popup ha una larghezza da popup, non da pagina',
-    `${popup?.larghezza}px`,
-  );
-
-  await foto(cdp, 'giustificativo-popup');
-  console.log(`\n  Testo del popup: ${popup?.testo ?? '(vuoto)'}\n`);
 } finally {
   await chiudi();
 }

@@ -437,7 +437,7 @@ const RichiestaSchema = z
  *  gruppo del dipendente. */
 export async function richiediPermesso(
   input: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const parsed = RichiestaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
   const ctx = await requireTenantContext();
@@ -553,7 +553,9 @@ export async function richiediPermesso(
 
   revalidatePath(PATH_PERMESSI);
   revalidatePath('/mobile/permessi');
-  return { ok: true };
+  // L'id torna al chiamante: serve a chi, nello stesso gesto, allega subito il
+  // certificato all'assenza appena creata.
+  return { ok: true, id: (row as unknown as { id: string }).id };
 }
 
 const DecisioneSchema = z.object({
@@ -963,7 +965,7 @@ export async function salvaGiustificativo(
     return {
       ok: false,
       error:
-        'Per la malattia il numero dell’attestato è obbligatorio: leggilo sul certificato del medico. Se è cartaceo, scegli «Protocollo cartaceo».',
+        'Il numero dell’attestato è obbligatorio per la malattia. Se il certificato è cartaceo, scegli «Protocollo».',
     };
   }
 

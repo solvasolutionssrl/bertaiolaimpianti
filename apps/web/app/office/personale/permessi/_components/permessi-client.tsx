@@ -28,14 +28,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@kommessa/ui';
-import { LABEL_STATO_PERMESSO } from '@kommessa/api/permessi-tipi';
+import { LABEL_STATO_PERMESSO, numeroAttestatoObbligatorio } from '@kommessa/api/permessi-tipi';
 import { useAlert } from '@/app/_components/confirm-provider';
 import {
+  caricaGiustificativo,
   decidiPermesso,
   registraAssenzaUfficio,
   richiediPermesso,
+  salvaGiustificativo,
 } from '@/app/office/_actions/ferie-permessi';
 import { GiustificativoDialog, type GiustificativoEsistente } from './giustificativo-dialog';
+import { AreaDocumento, type FaseDocumento } from './area-documento';
 
 export interface DipOpt {
   id: string;
@@ -46,6 +49,11 @@ export interface TipoOpt {
   label: string;
   unita: 'giorni' | 'ore' | 'entrambi';
   oreDefault?: number | null;
+  /**
+   * Questa assenza vuole un documento. Lo dice il catalogo per i tipi di
+   * serie, la configurazione del cliente per quelli che si e' creato lui.
+   */
+  richiedeGiustificativo?: boolean;
 }
 
 type Stato = 'in_attesa' | 'approvato' | 'rifiutato' | 'modifica_richiesta';
@@ -307,6 +315,16 @@ function NuovaRichiestaDialog({
   // se stesso: prende atto di un fatto. In quel caso l'assenza nasce già
   // approvata, senza passare da un'approvazione che sarebbe una formalità.
   const [registraDiretta, setRegistraDiretta] = React.useState(false);
+  // L'attestato si compila qui, nello stesso gesto che crea l'assenza: era un
+  // secondo passaggio su un'altra schermata, e non lo trovava nessuno.
+  const [tipoInfo, setTipoInfo] = React.useState<'C' | 'P' | 'M'>('P');
+  const [numero, setNumero] = React.useState('');
+  const [doc, setDoc] = React.useState<File | null>(null);
+  const [fase, setFase] = React.useState<FaseDocumento>('idle');
+
+  const tipoScelto = tipiDisponibili.find((t) => t.codice === tipo);
+  const serveDoc = tipoScelto?.richiedeGiustificativo === true;
+  const numeroObbligatorio = numeroAttestatoObbligatorio(tipo);
 
   const dipFiltrati = React.useMemo(() => {
     const q = cercaDip.trim().toLowerCase();
@@ -330,7 +348,14 @@ function NuovaRichiestaDialog({
 
   const invia = () => {
     if (!dipendenteId) {
-      void alert({ title: 'Manca il dipendente', body: 'Scegli per chi è la richiesta.' });
+      void alert({ title: 'Manca il dipendente', body: 'Scegli il dipendente.' });
+      return;
+    }
+    if (serveDoc && numeroObbligatorio && !numero.trim()) {
+      void alert({
+        title: 'Manca il numero',
+        body: 'Il numero dell’attestato è obbligatorio per la malattia. Se il certificato è cartaceo, scegli «Protocollo».',
+      });
       return;
     }
     start(async () => {
@@ -351,6 +376,42 @@ function NuovaRichiestaDialog({
         await alert({ title: 'Non creata', body: res.error });
         return;
       }
+
+      // L'assenza c'e'. Da qui in avanti un errore non la cancella: si dice
+      // cosa non e' riuscito e si chiude lo stesso, perche' il giustificativo
+      // si puo' completare dalla riga.
+      if (serveDoc && (numero.trim() || doc)) {
+        const salvato = await salvaGiustificativo({
+          permessoId: res.id,
+          tipoInfo,
+          numero: numero.trim() || null,
+        });
+        if (!salvato.ok) {
+          await alert({ title: 'Assenza creata, attestato no', body: salvato.error });
+          onClose();
+          router.refresh();
+          return;
+        }
+        if (doc) {
+          setFase('carico');
+          const dati = new FormData();
+          dati.set('giustificativoId', salvato.id);
+          dati.set('file', doc);
+          const caricato = await caricaGiustificativo(dati);
+          if (!caricato.ok) {
+            setFase('idle');
+            await alert({ title: 'Documento non caricato', body: caricato.error });
+            onClose();
+            router.refresh();
+            return;
+          }
+          // Un attimo sul check: chi ha caricato un documento vuole vedere che
+          // e' arrivato, non una finestra che sparisce.
+          setFase('fatto');
+          await new Promise((r) => setTimeout(r, 900));
+        }
+      }
+
       onClose();
       router.refresh();
     });
@@ -358,11 +419,60 @@ function NuovaRichiestaDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        className={
+          'max-h-[92vh] grid-cols-[minmax(0,1fr)] overflow-y-auto overflow-x-hidden ' +
+          // Il popup si allarga solo quando c'e' davvero una seconda colonna:
+          // per delle ferie resta stretto com'era.
+          (serveDoc ? 'sm:max-w-[920px]' : 'sm:max-w-lg')
+        }
+      >
         <DialogHeader>
-          <DialogTitle>Nuova richiesta</DialogTitle>
+          <DialogTitle>{registraDiretta ? 'Registra assenza' : 'Nuova richiesta'}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div
+          className={serveDoc ? 'grid min-w-0 gap-5 lg:grid-cols-3 lg:items-stretch' : 'min-w-0'}
+        >
+        <div className={'min-w-0 space-y-4' + (serveDoc ? ' lg:col-span-2' : '')}>
+          {/* E' la prima decisione, non una casella in fondo: da come si
+              risponde qui dipende se l'assenza nasce da approvare o gia'
+              approvata. Segmentata piena, come le altre scelte dell'ufficio. */}
+          <div>
+            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Cosa registri
+            </span>
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { diretta: false, titolo: 'Richiesta', sotto: 'Da approvare' },
+                { diretta: true, titolo: 'Assenza avvenuta', sotto: 'Registrata come approvata' },
+              ].map((o) => {
+                const attivo = registraDiretta === o.diretta;
+                return (
+                  <button
+                    key={o.titolo}
+                    type="button"
+                    onClick={() => setRegistraDiretta(o.diretta)}
+                    className={
+                      attivo
+                        ? 'rounded-md bg-primary px-2.5 py-2 text-left text-primary-foreground'
+                        : 'rounded-md border border-border bg-card px-2.5 py-2 text-left hover:border-primary/40'
+                    }
+                  >
+                    <span className="block text-[13px] font-semibold">{o.titolo}</span>
+                    <span
+                      className={
+                        'mt-0.5 block text-[11px] leading-snug ' +
+                        (attivo ? 'text-primary-foreground/80' : 'text-muted-foreground')
+                      }
+                    >
+                      {o.sotto}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Dipendente */}
           <div className="text-sm">
             <span className="mb-1 block text-xs font-medium text-muted-foreground">Per chi</span>
@@ -491,27 +601,88 @@ function NuovaRichiestaDialog({
             />
           </label>
 
-          <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
-            <span className="min-w-0">
-              <span className="font-medium">Registra come già approvata</span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                Per un&apos;assenza già avvenuta (una malattia, un lutto): la stai registrando, non
-                chiedendo.
-              </span>
-            </span>
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 shrink-0"
-              checked={registraDiretta}
-              onChange={(e) => setRegistraDiretta(e.target.checked)}
-            />
-          </label>
-
           <p className="rounded-md border border-sky-200 bg-sky-50/50 px-3 py-2 text-[11px] text-sky-700">
             {registraDiretta
-              ? 'L’assenza viene registrata come approvata da te e la persona riceve un avviso. Il giustificativo si allega dopo, dalla riga dell’assenza.'
-              : 'La richiesta resta da approvare: passa dal normale flusso di approvazione anche se la crei tu.'}
+              ? 'Registrata come approvata. Il dipendente riceve una notifica.'
+              : 'La richiesta resta da approvare.'}
           </p>
+        </div>
+
+        {/* Colonna dell'attestato: compare solo per le assenze che vogliono un
+            documento (malattia, infortunio, 104, lutto, congedi). Numero in
+            alto, documento sotto: e' l'ordine in cui arrivano. */}
+        {serveDoc ? (
+          <div className="flex min-w-0 flex-col lg:border-l lg:border-slate-200 lg:pl-5">
+            <span className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Stethoscope className="h-3.5 w-3.5" />
+              Attestato
+            </span>
+
+            <div className="flex flex-wrap gap-1">
+              {(
+                [
+                  { codice: 'P' as const, label: 'PUC' },
+                  { codice: 'M' as const, label: 'Protocollo' },
+                  { codice: 'C' as const, label: 'Cod. fiscale' },
+                ]
+              ).map((t) => (
+                <button
+                  key={t.codice}
+                  type="button"
+                  onClick={() => setTipoInfo(t.codice)}
+                  className={
+                    'rounded-md px-2 py-1 text-[11px] font-medium transition-colors ' +
+                    (tipoInfo === t.codice
+                      ? 'bg-primary text-primary-foreground'
+                      : 'border border-border bg-card hover:border-primary/40')
+                  }
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="mt-2 block text-sm" htmlFor="numero-attestato">
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                Numero{' '}
+                {numeroObbligatorio ? (
+                  <span className="text-rose-600">obbligatorio</span>
+                ) : (
+                  '(facoltativo)'
+                )}
+              </span>
+              <input
+                id="numero-attestato"
+                value={numero}
+                maxLength={30}
+                onChange={(e) => setNumero(e.target.value)}
+                placeholder="Come sta sul certificato"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm focus:border-primary focus:outline-none"
+              />
+            </label>
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+              {numeroObbligatorio
+                ? 'Si legge sul certificato del medico.'
+                : 'Facoltativo per questo tipo di assenza.'}
+            </p>
+
+            <span className="mb-1.5 mt-4 block text-xs font-medium text-muted-foreground">
+              Documento
+            </span>
+            <div className="min-h-0 flex-1">
+              <AreaDocumento
+                riempi
+                file={doc}
+                onFile={setDoc}
+                fase={fase}
+                onErrore={(title, body) => void alert({ title, body })}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Il documento resta in archivio.
+            </p>
+          </div>
+        ) : null}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={pending}>

@@ -116,6 +116,14 @@ Il certificato medico nasceva qui dentro, ma **appartiene a chi gestisce le asse
 - Uno per assenza: salvare di nuovo **aggiorna**, cosi' correggere un numero sbagliato non lascia due attestati sullo stesso periodo.
 - ⚠️ **La tabella si chiama ancora `paghe_certificati`** ed e' un nome sbagliato per un cliente senza paghe. Non e' stata rinominata di proposito: le migrazioni le applica una persona a mano, e rinominarla aprirebbe una finestra in cui il codice e' online e la tabella ha il vecchio nome — con la pagina paghe di FPM rotta. Nome imperfetto, produzione intatta.
 
+#### Dove lo fa l'ufficio
+
+Sidebar **Personale → Ferie e permessi**, tasto **Nuova richiesta**. In testa al popup si sceglie fra **Richiesta** (resta da approvare) e **Assenza avvenuta** (nasce approvata, con l'ufficio come decisore). Scegliendo un tipo che vuole un documento il popup **si allarga** e a destra compare la colonna **Attestato**: il numero in alto, sotto l'area dove trascinare il PDF. Numero e documento si salvano **nello stesso gesto** che crea l'assenza, con la barretta di caricamento e il check alla fine.
+
+Dopo, sulla riga dell'assenza resta la pastiglia (ambra finche' il numero manca, verde quando c'e') che riapre lo stesso contenuto: serve a correggere un numero, sostituire il documento o allegarlo quando arriva in ritardo.
+
+> ⚠️ **Perche' sta li'.** Prima il certificato era un secondo passaggio su un'altra schermata, e la prima domanda del cliente e' stata «ma dove me lo chiede?». Se un domani si aggiunge un dato all'assenza, il posto giusto e' **dentro il popup che la crea**, non una pagina a parte. L'area di caricamento e' un pezzo unico (`_components/area-documento.tsx`) condiviso dai due popup: due aree di caricamento con comportamenti diversi nella stessa pagina si notano subito.
+
 #### Ciclo di vita del documento (regole chiuse il 20/09 dopo una revisione critica)
 
 - **Sostituire l'allegato cancella il precedente.** La riga indica un file solo: senza la cancellazione il certificato di prima restava su R2 per sempre, senza nessuna riga che lo puntasse e nessuna schermata che lo raggiungesse. E' un documento sanitario, non un file qualunque.
