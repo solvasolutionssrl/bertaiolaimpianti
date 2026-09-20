@@ -18,6 +18,12 @@ export interface TipoOpt {
   /** Ore predefinite (per i tipi custom a ore fisse). */
   oreDefault?: number | null;
   custom?: boolean;
+  /**
+   * Serve un documento a giustificare l'assenza. Per i tipi del catalogo lo
+   * dice il catalogo stesso; per un tipo creato dall'azienda lo decide lei,
+   * altrimenti la regola sarebbe muta proprio sui tipi che non conosciamo.
+   */
+  richiedeGiustificativo?: boolean;
 }
 
 /** Tipi permesso personalizzati del tenant (config `permesso_tipi_custom`). */
@@ -46,6 +52,7 @@ export async function leggiTipiPermessoCustom(
         | 'entrambi',
       oreDefault: typeof t.oreDefault === 'number' ? t.oreDefault : null,
       custom: true,
+      richiedeGiustificativo: t.richiedeGiustificativo === true,
     }))
     .filter((t) => t.codice && t.label);
 }

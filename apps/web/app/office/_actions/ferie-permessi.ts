@@ -1,5 +1,6 @@
 'use server';
 
+import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
@@ -8,7 +9,15 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
-import { CODICI_PERMESSO, tipoPermesso } from '@kommessa/api/permessi-tipi';
+import {
+  CODICI_PERMESSO,
+  numeroAttestatoObbligatorio,
+  tipoPermesso,
+} from '@kommessa/api/permessi-tipi';
+import {
+  getR2ProviderFromEnv,
+  getR2ProviderFromTenantConfig,
+} from '@kommessa/integrations/storage';
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
@@ -281,6 +290,8 @@ const TipoCustomSchema = z.object({
   label: z.string().trim().min(2, 'Nome troppo corto').max(60),
   unita: z.enum(['giorni', 'ore', 'entrambi']),
   oreDefault: z.number().min(0.5).max(24).nullable().optional(),
+  /** Se l'azienda vuole un documento a giustificare questo tipo di assenza. */
+  richiedeGiustificativo: z.boolean().optional(),
 });
 
 /** Crea un tipo di permesso personalizzato del tenant (config). */
@@ -319,6 +330,7 @@ export async function creaTipoPermessoCustom(input: unknown): Promise<Ok> {
     label: parsed.data.label,
     unita: parsed.data.unita,
     oreDefault: parsed.data.unita === 'ore' ? parsed.data.oreDefault ?? null : null,
+    richiedeGiustificativo: parsed.data.richiedeGiustificativo === true,
   };
   const newConfig = { ...existing, permesso_tipi_custom: [...list, nuovo] };
   const { error } = await svc
@@ -643,4 +655,430 @@ function fmtRange(inizio: string, fine: string): string {
     });
   };
   return inizio === fine ? f(inizio) : `${f(inizio)} - ${f(fine)}`;
+}
+
+// =====================================================================
+// ASSENZE REGISTRATE DALL'UFFICIO
+// =====================================================================
+
+/**
+ * L'ufficio registra un'assenza gia' avvenuta, tipicamente una malattia.
+ *
+ * **Non e' una richiesta.** Quando l'ufficio mette qualcuno in malattia sta
+ * prendendo atto di un fatto, non chiedendo un permesso a se stesso: farla
+ * passare per «in attesa» vorrebbe dire approvare la propria scrittura un
+ * minuto dopo averla fatta. Nasce quindi gia' approvata, con l'ufficio come
+ * decisore. Se invece e' il tecnico a chiedere, resta il percorso di sempre
+ * (`richiediPermesso` → in attesa → `decidiPermesso`).
+ *
+ * La persona viene avvisata lo stesso: e' la sua assenza, deve poterla vedere
+ * e dire se c'e' un errore.
+ */
+export async function registraAssenzaUfficio(
+  input: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const parsed = RichiestaSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+
+  const d = parsed.data;
+  const oraria = !d.tuttoIlGiorno;
+  if (oraria && (!d.oraInizio || !d.oraFine)) {
+    return { ok: false, error: 'Indica ora di inizio e fine' };
+  }
+  if (oraria && d.dataInizio !== d.dataFine) {
+    return { ok: false, error: 'Un permesso a ore riguarda un solo giorno' };
+  }
+
+  const svc = createServiceSupabase();
+  const { data: dipRow } = await svc
+    .from('dipendenti' as never)
+    .select('id, tenant_id, user_id, nome, cognome')
+    .eq('id', d.dipendenteId)
+    .maybeSingle();
+  const dip = dipRow as {
+    tenant_id: string;
+    user_id: string | null;
+    nome: string;
+    cognome: string;
+  } | null;
+  if (!dip || dip.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'Dipendente non valido' };
+  }
+
+  // Il gruppo si registra lo stesso, anche se qui nessuno deve approvare:
+  // serve a ritrovare l'assenza nei conteggi per reparto.
+  const { data: mem } = await svc
+    .from('gruppo_membri' as never)
+    .select('gruppo_id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', d.dipendenteId)
+    .maybeSingle();
+
+  const adesso = new Date().toISOString();
+  const { data: row, error } = await svc
+    .from('permesso_richieste' as never)
+    .insert({
+      tenant_id: ctx.tenantId,
+      dipendente_id: d.dipendenteId,
+      tipo: d.tipo,
+      data_inizio: d.dataInizio,
+      data_fine: d.dataFine,
+      tutto_il_giorno: d.tuttoIlGiorno,
+      ora_inizio: oraria ? d.oraInizio : null,
+      ora_fine: oraria ? d.oraFine : null,
+      motivo: d.motivo?.trim() || null,
+      stato: 'approvato',
+      gruppo_id: (mem as { gruppo_id: string } | null)?.gruppo_id ?? null,
+      // Nessun approvatore esterno: l'ha scritta l'ufficio, e l'ufficio la firma.
+      approver_user_id: null,
+      creato_da: ctx.userId,
+      deciso_da: ctx.userId,
+      deciso_at: adesso,
+      decisione_nota: 'Registrata dall’ufficio',
+    } as never)
+    .select('id')
+    .single();
+  if (error || !row) return { ok: false, error: error?.message ?? 'Assenza non registrata' };
+  const id = (row as { id: string }).id;
+
+  await auditTenant(svc, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'permesso_richiesta',
+    entityId: id,
+    action: 'permesso.registra_ufficio',
+    after: { tipo: d.tipo, dal: d.dataInizio, al: d.dataFine, dipendente: d.dipendenteId },
+  });
+
+  if (dip.user_id) {
+    const tipoLabel = tipoPermesso(d.tipo)?.label ?? d.tipo;
+    const title = 'Assenza registrata';
+    const body = `${tipoLabel} · ${fmtRange(d.dataInizio, d.dataFine)}. L'ha inserita l'ufficio.`;
+    const url = '/mobile/permessi';
+    const { error: eNotifica } = await svc.from('notifiche' as never).insert({
+      tenant_id: ctx.tenantId,
+      user_id: dip.user_id,
+      type: 'permesso_esito',
+      payload: { title, body, url },
+    } as never);
+    if (eNotifica) console.error('[ferie-permessi] notifica non registrata:', eNotifica.message);
+    waitUntil(
+      inviaPushAUtente(svc as never, dip.user_id, { title, body, url }).catch((e) =>
+        console.error('[ferie-permessi] push non inviato:', e),
+      ),
+    );
+  }
+
+  revalidatePath(PATH_PERMESSI);
+  revalidatePath('/mobile/permessi');
+  return { ok: true, id };
+}
+
+// =====================================================================
+// GIUSTIFICATIVI: numero dell'attestato + documento del medico
+// =====================================================================
+//
+// Il documento vive in `paghe_certificati`. Il nome e' un'eredita': la tabella
+// e' nata con l'export verso il consulente del lavoro, ma il certificato medico
+// non e' roba di paghe — e' roba di chi gestisce le assenze, e deve funzionare
+// anche per un cliente che l'export non ce l'ha. Qui sotto ci sono le azioni
+// **generiche**, aperte a chiunque abbia il modulo Dipendenti; quelle in
+// `office/_actions/paghe.ts` restano per la pagina dell'export.
+// Rinominare la tabella si puo', ma le migrazioni le applica una persona a
+// mano: farlo vorrebbe dire una finestra in cui il codice e' online e la
+// tabella ha ancora il vecchio nome, e la pagina paghe si rompe.
+
+/** Gli stessi limiti dell'allegato in area paghe: e' lo stesso documento. */
+const GIUSTIFICATIVO_MIME = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+];
+const GIUSTIFICATIVO_MAX_BYTE = 15 * 1024 * 1024;
+
+const GiustificativoSchema = z.object({
+  permessoId: z.string().uuid(),
+  /** `P` attestato telematico (il PUC), `M` protocollo cartaceo, `C` codice fiscale. */
+  tipoInfo: z.enum(['C', 'P', 'M']).default('P'),
+  numero: z.string().trim().max(30).nullable().optional(),
+  nota: z.string().trim().max(500).nullable().optional(),
+});
+
+/**
+ * Salva il numero dell'attestato di un'assenza (per la malattia e' il PUC).
+ *
+ * Le date e la persona **non si prendono dal chiamante**: si leggono
+ * dall'assenza a cui il giustificativo si aggancia. Un certificato con date
+ * diverse da quelle dell'assenza non vuol dire niente, e lasciarle scrivere
+ * dal browser sarebbe solo un modo per farle divergere.
+ */
+export async function salvaGiustificativo(
+  input: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const parsed = GiustificativoSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+  }
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+
+  const d = parsed.data;
+  const svc = createServiceSupabase();
+  const { data: richRow } = await svc
+    .from('permesso_richieste' as never)
+    .select('id, tenant_id, dipendente_id, tipo, data_inizio, data_fine')
+    .eq('id', d.permessoId)
+    .maybeSingle();
+  const rich = richRow as {
+    tenant_id: string;
+    dipendente_id: string;
+    tipo: string;
+    data_inizio: string;
+    data_fine: string;
+  } | null;
+  if (!rich || rich.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'Assenza non trovata' };
+  }
+
+  const numero = d.numero?.trim() || null;
+  // Per la malattia il numero e' obbligatorio: senza, il consulente del lavoro
+  // non chiude la busta e deve inseguirlo a mano. Non si inventa mai, quindi
+  // l'unica strada e' chiederlo a chi ha il certificato davanti.
+  if (!numero && numeroAttestatoObbligatorio(rich.tipo)) {
+    return {
+      ok: false,
+      error:
+        'Per la malattia il numero dell’attestato è obbligatorio: leggilo sul certificato del medico. Se è cartaceo, scegli «Protocollo cartaceo».',
+    };
+  }
+
+  const riga = {
+    tenant_id: ctx.tenantId,
+    dipendente_id: rich.dipendente_id,
+    permesso_id: d.permessoId,
+    dal: rich.data_inizio,
+    al: rich.data_fine,
+    tipo_info: d.tipoInfo,
+    numero,
+    nota: d.nota?.trim() || null,
+    creato_da: ctx.userId,
+  };
+
+  // Uno per assenza: se c'e' gia' si aggiorna, cosi' correggere un numero
+  // sbagliato non lascia due attestati sullo stesso periodo.
+  const { data: esistente } = await svc
+    .from('paghe_certificati' as never)
+    .select('id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('permesso_id', d.permessoId)
+    .maybeSingle();
+  const idEsistente = (esistente as { id: string } | null)?.id ?? null;
+
+  if (idEsistente) {
+    const { error } = await svc
+      .from('paghe_certificati' as never)
+      .update(riga as never)
+      .eq('id', idEsistente)
+      .eq('tenant_id', ctx.tenantId);
+    if (error) return { ok: false, error: error.message };
+    await auditTenant(svc, {
+      tenantId: ctx.tenantId,
+      actorUserId: ctx.userId,
+      actorRole: ctx.role,
+      entityType: 'permesso_giustificativo',
+      entityId: idEsistente,
+      action: 'permesso.giustificativo.modifica',
+      after: { permessoId: d.permessoId, tipoInfo: d.tipoInfo, conNumero: Boolean(numero) },
+    });
+    revalidatePath(PATH_PERMESSI);
+    return { ok: true, id: idEsistente };
+  }
+
+  const { data: creato, error } = await svc
+    .from('paghe_certificati' as never)
+    .insert(riga as never)
+    .select('id')
+    .single();
+  if (error || !creato) return { ok: false, error: error?.message ?? 'Giustificativo non salvato' };
+  const id = (creato as { id: string }).id;
+
+  await auditTenant(svc, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'permesso_giustificativo',
+    entityId: id,
+    action: 'permesso.giustificativo.crea',
+    after: { permessoId: d.permessoId, tipoInfo: d.tipoInfo, conNumero: Boolean(numero) },
+  });
+
+  revalidatePath(PATH_PERMESSI);
+  return { ok: true, id };
+}
+
+/**
+ * Archivia il documento del medico accanto al numero.
+ *
+ * Prima si scrive la riga, poi si carica il file: se la riga non si salva non
+ * resta un documento su un archivio che nessuno guardera' mai, e se il file
+ * non si carica il numero e' comunque al sicuro.
+ */
+export async function caricaGiustificativo(
+  formData: FormData,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const giustificativoId = String(formData.get('giustificativoId') ?? '');
+  if (!z.string().uuid().safeParse(giustificativoId).success) {
+    return { ok: false, error: 'Giustificativo non valido' };
+  }
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: 'File mancante' };
+  if (file.size > GIUSTIFICATIVO_MAX_BYTE) return { ok: false, error: 'Il file supera i 15 MB' };
+  if (!GIUSTIFICATIVO_MIME.includes(file.type)) {
+    return { ok: false, error: 'Sono ammessi PDF e immagini' };
+  }
+
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+
+  const svc = createServiceSupabase();
+  const { data: certRow } = await svc
+    .from('paghe_certificati' as never)
+    .select('id, tenant_id, dal')
+    .eq('id', giustificativoId)
+    .maybeSingle();
+  const cert = certRow as { tenant_id: string; dal: string } | null;
+  if (!cert || cert.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'Giustificativo non trovato' };
+  }
+
+  const { data: tenantRow } = await svc
+    .from('tenants')
+    .select('slug, r2_config')
+    .eq('id', ctx.tenantId)
+    .maybeSingle();
+  const r2 =
+    getR2ProviderFromTenantConfig(
+      (tenantRow?.r2_config as Record<string, unknown> | null) ?? null,
+    ) ?? getR2ProviderFromEnv();
+  if (!r2) return { ok: false, error: 'Archivio documenti non configurato' };
+
+  const nomeSicuro = (file.name || 'giustificativo')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9._-]/g, '_')
+    .slice(-80);
+  const chiave = `tenants/${tenantRow?.slug ?? ctx.tenantSlug}/personale/giustificativi/${cert.dal.slice(0, 4)}/${giustificativoId}/${randomUUID().slice(0, 8)}_${nomeSicuro}`;
+
+  try {
+    await r2.putObject(chiave, Buffer.from(await file.arrayBuffer()), file.type);
+  } catch {
+    return { ok: false, error: 'Caricamento non riuscito, riprova' };
+  }
+
+  const { error } = await svc
+    .from('paghe_certificati' as never)
+    .update({
+      r2_key: chiave,
+      nome_file: file.name || nomeSicuro,
+      mime: file.type,
+      size_bytes: file.size,
+    } as never)
+    .eq('id', giustificativoId)
+    .eq('tenant_id', ctx.tenantId);
+  if (error) {
+    // Niente file orfani in un archivio che nessuno guarda piu'.
+    await r2.delete(chiave).catch(() => undefined);
+    return { ok: false, error: error.message };
+  }
+
+  await auditTenant(svc, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'permesso_giustificativo',
+    entityId: giustificativoId,
+    action: 'permesso.giustificativo.allegato',
+    after: { nome: file.name, bytes: file.size },
+  });
+
+  revalidatePath(PATH_PERMESSI);
+  return { ok: true, id: giustificativoId };
+}
+
+/** Toglie numero e documento. Il file su R2 se ne va con la riga. */
+export async function eliminaGiustificativo(id: string): Promise<Ok> {
+  if (!z.string().uuid().safeParse(id).success) return { ok: false, error: 'ID non valido' };
+  let ctx;
+  try {
+    ctx = await requireFerieContext();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
+
+  const svc = createServiceSupabase();
+  const { data: certRow } = await svc
+    .from('paghe_certificati' as never)
+    .select('id, tenant_id, r2_key, numero, permesso_id')
+    .eq('id', id)
+    .maybeSingle();
+  const cert = certRow as { tenant_id: string; r2_key: string | null } | null;
+  if (!cert || cert.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'Giustificativo non trovato' };
+  }
+
+  const { error } = await svc
+    .from('paghe_certificati' as never)
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', ctx.tenantId);
+  if (error) return { ok: false, error: error.message };
+
+  if (cert.r2_key) {
+    const { data: tenantRow } = await svc
+      .from('tenants')
+      .select('r2_config')
+      .eq('id', ctx.tenantId)
+      .maybeSingle();
+    const r2 =
+      getR2ProviderFromTenantConfig(
+        (tenantRow?.r2_config as Record<string, unknown> | null) ?? null,
+      ) ?? getR2ProviderFromEnv();
+    await r2?.delete(cert.r2_key).catch(() => undefined);
+  }
+
+  await auditTenant(svc, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'permesso_giustificativo',
+    entityId: id,
+    action: 'permesso.giustificativo.elimina',
+    before: certRow,
+  });
+
+  revalidatePath(PATH_PERMESSI);
+  return { ok: true };
 }

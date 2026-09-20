@@ -3,7 +3,17 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Scale, Plus, Trash2, Loader2, Sparkles, ExternalLink, Clock, CalendarDays } from 'lucide-react';
+import {
+  Scale,
+  Plus,
+  Trash2,
+  Loader2,
+  Sparkles,
+  ExternalLink,
+  Clock,
+  CalendarDays,
+  FileCheck2,
+} from 'lucide-react';
 import { Button, Card, CardContent, Badge } from '@kommessa/ui';
 import { PERMESSO_TIPI, UNITA_LABEL } from '@kommessa/api/permessi-tipi';
 import type { TipoOpt } from '@/app/_lib/dipendenti-config';
@@ -35,6 +45,10 @@ export function PersonaleSettingsClient({
   const [label, setLabel] = React.useState('');
   const [unita, setUnita] = React.useState<Unita>('giorni');
   const [oreDefault, setOreDefault] = React.useState('');
+  // I tipi del catalogo sanno già se vogliono un documento; un tipo creato
+  // dall'azienda no, e senza questa casella la regola resterebbe muta proprio
+  // sui tipi che il catalogo non conosce.
+  const [conGiustificativo, setConGiustificativo] = React.useState(false);
 
   const toggle = (codice: string) => {
     const next = new Set(set);
@@ -59,6 +73,7 @@ export function PersonaleSettingsClient({
         label: label.trim(),
         unita,
         oreDefault: unita === 'ore' && oreDefault ? Number(oreDefault) : null,
+        richiedeGiustificativo: conGiustificativo,
       });
       if (!res.ok) {
         await alert({ title: 'Errore', body: res.error });
@@ -67,6 +82,7 @@ export function PersonaleSettingsClient({
       setLabel('');
       setOreDefault('');
       setUnita('giorni');
+      setConGiustificativo(false);
       router.refresh();
     });
   };
@@ -162,6 +178,14 @@ export function PersonaleSettingsClient({
                       {UNITA_LABEL[t.unita]}
                       {t.unita === 'ore' && t.oreDefault ? ` · ${t.oreDefault}h` : ''}
                     </Badge>
+                    {t.richiedeGiustificativo ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1 border-sky-200 bg-sky-50 text-[10px] font-medium text-sky-700"
+                      >
+                        <FileCheck2 className="h-3 w-3" /> Giustificativo
+                      </Badge>
+                    ) : null}
                   </span>
                   {canManage ? (
                     <button
@@ -222,6 +246,18 @@ export function PersonaleSettingsClient({
                 {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 Aggiungi
               </Button>
+              <label className="flex cursor-pointer items-center gap-2 sm:col-span-4">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={conGiustificativo}
+                  onChange={(e) => setConGiustificativo(e.target.checked)}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Richiede un giustificativo: sulle assenze di questo tipo l&apos;ufficio potrà
+                  registrare il numero dell&apos;attestato e allegare il documento.
+                </span>
+              </label>
             </div>
           ) : null}
         </CardContent>

@@ -2,13 +2,28 @@ import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
+import { leggiPerId } from '@kommessa/api/pagine';
+import { numeroAttestatoObbligatorio, serveGiustificativo } from '@kommessa/api/permessi-tipi';
 import {
   leggiConfigDipendenti,
   leggiTipiRichiedibili,
+  leggiTipiPermessoCustom,
   leggiLabelTipi,
   labelTipoConMappa,
 } from '../../../_lib/dipendenti-config';
 import { PermessiClient, type RichiestaRow, type DipOpt } from './_components/permessi-client';
+
+/** Il giustificativo archiviato di un'assenza, come sta nel database. */
+type CertificatoRow = {
+  id: string;
+  permesso_id: string | null;
+  tipo_info: 'C' | 'P' | 'M';
+  numero: string | null;
+  nota: string | null;
+  nome_file: string | null;
+  size_bytes: number | null;
+  r2_key: string | null;
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -36,9 +51,12 @@ export default async function PermessiPage() {
     supabase.from('gruppi_approvazione' as never).select('id, nome').eq('tenant_id', ctx.tenantId),
   ]);
 
-  const [tipiOpzioni, labelMap] = await Promise.all([
+  const [tipiOpzioni, labelMap, tipiCustom] = await Promise.all([
     leggiTipiRichiedibili(supabase, ctx.tenantId),
     leggiLabelTipi(supabase, ctx.tenantId),
+    // Servono per sapere se un tipo creato dall'azienda vuole un documento:
+    // il catalogo non lo conosce, la config del cliente si'.
+    leggiTipiPermessoCustom(supabase, ctx.tenantId),
   ]);
 
   const dipRows = (dipRes.data ?? []) as unknown as {
@@ -63,6 +81,24 @@ export default async function PermessiPage() {
     ((gruppiRes.data ?? []) as unknown as { id: string; nome: string }[]).map((g) => [g.id, g.nome]),
   );
 
+  // I giustificativi delle assenze mostrate. A gruppi di id, non tutti in una
+  // volta: la lista degli id finisce nell'indirizzo della richiesta.
+  const idAssenze = ((richRes.data ?? []) as unknown as { id: string }[]).map((r) => r.id);
+  const certificati = await leggiPerId<string, CertificatoRow>(
+    idAssenze,
+    (gruppo, da, a) =>
+      supabase
+        .from('paghe_certificati' as never)
+        .select('id, permesso_id, tipo_info, numero, nota, nome_file, size_bytes, r2_key')
+        .in('permesso_id', gruppo)
+        .order('permesso_id')
+        .order('id')
+        .range(da, a) as never,
+    { contesto: 'giustificativi delle assenze' },
+  );
+  const certPerAssenza = new Map<string, CertificatoRow>();
+  for (const c of certificati) if (c.permesso_id) certPerAssenza.set(c.permesso_id, c);
+
   const richieste: RichiestaRow[] = (
     (richRes.data ?? []) as unknown as Array<{
       id: string;
@@ -82,11 +118,27 @@ export default async function PermessiPage() {
       decisione_nota: string | null;
       created_at: string;
     }>
-  ).map((r) => ({
+  ).map((r) => {
+    const cert = certPerAssenza.get(r.id) ?? null;
+    return {
     id: r.id,
     dipendenteNome: dipMap.get(r.dipendente_id) ?? 'Dipendente',
     tipo: r.tipo,
     tipoLabel: labelTipoConMappa(r.tipo, labelMap),
+    // La regola non guarda la parola «malattia»: la porta il tipo con se'.
+    richiedeGiustificativo: serveGiustificativo(r.tipo, tipiCustom),
+    numeroObbligatorio: numeroAttestatoObbligatorio(r.tipo),
+    giustificativo: cert
+      ? {
+          id: cert.id,
+          tipoInfo: cert.tipo_info,
+          numero: cert.numero,
+          nota: cert.nota,
+          nomeFile: cert.nome_file,
+          sizeBytes: cert.size_bytes,
+          haAllegato: Boolean(cert.r2_key),
+        }
+      : null,
     dataInizio: r.data_inizio,
     dataFine: r.data_fine,
     tuttoIlGiorno: r.tutto_il_giorno,
@@ -100,7 +152,8 @@ export default async function PermessiPage() {
     decisoAt: r.deciso_at,
     decisioneNota: r.decisione_nota,
     createdAt: r.created_at,
-  }));
+    };
+  });
 
   return (
     <PermessiClient

@@ -1,7 +1,7 @@
 # Logiche Export paghe (area Personalizzazioni)
 
-**Versione**: 1.0
-**Stato**: in produzione dal 16/09/2026
+**Versione**: 1.1
+**Stato**: in produzione dal 16/09/2026 · giustificativi generici dal 20/09/2026
 **Ambito**: funzione `export_paghe` dentro il modulo per-tenant `personalizzazioni`, l'area delle funzioni su misura. L'area puo' essere accesa per qualunque cliente; le funzioni attive stanno in `tenant_modules.config.funzioni` e l'elenco vive in `apps/web/app/_lib/personalizzazioni-registry.ts`. Chi non ha la riga non vede nemmeno la voce in menu.
 
 Registro delle regole e delle scelte operative dell'export mensile delle presenze verso il programma paghe del consulente del lavoro. Da tenere aggiornato come `Logiche_Kantiere.md`.
@@ -28,7 +28,7 @@ Pagina: `/office/personalizzazioni/paghe` (admin e ufficio). Download: `/api/off
 | Ferie, permessi, malattie | `permesso_richieste` con `stato = 'approvato'` | periodo, non giorno per giorno |
 | Codice paghe del dipendente | `dipendenti.codice_interno` | **e' gia' il codice dello Studio**: verificato sui dati reali di FPM (Benedetti `00003`, Valbusa `00009`) |
 | Variazioni di chi non usa l'app | `paghe_eventi` | scritte dall'ufficio, sostituiscono il vecchio foglio Excel |
-| Numero attestato e documento medico | `paghe_certificati` | il PUC in Kommessa non esisteva |
+| Numero attestato e documento medico | `paghe_certificati` | il PUC in Kommessa non esisteva. Dal 20/09/2026 si scrive **dalla scheda dell'assenza** (area Personale), non solo da qui |
 
 > **Niente si congela.** Il mese si ricostruisce a ogni apertura della pagina e a ogni download: una correzione su una giornata si vede subito nel file. Le tabelle `paghe_*` tengono solo cio' che in Kommessa non esiste.
 
@@ -101,13 +101,24 @@ Il cliente puo' **aggiungere causali** che nella tabella non ci sono (config `ca
 
 ## 5. Malattia e PUC
 
-Il record 12 di malattia vuole il **PUC**, il numero dell'attestato telematico, con tipo info `P`. In Kommessa non esisteva: ora sta in `paghe_certificati`, insieme al documento del medico archiviato su R2.
+Il record 12 di malattia vuole il **PUC**, il numero dell'attestato telematico, con tipo info `P`. In Kommessa non esisteva: sta in `paghe_certificati`, insieme al documento del medico archiviato su R2.
 
 - Il PUC **non si inventa mai**. Se manca, il file esce lo stesso con un avviso evidente e lo Studio lo inserisce a mano (confermato dal consulente).
 - Il certificato si aggancia alla richiesta di assenza o all'evento scritto a mano, e comunque porta le date: si ritrova anche se la richiesta viene cancellata.
 - Il documento resta in archivio e **non viene mandato allo Studio**: nel file va solo il numero.
 
-> ⚠️ **Da riprendere**: l'archivio documentale e' appena abbozzato (una chiave R2 sulla riga). Quando i documenti saranno tanti servira' un vero documentale, con ricerca e ciclo di vita. Deciso con Luca il 16/09/2026.
+### Il giustificativo non e' roba di paghe (dal 20/09/2026)
+
+Il certificato medico nasceva qui dentro, ma **appartiene a chi gestisce le assenze**: un cliente senza l'export verso il consulente deve comunque poter archiviare il certificato di una malattia. Da oggi si registra **dalla riga dell'assenza** in `/office/personale/permessi` (pastiglia con il numero, ambra finche' manca), con azioni proprie in `office/_actions/ferie-permessi.ts` aperte a chiunque abbia il modulo **Dipendenti**. Quelle in `office/_actions/paghe.ts` restano per la pagina dell'export.
+
+- **Quando serve un documento lo dice il tipo di assenza**, non un `if` sulla parola «malattia»: e' il campo `richiedeGiustificativo` del catalogo (`@kommessa/api/permessi-tipi`, vero su malattia, infortunio, visita medica, 104, lutto, congedi, donazione). Un tipo creato dall'azienda lo dichiara da se' dalle Impostazioni. Regola pura e testata: `serveGiustificativo`.
+- **Il numero e' obbligatorio solo per la malattia** (`numeroAttestatoObbligatorio`): li' e' il PUC, e senza il consulente non chiude la busta. Se il certificato e' cartaceo si sceglie «Protocollo». Per gli altri tipi il documento basta a se'.
+- Uno per assenza: salvare di nuovo **aggiorna**, cosi' correggere un numero sbagliato non lascia due attestati sullo stesso periodo.
+- ⚠️ **La tabella si chiama ancora `paghe_certificati`** ed e' un nome sbagliato per un cliente senza paghe. Non e' stata rinominata di proposito: le migrazioni le applica una persona a mano, e rinominarla aprirebbe una finestra in cui il codice e' online e la tabella ha il vecchio nome — con la pagina paghe di FPM rotta. Nome imperfetto, produzione intatta.
+
+> ✅ **Il documento ora si riscarica**: `GET /api/personale/giustificativo/[id]` risponde con un 302 verso un indirizzo firmato che scade in 5 minuti (`?vista=1` lo apre invece di scaricarlo). Prima il file finiva su R2 e non lo rivedeva piu' nessuno: l'interfaccia diceva «in archivio» e si fermava li'. L'autorizzazione la fa la **RLS** (lettura riservata a owner/admin/office del proprio cliente): qui dentro ci sono certificati medici.
+>
+> ⚠️ **Resta da riprendere**: l'archivio e' sempre una chiave R2 sulla riga. Quando i documenti saranno tanti servira' un vero documentale, con ricerca e ciclo di vita. Deciso con Luca il 16/09/2026.
 
 ---
 

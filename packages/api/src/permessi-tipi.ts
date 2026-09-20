@@ -85,6 +85,46 @@ export function labelTipoPermesso(codice: string): string {
   return PER_CODICE.get(codice)?.label ?? codice;
 }
 
+/** Un tipo creato dall'azienda: il catalogo non lo conosce, la config si'. */
+export interface TipoCustomMinimo {
+  codice: string;
+  richiedeGiustificativo?: boolean | null;
+}
+
+/**
+ * Per questa assenza serve un documento a giustificarla?
+ *
+ * ⚠️ **Non si guarda la parola «malattia».** Il catalogo lo dice gia' tipo per
+ * tipo (`richiedeGiustificativo`: malattia, infortunio, visita medica, 104,
+ * lutto, congedi, donazione), e un tipo creato dall'azienda porta con se' la
+ * stessa informazione. Inchiodare la regola a un codice preciso vorrebbe dire
+ * tornare a toccare il codice al primo cliente che aggiunge un tipo suo.
+ *
+ * Un tipo sconosciuto non chiede niente: meglio non chiedere un documento che
+ * non esiste, che bloccare un'assenza vera per un dato che non abbiamo.
+ */
+export function serveGiustificativo(codice: string, custom?: TipoCustomMinimo[]): boolean {
+  const builtin = PER_CODICE.get(codice);
+  if (builtin) return builtin.richiedeGiustificativo;
+  return custom?.find((t) => t.codice === codice)?.richiedeGiustificativo === true;
+}
+
+/**
+ * Il numero dell'attestato e' obbligatorio?
+ *
+ * Solo per la malattia, ed e' il PUC: il numero del certificato telematico che
+ * il medico manda all'INPS. Senza, il consulente del lavoro non puo' chiudere
+ * la busta paga e deve inseguirlo a mano. Per gli altri tipi il documento
+ * allegato basta a se' stesso.
+ *
+ * Non distingue fra PUC, protocollo cartaceo e codice fiscale dell'ente: quello
+ * lo sceglie chi scrive (`tipo_info`). Qui si dice solo che **un** numero ci
+ * vuole.
+ */
+export function numeroAttestatoObbligatorio(codice: string): boolean {
+  return codice === 'malattia';
+}
+
 export const CODICI_PERMESSO = PERMESSO_TIPI.map((t) => t.codice);
 
 export const LABEL_STATO_PERMESSO: Record<string, string> = {

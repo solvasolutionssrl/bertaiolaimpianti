@@ -14,6 +14,8 @@ import {
   CalendarDays,
   Plus,
   Search,
+  Paperclip,
+  Stethoscope,
 } from 'lucide-react';
 import {
   Button,
@@ -28,7 +30,12 @@ import {
 } from '@kommessa/ui';
 import { LABEL_STATO_PERMESSO } from '@kommessa/api/permessi-tipi';
 import { useAlert } from '@/app/_components/confirm-provider';
-import { decidiPermesso, richiediPermesso } from '@/app/office/_actions/ferie-permessi';
+import {
+  decidiPermesso,
+  registraAssenzaUfficio,
+  richiediPermesso,
+} from '@/app/office/_actions/ferie-permessi';
+import { GiustificativoDialog, type GiustificativoEsistente } from './giustificativo-dialog';
 
 export interface DipOpt {
   id: string;
@@ -61,6 +68,30 @@ export interface RichiestaRow {
   decisoAt: string | null;
   decisioneNota: string | null;
   createdAt: string;
+  /** Questa assenza vuole un documento (malattia, 104, lutto, congedi…). */
+  richiedeGiustificativo: boolean;
+  /** Il numero dell'attestato è obbligatorio: è il caso della malattia (PUC). */
+  numeroObbligatorio: boolean;
+  giustificativo: GiustificativoEsistente | null;
+}
+
+/** Il giustificativo è a posto? Con numero obbligatorio, il documento non basta. */
+function giustificativoCompleto(r: RichiestaRow): boolean {
+  const g = r.giustificativo;
+  if (!g) return false;
+  if (r.numeroObbligatorio && !g.numero) return false;
+  return Boolean(g.numero || g.haAllegato);
+}
+
+/** Cosa si legge sulla pastiglia del giustificativo. */
+function etichettaGiustificativo(r: RichiestaRow): string {
+  const g = r.giustificativo;
+  if (g?.numero) {
+    const prefisso = g.tipoInfo === 'P' ? 'PUC' : g.tipoInfo === 'M' ? 'Prot.' : 'CF';
+    return `${prefisso} ${g.numero}`;
+  }
+  if (r.numeroObbligatorio) return 'PUC mancante';
+  return g?.haAllegato ? 'Documento allegato' : 'Giustificativo';
 }
 
 function fmtData(iso: string): string {
@@ -113,6 +144,7 @@ export function PermessiClient({
   const [filtro, setFiltro] = React.useState<'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'>('in_attesa');
   const [decisione, setDecisione] = React.useState<{ r: RichiestaRow; esito: Stato } | null>(null);
   const [nuovaOpen, setNuovaOpen] = React.useState(false);
+  const [giustificativoDi, setGiustificativoDi] = React.useState<RichiestaRow | null>(null);
 
   const conteggi = React.useMemo(() => {
     const c = { in_attesa: 0, approvato: 0, rifiutato: 0 };
@@ -190,7 +222,12 @@ export function PermessiClient({
         <Card>
           <CardContent className="divide-y divide-border p-0">
             {filtrate.map((r) => (
-              <RichiestaRiga key={r.id} r={r} onDecidi={(esito) => setDecisione({ r, esito })} />
+              <RichiestaRiga
+                key={r.id}
+                r={r}
+                onDecidi={(esito) => setDecisione({ r, esito })}
+                onGiustificativo={() => setGiustificativoDi(r)}
+              />
             ))}
           </CardContent>
         </Card>
@@ -209,7 +246,34 @@ export function PermessiClient({
           onClose={() => setNuovaOpen(false)}
         />
       ) : null}
+
+      {giustificativoDi ? (
+        <GiustificativoDialogConnesso
+          r={giustificativoDi}
+          onChiudi={() => setGiustificativoDi(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** Aggancia il popup alla riga: chiude e ricarica quando ha salvato. */
+function GiustificativoDialogConnesso({ r, onChiudi }: { r: RichiestaRow; onChiudi: () => void }) {
+  const router = useRouter();
+  return (
+    <GiustificativoDialog
+      permessoId={r.id}
+      dipendenteNome={r.dipendenteNome}
+      tipoLabel={r.tipoLabel}
+      periodo={fmtQuando(r)}
+      numeroObbligatorio={r.numeroObbligatorio}
+      esistente={r.giustificativo}
+      onChiudi={onChiudi}
+      onSalvato={() => {
+        onChiudi();
+        router.refresh();
+      }}
+    />
   );
 }
 
@@ -239,6 +303,10 @@ function NuovaRichiestaDialog({
   const [oraInizio, setOraInizio] = React.useState('08:00');
   const [oraFine, setOraFine] = React.useState('12:00');
   const [motivo, setMotivo] = React.useState('');
+  // L'ufficio che mette qualcuno in malattia non sta chiedendo un permesso a
+  // se stesso: prende atto di un fatto. In quel caso l'assenza nasce già
+  // approvata, senza passare da un'approvazione che sarebbe una formalità.
+  const [registraDiretta, setRegistraDiretta] = React.useState(false);
 
   const dipFiltrati = React.useMemo(() => {
     const q = cercaDip.trim().toLowerCase();
@@ -266,7 +334,7 @@ function NuovaRichiestaDialog({
       return;
     }
     start(async () => {
-      const res = await richiediPermesso({
+      const payload = {
         dipendenteId,
         tipo,
         dataInizio,
@@ -275,7 +343,10 @@ function NuovaRichiestaDialog({
         oraInizio: tuttoIlGiorno ? null : oraInizio,
         oraFine: tuttoIlGiorno ? null : oraFine,
         motivo: motivo.trim() || null,
-      });
+      };
+      const res = registraDiretta
+        ? await registraAssenzaUfficio(payload)
+        : await richiediPermesso(payload);
       if (!res.ok) {
         await alert({ title: 'Non creata', body: res.error });
         return;
@@ -420,9 +491,26 @@ function NuovaRichiestaDialog({
             />
           </label>
 
+          <label className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
+            <span className="min-w-0">
+              <span className="font-medium">Registra come già approvata</span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                Per un&apos;assenza già avvenuta (una malattia, un lutto): la stai registrando, non
+                chiedendo.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0"
+              checked={registraDiretta}
+              onChange={(e) => setRegistraDiretta(e.target.checked)}
+            />
+          </label>
+
           <p className="rounded-md border border-sky-200 bg-sky-50/50 px-3 py-2 text-[11px] text-sky-700">
-            La richiesta resta <b>da approvare</b>: passa dal normale flusso di approvazione anche se
-            la crei tu.
+            {registraDiretta
+              ? 'L’assenza viene registrata come approvata da te e la persona riceve un avviso. Il giustificativo si allega dopo, dalla riga dell’assenza.'
+              : 'La richiesta resta da approvare: passa dal normale flusso di approvazione anche se la crei tu.'}
           </p>
         </div>
         <DialogFooter>
@@ -431,7 +519,7 @@ function NuovaRichiestaDialog({
           </Button>
           <Button type="button" onClick={invia} disabled={pending}>
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Crea richiesta
+            {registraDiretta ? 'Registra assenza' : 'Crea richiesta'}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -439,8 +527,17 @@ function NuovaRichiestaDialog({
   );
 }
 
-function RichiestaRiga({ r, onDecidi }: { r: RichiestaRow; onDecidi: (esito: Stato) => void }) {
+function RichiestaRiga({
+  r,
+  onDecidi,
+  onGiustificativo,
+}: {
+  r: RichiestaRow;
+  onDecidi: (esito: Stato) => void;
+  onGiustificativo: () => void;
+}) {
   const attesa = r.stato === 'in_attesa' || r.stato === 'modifica_richiesta';
+  const completo = giustificativoCompleto(r);
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/20">
       <div className="min-w-0 flex-1">
@@ -453,6 +550,25 @@ function RichiestaRiga({ r, onDecidi }: { r: RichiestaRow; onDecidi: (esito: Sta
             {r.tuttoIlGiorno ? <CalendarDays className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
             {fmtQuando(r)}
           </span>
+          {/* Il giustificativo si apre da qui: è la riga dell'assenza a cui
+              appartiene, non una pagina a parte. Ambra finché manca. */}
+          {r.richiedeGiustificativo ? (
+            <button
+              type="button"
+              onClick={onGiustificativo}
+              title="Numero dell'attestato e documento del medico"
+              className={
+                'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 transition ' +
+                (completo
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:bg-emerald-100'
+                  : 'bg-amber-50 text-amber-800 ring-amber-200 hover:bg-amber-100')
+              }
+            >
+              <Stethoscope className="h-3 w-3" />
+              {etichettaGiustificativo(r)}
+              {r.giustificativo?.haAllegato ? <Paperclip className="h-3 w-3" /> : null}
+            </button>
+          ) : null}
         </div>
         <p className="truncate text-[11px] text-muted-foreground">
           {r.gruppoNome ? r.gruppoNome : 'Senza gruppo'}
