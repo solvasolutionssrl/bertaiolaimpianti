@@ -116,6 +116,14 @@ Il certificato medico nasceva qui dentro, ma **appartiene a chi gestisce le asse
 - Uno per assenza: salvare di nuovo **aggiorna**, cosi' correggere un numero sbagliato non lascia due attestati sullo stesso periodo.
 - ⚠️ **La tabella si chiama ancora `paghe_certificati`** ed e' un nome sbagliato per un cliente senza paghe. Non e' stata rinominata di proposito: le migrazioni le applica una persona a mano, e rinominarla aprirebbe una finestra in cui il codice e' online e la tabella ha il vecchio nome — con la pagina paghe di FPM rotta. Nome imperfetto, produzione intatta.
 
+#### Ciclo di vita del documento (regole chiuse il 20/09 dopo una revisione critica)
+
+- **Sostituire l'allegato cancella il precedente.** La riga indica un file solo: senza la cancellazione il certificato di prima restava su R2 per sempre, senza nessuna riga che lo puntasse e nessuna schermata che lo raggiungesse. E' un documento sanitario, non un file qualunque.
+- **Il giustificativo muore con l'assenza.** Annullando una richiesta si cancellano anche numero e documento. La chiave esterna e' `on delete set null`: la riga sarebbe sopravvissuta **scollegata** — invisibile nella pagina, che li indicizza per assenza, e percio' non piu' cancellabile, ma ancora pescabile dall'export, che senza collegamento esplicito ripiega sulle date. Il PUC di un'assenza annullata sarebbe finito sul record di **un'altra** assenza, nel file del consulente.
+- **Il numero non si scrive nel registro attivita'**: si annota solo che c'era (`conNumero`). `audit_events` lo legge anche il super admin di piattaforma, e li' dentro non ci vanno i dati di un certificato medico.
+- **Un tipo di assenza personalizzato in uso non si elimina**: toglierlo lascerebbe quelle assenze senza nome (a schermo comparirebbe il codice grezzo) e senza la pastiglia del giustificativo, che e' l'unico modo per arrivare al documento gia' allegato. Stesso principio delle causali paghe.
+- La route di rilettura filtra **anche per tenant**, non solo per id: sulla tabella c'e' pure la policy del super admin di piattaforma, e il magazzino documenti in mancanza di configurazione del cliente e' condiviso.
+
 > ✅ **Il documento ora si riscarica**: `GET /api/personale/giustificativo/[id]` risponde con un 302 verso un indirizzo firmato che scade in 5 minuti (`?vista=1` lo apre invece di scaricarlo). Prima il file finiva su R2 e non lo rivedeva piu' nessuno: l'interfaccia diceva «in archivio» e si fermava li'. L'autorizzazione la fa la **RLS** (lettura riservata a owner/admin/office del proprio cliente): qui dentro ci sono certificati medici.
 >
 > ⚠️ **Resta da riprendere**: l'archivio e' sempre una chiave R2 sulla riga. Quando i documenti saranno tanti servira' un vero documentale, con ricerca e ciclo di vita. Deciso con Luca il 16/09/2026.

@@ -43,7 +43,11 @@ import {
 const TIPI = [
   { codice: 'P' as const, titolo: 'PUC', descrizione: 'Certificato telematico del medico. È il caso normale.' },
   { codice: 'M' as const, titolo: 'Protocollo', descrizione: 'Numero di protocollo del certificato cartaceo.' },
-  { codice: 'C' as const, titolo: 'Codice fiscale', descrizione: "Dell'ente, per la donazione di sangue." },
+  {
+    codice: 'C' as const,
+    titolo: 'Codice fiscale',
+    descrizione: 'Dell’ente, per la donazione di sangue.',
+  },
 ];
 
 const MIME_AMMESSI = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'];

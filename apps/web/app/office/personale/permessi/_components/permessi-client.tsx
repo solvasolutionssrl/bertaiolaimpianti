@@ -556,7 +556,7 @@ function RichiestaRiga({
             <button
               type="button"
               onClick={onGiustificativo}
-              title="Numero dell'attestato e documento del medico"
+              title="Numero dell’attestato e documento del medico"
               className={
                 'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ring-1 transition ' +
                 (completo

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
-import { leggiPerId } from '@kommessa/api/pagine';
+import { leggiPerId, leggiTutto } from '@kommessa/api/pagine';
 import { numeroAttestatoObbligatorio, serveGiustificativo } from '@kommessa/api/permessi-tipi';
 import {
   leggiConfigDipendenti,
@@ -12,6 +12,26 @@ import {
   labelTipoConMappa,
 } from '../../../_lib/dipendenti-config';
 import { PermessiClient, type RichiestaRow, type DipOpt } from './_components/permessi-client';
+
+/** L'assenza come sta nel database. */
+type RichiestaDb = {
+  id: string;
+  dipendente_id: string;
+  tipo: string;
+  data_inizio: string;
+  data_fine: string;
+  tutto_il_giorno: boolean;
+  ora_inizio: string | null;
+  ora_fine: string | null;
+  motivo: string | null;
+  stato: string;
+  gruppo_id: string | null;
+  approver_user_id: string | null;
+  deciso_da: string | null;
+  deciso_at: string | null;
+  decisione_nota: string | null;
+  created_at: string;
+};
 
 /** Il giustificativo archiviato di un'assenza, come sta nel database. */
 type CertificatoRow = {
@@ -33,15 +53,26 @@ export default async function PermessiPage() {
   const cfg = await leggiConfigDipendenti(supabase, ctx.tenantId);
   if (!cfg.ferieAttiva) notFound();
 
-  const [richRes, dipRes, usersRes, gruppiRes] = await Promise.all([
-    supabase
-      .from('permesso_richieste' as never)
-      .select(
-        'id, dipendente_id, tipo, data_inizio, data_fine, tutto_il_giorno, ora_inizio, ora_fine, motivo, stato, gruppo_id, approver_user_id, deciso_da, deciso_at, decisione_nota, created_at',
-      )
-      .eq('tenant_id', ctx.tenantId)
-      .order('created_at', { ascending: false })
-      .limit(300),
+  const [assenze, dipRes, usersRes, gruppiRes] = await Promise.all([
+    // Tutte, a pagine. Con un tetto fisso le assenze piu' vecchie uscivano
+    // dall'elenco: i contatori dei filtri mentivano, una richiesta rimasta in
+    // attesa diventava indecidibile, e soprattutto non si poteva piu' aprire
+    // il giustificativo di una malattia di mesi prima — che intanto
+    // continuava a entrare nel file del consulente senza PUC, perche' lui le
+    // assenze le legge paginate.
+    leggiTutto<RichiestaDb>(
+      (da, a) =>
+        supabase
+          .from('permesso_richieste' as never)
+          .select(
+            'id, dipendente_id, tipo, data_inizio, data_fine, tutto_il_giorno, ora_inizio, ora_fine, motivo, stato, gruppo_id, approver_user_id, deciso_da, deciso_at, decisione_nota, created_at',
+          )
+          .eq('tenant_id', ctx.tenantId)
+          .order('created_at', { ascending: false })
+          .order('id')
+          .range(da, a) as never,
+      { contesto: 'richieste di ferie e permessi' },
+    ),
     supabase
       .from('dipendenti' as never)
       .select('id, nome, cognome, stato_attivo, user_id')
@@ -83,7 +114,7 @@ export default async function PermessiPage() {
 
   // I giustificativi delle assenze mostrate. A gruppi di id, non tutti in una
   // volta: la lista degli id finisce nell'indirizzo della richiesta.
-  const idAssenze = ((richRes.data ?? []) as unknown as { id: string }[]).map((r) => r.id);
+  const idAssenze = assenze.map((r) => r.id);
   const certificati = await leggiPerId<string, CertificatoRow>(
     idAssenze,
     (gruppo, da, a) =>
@@ -99,26 +130,7 @@ export default async function PermessiPage() {
   const certPerAssenza = new Map<string, CertificatoRow>();
   for (const c of certificati) if (c.permesso_id) certPerAssenza.set(c.permesso_id, c);
 
-  const richieste: RichiestaRow[] = (
-    (richRes.data ?? []) as unknown as Array<{
-      id: string;
-      dipendente_id: string;
-      tipo: string;
-      data_inizio: string;
-      data_fine: string;
-      tutto_il_giorno: boolean;
-      ora_inizio: string | null;
-      ora_fine: string | null;
-      motivo: string | null;
-      stato: string;
-      gruppo_id: string | null;
-      approver_user_id: string | null;
-      deciso_da: string | null;
-      deciso_at: string | null;
-      decisione_nota: string | null;
-      created_at: string;
-    }>
-  ).map((r) => {
+  const richieste: RichiestaRow[] = assenze.map((r) => {
     const cert = certPerAssenza.get(r.id) ?? null;
     return {
     id: r.id,

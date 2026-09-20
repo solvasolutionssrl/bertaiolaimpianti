@@ -690,6 +690,13 @@ export async function caricaAllegatoCertificato(formData: FormData): Promise<Esi
     return { ok: false, error: error.message };
   }
 
+  // Caricare un secondo documento sostituisce il primo, e la riga ne indica
+  // uno solo: senza questa cancellazione il certificato di prima resterebbe su
+  // R2 senza nessuna riga che lo punti e nessuna schermata che lo raggiunga.
+  if (riga.r2_key && riga.r2_key !== chiave) {
+    await r2.delete(riga.r2_key).catch(() => undefined);
+  }
+
   await auditTenant(service, {
     tenantId: ctx.tenantId,
     actorUserId: ctx.userId,
@@ -715,7 +722,13 @@ export async function eliminaCertificato(id: string): Promise<EsitoPaghe> {
     .select('id, tenant_id, r2_key, numero, dal, al')
     .eq('id', id)
     .maybeSingle();
-  const riga = cert as { tenant_id: string; r2_key: string | null } | null;
+  const riga = cert as {
+    tenant_id: string;
+    r2_key: string | null;
+    numero: string | null;
+    dal: string;
+    al: string;
+  } | null;
   if (!riga || riga.tenant_id !== ctx.tenantId) return { ok: false, error: 'Riga non trovata.' };
 
   const { error } = await service
@@ -745,7 +758,15 @@ export async function eliminaCertificato(id: string): Promise<EsitoPaghe> {
     entityType: 'paghe_certificato',
     entityId: id,
     action: 'paghe.certificato.elimina',
-    before: cert,
+    // Il numero dell'attestato non si scrive nel registro: e' il dato di un
+    // certificato medico, e il registro lo legge anche il super admin di
+    // piattaforma. Basta sapere che c'era.
+    before: {
+      dal: riga.dal,
+      al: riga.al,
+      conNumero: Boolean(riga.numero),
+      conAllegato: Boolean(riga.r2_key),
+    },
   });
 
   revalidatePath(PERCORSO);

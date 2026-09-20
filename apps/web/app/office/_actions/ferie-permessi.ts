@@ -171,6 +171,18 @@ export async function impostaMembriGruppo(input: unknown): Promise<Ok> {
   }
   if (!OFFICE.has(ctx.role)) return { ok: false, error: 'Solo admin/office' };
   const svc = createServiceSupabase();
+  // Il gruppo dev'essere di chi sta scrivendo. Senza questo controllo si
+  // potevano agganciare i propri dipendenti al gruppo di un altro cliente: le
+  // loro richieste sarebbero poi finite all'approvatore di quell'altro, che
+  // avrebbe ricevuto la notifica push con nome, tipo di assenza e date di una
+  // persona che non e' sua.
+  const { data: gruppo } = await svc
+    .from('gruppi_approvazione' as never)
+    .select('id')
+    .eq('id', parsed.data.gruppoId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  if (!gruppo) return { ok: false, error: 'Gruppo non valido' };
   // svuota il gruppo
   await svc
     .from('gruppo_membri' as never)
@@ -367,6 +379,25 @@ export async function eliminaTipoPermessoCustom(codice: string): Promise<Ok> {
   const list = Array.isArray(existing['permesso_tipi_custom'])
     ? (existing['permesso_tipi_custom'] as { codice?: string }[])
     : [];
+
+  // Togliere un tipo ancora in uso lo farebbe sparire dalle assenze che lo
+  // portano: l'elenco mostrerebbe il codice grezzo al posto del nome, e la
+  // pastiglia del giustificativo svanirebbe anche dove un documento c'e' gia'
+  // — restando l'unico modo per raggiungerlo. Stesso principio delle causali
+  // paghe, che non si tolgono finche' qualcuno le usa.
+  const { count } = await svc
+    .from('permesso_richieste' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', ctx.tenantId)
+    .eq('tipo', codice);
+  if ((count ?? 0) > 0) {
+    const quante = count ?? 0;
+    return {
+      ok: false,
+      error: `Questo tipo è usato da ${quante} ${quante === 1 ? 'assenza' : 'assenze'}: toglierlo le lascerebbe senza nome e senza giustificativo. Prima cambia il tipo a quelle assenze.`,
+    };
+  }
+
   const newConfig = {
     ...existing,
     permesso_tipi_custom: list.filter((t) => t.codice !== codice),
@@ -440,6 +471,19 @@ export async function richiediPermesso(
     return { ok: false, error: 'Un permesso a ore riguarda un solo giorno' };
   }
 
+  // Il dipendente dev'essere di questo cliente. Il ramo office accettava un id
+  // qualunque: con quello di un'altra azienda nasceva una richiesta del tenant
+  // A puntata a una persona di B, e alla decisione partiva la notifica push al
+  // dipendente dell'altro cliente. `registraAssenzaUfficio` lo controlla gia'.
+  const { data: dipRow } = await svc
+    .from('dipendenti' as never)
+    .select('id, tenant_id')
+    .eq('id', d.dipendenteId)
+    .maybeSingle();
+  if ((dipRow as { tenant_id: string } | null)?.tenant_id !== ctx.tenantId) {
+    return { ok: false, error: 'Dipendente non valido' };
+  }
+
   // Risolvi gruppo → approvatore del dipendente.
   const { data: mem } = await svc
     .from('gruppo_membri' as never)
@@ -454,6 +498,7 @@ export async function richiediPermesso(
       .from('gruppi_approvazione' as never)
       .select('approver_user_id')
       .eq('id', gruppoId)
+      .eq('tenant_id', ctx.tenantId)
       .maybeSingle();
     approverUserId = (grp as { approver_user_id: string | null } | null)?.approver_user_id ?? null;
   }
@@ -575,6 +620,7 @@ export async function decidiPermesso(
     .from('dipendenti' as never)
     .select('user_id')
     .eq('id', r.dipendente_id)
+    .eq('tenant_id', ctx.tenantId)
     .maybeSingle();
   const targetUser = (dip as { user_id: string | null } | null)?.user_id ?? null;
   if (targetUser) {
@@ -634,6 +680,11 @@ export async function annullaRichiesta(id: string): Promise<Ok> {
       return { ok: false, error: 'Non autorizzato' };
     }
   }
+
+  // Il giustificativo se ne va con l'assenza: vedi `eliminaGiustificativiDi`
+  // per il perche' lasciarlo indietro sarebbe peggio che cancellarlo.
+  await eliminaGiustificativiDi(svc, ctx.tenantId, id);
+
   const { error } = await svc
     .from('permesso_richieste' as never)
     .delete()
@@ -797,6 +848,53 @@ export async function registraAssenzaUfficio(
 // Rinominare la tabella si puo', ma le migrazioni le applica una persona a
 // mano: farlo vorrebbe dire una finestra in cui il codice e' online e la
 // tabella ha ancora il vecchio nome, e la pagina paghe si rompe.
+
+/** Il magazzino documenti del cliente, con quello di piattaforma come ripiego. */
+async function risolviR2(svc: ReturnType<typeof createServiceSupabase>, tenantId: string) {
+  const { data } = await svc.from('tenants').select('r2_config').eq('id', tenantId).maybeSingle();
+  return (
+    getR2ProviderFromTenantConfig((data?.r2_config as Record<string, unknown> | null) ?? null) ??
+    getR2ProviderFromEnv()
+  );
+}
+
+/**
+ * Toglie i giustificativi di un'assenza, documento archiviato compreso.
+ *
+ * Serve quando l'assenza sparisce. La chiave esterna e' `on delete set null`,
+ * quindi senza questo la riga del certificato sopravviverebbe **scollegata**:
+ * invisibile nella pagina (che li indicizza per assenza) e percio' non piu'
+ * cancellabile, ma ancora pescabile dall'export, che in mancanza del
+ * collegamento ripiega sulle date — e il PUC di un'assenza annullata finirebbe
+ * sul record di un'altra assenza, nel file che va al consulente del lavoro.
+ */
+async function eliminaGiustificativiDi(
+  svc: ReturnType<typeof createServiceSupabase>,
+  tenantId: string,
+  permessoId: string,
+): Promise<void> {
+  const { data } = await svc
+    .from('paghe_certificati' as never)
+    .select('id, r2_key')
+    .eq('tenant_id', tenantId)
+    .eq('permesso_id', permessoId);
+  const righe = (data ?? []) as unknown as { id: string; r2_key: string | null }[];
+  if (righe.length === 0) return;
+
+  const { error } = await svc
+    .from('paghe_certificati' as never)
+    .delete()
+    .eq('tenant_id', tenantId)
+    .eq('permesso_id', permessoId);
+  // Se la riga non se ne va, il file resta dov'e': meglio un documento in piu'
+  // in archivio che una riga che punta a un file che non c'e'.
+  if (error) return;
+
+  const chiavi = righe.map((r) => r.r2_key).filter((k): k is string => !!k);
+  if (chiavi.length === 0) return;
+  const r2 = await risolviR2(svc, tenantId);
+  for (const chiave of chiavi) await r2?.delete(chiave).catch(() => undefined);
+}
 
 /** Gli stessi limiti dell'allegato in area paghe: e' lo stesso documento. */
 const GIUSTIFICATIVO_MIME = [
@@ -965,10 +1063,10 @@ export async function caricaGiustificativo(
   const svc = createServiceSupabase();
   const { data: certRow } = await svc
     .from('paghe_certificati' as never)
-    .select('id, tenant_id, dal')
+    .select('id, tenant_id, dal, r2_key')
     .eq('id', giustificativoId)
     .maybeSingle();
-  const cert = certRow as { tenant_id: string; dal: string } | null;
+  const cert = certRow as { tenant_id: string; dal: string; r2_key: string | null } | null;
   if (!cert || cert.tenant_id !== ctx.tenantId) {
     return { ok: false, error: 'Giustificativo non trovato' };
   }
@@ -1013,6 +1111,15 @@ export async function caricaGiustificativo(
     return { ok: false, error: error.message };
   }
 
+  // Il popup offre «Sostituisci il documento», e la riga punta a uno solo:
+  // senza questa cancellazione il certificato di prima resterebbe su R2 per
+  // sempre, senza nessuna riga che lo indichi e nessuna schermata che lo
+  // raggiunga. E' un documento sanitario, non un file qualunque: quando smette
+  // di servire va tolto, non dimenticato.
+  if (cert.r2_key && cert.r2_key !== chiave) {
+    await r2.delete(cert.r2_key).catch(() => undefined);
+  }
+
   await auditTenant(svc, {
     tenantId: ctx.tenantId,
     actorUserId: ctx.userId,
@@ -1020,7 +1127,7 @@ export async function caricaGiustificativo(
     entityType: 'permesso_giustificativo',
     entityId: giustificativoId,
     action: 'permesso.giustificativo.allegato',
-    after: { nome: file.name, bytes: file.size },
+    after: { nome: file.name, bytes: file.size, sostituito: Boolean(cert.r2_key) },
   });
 
   revalidatePath(PATH_PERMESSI);
@@ -1041,10 +1148,17 @@ export async function eliminaGiustificativo(id: string): Promise<Ok> {
   const svc = createServiceSupabase();
   const { data: certRow } = await svc
     .from('paghe_certificati' as never)
-    .select('id, tenant_id, r2_key, numero, permesso_id')
+    .select('id, tenant_id, r2_key, numero, permesso_id, dal, al')
     .eq('id', id)
     .maybeSingle();
-  const cert = certRow as { tenant_id: string; r2_key: string | null } | null;
+  const cert = certRow as {
+    tenant_id: string;
+    r2_key: string | null;
+    numero: string | null;
+    permesso_id: string | null;
+    dal: string;
+    al: string;
+  } | null;
   if (!cert || cert.tenant_id !== ctx.tenantId) {
     return { ok: false, error: 'Giustificativo non trovato' };
   }
@@ -1057,15 +1171,7 @@ export async function eliminaGiustificativo(id: string): Promise<Ok> {
   if (error) return { ok: false, error: error.message };
 
   if (cert.r2_key) {
-    const { data: tenantRow } = await svc
-      .from('tenants')
-      .select('r2_config')
-      .eq('id', ctx.tenantId)
-      .maybeSingle();
-    const r2 =
-      getR2ProviderFromTenantConfig(
-        (tenantRow?.r2_config as Record<string, unknown> | null) ?? null,
-      ) ?? getR2ProviderFromEnv();
+    const r2 = await risolviR2(svc, ctx.tenantId);
     await r2?.delete(cert.r2_key).catch(() => undefined);
   }
 
@@ -1076,7 +1182,16 @@ export async function eliminaGiustificativo(id: string): Promise<Ok> {
     entityType: 'permesso_giustificativo',
     entityId: id,
     action: 'permesso.giustificativo.elimina',
-    before: certRow,
+    // Il numero NON si scrive nel registro: e' il dato del certificato medico,
+    // e il registro lo legge anche il super admin di piattaforma. Serve sapere
+    // che c'era, non quale fosse.
+    before: {
+      permessoId: cert.permesso_id,
+      dal: cert.dal,
+      al: cert.al,
+      conNumero: Boolean(cert.numero),
+      conAllegato: Boolean(cert.r2_key),
+    },
   });
 
   revalidatePath(PATH_PERMESSI);

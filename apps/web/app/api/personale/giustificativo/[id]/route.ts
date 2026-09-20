@@ -21,11 +21,14 @@ import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
  * Risponde con un 302 verso un indirizzo firmato che scade in 5 minuti, come
  * le ricevute delle spese: il contenuto non passa mai da un indirizzo pubblico.
  *
- * ⚠️ L'autorizzazione la fa la **RLS**, non un controllo scritto qui: su
- * `paghe_certificati` la lettura e' aperta ai soli owner/admin/office del
- * proprio cliente, quindi se la riga torna, chi la chiede puo' vederla. Qui
- * dentro ci sono certificati medici di persone: non e' un dettaglio, e per
- * questo la query passa dal client dell'utente e non dal service role.
+ * ⚠️ **Due lucchetti, non uno.** La query passa dal client dell'utente, quindi
+ * la RLS tiene fuori i tecnici: su `paghe_certificati` la lettura e' riservata
+ * a owner/admin/office. Ma sulla stessa tabella c'e' anche una policy per il
+ * super admin di piattaforma, che vede tutti i clienti — e il magazzino dei
+ * documenti, quando il cliente non ne ha uno suo, e' lo stesso per tutti.
+ * Senza il filtro sul tenant scritto qui sotto, questa route servirebbe il
+ * certificato medico di un cliente qualunque, per giunta da un indirizzo che
+ * nessuna interfaccia espone. Il filtro **non e' ridondante**.
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   let ctx;
@@ -47,6 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     .from('paghe_certificati' as never)
     .select('id, r2_key, nome_file')
     .eq('id', params.id)
+    .eq('tenant_id', ctx.tenantId)
     .maybeSingle();
   const certificato = row as { r2_key: string | null; nome_file: string | null } | null;
   if (!certificato?.r2_key) {
