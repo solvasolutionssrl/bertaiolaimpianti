@@ -16,11 +16,36 @@ const BaseSchema = z.object({
   user_id: z.string().uuid().optional().nullable(),
   stato_attivo: z.boolean().optional(),
   a_turni: z.boolean().optional(),
+  /** Come lavora: cambia cosa chiede l'app, non cosa le e' permesso fare. */
+  modalita_lavoro: z.enum(['ufficio', 'esterno']).optional(),
   costo_orario: z.number().min(0).max(10000).optional().nullable(),
   note: z.string().max(2000).optional().nullable(),
 });
 
-type Result = { ok: true; id?: string } | { ok: false; error: string };
+type Result = { ok: true; id?: string; avviso?: string } | { ok: false; error: string };
+
+/**
+ * Scrive la modalita' di lavoro **a parte**.
+ *
+ * ⚠️ La colonna arriva con la migration `20260922090000`, che si applica a
+ * mano: se il codice e' online prima, infilarla nell'insert o nell'update
+ * principale farebbe cadere con se' tutto il salvataggio del dipendente —
+ * cioe' romperebbe una cosa che funziona per una che non c'e' ancora. Scritta
+ * da sola, al massimo non attacca, e chi salva se lo sente dire.
+ */
+async function scriviModalita(
+  supabase: ReturnType<typeof createServerSupabase>,
+  id: string,
+  modalita: 'ufficio' | 'esterno' | undefined,
+): Promise<string | null> {
+  if (!modalita) return null;
+  const { error } = await supabase
+    .from('dipendenti' as never)
+    .update({ modalita_lavoro: modalita } as never)
+    .eq('id', id);
+  if (!error) return null;
+  return 'La modalità di lavoro non è stata salvata: manca ancora la modifica al database (migrazione 20260922090000).';
+}
 
 async function guard() {
   const ctx = await requireTenantContext();
@@ -64,8 +89,10 @@ export async function creaDipendente(input: unknown): Promise<Result> {
     .select('id')
     .single();
   if (error) return { ok: false, error: error.message };
+  const id = (data as { id: string }).id;
+  const avviso = await scriviModalita(supabase, id, parsed.data.modalita_lavoro);
   revalidatePath('/office/kantiere/dipendenti');
-  return { ok: true, id: (data as { id: string }).id };
+  return { ok: true, id, ...(avviso ? { avviso } : {}) };
 }
 
 export async function aggiornaDipendente(input: unknown): Promise<Result> {
@@ -91,9 +118,10 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
     } as never)
     .eq('id', parsed.data.id);
   if (error) return { ok: false, error: error.message };
+  const avviso = await scriviModalita(supabase, parsed.data.id, parsed.data.modalita_lavoro);
   revalidatePath('/office/kantiere/dipendenti');
   revalidatePath(`/office/kantiere/dipendenti/${parsed.data.id}`);
-  return { ok: true };
+  return { ok: true, ...(avviso ? { avviso } : {}) };
 }
 
 // ── crea utente/accesso app per un dipendente (no email, username+password) ──

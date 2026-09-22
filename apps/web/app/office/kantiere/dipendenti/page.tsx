@@ -3,6 +3,11 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { nuoviDalGestionale } from '@/app/_lib/integrazione/nuovi';
+import { leggiModalitaLavoro } from '@/app/_lib/dipendenti-modalita';
+import {
+  MODALITA_PREDEFINITA,
+  type ModalitaLavoro,
+} from '@/app/_lib/dipendenti-modalita-registry';
 import { DipendentiClient } from './_components/dipendenti-client';
 import { NuoviDalGestionale } from './_components/nuovi-dal-gestionale';
 
@@ -19,6 +24,8 @@ export interface DipendenteRow {
   stato_attivo: boolean;
   a_turni: boolean;
   note: string | null;
+  /** Come lavora: cambia cosa chiede l'app, non i permessi. */
+  modalitaLavoro: ModalitaLavoro;
 }
 
 export interface UtenteRow {
@@ -44,7 +51,14 @@ export default async function DipendentiPage() {
   // Chi c'è sul gestionale e da noi no. Solo admin/office decidono: un tecnico
   // che apre l'anagrafica non deve trovarsi davanti una scelta che non è sua.
   const puoDecidere = ['owner', 'admin', 'office'].includes(ctx.role);
-  const elenco = (dipendenti ?? []) as DipendenteRow[];
+
+  // ⚠️ La modalità di lavoro si legge **a parte** e in modo tollerante: la
+  // colonna arriva con una migration applicata a mano, e infilarla nella select
+  // qui sopra farebbe cadere l'intero elenco finché non è stata applicata.
+  const modalita = await leggiModalitaLavoro(supabase, ctx.tenantId);
+  const elenco: DipendenteRow[] = (
+    (dipendenti ?? []) as Omit<DipendenteRow, 'modalitaLavoro'>[]
+  ).map((d) => ({ ...d, modalitaLavoro: modalita.get(d.id) ?? MODALITA_PREDEFINITA }));
   const { sistema, nuovi, ignorati } = puoDecidere
     ? await nuoviDalGestionale(supabase, ctx.tenantId, 'dipendente')
     : { sistema: null, nuovi: [], ignorati: [] };

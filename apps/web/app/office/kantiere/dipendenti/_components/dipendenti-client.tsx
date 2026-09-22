@@ -45,6 +45,13 @@ import {
   eliminaDipendente,
   creaUtenteDipendente,
 } from '../../../_actions/dipendenti';
+import {
+  LABEL_MODALITA,
+  MODALITA_LAVORO,
+  MODALITA_PREDEFINITA,
+  SPIEGA_MODALITA,
+  type ModalitaLavoro,
+} from '@/app/_lib/dipendenti-modalita-registry';
 import type { DipendenteRow, UtenteRow } from '../page';
 import { DipendenteCollegato } from './nuovi-dal-gestionale';
 
@@ -71,6 +78,7 @@ interface FormState {
   user_id: string;
   stato_attivo: boolean;
   a_turni: boolean;
+  modalita_lavoro: ModalitaLavoro;
   note: string;
   /** user_id originale al momento dell'apertura del dialog (per rilevare cambio) */
   _originalUserId?: string | null;
@@ -89,6 +97,7 @@ const EMPTY_FORM: FormState = {
   user_id: '',
   stato_attivo: true,
   a_turni: false,
+  modalita_lavoro: MODALITA_PREDEFINITA,
   note: '',
   _originalUserId: null,
   accountMode: 'none',
@@ -108,6 +117,7 @@ function formFromRow(d: DipendenteRow): FormState {
     user_id: d.user_id ?? '',
     stato_attivo: d.stato_attivo,
     a_turni: d.a_turni,
+    modalita_lavoro: d.modalitaLavoro,
     note: d.note ?? '',
     _originalUserId: d.user_id,
     accountMode: d.user_id ? 'existing' : 'none',
@@ -367,6 +377,7 @@ export function DipendentiClient({
         user_id: userId,
         stato_attivo: form.stato_attivo,
         a_turni: form.a_turni,
+        modalita_lavoro: form.modalita_lavoro,
         note: form.note || null,
       };
       const res = form.id ? await aggiornaDipendente(payload) : await creaDipendente(payload);
@@ -381,6 +392,10 @@ export function DipendentiClient({
         });
         return;
       }
+
+      // Il resto è salvato, ma la modalità di lavoro no: si dice invece di
+      // lasciar credere che sia andata (vedi `scriviModalita`).
+      if (res.avviso) await showAlert({ title: 'Salvato, con un’eccezione', body: res.avviso });
 
       // 3) Se ho creato un accesso, mostra le credenziali (una sola volta).
       if (nuoveCredenziali) {
@@ -531,6 +546,8 @@ export function DipendentiClient({
                     <th className="px-3 py-2 font-medium">Accesso</th>
                     <th className="px-3 py-2 font-medium">Ruolo</th>
                     <th className="px-3 py-2 font-medium">Turni</th>
+                    {/* Dice cosa chiede l'app a questa persona, non dove sta. */}
+                    <th className="px-3 py-2 font-medium">Modalità app</th>
                     <th className="px-3 py-2 font-medium">Stato</th>
                     <th className="w-32 px-3 py-2" aria-label="Azioni" />
                   </tr>
@@ -589,6 +606,18 @@ export function DipendentiClient({
                           ) : (
                             <span className="text-xs text-muted-foreground">No</span>
                           )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={
+                              d.modalitaLavoro === 'ufficio'
+                                ? 'inline-flex items-center gap-1 rounded bg-sky-50 px-1.5 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-sky-200'
+                                : 'text-xs text-muted-foreground'
+                            }
+                            title={SPIEGA_MODALITA[d.modalitaLavoro]}
+                          >
+                            {LABEL_MODALITA[d.modalitaLavoro]}
+                          </span>
                         </td>
                         <td className="px-3 py-2">
                           <span
@@ -962,6 +991,47 @@ export function DipendentiClient({
                 </Label>
                 <span className="text-xs text-muted-foreground">(influisce sul calcolo delle maggiorazioni)</span>
               </div>
+            </div>
+
+            {/* Come lavora: NON è un ruolo e non tocca i permessi. Cambia solo
+                cosa l'app chiede a questa persona sul telefono, ed è scritto a
+                schermo perché chi sceglie sappia cosa sta cambiando davvero. */}
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <span className="block text-xs font-medium text-foreground">
+                Come lavora · serve all&apos;app
+              </span>
+              <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {MODALITA_LAVORO.map((m) => {
+                  const attivo = form.modalita_lavoro === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, modalita_lavoro: m }))}
+                      className={
+                        attivo
+                          ? 'rounded-md bg-primary px-2.5 py-2 text-left text-primary-foreground'
+                          : 'rounded-md border border-border bg-card px-2.5 py-2 text-left hover:border-primary/40'
+                      }
+                    >
+                      <span className="block text-[13px] font-semibold leading-tight">
+                        {LABEL_MODALITA[m]}
+                      </span>
+                      <span
+                        className={
+                          'mt-0.5 block text-[11px] leading-snug ' +
+                          (attivo ? 'text-primary-foreground/80' : 'text-muted-foreground')
+                        }
+                      >
+                        {SPIEGA_MODALITA[m]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                Non cambia i permessi: quelli restano il ruolo dell&apos;account.
+              </p>
             </div>
 
             <DialogFooter className="gap-2 pt-2">

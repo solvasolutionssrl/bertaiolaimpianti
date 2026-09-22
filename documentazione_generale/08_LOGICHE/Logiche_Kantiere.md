@@ -1,8 +1,8 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.6
+**Versione**: 1.7
 **Stato**: Attivo (in produzione)
-**Ultimo aggiornamento**: 15/09/2026
+**Ultimo aggiornamento**: 22/09/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
 
 > **A cosa serve questo file.** Non è un manuale d'uso: è il registro delle **regole e delle scelte operative** già implementate (arrotondamenti, soglie, quando si caricano i km, come si collegano sedi e cantieri, quali impostazioni gestisce l'ufficio). Serve come base per una futura sezione **Help** nell'office e come contesto per un **agente AI interno**.
@@ -102,6 +102,28 @@ Non sempre si lavora fisicamente in cantiere: si può lavorare per un cantiere d
 | Dati | `timbrature.sede_lavoro_id` sulle timbrature del segmento (null = in cantiere). La cronologia mostra «Lavoro dalla sede …», la card del turno «dalla sede …». |
 
 Serve una sede predefinita attiva: senza, l'azione risponde `SEDE_PREDEFINITA_MANCANTE`.
+
+---
+
+### 3.3 Chi lavora quasi sempre in sede (dal 22/09/2026)
+
+Alcune persone in cantiere non ci vanno: stanno in ufficio o in officina. L'app chiedeva a tutti le stesse cose — quale cantiere, da dove parti, quanti chilometri — e a loro non servivano.
+
+**Come si assegna.** Sulla **scheda dipendente** (Personale → Dipendenti), campo «Come lavora»: **Attività esterne** (predefinito, il comportamento di sempre) oppure **Prevalenza ufficio**. Si vede anche in elenco, colonna «Modalità app».
+
+> ⚠️ **Non è un ruolo e non tocca i permessi.** Il ruolo (`users.role`) dice cosa a una persona è *permesso fare* e regge guard e RLS; questo dice *come l'app si comporta con lei*, ed è una proprietà del lavoro. Per questo sta su `dipendenti`, accanto a `a_turni` e al costo orario: due persone su trentaquattro non hanno nemmeno un account, e il loro lavoro esiste lo stesso. Farne un ruolo porterebbe subito all'esplosione combinatoria — «office che timbra», «tecnico che sta in sede», «caposquadra in ufficio».
+
+**Cosa cambia sul telefono** per chi è in «Prevalenza ufficio»:
+
+- **Inizia giornata in un passo**: si sceglie *su cosa* si lavora, non *da dove* si parte. Sotto c'è `daSede: true`, cioè il «lavoro dalla sede sul progetto» di §3.2: le ore restano del lavoro scelto, il luogo è la sede predefinita.
+- **Chiusura in un tocco**: niente foglio del viaggio di ritorno.
+- **Il viaggio è un flag al contrario**: non si chiede, si dichiara («Oggi ho fatto un viaggio») e apre il foglio di sempre.
+- Il foglio compare da solo **solo quando c'è una domanda vera**: giornata lunga senza pausa timbrata.
+- «Scansiona QR» resta raggiungibile: capita di andare in cantiere anche a chi di solito non ci va.
+
+Per chi è in «Attività esterne» **non cambia niente**: la stessa app di prima.
+
+> ⚠️ **La colonna si legge in modo tollerante.** `dipendenti.modalita_lavoro` arriva con la migration `20260922090000`, che si applica a mano, mentre il codice va online al push. Le letture stanno in una **query separata** (`_lib/dipendenti-modalita.ts`): se la colonna non c'è ancora, tutti risultano «esterno» invece di far cadere la pagina Dipendenti. Anche il salvataggio la scrive a parte e avvisa se non ha attaccato, così un campo che non esiste non porta giù con sé l'anagrafica.
 
 ---
 

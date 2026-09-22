@@ -19,8 +19,10 @@ import {
   vedeTuttiICantieri,
   cantieriVisibiliTecnicoIds,
 } from './_lib/visibilita-tecnico';
+import { modalitaLavoroDi } from '@/app/_lib/dipendenti-modalita';
 import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
 import { IniziaTurnoButton } from './_components/inizia-turno';
+import { HomeUfficio } from './_components/home-ufficio';
 
 export const metadata: Metadata = {
   title: 'Kantiere',
@@ -110,6 +112,30 @@ export default async function KantiereHomePage() {
   }
 
   const dentro = ultima?.tipo === 'ingresso';
+
+  // Chi lavora in sede ha una giornata diversa: si sceglie su cosa si lavora,
+  // non da dove si parte, e il viaggio si dichiara solo quando c'è stato. Non
+  // è un ruolo: è come lavora la persona (scheda dipendente).
+  const inUfficio = me
+    ? (await modalitaLavoroDi(supabase, ctx.tenantId, me.id)) === 'ufficio'
+    : false;
+  if (inUfficio) {
+    return (
+      <div className="animate-content-in flex min-h-[100dvh] flex-col gap-6 p-4">
+        <header className="pt-2">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+            <HardHat className="h-3.5 w-3.5" aria-hidden="true" />
+            Kantiere
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight">
+            {me ? `Ciao, ${titoloCase(me.nome)}` : 'Kantiere'}
+          </h1>
+          <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
+        </header>
+        <HomeUfficio turno={turno} azioni={azioni} />
+      </div>
+    );
+  }
 
   // Tenant 'full': qui arriva la tab Kantiere della barra commesse, che non ha
   // gli slot della shell Kantiere. Cruscotto, Spese e Squadra si linkano qui.

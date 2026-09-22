@@ -6,13 +6,16 @@ import { STATI_CANTIERE_VIVI } from '@kommessa/api/stato-lavoro';
 
 import { guardMobile } from '../../_lib/guard';
 import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
+import { modalitaLavoroDi } from '@/app/_lib/dipendenti-modalita';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
+import { HomeUfficio } from '../_components/home-ufficio';
 import {
   vedeTuttiICantieri,
   cantieriVisibiliTecnicoIds,
 } from '../_lib/visibilita-tecnico';
 import { CantieriBrowser, type CantiereItem } from './_components/cantieri-browser';
+import type { PickerCantiere } from '../_components/cantiere-picker';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 
 export const metadata: Metadata = {
@@ -40,7 +43,7 @@ export default async function CantieriMobilePage() {
     mioTurnoAttivo(),
     supabase
       .from('dipendenti' as never)
-      .select('id')
+      .select('id, nome')
       .eq('tenant_id', ctx.tenantId)
       .eq('user_id', ctx.userId)
       .maybeSingle(),
@@ -48,7 +51,15 @@ export default async function CantieriMobilePage() {
 
   // "Inizia turno" (avvio manuale senza QR) solo se l'utente ha un profilo
   // dipendente: vale per tecnici e per admin/office che lavorano in cantiere.
-  const puoAvviareTurno = !!(meRes.data as { id: string } | null);
+  const me = meRes.data as { id: string; nome: string } | null;
+  const puoAvviareTurno = !!me;
+
+  // Chi lavora in sede atterra qui (è la landing dei non-manager): la sua
+  // giornata si apre e si chiude da questa stessa pagina, senza le domande
+  // del cantiere. L'elenco resta sotto, perché capita di andarci.
+  const inUfficio = me
+    ? (await modalitaLavoroDi(supabase, ctx.tenantId, me.id)) === 'ufficio'
+    : false;
 
   const cantieriTutti = (cantieriRes.data as CantiereItem[] | null) ?? [];
   // Visibilità cantieri per i tecnici: se "avvio libero" è ATTIVO (default) i
@@ -89,11 +100,22 @@ export default async function CantieriMobilePage() {
         </div>
       </header>
 
+      {inUfficio ? (
+        <HomeUfficio
+          nome={me?.nome}
+          turno={turno}
+          azioni={azioni}
+          cantieri={cantieri as unknown as PickerCantiere[]}
+        />
+      ) : null}
+
       <CantieriBrowser
         cantieri={cantieri}
         turno={turno}
         azioni={azioni}
-        puoAvviareTurno={puoAvviareTurno}
+        // In modalità ufficio il tasto di avvio è quello della card sopra: due
+        // tasti che iniziano la giornata in due modi diversi confonderebbero.
+        puoAvviareTurno={puoAvviareTurno && !inUfficio}
       />
     </div>
   );
