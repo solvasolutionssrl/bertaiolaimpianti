@@ -175,10 +175,23 @@ try {
   });
   await pausa(900);
 
+  // ── Appena aperto, prima ancora di scegliere il lavoro ────────────────────
+  // ⚠️ Qui stava il buco della prima stesura: il banco aggiungeva subito un
+  // cantiere, quindi non guardava mai la schermata che accoglie la persona. Ed
+  // era proprio lì che «Partenza» e «Rientro» comparivano lo stesso.
+  let s = await valuta(cdp, LEGGI);
+  esito(
+    s.haPartenza === false && s.haRientro === false,
+    'appena aperto non accoglie con partenza e rientro',
+    s.haPartenza || s.haRientro ? 'compaiono prima ancora di scegliere il lavoro' : '',
+  );
+  esito(s.tuttoInSede === true, 'appena aperto la giornata è già «in sede»');
+  await foto(cdp, 'rgu-00-appena-aperto');
+
   // ── Un lavoro: nasce dalla sede ──────────────────────────────────────────
   esito(await aggiungiCantiere(cdp, 'Aurora'), 'aggiunge un lavoro dalla ricerca');
   await ore(cdp, 8);
-  let s = await valuta(cdp, LEGGI);
+  s = await valuta(cdp, LEGGI);
 
   esito(
     s.etichettaFlag === 'Lavoro presso il cliente',

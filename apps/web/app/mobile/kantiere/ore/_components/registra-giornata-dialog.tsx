@@ -420,7 +420,12 @@ export function RegistraGiornataDialog({
     ? { tipo: 'sede', sedeId: sedeDefault.id }
     : null;
   // Tutto il giorno dalla sede: partenza e rientro non si chiedono.
-  const tuttoInSede = righe.length > 0 && sedeDefault != null && righe.every((r) => r.daSede);
+  // In modalità ufficio la giornata è in sede da subito, anche prima di scegliere
+  // il primo lavoro: altrimenti il dialog appena aperto accoglierebbe con
+  // «Partenza» e «Rientro», cioè con la domanda che qui è l'eccezione. Per chi
+  // lavora fuori serve almeno una riga, come è sempre stato.
+  const tuttoInSede =
+    sedeDefault != null && (inUfficio || righe.length > 0) && righe.every((r) => r.daSede);
   const mostraPartenza = !tuttoInSede && sediAndata.length > 0;
   const mostraRientro = !tuttoInSede && sediRitorno.length > 0;
 
