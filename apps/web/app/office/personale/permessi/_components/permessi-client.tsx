@@ -302,9 +302,14 @@ function NuovaRichiestaDialog({
   const alert = useAlert();
   const [pending, start] = React.useTransition();
   const tipiDisponibili = tipiOpzioni;
-  const dipIniziale = mioDip ?? dipendenti[0]?.id ?? '';
+  // ⚠️ Si preseleziona solo chi e' davvero nell'elenco. `mioDip` viene cercato
+  // fra TUTTI i dipendenti, mentre l'elenco porta solo gli attivi: se chi sta
+  // in ufficio ha la propria scheda disattivata, preselezionarlo darebbe un
+  // campo vuoto con dentro un id valido, e l'assenza finirebbe su di lui.
+  const dipIniziale = dipendenti.some((d) => d.id === mioDip)
+    ? (mioDip as string)
+    : dipendenti[0]?.id ?? '';
   const [dipendenteId, setDipendenteId] = React.useState<string>(dipIniziale);
-  // Il campo mostra chi e' selezionato: parte col nome, non vuoto.
   const [cercaDip, setCercaDip] = React.useState(
     dipendenti.find((d) => d.id === dipIniziale)?.nome ?? '',
   );
@@ -330,15 +335,21 @@ function NuovaRichiestaDialog({
   const tipoScelto = tipiDisponibili.find((t) => t.codice === tipo);
   const serveDoc = tipoScelto?.richiedeGiustificativo === true;
   const numeroObbligatorio = numeroAttestatoObbligatorio(tipo);
-  const nomeScelto = dipendenti.find((d) => d.id === dipendenteId)?.nome ?? '';
-
   // Poche righe alla volta: la tendina si sovrappone al resto del modulo e non
-  // deve coprirlo tutto.
-  const dipFiltrati = React.useMemo(() => {
+  // deve coprirlo tutto. `quantiTrovati` serve a dire che si sta guardando una
+  // fetta, invece di lasciar credere che quelli siano tutti.
+  const { dipFiltrati, quantiTrovati } = React.useMemo(() => {
     const q = cercaDip.trim().toLowerCase();
     const base = q ? dipendenti.filter((d) => d.nome.toLowerCase().includes(q)) : dipendenti;
-    return base.slice(0, 6);
+    return { dipFiltrati: base.slice(0, 6), quantiTrovati: base.length };
   }, [dipendenti, cercaDip]);
+
+  /** Scegliere allinea le due cose: chi e' selezionato e cosa si legge. */
+  const scegliDip = (d: DipOpt) => {
+    setDipendenteId(d.id);
+    setCercaDip(d.nome);
+    setDipAperto(false);
+  };
 
   const onTipo = (codice: string) => {
     setTipo(codice);
@@ -426,15 +437,21 @@ function NuovaRichiestaDialog({
   };
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    // Mentre crea l'assenza e carica il documento la finestra non si chiude.
+    // «Annulla» e' gia' spento, ma la X e il tasto Esc di Radix non passano di
+    // li': chiudere a meta' dei tre passaggi lascerebbe un'assenza gia' creata
+    // senza nessuna conferma a schermo, e chi non l'ha vista la ricrea.
+    <Dialog open onOpenChange={(o) => (o || pending ? undefined : onClose())}>
       <DialogContent
         className={
           // Intestazione ferma, corpo che scorre, tasti fermi in fondo: prima
           // scorreva tutto il popup e Annulla/Salva finivano sotto il bordo.
           'flex max-h-[92vh] flex-col overflow-hidden ' +
-          // Il popup si allarga solo quando c'e' davvero una seconda colonna:
-          // per delle ferie resta stretto com'era.
-          (serveDoc ? 'sm:max-w-[920px]' : 'sm:max-w-lg')
+          // ⚠️ Larghezza e numero di colonne devono scattare alla STESSA misura.
+          // Con il largo a `sm` e le colonne a `lg`, fra i 640 e i 1024px il
+          // popup si allargava restando a una colonna: l'attestato finiva in
+          // fondo e il numero obbligatorio si trovava solo scorrendo.
+          (serveDoc ? 'sm:max-w-lg lg:max-w-[920px]' : 'sm:max-w-lg')
         }
       >
         <DialogHeader className="shrink-0">
@@ -484,37 +501,73 @@ function NuovaRichiestaDialog({
             </div>
           </div>
 
-          {/* Dipendente: solo ricerca con tendina, come il cantiere in
-              pianificazione. L'elenco sempre aperto rubava 170px di altezza e
-              spingeva i tasti sotto il bordo del popup. */}
+          {/* Dipendente: ricerca con tendina, come il cantiere in
+              pianificazione. L'elenco sempre aperto rubava 170px di altezza.
+
+              ⚠️ **Scrivere annulla la scelta fatta.** Il testo del campo e la
+              persona selezionata devono dire la stessa cosa: prima erano due
+              stati scollegati, e un refuso nella ricerca lasciava in piedi la
+              selezione di prima — l'assenza finiva sulla persona sbagliata,
+              senza che niente a schermo lo contraddicesse. */}
           <div className="text-sm">
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">Per chi</span>
+            <label
+              htmlFor="cerca-dipendente"
+              className="mb-1 block text-xs font-medium text-muted-foreground"
+            >
+              Per chi
+            </label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
+                id="cerca-dipendente"
+                role="combobox"
+                aria-expanded={dipAperto}
+                aria-controls="elenco-dipendenti"
+                autoComplete="off"
                 value={cercaDip}
                 onChange={(e) => {
                   setCercaDip(e.target.value);
+                  // La selezione decade: vale solo quella presa dall'elenco.
+                  setDipendenteId('');
                   setDipAperto(true);
                 }}
                 onFocus={() => setDipAperto(true)}
-                // Il ritardo lascia arrivare il clic sulla voce: senza, la
-                // tendina si chiude prima che la scelta venga registrata.
-                onBlur={() => setTimeout(() => setDipAperto(false), 120)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape' && dipAperto) {
+                    // Chiude la tendina, non tutto il popup con dentro i campi
+                    // gia' compilati (Esc di Radix chiuderebbe la finestra).
+                    e.stopPropagation();
+                    setDipAperto(false);
+                    return;
+                  }
+                  if (e.key === 'Enter' && dipAperto && dipFiltrati[0]) {
+                    e.preventDefault();
+                    scegliDip(dipFiltrati[0]);
+                    return;
+                  }
+                  if (e.key === 'ArrowDown') setDipAperto(true);
+                }}
+                onBlur={() => setDipAperto(false)}
                 placeholder="Cerca dipendente"
                 className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm focus:border-primary focus:outline-none"
               />
-              {dipAperto && dipFiltrati.length > 0 ? (
-                <div className="absolute left-0 right-0 top-[calc(100%+2px)] z-20 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+              {dipAperto ? (
+                <div
+                  id="elenco-dipendenti"
+                  role="listbox"
+                  className="absolute left-0 right-0 top-[calc(100%+2px)] z-20 overflow-hidden rounded-md border border-border bg-popover shadow-lg"
+                >
                   {dipFiltrati.map((d) => (
                     <button
                       key={d.id}
                       type="button"
-                      onClick={() => {
-                        setDipendenteId(d.id);
-                        setCercaDip(d.nome);
-                        setDipAperto(false);
-                      }}
+                      role="option"
+                      aria-selected={dipendenteId === d.id}
+                      // Il focus resta nel campo: senza, il `blur` chiude la
+                      // tendina prima che il clic arrivi, e chi clicca piano
+                      // non seleziona niente.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => scegliDip(d)}
                       className={
                         'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-muted ' +
                         (dipendenteId === d.id ? 'font-medium' : '')
@@ -529,11 +582,23 @@ function NuovaRichiestaDialog({
                       ) : null}
                     </button>
                   ))}
+                  {dipFiltrati.length === 0 ? (
+                    <p className="px-3 py-2 text-[12px] text-muted-foreground">
+                      Nessun dipendente con questo nome.
+                    </p>
+                  ) : null}
+                  {quantiTrovati > dipFiltrati.length ? (
+                    <p className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
+                      Altri {quantiTrovati - dipFiltrati.length}. Scrivi per restringere.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
-            {nomeScelto ? null : (
-              <p className="mt-1 text-[11px] text-amber-700">Nessun dipendente scelto.</p>
+            {dipendenteId ? null : (
+              <p className="mt-1 text-[11px] text-amber-700">
+                Nessun dipendente scelto: prendilo dall&apos;elenco.
+              </p>
             )}
           </div>
 
@@ -650,16 +715,33 @@ function NuovaRichiestaDialog({
             </span>
 
             <div className="flex flex-wrap gap-1">
+              {/* Stesse tre voci, con le stesse parole, del popup di modifica:
+                  erano «Cod. fiscale» qui e «Codice fiscale» di la', proprio
+                  dove i due dovevano somigliarsi. La spiegazione sta nel
+                  suggerimento, che qui lo spazio e' un terzo di riga. */}
               {(
                 [
-                  { codice: 'P' as const, label: 'PUC' },
-                  { codice: 'M' as const, label: 'Protocollo' },
-                  { codice: 'C' as const, label: 'Cod. fiscale' },
+                  {
+                    codice: 'P' as const,
+                    label: 'PUC',
+                    spiega: 'Certificato telematico inviato dal medico.',
+                  },
+                  {
+                    codice: 'M' as const,
+                    label: 'Protocollo',
+                    spiega: 'Certificato consegnato su carta.',
+                  },
+                  {
+                    codice: 'C' as const,
+                    label: 'Codice fiscale',
+                    spiega: 'Ente della donazione di sangue.',
+                  },
                 ]
               ).map((t) => (
                 <button
                   key={t.codice}
                   type="button"
+                  title={t.spiega}
                   onClick={() => setTipoInfo(t.codice)}
                   className={
                     'rounded-md px-2 py-1 text-[11px] font-medium transition-colors ' +

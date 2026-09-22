@@ -138,8 +138,11 @@ export function GiustificativoDialog({
 
   const urlFile = esistente?.haAllegato ? `/api/personale/giustificativo/${esistente.id}` : null;
 
+  // Mentre salva o carica la finestra non si chiude. «Annulla» e' gia' spento,
+  // ma la X e il tasto Esc di Radix non passano di li': chiudere a meta' del
+  // caricamento lascerebbe l'utente senza sapere se il documento e' arrivato.
   return (
-    <Dialog open onOpenChange={(v) => (v ? undefined : onChiudi())}>
+    <Dialog open onOpenChange={(v) => (v || inCorso ? undefined : onChiudi())}>
       <DialogContent className="grid-cols-[minmax(0,1fr)] overflow-x-hidden sm:max-w-[620px]">
         <DialogHeader>
           <DialogTitle>Giustificativo</DialogTitle>
@@ -201,7 +204,7 @@ export function GiustificativoDialog({
             {numero.trim() ? (
               <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Registrato sull&apos;assenza.
+                Registrato sull’assenza.
               </p>
             ) : (
               <p className="mt-1 text-[11px] leading-snug text-amber-700">

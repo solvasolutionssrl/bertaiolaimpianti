@@ -164,6 +164,39 @@ try {
       alt?.popupScorre ? 'scorre il popup intero: i tasti se ne vanno sotto' : '',
     );
 
+    // ── Il difetto peggiore: scrivere un refuso e salvare sulla persona
+    //    sbagliata. Scrivere DEVE annullare la scelta e dirlo.
+    await valuta(
+      cdp,
+      `(() => {
+        const i = document.querySelector('#cerca-dipendente');
+        if (!i) return 'campo assente';
+        const proto = Object.getPrototypeOf(i);
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, 'zzzqqq');
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`,
+    );
+    await new Promise((r) => setTimeout(r, 400));
+    const refuso = await valuta(
+      cdp,
+      `(() => {
+        const d = document.querySelector('[role=dialog]');
+        if (!d) return null;
+        const t = (d.innerText || '').replace(/\\s+/g, ' ');
+        return {
+          avvisa: /Nessun dipendente scelto/i.test(t),
+          tendinaVuota: /Nessun dipendente con questo nome/i.test(t),
+        };
+      })()`,
+    );
+    esito(
+      refuso?.avvisa === true,
+      'un refuso nella ricerca annulla la scelta e lo dice',
+      refuso?.avvisa ? '' : 'nessun avviso: si salverebbe sulla persona di prima',
+    );
+    esito(refuso?.tendinaVuota === true, 'la tendina dice che non ha trovato nessuno');
+
     console.log(`\n  Testo del popup: ${largo?.testo ?? '(vuoto)'}\n`);
   }
 
