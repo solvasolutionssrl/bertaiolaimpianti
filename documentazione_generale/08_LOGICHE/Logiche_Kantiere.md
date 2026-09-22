@@ -119,9 +119,12 @@ Alcune persone in cantiere non ci vanno: stanno in ufficio o in officina. L'app 
 - **Chiusura in un tocco**: niente foglio del viaggio di ritorno.
 - **Il viaggio è un flag al contrario**: non si chiede, si dichiara («Oggi ho fatto un viaggio») e apre il foglio di sempre.
 - Il foglio compare da solo **solo quando c'è una domanda vera**: giornata lunga senza pausa timbrata.
+- **«Registra giornata» gira allo stesso modo** (tab «Le mie ore di oggi», l'inserimento a mano di §7.6). È la stessa schermata, con gli stessi pezzi: scelta dei lavori, colori, ora di inizio, fine calcolata, pausa pranzo. Cambia solo da che parte sta il caso normale — il lavoro nasce **dalla sede**, e il flag sulla riga dice l'eccezione: **«Lavoro presso il cliente»** al posto di «Lavoro dalla sede sul progetto». Finché nessuna riga è spuntata la giornata è tutta in sede e il percorso non si chiede; spuntandone una compaiono partenza, rientro e tratte, identici a prima. Sotto non cambia niente: è sempre `daSede` per riga, ed è lo stesso salvataggio.
 - «Scansiona QR» resta raggiungibile: capita di andare in cantiere anche a chi di solito non ci va.
 
 Per chi è in «Attività esterne» **non cambia niente**: la stessa app di prima.
+
+> ⚠️ **Una schermata sola, non due.** La variante di «Registra giornata» è una prop (`inUfficio`) sullo stesso componente, **spenta di default**: chi lavora fuori vede esattamente la schermata di prima. Un gemello copiato — sono 1100 righe — divergerebbe dall'originale alla prima correzione, e questa è la schermata che i tecnici toccano tutti i giorni. Banco: `scripts/banco-ui/registra-giornata-ufficio.mjs`.
 
 > ⚠️ **La colonna si legge in modo tollerante.** `dipendenti.modalita_lavoro` arriva con la migration `20260922090000`, che si applica a mano, mentre il codice va online al push. Le letture stanno in una **query separata** (`_lib/dipendenti-modalita.ts`): se la colonna non c'è ancora, tutti risultano «esterno» invece di far cadere la pagina Dipendenti. Anche il salvataggio la scrive a parte e avvisa se non ha attaccato, così un campo che non esiste non porta giù con sé l'anagrafica.
 

@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { guardMobile } from '../../_lib/guard';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiArrotondamenti, leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
+import { modalitaLavoroDi } from '@/app/_lib/dipendenti-modalita';
 import { precompilaMioRapportino, mioStoricoRapportini } from '@/app/_actions/kantiere-rapportino';
 import { OreClient } from './_components/ore-client';
 import { StoricoOre } from './_components/storico-ore';
@@ -157,12 +158,19 @@ export default async function MobileOrePage() {
     ultimoMezzoId = (umRaw as { mezzo_id: string } | null)?.mezzo_id ?? null;
   }
 
-  const [turno, storicoRes, impTurno, arrotondamenti] = await Promise.all([
+  // Come lavora questa persona sta sulla sua scheda, non nel ruolo: chi è quasi
+  // sempre in sede registra la giornata con il flag al contrario (il percorso si
+  // dichiara quando esce, invece di toglierlo quando resta). Va insieme alle
+  // altre letture: non dipende da nessuna di loro, e in fila costerebbe un giro
+  // di database in più a tutti, anche a chi lavora fuori.
+  const [turno, storicoRes, impTurno, arrotondamenti, modalita] = await Promise.all([
     mioTurnoAttivo(),
     mioStoricoRapportini({}),
     leggiImpostazioniTurno(supabase, ctx.tenantId),
     leggiArrotondamenti(supabase, ctx.tenantId),
+    dipendenteId ? modalitaLavoroDi(supabase, ctx.tenantId, dipendenteId) : Promise.resolve(null),
   ]);
+  const inUfficio = modalita === 'ufficio';
   const storico = storicoRes.ok ? storicoRes.giorni : [];
 
   // Se c'è un turno aperto, la stessa card azioni della home/scheda cantiere
@@ -220,6 +228,7 @@ export default async function MobileOrePage() {
         registraGiornataAttivo={impTurno.registraGiornataAttivo}
         passoMinuti={impTurno.passoMinuti}
         stepViaggio={arrotondamenti.viaggioMin}
+        inUfficio={inUfficio}
       />
 
       <StoricoOre giorni={storico} passo={impTurno.passoMinuti} />

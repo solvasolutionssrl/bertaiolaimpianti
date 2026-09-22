@@ -86,35 +86,54 @@ export default async function CantieriMobilePage() {
           <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Cantieri</h1>
+        {/* Per chi lavora in sede questa è la SUA giornata, non l'elenco dei
+            cantieri: il titolo deve dire quello che la pagina fa per lei.
+            L'elenco resta sotto, con la sua etichetta. */}
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">
+          {inUfficio ? 'La mia giornata' : 'Cantieri'}
+        </h1>
         {/* Chi è dentro e chi è fuori cambia durante la giornata: la pagina si
             tiene aggiornata da sola. «Aggiornato alle» sta sulla riga sotto il
             titolo: in alto a destra c'è la campanella. */}
         <div className="mt-0.5 flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
-            {cantieri.length === 0
-              ? 'Nessun cantiere'
-              : `${cantieri.length} ${cantieri.length === 1 ? 'cantiere' : 'cantieri'}`}
+            {inUfficio
+              ? ''
+              : cantieri.length === 0
+                ? 'Nessun cantiere'
+                : `${cantieri.length} ${cantieri.length === 1 ? 'cantiere' : 'cantieri'}`}
           </p>
           <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
         </div>
       </header>
 
       {inUfficio ? (
-        <HomeUfficio
-          nome={me?.nome}
-          turno={turno}
-          azioni={azioni}
-          cantieri={cantieri as unknown as PickerCantiere[]}
-        />
+        <>
+          <HomeUfficio
+            nome={me?.nome}
+            turno={turno}
+            azioni={azioni}
+            cantieri={cantieri as unknown as PickerCantiere[]}
+          />
+          {/* Senza cantieri l'etichetta sarebbe un titolo sopra il vuoto. */}
+          {cantieri.length > 0 ? (
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Cantieri · {cantieri.length}
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       <CantieriBrowser
         cantieri={cantieri}
-        turno={turno}
-        azioni={azioni}
-        // In modalità ufficio il tasto di avvio è quello della card sopra: due
-        // tasti che iniziano la giornata in due modi diversi confonderebbero.
+        // In modalità ufficio la giornata sta tutta nella card sopra: turno e
+        // azioni non scendono qui, altrimenti con un turno aperto si vedrebbero
+        // DUE card, con due «Fine turno» che chiudono in modi diversi (uno in un
+        // tocco, l'altro con il foglio del viaggio di ritorno).
+        turno={inUfficio ? null : turno}
+        azioni={inUfficio ? null : azioni}
+        // Stesso motivo per l'avvio: due tasti che iniziano la giornata in due
+        // modi diversi confonderebbero.
         puoAvviareTurno={puoAvviareTurno && !inUfficio}
       />
     </div>

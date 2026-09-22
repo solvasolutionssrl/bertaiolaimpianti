@@ -48,6 +48,8 @@ interface OreClientProps {
   passoMinuti: number;
   /** Arrotondamento del tempo di viaggio (min), per Registra giornata. */
   stepViaggio: number;
+  /** Modalità di lavoro «ufficio»: «Registra giornata» gira il flag al contrario. */
+  inUfficio: boolean;
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -103,6 +105,7 @@ export function OreClient({
   registraGiornataAttivo,
   passoMinuti,
   stepViaggio,
+  inUfficio,
 }: OreClientProps) {
   // Vista di sola lettura: le ore si scrivono da timbrature, Registra giornata e
   // Modifica giornata, non da qui.
@@ -249,7 +252,9 @@ export function OreClient({
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-foreground">Registra giornata</span>
               <span className="block text-xs leading-snug text-muted-foreground">
-                Orario, pausa, cantieri e viaggio della giornata.
+                {inUfficio
+                  ? 'Orario, pausa e lavori della giornata.'
+                  : 'Orario, pausa, cantieri e viaggio della giornata.'}
               </span>
             </span>
           </button>
@@ -285,6 +290,7 @@ export function OreClient({
         sediPerCantiere={sediPerCantiere}
         mezzi={mezziDisponibili}
         ultimoMezzoId={ultimoMezzoId}
+        inUfficio={inUfficio}
       />
 
       {/* Panoramica/correzione della giornata di oggi (pencil sul riepilogo) */}

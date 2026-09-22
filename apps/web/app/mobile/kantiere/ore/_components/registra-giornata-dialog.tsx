@@ -320,6 +320,12 @@ const tipoLuogoSede = (tipo: string | undefined) =>
  * viene bloccato: premendo «Registra giornata» sale il foglio «Il viaggio», che
  * chiede solo quello che manca, con la barra dei tempi sempre visibile sotto.
  * Regole del percorso in `@kommessa/api/kantiere-percorso`.
+ *
+ * Con `inUfficio` la stessa schermata gira al contrario, per chi lavora quasi
+ * sempre in sede: un lavoro nasce «dalla sede» e il flag dice l'eccezione
+ * («Lavoro presso il cliente»), che è quella che fa comparire il percorso.
+ * Stessi pezzi e stesso salvataggio: cambia solo da che parte sta il caso
+ * normale. Chi lavora fuori non vede nessuna differenza.
  */
 export function RegistraGiornataDialog({
   open,
@@ -330,6 +336,7 @@ export function RegistraGiornataDialog({
   sediPerCantiere,
   mezzi,
   ultimoMezzoId,
+  inUfficio = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -341,6 +348,8 @@ export function RegistraGiornataDialog({
   sediPerCantiere: Record<string, string[]>;
   mezzi: MezzoOpzione[];
   ultimoMezzoId: string | null;
+  /** Modalità di lavoro «ufficio» (scheda dipendente): il flag va al contrario. */
+  inUfficio?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -853,7 +862,15 @@ export function RegistraGiornataDialog({
         ? prev
         : [
             ...prev,
-            { cantiereId: id, nome, codice: codiceCantiereMostrato(c), minuti: 0, daSede: false },
+            {
+              cantiereId: id,
+              nome,
+              codice: codiceCantiereMostrato(c),
+              minuti: 0,
+              // In modalità ufficio il caso normale è lavorare dalla sede: il
+              // lavoro nasce così, e il flag serve a dire quando si è usciti.
+              daSede: inUfficio && sedeDefault != null,
+            },
           ],
     );
     setErrore(null);
@@ -1053,9 +1070,12 @@ export function RegistraGiornataDialog({
             <span className="text-foreground min-w-0 flex-1 truncate text-[13px] font-semibold">
               {r.nome}
             </span>
-            {r.daSede ? (
+            {/* Si segna l'eccezione, non la regola: fuori è «in sede», in
+                ufficio è l'uscita dal cliente. Senza sede predefinita non c'è
+                nessuna eccezione da segnare: la casella non esiste nemmeno. */}
+            {(inUfficio ? sedeDefault != null && !r.daSede : r.daSede) ? (
               <span className="text-primary shrink-0 text-[10px] font-semibold uppercase tracking-wide">
-                In sede
+                {inUfficio ? 'Dal cliente' : 'In sede'}
               </span>
             ) : null}
             <span className="text-muted-foreground shrink-0 font-mono text-xs font-semibold tabular-nums">
@@ -1105,17 +1125,21 @@ export function RegistraGiornataDialog({
               <label className="mt-1.5 flex cursor-pointer select-none items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={r.daSede}
+                  checked={inUfficio ? !r.daSede : r.daSede}
                   disabled={pending}
                   onChange={(e) =>
                     setRighe((prev) =>
-                      prev.map((x, j) => (j === i ? { ...x, daSede: e.target.checked } : x)),
+                      prev.map((x, j) =>
+                        j === i
+                          ? { ...x, daSede: inUfficio ? !e.target.checked : e.target.checked }
+                          : x,
+                      ),
                     )
                   }
                   className="border-input accent-primary h-4 w-4 rounded"
                 />
                 <span className="text-muted-foreground text-xs">
-                  Lavoro dalla sede sul progetto
+                  {inUfficio ? 'Lavoro presso il cliente' : 'Lavoro dalla sede sul progetto'}
                 </span>
               </label>
             ) : null}
@@ -1123,7 +1147,15 @@ export function RegistraGiornataDialog({
         ),
       });
       const tratta = vistaTratte[i];
-      if (tratta) {
+      // Due lavori seguiti dallo stesso posto non hanno una tratta in mezzo. In
+      // modalità ufficio è il caso normale di ogni giornata su più lavori: la
+      // riga «Nella stessa sede · Nessun viaggio» sarebbe rumore, tappabile per
+      // niente, sotto il nodo che lo dice già. Per chi lavora fuori resta dove
+      // era. I dati non cambiano: il percorso si manda da `intermedie`.
+      const fra = intermedie[i];
+      const senzaTratta =
+        inUfficio && fra != null && stessoPosto(luogoDi(fra.da), luogoDi(fra.a));
+      if (tratta && !senzaTratta) {
         tappe.push({
           key: `tratta:${tratta.chiave}`,
           nodo: <NodoTratta />,
