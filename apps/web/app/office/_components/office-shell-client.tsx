@@ -184,6 +184,7 @@ function buildNav(
           { id: 'kant-rapp', label: 'Presenze e ore', href: '/office/kantiere/rapportini' },
           { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
           { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
+        { id: 'kant-registro', label: 'Registro modifiche', href: '/office/kantiere/registro' },
         ],
       },
       // Kontabilità: voce top-level (sibling del modulo Kantiere) per dare
@@ -266,6 +267,7 @@ function buildNav(
         { id: 'kant-rapp', label: 'Presenze e ore', href: '/office/kantiere/rapportini' },
         { id: 'kant-ore-costi', label: 'Ore e costi', href: '/office/kantiere/ore-costi', icon: Coins },
         { id: 'kant-report', label: 'Report', href: '/office/kantiere/report' },
+        { id: 'kant-registro', label: 'Registro modifiche', href: '/office/kantiere/registro' },
       ],
     },
     // Kontabilità: voce top-level (sibling del modulo Kantiere) per dare
