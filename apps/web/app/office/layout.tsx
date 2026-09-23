@@ -11,7 +11,7 @@ import { tenantFeatureEnabled } from '../_lib/tenant-features';
 import { leggiFunzioniPersonalizzate } from '../_lib/personalizzazioni';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
-import { ImpersonationBanner } from './_components/impersonation-banner';
+import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
 import {
@@ -169,10 +169,14 @@ export default async function OfficeLayout({
 
   return (
     <>
-      {isImpersonating ? (
-        <ImpersonationBanner tenantLabel={impersonatingLabel ?? tenant.name} />
-      ) : null}
+      {/* La barra entra DENTRO la shell: fuori allungherebbe il documento oltre
+          la finestra e sparirebbe al primo scroll, senza più tornare. */}
       <OfficeShellClient
+        banner={
+          isImpersonating ? (
+            <ImpersonationBanner tenantLabel={impersonatingLabel ?? tenant.name} />
+          ) : null
+        }
         tenant={tenant}
         user={user}
         notificationCount={notificationCount}

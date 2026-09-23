@@ -614,6 +614,42 @@ export async function impersonate(tenantId: string) {
   return impersonateUser({ tenantId });
 }
 
+/**
+ * Proroga la sessione admin messa da parte, finché l'impersonation è in corso.
+ *
+ * Il cookie `shadow_admin` nasceva con una scadenza fissa e non veniva mai
+ * rinnovato, mentre i cookie di sessione del tenant si rinnovano a ogni
+ * richiesta. Passate le ore restava quindi la sessione del tenant ma non
+ * l'identità admin: niente barra, nessuna via di ritorno, e come unica uscita
+ * il logout. Chiamata dalla barra stessa, quindi solo durante l'impersonation.
+ *
+ * ⚠️ Proroga soltanto un cookie GIÀ valido: firma verificata e non scaduto.
+ * Non può crearne uno, e non allarga i privilegi — chi lo usa ricontrolla
+ * comunque sul database che quell'utente sia ancora super admin.
+ */
+export async function rinnovaShadow(): Promise<{ ok: boolean }> {
+  const { cookies } = await import('next/headers');
+  const cookieStore = cookies();
+  const shadow = leggiShadow(cookieStore.get(SHADOW_COOKIE)?.value);
+  if (!shadow) return { ok: false };
+
+  // Si riscrive solo oltre la metà della vita: una pagina lasciata aperta non
+  // riscrive il cookie a ogni giro, e chi sta lavorando non lo vede scadere.
+  const restanteMs = shadow.scade_at - Date.now();
+  if (restanteMs > (SHADOW_DURATA_S * 1000) / 2) return { ok: true };
+
+  cookieStore.set({
+    name: SHADOW_COOKIE,
+    value: firmaShadow({ ...shadow, scade_at: Date.now() + SHADOW_DURATA_S * 1000 }),
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: SHADOW_DURATA_S,
+  });
+  return { ok: true };
+}
+
 export async function endImpersonation() {
   const { cookies } = await import('next/headers');
   const { createServerSupabase } = await import('@kommessa/api/server');

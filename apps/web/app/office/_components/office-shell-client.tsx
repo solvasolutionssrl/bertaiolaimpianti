@@ -58,6 +58,8 @@ interface Props {
   appMode?: 'kommessa' | 'kantiere' | 'full';
   /** Quali mondi e funzioni mostrare nella ricerca rapida (⌘K). */
   mondoRicerca?: MondoRicerca;
+  /** Barra di servizio sopra l'header (impersonation): va dentro la shell. */
+  banner?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -493,6 +495,7 @@ export function OfficeShellClient({
   hasKontabilita,
   appMode,
   mondoRicerca,
+  banner,
   children,
 }: Props) {
   const router = useRouter();
@@ -551,6 +554,7 @@ export function OfficeShellClient({
         onLogout={handleLogout}
         onNotificationsClick={() => router.push('/office/notifiche')}
         linkComponent={NextLinkAdapter}
+        banner={banner}
       >
         {children}
       </OfficeShell>

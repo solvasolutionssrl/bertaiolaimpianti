@@ -1,7 +1,10 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
+import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 import { tenantHasModule } from '../_lib/modules';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
@@ -43,6 +46,16 @@ export default async function MobileLayout({
   children: React.ReactNode;
 }) {
   const ctx = await getTenantContext();
+
+  // Impersonation: la barra qui non c'era proprio, e un tenant Kantiere si gira
+  // quasi tutto da mobile. Stessa lettura dell'ufficio: vale solo un cookie
+  // firmato dal server e non scaduto.
+  const cookieJar = cookies();
+  const impersonando = leggiShadow(cookieJar.get(SHADOW_COOKIE)?.value) !== null;
+  const etichettaImpersonation =
+    cookieJar.get('impersonating_label')?.value ??
+    cookieJar.get('impersonating_tenant_label')?.value ??
+    'un altro utente';
 
   // Esperienza mobile per-tenant. Default 'kommessa' = comportamento storico
   // (shell gestione/campo per ruolo): per i tenant esistenti — incluso
@@ -124,6 +137,12 @@ export default async function MobileLayout({
           paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)',
         }}
       >
+        {/* Chi impersona deve sapere dove si trova e come tornare indietro anche
+            qui: un tenant Kantiere si gira quasi tutto da mobile, e prima questa
+            barra esisteva solo sotto /office. Sta dentro <main>, sopra il
+            contenuto: scorre con la pagina ma si ritrova risalendo, e non
+            interferisce con la barra in basso ne' con le aree di sicurezza. */}
+        {impersonando ? <ImpersonationBanner tenantLabel={etichettaImpersonation} /> : null}
         {children}
       </main>
 

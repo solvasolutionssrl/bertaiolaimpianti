@@ -83,6 +83,11 @@ export interface OfficeShellProps {
     prefetch?: boolean;
   }>;
   children: React.ReactNode;
+  /**
+   * Barra di servizio sopra l'header (oggi: l'avviso di impersonation).
+   * Sta DENTRO la shell di proposito: vedi il commento sul contenitore.
+   */
+  banner?: React.ReactNode;
   defaultSidebarOpen?: boolean;
   version?: string;
   className?: string;
@@ -140,6 +145,7 @@ function OfficeShell({
   onLogout,
   linkComponent: LinkComp,
   children,
+  banner,
   defaultSidebarOpen = true,
   version,
   className,
@@ -434,6 +440,17 @@ function OfficeShell({
     // Succedeva per colpa degli `sr-only` (Tailwind li rende assoluti), quindi
     // in modo intermittente — solo sulle pagine abbastanza lunghe.
     <div data-app-shell="" className={cn('relative flex h-screen flex-col overflow-hidden bg-background', className)}>
+      {/* La barra di servizio, quando c'è, è il PRIMO figlio della colonna:
+          entra nel budget dei 100vh e non scorre mai via, perché qui dentro
+          non scorre niente (scrolla solo <main>).
+
+          ⚠️ Messa FUORI da questo contenitore faceva danni: la shell è alta
+          esattamente una viewport, quindi una barra sorella allungava il
+          documento dei suoi ~40px e dava alla finestra uno scroll tutto suo.
+          Bastava scorrere una volta e la barra spariva per sempre — e
+          `position: sticky` non la riportava, perché è già rotto da
+          `overflow-x: hidden` su html/body (stesso motivo spiegato sopra). */}
+      {banner ? <div className="z-40 shrink-0">{banner}</div> : null}
       {/* Header (righetta brand + header) come figlio flex shrink-0 in cima:
           resta fisso perché la colonna non scrolla (scrolla solo <main>). */}
       <div className="z-30 shrink-0">

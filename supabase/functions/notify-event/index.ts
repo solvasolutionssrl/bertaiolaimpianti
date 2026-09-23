@@ -20,6 +20,7 @@
 // =====================================================================
 
 import { errorResponse, handlePreflight, jsonResponse } from '../_shared/cors.ts';
+import { segretoValido } from '../_shared/segreto.ts';
 import { serviceClient, type SupabaseClient } from '../_shared/supabase.ts';
 
 interface NotifyEvent {
@@ -38,10 +39,12 @@ Deno.serve(async (req: Request) => {
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse(405, 'Method not allowed');
 
-  // Verifica secret condiviso (configurato sia in DB webhook che pg_cron)
+  // Verifica secret condiviso (configurato sia in DB webhook che pg_cron).
+  // `verify_jwt = false`: il segreto e' l'unica difesa, quindi confronto a
+  // tempo costante e non `===` (vedi `_shared/segreto.ts`).
   const expected = Deno.env.get('NOTIFY_WEBHOOK_SECRET');
   const got = req.headers.get('x-webhook-secret');
-  if (!expected || got !== expected) {
+  if (!segretoValido(got, expected)) {
     return errorResponse(401, 'Invalid webhook secret');
   }
 

@@ -64,7 +64,15 @@ export async function checkPlatformAdmin(): Promise<PlatformAdminCheck> {
 export async function requirePlatformAdmin(): Promise<PlatformAdminContext> {
   const check = await checkPlatformAdmin();
   if (check.kind === 'admin') return check.ctx;
-  if (check.kind === 'tenant_user') redirect('/office');
+  if (check.kind === 'tenant_user') {
+    // Chi sta impersonando ha il JWT del tenant, quindi finirebbe rimbalzato
+    // dentro al tenant proprio mentre cerca di tornare alla console: era l'unico
+    // modo di uscirne fare logout. Con un cookie di impersonation ancora valido,
+    // `/admin` diventa la via di ritorno. Il ripristino della sessione scrive
+    // cookie, che un Server Component non puo' fare: passa da una route.
+    if (leggiShadow(cookies().get(SHADOW_COOKIE)?.value)) redirect('/api/admin/rientro');
+    redirect('/office');
+  }
   redirect('/login?next=/admin');
 }
 

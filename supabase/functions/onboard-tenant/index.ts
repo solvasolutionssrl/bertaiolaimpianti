@@ -30,6 +30,7 @@
 // =====================================================================
 
 import { errorResponse, handlePreflight, jsonResponse } from '../_shared/cors.ts';
+import { segretoValido } from '../_shared/segreto.ts';
 import { serviceClient } from '../_shared/supabase.ts';
 
 interface OnboardRequest {
@@ -48,9 +49,11 @@ Deno.serve(async (req: Request) => {
   if (pre) return pre;
   if (req.method !== 'POST') return errorResponse(405, 'Method not allowed');
 
+  // Il segreto e' l'unica difesa (`verify_jwt = false`) e questa funzione crea
+  // tenant e invita utenti con la service role: confronto a tempo costante.
   const expected = Deno.env.get('ONBOARDING_ADMIN_SECRET');
   const got = req.headers.get('x-admin-secret');
-  if (!expected || got !== expected) return errorResponse(401, 'Invalid admin secret');
+  if (!segretoValido(got, expected)) return errorResponse(401, 'Invalid admin secret');
 
   let body: OnboardRequest;
   try {
