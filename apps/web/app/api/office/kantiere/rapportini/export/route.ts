@@ -112,6 +112,9 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const stato = url.searchParams.get('stato') ?? '';
   const dipendenteFilter = url.searchParams.get('dipendente') ?? '';
+  // Stesso filtro della pagina. Senza, "Esporta CSV" con un cantiere scelto
+  // scaricherebbe piu' righe di quelle viste a schermo.
+  const cantiereFilter = url.searchParams.get('cantiere') ?? '';
 
   // Periodo default: ultimi 30 giorni
   const toDefault = new Date();
@@ -164,6 +167,17 @@ export async function GET(req: NextRequest) {
     ).sort(
       (x, y) => (ordineGiornata.get(x.rapportino_id) ?? 0) - (ordineGiornata.get(y.rapportino_id) ?? 0),
     );
+
+    // Filtro per cantiere, con lo stesso criterio della pagina: si tengono le
+    // GIORNATE che hanno almeno una riga su quel cantiere, e di quelle si
+    // esporta tutto. Tenere solo le righe del cantiere darebbe un file con
+    // totali diversi da quelli a schermo.
+    if (cantiereFilter) {
+      const giornateDelCantiere = new Set(
+        righeData.filter((r) => r.cantiere_id === cantiereFilter).map((r) => r.rapportino_id),
+      );
+      righeData = righeData.filter((r) => giornateDelCantiere.has(r.rapportino_id));
+    }
 
     const commessaIds = [...new Set(righeData.map((r) => r.commessa_id).filter((id): id is string => id != null))];
     const cantiereIds = [...new Set(righeData.map((r) => r.cantiere_id).filter((id): id is string => id != null))];

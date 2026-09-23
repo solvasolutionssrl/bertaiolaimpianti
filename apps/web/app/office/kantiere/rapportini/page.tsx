@@ -114,7 +114,14 @@ function timbraturaGiorno(ts: string): string {
 }
 
 interface PageProps {
-  searchParams: { from?: string; to?: string; stato?: string; dipendente?: string };
+  searchParams: {
+    from?: string;
+    to?: string;
+    stato?: string;
+    dipendente?: string;
+    /** Id cantiere: il cantiere sta sulle RIGHE, non sulla giornata. */
+    cantiere?: string;
+  };
 }
 
 export default async function RapportiniPage({ searchParams }: PageProps) {
@@ -130,6 +137,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const to = searchParams.to ?? def.to;
   const statoFilter = searchParams.stato ?? '';
   const dipendenteFilter = searchParams.dipendente ?? '';
+  const cantiereFilter = searchParams.cantiere ?? '';
 
   // Carica tutti i rapportini nel range, a pagine: il database restituisce al
   // massimo 1000 righe per richiesta (prima un .limit(500) tagliava in silenzio
@@ -495,7 +503,18 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const oggiRome = toYYYYMMDD(new Date());
 
   // Costruisci righe per il client
-  const righe: RapportiniRiga[] = rapportini.map((r) => {
+  // Filtro per cantiere. Il cantiere sta sulle RIGHE, non sulla giornata: si
+  // tengono le giornate che hanno almeno una riga su quel cantiere, e si mostra
+  // la giornata INTERA — una giornata e' una giornata, mostrarne solo un pezzo
+  // farebbe quadrare male i totali. Le righe sono gia' in memoria (caricate per
+  // queste stesse giornate), quindi non serve nessuna lettura in piu'.
+  const rapportiniVisibili = cantiereFilter
+    ? rapportini.filter((r) =>
+        (righeByRapportino.get(r.id) ?? []).some((x) => x.cantiere_id === cantiereFilter),
+      )
+    : rapportini;
+
+  const righe: RapportiniRiga[] = rapportiniVisibili.map((r) => {
     const rr = righeByRapportino.get(r.id) ?? [];
     // `ord` resta il lavoro entro l'orario (ord + straord = lavoro); le quote
     // mostrate (ordinarie con il viaggio entro l'orario, viaggio eccedente) si
@@ -661,7 +680,13 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       </header>
       <RapportiniClient
         righe={righe}
-        filtri={{ from, to, stato: statoFilter, dipendente: dipendenteFilter }}
+        filtri={{
+          from,
+          to,
+          stato: statoFilter,
+          dipendente: dipendenteFilter,
+          cantiere: cantiereFilter,
+        }}
         dipendenti={dipendentiFilter}
         commesse={commessePicker}
         cantieri={cantieriPicker}

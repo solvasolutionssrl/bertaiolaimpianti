@@ -111,6 +111,8 @@ export type FiltriRapportini = {
   to: string;
   stato: string;
   dipendente: string;
+  /** Id del cantiere: tiene solo le giornate che hanno ore su quel cantiere. */
+  cantiere: string;
 };
 
 export type DipendenteItem = { id: string; nome: string };
@@ -380,6 +382,7 @@ export function RapportiniClient({
   const [from, setFrom] = React.useState(filtri.from);
   const [to, setTo] = React.useState(filtri.to);
   const [dipendente, setDipendente] = React.useState(filtri.dipendente);
+  const [cantiere, setCantiere] = React.useState(filtri.cantiere);
 
   // Mostra solo le giornate "anomale" (da verificare)
   const [soloAnomalie, setSoloAnomalie] = React.useState(false);
@@ -494,12 +497,15 @@ export function RapportiniClient({
     });
   }
 
-  function applyFiltri(overrides: Partial<{ from: string; to: string; dipendente: string }>) {
-    const f = { from, to, dipendente, ...overrides };
+  function applyFiltri(
+    overrides: Partial<{ from: string; to: string; dipendente: string; cantiere: string }>,
+  ) {
+    const f = { from, to, dipendente, cantiere, ...overrides };
     const qs = new URLSearchParams();
     if (f.from) qs.set('from', f.from);
     if (f.to) qs.set('to', f.to);
     if (f.dipendente) qs.set('dipendente', f.dipendente);
+    if (f.cantiere) qs.set('cantiere', f.cantiere);
     startTransition(() => {
       router.push('/office/kantiere/rapportini?' + qs.toString());
     });
@@ -518,6 +524,9 @@ export function RapportiniClient({
   if (filtri.from) exportQs.set('from', filtri.from);
   if (filtri.to) exportQs.set('to', filtri.to);
   if (filtri.dipendente) exportQs.set('dipendente', filtri.dipendente);
+  // Stesso filtro anche nell'export: un CSV con piu' righe di quelle a schermo
+  // sarebbe peggio di un export mancante.
+  if (filtri.cantiere) exportQs.set('cantiere', filtri.cantiere);
   const exportHref = '/api/office/kantiere/rapportini/export?' + exportQs.toString();
 
   // Giornata "fantasma": il guscio bozza creato aprendo il rapportino senza mai
@@ -606,6 +615,24 @@ export function RapportiniClient({
             {dipendenti.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.nome}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <label className="text-[11px] font-medium text-muted-foreground">Cantiere</label>
+          <select
+            value={cantiere}
+            onChange={(e) => {
+              setCantiere(e.target.value);
+              applyFiltri({ cantiere: e.target.value });
+            }}
+            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Tutti i cantieri</option>
+            {cantieri.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.stato === 'chiuso' ? `${k.nome} · chiuso` : k.nome}
               </option>
             ))}
           </select>
