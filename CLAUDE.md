@@ -216,7 +216,11 @@ Area office **Personalizzazioni** = il **contenitore** delle funzioni su misura,
 
 > **Segreti su `tenants` (hardening, migration `20260627010000`)**: le colonne `storage_config` (credenziali Nextcloud) e `r2_config` (secret key R2) sono **segreti** e NON sono leggibili dal client `authenticated`/`anon` (privilegi di colonna: SELECT di tabella revocato, ri-concesso solo sulle colonne non sensibili). Vanno lette **esclusivamente via service role** (`createServiceSupabase`, scoping esplicito `.eq('id', tenantId)`) — già così in tutto il codice. **Mai** passare questi due campi a un componente client per i tenant. ⚠️ Aggiungendo una **nuova colonna NON segreta** a `tenants`, concederla: `grant select (col) on public.tenants to anon, authenticated;` (le colonne segrete NON si concedono). La chiave Google Maps non sta qui (è env globale): vedi sopra.
 
-**Migrazioni DB**: scrivere solo il file SQL in `supabase/migrations/` — l'apply al DB cloud lo esegue l'umano con `supabase db push` o `psql`.
+**Migrazioni DB**: scrivere il file SQL in `supabase/migrations/`. L'apply al DB cloud si fa con `supabase db query --linked < supabase/migrations/<file>.sql` — **`db push` non funziona su questo repo**.
+
+> ⚠️ **Ogni migration DEVE essere idempotente.** Applicate con `db query` non finiscono in `supabase_migrations.schema_migrations`, quindi un domani un `db push` proverebbe a rilanciarle tutte. Il registro è fermo a `20260814150000` mentre nel repo ci sono 10 file più recenti: verificato il 23/09/2026 che **tutti e 10 sono idempotenti** (drop-if-exists in pari con ogni create, `on conflict` sugli insert), quindi una riesecuzione gira a vuoto senza danni.
+>
+> **Non registrarle a mano** in `schema_migrations` per "sistemare" il disallineamento: il rischio è asimmetrico. Segnare come applicata una migration che non lo è la fa saltare **per sempre**, cioè deriva silenziosa dello schema; non segnarla costa al massimo una riesecuzione a vuoto. In pratica: `add column if not exists`, `drop constraint if exists` prima di `add constraint`, `drop policy if exists` prima di `create policy`, `on conflict` sugli insert.
 
 **Deploy**: solo `git push origin main`. La GitHub integration Vercel fa tutto. Non usare `vercel deploy --prod` manualmente (raddoppia la build sul piano Hobby).
 
