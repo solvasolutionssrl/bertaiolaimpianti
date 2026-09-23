@@ -30,7 +30,11 @@ import {
 } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
-import { CorreggiGiornataDialog, type CorreggiRiga } from '../../_components/correggi-giornata-dialog';
+import {
+  CorreggiGiornataDialog,
+  type CorreggiRiga,
+  type CorreggiTratta,
+} from '../../_components/correggi-giornata-dialog';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 
 export type TimbraturaItem = {
@@ -49,6 +53,8 @@ export type TimbraturaItem = {
 
 /** Tratta di viaggio della giornata (andata sede→cantiere, ritorno cantiere→sede). */
 export type ViaggioTratta = {
+  /** Id della riga `timbratura_viaggio`: e' come si indirizza la tratta da correggere. */
+  id: string;
   direzione: 'andata' | 'ritorno';
   sede: string;
   cantiere: string;
@@ -399,6 +405,7 @@ export function RapportiniClient({
     data: string;
     oreLavorate: number;
     righe: CorreggiRiga[];
+    tratte: CorreggiTratta[];
   } | null>(null);
 
   function openCorreggi(riga: RapportiniRiga) {
@@ -413,12 +420,26 @@ export function RapportiniClient({
         lavoro: r.lavoro,
         viaggio: r.ore_viaggio,
       }));
+    // Le tratte si leggono come nel dettaglio espanso, così l'etichetta nel
+    // dialog è la stessa frase che si vede nell'elenco.
+    const tratteMod: CorreggiTratta[] = (riga.viaggi ?? []).map((v) => {
+      const da = v.daCantiere || (v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere');
+      const a = v.direzione === 'andata' ? v.cantiere || 'cantiere' : v.sede;
+      return {
+        id: v.id,
+        etichetta: `${v.direzione === 'andata' ? 'Andata' : 'Ritorno'} · ${da} → ${a}`,
+        km: Math.round(v.km),
+        minuti: v.minuti,
+        autista: v.autista,
+      };
+    });
     setCorreggiFor({
       dipendenteId: riga.dipendenteId,
       dipendenteNome: riga.dipendenteNome,
       data: riga.data,
       oreLavorate: riga.totale.ord + riga.totale.straord,
       righe: righeMod,
+      tratte: tratteMod,
     });
   }
 
@@ -1076,6 +1097,7 @@ export function RapportiniClient({
           oreLavorate={correggiFor.oreLavorate}
           sogliaOre={sogliaOre}
           righe={correggiFor.righe}
+          tratte={correggiFor.tratte}
         />
       ) : null}
     </div>

@@ -392,6 +392,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   // viaggi manuali (timbratura_id null) → colonna `data`. Raccoglie km totali +
   // le singole tratte (direzione, sede, cantiere, km, minuti, autista).
   type ViaggioRow = {
+    id: string;
     timbratura_id: string | null;
     dipendente_id: string;
     data: string | null;
@@ -403,8 +404,10 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     durata_confermata_min: number | null;
     autista: boolean | null;
   };
+  // L'`id` serve a indirizzare la singola tratta quando la si corregge: senza,
+  // due trasferimenti A→B nello stesso giorno sono indistinguibili.
   const VIAGGIO_COLS =
-    'timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, da_cantiere_id, distanza_km, durata_confermata_min, autista';
+    'id, timbratura_id, dipendente_id, data, direzione, sede_id, cantiere_id, da_cantiere_id, distanza_km, durata_confermata_min, autista';
   const timbIdToKey = new Map<string, string>();
   for (const t of timbratureData) timbIdToKey.set(t.id, `${t.dipendente_id}:${timbraturaGiorno(t.ts)}`);
   const viaggioRows: ViaggioRow[] = [];
@@ -486,6 +489,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     if (v.autista) viaggioKmByKey.set(key, (viaggioKmByKey.get(key) ?? 0) + km);
     const arr = viaggiByKey.get(key) ?? [];
     arr.push({
+      id: v.id,
       direzione: v.direzione === 'ritorno' ? 'ritorno' : 'andata',
       sede: v.sede_id ? sediNomeMap.get(v.sede_id) ?? 'Sede' : 'Sede',
       cantiere: v.cantiere_id ? cantieriNomeMap.get(v.cantiere_id) ?? '' : '',

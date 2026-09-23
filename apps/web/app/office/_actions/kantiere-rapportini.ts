@@ -70,6 +70,168 @@ async function guard() {
   return ctx;
 }
 
+// ── correggiViaggio ──────────────────────────────────────────────────────────
+// Corregge a posteriori i km e/o il tempo di UNA tratta di viaggio.
+//
+// ⚠️ Corregge la SORGENTE (`timbratura_viaggio`), non la riga derivata della
+// giornata, e la differenza non è di stile:
+//  - i km su `rapportino_righe` non esistono proprio, non è una sua colonna;
+//  - il tempo, corretto lì, obbligherebbe a marcare la giornata come manuale,
+//    congelando anche le ore di lavoro rispetto alle timbrature future.
+// Correggendo la sorgente il valore sopravvive al ricalcolo per costruzione
+// (è ciò da cui il ricalcolo parte) e non si congela niente.
+//
+// ⚠️ `distanza_stimata_km` e `km_giustificazione` arrivano con la migration
+// 20260923090000, che si applica a mano mentre il codice va online al push:
+// si scrivono in un update SEPARATO, e se non ci sono ancora la correzione
+// resta valida e torna un avviso, invece di fallire tutto.
+
+const CorreggiViaggioSchema = z
+  .object({
+    trattaId: z.string().uuid(),
+    /** Km percorsi. Assente = non si toccano. */
+    km: z.number().min(0).max(5000).optional(),
+    /** Minuti di viaggio. Assente = non si toccano. */
+    minuti: z
+      .number()
+      .int()
+      .min(0)
+      .max(24 * 60)
+      .optional(),
+    motivo: z.string().trim().min(3).max(500),
+  })
+  .refine((d) => d.km !== undefined || d.minuti !== undefined, {
+    message: 'Indica almeno un valore da correggere',
+  });
+
+export async function correggiViaggio(
+  input: unknown,
+): Promise<{ ok: true; avviso?: string } | { ok: false; error: string }> {
+  const parsed = CorreggiViaggioSchema.safeParse(input);
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
+
+  const ctx = await guard();
+  const supabase = createServerSupabase();
+  const { trattaId, km, minuti, motivo } = parsed.data;
+
+  // Solo le colonne di sempre: quelle nuove potrebbero non esistere ancora.
+  const { data: trattaRaw } = await supabase
+    .from('timbratura_viaggio' as never)
+    .select('id, dipendente_id, data, timbratura_id, distanza_km, durata_confermata_min')
+    .eq('id', trattaId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  const tratta = trattaRaw as {
+    id: string;
+    dipendente_id: string;
+    data: string | null;
+    timbratura_id: string | null;
+    distanza_km: number | null;
+    durata_confermata_min: number | null;
+  } | null;
+  if (!tratta) return { ok: false, error: 'TRATTA_NON_TROVATA' };
+
+  // Il giorno della tratta: `data` è valorizzata su tutto ciò che è stato
+  // scritto dal 24/06/2026, anche sulle righe legate a una timbratura. Le più
+  // vecchie lo ricavano dalla timbratura a cui sono attaccate.
+  let giorno = tratta.data;
+  if (!giorno && tratta.timbratura_id) {
+    const { data: tRaw } = await supabase
+      .from('timbrature' as never)
+      .select('ts')
+      .eq('id', tratta.timbratura_id)
+      .maybeSingle();
+    const ts = (tRaw as { ts: string } | null)?.ts;
+    if (ts) giorno = romeDay(new Date(ts));
+  }
+  if (!giorno) return { ok: false, error: 'GIORNO_NON_RISOLTO' };
+
+  const kmCambia =
+    km !== undefined && Math.round(km * 100) !== Math.round((Number(tratta.distanza_km) || 0) * 100);
+  const minutiCambia =
+    minuti !== undefined && minuti !== (Number(tratta.durata_confermata_min) || 0);
+  // Salvare un valore identico non è una correzione: non si scrive niente e
+  // non si sporca la cronologia con una voce che non dice nulla.
+  if (!kmCambia && !minutiCambia) return { ok: true };
+
+  // Com'era la giornata prima: la versione in fondo dirà prima → dopo.
+  const prima = await statoGiornataPerData(supabase, ctx.tenantId, tratta.dipendente_id, giorno);
+
+  const patch: Record<string, unknown> = {};
+  if (kmCambia) patch.distanza_km = km;
+  if (minutiCambia) {
+    patch.durata_confermata_min = minuti;
+    patch.giustificazione = motivo;
+  }
+  const { error: eUpd } = await supabase
+    .from('timbratura_viaggio' as never)
+    .update(patch as never)
+    .eq('id', trattaId)
+    .eq('tenant_id', ctx.tenantId);
+  if (eUpd) return { ok: false, error: eUpd.message };
+
+  let avviso: string | undefined;
+  if (kmCambia) {
+    // La stima del provider si mette da parte solo alla PRIMA correzione
+    // (`is null`): una seconda correzione non deve sovrascriverla con il
+    // valore già corretto, o si perderebbe da dove si era partiti.
+    const { error: eKm } = await supabase
+      .from('timbratura_viaggio' as never)
+      .update({
+        distanza_stimata_km: tratta.distanza_km,
+        km_giustificazione: motivo,
+      } as never)
+      .eq('id', trattaId)
+      .eq('tenant_id', ctx.tenantId)
+      .is('distanza_stimata_km', null);
+    if (eKm) {
+      avviso =
+        'I km sono stati corretti, ma il valore di partenza e il motivo non sono stati archiviati: manca la modifica al database (migrazione 20260923090000).';
+    }
+  }
+
+  // Il tempo entra nel conto delle ore: si lascia riderivare al ricalcolo, che
+  // legge `durata_confermata_min` proprio da qui. I km no, il ricalcolo non li
+  // guarda mai: non c'è niente da rifare. `versione: false` perché la versione
+  // la scrive questa azione, e dice una cosa più precisa.
+  if (minutiCambia) {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, tratta.dipendente_id, giorno, {
+      versione: false,
+    });
+  }
+
+  const { data: rapRaw } = await supabase
+    .from('rapportini' as never)
+    .select('id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', tratta.dipendente_id)
+    .eq('data', giorno)
+    .maybeSingle();
+  const rapportinoId = (rapRaw as { id: string } | null)?.id ?? null;
+  if (rapportinoId) {
+    const scritta = await scriviVersioneRapportino({
+      supabase,
+      rapportinoId,
+      tenantId: ctx.tenantId,
+      azione: 'modifica_viaggio',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: await nomeUtente(supabase, ctx.userId),
+      prima,
+    });
+    // `modifica_viaggio` entra nel vocabolario con la stessa migration: finché
+    // non è applicata la cronologia non può registrarla, e va detto.
+    if (!scritta) {
+      avviso =
+        avviso ??
+        'La correzione è stata salvata, ma non risulta nella cronologia: potrebbe mancare la modifica al database (migrazione 20260923090000).';
+    }
+  }
+
+  revalidatePath('/office/kantiere/rapportini');
+  return avviso ? { ok: true, avviso } : { ok: true };
+}
+
 // ── registraOrePerDipendente ─────────────────────────────────────────────────
 // L'ufficio inserisce ore per conto di un dipendente (cantiere O commessa).
 // Il rapportino risultante ha stato=approvato se creato ex-novo, oppure viene

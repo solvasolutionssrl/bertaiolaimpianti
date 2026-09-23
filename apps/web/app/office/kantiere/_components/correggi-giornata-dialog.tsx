@@ -14,6 +14,7 @@ import {
 import { fmtData } from '@/app/office/_lib/format';
 import {
   aggiungiPausaGiornata,
+  correggiViaggio,
   registraOrePerDipendente,
 } from '@/app/office/_actions/kantiere-rapportini';
 
@@ -25,6 +26,21 @@ export type CorreggiRiga = {
   /** Ore di lavoro (ordinarie e straordinarie si derivano dall'orario ordinario). */
   lavoro: number;
   viaggio: number;
+};
+
+/**
+ * Una tratta di viaggio correggibile. Km e minuti non stanno nelle righe della
+ * giornata ma su `timbratura_viaggio`, e si indirizzano per `id`: due
+ * trasferimenti A→B nello stesso giorno sono distinguibili solo così.
+ */
+export type CorreggiTratta = {
+  id: string;
+  /** Come si legge la tratta a schermo, es. «Andata · Sede → Monfalcone». */
+  etichetta: string;
+  km: number;
+  minuti: number;
+  /** I km si contano al solo autista: a un passeggero non si chiedono. */
+  autista: boolean;
 };
 
 interface Props {
@@ -39,6 +55,8 @@ interface Props {
   /** Soglia (ore) oltre cui la giornata è anomalia. Per-tenant (`anomalia_turno_ore_max`), default 10. */
   sogliaOre?: number;
   righe?: CorreggiRiga[];
+  /** Le tratte della giornata. Assente = la sezione viaggi non compare. */
+  tratte?: CorreggiTratta[];
 }
 
 const PAUSE_RAPIDE = [30, 45, 60, 90] as const;
@@ -66,6 +84,7 @@ export function CorreggiGiornataDialog({
   oreLavorate,
   sogliaOre = 10,
   righe,
+  tratte,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = React.useTransition();
@@ -80,6 +99,16 @@ export function CorreggiGiornataDialog({
   const [erroreRiga, setErroreRiga] = React.useState<Record<string, string>>({});
   const [salvataId, setSalvataId] = React.useState<string | null>(null);
 
+  // Sezione "correggi i viaggi": km e minuti stanno sulla tratta, non sulle
+  // righe della giornata, quindi hanno un salvataggio tutto loro.
+  const [viaggiOpen, setViaggiOpen] = React.useState(false);
+  const [valoriTratta, setValoriTratta] = React.useState<
+    Record<string, { km: number; minuti: number; motivo: string }>
+  >({});
+  const [erroreTratta, setErroreTratta] = React.useState<Record<string, string>>({});
+  const [avvisoTratta, setAvvisoTratta] = React.useState<string | null>(null);
+  const [salvataTrattaId, setSalvataTrattaId] = React.useState<string | null>(null);
+
   // Reset alla riapertura
   React.useEffect(() => {
     if (open) {
@@ -93,8 +122,17 @@ export function CorreggiGiornataDialog({
         init[r.targetId] = { lavoro: r.lavoro, viaggio: r.viaggio };
       }
       setValori(init);
+      setViaggiOpen(false);
+      setErroreTratta({});
+      setAvvisoTratta(null);
+      setSalvataTrattaId(null);
+      const initT: Record<string, { km: number; minuti: number; motivo: string }> = {};
+      for (const t of tratte ?? []) {
+        initT[t.id] = { km: t.km, minuti: t.minuti, motivo: '' };
+      }
+      setValoriTratta(initT);
     }
-  }, [open, righe]);
+  }, [open, righe, tratte]);
 
   const oltreSoglia = oreLavorate > sogliaOre + 0.001;
 
@@ -155,7 +193,58 @@ export function CorreggiGiornataDialog({
     }));
   }
 
+  function handleSalvaTratta(t: CorreggiTratta) {
+    setErroreTratta((prev) => {
+      const n = { ...prev };
+      delete n[t.id];
+      return n;
+    });
+    setAvvisoTratta(null);
+    setSalvataTrattaId(null);
+    const v = valoriTratta[t.id] ?? { km: t.km, minuti: t.minuti, motivo: '' };
+    const cambiato = v.km !== t.km || v.minuti !== t.minuti;
+    if (!cambiato) {
+      setErroreTratta((prev) => ({ ...prev, [t.id]: 'Non hai cambiato nessun valore.' }));
+      return;
+    }
+    // Il motivo non è una formalità: un km corretto senza una ragione scritta
+    // è indistinguibile da un errore, e i km finiscono nei costi.
+    if (v.motivo.trim().length < 3) {
+      setErroreTratta((prev) => ({ ...prev, [t.id]: 'Indica il motivo della correzione.' }));
+      return;
+    }
+    startTransition(async () => {
+      const res = await correggiViaggio({
+        trattaId: t.id,
+        km: v.km !== t.km ? v.km : undefined,
+        minuti: v.minuti !== t.minuti ? v.minuti : undefined,
+        motivo: v.motivo.trim(),
+      });
+      if (!res.ok) {
+        setErroreTratta((prev) => ({ ...prev, [t.id]: messaggioErrore(res.error) }));
+        return;
+      }
+      if (res.avviso) setAvvisoTratta(res.avviso);
+      setSalvataTrattaId(t.id);
+      router.refresh();
+    });
+  }
+
+  function setCampoTratta(
+    id: string,
+    campo: 'km' | 'minuti' | 'motivo',
+    val: number | string,
+    base: CorreggiTratta,
+  ) {
+    setSalvataTrattaId(null);
+    setValoriTratta((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] ?? { km: base.km, minuti: base.minuti, motivo: '' }), [campo]: val },
+    }));
+  }
+
   const hasRighe = (righe ?? []).length > 0;
+  const hasTratte = (tratte ?? []).length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -364,6 +453,130 @@ export function CorreggiGiornataDialog({
               </div>
             ) : null}
           </div>
+
+          {/* Sezione: correggi i viaggi (km e tempo delle singole tratte) */}
+          {hasTratte ? (
+            <div className="rounded-lg border border-border">
+              <button
+                type="button"
+                onClick={() => setViaggiOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left"
+              >
+                <span className="text-sm font-medium text-foreground">Correggi i viaggi</span>
+                {viaggiOpen ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                )}
+              </button>
+
+              {viaggiOpen ? (
+                <div className="border-t border-border px-3 py-3">
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Km e tempo di ogni tratta. Il tempo rientra nel calcolo delle ore di viaggio;
+                    i km valgono per i costi e si contano al solo autista.
+                  </p>
+                  <div className="space-y-3">
+                    {(tratte ?? []).map((t) => {
+                      const v = valoriTratta[t.id] ?? { km: t.km, minuti: t.minuti, motivo: '' };
+                      return (
+                        <div
+                          key={t.id}
+                          className="rounded-md border border-border/70 bg-muted/20 p-2.5"
+                        >
+                          <p className="mb-2 truncate text-xs font-medium text-foreground">
+                            {t.etichetta}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Km
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={5000}
+                                step={1}
+                                disabled={!t.autista}
+                                value={v.km}
+                                onChange={(e) =>
+                                  setCampoTratta(t.id, 'km', parseFloat(e.target.value) || 0, t)
+                                }
+                                title={t.autista ? undefined : 'I km si contano al solo autista'}
+                                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                                Minuti
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={1440}
+                                step={5}
+                                value={v.minuti}
+                                onChange={(e) =>
+                                  setCampoTratta(t.id, 'minuti', parseInt(e.target.value, 10) || 0, t)
+                                }
+                                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-1">
+                            <label className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                              Motivo della correzione
+                            </label>
+                            <input
+                              type="text"
+                              maxLength={500}
+                              value={v.motivo}
+                              onChange={(e) => setCampoTratta(t.id, 'motivo', e.target.value, t)}
+                              placeholder="Minimo 3 caratteri"
+                              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                          </div>
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            {salvataTrattaId === t.id ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                                Salvato
+                              </span>
+                            ) : null}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isPending}
+                              onClick={() => handleSalvaTratta(t)}
+                            >
+                              {isPending ? (
+                                <Loader2
+                                  className="mr-1.5 h-3.5 w-3.5 animate-spin"
+                                  aria-hidden="true"
+                                />
+                              ) : null}
+                              Salva
+                            </Button>
+                          </div>
+                          {erroreTratta[t.id] ? (
+                            <p className="mt-1.5 text-xs font-medium text-destructive">
+                              {erroreTratta[t.id]}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {avvisoTratta ? (
+                    <p className="mt-3 flex items-start gap-1.5 rounded-md border border-amber-300/70 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      {avvisoTratta}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
