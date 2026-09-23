@@ -18,6 +18,13 @@ import {
  * uno dei cinque offriva anche 90 minuti. Ora il posto e' uno solo: cambiare le
  * durate o la regola di arrotondamento si fa qui e vale dappertutto.
  *
+ * ⚠️ **Sta su UNA riga sola, e non deve crescere.** Il posto piu' stretto e'
+ * «Registra giornata», dove la card ha un'altezza che deve restare ferma (le
+ * card sotto non si muovono quando si tocca + o −): ogni riga in piu' li' si
+ * paga. Per questo il campo libero sta in linea con le scelte rapide, e
+ * l'avviso dell'arrotondamento e' un popup **in posizione assoluta**, che dice
+ * la sua senza spostare niente e sparisce da solo.
+ *
  * Il valore e' **sempre in minuti** e sempre un multiplo di cinque: chi lo
  * riceve non deve normalizzare niente.
  */
@@ -26,7 +33,7 @@ type Tono = 'ambra' | 'tenue' | 'neutro';
 
 const STILI: Record<
   Tono,
-  { scelto: string; libero: string; campo: string; nota: string; etichetta: string }
+  { scelto: string; libero: string; campo: string; popup: string; etichetta: string }
 > = {
   // Ambra: i punti dove la pausa si dichiara perche' NON e' stata timbrata.
   // E' un ripiego, e il colore lo dice.
@@ -34,7 +41,7 @@ const STILI: Record<
     scelto: 'border-amber-500 bg-amber-500 text-white',
     libero: 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
     campo: 'border-amber-300 bg-white text-amber-900 focus:ring-amber-400',
-    nota: 'text-amber-700',
+    popup: 'border-amber-300 bg-amber-900 text-amber-50',
     etichetta: 'text-amber-800',
   },
   // Tenue: dentro «Registra giornata», dove la pausa e' un campo del modulo e
@@ -44,7 +51,7 @@ const STILI: Record<
     scelto: 'shadow-soft border-amber-400 bg-amber-100 text-amber-900',
     libero: 'border-border bg-background text-foreground hover:bg-amber-50',
     campo: 'border-border bg-background text-foreground focus:ring-amber-400',
-    nota: 'text-muted-foreground',
+    popup: 'border-amber-300 bg-amber-900 text-amber-50',
     etichetta: 'text-amber-700',
   },
   // Neutro: i moduli dove la pausa e' un dato come gli altri.
@@ -52,10 +59,13 @@ const STILI: Record<
     scelto: 'border-primary bg-primary text-primary-foreground',
     libero: 'border-input bg-background text-foreground hover:bg-muted',
     campo: 'border-input bg-background text-foreground focus:ring-ring',
-    nota: 'text-muted-foreground',
+    popup: 'border-border bg-foreground text-background',
     etichetta: 'text-muted-foreground',
   },
 };
+
+/** Quanto resta a schermo l'avviso dell'arrotondamento. */
+const AVVISO_MS = 3500;
 
 export interface SceltaPausaPranzoProps {
   /** Minuti scelti. Sempre un multiplo di cinque. */
@@ -65,8 +75,6 @@ export interface SceltaPausaPranzoProps {
   conNessuna?: boolean;
   disabled?: boolean;
   tono?: Tono;
-  /** Etichetta sopra le scelte. Assente = nessuna etichetta. */
-  etichetta?: string;
   className?: string;
 }
 
@@ -76,7 +84,6 @@ export function SceltaPausaPranzo({
   conNessuna = false,
   disabled = false,
   tono = 'ambra',
-  etichetta,
   className,
 }: SceltaPausaPranzoProps) {
   const s = STILI[tono];
@@ -84,14 +91,21 @@ export function SceltaPausaPranzo({
   // La bozza del campo libero vive qui: arrotondare a ogni tasto combatterebbe
   // con chi sta scrivendo («45» diventerebbe «5» appena digitato il 4).
   const [bozza, setBozza] = React.useState('');
-  const [arrotondatoA, setArrotondatoA] = React.useState<number | null>(null);
+  const [avviso, setAvviso] = React.useState<number | null>(null);
+
+  // L'avviso si toglie da solo: e' una conferma, non un errore da chiudere.
+  React.useEffect(() => {
+    if (avviso === null) return;
+    const t = setTimeout(() => setAvviso(null), AVVISO_MS);
+    return () => clearTimeout(t);
+  }, [avviso]);
 
   const scelteRapide: number[] = conNessuna ? [0, ...PAUSE_RAPIDE_MIN] : [...PAUSE_RAPIDE_MIN];
   const suUnaScelta = scelteRapide.includes(valore);
 
   function scegliRapida(m: number) {
     setBozza('');
-    setArrotondatoA(null);
+    setAvviso(null);
     onChange(m);
   }
 
@@ -100,7 +114,6 @@ export function SceltaPausaPranzo({
     const grezzo = Number(bozza.replace(',', '.'));
     if (!Number.isFinite(grezzo) || bozza.trim() === '') {
       setBozza('');
-      setArrotondatoA(null);
       return;
     }
     const buono = arrotondaPausaMin(grezzo);
@@ -108,40 +121,32 @@ export function SceltaPausaPranzo({
     setBozza(String(buono));
     // Si avvisa solo se il numero e' davvero cambiato: dirlo sempre sarebbe
     // rumore, e il rumore si smette di leggerlo.
-    setArrotondatoA(buono !== Math.round(grezzo) ? buono : null);
+    setAvviso(buono !== Math.round(grezzo) ? buono : null);
   }
 
   return (
-    <div className={['space-y-2', className].filter(Boolean).join(' ')}>
-      {etichetta ? (
-        <p className={`font-mono text-[10px] uppercase tracking-[0.14em] ${s.etichetta}`}>
-          {etichetta}
-        </p>
-      ) : null}
+    <div className={['flex items-stretch gap-1.5', className].filter(Boolean).join(' ')}>
+      {scelteRapide.map((m) => {
+        const attivo = valore === m && suUnaScelta;
+        return (
+          <button
+            key={m}
+            type="button"
+            disabled={disabled}
+            aria-pressed={attivo}
+            onClick={() => scegliRapida(m)}
+            className={[
+              'min-w-0 flex-1 rounded-lg border px-1 py-1.5 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50',
+              attivo ? s.scelto : s.libero,
+            ].join(' ')}
+          >
+            {etichettaPausa(m)}
+          </button>
+        );
+      })}
 
-      <div className="flex flex-wrap gap-2">
-        {scelteRapide.map((m) => {
-          const attivo = valore === m && suUnaScelta;
-          return (
-            <button
-              key={m}
-              type="button"
-              disabled={disabled}
-              aria-pressed={attivo}
-              onClick={() => scegliRapida(m)}
-              className={[
-                'min-w-[64px] flex-1 rounded-lg border py-2 text-sm font-semibold tabular-nums transition-colors disabled:opacity-50',
-                attivo ? s.scelto : s.libero,
-              ].join(' ')}
-            >
-              {etichettaPausa(m)}
-            </button>
-          );
-        })}
-      </div>
-
-      <label className="flex items-center gap-2">
-        <span className={`shrink-0 text-xs font-medium ${s.etichetta}`}>Altra durata</span>
+      {/* Campo libero: in linea, non a capo. `relative` regge il popup. */}
+      <div className="relative shrink-0">
         <input
           type="number"
           inputMode="numeric"
@@ -150,10 +155,10 @@ export function SceltaPausaPranzo({
           step={5}
           disabled={disabled}
           value={bozza}
-          placeholder={suUnaScelta ? 'minuti' : String(valore)}
+          placeholder={suUnaScelta ? 'altra' : String(valore)}
           onChange={(e) => {
             setBozza(e.target.value);
-            setArrotondatoA(null);
+            setAvviso(null);
           }}
           onBlur={confermaLibero}
           onKeyDown={(e) => {
@@ -162,18 +167,28 @@ export function SceltaPausaPranzo({
               confermaLibero();
             }
           }}
-          aria-label="Durata della pausa in minuti"
-          className={`w-24 rounded-lg border px-2 py-1.5 text-base tabular-nums focus:outline-none focus:ring-2 disabled:opacity-50 ${s.campo}`}
+          aria-label="Altra durata della pausa, in minuti"
+          title="Altra durata: si arrotonda a 5 minuti"
+          // ⚠️ Vuoto va TRATTEGGIATO. Con il bordo pieno aveva la stessa forma
+          // dei pulsanti e il testo grigio: si leggeva come una quinta scelta
+          // spenta, e nessuno capiva di poterci scrivere. Il tratteggio in
+          // questa interfaccia significa gia' «qui puoi agire» (vedi «+
+          // Aggiungi cantiere»). Quando tiene il valore scelto torna pieno.
+          className={`w-[4.25rem] rounded-lg border px-1.5 py-1.5 text-center text-[13px] tabular-nums placeholder:italic focus:outline-none focus:ring-2 disabled:opacity-50 ${
+            !suUnaScelta ? s.scelto : `border-dashed ${s.campo}`
+          }`}
         />
-        <span className={`text-xs ${s.nota}`}>min</span>
-      </label>
 
-      {arrotondatoA !== null ? (
-        <p role="status" className={`text-[11px] leading-snug ${s.nota}`}>
-          La pausa si registra a intervalli di cinque minuti: salvata come{' '}
-          <strong>{etichettaPausa(arrotondatoA)}</strong>.
-        </p>
-      ) : null}
+        {/* Popup dell'arrotondamento: assoluto, quindi non sposta niente. */}
+        {avviso !== null ? (
+          <span
+            role="status"
+            className={`animate-fade-up pointer-events-none absolute bottom-full right-0 z-20 mb-1 w-max max-w-[13rem] rounded-md border px-2 py-1 text-[11px] font-medium leading-snug shadow-soft ${s.popup}`}
+          >
+            Arrotondata a {etichettaPausa(avviso)}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
