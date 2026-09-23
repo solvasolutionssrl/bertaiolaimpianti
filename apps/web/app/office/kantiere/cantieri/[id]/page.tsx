@@ -231,31 +231,47 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // Km di viaggio aggregati per dipendente su QUESTO cantiere nel periodo
   // (da timbratura_viaggio, cantiere_id + data popolati). `percorsi` = tutti i km,
   // `guidati` = solo quando era l'autista.
-  const kmPerDip = new Map<string, { percorsi: number; guidati: number }>();
+  // Oltre ai km serve il TEMPO passato in viaggio e quante tratte sono state
+  // fatte: senza, dalla scheda del cantiere non si capisce quanto sia costato
+  // raggiungerlo. I km restano attribuiti al solo autista (contarli anche ai
+  // passeggeri li moltiplicherebbe per il numero di persone in macchina); il
+  // tempo invece vale per tutti, perche' in viaggio ci sono stati tutti.
+  const viaggioPerDip = new Map<
+    string,
+    { percorsi: number; guidati: number; minuti: number; tratte: number }
+  >();
   const viaRaw = await leggiTutto<{
     dipendente_id: string;
     distanza_km: number | null;
+    durata_confermata_min: number | null;
     autista: boolean | null;
     da_cantiere_id: string | null;
   }>(
     (da, a) =>
       supabase
         .from('timbratura_viaggio' as never)
-        .select('dipendente_id, distanza_km, autista, da_cantiere_id')
+        .select('dipendente_id, distanza_km, durata_confermata_min, autista, da_cantiere_id')
         .eq('tenant_id', ctx.tenantId)
         .eq('cantiere_id', params.id)
         .gte('data', dataDa)
         .order('id')
         .range(da, a) as never,
-    { contesto: 'km del cantiere' },
+    { contesto: 'viaggi del cantiere' },
   );
   for (const v of viaRaw) {
     if (!v.dipendente_id) continue;
     const km = Number(v.distanza_km) || 0;
-    const cur = kmPerDip.get(v.dipendente_id) ?? { percorsi: 0, guidati: 0 };
+    const cur = viaggioPerDip.get(v.dipendente_id) ?? {
+      percorsi: 0,
+      guidati: 0,
+      minuti: 0,
+      tratte: 0,
+    };
     cur.percorsi += km;
     if (v.autista) cur.guidati += km;
-    kmPerDip.set(v.dipendente_id, cur);
+    cur.minuti += Number(v.durata_confermata_min) || 0;
+    cur.tratte += 1;
+    viaggioPerDip.set(v.dipendente_id, cur);
   }
 
   // Aggregazione per dipendente via aggregaOre (chiave = dipendente_id).
@@ -282,8 +298,10 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
       straordinarie: agg.straordinarie,
       viaggio: agg.viaggioEccedente,
       totale: agg.totale,
-      km: Math.round(kmPerDip.get(dipendenteId)?.percorsi ?? 0),
-      kmGuidati: Math.round(kmPerDip.get(dipendenteId)?.guidati ?? 0),
+      km: Math.round(viaggioPerDip.get(dipendenteId)?.percorsi ?? 0),
+      kmGuidati: Math.round(viaggioPerDip.get(dipendenteId)?.guidati ?? 0),
+      minutiViaggio: Math.round(viaggioPerDip.get(dipendenteId)?.minuti ?? 0),
+      tratte: viaggioPerDip.get(dipendenteId)?.tratte ?? 0,
     }))
     .sort((a, b) => b.totale - a.totale);
 
@@ -296,8 +314,19 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
       totale: Math.round((acc.totale + p.totale) * 100) / 100,
       km: acc.km + p.km,
       kmGuidati: acc.kmGuidati + p.kmGuidati,
+      minutiViaggio: acc.minutiViaggio + p.minutiViaggio,
+      tratte: acc.tratte + p.tratte,
     }),
-    { ordinarie: 0, straordinarie: 0, viaggio: 0, totale: 0, km: 0, kmGuidati: 0 },
+    {
+      ordinarie: 0,
+      straordinarie: 0,
+      viaggio: 0,
+      totale: 0,
+      km: 0,
+      kmGuidati: 0,
+      minutiViaggio: 0,
+      tratte: 0,
+    },
   );
 
   // Trend giornaliero: lavoro + viaggio per giorno del periodo.

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { BarChart3, TrendingUp } from 'lucide-react';
+import { formattaOreGiornata, formattaOreTotale } from '@kommessa/api/kantiere-ore';
 import { BarsOrizzontali, DonutOre, AreaTrend } from '@/app/office/kantiere/_components/charts';
 
 export interface StoricoPersona {
@@ -19,6 +20,11 @@ export interface StoricoPersona {
   km: number;
   /** Km percorsi come autista (sottoinsieme di `km`). */
   kmGuidati: number;
+  /** Minuti passati in viaggio verso/da questo cantiere: valgono per tutti,
+   *  autista e passeggeri, perche' in viaggio ci sono stati tutti. */
+  minutiViaggio: number;
+  /** Quante tratte: dice se i km sono un viaggio lungo o tanti brevi. */
+  tratte: number;
 }
 
 export interface StoricoTotali {
@@ -28,6 +34,8 @@ export interface StoricoTotali {
   totale: number;
   km: number;
   kmGuidati: number;
+  minutiViaggio: number;
+  tratte: number;
 }
 
 export interface TrendGiorno {
@@ -51,10 +59,25 @@ const PERIODI = [
   { giorni: 90, label: '90 giorni' },
 ];
 
+/** Ore di una riga: sempre H:MM, come in tutte le tabelle Kantiere. */
 function fmtOre(n: number): string {
   if (!n) return '—';
-  const totMin = Math.max(0, Math.round(n * 60));
-  return `${Math.floor(totMin / 60)}:${String(totMin % 60).padStart(2, '0')}`;
+  return formattaOreGiornata(Math.max(0, Math.round(n * 60)));
+}
+
+/**
+ * Ore di un TOTALE. Su una somma l'H:MM diventa illeggibile («705:19» non dice
+ * niente a nessuno e quei minuti non li usa nessuno): sui totali si usa sempre
+ * `formattaOreTotale`. Qui prima si usava lo stesso formato delle righe.
+ */
+function fmtOreTotale(n: number): string {
+  if (!n) return '—';
+  return formattaOreTotale(Math.max(0, Math.round(n * 60)));
+}
+
+/** Minuti di viaggio: H:MM sulle righe. */
+function fmtMinuti(min: number): string {
+  return min > 0 ? formattaOreGiornata(min) : '—';
 }
 
 function fmtKm(n: number): string {
@@ -130,6 +153,12 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Straord.</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground" title="Viaggio oltre l'orario ordinario">Viaggio ecc.</th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Km</th>
+                  <th
+                    className="px-3 py-2 text-right text-xs font-medium text-muted-foreground"
+                    title="Tempo passato in viaggio da e verso questo cantiere"
+                  >
+                    Tempo viaggio
+                  </th>
                   <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">Totale</th>
                 </tr>
               </thead>
@@ -162,6 +191,16 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                     >
                       {fmtKm(p.kmGuidati)}
                     </td>
+                    <td
+                      className="px-3 py-2 text-right tabular-nums text-sky-700 dark:text-sky-400"
+                      title={
+                        p.tratte > 0
+                          ? `${p.tratte} ${p.tratte === 1 ? 'tratta' : 'tratte'}`
+                          : 'Nessuna tratta registrata'
+                      }
+                    >
+                      {fmtMinuti(p.minutiViaggio)}
+                    </td>
                     <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtOre(p.totale)}</td>
                   </tr>
                 ))}
@@ -171,12 +210,16 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Totale
                   </td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtOre(data.totali.ordinarie)}</td>
+                  {/* Sui totali il formato e' quello dei totali: una somma in
+                      H:MM («705:19») non la usa nessuno. */}
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                    {fmtOreTotale(data.totali.ordinarie)}
+                  </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-                    {fmtOre(data.totali.straordinarie)}
+                    {fmtOreTotale(data.totali.straordinarie)}
                   </td>
                   <td className="px-3 py-2 text-right font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                    {fmtOre(data.totali.viaggio)}
+                    {fmtOreTotale(data.totali.viaggio)}
                   </td>
                   <td
                     className="px-3 py-2 text-right font-semibold tabular-nums text-sky-700 dark:text-sky-400"
@@ -184,7 +227,17 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   >
                     {fmtKm(data.totali.kmGuidati)}
                   </td>
-                  <td className="px-3 py-2 text-right font-bold tabular-nums">{fmtOre(data.totali.totale)}</td>
+                  <td
+                    className="px-3 py-2 text-right font-semibold tabular-nums text-sky-700 dark:text-sky-400"
+                    title={`${data.totali.tratte} ${data.totali.tratte === 1 ? 'tratta' : 'tratte'} nel periodo`}
+                  >
+                    {data.totali.minutiViaggio > 0
+                      ? formattaOreTotale(data.totali.minutiViaggio)
+                      : '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-bold tabular-nums">
+                    {fmtOreTotale(data.totali.totale)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

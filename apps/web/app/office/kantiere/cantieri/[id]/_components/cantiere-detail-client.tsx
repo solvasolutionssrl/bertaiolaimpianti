@@ -861,7 +861,7 @@ export function CantiereDetailClient({
             header={
               <SezioneHeader
                 icon={<History className="h-4 w-4" aria-hidden="true" />}
-                titolo="Storico presenze"
+                titolo="Ore del cantiere"
                 accent="blue"
               />
             }
