@@ -67,10 +67,38 @@ I km si registrano su una **tratta di viaggio** (`timbratura_viaggio`), non sull
 
 **Dettagli:**
 
-- I km della stima sono **definitivi**: il tecnico non li corregge a mano (può correggere solo il **tempo**, con giustificazione se scosta dalla stima).
+- I km arrivano dalla **stima del provider** e restano il valore buono finché nessuno li tocca. **Dal 23/09/2026 si correggono a posteriori**, sia dall'ufficio sia dal tecnico dalla propria app: vedi **§3.3bis**. Fino a quella data erano definitivi e si correggeva solo il **tempo**.
 - Il flag **autista** sulla tratta distingue chi **guidava** (rilevante per i rimborsi km) dal passeggero.
 - Il tempo di viaggio si registra separato dal lavoro (`minuti_viaggio`) e rientra nelle ore ordinarie fino all'orario ordinario (§1.1). Display sempre in `H:MM`.
 - Chi lavora **dalla sede sul progetto** fa partire e arrivare le tratte alla sede: **§3.2**.
+
+### 3.3bis Correggere km e tempo di una tratta, dopo (dal 23/09/2026)
+
+Una tratta si può correggere **dopo**, quando ci si accorge che il numero non torna: km, tempo, o tutti e due. Lo fanno sia l'**ufficio** (Presenze e ore → «Correggi giornata» → «Correggi i viaggi») sia il **tecnico** dalla propria app (Le mie ore → «Modifica giornata» → «I viaggi»).
+
+> ⚠️ **Ribalta una scelta esplicita.** La migration che ha introdotto i km (`20260624040000`) diceva che erano definitivi e che si correggeva solo il tempo. Da oggi non è più così, ma **solo a una condizione**: che resti distinguibile che cosa ha detto il provider e che cosa ha corretto una persona. Un km corretto che sembra un km misurato è un dato peggiore di un km sbagliato, perché nessuno sa più di chi fidarsi, e i km finiscono nei costi, nei rimborsi e nell'export verso il gestionale.
+
+**Come è fatta** (migration `20260923090000`), ricalcando il modello che il tempo aveva già:
+
+| Il tempo (da sempre) | I km (da oggi) |
+|---|---|
+| `durata_stimata_min` (provider) | `distanza_stimata_km` (provider) |
+| `durata_confermata_min` (valore buono) | `distanza_km` (valore buono) |
+| `giustificazione` | `km_giustificazione` |
+
+- Il **valore buono resta in `distanza_km`**: tutti i lettori di oggi (costi, report, scheda cantiere, mezzi, API pubblica, export) continuano a leggere il numero giusto senza sapere niente di questa funzione.
+- La stima si archivia **solo alla prima correzione**: una seconda non deve sovrascriverla, o si perde da dove si era partiti. Nessun backfill: `distanza_stimata_km` NULL significa «mai corretta», riempirla direbbe «corretta a un valore identico alla stima», che è falso.
+- Il **motivo è obbligatorio**. Senza, la correzione è indistinguibile da un errore.
+- I km si correggono **solo se si era autista**: è a lui che sono attribuiti (contarli anche ai passeggeri li moltiplicherebbe per le persone in macchina). Il **tempo** vale per tutti.
+
+⚠️ **Si corregge la SORGENTE, non la riga derivata della giornata**, e non è una scelta di stile:
+
+- i km su `rapportino_righe` non esistono, non è una sua colonna;
+- il tempo, corretto lì, obbligherebbe a marcare la giornata come manuale, **congelando anche le ore di lavoro** rispetto alle timbrature future.
+
+Correggendo `timbratura_viaggio` il valore sopravvive al ricalcolo **per costruzione** (è ciò da cui il ricalcolo parte) e non si congela niente. Il ricalcolo si rilancia **solo se cambia il tempo**: `distanza_km` non viene letta mai dal ricalcolo.
+
+**Il tecnico** ha le stesse guardie che ha sulle ore: identità presa dalla sessione e mai dal client (ed è parte del filtro, non un controllo fatto dopo), finestra di 3 giorni, stop se l'ufficio ha già deciso la giornata a mano. La RLS gli permetteva già di scrivere le proprie righe di viaggio: nessuna migration in più.
 
 ### 3.1 Trasferimenti cantiere → cantiere (km + tempo)
 
@@ -352,6 +380,17 @@ eventi, le versioni del rapportino sono già le modifiche. Un diario scritto a
 parte sarebbe una seconda copia della verità: il giorno che una funzione si
 dimentica di annotare, la storia avrebbe un buco invisibile. Modulo puro
 `@kommessa/api/kantiere-cronologia`.
+
+⚠️ **Lo snapshot fotografa anche le tratte** (id, km, minuti), dal 23/09/2026.
+Prima confrontava lavoro, viaggio, stato e righe, tutti presi da
+`rapportino_righe`: i km e i minuti delle tratte stanno però su
+`timbratura_viaggio`, che in quel confronto non compariva. Correggere i **soli
+km** risultava quindi «non è cambiato niente» e la versione veniva **scartata in
+silenzio**: la correzione restava, la sua storia no. Gli snapshot scritti prima
+di quella data non hanno le tratte: in quel caso non si può sapere se siano
+cambiate e **non si dice**, esattamente come già si fa per le righe. L'azione
+`modifica_viaggio` è entrata nel vocabolario chiuso del CHECK con la stessa
+migration.
 
 **Come nasce una timbratura — `timbrature.modalita`** (migration
 `20260914090000`). `origine` non bastava: l'avvio turno da app scriveva
