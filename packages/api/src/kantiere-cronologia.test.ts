@@ -110,6 +110,38 @@ describe('differenzeGiornata', () => {
     expect(differenzeGiornata(null, { stato: 'approvato' })).toEqual([]);
     expect(versioneSenzaCambiamenti(null, { stato: 'approvato' })).toBe(false);
   });
+
+  // I km e il tempo delle tratte stanno su `timbratura_viaggio`, non nelle
+  // righe della giornata: prima una correzione dei soli km risultava «non e'
+  // cambiato niente» e la versione veniva scartata in silenzio.
+  it('correggere i soli km e un cambiamento, e si vede', () => {
+    const prima = { stato: 'approvato', totali: { ore_ordinarie: 8 }, tratte: [{ id: 't1', km: 40, minuti: 30 }] };
+    const dopo = { stato: 'approvato', totali: { ore_ordinarie: 8 }, tratte: [{ id: 't1', km: 52, minuti: 30 }] };
+    expect(versioneSenzaCambiamenti(prima, dopo)).toBe(false);
+    expect(differenzeGiornata(prima, dopo)).toEqual(['Km 40 → 52']);
+  });
+
+  it('correggere il solo tempo di una tratta si vede, in H:MM', () => {
+    const prima = { stato: 'approvato', totali: { ore_ordinarie: 8 }, tratte: [{ id: 't1', km: 40, minuti: 30 }] };
+    const dopo = { stato: 'approvato', totali: { ore_ordinarie: 8 }, tratte: [{ id: 't1', km: 40, minuti: 55 }] };
+    expect(versioneSenzaCambiamenti(prima, dopo)).toBe(false);
+    expect(differenzeGiornata(prima, dopo)).toEqual(['Tempo di viaggio 0:30 → 0:55']);
+  });
+
+  it('tratte identiche restano «nessun cambiamento»', () => {
+    const s = { stato: 'approvato', totali: { ore_ordinarie: 8 }, tratte: [{ id: 't1', km: 40, minuti: 30 }] };
+    expect(versioneSenzaCambiamenti(s, s)).toBe(true);
+    expect(differenzeGiornata(s, s)).toEqual([]);
+  });
+
+  // Gli snapshot scritti prima del 23/09/2026 non hanno le tratte: non si sa
+  // se siano cambiate, quindi non si dice (come per le righe).
+  it('snapshot vecchio senza tratte: nessuna differenza inventata', () => {
+    const vecchio = { stato: 'approvato', totali: { ore_ordinarie: 8 } };
+    const nuovo = { stato: 'approvato', totali: { ore_ordinarie: 8 }, tratte: [{ id: 't1', km: 40, minuti: 30 }] };
+    expect(differenzeGiornata(vecchio, nuovo)).toEqual([]);
+    expect(versioneSenzaCambiamenti(vecchio, nuovo)).toBe(true);
+  });
 });
 
 describe('costruisciCronologia', () => {

@@ -1,5 +1,5 @@
 import { createServerSupabase } from '@kommessa/api/server';
-import { versioneSenzaCambiamenti } from '@kommessa/api/kantiere-cronologia';
+import { versioneSenzaCambiamenti, type TrattaSnapshot } from '@kommessa/api/kantiere-cronologia';
 
 export type AzioneVersione =
   | 'invio'
@@ -12,7 +12,11 @@ export type AzioneVersione =
   // e il ricalcolo che sposta le ore di una giornata già chiusa.
   | 'pausa_ufficio'
   | 'chiusura_ufficio'
-  | 'ricalcolo';
+  | 'ricalcolo'
+  // Dal 23/09/2026: km o tempo di una tratta corretti a posteriori. Non tocca
+  // le righe della giornata, quindi senza le tratte nello snapshot sarebbe
+  // indistinguibile da «non e' cambiato niente».
+  | 'modifica_viaggio';
 
 type Supa = ReturnType<typeof createServerSupabase>;
 
@@ -30,6 +34,8 @@ export interface StatoGiornata {
   stato: string;
   totali: { ore_ordinarie: number; ore_straordinarie: number; ore_viaggio: number };
   righe: RigaSnapshot[];
+  /** Km e minuti delle tratte: non stanno nelle righe, ma si correggono. */
+  tratte: TrattaSnapshot[];
 }
 
 /** Le modifiche: se non cambiano niente non si scrivono. Le transizioni di stato sì, sempre. */
@@ -39,6 +45,7 @@ const AZIONI_MODIFICA: ReadonlySet<AzioneVersione> = new Set([
   'pausa_ufficio',
   'chiusura_ufficio',
   'ricalcolo',
+  'modifica_viaggio',
 ]);
 
 async function leggiRighe(supabase: Supa, rapportinoId: string): Promise<RigaSnapshot[]> {
@@ -47,6 +54,31 @@ async function leggiRighe(supabase: Supa, rapportinoId: string): Promise<RigaSna
     .select('commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
     .eq('rapportino_id', rapportinoId);
   return (data as RigaSnapshot[] | null) ?? [];
+}
+
+/**
+ * Le tratte di viaggio della giornata: km e minuti confermati.
+ *
+ * Non stanno in `rapportino_righe` ma su `timbratura_viaggio`, quindi senza
+ * questa fotografia una correzione dei soli km risulterebbe «non è cambiato
+ * niente» e la sua versione verrebbe scartata. La colonna `data` è valorizzata
+ * anche sulle righe legate a una timbratura (`rigaViaggio`), quindi basta una
+ * query sola. Best-effort come tutto il resto del versioning.
+ */
+async function leggiTratte(
+  supabase: Supa,
+  dipendenteId: string | null | undefined,
+  data: string | null | undefined,
+): Promise<TrattaSnapshot[]> {
+  if (!dipendenteId || !data) return [];
+  const { data: rows } = await supabase
+    .from('timbratura_viaggio' as never)
+    .select('id, distanza_km, durata_confermata_min')
+    .eq('dipendente_id', dipendenteId)
+    .eq('data', data);
+  return (
+    (rows as { id: string; distanza_km: number | null; durata_confermata_min: number | null }[] | null) ?? []
+  ).map((r) => ({ id: r.id, km: r.distanza_km, minuti: r.durata_confermata_min }));
 }
 
 function sommaTotali(righe: RigaSnapshot[]): StatoGiornata['totali'] {
@@ -72,13 +104,14 @@ export async function leggiStatoGiornata(
   try {
     const { data } = await supabase
       .from('rapportini' as never)
-      .select('stato')
+      .select('stato, dipendente_id, data')
       .eq('id', rapportinoId)
       .maybeSingle();
-    const stato = (data as { stato: string } | null)?.stato;
-    if (!stato) return null;
+    const rapp = data as { stato: string; dipendente_id: string; data: string } | null;
+    if (!rapp?.stato) return null;
     const righe = await leggiRighe(supabase, rapportinoId);
-    return { stato, totali: sommaTotali(righe), righe };
+    const tratte = await leggiTratte(supabase, rapp.dipendente_id, rapp.data);
+    return { stato: rapp.stato, totali: sommaTotali(righe), righe, tratte };
   } catch {
     return null;
   }
@@ -133,14 +166,20 @@ export async function scriviVersioneRapportino(params: {
   try {
     const { data: rappRaw } = await supabase
       .from('rapportini' as never)
-      .select('data, stato, note')
+      .select('data, stato, note, dipendente_id')
       .eq('id', rapportinoId)
       .maybeSingle();
-    const rapp = rappRaw as { data: string; stato: string; note: string | null } | null;
+    const rapp = rappRaw as {
+      data: string;
+      stato: string;
+      note: string | null;
+      dipendente_id: string;
+    } | null;
     if (!rapp) return false;
 
     const righe = await leggiRighe(supabase, rapportinoId);
     const totali = sommaTotali(righe);
+    const tratte = await leggiTratte(supabase, rapp.dipendente_id, rapp.data);
 
     const { data: lastRaw } = await supabase
       .from('rapportino_versioni' as never)
@@ -151,19 +190,31 @@ export async function scriviVersioneRapportino(params: {
       .maybeSingle();
     const last = lastRaw as {
       versione: number;
-      snapshot: { stato?: string; totali?: StatoGiornata['totali']; righe?: RigaSnapshot[] } | null;
+      snapshot: {
+        stato?: string;
+        totali?: StatoGiornata['totali'];
+        righe?: RigaSnapshot[];
+        /** Assente sugli snapshot precedenti al 23/09/2026: resta `undefined`,
+         *  e il confronto non pretende di sapere se le tratte siano cambiate. */
+        tratte?: TrattaSnapshot[];
+      } | null;
     } | null;
 
     const base =
       params.prima ??
       (last?.snapshot
-        ? { stato: last.snapshot.stato, totali: last.snapshot.totali, righe: last.snapshot.righe }
+        ? {
+            stato: last.snapshot.stato,
+            totali: last.snapshot.totali,
+            righe: last.snapshot.righe,
+            tratte: last.snapshot.tratte,
+          }
         : null);
 
     if (
       AZIONI_MODIFICA.has(azione) &&
       base &&
-      versioneSenzaCambiamenti(base, { stato: rapp.stato, totali, righe })
+      versioneSenzaCambiamenti(base, { stato: rapp.stato, totali, righe, tratte })
     ) {
       return false;
     }
@@ -172,7 +223,15 @@ export async function scriviVersioneRapportino(params: {
       rapportino_id: rapportinoId,
       tenant_id: tenantId,
       versione: (last?.versione ?? 0) + 1,
-      snapshot: { data: rapp.data, stato: rapp.stato, note: rapp.note, righe, totali, prima: base },
+      snapshot: {
+        data: rapp.data,
+        stato: rapp.stato,
+        note: rapp.note,
+        righe,
+        totali,
+        tratte,
+        prima: base,
+      },
       azione,
       modificato_da: modificatoDa,
       modificato_da_nome: modificatoDaNome,

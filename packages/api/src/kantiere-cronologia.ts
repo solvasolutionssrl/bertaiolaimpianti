@@ -117,10 +117,28 @@ export interface RigaSnapshotCronologia {
   ore_viaggio?: number;
 }
 
+/**
+ * Una tratta di viaggio della giornata, come viene fotografata nello snapshot.
+ * Serve perche' km e minuti di viaggio NON stanno nelle righe della giornata:
+ * stanno su `timbratura_viaggio`. Senza, una correzione dei soli km risultava
+ * «nessun cambiamento» e la versione veniva scartata in silenzio.
+ */
+export interface TrattaSnapshot {
+  id?: string;
+  km?: number | null;
+  minuti?: number | null;
+}
+
 export interface StatoConfrontabile {
   stato?: string;
   totali?: TotaliSnapshot;
   righe?: RigaSnapshotCronologia[];
+  /**
+   * Le tratte di viaggio. Assente negli snapshot scritti prima del 23/09/2026:
+   * in quel caso non si puo' sapere se siano cambiate, e infatti non si dice
+   * (stessa regola delle righe: meglio tacere che inventare un «prima»).
+   */
+  tratte?: TrattaSnapshot[];
 }
 
 export interface SnapshotGiornata extends StatoConfrontabile {
@@ -281,6 +299,33 @@ function righeCambiate(prima: StatoConfrontabile, dopo: StatoConfrontabile): boo
   return a !== null && b !== null && a !== b;
 }
 
+/** Km totali delle tratte. Null se lo snapshot non le ha: non si sa, non si dice. */
+function totaleKm(tratte: TrattaSnapshot[] | undefined): number | null {
+  if (!tratte) return null;
+  return Math.round(tratte.reduce((a, t) => a + (Number(t.km) || 0), 0));
+}
+
+/** Minuti totali delle tratte. Null se lo snapshot non le ha. */
+function totaleMinutiTratte(tratte: TrattaSnapshot[] | undefined): number | null {
+  if (!tratte) return null;
+  return Math.round(tratte.reduce((a, t) => a + (Number(t.minuti) || 0), 0));
+}
+
+/** Le tratte in forma confrontabile: cambia anche se si sposta una sola tratta. */
+function firmaTratte(tratte: TrattaSnapshot[] | undefined): string | null {
+  if (!tratte) return null;
+  return tratte
+    .map((t) => `${t.id ?? '-'}:${Math.round(Number(t.km) || 0)}:${Math.round(Number(t.minuti) || 0)}`)
+    .sort()
+    .join('|');
+}
+
+function tratteCambiate(prima: StatoConfrontabile, dopo: StatoConfrontabile): boolean {
+  const a = firmaTratte(prima.tratte);
+  const b = firmaTratte(dopo.tratte);
+  return a !== null && b !== null && a !== b;
+}
+
 const STATO_ETICHETTA: Record<string, string> = {
   bozza: 'da verificare',
   approvato: 'approvata',
@@ -306,6 +351,20 @@ export function differenzeGiornata(
   if (lp === ld && vp === vd && righeCambiate(prima, dopo)) {
     righe.push('Ore spostate fra cantieri');
   }
+  // Km e tempo delle tratte: stanno su `timbratura_viaggio`, non nelle righe
+  // della giornata, quindi una loro correzione non si vede nei totali sopra.
+  const kmPrima = totaleKm(prima.tratte);
+  const kmDopo = totaleKm(dopo.tratte);
+  if (kmPrima !== null && kmDopo !== null && kmPrima !== kmDopo) {
+    righe.push(`Km ${kmPrima} → ${kmDopo}`);
+  }
+  const trattePrima = totaleMinutiTratte(prima.tratte);
+  const tratteDopo = totaleMinutiTratte(dopo.tratte);
+  if (trattePrima !== null && tratteDopo !== null && trattePrima !== tratteDopo) {
+    righe.push(
+      `Tempo di viaggio ${formattaOreGiornata(trattePrima)} → ${formattaOreGiornata(tratteDopo)}`,
+    );
+  }
   if (prima.stato && dopo.stato && prima.stato !== dopo.stato) {
     righe.push(
       `Stato ${STATO_ETICHETTA[prima.stato] ?? prima.stato} → ${STATO_ETICHETTA[dopo.stato] ?? dopo.stato}`,
@@ -324,7 +383,11 @@ export function versioneSenzaCambiamenti(
     minutiLavoro(prima.totali) === minutiLavoro(dopo.totali) &&
     minutiViaggio(prima.totali) === minutiViaggio(dopo.totali) &&
     (prima.stato ?? null) === (dopo.stato ?? null) &&
-    !righeCambiate(prima, dopo)
+    !righeCambiate(prima, dopo) &&
+    // Senza questa, correggere SOLO i km di una tratta risultava «non e'
+    // cambiato niente» e la versione veniva scartata in silenzio: la
+    // correzione restava, la sua storia no.
+    !tratteCambiate(prima, dopo)
   );
 }
 
