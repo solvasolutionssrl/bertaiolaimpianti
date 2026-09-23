@@ -6,6 +6,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 
 /**
  * Server actions per le regole di maggiorazione ore (kantiere_regole_ore),
@@ -337,6 +338,15 @@ export async function aggiornaCostoOrarioDipendente(input: unknown): Promise<OkR
   try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   const supabase = createServerSupabase();
+  // Com'era prima: un costo orario cambiato senza il valore di partenza non
+  // dice niente, e questo numero moltiplica tutte le ore del cantiere.
+  const { data: primaRaw } = await supabase
+    .from('dipendenti' as never)
+    .select('costo_orario')
+    .eq('id', parsed.data.dipendenteId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('dipendenti' as never)
     .update({ costo_orario: parsed.data.costo } as never)
@@ -344,6 +354,16 @@ export async function aggiornaCostoOrarioDipendente(input: unknown): Promise<OkR
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'dipendente',
+    entityId: parsed.data.dipendenteId,
+    action: 'dipendente.costo_orario',
+    before: primaRaw ?? null,
+    after: { costo_orario: parsed.data.costo },
+  });
   revalidatePath('/office/kantiere/ore-costi');
   return { ok: true };
 }

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { prossimoCodiceDipendente } from '@kommessa/api/kantiere';
 
@@ -91,6 +92,21 @@ export async function creaDipendente(input: unknown): Promise<Result> {
   if (error) return { ok: false, error: error.message };
   const id = (data as { id: string }).id;
   const avviso = await scriviModalita(supabase, id, parsed.data.modalita_lavoro);
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'dipendente',
+    entityId: id,
+    action: 'dipendente.crea',
+    after: {
+      nome: parsed.data.nome,
+      cognome: parsed.data.cognome,
+      codice_interno: codice,
+      mansione: parsed.data.mansione ?? null,
+      costo_orario: parsed.data.costo_orario ?? null,
+    },
+  });
   revalidatePath('/office/kantiere/dipendenti');
   return { ok: true, id, ...(avviso ? { avviso } : {}) };
 }
@@ -99,7 +115,7 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
   const schema = BaseSchema.extend({ id: z.string().uuid() });
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
-  await guard();
+  const ctx = await guard();
   const supabase = createServerSupabase();
   const { error } = await supabase
     .from('dipendenti' as never)
@@ -119,6 +135,28 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
     .eq('id', parsed.data.id);
   if (error) return { ok: false, error: error.message };
   const avviso = await scriviModalita(supabase, parsed.data.id, parsed.data.modalita_lavoro);
+  // L'anagrafica di una persona non lasciava nessuna traccia, nemmeno quando
+  // cambia il costo orario, che finisce dritto nei costi del cantiere.
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'dipendente',
+    entityId: parsed.data.id,
+    action: 'dipendente.modifica',
+    after: {
+      nome: parsed.data.nome,
+      cognome: parsed.data.cognome,
+      mansione: parsed.data.mansione ?? null,
+      codice_interno: parsed.data.codice_interno ?? null,
+      stato_attivo: parsed.data.stato_attivo ?? true,
+      a_turni: parsed.data.a_turni ?? false,
+      modalita_lavoro: parsed.data.modalita_lavoro,
+      ...(parsed.data.costo_orario !== undefined
+        ? { costo_orario: parsed.data.costo_orario }
+        : {}),
+    },
+  });
   revalidatePath('/office/kantiere/dipendenti');
   revalidatePath(`/office/kantiere/dipendenti/${parsed.data.id}`);
   return { ok: true, ...(avviso ? { avviso } : {}) };
@@ -211,7 +249,7 @@ export async function creaUtenteDipendente(
 export async function eliminaDipendente(input: unknown): Promise<Result> {
   const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
-  await guard();
+  const ctx = await guard();
   const supabase = createServerSupabase();
   const { count } = await supabase
     .from('commessa_squadra' as never)
@@ -220,8 +258,26 @@ export async function eliminaDipendente(input: unknown): Promise<Result> {
   if ((count ?? 0) > 0) {
     return { ok: false, error: `Dipendente assegnato a ${count} commesse: rimuovilo dalle squadre prima.` };
   }
+  // Com'era prima di sparire: dopo la delete non c'e' piu' modo di saperlo, e
+  // una persona cancellata senza traccia e' il buco peggiore di tutti.
+  const { data: primaRaw } = await supabase
+    .from('dipendenti' as never)
+    .select('nome, cognome, codice_interno, mansione, stato_attivo')
+    .eq('id', parsed.data.id)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+
   const { error } = await supabase.from('dipendenti' as never).delete().eq('id', parsed.data.id);
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'dipendente',
+    entityId: parsed.data.id,
+    action: 'dipendente.elimina',
+    before: primaRaw ?? null,
+  });
   revalidatePath('/office/kantiere/dipendenti');
   return { ok: true };
 }

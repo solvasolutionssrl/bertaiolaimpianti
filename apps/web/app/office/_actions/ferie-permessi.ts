@@ -617,6 +617,24 @@ export async function decidiPermesso(
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
 
+  // Chi ha deciso resta su `deciso_da`, ma senza un evento non si puo' cercare
+  // «tutte le decisioni del mese» ne' sapere da quale stato si e' partiti.
+  await auditTenant(svc, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'permesso_richiesta',
+    entityId: parsed.data.id,
+    action: 'permesso.decisione',
+    after: { stato: parsed.data.esito, nota: parsed.data.nota?.trim() || null },
+    metadata: {
+      dipendenteId: r.dipendente_id,
+      tipo: r.tipo,
+      dal: r.data_inizio,
+      al: r.data_fine,
+    },
+  });
+
   // Notifica il richiedente (dipendente.user_id).
   const { data: dip } = await svc
     .from('dipendenti' as never)
@@ -693,6 +711,17 @@ export async function annullaRichiesta(id: string): Promise<Ok> {
     .eq('id', id)
     .eq('tenant_id', ctx.tenantId);
   if (error) return { ok: false, error: error.message };
+  // ⚠️ Questa e' una cancellazione FISICA: senza evento, di una richiesta
+  // annullata non resta assolutamente niente, nemmeno che sia esistita.
+  await auditTenant(svc, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'permesso_richiesta',
+    entityId: id,
+    action: 'permesso.annulla',
+    before: { dipendenteId: r.dipendente_id, stato: r.stato },
+  });
   revalidatePath(PATH_PERMESSI);
   revalidatePath('/mobile/permessi');
   return { ok: true };

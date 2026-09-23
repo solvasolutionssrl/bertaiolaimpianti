@@ -6,6 +6,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 
 /**
  * Server actions per il parco mezzi (tabella `mezzi`).
@@ -58,6 +59,14 @@ export async function creaMezzo(input: unknown): Promise<OkResult> {
     } as never);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'mezzo',
+    action: 'mezzo.crea',
+    after: { targa: parsed.data.targa.toUpperCase(), tipo: parsed.data.tipo },
+  });
   revalidatePath('/office/kantiere/mezzi');
   return { ok: true };
 }
@@ -94,6 +103,19 @@ export async function aggiornaMezzo(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'mezzo',
+    entityId: parsed.data.id,
+    action: 'mezzo.modifica',
+    after: {
+      targa: parsed.data.targa.toUpperCase(),
+      tipo: parsed.data.tipo,
+      attivo: parsed.data.attivo,
+    },
+  });
   revalidatePath('/office/kantiere/mezzi');
   return { ok: true };
 }
@@ -108,6 +130,15 @@ export async function eliminaMezzo(input: unknown): Promise<OkResult> {
   try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   const supabase = createServerSupabase();
+  // Com'era prima di sparire: dopo la delete non c'e' piu' modo di dire quale
+  // mezzo fosse, e i km dei viaggi puntano proprio ai mezzi.
+  const { data: primaRaw } = await supabase
+    .from('mezzi' as never)
+    .select('targa, tipo, modello, attivo')
+    .eq('id', parsed.data.id)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('mezzi' as never)
     .delete()
@@ -115,6 +146,15 @@ export async function eliminaMezzo(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'mezzo',
+    entityId: parsed.data.id,
+    action: 'mezzo.elimina',
+    before: primaRaw ?? null,
+  });
   revalidatePath('/office/kantiere/mezzi');
   return { ok: true };
 }
