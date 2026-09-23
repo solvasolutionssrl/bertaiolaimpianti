@@ -10,6 +10,8 @@ import {
   type PickerCantiere,
 } from '@/app/mobile/kantiere/_components/cantiere-picker';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
+import { etichettaPausa } from '@kommessa/api/kantiere-pausa';
+import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 
 /** Sentinel: "rientro a casa" → nessun viaggio di lavoro (0 km, 0 tempo). */
 const CASA_ID = '__casa__';
@@ -41,7 +43,7 @@ export interface ViaggioRitornoPayload {
 
 export interface ViaggioRitornoConfirm {
   viaggio: ViaggioRitornoPayload | null;
-  pausaPranzoMin?: 30 | 45 | 60;
+  pausaPranzoMin?: number;
   /** Split "cosa hai fatto oggi": ore per cantiere (somma = netto). */
   split?: { cantiereId: string; minuti: number }[];
 }
@@ -268,7 +270,7 @@ export function ViaggioRitornoDialog({
 
   // Pausa pranzo dichiarata (ripiego se non timbrata)
   const [pausaFatta, setPausaFatta] = useState(false);
-  const [pausaMin, setPausaMin] = useState<30 | 45 | 60>(30);
+  const [pausaMin, setPausaMin] = useState<number>(30);
 
   // Portal su body: dentro la shell mobile un `fixed` resta intrappolato nello
   // stacking context e finisce SOTTO la bottom-nav. Su body compete al livello
@@ -694,28 +696,10 @@ export function ViaggioRitornoDialog({
                 />
                 <span className="text-sm font-medium text-amber-900">Ho fatto la pausa pranzo</span>
               </label>
-              {pausaFatta ? (
-                <div className="flex gap-2">
-                  {([30, 45, 60] as const).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setPausaMin(m)}
-                      className={[
-                        'flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors',
-                        pausaMin === m
-                          ? 'border-amber-500 bg-amber-500 text-white'
-                          : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
-                      ].join(' ')}
-                    >
-                      {m === 60 ? '1h' : `${m} min`}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              {pausaFatta ? <SceltaPausaPranzo valore={pausaMin} onChange={setPausaMin} /> : null}
               {pausaFatta ? (
                 <p className="text-[11px] text-amber-700">
-                  Verranno tolti {pausaMin === 60 ? '1h' : `${pausaMin} min`} dal turno.
+                  Verranno tolti {etichettaPausa(pausaMin)} dal turno.
                 </p>
               ) : null}
             </div>

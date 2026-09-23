@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Coffee, Info, Loader2 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
+import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 import {
   Dialog,
   DialogContent,
@@ -41,7 +42,6 @@ interface RigaEdit {
   viaggioM: number;
 }
 
-const PAUSA_OPZIONI = [30, 45, 60] as const;
 
 // ── helper ────────────────────────────────────────────────────────────────────
 
@@ -520,27 +520,11 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
                 )}
 
                 {giornataChiusa && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {PAUSA_OPZIONI.map((min) => {
-                      const attivo = pausaMinuti === min;
-                      return (
-                        <button
-                          key={min}
-                          type="button"
-                          onClick={() => setPausaMinuti(attivo ? null : min)}
-                          disabled={isPending || !modificabile}
-                          className={[
-                            'rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors',
-                            attivo
-                              ? 'border-amber-500 bg-amber-200/70 text-amber-900'
-                              : 'border-amber-300 bg-white/70 text-amber-800 hover:bg-amber-100',
-                          ].join(' ')}
-                        >
-                          {min} min
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <SceltaPausaPranzo
+                    valore={pausaMinuti ?? 0}
+                    onChange={(m) => setPausaMinuti(m > 0 ? m : null)}
+                    disabled={isPending || !modificabile}
+                  />
                 )}
 
                 {pausaMinuti !== null && pausaMinuti !== pausaMinutiEsistente && (

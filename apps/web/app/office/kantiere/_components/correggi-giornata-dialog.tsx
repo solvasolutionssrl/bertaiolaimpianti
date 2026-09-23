@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
+import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 import {
   aggiungiPausaGiornata,
   correggiViaggio,
@@ -59,7 +60,6 @@ interface Props {
   tratte?: CorreggiTratta[];
 }
 
-const PAUSE_RAPIDE = [30, 45, 60, 90] as const;
 
 /** "10h 30min" da un numero di ore decimale. */
 function fmtOreMin(ore: number): string {
@@ -291,36 +291,8 @@ export function CorreggiGiornataDialog({
               soglia, la giornata si approva da sola.
             </p>
 
-            <div className="mb-3 flex flex-wrap items-center gap-1.5">
-              {PAUSE_RAPIDE.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPausaSel(m)}
-                  className={[
-                    'rounded-md border px-3 py-1.5 text-sm font-medium tabular-nums transition-colors',
-                    pausaSel === m
-                      ? 'border-amber-600 bg-amber-600 text-white'
-                      : 'border-amber-300 bg-white text-amber-800 hover:bg-amber-100',
-                  ].join(' ')}
-                >
-                  {m} min
-                </button>
-              ))}
-              <label className="ml-1 flex items-center gap-1.5 text-xs text-amber-800">
-                <span>Altro</span>
-                <input
-                  type="number"
-                  min={5}
-                  max={240}
-                  step={5}
-                  value={pausaSel}
-                  onChange={(e) => setPausaSel(parseInt(e.target.value, 10) || 0)}
-                  className="w-16 rounded-md border border-amber-300 bg-white px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  aria-label="Minuti pausa personalizzati"
-                />
-                <span>min</span>
-              </label>
+            <div className="mb-3">
+              <SceltaPausaPranzo valore={pausaSel} onChange={setPausaSel} />
             </div>
 
             {/* Anteprima live */}

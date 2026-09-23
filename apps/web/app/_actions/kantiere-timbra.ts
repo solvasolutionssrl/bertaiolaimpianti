@@ -12,6 +12,7 @@ import {
   type StatoTurno,
 } from '@kommessa/api/kantiere-ore';
 import { calcolaSegmentiSplit, trasferimentiDaSegmenti } from '@kommessa/api/kantiere-split';
+import { PAUSA_MASSIMA_MIN, PAUSA_MINIMA_MIN } from '@kommessa/api/kantiere-pausa';
 import {
   chiaveCoppia,
   confiniFraCantieri,
@@ -155,7 +156,15 @@ const TimbraSchema = z.object({
    *  (inizio/fine), usato dal capo per i membri e per retrocompatibilità. */
   azione: z.enum(['inizio', 'fine', 'pausa', 'ripresa']).optional(),
   /** Pausa pranzo dichiarata in uscita (solo self, turno lungo senza pausa). */
-  pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
+  // Dal 23/09/2026 non e' piu' un elenco chiuso: oltre alle scelte rapide si
+  // puo' scrivere una durata qualsiasi, che la pagina arrotonda a 5 minuti.
+  // Il server ricontrolla i limiti, perche' il client puo' sempre mentire.
+  pausaPranzoMin: z
+    .number()
+    .int()
+    .min(PAUSA_MINIMA_MIN)
+    .max(PAUSA_MASSIMA_MIN)
+    .optional(),
 });
 
 export async function timbra(input: unknown): Promise<Result> {
@@ -361,7 +370,15 @@ const TerminaTurnoSchema = z.object({
   // dopo l'apertura del turno.
   ts: z.string().datetime().optional(),
   /** Pausa pranzo dichiarata (turno lungo senza pausa timbrata). */
-  pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
+  // Dal 23/09/2026 non e' piu' un elenco chiuso: oltre alle scelte rapide si
+  // puo' scrivere una durata qualsiasi, che la pagina arrotonda a 5 minuti.
+  // Il server ricontrolla i limiti, perche' il client puo' sempre mentire.
+  pausaPranzoMin: z
+    .number()
+    .int()
+    .min(PAUSA_MINIMA_MIN)
+    .max(PAUSA_MASSIMA_MIN)
+    .optional(),
   /** Viaggio di RITORNO (chiusura da app): sede, stima, autista, mezzo, km. */
   viaggio: ViaggioSchema.optional(),
   /**

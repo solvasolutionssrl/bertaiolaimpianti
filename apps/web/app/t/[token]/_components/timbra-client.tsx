@@ -7,6 +7,8 @@ import { Button } from '@kommessa/ui';
 import { Loader2, Car, MapPin, Utensils, Play, LogOut, CheckCircle2, Home } from 'lucide-react';
 import { timbra, type AzioneTimbra } from '@/app/_actions/kantiere-timbra';
 import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
+import { etichettaPausa } from '@kommessa/api/kantiere-pausa';
+import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
 
@@ -262,7 +264,7 @@ function TimbraConViaggio({
   const [erroreMsg, setErroreMsg] = useState<string | null>(null);
   // Pausa pranzo dichiarata (ripiego se il dipendente non l'ha timbrata).
   const [pausaFatta, setPausaFatta] = useState(false);
-  const [pausaMin, setPausaMin] = useState<30 | 45 | 60>(30);
+  const [pausaMin, setPausaMin] = useState<number>(30);
 
   const prossimoTipo: TipoTimbratura = azione === 'inizio' ? 'ingresso' : 'uscita';
   const direzione = azione === 'inizio' ? 'andata' : 'ritorno';
@@ -521,28 +523,10 @@ function TimbraConViaggio({
               Ho fatto la pausa pranzo
             </span>
           </label>
-          {pausaFatta ? (
-            <div className="flex gap-2">
-              {([30, 45, 60] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setPausaMin(m)}
-                  className={[
-                    'flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors',
-                    pausaMin === m
-                      ? 'border-amber-500 bg-amber-500 text-white'
-                      : 'border-amber-300 bg-white text-amber-900 hover:bg-amber-100',
-                  ].join(' ')}
-                >
-                  {m === 60 ? '1h' : `${m} min`}
-                </button>
-              ))}
-            </div>
-          ) : null}
+          {pausaFatta ? <SceltaPausaPranzo valore={pausaMin} onChange={setPausaMin} /> : null}
           {pausaFatta ? (
             <p className="text-[11px] text-amber-700">
-              Verranno tolti {pausaMin === 60 ? '1h' : `${pausaMin} min`} dal turno.
+              Verranno tolti {etichettaPausa(pausaMin)} dal turno.
             </p>
           ) : null}
         </div>

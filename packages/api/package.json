@@ -15,6 +15,7 @@
     "./stato-lavoro": "./src/stato-lavoro.ts",
     "./kantiere-qr": "./src/kantiere-qr.ts",
     "./kantiere-ore": "./src/kantiere-ore.ts",
+    "./kantiere-pausa": "./src/kantiere-pausa.ts",
     "./kantiere-cronologia": "./src/kantiere-cronologia.ts",
     "./kantiere-split": "./src/kantiere-split.ts",
     "./kantiere-percorso": "./src/kantiere-percorso.ts",

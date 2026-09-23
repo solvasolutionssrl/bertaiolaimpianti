@@ -39,6 +39,7 @@ import {
 } from '@kommessa/api/kantiere-percorso';
 import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { Portal } from '@/app/mobile/_components/portal';
+import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
@@ -121,14 +122,6 @@ function testoMancanti(m: DatoMancante[]): string {
   return `Per registrare indica ${elenco}.`;
 }
 
-// Pause tipiche in cantiere: coprono di fatto tutti i casi reali. Se serve un
-// valore fuori scala lo sistema l'ufficio in fase di verifica.
-const PAUSE_CHIPS: { min: number; label: string }[] = [
-  { min: 0, label: 'Nessuna' },
-  { min: 30, label: '30 min' },
-  { min: 45, label: '45 min' },
-  { min: 60, label: '1 h' },
-];
 
 function StepperMin({
   minuti,
@@ -1371,27 +1364,13 @@ export function RegistraGiornataDialog({
                   <label className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-amber-700">
                     <Coffee className="h-3 w-3" aria-hidden="true" /> Pausa pranzo
                   </label>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {PAUSE_CHIPS.map((p) => {
-                      const attivo = pausaMin === p.min;
-                      return (
-                        <button
-                          key={p.min}
-                          type="button"
-                          disabled={pending}
-                          aria-pressed={attivo}
-                          onClick={() => setPausaMin(p.min)}
-                          className={`rounded-lg border px-1 py-1 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50 ${
-                            attivo
-                              ? 'shadow-soft border-amber-400 bg-amber-100 text-amber-900'
-                              : 'border-border bg-background text-foreground hover:bg-amber-50'
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <SceltaPausaPranzo
+                    valore={pausaMin}
+                    onChange={setPausaMin}
+                    conNessuna
+                    disabled={pending}
+                    tono="tenue"
+                  />
                 </div>
               </section>
 

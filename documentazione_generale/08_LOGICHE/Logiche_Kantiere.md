@@ -226,8 +226,16 @@ Tutte in `tenant_modules.config` (per-tenant), pagina **Impostazioni → Kantier
 ### Pause
 | Chiave | Default | Effetto |
 |---|---|---|
-| `soglia_pausa_pranzo_ore` | 5 h | Oltre questa durata, chiudendo senza pausa timbrata, l'app chiede la pausa pranzo (30/45/60 min). |
+| `soglia_pausa_pranzo_ore` | 5 h | Oltre questa durata, chiudendo senza pausa timbrata, l'app chiede la pausa pranzo. |
 | `soglia_auto_spegnimento_pausa_ore` | 1,5 h | Una pausa rimasta aperta oltre la soglia si chiude e il turno riprende; la pausa registrata è pari alla soglia. |
+
+**Come si sceglie la durata (dal 23/09/2026).** Ovunque si chieda la pausa si vedono le stesse cose: le durate rapide **30 / 45 / 60**, più un **campo libero** per qualunque altra durata. Il valore scritto a mano viene portato al **multiplo di cinque** più vicino, e lo si dice a chi ha scritto — ma solo quando il numero è davvero cambiato, perché avvisare sempre è rumore. Una pausa si ricorda a memoria a fine giornata: il minuto esatto è una precisione finta.
+
+Le cinque superfici che la chiedono (QR, fine turno da app e capo, Registra giornata, Modifica giornata del tecnico, Correggi giornata dell'ufficio) usano **lo stesso componente**, `_components/scelta-pausa-pranzo.tsx`, sopra il modulo puro `@kommessa/api/kantiere-pausa` (durate, passo, limiti, arrotondamento). Prima erano cinque elenchi scritti a mano, e uno offriva anche 90 minuti: cambiare le durate si fa in un posto solo.
+
+> ⚠️ Il vincolo vero non stava nella pagina. Due schemi di `kantiere-timbra.ts` dichiaravano `pausaPranzoMin` come **elenco chiuso** (`z.union` di 30, 45, 60): un campo libero sarebbe stato rifiutato dal **server**. Ora tutti e quattro gli schemi accettano un intero fra `PAUSA_MINIMA_MIN` e `PAUSA_MASSIMA_MIN`, presi dal modulo. Prima di cambiare una scelta a schermo, cercare sempre dove quel valore viene validato.
+>
+> «Nessuna» (zero) resta una risposta valida e distinta in «Registra giornata»: non aver fatto pausa è un fatto, non un dato mancante.
 
 ### Viaggi e chilometri
 | Chiave | Default | Effetto |
