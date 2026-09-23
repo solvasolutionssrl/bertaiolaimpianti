@@ -104,6 +104,17 @@ export async function creaRegola(input: unknown): Promise<CreaResult> {
     .single();
 
   if (error) return { ok: false, error: error.message };
+  // Le regole decidono come le ore diventano soldi: una regola nuova che
+  // compare senza sapere chi l'ha messa e' un buco sui costi.
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'kantiere_regola_ore',
+    entityId: (data as { id: string }).id,
+    action: 'kantiere.regola.crea',
+    after: parsed.data,
+  });
   revalidatePath('/office/kantiere/ore-costi');
   return { ok: true, id: (data as { id: string }).id };
 }
@@ -147,6 +158,14 @@ export async function aggiornaRegola(input: unknown): Promise<OkResult> {
 
   if (Object.keys(patch).length === 0) return { ok: true };
 
+  // Com'era prima: senza, «maggiorazione portata al 30%» non dice da quanto.
+  const { data: primaRaw } = await supabase
+    .from('kantiere_regole_ore' as never)
+    .select('nome, attiva, maggiorazione_pct, priorita')
+    .eq('id', parsed.data.id)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('kantiere_regole_ore' as never)
     .update(patch as never)
@@ -154,6 +173,16 @@ export async function aggiornaRegola(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'kantiere_regola_ore',
+    entityId: parsed.data.id,
+    action: 'kantiere.regola.modifica',
+    before: primaRaw ?? null,
+    after: patch,
+  });
   revalidatePath('/office/kantiere/ore-costi');
   return { ok: true };
 }
@@ -176,6 +205,14 @@ export async function eliminaRegola(input: unknown): Promise<OkResult> {
     .eq('tenant_id', ctx.tenantId);
 
   if (error) return { ok: false, error: error.message };
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'kantiere_regola_ore',
+    entityId: parsed.data.id,
+    action: 'kantiere.regola.elimina',
+  });
   revalidatePath('/office/kantiere/ore-costi');
   return { ok: true };
 }

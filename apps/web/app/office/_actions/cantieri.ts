@@ -363,6 +363,17 @@ export async function generaQrCantiere(input: unknown): Promise<QrResult> {
 
   if (error) return { ok: false, error: error.message };
 
+  // Il QR e' la chiave con cui si timbra su questo cantiere: chi l'ha creata
+  // deve restare scritto.
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'cantiere_qr',
+    entityId: parsed.data.cantiereId,
+    action: 'cantiere.qr.genera',
+  });
+
   revalidatePath(`/office/kantiere/cantieri/${parsed.data.cantiereId}`);
   return { ok: true, token };
 }
@@ -436,6 +447,19 @@ export async function impostaSquadraCantiere(input: unknown): Promise<OkResult> 
     if (insError) return { ok: false, error: `Inserimento squadra fallito: ${insError.message}` };
   }
 
+  // ⚠️ Qui la squadra viene RIFATTA da zero (cancella e reinserisci): chi e'
+  // stato tolto sparisce senza lasciare niente, e la squadra decide chi puo'
+  // timbrare su questo cantiere.
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'cantiere',
+    entityId: parsed.data.cantiereId,
+    action: 'cantiere.squadra.imposta',
+    after: { capoId, membri: membriIds.length },
+  });
+
   revalidatePath(`/office/kantiere/cantieri/${parsed.data.cantiereId}`);
   return { ok: true };
 }
@@ -471,6 +495,19 @@ export async function rigeneraQrCantiere(input: unknown): Promise<QrResult> {
     .eq('tenant_id', ctx.tenantId)
     .eq('cantiere_id', parsed.data.cantiereId)
     .eq('attivo', true);
+
+  // ⚠️ Qui si REVOCA la chiave con cui si timbrava: da questo momento i
+  // cartelli gia' appesi in cantiere non funzionano piu'. Senza evento non si
+  // saprebbe ne' chi l'ha fatto ne' quando hanno smesso di funzionare.
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'cantiere_qr',
+    entityId: parsed.data.cantiereId,
+    action: 'cantiere.qr.rigenera',
+    metadata: { nota: 'il QR precedente e\' stato revocato' },
+  });
 
   const token = nuovoToken();
   const { error } = await supabase.from('cantiere_qr' as never).insert({
