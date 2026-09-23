@@ -135,12 +135,21 @@ export function SceltaPausaPranzo({
             disabled={disabled}
             aria-pressed={attivo}
             onClick={() => scegliRapida(m)}
+            // «NO» invece di «Nessuna»: la riga deve stare stretta, e il posto
+            // guadagnato qui va alle altre scelte. Il significato per esteso
+            // resta nel title e nell'etichetta accessibile.
+            title={etichettaPausa(m)}
+            aria-label={m === 0 ? 'Nessuna pausa' : etichettaPausa(m)}
+            // `flex-1` serve sul telefono, dove lo spazio e' poco e le scelte
+            // devono riempire la riga. Il tetto serve nei dialog larghi
+            // dell'ufficio, dove senza si gonfiavano a fisarmonica accanto al
+            // campo stretto. Sul telefono la soglia non si tocca mai.
             className={[
-              'min-w-0 flex-1 rounded-lg border px-1 py-1.5 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50',
+              'min-w-0 max-w-[7.5rem] flex-1 rounded-lg border px-1 py-1.5 text-[13px] font-semibold tabular-nums transition-colors disabled:opacity-50',
               attivo ? s.scelto : s.libero,
             ].join(' ')}
           >
-            {etichettaPausa(m)}
+            {m === 0 ? 'NO' : etichettaPausa(m)}
           </button>
         );
       })}
@@ -174,10 +183,22 @@ export function SceltaPausaPranzo({
           // spenta, e nessuno capiva di poterci scrivere. Il tratteggio in
           // questa interfaccia significa gia' «qui puoi agire» (vedi «+
           // Aggiungi cantiere»). Quando tiene il valore scelto torna pieno.
-          className={`w-[4.25rem] rounded-lg border px-1.5 py-1.5 text-center text-[13px] tabular-nums placeholder:italic focus:outline-none focus:ring-2 disabled:opacity-50 ${
+          className={`w-[4.25rem] rounded-lg border py-1.5 pl-1.5 pr-5 text-center text-[13px] tabular-nums placeholder:italic focus:outline-none focus:ring-2 disabled:opacity-50 ${
             !suUnaScelta ? s.scelto : `border-dashed ${s.campo}`
           }`}
         />
+
+        {/* L'unita' di misura, appena si comincia a scrivere: cosi' e' chiara
+            gia' PRIMA di confermare. A campo vuoto non serve, e il posto lo
+            prende il segnaposto «altra». */}
+        {bozza.trim() !== '' ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-medium opacity-60"
+          >
+            min
+          </span>
+        ) : null}
 
         {/* Popup dell'arrotondamento: assoluto, quindi non sposta niente. */}
         {avviso !== null ? (
