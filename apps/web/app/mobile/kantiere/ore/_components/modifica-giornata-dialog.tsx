@@ -12,8 +12,10 @@ import {
 } from '@kommessa/ui';
 import {
   caricaMiaGiornata,
+  correggiMioViaggio,
   modificaMiaGiornata,
   type RigaGiornataModifica,
+  type TrattaGiornataModifica,
 } from '@/app/_actions/kantiere-rapportino';
 
 // ── props ────────────────────────────────────────────────────────────────────
@@ -207,6 +209,16 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
   const [pausaMinuti, setPausaMinuti] = useState<number | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
 
+  // I viaggi: km e minuti stanno sulla tratta, non nelle righe della giornata,
+  // quindi ognuna si salva per conto suo.
+  const [tratte, setTratte] = useState<TrattaGiornataModifica[]>([]);
+  const [valoriTratta, setValoriTratta] = useState<
+    Record<string, { km: number; minuti: number; motivo: string }>
+  >({});
+  const [erroreTratta, setErroreTratta] = useState<Record<string, string>>({});
+  const [avvisoTratta, setAvvisoTratta] = useState<string | null>(null);
+  const [salvataTrattaId, setSalvataTrattaId] = useState<string | null>(null);
+
   const carica = useCallback(async () => {
     setLoading(true);
     setErrore(null);
@@ -215,6 +227,15 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
     const res = await caricaMiaGiornata({ data });
     if (res.ok) {
       setRighe(res.righe.map(rigaFromPayload));
+      setTratte(res.tratte);
+      setValoriTratta(
+        Object.fromEntries(
+          res.tratte.map((t) => [t.id, { km: t.km, minuti: t.minuti, motivo: '' }]),
+        ),
+      );
+      setErroreTratta({});
+      setAvvisoTratta(null);
+      setSalvataTrattaId(null);
       setPausaPresente(res.pausaPresente);
       setGiornataChiusa(res.giornataChiusa);
       setModificabile(res.modificabile);
@@ -224,6 +245,7 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
     } else {
       setErrore(messaggioErrore(res.error));
       setRighe([]);
+      setTratte([]);
     }
     setLoading(false);
   }, [data]);
@@ -330,6 +352,148 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
                   ))}
                 </div>
               )}
+
+              {/* I viaggi della giornata: km e tempo di ogni tratta */}
+              {tratte.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="px-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    I viaggi
+                  </p>
+                  {tratte.map((t) => {
+                    const v = valoriTratta[t.id] ?? { km: t.km, minuti: t.minuti, motivo: '' };
+                    const cambiato = v.km !== t.km || v.minuti !== t.minuti;
+                    return (
+                      <div
+                        key={t.id}
+                        className="min-w-0 rounded-xl border border-sky-200 bg-sky-50/60 p-2.5"
+                      >
+                        <p className="text-[13px] font-semibold capitalize text-sky-900">
+                          {t.direzione}
+                          {t.autista ? '' : ' · passeggero'}
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <label className="block space-y-1">
+                            <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-sky-800">
+                              Km
+                            </span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              max={5000}
+                              value={v.km}
+                              disabled={isPending || !modificabile || !t.autista}
+                              onChange={(e) =>
+                                setValoriTratta((p) => ({
+                                  ...p,
+                                  [t.id]: { ...v, km: parseFloat(e.target.value) || 0 },
+                                }))
+                              }
+                              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-base tabular-nums disabled:opacity-50"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-sky-800">
+                              Minuti
+                            </span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              max={1440}
+                              value={v.minuti}
+                              disabled={isPending || !modificabile}
+                              onChange={(e) =>
+                                setValoriTratta((p) => ({
+                                  ...p,
+                                  [t.id]: { ...v, minuti: parseInt(e.target.value, 10) || 0 },
+                                }))
+                              }
+                              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-base tabular-nums disabled:opacity-50"
+                            />
+                          </label>
+                        </div>
+                        {cambiato ? (
+                          <div className="mt-2 space-y-2">
+                            <input
+                              type="text"
+                              maxLength={500}
+                              value={v.motivo}
+                              placeholder="Motivo della correzione, minimo 3 caratteri"
+                              disabled={isPending}
+                              onChange={(e) =>
+                                setValoriTratta((p) => ({
+                                  ...p,
+                                  [t.id]: { ...v, motivo: e.target.value },
+                                }))
+                              }
+                              className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-base"
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isPending}
+                              className="w-full"
+                              onClick={() => {
+                                if (v.motivo.trim().length < 3) {
+                                  setErroreTratta((p) => ({
+                                    ...p,
+                                    [t.id]: 'Indica il motivo della correzione.',
+                                  }));
+                                  return;
+                                }
+                                setErroreTratta((p) => {
+                                  const n = { ...p };
+                                  delete n[t.id];
+                                  return n;
+                                });
+                                setAvvisoTratta(null);
+                                startTransition(async () => {
+                                  const res = await correggiMioViaggio({
+                                    trattaId: t.id,
+                                    km: v.km !== t.km ? v.km : undefined,
+                                    minuti: v.minuti !== t.minuti ? v.minuti : undefined,
+                                    motivo: v.motivo.trim(),
+                                  });
+                                  if (!res.ok) {
+                                    setErroreTratta((p) => ({
+                                      ...p,
+                                      [t.id]: messaggioErrore(res.error),
+                                    }));
+                                    return;
+                                  }
+                                  if (res.avviso) setAvvisoTratta(res.avviso);
+                                  setSalvataTrattaId(t.id);
+                                  await carica();
+                                  router.refresh();
+                                });
+                              }}
+                            >
+                              {isPending ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : null}
+                              Salva il viaggio
+                            </Button>
+                          </div>
+                        ) : null}
+                        {salvataTrattaId === t.id ? (
+                          <p className="mt-1.5 text-xs font-medium text-emerald-700">Salvato</p>
+                        ) : null}
+                        {erroreTratta[t.id] ? (
+                          <p className="mt-1.5 text-xs font-medium text-destructive">
+                            {erroreTratta[t.id]}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {avvisoTratta ? (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-800">
+                      {avvisoTratta}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* Pausa pranzo — zona gialla dedicata */}
               <div className="space-y-2.5 rounded-xl border border-amber-300 bg-amber-50 p-3">

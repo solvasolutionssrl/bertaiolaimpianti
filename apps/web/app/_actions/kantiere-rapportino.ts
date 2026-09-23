@@ -6,7 +6,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
-import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { differenzeGiornata, type SnapshotGiornata } from '@kommessa/api/kantiere-cronologia';
 import { scriviVersioneRapportino, leggiStatoGiornata } from './_lib/scrivi-versione-rapportino';
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
@@ -397,6 +397,21 @@ export type RigaGiornataModifica = {
   ore_viaggio: number;
 };
 
+/**
+ * Una tratta di viaggio della propria giornata, correggibile dall'app.
+ * Km e minuti stanno su `timbratura_viaggio`, non nelle righe della giornata:
+ * si indirizzano per `id`, perche' due trasferimenti A→B nello stesso giorno
+ * sono distinguibili solo cosi'.
+ */
+export type TrattaGiornataModifica = {
+  id: string;
+  direzione: 'andata' | 'ritorno';
+  km: number;
+  minuti: number;
+  /** I km si contano al solo autista: a un passeggero non si chiedono. */
+  autista: boolean;
+};
+
 export async function caricaMiaGiornata(
   input: unknown,
 ): Promise<
@@ -410,6 +425,7 @@ export async function caricaMiaGiornata(
       pausaMinutiEsistente: number | null;
       giornataChiusa: boolean;
       righe: RigaGiornataModifica[];
+      tratte: TrattaGiornataModifica[];
     }
   | ResultErr
 > {
@@ -462,6 +478,34 @@ export async function caricaMiaGiornata(
   const giornataChiusa =
     lavori.some((t) => t.tipo === 'ingresso') && lavori.some((t) => t.tipo === 'uscita');
 
+  // Le tratte di viaggio della giornata: km e minuti non stanno nelle righe,
+  // stanno qui. `data` è valorizzata anche sulle righe legate a una timbratura
+  // (`rigaViaggio`), quindi basta una query sola.
+  const { data: tratteRaw } = await supabase
+    .from('timbratura_viaggio' as never)
+    .select('id, direzione, distanza_km, durata_confermata_min, autista')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .eq('data', data)
+    .order('id');
+  const tratte: TrattaGiornataModifica[] = (
+    (tratteRaw as
+      | {
+          id: string;
+          direzione: string | null;
+          distanza_km: number | null;
+          durata_confermata_min: number | null;
+          autista: boolean | null;
+        }[]
+      | null) ?? []
+  ).map((t) => ({
+    id: t.id,
+    direzione: t.direzione === 'ritorno' ? 'ritorno' : 'andata',
+    km: Math.round(Number(t.distanza_km) || 0),
+    minuti: Number(t.durata_confermata_min) || 0,
+    autista: !!t.autista,
+  }));
+
   // Durata della pausa già registrata (coppia uscita→ingresso con pausa=true),
   // così il dialog può precompilarla e permetterne la modifica.
   let pausaMinutiEsistente: number | null = null;
@@ -482,7 +526,156 @@ export async function caricaMiaGiornata(
     pausaMinutiEsistente,
     giornataChiusa,
     righe,
+    tratte,
   };
+}
+
+// ── 6-bis) correggiMioViaggio (tecnico: km e tempo di una propria tratta) ────
+// Le stesse guardie della modifica ore: proprieta' dalla sessione (mai dal
+// client), finestra di 3 giorni, e stop se l'ufficio ha gia' deciso a mano.
+//
+// ⚠️ Corregge la SORGENTE (`timbratura_viaggio`), non la riga derivata: i km
+// li' non esistono come colonna, e il tempo corretto sulla riga congelerebbe
+// tutta la giornata rispetto alle timbrature. Il ricalcolo si rilancia solo
+// se cambia il tempo, perche' i km non li legge mai.
+
+const CorreggiMioViaggioSchema = z
+  .object({
+    trattaId: z.string().uuid(),
+    km: z.number().min(0).max(5000).optional(),
+    minuti: z
+      .number()
+      .int()
+      .min(0)
+      .max(24 * 60)
+      .optional(),
+    motivo: z.string().trim().min(3).max(500),
+  })
+  .refine((d) => d.km !== undefined || d.minuti !== undefined, {
+    message: 'Indica almeno un valore da correggere',
+  });
+
+export async function correggiMioViaggio(
+  input: unknown,
+): Promise<{ ok: true; avviso?: string } | ResultErr> {
+  const parsed = CorreggiMioViaggioSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const { trattaId, km, minuti, motivo } = parsed.data;
+
+  // La tratta deve essere SUA: il dipendente viene dalla sessione, non dal
+  // client, ed e' parte del filtro invece che un controllo fatto dopo.
+  const { data: trattaRaw } = await supabase
+    .from('timbratura_viaggio' as never)
+    .select('id, data, timbratura_id, distanza_km, durata_confermata_min')
+    .eq('id', trattaId)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .maybeSingle();
+  const tratta = trattaRaw as {
+    id: string;
+    data: string | null;
+    timbratura_id: string | null;
+    distanza_km: number | null;
+    durata_confermata_min: number | null;
+  } | null;
+  if (!tratta) return { ok: false, error: 'TRATTA_NON_TROVATA' };
+
+  let giorno = tratta.data;
+  if (!giorno && tratta.timbratura_id) {
+    const { data: tRaw } = await supabase
+      .from('timbrature' as never)
+      .select('ts')
+      .eq('id', tratta.timbratura_id)
+      .maybeSingle();
+    const ts = (tRaw as { ts: string } | null)?.ts;
+    if (ts) giorno = romeDay(new Date(ts));
+  }
+  if (!giorno) return { ok: false, error: 'GIORNO_NON_RISOLTO' };
+
+  if (!calcolaGiorniModificabili().includes(giorno)) {
+    return { ok: false, error: 'FUORI_FINESTRA' };
+  }
+
+  const { data: rappPre } = await supabase
+    .from('rapportini' as never)
+    .select('id, approvato_da')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .eq('data', giorno)
+    .maybeSingle();
+  const pre = rappPre as { id: string; approvato_da: string | null } | null;
+  if (pre?.approvato_da) return { ok: false, error: 'NON_MODIFICABILE' };
+
+  const kmCambia =
+    km !== undefined && Math.round(km * 100) !== Math.round((Number(tratta.distanza_km) || 0) * 100);
+  const minutiCambia =
+    minuti !== undefined && minuti !== (Number(tratta.durata_confermata_min) || 0);
+  if (!kmCambia && !minutiCambia) return { ok: true };
+
+  // Com'era la giornata prima: il rapportino l'abbiamo gia' in mano (`pre`),
+  // quindi non serve ricercarlo per data.
+  const prima = await leggiStatoGiornata(supabase, pre?.id);
+
+  const patch: Record<string, unknown> = {};
+  if (kmCambia) patch.distanza_km = km;
+  if (minutiCambia) {
+    patch.durata_confermata_min = minuti;
+    patch.giustificazione = motivo;
+  }
+  const { error: eUpd } = await supabase
+    .from('timbratura_viaggio' as never)
+    .update(patch as never)
+    .eq('id', trattaId)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id);
+  if (eUpd) return { ok: false, error: eUpd.message };
+
+  let avviso: string | undefined;
+  if (kmCambia) {
+    // La stima del provider si archivia solo alla PRIMA correzione.
+    const { error: eKm } = await supabase
+      .from('timbratura_viaggio' as never)
+      .update({ distanza_stimata_km: tratta.distanza_km, km_giustificazione: motivo } as never)
+      .eq('id', trattaId)
+      .eq('tenant_id', ctx.tenantId)
+      .is('distanza_stimata_km', null);
+    if (eKm) {
+      avviso =
+        'Correzione salvata, ma il valore di partenza e il motivo non sono stati archiviati: manca un aggiornamento del sistema.';
+    }
+  }
+
+  if (minutiCambia) {
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, giorno, { versione: false });
+  }
+
+  if (pre?.id) {
+    const scritta = await scriviVersioneRapportino({
+      supabase,
+      rapportinoId: pre.id,
+      tenantId: ctx.tenantId,
+      azione: 'modifica_viaggio',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: null,
+      prima,
+    });
+    if (!scritta) {
+      avviso =
+        avviso ??
+        'Correzione salvata, ma non risulta nello storico: manca un aggiornamento del sistema.';
+    }
+  }
+
+  return avviso ? { ok: true, avviso } : { ok: true };
 }
 
 // ── 7) modificaMiaGiornata (tecnico: modifica ultimi 3 giorni) ───────────────
