@@ -105,30 +105,51 @@ export interface OfficeShellProps {
  * giorni. Dopo una pausa lunga e' piu' utile ripartire dai valori di partenza
  * che ritrovare una barra sistemata mesi prima e non ricordarsi perche'.
  */
-const MEMORIA_SEZIONI = 'kommessa:nav-sezioni';
+/**
+ * ⚠️ La chiave e' `v2` perche' la prima versione salvava solo l'elenco delle
+ * sezioni aperte e al ripristino lo usava AL POSTO dei valori di partenza. Chi
+ * aveva toccato la barra mentre nasceva tutta chiusa si e' congelato quello
+ * stato per trenta giorni, e una sezione marcata «aperta di default» restava
+ * invisibile. Peggio: qualunque sezione NUOVA sarebbe rimasta nascosta a
+ * chiunque avesse una preferenza salvata, perche' nel suo elenco non poteva
+ * esserci. Cambiare chiave scarta lo stato vecchio invece di aspettarne la
+ * scadenza.
+ */
+const MEMORIA_SEZIONI = 'kommessa:nav-sezioni:v2';
 const MEMORIA_DURATA_MS = 30 * 24 * 60 * 60 * 1000;
 
-function leggiSezioniSalvate(): string[] | null {
+/** Quello che la persona ha aperto, e quello che ha toccato almeno una volta. */
+interface SezioniSalvate {
+  aperte: string[];
+  toccate: string[];
+}
+
+function leggiSezioniSalvate(): SezioniSalvate | null {
   try {
     const grezzo = window.localStorage.getItem(MEMORIA_SEZIONI);
     if (!grezzo) return null;
-    const salvato = JSON.parse(grezzo) as { scadenza?: number; aperte?: string[] };
+    const salvato = JSON.parse(grezzo) as { scadenza?: number } & Partial<SezioniSalvate>;
     if (!salvato?.scadenza || salvato.scadenza < Date.now()) {
       window.localStorage.removeItem(MEMORIA_SEZIONI);
       return null;
     }
-    return Array.isArray(salvato.aperte) ? salvato.aperte : null;
+    if (!Array.isArray(salvato.aperte) || !Array.isArray(salvato.toccate)) return null;
+    return { aperte: salvato.aperte, toccate: salvato.toccate };
   } catch {
     // Navigazione privata o spazio esaurito: si resta ai valori di partenza.
     return null;
   }
 }
 
-function salvaSezioni(aperte: Set<string>): void {
+function salvaSezioni(aperte: Set<string>, toccate: Set<string>): void {
   try {
     window.localStorage.setItem(
       MEMORIA_SEZIONI,
-      JSON.stringify({ scadenza: Date.now() + MEMORIA_DURATA_MS, aperte: [...aperte] }),
+      JSON.stringify({
+        scadenza: Date.now() + MEMORIA_DURATA_MS,
+        aperte: [...aperte],
+        toccate: [...toccate],
+      }),
     );
   } catch {
     // Se non si puo' salvare, la sidebar funziona lo stesso.
@@ -174,11 +195,27 @@ function OfficeShell({
   // il browser durante il render darebbe al server e al browser due alberi
   // diversi, e l'idratazione salterebbe.
   const sezioniRipristinate = React.useRef(false);
+  /** Le sezioni su cui la persona si e' espressa: solo per quelle vince lei. */
+  const sezioniToccate = React.useRef<Set<string>>(new Set());
   React.useEffect(() => {
     if (sezioniRipristinate.current) return;
     sezioniRipristinate.current = true;
     const salvate = leggiSezioniSalvate();
-    if (salvate) setExpanded(new Set(salvate));
+    if (!salvate) return;
+    sezioniToccate.current = new Set(salvate.toccate);
+    // Si parte SEMPRE dai valori di partenza e si applica sopra solo quello che
+    // la persona ha davvero toccato. Sostituirli in blocco, come si faceva
+    // prima, nascondeva le sezioni aperte di default e tutte quelle nuove.
+    setExpanded(() => {
+      const base = new Set(navItems.filter((i) => i.defaultOpen).map((i) => i.id));
+      for (const id of salvate.toccate) {
+        if (salvate.aperte.includes(id)) base.add(id);
+        else base.delete(id);
+      }
+      return base;
+    });
+    // I valori di partenza non cambiano dopo il primo render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   React.useEffect(() => {
@@ -202,7 +239,9 @@ function OfficeShell({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      salvaSezioni(next);
+      // Da qui in poi su questa sezione comanda la persona, non il default.
+      sezioniToccate.current.add(id);
+      salvaSezioni(next, sezioniToccate.current);
       return next;
     });
   };
