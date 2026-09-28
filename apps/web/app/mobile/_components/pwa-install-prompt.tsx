@@ -55,6 +55,17 @@ export function PwaInstallPrompt({
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // ⚠️ Su computer NON si propone di installare. La PWA ha la shell del
+    // telefono: installata su un PC diventa una finestra con l'interfaccia da
+    // smartphone, e chi lavora in ufficio si ritrova la vista del tecnico al
+    // posto della sua. E' successo davvero, a un utente che la pianificazione
+    // la gestiva da mesi.
+    //
+    // Il segnale e' il puntatore PRIMARIO: `coarse` = dito (telefono, tablet),
+    // `fine` = mouse o trackpad. Non si guarda la larghezza, che su un telefono
+    // in orizzontale ingannerebbe, ne' la stringa del browser, che mente.
+    if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+
     // Già installata → exit immediato
     if (
       window.matchMedia?.('(display-mode: standalone)').matches ||

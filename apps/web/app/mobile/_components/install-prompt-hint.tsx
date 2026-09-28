@@ -62,7 +62,11 @@ export function InstallPromptHint() {
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall);
   }, []);
 
-  if (platform === 'standalone' || dismissed) return null;
+  // ⚠️ Su computer non si propone di installare: la PWA ha la shell del
+  // telefono, e installata su un PC diventa una finestra con l'interfaccia da
+  // smartphone. Chi lavora in ufficio ci si e' ritrovato davvero, con la vista
+  // del tecnico al posto della sua.
+  if (platform === 'standalone' || platform === 'desktop' || dismissed) return null;
 
   const triggerNativePrompt = async () => {
     if (!deferredPrompt) return;
