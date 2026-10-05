@@ -21,10 +21,15 @@ const baseSchema = z.object({
 
 /**
  * Cerca clienti dell'anagrafica per nome (match parziale, case-insensitive).
- * Usata dal flusso di dettato vocale per evitare duplicati: quando l'AI
- * rileva un nome cliente, proponiamo i clienti esistenti che combaciano
- * così l'utente può associare la commessa a quello giusto invece di
- * crearne uno nuovo ogni volta. RLS scopa già sul tenant corrente.
+ *
+ * **Punto unico di ricerca cliente.** Prima erano tre: questa azione (usata dal
+ * dettato vocale per non creare doppioni), una query Supabase fatta
+ * direttamente dal browser nel form di creazione commessa, e nulla per chi
+ * risponde al telefono. Ora la usano il componente condiviso `ClientePicker` e
+ * l'avviso di deduplica del dettato. RLS scopa già sul tenant corrente.
+ *
+ * Due caratteri bastano: con tre, cercare «Bo» per «Bortolussi» non dava
+ * niente e sembrava che il cliente non ci fosse.
  */
 export interface ClienteSimile {
   id: string;
@@ -37,17 +42,20 @@ export interface ClienteSimile {
 
 export async function cercaClientiPerNome(input: {
   nome: string;
+  /** Quanti risultati al massimo. Default 8. */
+  limite?: number;
 }): Promise<ClienteSimile[]> {
   await requireTenantContext();
   const term = (input.nome ?? '').trim();
-  if (term.length < 3) return [];
+  if (term.length < 2) return [];
+  const limite = Math.min(Math.max(1, Math.trunc(input.limite ?? 8)), 20);
   const supabase = createServerSupabase();
   const { data } = await supabase
     .from('clienti')
     .select('id, ragione_sociale, tipo, citta, telefoni, email')
     .ilike('ragione_sociale', `%${term}%`)
     .order('ragione_sociale')
-    .limit(5);
+    .limit(limite);
   return (data ?? []) as ClienteSimile[];
 }
 

@@ -6,6 +6,7 @@ import {
   CircleDot,
   Clock,
   Flame,
+  Phone,
   Plus,
   User,
 } from 'lucide-react';
@@ -15,7 +16,7 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { Badge, Card, CardContent, cn } from '@kommessa/ui';
 
 import { EmptyState } from '../../_components/empty-state';
-import { elencaTecniciTenant } from '../../_actions/commessa-tecnici';
+import { elencaAssegnabiliTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard } from './_components/todo-globale-board';
 
 export const metadata = { title: 'Task' };
@@ -25,6 +26,8 @@ type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
 
 interface SearchParams {
+  /** 'richieste' = solo quelle senza commessa; 'commessa' = solo quelle con. */
+  tipo?: string;
   stato?: string;
   priorita?: string;
   assegnato?: string;
@@ -63,6 +66,10 @@ export default async function TodoGlobalePage({
   const assegnatoFiltro = searchParams.assegnato ?? null;
   const commessaFiltro = searchParams.commessa ?? null;
   const qFiltro = (searchParams.q ?? '').trim();
+  const tipoFiltro =
+    searchParams.tipo === 'richieste' || searchParams.tipo === 'commessa'
+      ? searchParams.tipo
+      : null;
 
   // ─── query principale ──────────────────────────────────────────────
   let q = supabase
@@ -70,6 +77,8 @@ export default async function TodoGlobalePage({
     .select(
       `id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at,
        sort_order, metadata, created_at, completato_at, commessa_id,
+       cliente_id, cliente_testo, contatto,
+       richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale ),
        commessa:commesse!commessa_todo_commessa_id_fkey (
          id, codice_interno, nome_cartella,
          cliente:clienti ( ragione_sociale )
@@ -85,6 +94,9 @@ export default async function TodoGlobalePage({
     q = q.eq('assegnato_a', assegnatoFiltro);
   }
   if (commessaFiltro) q = q.eq('commessa_id', commessaFiltro);
+  // `.is()` e non `.eq(..., null)`: quest'ultimo non trova i NULL.
+  if (tipoFiltro === 'richieste') q = q.is('commessa_id', null);
+  else if (tipoFiltro === 'commessa') q = q.not('commessa_id', 'is', null);
   if (qFiltro) {
     q = q.or(
       `titolo.ilike.%${qFiltro}%,descrizione.ilike.%${qFiltro}%`,
@@ -94,14 +106,17 @@ export default async function TodoGlobalePage({
   const { data: todosRaw } = await q.limit(300);
 
   // ─── liste per filtri (commesse attive + tecnici) ──────────────────
-  const [commesseRes, tecnici] = await Promise.all([
+  const [commesseRes, assegnabili] = await Promise.all([
     supabase
       .from('commesse')
       .select('id, codice_interno, nome_cartella')
       .in('stato', ['bozza', 'aperta', 'in_corso', 'collaudo'])
       .order('codice_interno', { ascending: false })
       .limit(200),
-    elencaTecniciTenant(),
+    // Un task o una richiesta si dà a CHIUNQUE della squadra, non solo ai
+    // tecnici: «chiama il fornitore» è roba d'ufficio, «passa a vedere la
+    // caldaia» è roba da capo.
+    elencaAssegnabiliTenant(),
   ]);
 
   // ─── trasforma + ordina ────────────────────────────────────────────
@@ -116,9 +131,14 @@ export default async function TodoGlobalePage({
     scadenza_at: string | null;
     sort_order: number;
     metadata: Record<string, unknown> | null;
-    commessa_id: string;
+    /** null = richiesta: arrivata al telefono, non ancora un lavoro. */
+    commessa_id: string | null;
     codice_interno: string | null;
     cliente_nome: string | null;
+    /** Solo sulle richieste: come richiamare. */
+    contatto: string | null;
+    cliente_id: string | null;
+    eRichiesta: boolean;
     isScaduto: boolean;
     fonteRiunione: boolean;
   };
@@ -132,7 +152,9 @@ export default async function TodoGlobalePage({
         : comm.cliente
       : null;
     const ass = Array.isArray(t.assegnato) ? t.assegnato[0] : t.assegnato;
+    const richiedente = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
     const fonte = (t.metadata as { fonte?: string } | null)?.fonte ?? '';
+    const eRichiesta = (t.commessa_id ?? null) === null;
     return {
       id: t.id as string,
       titolo: t.titolo as string,
@@ -144,9 +166,18 @@ export default async function TodoGlobalePage({
       scadenza_at: (t.scadenza_at as string | null) ?? null,
       sort_order: t.sort_order as number,
       metadata: (t.metadata as Record<string, unknown> | null) ?? null,
-      commessa_id: t.commessa_id as string,
+      commessa_id: (t.commessa_id as string | null) ?? null,
       codice_interno: (comm?.codice_interno as string | undefined) ?? null,
-      cliente_nome: (cli?.ragione_sociale as string | undefined) ?? null,
+      // Sulle richieste il cliente è quello della telefonata: in anagrafica se
+      // c'era, altrimenti il nome così come è stato detto.
+      cliente_nome: eRichiesta
+        ? ((richiedente?.ragione_sociale as string | undefined) ??
+          (t.cliente_testo as string | null) ??
+          null)
+        : ((cli?.ragione_sociale as string | undefined) ?? null),
+      contatto: (t.contatto as string | null) ?? null,
+      cliente_id: (t.cliente_id as string | null) ?? null,
+      eRichiesta,
       isScaduto: t.scadenza_at
         ? new Date(t.scadenza_at as string).getTime() < now
         : false,
@@ -161,6 +192,9 @@ export default async function TodoGlobalePage({
     bassa: 3,
   };
   todos.sort((a, b) => {
+    // Le richieste prima: sono le uniche che aspettano una decisione (va in
+    // sopralluogo? si butta?), il resto è lavoro già incanalato.
+    if (a.eRichiesta !== b.eRichiesta) return a.eRichiesta ? -1 : 1;
     if (a.isScaduto !== b.isScaduto) return a.isScaduto ? -1 : 1;
     const pa = priOrder[a.priorita];
     const pb = priOrder[b.priorita];
@@ -170,6 +204,7 @@ export default async function TodoGlobalePage({
 
   // ─── KPI sintetici ─────────────────────────────────────────────────
   const kpi = {
+    richieste: todos.filter((t) => t.eRichiesta).length,
     aperti: todos.filter((t) => t.stato === 'aperto').length,
     inCorso: todos.filter((t) => t.stato === 'in_corso').length,
     urgenti: todos.filter((t) => t.priorita === 'urgente').length,
@@ -190,9 +225,12 @@ export default async function TodoGlobalePage({
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Lavori
           </p>
-          <h1 className="mt-0.5 text-xl font-bold tracking-tight">Task</h1>
+          <h1 className="mt-0.5 text-xl font-bold tracking-tight">Task e richieste</h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          {kpi.richieste > 0 ? (
+            <KpiChip icon={<Phone />} label="Richieste" value={kpi.richieste} tone="amber" />
+          ) : null}
           <KpiChip icon={<CircleDot />} label="Aperti" value={kpi.aperti} />
           <KpiChip icon={<Clock />} label="In corso" value={kpi.inCorso} tone="blue" />
           <KpiChip icon={<Flame />} label="Urgenti" value={kpi.urgenti} tone="red" />
@@ -205,9 +243,10 @@ export default async function TodoGlobalePage({
         todos={todos}
         currentUserId={ctx.userId}
         canWrite={ctx.role === 'admin' || ctx.role === 'office'}
-        tecnici={tecnici as Array<{ id: string; display_name: string | null }>}
+        assegnabili={assegnabili}
         commesseAttive={commesseAttive}
         filtri={{
+          tipo: tipoFiltro,
           stato: searchParams.stato ?? null,
           priorita: prioritaFiltro,
           assegnato: assegnatoFiltro,

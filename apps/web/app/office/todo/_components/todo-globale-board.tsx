@@ -13,6 +13,8 @@ import {
   Filter,
   Flame,
   Loader2,
+  Pencil,
+  Phone,
   Plus,
   Sparkles,
   User,
@@ -30,8 +32,10 @@ import {
 import {
   cambiaTodoStato,
 } from '../../../_actions/commessa-todo';
-import { useAlert } from '@/app/_components/confirm-provider';
+import { convertiRichiestaInBozza } from '../../../_actions/richieste';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { CreaTodoGlobaleDialog } from './crea-todo-globale-dialog';
+import { RichiestaDialog, type RichiestaEsistente } from './richiesta-dialog';
 
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
@@ -47,14 +51,19 @@ interface Row {
   scadenza_at: string | null;
   sort_order: number;
   metadata: Record<string, unknown> | null;
-  commessa_id: string;
+  /** null = richiesta arrivata al telefono, non ancora un lavoro. */
+  commessa_id: string | null;
   codice_interno: string | null;
   cliente_nome: string | null;
+  contatto: string | null;
+  cliente_id: string | null;
+  eRichiesta: boolean;
   isScaduto: boolean;
   fonteRiunione: boolean;
 }
 
 interface Filtri {
+  tipo: 'richieste' | 'commessa' | null;
   stato: string | null;
   priorita: Priorita | null;
   assegnato: string | null;
@@ -66,7 +75,13 @@ interface Props {
   todos: Row[];
   currentUserId: string;
   canWrite: boolean;
-  tecnici: Array<{ id: string; display_name: string | null }>;
+  /**
+   * Tutta la squadra. Un task o una richiesta si dà a CHIUNQUE: «ordina la
+   * pompa» è roba d'ufficio, «passa a vedere la caldaia» è roba da capo. Prima
+   * qui arrivavano solo i `role='tecnico'`, e nel filtro un task assegnato a un
+   * collega d'ufficio non si poteva nemmeno cercare.
+   */
+  assegnabili: Array<{ id: string; display_name: string | null; role: string }>;
   commesseAttive: Array<{ id: string; codice_interno: string; nome_cartella: string }>;
   filtri: Filtri;
 }
@@ -101,7 +116,7 @@ export function TodoGlobaleBoard({
   todos,
   currentUserId,
   canWrite,
-  tecnici,
+  assegnabili,
   commesseAttive,
   filtri,
 }: Props) {
@@ -110,6 +125,10 @@ export function TodoGlobaleBoard({
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
   const [creaOpen, setCreaOpen] = React.useState(false);
+  const [richiestaOpen, setRichiestaOpen] = React.useState(false);
+  const [richiestaInModifica, setRichiestaInModifica] =
+    React.useState<RichiestaEsistente | null>(null);
+  const chiediConferma = useConfirm();
 
   // Search input client-side (commit con debounce sul URL)
   const [qDraft, setQDraft] = React.useState(filtri.q);
@@ -140,7 +159,27 @@ export function TodoGlobaleBoard({
       router.refresh();
     });
 
+  const creaCommessaDaRichiesta = (row: Row) =>
+    start(async () => {
+      const ok = await chiediConferma({
+        title: 'Creare la commessa?',
+        description:
+          `«${row.titolo}»\n\nSi apre il form di creazione già compilato con quello che sai. ` +
+          'Il codice interno e le cartelle su Nextcloud si creano solo quando confermi lì: ' +
+          'da qui non si fa ancora niente di definitivo.',
+        confirmLabel: 'Continua',
+      });
+      if (!ok) return;
+      const res = await convertiRichiestaInBozza({ todoId: row.id });
+      if (!res.ok) {
+        await showAlert({ title: 'Non riesco a continuare', body: res.error });
+        return;
+      }
+      router.push(`/office/commesse/nuova?bozza=${res.data.bozzaId}`);
+    });
+
   const activeFiltri =
+    (filtri.tipo ? 1 : 0) +
     (filtri.stato ? 1 : 0) +
     (filtri.priorita ? 1 : 0) +
     (filtri.assegnato ? 1 : 0) +
@@ -152,11 +191,41 @@ export function TodoGlobaleBoard({
       {/* ─── SIDEBAR FILTRI (sticky desktop) ─────────────────────── */}
       <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
         {canWrite ? (
-          <Button onClick={() => setCreaOpen(true)} className="w-full">
-            <Plus className="h-3.5 w-3.5" />
-            Nuovo task
-          </Button>
+          <div className="space-y-1.5">
+            <Button size="sm" onClick={() => setRichiestaOpen(true)} className="w-full">
+              <Phone className="h-3.5 w-3.5" />
+              Richiesta al telefono
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setCreaOpen(true)}
+              className="w-full"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Task su una commessa
+            </Button>
+          </div>
         ) : null}
+
+        <FiltroGroup label="Tipo">
+          <FiltroRadio
+            label="Tutto"
+            active={!filtri.tipo}
+            onClick={() => updateFiltro('tipo', null)}
+          />
+          <FiltroRadio
+            label="Richieste da smistare"
+            icon={<Phone className="h-3 w-3" />}
+            active={filtri.tipo === 'richieste'}
+            onClick={() => updateFiltro('tipo', 'richieste')}
+          />
+          <FiltroRadio
+            label="Task di commessa"
+            active={filtri.tipo === 'commessa'}
+            onClick={() => updateFiltro('tipo', 'commessa')}
+          />
+        </FiltroGroup>
 
         <FiltroGroup label="Stato">
           <FiltroRadio
@@ -225,7 +294,7 @@ export function TodoGlobaleBoard({
             <option value="">Chiunque</option>
             <option value="nessuno">Non assegnato</option>
             <option value={currentUserId}>A me</option>
-            {tecnici
+            {assegnabili
               .filter((t) => t.id !== currentUserId)
               .map((t) => (
                 <option key={t.id} value={t.id}>
@@ -263,8 +332,22 @@ export function TodoGlobaleBoard({
         {todos.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-sm text-muted-foreground">
-              <CheckCircle2 className="h-8 w-8 opacity-40" />
-              <p className="font-medium">Nessun task con questi filtri.</p>
+              {filtri.tipo === 'richieste' ? (
+                <Phone className="h-8 w-8 opacity-40" />
+              ) : (
+                <CheckCircle2 className="h-8 w-8 opacity-40" />
+              )}
+              <p className="font-medium">
+                {filtri.tipo === 'richieste'
+                  ? 'Nessuna richiesta da smistare.'
+                  : 'Nessun task con questi filtri.'}
+              </p>
+              {filtri.tipo === 'richieste' && activeFiltri === 1 ? (
+                <p className="max-w-sm text-xs">
+                  Le richieste si registrano al telefono col pulsante qui a lato: chi
+                  chiama, cosa serve, e a chi la passi.
+                </p>
+              ) : null}
               {activeFiltri > 0 ? (
                 <button
                   type="button"
@@ -287,7 +370,22 @@ export function TodoGlobaleBoard({
                   row={t}
                   isMine={t.assegnato_a === currentUserId}
                   pending={pending}
+                  canWrite={canWrite}
                   onComplete={() => onComplete(t.id)}
+                  onCreaCommessa={() => creaCommessaDaRichiesta(t)}
+                  onModifica={() =>
+                    setRichiestaInModifica({
+                      id: t.id,
+                      titolo: t.titolo,
+                      descrizione: t.descrizione,
+                      contatto: t.contatto,
+                      priorita: t.priorita,
+                      assegnatoA: t.assegnato_a,
+                      scadenzaAt: t.scadenza_at,
+                      clienteId: t.cliente_id,
+                      clienteNome: t.cliente_nome,
+                    })
+                  }
                 />
               ))}
             </CardContent>
@@ -298,8 +396,23 @@ export function TodoGlobaleBoard({
       {creaOpen ? (
         <CreaTodoGlobaleDialog
           commesseAttive={commesseAttive}
-          tecnici={tecnici}
+          tecnici={assegnabili}
           onClose={() => setCreaOpen(false)}
+        />
+      ) : null}
+
+      {richiestaOpen ? (
+        <RichiestaDialog
+          assegnabili={assegnabili}
+          onClose={() => setRichiestaOpen(false)}
+        />
+      ) : null}
+
+      {richiestaInModifica ? (
+        <RichiestaDialog
+          assegnabili={assegnabili}
+          esistente={richiestaInModifica}
+          onClose={() => setRichiestaInModifica(null)}
         />
       ) : null}
     </div>
@@ -357,19 +470,32 @@ function TodoRow({
   row,
   isMine,
   pending,
+  canWrite,
   onComplete,
+  onCreaCommessa,
+  onModifica,
 }: {
   row: Row;
   isMine: boolean;
   pending: boolean;
+  canWrite: boolean;
   onComplete: () => void;
+  onCreaCommessa: () => void;
+  onModifica: () => void;
 }) {
   const meta = PRIORITA_META[row.priorita];
   const Icon = meta.Icon;
   const completed = row.stato === 'completato' || row.stato === 'annullato';
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30">
+    <div
+      className={cn(
+        'flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/30',
+        // Le richieste si riconoscono di lato, senza leggere: sono le righe
+        // che aspettano una decisione.
+        row.eRichiesta && !completed && 'border-l-2 border-l-amber-500/70 bg-amber-500/[0.03]',
+      )}
+    >
       {!completed ? (
         <button
           type="button"
@@ -384,10 +510,7 @@ function TodoRow({
         <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
       )}
 
-      <Link
-        href={`/office/commesse/${row.commessa_id}/lavori`}
-        className="min-w-0 flex-1"
-      >
+      <Contenitore commessaId={row.commessa_id}>
         <div className="flex flex-wrap items-center gap-2">
           <Icon className={cn('h-3.5 w-3.5 shrink-0', meta.chip.split(' ')[1])} />
           <p
@@ -409,6 +532,16 @@ function TodoRow({
               In corso
             </Badge>
           ) : null}
+          {row.eRichiesta ? (
+            <Badge
+              variant="outline"
+              className="border-amber-500/40 bg-amber-500/10 text-[10px] uppercase text-amber-700 dark:text-amber-400"
+              title="Arrivata al telefono: non è ancora un lavoro"
+            >
+              <Phone className="mr-0.5 h-2.5 w-2.5" />
+              Richiesta
+            </Badge>
+          ) : null}
           {row.fonteRiunione ? (
             <Badge
               variant="outline"
@@ -424,7 +557,15 @@ function TodoRow({
           {row.codice_interno ? (
             <span className="font-mono">{row.codice_interno}</span>
           ) : null}
-          {row.cliente_nome ? <span>· {row.cliente_nome}</span> : null}
+          {row.cliente_nome ? (
+            <span className={row.eRichiesta ? 'font-medium text-foreground' : undefined}>
+              {row.codice_interno ? '· ' : ''}
+              {row.cliente_nome}
+            </span>
+          ) : null}
+          {row.eRichiesta && row.contatto ? (
+            <span className="font-mono">{row.contatto}</span>
+          ) : null}
           {row.assegnato_nome ? (
             <span className={isMine ? 'text-primary' : ''}>
               <User className="mr-0.5 inline h-3 w-3" />
@@ -440,9 +581,50 @@ function TodoRow({
             </span>
           ) : null}
         </div>
-      </Link>
-      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      </Contenitore>
+
+      {row.eRichiesta ? (
+        canWrite && !completed ? (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onModifica}
+              disabled={pending}
+              title="Modifica o assegna"
+              aria-label="Modifica o assegna la richiesta"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <Button size="sm" variant="outline" onClick={onCreaCommessa} disabled={pending}>
+              Crea commessa
+            </Button>
+          </div>
+        ) : null
+      ) : (
+        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
     </div>
+  );
+}
+
+/**
+ * Il corpo della riga è un link alla commessa — ma una richiesta non ce l'ha
+ * ancora, e `/office/commesse/null/lavori` è una pagina che non esiste: lì il
+ * contenuto resta testo, e si agisce coi pulsanti accanto.
+ */
+function Contenitore({
+  commessaId,
+  children,
+}: {
+  commessaId: string | null;
+  children: React.ReactNode;
+}) {
+  if (!commessaId) return <div className="min-w-0 flex-1">{children}</div>;
+  return (
+    <Link href={`/office/commesse/${commessaId}/lavori`} className="min-w-0 flex-1">
+      {children}
+    </Link>
   );
 }
 

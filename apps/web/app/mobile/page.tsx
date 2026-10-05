@@ -13,6 +13,7 @@ import {
   Flame,
   MapPin,
   Mic,
+  Phone,
   Plus,
   Sparkles,
   TrendingUp,
@@ -214,16 +215,14 @@ async function CampoOggi({
     .map((r) => r.commessa_id as string)
     .filter(Boolean);
 
-  if (assignedIds.length === 0) {
-    return (
-      <CampoVuoto
-        title="Nessuna commessa assegnata"
-        body="Quando l'ufficio o l'amministratore ti assegna una commessa, la vedrai qui."
-      />
-    );
-  }
+  // Un sentinella che non combacia con niente: serve perché una RICHIESTA
+  // assegnata non dipende dalle commesse, e chi non ne ha nessuna deve vederla
+  // comunque. Prima qui si usciva subito, e un capo con una richiesta in mano
+  // vedeva «nessuna commessa assegnata» senza mai saperlo.
+  const idsCommesse =
+    assignedIds.length > 0 ? assignedIds : ['00000000-0000-0000-0000-000000000000'];
 
-  const [commesseRes, todosRes] = await Promise.all([
+  const [commesseRes, todosRes, richiesteRes] = await Promise.all([
     supabase
       .from('commesse')
       .select(
@@ -234,7 +233,7 @@ async function CampoOggi({
           cliente:clienti ( id, ragione_sociale )
         `,
       )
-      .in('id', assignedIds)
+      .in('id', idsCommesse)
       // Le completate restano: per il tecnico questa lista e' l'unico modo di
       // riaprire da telefono il lavoro di ieri. Fuori le archiviate (la regola
       // sta in `commessaVisibileSuMobile`) e le bozze, che non sono lavoro
@@ -253,7 +252,19 @@ async function CampoOggi({
       )
       .eq('assegnato_a', ctx.userId)
       .in('stato', ['aperto', 'in_corso'])
-      .in('commessa_id', assignedIds)
+      .in('commessa_id', idsCommesse)
+      .limit(50),
+    // Le RICHIESTE assegnate a me: non hanno una commessa, quindi non possono
+    // passare dal filtro qui sopra.
+    supabase
+      .from('commessa_todo' as never)
+      .select(
+        `id, titolo, priorita, scadenza_at, commessa_id, contatto, cliente_testo,
+         richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale )`,
+      )
+      .eq('assegnato_a', ctx.userId)
+      .is('commessa_id', null)
+      .in('stato', ['aperto', 'in_corso'])
       .limit(50),
   ]);
   const { data, error } = commesseRes;
@@ -273,8 +284,12 @@ async function CampoOggi({
     titolo: string;
     priorita: 'bassa' | 'media' | 'alta' | 'urgente';
     scadenza_at: string | null;
-    commessa_id: string;
+    /** null = richiesta arrivata al telefono, non ancora un lavoro. */
+    commessa_id: string | null;
     codice_interno: string | null;
+    /** Solo sulle richieste: chi ha chiamato e come richiamarlo. */
+    cliente: string | null;
+    contatto: string | null;
   };
   const priOrder: Record<TodoMini['priorita'], number> = {
     urgente: 0,
@@ -283,18 +298,37 @@ async function CampoOggi({
     bassa: 3,
   };
   const now = Date.now();
-  const myTodos: TodoMini[] = ((todosRes.data ?? []) as Array<any>)
-    .map((t) => {
+  const myTodos: TodoMini[] = [
+    ...((todosRes.data ?? []) as Array<any>).map((t) => {
       const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
       return {
         id: t.id as string,
         titolo: t.titolo as string,
         priorita: t.priorita as TodoMini['priorita'],
         scadenza_at: (t.scadenza_at as string | null) ?? null,
-        commessa_id: t.commessa_id as string,
+        commessa_id: (t.commessa_id as string | null) ?? null,
         codice_interno: (comm?.codice_interno as string | undefined) ?? null,
+        cliente: null,
+        contatto: null,
       };
-    })
+    }),
+    ...((richiesteRes.data ?? []) as Array<any>).map((t) => {
+      const chi = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
+      return {
+        id: t.id as string,
+        titolo: t.titolo as string,
+        priorita: t.priorita as TodoMini['priorita'],
+        scadenza_at: (t.scadenza_at as string | null) ?? null,
+        commessa_id: null,
+        codice_interno: null,
+        cliente:
+          (chi?.ragione_sociale as string | undefined) ??
+          (t.cliente_testo as string | null) ??
+          null,
+        contatto: (t.contatto as string | null) ?? null,
+      };
+    }),
+  ]
     .sort((a, b) => {
       const aScaduto = a.scadenza_at && new Date(a.scadenza_at).getTime() < now ? 0 : 1;
       const bScaduto = b.scadenza_at && new Date(b.scadenza_at).getTime() < now ? 0 : 1;
@@ -305,6 +339,16 @@ async function CampoOggi({
       return a.titolo.localeCompare(b.titolo, 'it');
     })
     .slice(0, 8);
+
+  // Niente commesse E niente richieste: allora sì, non c'è nulla da mostrare.
+  if (assignedIds.length === 0 && myTodos.length === 0) {
+    return (
+      <CampoVuoto
+        title="Nessuna commessa assegnata"
+        body="Quando l'ufficio o l'amministratore ti assegna una commessa o una richiesta, la vedrai qui."
+      />
+    );
+  }
 
   const rows: CommessaRow[] = ((data ?? []) as any[]).map((r) => ({
     id: r.id,
@@ -582,6 +626,14 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
   );
 }
 
+/**
+ * Una cosa da fare, sulla home del telefono: un task di commessa o una
+ * **richiesta** arrivata al telefono in ufficio.
+ *
+ * Le due si comportano diversamente di proposito. Il task porta alla commessa.
+ * La richiesta no — non ce l'ha ancora — e la prima cosa che serve a chi la
+ * riceve è **richiamare la persona**: se c'è un numero, il tasto lo chiama.
+ */
 function TodoMiniCard({
   todo,
   now,
@@ -591,8 +643,10 @@ function TodoMiniCard({
     titolo: string;
     priorita: 'bassa' | 'media' | 'alta' | 'urgente';
     scadenza_at: string | null;
-    commessa_id: string;
+    commessa_id: string | null;
     codice_interno: string | null;
+    cliente: string | null;
+    contatto: string | null;
   };
   now: number;
 }) {
@@ -603,36 +657,73 @@ function TodoMiniCard({
     bassa: { chip: 'bg-muted text-muted-foreground border-border', icon: Clock },
   }[todo.priorita];
   const Icon = meta.icon;
-  const isScaduto =
-    todo.scadenza_at && new Date(todo.scadenza_at).getTime() < now;
+  const isScaduto = todo.scadenza_at && new Date(todo.scadenza_at).getTime() < now;
+  const eRichiesta = todo.commessa_id === null;
+  // Un contatto senza chiocciola e con abbastanza cifre è un numero: si può
+  // chiamare. Altrimenti è una email e resta scritta.
+  const numero =
+    todo.contatto && !todo.contatto.includes('@')
+      ? todo.contatto.replace(/[^+\d]/g, '')
+      : null;
+  const chiamabile = numero && numero.replace(/\D/g, '').length >= 6 ? numero : null;
+
+  const contenuto = (
+    <>
+      <span
+        className={[
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
+          meta.chip,
+        ].join(' ')}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium leading-tight">{todo.titolo}</p>
+        <p className="mt-0.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+          {eRichiesta ? (
+            <span className="font-semibold text-amber-700 dark:text-amber-400">Richiesta</span>
+          ) : null}
+          {todo.codice_interno ? (
+            <span className="tabular-nums">{todo.codice_interno}</span>
+          ) : null}
+          {todo.cliente ? <span className="truncate normal-case tracking-normal">{todo.cliente}</span> : null}
+          {todo.scadenza_at ? (
+            <span className={isScaduto ? 'font-semibold text-destructive' : ''}>
+              <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
+              {fmtScadenza(todo.scadenza_at)}
+            </span>
+          ) : null}
+        </p>
+      </div>
+    </>
+  );
+
+  if (eRichiesta) {
+    return (
+      <li>
+        <div className="flex items-center gap-2 rounded-md border border-l-2 border-border border-l-amber-500/70 bg-card p-2.5 shadow-soft">
+          {contenuto}
+          {chiamabile ? (
+            <a
+              href={`tel:${chiamabile}`}
+              aria-label={`Chiama ${todo.cliente ?? 'il cliente'}`}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors active:bg-primary/20"
+            >
+              <Phone className="h-4 w-4" aria-hidden="true" />
+            </a>
+          ) : null}
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li>
       <Link
         href={`/mobile/commessa/${todo.commessa_id}#lavori`}
         className="flex items-center gap-2 rounded-md border border-border bg-card p-2.5 shadow-soft transition-colors active:bg-muted"
       >
-        <span
-          className={[
-            'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
-            meta.chip,
-          ].join(' ')}
-        >
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium leading-tight">{todo.titolo}</p>
-          <p className="mt-0.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-            {todo.codice_interno ? (
-              <span className="tabular-nums">{todo.codice_interno}</span>
-            ) : null}
-            {todo.scadenza_at ? (
-              <span className={isScaduto ? 'font-semibold text-destructive' : ''}>
-                <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
-                {fmtScadenza(todo.scadenza_at)}
-              </span>
-            ) : null}
-          </p>
-        </div>
+        {contenuto}
         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
       </Link>
     </li>

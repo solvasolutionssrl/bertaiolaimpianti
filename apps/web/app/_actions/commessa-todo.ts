@@ -11,6 +11,7 @@ import {
   cleanupAllegatoFiles,
   getTodoFileRefIds,
 } from './_lib/storage-cleanup';
+import { notificaAssegnazione } from './_lib/notifica-assegnazione';
 
 /**
  * Server actions per gestire i TODO di una commessa.
@@ -37,7 +38,8 @@ type TodoStato = (typeof TODO_STATO)[number];
 
 export type TodoRow = {
   id: string;
-  commessa_id: string;
+  /** null = RICHIESTA: arrivata al telefono, non ancora un lavoro. */
+  commessa_id: string | null;
   titolo: string;
   descrizione: string | null;
   stato: TodoStato;
@@ -62,13 +64,24 @@ export type Result<T = void> =
 // ────────────────────────────────────────────────────────────
 
 const CreaInput = z.object({
-  commessaId: z.string().uuid(),
+  /**
+   * Assente = RICHIESTA: qualcuno ha chiamato e il lavoro non esiste ancora.
+   * Una commessa nasce dal sopralluogo; questo momento sta a monte.
+   */
+  commessaId: z.string().uuid().nullable().optional(),
   titolo: z.string().trim().min(1).max(200),
   descrizione: z.string().trim().max(2000).optional(),
   priorita: z.enum(TODO_PRIORITA).default('media'),
   assegnatoA: z.string().uuid().nullable().optional(),
   scadenzaAt: z.string().datetime().nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
+  // ─── solo per le richieste: quel poco che si raccoglie al telefono ───
+  /** Cliente in anagrafica, se chi ha chiamato c'era già. */
+  clienteId: z.string().uuid().nullable().optional(),
+  /** Il nome come è stato detto, quando in anagrafica non c'è. */
+  clienteTesto: z.string().trim().max(200).nullable().optional(),
+  /** Come richiamare: numero o email, testo libero. */
+  contatto: z.string().trim().max(200).nullable().optional(),
 });
 
 export async function creaTodo(
@@ -84,20 +97,24 @@ export async function creaTodo(
   }
 
   const supabase = createServerSupabase();
+  const commessaId = parsed.data.commessaId ?? null;
 
-  // sort_order = max+1 dei todo aperti della commessa
-  const { data: maxRow } = await supabase
+  // sort_order = max+1 nel suo gruppo. Per le richieste il gruppo è «senza
+  // commessa», e serve `.is()`: `.eq('commessa_id', null)` non trova i NULL.
+  const qOrder = supabase
     .from('commessa_todo' as never)
     .select('sort_order')
-    .eq('commessa_id', parsed.data.commessaId)
     .order('sort_order', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+  const { data: maxRow } = await (commessaId
+    ? qOrder.eq('commessa_id', commessaId)
+    : qOrder.is('commessa_id', null)
+  ).maybeSingle();
   const nextOrder = (((maxRow as { sort_order?: number } | null)?.sort_order ?? 0) + 1);
 
   const insertRow = {
     tenant_id: ctx.tenantId,
-    commessa_id: parsed.data.commessaId,
+    commessa_id: commessaId,
     titolo: parsed.data.titolo,
     descrizione: parsed.data.descrizione ?? null,
     priorita: parsed.data.priorita,
@@ -106,6 +123,9 @@ export async function creaTodo(
     sort_order: nextOrder,
     metadata: parsed.data.metadata ?? {},
     created_by: ctx.userId,
+    cliente_id: parsed.data.clienteId ?? null,
+    cliente_testo: parsed.data.clienteTesto ?? null,
+    contatto: parsed.data.contatto ?? null,
   };
   const { data, error } = await supabase
     .from('commessa_todo' as never)
@@ -116,14 +136,25 @@ export async function creaTodo(
 
   const id = (data as { id: string }).id;
 
-  await audit(ctx, 'commessa.todo.crea', parsed.data.commessaId, id, {
+  await audit(ctx, commessaId ? 'commessa.todo.crea' : 'richiesta.crea', commessaId, id, {
     titolo: parsed.data.titolo,
     priorita: parsed.data.priorita,
     assegnato_a: parsed.data.assegnatoA,
+    ...(commessaId ? {} : { cliente: parsed.data.clienteTesto ?? parsed.data.clienteId }),
   });
 
-  revalidatePath(`/office/commesse/${parsed.data.commessaId}`);
-  revalidatePath(`/mobile/commessa/${parsed.data.commessaId}`);
+  if (parsed.data.assegnatoA) {
+    await notificaAssegnazione({
+      tenantId: ctx.tenantId,
+      userId: parsed.data.assegnatoA,
+      attoreUserId: ctx.userId,
+      todoId: id,
+      titolo: parsed.data.titolo,
+      commessaId,
+    });
+  }
+
+  rivalida(commessaId);
   return { ok: true, data: { id } };
 }
 
@@ -165,19 +196,45 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
     return { ok: false, error: 'Nessun campo da aggiornare' };
   }
 
+  // Si legge l'assegnatario PRIMA: la notifica va mandata solo se cambia
+  // davvero, altrimenti ogni ritocco al titolo riavvisa la stessa persona.
+  const { data: prima } = await supabase
+    .from('commessa_todo' as never)
+    .select('assegnato_a')
+    .eq('id', parsed.data.id)
+    .maybeSingle();
+  const assegnatoPrima = (prima as { assegnato_a?: string | null } | null)?.assegnato_a ?? null;
+
   const { data: existing, error: fErr } = await supabase
     .from('commessa_todo' as never)
     .update(update as never)
     .eq('id', parsed.data.id)
-    .select('id, commessa_id')
+    .select('id, commessa_id, titolo, assegnato_a')
     .single();
   if (fErr) return { ok: false, error: `Update fallito: ${fErr.message}` };
 
-  const commessaId = (existing as { commessa_id: string }).commessa_id;
-  await audit(ctx, 'commessa.todo.aggiorna', commessaId, parsed.data.id, update);
+  const riga = existing as { commessa_id: string | null; titolo: string; assegnato_a: string | null };
+  const commessaId = riga.commessa_id;
+  await audit(
+    ctx,
+    commessaId ? 'commessa.todo.aggiorna' : 'richiesta.aggiorna',
+    commessaId,
+    parsed.data.id,
+    update,
+  );
 
-  revalidatePath(`/office/commesse/${commessaId}`);
-  revalidatePath(`/mobile/commessa/${commessaId}`);
+  if (riga.assegnato_a && riga.assegnato_a !== assegnatoPrima) {
+    await notificaAssegnazione({
+      tenantId: ctx.tenantId,
+      userId: riga.assegnato_a,
+      attoreUserId: ctx.userId,
+      todoId: parsed.data.id,
+      titolo: riga.titolo,
+      commessaId,
+    });
+  }
+
+  rivalida(commessaId);
   return { ok: true };
 }
 
@@ -224,8 +281,7 @@ export async function cambiaTodoStato(input: unknown): Promise<Result> {
     { stato: parsed.data.stato },
   );
 
-  revalidatePath(`/office/commesse/${commessaId}`);
-  revalidatePath(`/mobile/commessa/${commessaId}`);
+  rivalida(commessaId);
   return { ok: true };
 }
 
@@ -258,7 +314,7 @@ export async function riordinaTodo(input: unknown): Promise<Result> {
   } as never);
   if (error) return { ok: false, error: `Riordino fallito: ${error.message}` };
 
-  revalidatePath(`/office/commesse/${parsed.data.commessaId}`);
+  rivalida(parsed.data.commessaId);
   return { ok: true };
 }
 
@@ -308,8 +364,7 @@ export async function eliminaTodo(input: unknown): Promise<Result> {
   await audit(ctx, 'commessa.todo.elimina', t.commessa_id, parsed.data.id, {
     titolo: t.titolo,
   });
-  revalidatePath(`/office/commesse/${t.commessa_id}`);
-  revalidatePath(`/mobile/commessa/${t.commessa_id}`);
+  rivalida(t.commessa_id);
   return { ok: true };
 }
 
@@ -348,8 +403,7 @@ export async function aggiungiNotaTodo(input: unknown): Promise<Result> {
     } as never);
   if (error) return { ok: false, error: `Nota fallita: ${error.message}` };
 
-  revalidatePath(`/office/commesse/${t.commessa_id}`);
-  revalidatePath(`/mobile/commessa/${t.commessa_id}`);
+  rivalida(t.commessa_id);
   return { ok: true };
 }
 
@@ -368,24 +422,42 @@ async function safeCtx() {
 async function audit(
   ctx: { tenantId: string; userId: string; role: AppRole },
   action: string,
-  commessaId: string,
+  commessaId: string | null,
   entityId: string,
   metadata: Record<string, unknown>,
 ) {
   // entity_type='commessa' + entity_id=commessaId così la tab Cronologia
   // (filtrata per entity_type='commessa') include questi eventi.
   // L'id specifico del TODO va in metadata.todo_id.
+  //
+  // Una RICHIESTA non ha una commessa: l'entità è la richiesta stessa,
+  // altrimenti l'evento finirebbe nella cronologia di nessuno.
   const supabase = createServerSupabase();
   await supabase.from('audit_events').insert({
     tenant_id: ctx.tenantId,
     actor_user_id: ctx.userId,
     actor_role: ctx.role,
-    entity_type: 'commessa',
-    entity_id: commessaId,
+    entity_type: commessaId ? 'commessa' : 'richiesta',
+    entity_id: commessaId ?? entityId,
     action,
     metadata: {
       todo_id: entityId,
       ...metadata,
     } as unknown as never,
   });
+}
+
+/**
+ * Ricarica le pagine che mostrano un task. Senza commessa si saltano i due
+ * percorsi che la citano: `revalidatePath('/office/commesse/null')` non
+ * ricarica niente e nasconde l'errore.
+ */
+function rivalida(commessaId: string | null): void {
+  revalidatePath('/office/todo');
+  revalidatePath('/office');
+  revalidatePath('/mobile');
+  if (commessaId) {
+    revalidatePath(`/office/commesse/${commessaId}`);
+    revalidatePath(`/mobile/commessa/${commessaId}`);
+  }
 }

@@ -219,6 +219,12 @@ export async function computeAlerts(tenantId: string): Promise<AlertItem[]> {
     }
   }
 
+  // Una RICHIESTA (task senza commessa) non ha una pagina di commessa dove
+  // atterrare: `/office/commesse/null/lavori` e' un link rotto. Si manda alla
+  // lista delle richieste.
+  const linkTodo = (commessaId: string | null): string =>
+    commessaId ? `/office/commesse/${commessaId}/lavori` : '/office/todo?tipo=richieste';
+
   // ─── todo_scaduti ──────────────────────────────────────────────────
   if (settings.todo_scaduti.enabled) {
     const { data } = await supabase
@@ -238,9 +244,11 @@ export async function computeAlerts(tenantId: string): Promise<AlertItem[]> {
       out.push({
         type: 'todo_scaduti',
         severity: t.priorita === 'urgente' ? 'critical' : 'warning',
-        title: `TODO scaduto da ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`,
-        description: `${t.titolo} — ${comm?.codice_interno ?? ''}`,
-        href: `/office/commesse/${t.commessa_id}/lavori`,
+        title: `${t.commessa_id ? 'TODO' : 'Richiesta'} scaduto da ${giorni} ${giorni === 1 ? 'giorno' : 'giorni'}`,
+        description: comm?.codice_interno
+          ? `${t.titolo} — ${comm.codice_interno}`
+          : t.titolo,
+        href: linkTodo(t.commessa_id ?? null),
         ref: comm?.codice_interno ?? null,
         ts: t.scadenza_at,
       });
@@ -264,9 +272,11 @@ export async function computeAlerts(tenantId: string): Promise<AlertItem[]> {
       out.push({
         type: 'todo_urgenti_non_assegnati',
         severity: t.priorita === 'urgente' ? 'critical' : 'warning',
-        title: `TODO ${t.priorita} senza assegnatario`,
-        description: `${t.titolo} — ${comm?.codice_interno ?? ''}`,
-        href: `/office/commesse/${t.commessa_id}/lavori`,
+        title: `${t.commessa_id ? 'TODO' : 'Richiesta'} ${t.priorita} senza assegnatario`,
+        description: comm?.codice_interno
+          ? `${t.titolo} — ${comm.codice_interno}`
+          : t.titolo,
+        href: linkTodo(t.commessa_id ?? null),
         ref: comm?.codice_interno ?? null,
         ts: t.created_at,
       });

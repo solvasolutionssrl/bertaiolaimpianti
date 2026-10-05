@@ -22,6 +22,11 @@ type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
 
 interface Props {
   commesseAttive: Array<{ id: string; codice_interno: string; nome_cartella: string }>;
+  /**
+   * Tutta la squadra, non solo i tecnici: «ordina la pompa» è roba d'ufficio.
+   * Prima qui arrivavano solo i `role='tecnico'` e un task non si poteva
+   * passare a un collega.
+   */
   tecnici: Array<{ id: string; display_name: string | null }>;
   onClose: () => void;
 }

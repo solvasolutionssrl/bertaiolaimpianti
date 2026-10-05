@@ -34,12 +34,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@kommessa/ui';
-import { createBrowserSupabase } from '@kommessa/api/client';
 
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
 import { camelCaseToWords } from '../../../../_lib/camel-to-words';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
+import { useRicercaClienti } from '@/app/_components/cliente-picker';
+import type { ClienteSimile } from '@/app/office/_actions/clienti';
 import { useBozzaDraft } from '../../../../_lib/bozze/use-bozza-draft';
 import { useBozzaMedia } from '../../../../_lib/bozze/use-bozza-media';
 import { useOnline } from '../../../../_lib/use-online';
@@ -60,13 +61,6 @@ export interface PresetItem {
   id: string;
   nome: string;
   vociIds: number[];
-}
-
-interface ClienteSuggest {
-  id: string;
-  ragione_sociale: string;
-  citta: string | null;
-  tipo: 'persona_fisica' | 'azienda';
 }
 
 interface VoiceSuggested {
@@ -271,39 +265,17 @@ export function NuovaCommessaForm({
     return { sezioneA: a, sezioneB: [...bMap.entries()] };
   }, [voci]);
 
-  // -------- Cliente autocomplete --------
-  const [clientiSugg, setClientiSugg] = React.useState<ClienteSuggest[]>([]);
-  const [searchPending, setSearchPending] = React.useState(false);
-
-  const cercaClienti = React.useCallback(async (q: string) => {
-    const term = q.trim();
-    if (term.length < 2) {
-      setClientiSugg([]);
-      return;
-    }
-    setSearchPending(true);
-    try {
-      const supabase = createBrowserSupabase();
-      const { data } = await supabase
-        .from('clienti')
-        .select('id, ragione_sociale, citta, tipo')
-        .ilike('ragione_sociale', `%${term}%`)
-        .order('ragione_sociale')
-        .limit(8);
-      setClientiSugg((data ?? []) as ClienteSuggest[]);
-    } finally {
-      setSearchPending(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    const handle = setTimeout(() => {
-      if (!state.cliente.id) {
-        void cercaClienti(state.cliente.ragione_sociale);
-      }
-    }, 200);
-    return () => clearTimeout(handle);
-  }, [state.cliente.ragione_sociale, state.cliente.id, cercaClienti]);
+  // -------- Cliente: ricerca condivisa --------
+  // Prima qui c'era una query Supabase fatta **dal browser**, con la sua
+  // soglia e il suo debounce: la terza implementazione della stessa domanda
+  // «chi è il cliente?», e la sola che parlasse col database dal client. Ora
+  // la meccanica è una, in `useRicercaClienti` (debounce, soglia, annullamento,
+  // errore che diventa «nessun risultato»); qui resta solo la resa, che è
+  // intrecciata con gli errori di campo di questo form.
+  const { risultati: clientiSugg, cercando: searchPending } = useRicercaClienti(
+    state.cliente.ragione_sociale,
+    !state.cliente.id,
+  );
 
   // -------- Bozza: resume (seed) + autosave --------
   const seededRef = React.useRef(false);
@@ -327,17 +299,17 @@ export function NuovaCommessaForm({
     stageMedia(mediaFiles, draftCreated);
   }, [mediaFiles, draftCreated, stageMedia, success]);
 
-  const selezionaCliente = (c: ClienteSuggest) => {
+  const selezionaCliente = (c: ClienteSimile) => {
     setState((s) => ({
       ...s,
       cliente: {
         ...s.cliente,
         id: c.id,
         ragione_sociale: c.ragione_sociale,
-        tipo: c.tipo,
+        // In anagrafica il tipo può essere nullo: si resta sul default.
+        tipo: c.tipo === 'azienda' ? 'azienda' : 'persona_fisica',
       },
     }));
-    setClientiSugg([]);
   };
 
   const applicaPreset = (presetId: string) => {

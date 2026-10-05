@@ -166,6 +166,47 @@ export async function elencaTecniciTenant(): Promise<
   }));
 }
 
+/**
+ * Chi puo' ricevere un task o una richiesta: **tutta la squadra**, non solo i
+ * tecnici.
+ *
+ * `elencaTecniciTenant` qui sopra filtra `role='tecnico'` perche' serve ad
+ * assegnare le PERSONE A UNA COMMESSA, dove solo un tecnico ha senso. Un task
+ * invece lo si da' a chiunque: «chiama tu il fornitore» va all'ufficio, «passa
+ * a vedere la caldaia» va al capo. Prima il picker mostrava solo i tecnici e
+ * una richiesta non si poteva passare a un collega.
+ *
+ * Fuori restano solo i `cliente` (il portale e' chiuso) e i disattivati. Il
+ * ruolo viene restituito perche' l'elenco va raggruppato a schermo: con dieci
+ * nomi tutti uguali non si capisce chi e' chi.
+ */
+export async function elencaAssegnabiliTenant(): Promise<
+  Array<{ id: string; display_name: string | null; role: AppRole }>
+> {
+  let ctx;
+  try {
+    ctx = await requireTenantContext();
+  } catch {
+    return [];
+  }
+  if (!ASSIGN_ROLES.has(ctx.role)) return [];
+
+  const service = createServiceSupabase();
+  const { data } = await service
+    .from('users')
+    .select('id, display_name, role')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('attivo', true)
+    .neq('role', 'cliente')
+    .order('display_name', { ascending: true });
+
+  return (data ?? []).map((u) => ({
+    id: u.id as string,
+    display_name: (u.display_name as string | null) ?? null,
+    role: u.role as AppRole,
+  }));
+}
+
 /** Lista tecnici già assegnati a una commessa. */
 export async function elencaTecniciAssegnati(commessaId: string): Promise<
   Array<{ user_id: string; display_name: string | null; assegnato_at: string }>

@@ -10,6 +10,7 @@ import {
   CheckCheck,
   Clock3,
   Loader2,
+  ListChecks,
   MessageSquare,
   PencilRuler,
   Ticket,
@@ -41,6 +42,7 @@ const NOTIF_META: Record<string, { label: string; Icon: LucideIcon }> = {
   commessa_archiviata: { label: 'Commessa archiviata', Icon: Bell },
   voice_note: { label: 'Nota vocale', Icon: Bell },
   kantiere_modifica_tecnico: { label: 'Ore modificate dal tecnico', Icon: PencilRuler },
+  todo_assegnato: { label: 'Assegnato a te', Icon: ListChecks },
 };
 
 function fmtGiorno(data: string): string {
@@ -95,6 +97,11 @@ function corpo(n: NotificaRow): string | null {
  */
 function destinazioneMobile(n: NotificaRow): { href: string; label: string } | null {
   const p = (n.payload ?? {}) as Record<string, unknown>;
+  // Una richiesta arrivata al telefono non ha (ancora) una commessa da aprire:
+  // si va dove la si trova, cioè l'elenco delle proprie cose da fare.
+  if (n.type === 'todo_assegnato' && p.e_richiesta === true) {
+    return { href: '/mobile', label: 'Vedi cosa fare' };
+  }
   if (n.type === 'kantiere_modifica_tecnico' && typeof p.data === 'string') {
     return { href: `/mobile/kantiere/cruscotto?giorno=${p.data}`, label: 'Vedi la giornata' };
   }

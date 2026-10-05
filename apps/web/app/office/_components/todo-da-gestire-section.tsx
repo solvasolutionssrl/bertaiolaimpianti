@@ -167,7 +167,12 @@ function PriorityColumn({
 function TodoMiniCard({ t, accent }: { t: TodoDaGestireRow; accent: string }) {
   return (
     <Link
-      href={`/office/commesse/${t.commessa_id}/lavori`}
+      href={
+        // Una richiesta non ha una commessa dove atterrare: si va alla lista.
+        t.commessa_id
+          ? `/office/commesse/${t.commessa_id}/lavori`
+          : '/office/todo?tipo=richieste'
+      }
       className="group relative block overflow-hidden rounded-md border border-border bg-card p-2 shadow-soft transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-md"
     >
       <span aria-hidden className={`absolute inset-y-1.5 left-0 w-[2px] rounded-full ${accent}`} />

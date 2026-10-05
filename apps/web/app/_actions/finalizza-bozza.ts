@@ -154,7 +154,26 @@ export async function finalizzaBozza(
     keepFileRefIds: opts?.keepFileRefIds,
   });
 
-  // 6) Marca la bozza finalizzata (service: la bozza resta dell'autore ma
+  // 6) Se la bozza nasce da una RICHIESTA al telefono, la richiesta entra nella
+  //    commessa invece di restare un orfano nella lista Task: il post-it
+  //    diventa la prima riga di storia del lavoro, e si vede da dove veniva.
+  //    Best-effort: la commessa è già creata, non si torna indietro per questo.
+  const richiestaTodoId = (bozza.payload as { _richiestaTodoId?: unknown })
+    ?._richiestaTodoId;
+  if (typeof richiestaTodoId === 'string' && richiestaTodoId.length > 0) {
+    const { error: errAggancio } = await supabase
+      .from('commessa_todo' as never)
+      .update({ commessa_id: commessaId } as never)
+      .eq('id', richiestaTodoId)
+      .is('commessa_id', null);
+    if (errAggancio) {
+      console.error(
+        `[finalizzaBozza] richiesta ${richiestaTodoId} NON agganciata alla commessa ${commessaId}: ${errAggancio.message}`,
+      );
+    }
+  }
+
+  // 7) Marca la bozza finalizzata (service: la bozza resta dell'autore ma
   //    questo aggiornamento di chiusura passa comunque per RLS author-scoped).
   await supabase
     .from('commessa_bozze' as never)

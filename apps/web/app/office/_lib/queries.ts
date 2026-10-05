@@ -62,7 +62,8 @@ export interface TodoDaGestireRow {
   titolo: string;
   priorita: Priorita;
   scadenza_at: string | null;
-  commessa_id: string;
+  /** null = richiesta arrivata al telefono, non ancora un lavoro. */
+  commessa_id: string | null;
   codice_interno: string | null;
   cliente_nome: string | null;
   assegnato_nome: string | null;
@@ -87,8 +88,9 @@ export async function getTodoDaGestire(limit = 300): Promise<TodoDaGestireRow[]>
   const { data } = await supabase
     .from('commessa_todo' as never)
     .select(
-      `id, titolo, priorita, scadenza_at, stato, commessa_id, assegnato_a,
+      `id, titolo, priorita, scadenza_at, stato, commessa_id, assegnato_a, cliente_testo,
        commessa:commesse!commessa_todo_commessa_id_fkey ( codice_interno, cliente:clienti ( ragione_sociale ) ),
+       richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale ),
        assegnato:users!commessa_todo_assegnato_a_fkey ( display_name )`,
     )
     .in('stato', ['aperto', 'in_corso'])
@@ -103,14 +105,20 @@ export async function getTodoDaGestire(limit = 300): Promise<TodoDaGestireRow[]>
         : comm.cliente
       : null;
     const ass = Array.isArray(t.assegnato) ? t.assegnato[0] : t.assegnato;
+    const richiedente = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
     return {
       id: t.id as string,
       titolo: t.titolo as string,
       priorita: (t.priorita as Priorita) ?? 'media',
       scadenza_at: (t.scadenza_at as string | null) ?? null,
-      commessa_id: t.commessa_id as string,
+      commessa_id: (t.commessa_id as string | null) ?? null,
       codice_interno: (comm?.codice_interno as string | undefined) ?? null,
-      cliente_nome: (cli?.ragione_sociale as string | undefined) ?? null,
+      // Sulle richieste il cliente è quello della telefonata.
+      cliente_nome:
+        (cli?.ragione_sociale as string | undefined) ??
+        (richiedente?.ragione_sociale as string | undefined) ??
+        (t.cliente_testo as string | null) ??
+        null,
       assegnato_nome: (ass?.display_name as string | undefined) ?? null,
       isScaduto: t.scadenza_at
         ? new Date(t.scadenza_at as string).getTime() < now
