@@ -8,6 +8,7 @@ import {
   Flame,
   Phone,
   Plus,
+  UserPlus,
   User,
 } from 'lucide-react';
 
@@ -205,6 +206,10 @@ export default async function TodoGlobalePage({
   // ─── KPI sintetici ─────────────────────────────────────────────────
   const kpi = {
     richieste: todos.filter((t) => t.eRichiesta).length,
+    // Il mucchio da smistare: aperte e senza nessuno che ci stia dietro.
+    daAssegnare: todos.filter(
+      (t) => !t.assegnato_a && t.stato !== 'completato' && t.stato !== 'annullato',
+    ).length,
     aperti: todos.filter((t) => t.stato === 'aperto').length,
     inCorso: todos.filter((t) => t.stato === 'in_corso').length,
     urgenti: todos.filter((t) => t.priorita === 'urgente').length,
@@ -230,6 +235,14 @@ export default async function TodoGlobalePage({
         <div className="flex flex-wrap items-center gap-1.5">
           {kpi.richieste > 0 ? (
             <KpiChip icon={<Phone />} label="Richieste" value={kpi.richieste} tone="amber" />
+          ) : null}
+          {kpi.daAssegnare > 0 ? (
+            <KpiChip
+              icon={<UserPlus />}
+              label="Da assegnare"
+              value={kpi.daAssegnare}
+              tone="amber"
+            />
           ) : null}
           <KpiChip icon={<CircleDot />} label="Aperti" value={kpi.aperti} />
           <KpiChip icon={<Clock />} label="In corso" value={kpi.inCorso} tone="blue" />

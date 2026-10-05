@@ -15,6 +15,7 @@ import {
   Loader2,
   Pencil,
   Phone,
+  UserPlus,
   Plus,
   Sparkles,
   User,
@@ -30,6 +31,7 @@ import {
 } from '@kommessa/ui';
 
 import {
+  aggiornaTodo,
   cambiaTodoStato,
 } from '../../../_actions/commessa-todo';
 import { convertiRichiestaInBozza } from '../../../_actions/richieste';
@@ -156,6 +158,19 @@ export function TodoGlobaleBoard({
     start(async () => {
       const res = await cambiaTodoStato({ id, stato: 'completato' });
       if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
+      router.refresh();
+    });
+
+  // Assegnare dalla riga, senza aprire niente: è il gesto che l'ufficio fa a
+  // raffica quando smaltisce il mucchio delle cose non assegnate. La notifica
+  // a chi la riceve parte da `aggiornaTodo`.
+  const assegnaDallaRiga = (id: string, userId: string) =>
+    start(async () => {
+      const res = await aggiornaTodo({ id, assegnatoA: userId || null });
+      if (!res.ok) {
+        await showAlert({ title: 'Non assegnato', body: res.error });
+        return;
+      }
       router.refresh();
     });
 
@@ -286,6 +301,14 @@ export function TodoGlobaleBoard({
         </FiltroGroup>
 
         <FiltroGroup label="Assegnato">
+          <FiltroRadio
+            label="Da assegnare"
+            icon={<UserPlus className="h-3 w-3" />}
+            active={filtri.assegnato === 'nessuno'}
+            onClick={() =>
+              updateFiltro('assegnato', filtri.assegnato === 'nessuno' ? null : 'nessuno')
+            }
+          />
           <select
             value={filtri.assegnato ?? ''}
             onChange={(e) => updateFiltro('assegnato', e.target.value || null)}
@@ -371,7 +394,9 @@ export function TodoGlobaleBoard({
                   isMine={t.assegnato_a === currentUserId}
                   pending={pending}
                   canWrite={canWrite}
+                  assegnabili={assegnabili}
                   onComplete={() => onComplete(t.id)}
+                  onAssegna={(userId) => assegnaDallaRiga(t.id, userId)}
                   onCreaCommessa={() => creaCommessaDaRichiesta(t)}
                   onModifica={() =>
                     setRichiestaInModifica({
@@ -471,17 +496,21 @@ function TodoRow({
   isMine,
   pending,
   canWrite,
+  assegnabili,
   onComplete,
   onCreaCommessa,
   onModifica,
+  onAssegna,
 }: {
   row: Row;
   isMine: boolean;
   pending: boolean;
   canWrite: boolean;
+  assegnabili: Array<{ id: string; display_name: string | null; role: string }>;
   onComplete: () => void;
   onCreaCommessa: () => void;
   onModifica: () => void;
+  onAssegna: (userId: string) => void;
 }) {
   const meta = PRIORITA_META[row.priorita];
   const Icon = meta.Icon;
@@ -583,27 +612,50 @@ function TodoRow({
         </div>
       </Contenitore>
 
-      {row.eRichiesta ? (
-        canWrite && !completed ? (
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onModifica}
-              disabled={pending}
-              title="Modifica o assegna"
-              aria-label="Modifica o assegna la richiesta"
-              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <Button size="sm" variant="outline" onClick={onCreaCommessa} disabled={pending}>
-              Crea commessa
-            </Button>
-          </div>
-        ) : null
-      ) : (
-        <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-      )}
+      <div className="flex shrink-0 items-center gap-1.5">
+        {/* Non assegnato: si assegna da qui, senza aprire niente. È il gesto
+            che l'ufficio ripete a raffica smaltendo il mucchio. */}
+        {canWrite && !completed && !row.assegnato_a ? (
+          <select
+            value=""
+            disabled={pending}
+            aria-label={`Assegna «${row.titolo}» a una persona`}
+            onChange={(e) => {
+              if (e.target.value) onAssegna(e.target.value);
+            }}
+            className="h-8 max-w-[9rem] rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 text-xs font-medium text-primary disabled:opacity-50"
+          >
+            <option value="">Assegna a…</option>
+            {assegnabili.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.display_name ?? u.id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+        ) : null}
+
+        {row.eRichiesta ? (
+          canWrite && !completed ? (
+            <>
+              <button
+                type="button"
+                onClick={onModifica}
+                disabled={pending}
+                title="Modifica la richiesta"
+                aria-label="Modifica la richiesta"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <Button size="sm" variant="outline" onClick={onCreaCommessa} disabled={pending}>
+                Crea commessa
+              </Button>
+            </>
+          ) : null
+        ) : (
+          <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+      </div>
     </div>
   );
 }
