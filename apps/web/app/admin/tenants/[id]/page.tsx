@@ -25,6 +25,7 @@ import { TabAi } from './_components/tab-ai';
 import { TabModuli } from './_components/tab-moduli';
 import { TabFunzioni } from './_components/tab-funzioni';
 import { TabRouting } from './_components/tab-routing';
+import { TabUpload } from './_components/tab-upload';
 import { TabIntegrazione } from './_components/tab-integrazione';
 import { fotoCollegamenti } from '../../_lib/integrazione/foto';
 import { leggiConfigIntegrazione } from '../../_lib/integrazione/config';
@@ -66,6 +67,7 @@ const TAB_VALIDI = [
   'utenti',
   'quote',
   'storage',
+  'upload',
   'ai',
   'moduli',
   'funzioni',
@@ -86,8 +88,16 @@ export default async function TenantDetailPage({
   await requirePlatformAdmin();
   const supabase = createServiceSupabase();
 
-  const [tenantRes, usageRes, quotaRes, plansRes, utentiRes, auditRes, moduliRes] =
-    await Promise.all([
+  const [
+    tenantRes,
+    usageRes,
+    quotaRes,
+    plansRes,
+    utentiRes,
+    auditRes,
+    moduliRes,
+    limitiGlobaliRes,
+  ] = await Promise.all([
       supabase
         .from('tenants')
         .select('*')
@@ -122,6 +132,13 @@ export default async function TenantDetailPage({
         .from('tenant_modules' as never)
         .select('module_code, attivo, config')
         .eq('tenant_id', params.id),
+      // Default globale dei limiti di invio: serve al tab Upload per mostrare
+      // cosa si eredita quando un campo è lasciato vuoto.
+      supabase
+        .from('platform_settings' as never)
+        .select('valore')
+        .eq('chiave', 'limiti_upload')
+        .maybeSingle(),
     ]);
 
   const tenant: any = tenantRes.data;
@@ -133,6 +150,7 @@ export default async function TenantDetailPage({
   const utenti = (utentiRes.data ?? []) as any[];
   const audit = (auditRes.data ?? []) as any[];
   const moduli = (moduliRes.data ?? []) as any[];
+  const limitiGlobali = (limitiGlobaliRes.data as { valore?: unknown } | null)?.valore ?? null;
   const kantiereAttivo = moduli.some(
     (m) => m.module_code === 'kantiere' && m.attivo === true,
   );
@@ -140,6 +158,14 @@ export default async function TenantDetailPage({
     string,
     unknown
   >;
+  // I limiti di invio media governano solo superfici del mondo commesse: per un
+  // tenant solo-Kantiere il tab esisterebbe, si salverebbe, e non farebbe
+  // niente. Gated come il tab Viaggio, che compare solo col modulo Kantiere.
+  const appModeEffettivo =
+    (tenant.app_mode === 'kantiere' || tenant.app_mode === 'full') && kantiereAttivo
+      ? tenant.app_mode
+      : 'kommessa';
+  const mondoCommesse = appModeEffettivo !== 'kantiere';
   const dipendentiAttivo = moduli.some(
     (m) => m.module_code === 'dipendenti' && m.attivo === true,
   );
@@ -283,6 +309,7 @@ export default async function TenantDetailPage({
           <TabsTrigger value="utenti">Utenti</TabsTrigger>
           <TabsTrigger value="quote">Quote</TabsTrigger>
           <TabsTrigger value="storage">Storage</TabsTrigger>
+          {mondoCommesse ? <TabsTrigger value="upload">Upload</TabsTrigger> : null}
           <TabsTrigger value="ai">AI</TabsTrigger>
           <TabsTrigger value="moduli">Moduli</TabsTrigger>
           <TabsTrigger value="funzioni">Funzioni</TabsTrigger>
@@ -357,6 +384,18 @@ export default async function TenantDetailPage({
             creaCartelle={tenant.crea_cartelle ?? true}
           />
         </TabsContent>
+
+        {/* ===== Upload (limiti di invio media) ===== */}
+        {mondoCommesse ? (
+          <TabsContent value="upload">
+            <TabUpload
+              tenantId={tenant.id}
+              tenantNome={tenant.nome}
+              uploadConfig={tenant.upload_config ?? {}}
+              globale={limitiGlobali}
+            />
+          </TabsContent>
+        ) : null}
 
         {/* ===== AI (modello trascrizione audio) ===== */}
         <TabsContent value="ai">

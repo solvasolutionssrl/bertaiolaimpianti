@@ -38,7 +38,7 @@ import {
 } from '../../../../../_actions/commessa-riunione';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { useUploadQueue } from '@/app/_components/upload-queue-provider';
-import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
+import { useLimitiUpload } from '@/app/_components/limiti-upload-provider';
 import { PdfCameraCapture } from '@/app/_components/pdf-camera-capture';
 
 interface Props {
@@ -80,6 +80,10 @@ export function CreaRiunioneDialog({
   const showAlert = useAlert();
   const askConfirm = useConfirm();
   const uploadQueue = useUploadQueue();
+  // Il limite dei video lo decide il pannello super admin (globale o per
+  // tenant), non una costante: stesso valore che usa il selettore media.
+  const { maxVideoMb } = useLimitiUpload();
+  const maxVideoBytes = maxVideoMb * 1024 * 1024;
   const [step, setStep] = React.useState<Step>('contenuto');
 
   // ─── Step 1: Dati ─────────────────────────────────────────────────
@@ -195,7 +199,7 @@ export function CreaRiunioneDialog({
       const isImage = f.type.startsWith('image/');
       const isVideo = f.type.startsWith('video/');
       if (!isImage && !isVideo) continue;
-      if (isVideo && f.size > VIDEO_MAX_SIZE_BYTES) {
+      if (isVideo && f.size > maxVideoBytes) {
         oversizedVideo.push(f.name);
         continue;
       }
@@ -211,7 +215,7 @@ export function CreaRiunioneDialog({
     if (oversizedVideo.length > 0) {
       void showAlert({
         title: 'Alcuni video sono troppo grandi',
-        body: `Limite: 500 MB.\n\nFile esclusi:\n${oversizedVideo.join('\n')}`,
+        body: `Limite: ${maxVideoMb} MB.\n\nFile esclusi:\n${oversizedVideo.join('\n')}`,
       });
     }
   };

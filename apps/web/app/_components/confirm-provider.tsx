@@ -113,7 +113,12 @@ export function ConfirmAlertProvider({ children }: { children: React.ReactNode }
               <DialogTitle>{confirmState.opts.title}</DialogTitle>
             </div>
             {confirmState.opts.description && (
-              <DialogDescription>{confirmState.opts.description}</DialogDescription>
+              // `whitespace-pre-wrap` come nell'alert qui sotto: senza, un
+              // elenco di cose che stanno per cambiare esce tutto su una riga
+              // sola, e la conferma serve proprio a farlo leggere.
+              <DialogDescription className="whitespace-pre-wrap">
+                {confirmState.opts.description}
+              </DialogDescription>
             )}
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">

@@ -37,6 +37,14 @@ import {
 export const SYNC_MAX_BUFFER_BYTES = 5 * 1024 * 1024 * 1024;
 
 /**
+ * ⚠️ Non è questo il bordo che limita davvero i video: il cap stringente è
+ * `MAX_SIZE_BYTES` (2 GiB) in `app/api/upload/media/init/route.ts`, perché un
+ * file oltre quello non viene nemmeno aperto. Il tetto configurabile in
+ * ingresso (`TETTI_UPLOAD.maxVideoMb`, 2000 MB) sta sotto entrambi. Abbassando
+ * questa soglia, guardare anche quelli.
+ */
+
+/**
  * Sotto questa soglia → modalità buffered con SHA-256 verify (più sicuro
  * per integrità). Sopra → streaming diretto R2 → Nextcloud, niente
  * memoria, niente OOM su Vercel Hobby (1GB heap).

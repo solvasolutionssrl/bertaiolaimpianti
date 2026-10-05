@@ -40,6 +40,28 @@ Le gallerie immagini (PWA mobile, office riunioni, foto-tab) servono **thumb 400
 - **Admin osservabilità**: `/admin/media` mostra `% thumb generate` + flag visivo per riga (synced+thumb → riga emerald).
 - **Video**: NON gestiti (`sharp` non li supporta). Restano su `<video preload="metadata">`. Futuro: ffmpeg-server o frame extraction client-side.
 
+### Limiti di invio media configurabili (dal 05/10/2026, migration `20261005090000`)
+
+Quanti file per volta e quanto può pesare una foto / un video / un PDF **non sono più costanti nel codice**: sono dato su tre livelli, e il default del conteggio è passato da 30 a **50**.
+
+| Livello | Dove | Chi lo cambia |
+|---|---|---|
+| **Tetti tecnici** | `packages/api/src/limiti-upload.ts` (`TETTI_UPLOAD`) | nessuno: paracadute contro il refuso |
+| **Default globale** | `platform_settings`, riga `limiti_upload` | super admin, card in `/admin/media` |
+| **Override per tenant** | `tenants.upload_config` | super admin, tab **Upload** di `/admin/tenants/[id]` |
+
+Una chiave **assente eredita** il livello sopra, non azzera: `{}` significa «fai come dice il globale», ed è perché l'apply non ha cambiato il comportamento di nessun tenant. Logica pura e testata in `@kommessa/api/limiti-upload` (`risolviLimitiUpload`, `validaLimitiUpload`, `applicaLimitiAConfig`, `sogliaAvvisoNumero`, `sogliaAvvisoVideoMb`), 30 asserzioni.
+
+> ⚠️ **`platform_settings`: mai un segreto.** È leggibile dagli utenti autenticati (serve: il selettore file deve sapere cosa accetta) e la policy elenca le chiavi pubbliche una per una (`chiave IN ('limiti_upload')`), così una chiave nuova nasce **non** leggibile. Chiavi API e token restano in env.
+>
+> ⚠️ **`audit_events.tenant_id` è ora NULLABLE** = evento di **piattaforma**, nessun cliente. Serviva: con il `NOT NULL` il salvataggio del default globale non lasciava **nessuna** traccia (l'insert veniva rifiutato e l'errore moriva nel best-effort di `auditPlatform`, che non guardava l'esito perché supabase-js non solleva). Ora `auditPlatform` **logga** i fallimenti: resta best-effort, non è più muto.
+
+- **Due atteggiamenti opposti, ed è voluto**: in **lettura** (`risolviLimitiUpload`) si taglia ai tetti in silenzio e non si solleva mai — un dato storto nel database non deve impedire a un tecnico di caricare le foto del cantiere; in **scrittura** (`validaLimitiUpload`) si **rifiuta** dicendo campo e bordo, perché tagliare di nascosto il numero che un umano ha appena battuto nel pannello gli fa credere di aver salvato altro.
+- **Come arriva al browser**: reader server `_lib/limiti-upload-server.ts` (`server-only` + `cache()`, tollerante alla colonna assente come `tenant-features.ts`) → context `_components/limiti-upload-provider.tsx` montato nei **due gusci** (`office/layout.tsx`, `mobile/layout.tsx`) → `useLimitiUpload()`. Si aggancia una volta per guscio invece di passare prop lungo cinque alberi di componenti; **fuori dai gusci** (banco `/prova-upload`) valgono i valori di sicurezza.
+- ⚠️ **Il conteggio file misura la SELEZIONE in corso, non la commessa.** Dove la lista resta in piedi fino al salvataggio (creazione commessa, wizard sopralluogo, dettatura) il limite è di fatto cumulativo; dove i file vengono accodati e la lista si svuota (tab Scatto, tab Media) è un limite per infornata, ripetibile. Non è un tetto di foto per commessa.
+- ⚠️ **Il tetto dei video ha due bordi sopra di sé, e vince il più basso**: `MAX_SIZE_BYTES` = **2 GiB** nello schema zod di `api/upload/media/init/route.ts` (oltre, l'init risponde `400 Body non valido` e l'utente vede un errore tecnico su un file che il pannello gli ha detto di poter caricare) e `SYNC_MAX_BUFFER_BYTES` = 5 GiB in `_lib/sync-r2-to-nextcloud.ts`. Il vincolante è il primo, quindi `TETTI_UPLOAD.maxVideoMb` sta a **2000 MB** (1,86 GiB). Alzandolo, alzare PRIMA quel cap. Riferimento incrociato annotato in entrambi i file.
+- **Niente seconde verità**: la vecchia `VIDEO_MAX_SIZE_BYTES` (500 MB) di `_lib/upload-queue/types.ts` è stata **rimossa** — era un limite indipendente usato dai tre percorsi degli allegati riunione, che avrebbero continuato a rifiutare a 500 MB dopo un cambio nel pannello. Aggiungendo un nuovo punto di ingresso file, leggere i limiti da `useLimitiUpload()`, non scrivere un numero.
+
 > **Display titolo commessa**: nelle UI non mostrare mai `nome_cartella` raw (è la directory Nextcloud nel formato `{codice}_{cliente}_{lavoro}`). Usare sempre `risolviTitoloCommessa()` da `apps/web/app/_lib/commessa-display.ts` che pesca da `descrizione_ai_finale → proposta → note_iniziali` con fallback estrattivo da nome_cartella (CamelCase → spazi).
 
 ### Modifica commessa, versioning e tipologie (dal 18/06/2026, migration 20260618000000)

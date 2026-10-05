@@ -28,7 +28,7 @@ export async function auditPlatform(opts: {
 }): Promise<void> {
   try {
     const supabase = createServiceSupabase();
-    await supabase.from('audit_events').insert({
+    const { error } = await supabase.from('audit_events').insert({
       tenant_id: opts.tenantId,
       actor_user_id: opts.actorUserId,
       // L'enum `actor_role` non ha 'platform_admin': si usa 'admin' e la
@@ -45,7 +45,20 @@ export async function auditPlatform(opts: {
         actor_email: opts.actorEmail,
       } as Record<string, unknown>,
     } as never);
-  } catch {
-    // best-effort
+    // ⚠️ supabase-js NON solleva: un insert rifiutato torna qui dentro, e per
+    // questo il try/catch da solo non bastava. Un vincolo violato (è successo:
+    // `tenant_id` era NOT NULL e gli eventi di piattaforma non entravano)
+    // spariva senza traccia, cioè esattamente la cosa che questo helper
+    // dovrebbe impedire. Resta best-effort — non si fa fallire l'operazione —
+    // ma smette di essere muto.
+    if (error) {
+      console.error(
+        `[auditPlatform] evento "${opts.action}" NON registrato: ${error.message}`,
+      );
+    }
+  } catch (e) {
+    console.error(
+      `[auditPlatform] evento "${opts.action}" NON registrato: ${e instanceof Error ? e.message : 'errore sconosciuto'}`,
+    );
   }
 }

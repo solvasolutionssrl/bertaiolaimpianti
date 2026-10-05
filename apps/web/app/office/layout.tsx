@@ -8,6 +8,8 @@ import { tenantHasModule } from '../_lib/modules';
 import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { tenantFeatureEnabled } from '../_lib/tenant-features';
+import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
+import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
 import { leggiFunzioniPersonalizzate } from '../_lib/personalizzazioni';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
@@ -141,10 +143,13 @@ export default async function OfficeLayout({
   const kommessaWorld = appMode !== 'kantiere';
   // Kontabilità (interruttore del super admin) e funzioni del mondo commesse:
   // servono a menu e ricerca rapida per non proporre pagine che non si aprono.
-  const [hasKontabilita, showVoci, showPreset] = await Promise.all([
+  const [hasKontabilita, showVoci, showPreset, limitiUpload] = await Promise.all([
     hasKantiere ? kontabilitaAttiva(supabase, ctx.tenantId) : Promise.resolve(false),
     tenantFeatureEnabled('voci_catalogo', kommessaWorld),
     tenantFeatureEnabled('preset_lavoro', kommessaWorld),
+    // Limiti di invio media (globali o per tenant): servono al selettore file
+    // della creazione commessa, annidato in profondità sotto questo guscio.
+    getLimitiUploadCached(),
   ]);
   const onboardedAt = (userRow?.onboarded_at as string | null | undefined) ?? null;
   const showOnboardingTour = onboardedAt === null;
@@ -197,7 +202,7 @@ export default async function OfficeLayout({
         }}
       >
         {isPlatformAdmin && !isImpersonating ? <PlatformAdminPill /> : null}
-        {children}
+        <LimitiUploadProvider limiti={limitiUpload}>{children}</LimitiUploadProvider>
       </OfficeShellClient>
       {showOnboardingTour ? (
         <Suspense fallback={null}>

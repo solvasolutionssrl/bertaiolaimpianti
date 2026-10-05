@@ -16,7 +16,7 @@ import { Button, cn } from '@kommessa/ui';
 
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
-import { VIDEO_MAX_SIZE_BYTES } from '../../../../_lib/upload-queue/types';
+import { useLimitiUpload } from '../../../../_components/limiti-upload-provider';
 import { useAlert } from '../../../../_components/confirm-provider';
 import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
@@ -373,6 +373,10 @@ function AllegatiAttacher({
   const chiediConfermaChiusa = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const galleryRef = React.useRef<HTMLInputElement | null>(null);
   const cameraRef = React.useRef<HTMLInputElement | null>(null);
+  // Il limite dei video lo decide il pannello super admin (globale o per
+  // tenant), non una costante: stesso valore che usa il selettore media.
+  const { maxVideoMb } = useLimitiUpload();
+  const maxVideoBytes = maxVideoMb * 1024 * 1024;
   const docRef = React.useRef<HTMLInputElement | null>(null);
   const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
   const completedJobIdsRef = React.useRef<Set<string>>(new Set());
@@ -414,7 +418,7 @@ function AllegatiAttacher({
     for (const file of Array.from(files)) {
       const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
       const isVideo = !isPdf && file.type.startsWith('video/');
-      if (isVideo && file.size > VIDEO_MAX_SIZE_BYTES) {
+      if (isVideo && file.size > maxVideoBytes) {
         oversized.push(file.name);
         continue;
       }
@@ -438,7 +442,7 @@ function AllegatiAttacher({
     if (oversized.length > 0) {
       void showAlert({
         title: 'Alcuni video sono troppo grandi',
-        body: `Limite: 500 MB.\n\nFile esclusi:\n${oversized.join('\n')}`,
+        body: `Limite: ${maxVideoMb} MB.\n\nFile esclusi:\n${oversized.join('\n')}`,
       });
     }
   };

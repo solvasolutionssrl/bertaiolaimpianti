@@ -18,6 +18,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { SectionHeader } from '../../_components/section-header';
 import { MediaRowActions } from './_components/media-row-actions';
+import { LimitiGlobaliCard } from './_components/limiti-globali-card';
 import { SyncBatchButton } from './_components/sync-batch-button';
 
 export const metadata = { title: 'Platform · Media & sync' };
@@ -58,6 +59,13 @@ const STALE_UPLOADED_MINUTES = 30;
 export default async function MediaSyncPage({ searchParams }: Props) {
   await requirePlatformAdmin();
   const supabase = createServiceSupabase();
+  // Default globale dei limiti di invio media (modificabile qui sotto).
+  const limitiGlobaliRes = await supabase
+    .from('platform_settings' as never)
+    .select('valore')
+    .eq('chiave', 'limiti_upload')
+    .maybeSingle();
+  const limitiGlobali = (limitiGlobaliRes.data as { valore?: unknown } | null)?.valore ?? null;
 
   const statusFilter = (searchParams.status ?? '').trim() as Status | '';
   const tenantFilter = (searchParams.tenant ?? '').trim();
@@ -315,6 +323,9 @@ export default async function MediaSyncPage({ searchParams }: Props) {
           </Link>
         )}
       </form>
+
+      {/* Limiti di invio media: default di piattaforma */}
+      <LimitiGlobaliCard valore={limitiGlobali} />
 
       {/* Tabella */}
       <Card>

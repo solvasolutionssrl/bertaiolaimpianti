@@ -41,7 +41,7 @@ import { eliminaMediaOffice } from '../../foto/_actions/media';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { useConfermaCommessaChiusa } from '@/app/_components/conferma-commessa-chiusa';
 import { useUploadQueue } from '@/app/_components/upload-queue-provider';
-import { VIDEO_MAX_SIZE_BYTES } from '@/app/_lib/upload-queue/types';
+import { useLimitiUpload } from '@/app/_components/limiti-upload-provider';
 import {
   MediaLightbox,
   type MediaItem,
@@ -1520,6 +1520,10 @@ function RiunioneAllegatiAttacherDesktop({
   const chiediConfermaChiusa = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const galleryRef = React.useRef<HTMLInputElement | null>(null);
   const enqueuedJobIdsRef = React.useRef<Set<string>>(new Set());
+  // Il limite dei video lo decide il pannello super admin (globale o per
+  // tenant), non una costante: stesso valore che usa il selettore media.
+  const { maxVideoMb } = useLimitiUpload();
+  const maxVideoBytes = maxVideoMb * 1024 * 1024;
   const completedJobIdsRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
@@ -1542,7 +1546,7 @@ function RiunioneAllegatiAttacherDesktop({
     const oversized: string[] = [];
     for (const file of Array.from(files)) {
       const isVideo = file.type.startsWith('video/');
-      if (isVideo && file.size > VIDEO_MAX_SIZE_BYTES) {
+      if (isVideo && file.size > maxVideoBytes) {
         oversized.push(file.name);
         continue;
       }
@@ -1560,7 +1564,7 @@ function RiunioneAllegatiAttacherDesktop({
     if (oversized.length > 0) {
       void showAlert({
         title: 'Alcuni video sono troppo grandi',
-        body: `Limite: 500 MB.\n\nFile esclusi:\n${oversized.join('\n')}`,
+        body: `Limite: ${maxVideoMb} MB.\n\nFile esclusi:\n${oversized.join('\n')}`,
       });
     }
   };

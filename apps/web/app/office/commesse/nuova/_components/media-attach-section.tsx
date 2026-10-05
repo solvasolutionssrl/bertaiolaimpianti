@@ -39,6 +39,11 @@ import {
   fmtScattoDate,
   readImageDate,
 } from '../../../../_lib/read-image-date';
+import { useLimitiUpload } from '@/app/_components/limiti-upload-provider';
+import {
+  sogliaAvvisoNumero,
+  sogliaAvvisoVideoMb,
+} from '@kommessa/api/limiti-upload';
 import { useAttesaPicker } from '../../../../_lib/use-attesa-picker';
 
 export interface MediaFile {
@@ -52,19 +57,23 @@ export interface MediaFile {
   takenAt: Date | null;
 }
 
-const MAX_VIDEO_MB = 500;
-const MAX_PHOTO_MB = 25;
-// Documenti PDF (capitolati, schemi, preventivi cartacei scansionati): cap
-// generoso ma sotto la soglia multipart, niente compressione client-side.
-const MAX_DOC_MB = 50;
-// Cap pratico: 30 file in un singolo intake (foto + video). Sopra è quasi
-// sempre un errore (sopralluogo lungo = meglio scattarne 30, creare la
-// commessa, poi continuare dal pannello commessa). 30 lascia tantissimo
-// spazio per sopralluoghi reali (10-15 foto + 1-2 video tipici).
-const MAX_FILES = 30;
-const WARN_VIDEO_MB = 200;
-// Soft warning quando ci si avvicina al cap: 80% = 24/30.
-const WARN_NEAR_LIMIT = Math.floor(MAX_FILES * 0.8);
+// I quattro limiti (quanti file, quanto pesa una foto / un video / un PDF) NON
+// stanno più qui: dal 05/10/2026 sono dato, deciso dal pannello super admin a
+// livello globale o per singolo tenant, e arrivano dal contesto
+// (`useLimitiUpload`). Fuori dai gusci office e mobile valgono i valori di
+// sicurezza di `@kommessa/api/limiti-upload` — è il caso del banco
+// `/prova-upload`.
+//
+// Attenzione a cosa misura il conteggio: è il contenuto di QUESTA selezione.
+// Dove la lista resta in piedi fino al salvataggio (creazione commessa, wizard
+// sopralluogo, dettatura) il limite è di fatto cumulativo; dove invece i file
+// vengono accodati e la lista si svuota (tab Scatto, tab Media) è un limite per
+// infornata, ripetibile.
+//
+// Le due soglie di avviso si ricavano dai limiti risolti (`sogliaAvviso*`, pure
+// e testate) così restano sensate anche se il pannello li cambia: col default
+// di 500 MB il video "grande" è >200 MB come è sempre stato, e l'avviso di
+// "quasi al limite" scatta a 40 file su 50.
 
 interface ValidationError {
   name: string;
@@ -94,6 +103,10 @@ export function MediaAttachSection({
   title,
   description,
 }: Props) {
+  const { maxFile, maxFotoMb, maxVideoMb, maxDocMb } = useLimitiUpload();
+  const warnVideoMb = sogliaAvvisoVideoMb(maxVideoMb);
+  const warnNearLimit = sogliaAvvisoNumero(maxFile);
+
   const inputRef = React.useRef<HTMLInputElement>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const docInputRef = React.useRef<HTMLInputElement>(null);
@@ -114,10 +127,10 @@ export function MediaAttachSection({
     if (!list || list.length === 0) return;
     const errors: ValidationError[] = [];
     const accepted: MediaFile[] = [];
-    const remaining = MAX_FILES - files.length;
+    const remaining = maxFile - files.length;
     Array.from(list).forEach((f, idx) => {
       if (idx >= remaining) {
-        errors.push({ name: f.name, reason: `Limite di ${MAX_FILES} file raggiunto` });
+        errors.push({ name: f.name, reason: `Limite di ${maxFile} file raggiunto` });
         return;
       }
       // I PDF arrivano dal picker documenti (mime application/pdf) ma su alcuni
@@ -125,15 +138,15 @@ export function MediaAttachSection({
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
       const isVideo = !isPdf && f.type.startsWith('video/');
       const sizeMB = f.size / (1024 * 1024);
-      const limit = isPdf ? MAX_DOC_MB : isVideo ? MAX_VIDEO_MB : MAX_PHOTO_MB;
+      const limit = isPdf ? maxDocMb : isVideo ? maxVideoMb : maxFotoMb;
       if (sizeMB > limit) {
         errors.push({
           name: f.name,
           reason: isPdf
-            ? `File troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_DOC_MB} MB).`
+            ? `File troppo grande (${sizeMB.toFixed(0)} MB, max ${maxDocMb} MB).`
             : isVideo
-              ? `Video troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_VIDEO_MB} MB). Vai su Impostazioni iPhone → Fotocamera → Formato e scegli "Alta efficienza" (H.265).`
-              : `Foto troppo grande (${sizeMB.toFixed(0)} MB, max ${MAX_PHOTO_MB} MB).`,
+              ? `Video troppo grande (${sizeMB.toFixed(0)} MB, max ${maxVideoMb} MB). Vai su Impostazioni iPhone → Fotocamera → Formato e scegli "Alta efficienza" (H.265).`
+              : `Foto troppo grande (${sizeMB.toFixed(0)} MB, max ${maxFotoMb} MB).`,
         });
         return;
       }
@@ -205,9 +218,9 @@ export function MediaAttachSection({
 
   const totalMB = files.reduce((s, f) => s + f.sizeMB, 0);
   const hasVideo = files.some((f) => f.kind === 'video');
-  const hasLargeVideo = files.some((f) => f.kind === 'video' && f.sizeMB > WARN_VIDEO_MB);
-  const atLimit = files.length >= MAX_FILES;
-  const nearLimit = files.length >= WARN_NEAR_LIMIT && !atLimit;
+  const hasLargeVideo = files.some((f) => f.kind === 'video' && f.sizeMB > warnVideoMb);
+  const atLimit = files.length >= maxFile;
+  const nearLimit = files.length >= warnNearLimit && !atLimit;
 
   return (
     <Card>
@@ -241,7 +254,7 @@ export function MediaAttachSection({
           >
             <span>
               <span className="font-mono font-semibold tabular-nums">
-                {files.length}/{MAX_FILES}
+                {files.length}/{maxFile}
               </span>{' '}
               file allegati{totalMB > 0 ? ` · ${totalMB.toFixed(0)} MB` : ''}
             </span>
@@ -552,7 +565,7 @@ export function MediaAttachSection({
           <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
             <Smartphone className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              Video grande (&gt;{WARN_VIDEO_MB} MB) — il caricamento richiede qualche minuto su rete mobile.
+              Video grande (&gt;{warnVideoMb} MB) — il caricamento richiede qualche minuto su rete mobile.
               Per file più leggeri: <strong>Impostazioni iPhone → Fotocamera → Formato → Alta efficienza</strong> (H.265 dimezza la dimensione senza perdita visibile).
               Puoi continuare a lavorare o chiudere l&apos;app: il caricamento riprende da solo.
             </span>
@@ -572,7 +585,7 @@ export function MediaAttachSection({
           {files.length > 0 ? (
             <span>
               <span className="font-semibold tabular-nums text-foreground">{files.length}</span>
-              {atLimit && <span className="ml-1">(max {MAX_FILES})</span>}{' '}
+              {atLimit && <span className="ml-1">(max {maxFile})</span>}{' '}
               file ·{' '}
               <span className="font-semibold tabular-nums text-foreground">
                 {totalMB.toFixed(1)} MB

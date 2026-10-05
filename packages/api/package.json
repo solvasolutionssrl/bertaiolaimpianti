@@ -26,6 +26,7 @@
     "./pianificazione": "./src/pianificazione.ts",
     "./permessi-tipi": "./src/permessi-tipi.ts",
     "./rome-time": "./src/rome-time.ts",
+    "./limiti-upload": "./src/limiti-upload.ts",
     "./upload-multipart": "./src/upload-multipart.ts",
     "./upload-queue-policy": "./src/upload-queue-policy.ts",
     "./integrazione-mappa": "./src/integrazione-mappa.ts",

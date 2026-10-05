@@ -8,6 +8,12 @@ import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 import { tenantHasModule } from '../_lib/modules';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
+import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
+import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
+import {
+  LIMITI_UPLOAD_FALLBACK,
+  type LimitiUpload,
+} from '@kommessa/api/limiti-upload';
 
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
@@ -63,9 +69,12 @@ export default async function MobileLayout({
   let appMode: AppMode = 'kommessa';
   let showOnboardingTour = false;
   let unreadCount = 0;
+  // Limiti di invio media: decisi dal pannello super admin (globali o per
+  // tenant), servono a tab Scatto, tab Media, wizard sopralluogo e dettatura.
+  let limitiUpload: LimitiUpload = LIMITI_UPLOAD_FALLBACK;
   if (ctx) {
     const supabase = createServerSupabase();
-    const [userRes, notifRes, tenantRes] = await Promise.all([
+    const [userRes, notifRes, tenantRes, limitiRes] = await Promise.all([
       supabase.from('users').select('onboarded_at').eq('id', ctx.userId).maybeSingle(),
       supabase
         .from('notifiche')
@@ -77,7 +86,9 @@ export default async function MobileLayout({
         .select('app_mode')
         .eq('id', ctx.tenantId)
         .maybeSingle(),
+      getLimitiUploadCached(),
     ]);
+    limitiUpload = limitiRes;
     showOnboardingTour =
       ((userRes.data as { onboarded_at: string | null } | null)?.onboarded_at ?? null) === null;
     unreadCount = notifRes.count ?? 0;
@@ -143,7 +154,7 @@ export default async function MobileLayout({
             contenuto: scorre con la pagina ma si ritrova risalendo, e non
             interferisce con la barra in basso ne' con le aree di sicurezza. */}
         {impersonando ? <ImpersonationBanner tenantLabel={etichettaImpersonation} /> : null}
-        {children}
+        <LimitiUploadProvider limiti={limitiUpload}>{children}</LimitiUploadProvider>
       </main>
 
       {ctx ? (

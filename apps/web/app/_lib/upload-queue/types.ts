@@ -83,5 +83,8 @@ export interface UploadJob {
 // Qui restano solo gli alias storici usati dalla UI.
 export const MAX_ATTEMPTS = MAX_TENTATIVI;
 
-/** Limite client-side per video (richiesto da Bertaiola: 500 MB). */
-export const VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024;
+// Il limite dei video NON sta più qui: dal 05/10/2026 è un'impostazione del
+// pannello super admin (globale o per tenant) e si legge da
+// `useLimitiUpload()` → `maxVideoMb`. La vecchia costante a 500 MB era una
+// seconda verità accanto a quelle del selettore file: alzando il limite di un
+// tenant gli allegati riunione avrebbero continuato a rifiutare a 500 MB.
