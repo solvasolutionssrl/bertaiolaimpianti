@@ -59,3 +59,54 @@ export async function notificaAssegnazione(opts: {
     );
   }
 }
+
+/**
+ * Avvisa un tecnico che è stato messo su una commessa.
+ *
+ * ⚠️ PERCHE' QUESTA FUNZIONE NASCE OGGI, 07/10/2026
+ * Il tipo di notifica `commessa_assegnata` **esisteva da marzo**: dichiarato
+ * in `notification_event_types` con tanto di descrizione («Quando vieni
+ * nominato responsabile o tecnico di una commessa»), presente nella matrice
+ * delle preferenze dentro il profilo dell'app — dove ognuno poteva scegliere
+ * su quali canali riceverlo. **Nessuna riga di codice lo inviava.**
+ *
+ * Il risultato era il peggiore dei due mondi: l'utente vedeva
+ * un'impostazione, la configurava, e non arrivava niente. Un tecnico messo su
+ * una commessa lo scopriva aprendo l'app e trovandocela.
+ *
+ * Stesso contratto dell'altra: service role (la RLS di `notifiche` è
+ * self-only), best-effort con l'errore nei log, e non si avvisa chi assegna a
+ * se stesso.
+ */
+export async function notificaCommessaAssegnata(opts: {
+  tenantId: string;
+  userId: string;
+  attoreUserId: string;
+  commessaId: string;
+  /** Come si chiama il lavoro a schermo: codice più titolo, se c'è. */
+  titolo: string;
+}): Promise<void> {
+  if (opts.userId === opts.attoreUserId) return;
+  try {
+    const service = createServiceSupabase();
+    const { error } = await service.from('notifiche').insert({
+      tenant_id: opts.tenantId,
+      user_id: opts.userId,
+      type: 'commessa_assegnata',
+      payload: {
+        title: `Sei sul lavoro: ${opts.titolo}`,
+        commessa_id: opts.commessaId,
+        actor_user_id: opts.attoreUserId,
+      } as unknown as never,
+    } as never);
+    if (error) {
+      console.error(
+        `[notificaCommessaAssegnata] notifica NON inviata a ${opts.userId}: ${error.message}`,
+      );
+    }
+  } catch (e) {
+    console.error(
+      `[notificaCommessaAssegnata] notifica NON inviata a ${opts.userId}: ${e instanceof Error ? e.message : 'errore sconosciuto'}`,
+    );
+  }
+}

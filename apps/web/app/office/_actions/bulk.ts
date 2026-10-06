@@ -387,7 +387,13 @@ export async function bulkAssegnaResponsabile(
         return {
           tenant_id: ctx.tenantId,
           user_id: parsed.userId,
-          type: 'commessa_assigned',
+          // ⚠️ Si chiamava `commessa_assigned`, in inglese, e NON era fra i tipi
+          // registrati in `notification_event_types`: le preferenze
+          // dell'utente non potevano governarla. Il nome registrato — e
+          // quello del resto dell'app — e' `commessa_assegnata`. Zero righe
+          // con il vecchio nome in archivio, quindi la rinomina non perde
+          // niente.
+          type: 'commessa_assegnata',
           payload: {
             commessa_id: c.id,
             codice: c.codice_interno,

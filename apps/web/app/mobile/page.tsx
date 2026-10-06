@@ -36,6 +36,7 @@ import {
 } from '@kommessa/api/priorita';
 import { IconaPriorita } from '@/app/_components/priorita-ui';
 import { possoAprireLavori } from '../_lib/capacita-server';
+import { CampanellaHero } from './_components/campanella-hero';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -82,12 +83,33 @@ export default async function MobileHomePage() {
 
 // ─── GESTIONE DASHBOARD ──────────────────────────────────────────────────────
 
+/**
+ * Quante notifiche non lette ha chi sta guardando.
+ *
+ * Il conteggio lo fa gia' il guscio per il pallino sulla barra in basso, ma
+ * questa e' una pagina e non puo' leggerlo da li': una domanda indicizzata in
+ * piu' (`notifiche_user_unread_idx`) costa meno che passare un dato lungo
+ * tutto l'albero dei componenti.
+ */
+async function contaNonLette(
+  supabase: ReturnType<typeof createServerSupabase>,
+  userId: string,
+): Promise<number> {
+  const { count } = await supabase
+    .from('notifiche')
+    .select('id', { count: 'exact', head: true })
+    .is('read_at', null)
+    .eq('user_id', userId);
+  return count ?? 0;
+}
+
 async function GestioneDashboard({
   ctx,
 }: {
   ctx: Awaited<ReturnType<typeof guardMobile>>;
 }) {
   const supabase = createServerSupabase();
+  const nonLette = await contaNonLette(supabase, ctx.userId);
 
 
   const recenti = await supabase
@@ -131,9 +153,16 @@ async function GestioneDashboard({
     <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
       {/* Hero dark */}
       <Hero>
-        <HeroMeta>
-          {greeting()} · {formatToday()}
-        </HeroMeta>
+        <div className="flex items-start justify-between gap-3">
+          <HeroMeta>
+            {greeting()} · {formatToday()}
+          </HeroMeta>
+          <CampanellaHero
+            userId={ctx.userId}
+            tenantId={ctx.tenantId}
+            initialCount={nonLette}
+          />
+        </div>
         <div className="mt-2 flex items-baseline justify-between gap-3">
           <h1 className="font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
             DASHBOARD
@@ -217,6 +246,7 @@ async function CampoOggi({
   ctx: Awaited<ReturnType<typeof guardMobile>>;
 }) {
   const supabase = createServerSupabase();
+  const nonLette = await contaNonLette(supabase, ctx.userId);
 
   // Tecnico: vede solo le commesse a cui è assegnato (commessa_tecnici).
   // L'assegnazione è gestita da admin/office via la pagina commessa.
@@ -378,9 +408,16 @@ async function CampoOggi({
     <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
       {/* Hero dark */}
       <Hero>
-        <HeroMeta>
-          {greeting()} · {formatToday()}
-        </HeroMeta>
+        <div className="flex items-start justify-between gap-3">
+          <HeroMeta>
+            {greeting()} · {formatToday()}
+          </HeroMeta>
+          <CampanellaHero
+            userId={ctx.userId}
+            tenantId={ctx.tenantId}
+            initialCount={nonLette}
+          />
+        </div>
         <h1 className="mt-2 font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
           OGGI
         </h1>

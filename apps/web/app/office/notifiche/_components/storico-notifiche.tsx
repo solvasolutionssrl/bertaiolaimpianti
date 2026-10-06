@@ -2,18 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Bell,
-  Clock3,
-  MessageSquare,
-  PencilRuler,
-  Ticket,
-  type LucideIcon,
-} from 'lucide-react';
+
 import { Card, CardContent, cn } from '@kommessa/ui';
 
 import { fmtDataOra } from '../../_lib/format';
 import { segnaNotificaLetta } from '../actions';
+import { metaNotifica } from '@/app/_components/notifiche-meta';
 
 export interface NotificaRow {
   id: string;
@@ -23,15 +17,7 @@ export interface NotificaRow {
   created_at: string;
 }
 
-const NOTIF_META: Record<string, { label: string; Icon: LucideIcon }> = {
-  ticket_assigned: { label: 'Ticket assegnato', Icon: Ticket },
-  ticket_new_message: { label: 'Nuovo messaggio ticket', Icon: MessageSquare },
-  fase_zero_foto: { label: 'Fase senza foto', Icon: Bell },
-  dico_scadenza: { label: 'DICO in scadenza', Icon: Clock3 },
-  commessa_pronta: { label: 'Commessa pronta per chiusura', Icon: Bell },
-  voice_note: { label: 'Nota vocale', Icon: Bell },
-  kantiere_modifica_tecnico: { label: 'Ore modificate dal tecnico', Icon: PencilRuler },
-};
+// Le etichette stanno in `_components/notifiche-meta.tsx`: un posto solo.
 
 function fmtGiorno(data: string): string {
   return new Intl.DateTimeFormat('it-IT', {
@@ -52,7 +38,7 @@ function titolo(n: NotificaRow): string {
   }
   if (typeof p.title === 'string') return p.title;
   if (typeof p.descrizione === 'string') return p.descrizione;
-  return NOTIF_META[n.type]?.label ?? n.type;
+  return metaNotifica(n.type).label;
 }
 
 function destinazione(n: NotificaRow): string | null {
@@ -91,7 +77,7 @@ export function StoricoNotifiche({ rows }: { rows: NotificaRow[] }) {
       <CardContent className="divide-y divide-border p-0">
         {rows.map((n) => {
           const unread = !n.read_at;
-          const meta = NOTIF_META[n.type] ?? { label: n.type, Icon: Bell };
+          const meta = metaNotifica(n.type);
           const Icon = meta.Icon;
           return (
             <button

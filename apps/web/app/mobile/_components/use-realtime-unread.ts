@@ -19,10 +19,20 @@ export function useRealtimeUnread({
   userId,
   tenantId,
   initialCount,
+  canale = 'nav',
 }: {
   userId: string;
   tenantId: string;
   initialCount: number;
+  /**
+   * Nome del canale, per chi monta questo hook piu' di una volta nella stessa
+   * pagina (la barra in basso e la campanella in alto).
+   *
+   * ⚠️ Senza, i due userebbero lo stesso argomento `notifiche:<utente>` e lo
+   * smontaggio di uno chiuderebbe il canale dell'altro: un numero che smette
+   * di aggiornarsi senza nessun errore.
+   */
+  canale?: string;
 }): number {
   const [count, setCount] = React.useState(initialCount);
 
@@ -35,7 +45,7 @@ export function useRealtimeUnread({
     if (!userId) return;
     const supabase = createBrowserSupabase();
     const channel = supabase
-      .channel(`notifiche:${userId}`)
+      .channel(`notifiche:${canale}:${userId}`)
       .on(
         'postgres_changes',
         {
@@ -77,7 +87,7 @@ export function useRealtimeUnread({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [userId, tenantId]);
+  }, [userId, tenantId, canale]);
 
   return count;
 }

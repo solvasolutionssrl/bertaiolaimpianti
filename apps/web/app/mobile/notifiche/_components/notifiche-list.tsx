@@ -4,22 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowRight,
-  Bell,
   BellOff,
   CalendarClock,
   CheckCheck,
-  Clock3,
   Loader2,
-  ListChecks,
-  MessageSquare,
-  PencilRuler,
-  Ticket,
   X,
-  type LucideIcon,
 } from 'lucide-react';
 
 import { segnaNotificaLetta, segnaTutteLette } from '@/app/office/notifiche/actions';
 import { Portal } from '@/app/mobile/_components/portal';
+import { metaNotifica } from '@/app/_components/notifiche-meta';
 
 export interface NotificaRow {
   id: string;
@@ -29,21 +23,7 @@ export interface NotificaRow {
   created_at: string;
 }
 
-const NOTIF_META: Record<string, { label: string; Icon: LucideIcon }> = {
-  ticket_assigned: { label: 'Ticket assegnato', Icon: Ticket },
-  ticket_new_message: { label: 'Nuovo messaggio ticket', Icon: MessageSquare },
-  ticket_nuovo_portale: { label: 'Nuovo ticket dal cliente', Icon: Ticket },
-  fase_zero_foto: { label: 'Fase senza foto', Icon: Bell },
-  dico_scadenza: { label: 'DICO in scadenza', Icon: Clock3 },
-  commessa_pronta: { label: 'Commessa pronta per chiusura', Icon: Bell },
-  commessa_assigned: { label: 'Commessa assegnata', Icon: Bell },
-  commessa_completata: { label: 'Commessa completata', Icon: Bell },
-  commessa_collaudo: { label: 'Commessa in collaudo', Icon: Bell },
-  commessa_archiviata: { label: 'Commessa archiviata', Icon: Bell },
-  voice_note: { label: 'Nota vocale', Icon: Bell },
-  kantiere_modifica_tecnico: { label: 'Ore modificate dal tecnico', Icon: PencilRuler },
-  todo_assegnato: { label: 'Assegnato a te', Icon: ListChecks },
-};
+// Le etichette stanno in `_components/notifiche-meta.tsx`: un posto solo.
 
 function fmtGiorno(data: string): string {
   return new Intl.DateTimeFormat('it-IT', {
@@ -63,7 +43,7 @@ function titolo(n: NotificaRow): string {
   }
   if (typeof p.title === 'string') return p.title;
   if (typeof p.descrizione === 'string') return p.descrizione;
-  return NOTIF_META[n.type]?.label ?? n.type;
+  return metaNotifica(n.type).label;
 }
 
 /**
@@ -219,7 +199,7 @@ export function NotificheList({ rows }: { rows: NotificaRow[] }) {
       <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card shadow-soft">
         {rows.map((n) => {
           const unread = isUnread(n);
-          const meta = NOTIF_META[n.type] ?? { label: n.type, Icon: Bell };
+          const meta = metaNotifica(n.type);
           const Icon = meta.Icon;
           return (
             <button
@@ -290,7 +270,7 @@ function NotificaDettaglio({
   onVai: (href: string) => void;
   navigating: boolean;
 }) {
-  const meta = NOTIF_META[notifica.type] ?? { label: notifica.type, Icon: Bell };
+  const meta = metaNotifica(notifica.type);
   const Icon = meta.Icon;
   const testo = corpo(notifica);
   const dest = destinazioneMobile(notifica);

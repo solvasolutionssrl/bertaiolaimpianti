@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
+import { notificaCommessaAssegnata } from './_lib/notifica-assegnazione';
 
 /**
  * Server actions per assegnare/togliere tecnici alle commesse.
@@ -89,6 +90,30 @@ export async function assegnaTecnico(input: unknown): Promise<AssignResult> {
       commessa_id: parsed.data.commessaId,
       tecnico_user_id: parsed.data.userId,
     } as unknown as never,
+  });
+
+  // Avvisa l'interessato. Finora assegnare un tecnico a una commessa scriveva
+  // SOLO su `audit_events`: lui non riceveva niente e lo scopriva aprendo
+  // l'app. Vedi la nota in `notificaCommessaAssegnata`.
+  const { data: comm } = await supabase
+    .from('commesse')
+    .select('codice_interno, descrizione_ai_finale, descrizione_ai_proposta')
+    .eq('id', parsed.data.commessaId)
+    .maybeSingle();
+  const c = comm as {
+    codice_interno?: string | null;
+    descrizione_ai_finale?: string | null;
+    descrizione_ai_proposta?: string | null;
+  } | null;
+  const primaRiga =
+    (c?.descrizione_ai_finale ?? c?.descrizione_ai_proposta ?? '').split('\n')[0]?.trim() || null;
+  const titolo = [c?.codice_interno, primaRiga].filter(Boolean).join(' · ');
+  await notificaCommessaAssegnata({
+    tenantId: ctx.tenantId,
+    userId: parsed.data.userId,
+    attoreUserId: ctx.userId,
+    commessaId: parsed.data.commessaId,
+    titolo: titolo || 'un lavoro',
   });
 
   revalidatePath(`/office/commesse/${parsed.data.commessaId}`);
