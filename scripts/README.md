@@ -25,6 +25,8 @@ Script operativi (import una tantum, manutenzioni, banchi di prova) che vivono f
 | `cleanup-pianificazione-duplicati.mjs` | Toglie i blocchi doppi dalla pianificazione. |
 | `archivio-kantiere/esporta.mjs` | Esporta in CSV le presenze (sola lettura; gli esiti restano fuori dal repo). |
 | `demo/` | Crea e allinea gli accessi dei tenant dimostrativi. |
+| `demo/crea-commessa-demo.ts` | Una commessa dimostrativa completa sul tenant **BER** di produzione (cliente, dettatura, cose da fare, riunione, foto e video su R2, assegnata a tutti i tecnici). Dry-run di default; **non brucia il contatore dei codici**. |
+| `demo/togli-commessa-demo.ts` | La toglie, oggetti R2 e avvisi compresi. Il cliente si cancella solo se le sue note dicono che è un dato dimostrativo. |
 
 ## Import una tantum (FPM)
 
