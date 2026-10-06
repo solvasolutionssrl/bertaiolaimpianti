@@ -13,6 +13,7 @@ import {
 } from './_lib/storage-cleanup';
 import { notificaAssegnazione } from './_lib/notifica-assegnazione';
 import { PRIORITA, PRIORITA_DEFAULT } from '@kommessa/api/priorita';
+import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 /**
  * Server actions per gestire i TODO di una commessa.
@@ -94,12 +95,51 @@ export async function creaTodo(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono creare TODO' };
-  }
 
   const supabase = createServerSupabase();
   const commessaId = parsed.data.commessaId ?? null;
+
+  /**
+   * Chi puo' scrivere una cosa da fare, e con quali limiti.
+   *
+   * L'ufficio e chi ha i poteri del capo squadra: tutto, compresa
+   * l'assegnazione e la richiesta al telefono.
+   *
+   * Un tecnico qualsiasi: **solo dentro una commessa su cui lavora, e senza
+   * assegnarla a nessuno.** E' il gesto di chi sta sul posto — «qui ci vuole
+   * una guarnizione nuova» — e oggi se lo deve ricordare a voce fino in
+   * ufficio. Senza assegnatario la cosa da fare resta «per chiunque passi»,
+   * che e' esattamente cio' che serve.
+   *
+   * Gli stessi tre limiti sono scritti anche nella policy
+   * `commessa_todo_insert_tecnico`: qui ci stanno per dire **perche'** no, in
+   * italiano, invece di un errore di vincolo.
+   */
+  if (!(await possoAprireLavori())) {
+    if (ctx.role !== 'tecnico') {
+      return { ok: false, error: 'Permessi insufficienti.' };
+    }
+    if (!commessaId) {
+      return {
+        ok: false,
+        error: 'Una richiesta arrivata al telefono la registra l’ufficio.',
+      };
+    }
+    if (parsed.data.assegnatoA && parsed.data.assegnatoA !== ctx.userId) {
+      return {
+        ok: false,
+        error: 'Puoi scrivere una cosa da fare, non darla a qualcun altro: la vedrà chi passa.',
+      };
+    }
+    const { count } = await supabase
+      .from('commessa_tecnici' as never)
+      .select('user_id', { count: 'exact', head: true })
+      .eq('commessa_id', commessaId)
+      .eq('user_id', ctx.userId);
+    if ((count ?? 0) === 0) {
+      return { ok: false, error: 'Non sei nella squadra di questo lavoro.' };
+    }
+  }
 
   // sort_order = max+1 nel suo gruppo. Per le richieste il gruppo è «senza
   // commessa», e serve `.is()`: `.eq('commessa_id', null)` non trova i NULL.
@@ -258,12 +298,45 @@ export async function cambiaTodoStato(input: unknown): Promise<Result> {
   if (!ALL_ROLES.has(ctx.role)) {
     return { ok: false, error: 'Permessi insufficienti' };
   }
-  // annullato solo admin/office (è una "cancellazione soft")
+  // annullato solo admin/office: è una cancellazione travestita.
   if (parsed.data.stato === 'annullato' && !FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono annullare un TODO' };
+    return { ok: false, error: 'Solo l’ufficio può annullare una cosa da fare.' };
   }
 
   const supabase = createServerSupabase();
+
+  /**
+   * Un tecnico spunta solo cio' che lo riguarda: una cosa da fare su una
+   * commessa su cui e' in squadra, oppure una assegnata a lui (anche una
+   * richiesta senza commessa, che l'ufficio gli ha passato).
+   *
+   * ⚠️ Fino a oggi questo controllo **non c'era da nessuna parte**: non qui e
+   * non in RLS, dove la policy diceva solo «sei un tecnico di questo spazio di
+   * lavoro». Il filtro «solo le mie» viveva nella pagina, e una pagina non e'
+   * un presidio. Adesso lo dicono entrambi; qui per poterlo spiegare.
+   */
+  if (ctx.role === 'tecnico') {
+    const { data: riga } = await supabase
+      .from('commessa_todo' as never)
+      .select('commessa_id, assegnato_a')
+      .eq('id', parsed.data.id)
+      .maybeSingle();
+    const r = riga as { commessa_id: string | null; assegnato_a: string | null } | null;
+    if (!r) return { ok: false, error: 'Questa cosa da fare non c’è più.' };
+    if (r.assegnato_a !== ctx.userId) {
+      if (!r.commessa_id) {
+        return { ok: false, error: 'Questa richiesta non è tua.' };
+      }
+      const { count } = await supabase
+        .from('commessa_tecnici' as never)
+        .select('user_id', { count: 'exact', head: true })
+        .eq('commessa_id', r.commessa_id)
+        .eq('user_id', ctx.userId);
+      if ((count ?? 0) === 0) {
+        return { ok: false, error: 'Non sei nella squadra di questo lavoro.' };
+      }
+    }
+  }
   const { data, error } = await supabase
     .from('commessa_todo' as never)
     .update({ stato: parsed.data.stato } as never)

@@ -44,6 +44,8 @@ import {
   resetPasswordUser,
 } from '../../../_actions/utenti';
 import { creaUtenteTenant, impersonateUser } from '../../../_actions/tenants';
+import { impostaPotereUtente } from '../../../_actions/utenti';
+import { haCapacita } from '@kommessa/api/capacita';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
 interface UtenteRow {
@@ -53,6 +55,10 @@ interface UtenteRow {
   role: string;
   attivo: boolean;
   created_at: string;
+  /** I poteri in piu' di quelli del ruolo (`users.permissions`). */
+  permissions?: unknown;
+  /** Se e' ancora sulla password consegnata dall'ufficio. */
+  must_change_password?: boolean | null;
 }
 
 const ROLES = ['admin', 'office', 'tecnico'] as const;
@@ -159,6 +165,9 @@ export function TabUtenti({
                 <th className="px-2 py-2 font-medium">Nome</th>
                 <th className="px-2 py-2 font-medium">Email</th>
                 <th className="px-2 py-2 font-medium">Ruolo</th>
+                <th className="px-2 py-2 font-medium" title="Può aprire lavori nuovi">
+                  Capo
+                </th>
                 <th className="px-2 py-2 font-medium">Stato</th>
                 <th className="px-2 py-2 text-right font-medium">Azioni</th>
               </tr>
@@ -166,7 +175,7 @@ export function TabUtenti({
             <tbody className="divide-y divide-border">
               {utenti.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-muted-foreground">
                     Nessun utente. Invita il primo dal pulsante in alto.
                   </td>
                 </tr>
@@ -194,13 +203,52 @@ export function TabUtenti({
                         ))}
                       </select>
                     </td>
+                    {/* Capo squadra: solo per i tecnici. Su un amministratore o
+                        sull'ufficio il potere e' compreso nel ruolo, e una
+                        casella che non cambia niente inganna chi la guarda. */}
                     <td className="px-2 py-2">
-                      {u.attivo ? (
+                      {u.role === 'tecnico' ? (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={haCapacita(
+                            { role: u.role, permissions: u.permissions },
+                            'capo_squadra',
+                          )}
+                          aria-label={`Capo squadra per ${u.display_name ?? u.email}`}
+                          onChange={(e) =>
+                            start(async () => {
+                              const res = await impostaPotereUtente({
+                                userId: u.id,
+                                capacita: 'capo_squadra',
+                                acceso: e.target.checked,
+                              });
+                              if (!res.ok) await showAlert({ title: 'Non modificato', body: res.error });
+                              router.refresh();
+                            })
+                          }
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground" title="Compreso nel ruolo">
+                          —
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2">
+                      {!u.attivo ? (
+                        <Badge variant="destructive">Disattivato</Badge>
+                      ) : u.must_change_password ? (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/40 text-amber-700 dark:text-amber-400"
+                          title="Non ha ancora scelto la sua password"
+                        >
+                          Password da scegliere
+                        </Badge>
+                      ) : (
                         <Badge variant="outline" className="border-success/30 text-success">
                           Attivo
                         </Badge>
-                      ) : (
-                        <Badge variant="destructive">Disattivato</Badge>
                       )}
                     </td>
                     <td className="px-2 py-2 text-right">

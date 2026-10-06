@@ -55,6 +55,7 @@ import { CloudRetry } from './_components/cloud-retry';
 import { CommessaChiusaNota } from '../../../_components/commessa-chiusa-nota';
 import { type Priorita } from '@kommessa/api/priorita';
 import { leggiLinkPubblico } from '@/app/_actions/link-pubblico';
+import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -93,6 +94,22 @@ export default async function CommessaDetailPage({
   const canEditDettagli = ctx.role === 'admin';
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
   const canEditCommessa = ctx.role === 'admin' || ctx.role === 'office';
+  const eTecnico = ctx.role === 'tecnico';
+
+  /**
+   * Il tab «File» non si mostra ai tecnici.
+   *
+   * Non e' una questione di segreti: e' il cassetto dei documenti del lavoro
+   * (preventivi, DiCo, schede tecniche, PDF del cliente) e per chi sta in
+   * cantiere non e' un posto dove fare qualcosa. Gli serve l'elenco dei
+   * lavori, le foto e sapere chi c'e' sopra. Un tab che non si usa mai e' un
+   * quarto di barra tolto ai tre che si usano.
+   */
+  const mostraFile = !eTecnico;
+
+  // Riunioni e assegnazione: da capo squadra. Scrivere una cosa da fare: da
+  // chiunque sia in squadra (il gate sta nella action e nella policy).
+  const apreLavori = await possoAprireLavori();
 
   // Carica tecnici assegnati + rosa disponibile (rosa solo se admin/office)
   const [tecniciAssegnati, tecniciTenant] = await Promise.all([
@@ -182,13 +199,26 @@ export default async function CommessaDetailPage({
     .order('uploaded_at', { ascending: false })
     .limit(60);
 
-  // 4-bis) TODO della commessa (aperti + completati recenti)
-  const todoQuery = supabase
+  // 4-bis) Le cose da fare di questa commessa.
+  //
+  // Un tecnico vede **le sue, quelle assegnate a lui e quelle di nessuno** —
+  // non quelle date a un collega. Il motivo non e' la riservatezza (sono tutti
+  // sullo stesso lavoro): e' che un elenco in cui la maggior parte delle righe
+  // non ti riguarda smette di essere un elenco di cose da fare e diventa un
+  // rumore da scorrere. Senza assegnatario significa «chiunque passi», e quelle
+  // si vedono tutte.
+  const todoSelect =
+    'id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at, created_at, completato_at, created_by, completato_da';
+  const todoBase = supabase
     .from('commessa_todo' as never)
-    .select(
-      'id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at, created_at, completato_at, created_by, completato_da',
-    )
-    .eq('commessa_id', params.id)
+    .select(todoSelect)
+    .eq('commessa_id', params.id);
+  const todoQuery = (eTecnico
+    ? todoBase.or(
+        `assegnato_a.eq.${ctx.userId},assegnato_a.is.null,created_by.eq.${ctx.userId}`,
+      )
+    : todoBase
+  )
     .order('sort_order', { ascending: true })
     .limit(200);
 
@@ -717,7 +747,11 @@ export default async function CommessaDetailPage({
           className="w-full"
         >
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft-md">
-          <TabsList className="grid h-10 w-full grid-cols-4 items-center rounded-none border-b border-border/60 bg-primary-soft/60 p-1">
+          <TabsList
+            className={`grid h-10 w-full ${
+              mostraFile ? 'grid-cols-4' : 'grid-cols-3'
+            } items-center rounded-none border-b border-border/60 bg-primary-soft/60 p-1`}
+          >
             <TabsTrigger
               value="todo"
               className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
@@ -736,15 +770,17 @@ export default async function CommessaDetailPage({
                 {fotoTot}
               </span>
             </TabsTrigger>
-            <TabsTrigger
-              value="file"
-              className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
-            >
-              File
-              <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
-                {cloudFileCount}
-              </span>
-            </TabsTrigger>
+            {mostraFile ? (
+              <TabsTrigger
+                value="file"
+                className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
+              >
+                File
+                <span className="ml-1 font-sans text-[9px] tabular-nums opacity-70">
+                  {cloudFileCount}
+                </span>
+              </TabsTrigger>
+            ) : null}
             <TabsTrigger
               value="tecnici"
               className="h-8 rounded-md font-mono text-[10px] font-semibold uppercase tracking-[0.10em] text-muted-foreground transition-all data-[state=active]:rounded-b-none data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow"
@@ -769,7 +805,8 @@ export default async function CommessaDetailPage({
                 .filter(Boolean)
                 .join(' · ')}
               currentUserId={ctx.userId}
-              canWrite={canManageTecnici}
+              canWrite={canManageTecnici || apreLavori}
+              puoScrivereTodo
               statoCommessa={stato}
               nomeCommessa={nomeCommessa}
               todos={todosMobile}
@@ -791,6 +828,7 @@ export default async function CommessaDetailPage({
           </TabsContent>
 
           {/* ───────────── FILE (cloud diretto) ───────────── */}
+          {mostraFile ? (
           <TabsContent value="file" className="m-0 space-y-3 bg-muted/30 p-3 pt-4">
             {cloudError ? (
               <CloudRetry />
@@ -847,6 +885,7 @@ export default async function CommessaDetailPage({
               </p>
             </div>
           </TabsContent>
+          ) : null}
 
           {/* ───────────── TECNICI ───────────── */}
           <TabsContent value="tecnici" className="m-0 bg-muted/30 p-3 pt-4">

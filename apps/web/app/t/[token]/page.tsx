@@ -27,6 +27,7 @@ import { TimbraClient } from './_components/timbra-client';
 import { LandingPubblica } from './_components/landing-pubblica';
 import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
 import { sonoCapoSquadra } from '@/app/mobile/kantiere/_lib/capo';
+import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -472,6 +473,7 @@ export default async function TokenPage({
         userId={ctx.userId}
         tenantId={ctx.tenantId}
         isCapo={navIsCapo}
+        puoAprireLavori={await possoAprireLavori()}
       />
     </>
   );

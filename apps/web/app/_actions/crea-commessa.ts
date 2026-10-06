@@ -11,7 +11,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 // invece di due. Erano due viaggi di rete in fila prima ancora di cominciare.
 import { requireTenantContextCached } from '@/app/_lib/tenant-cache';
 import { isKantiereOnly } from '@/app/_lib/app-mode';
-import type { AppRole, Json } from '@kommessa/api';
+import type { Json } from '@kommessa/api';
 import { getStorageProvider } from '@kommessa/integrations/storage';
 
 import {
@@ -26,6 +26,8 @@ import {
   STATUS_FOLDER_RICHIESTE,
   ensureStatusFolders,
 } from '../_lib/commessa-stato-folder';
+import { CAPACITA_META } from '@kommessa/api/capacita';
+import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 /**
  * Server Action canonica per la creazione di una commessa.
@@ -45,10 +47,20 @@ import {
  *  - Architettura_Soluzione.md §4 (codice interno + nome cartella)
  */
 
-const RUOLI_AMMESSI: ReadonlySet<AppRole> = new Set<AppRole>([
-  'admin',
-  'office',
-]);
+/**
+ * Chi puo' aprire un lavoro nuovo.
+ *
+ * Non e' piu' una lista di ruoli: e' la capacita' `capo_squadra`, che
+ * l'ufficio e gli amministratori hanno per mestiere e un tecnico solo se
+ * gliela danno. Vedi `@kommessa/api/capacita`.
+ *
+ * ⚠️ Prima qui c'era `new Set(['admin','office'])`, e il tasto piu' grande
+ * della PWA — il microfono al centro della barra — portava **tutti** a questo
+ * flusso: un tecnico registrava la dettatura, aspettava la trascrizione,
+ * guardava l'AI compilare i campi, e al tocco finale leggeva «Permessi
+ * insufficienti». Il ruolo piu' numeroso dell'app finiva in un vicolo cieco
+ * dopo aver fatto tutto il lavoro.
+ */
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -103,8 +115,8 @@ export async function creaCommessa(
   } catch {
     return { ok: false, error: 'Sessione non valida. Effettua nuovamente il login.' };
   }
-  if (!RUOLI_AMMESSI.has(ctx.role)) {
-    return { ok: false, error: 'Permessi insufficienti per creare una commessa.' };
+  if (!(await possoAprireLavori())) {
+    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
   }
   // Un tenant puro-Kantiere non ha il mondo commesse: blocca la chiamata diretta.
   if (await isKantiereOnly()) {

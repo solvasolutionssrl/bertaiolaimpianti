@@ -20,7 +20,16 @@ interface Props {
   commessaId: string;
   contestoCommessa: string;
   currentUserId: string;
+  /** Riunioni e assegnazione: sono gesti da capo squadra o da ufficio. */
   canWrite: boolean;
+  /**
+   * Scrivere una cosa da fare: lo puo' fare **ogni** tecnico in squadra.
+   *
+   * E' il gesto di chi sta sul posto — «qui ci vuole una guarnizione nuova» —
+   * e finora non c'era: il tecnico vedeva l'elenco e poteva solo spuntarlo.
+   * Senza questo, quell'informazione viaggiava a memoria fino in ufficio.
+   */
+  puoScrivereTodo?: boolean;
   /** Se la commessa e' chiusa, le aggiunte chiedono conferma. */
   statoCommessa?: string | null;
   nomeCommessa?: string | null;
@@ -43,6 +52,7 @@ export function CommessaLavoriMobile({
   contestoCommessa,
   currentUserId,
   canWrite,
+  puoScrivereTodo = false,
   statoCommessa,
   nomeCommessa,
   todos,
@@ -60,28 +70,33 @@ export function CommessaLavoriMobile({
 
   return (
     <div>
-      {/* Action bar — solo per admin/office */}
-      {canWrite ? (
-        <div className="mb-5 grid grid-cols-2 gap-2.5">
+      {/* I tasti. Il nero («Nuovo Da Fare») lo vede chiunque sia in squadra; il
+          verbale con l'AI resta a chi ha i poteri del capo. Se c'e' solo il
+          primo, prende tutta la riga: due colonne con una sola cosa dentro
+          lasciano un buco che sembra un errore. */}
+      {canWrite || puoScrivereTodo ? (
+        <div className={canWrite ? 'mb-5 grid grid-cols-2 gap-2.5' : 'mb-5'}>
           <Button
             onClick={async () => {
               if (await chiediConferma()) setTodoOpen(true);
             }}
-            className="h-11 justify-center gap-1.5 rounded-xl text-[14px] font-semibold"
+            className="h-11 w-full justify-center gap-1.5 rounded-xl text-[14px] font-semibold"
           >
             <Plus className="h-4 w-4" />
             Nuovo Da Fare
           </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              if (await chiediConferma()) setRiunOpen(true);
-            }}
-            className="h-11 justify-center gap-1.5 rounded-xl border-primary/40 text-[14px] font-semibold text-primary"
-          >
-            <Sparkles className="h-4 w-4" />
-            Riunione AI
-          </Button>
+          {canWrite ? (
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (await chiediConferma()) setRiunOpen(true);
+              }}
+              className="h-11 justify-center gap-1.5 rounded-xl border-primary/40 text-[14px] font-semibold text-primary"
+            >
+              <Sparkles className="h-4 w-4" />
+              Riunione AI
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -103,7 +118,7 @@ export function CommessaLavoriMobile({
           <div className="rounded-lg border border-dashed border-border/60 bg-background/50 p-5 text-center text-sm text-muted-foreground">
             <p>
               Nessun lavoro tracciato.
-              {canWrite ? ' Crea il primo dai bottoni sopra.' : ''}
+              {canWrite || puoScrivereTodo ? ' Il primo si crea qui sopra.' : ''}
             </p>
           </div>
         ) : null}
@@ -131,9 +146,12 @@ export function CommessaLavoriMobile({
 
       {/* Dialogs */}
       {todoOpen ? (
+        /* Senza assegnatario per chi non e' capo: il modulo non chiede «a chi»,
+           perche' la risposta non sarebbe sua da dare. */
         <CreaTodoDialog
           commessaId={commessaId}
-          tecniciTenant={tecniciTenant}
+          tecniciTenant={canWrite ? tecniciTenant : []}
+          puoAssegnare={canWrite}
           onClose={() => setTodoOpen(false)}
         />
       ) : null}

@@ -15,11 +15,15 @@ import {
   QrCode,
   Clock,
   ReceiptText,
+  HardHat,
 } from 'lucide-react';
 
 import { MobileBottomNav, type MobileTab, type MobileTabId } from '@kommessa/ui';
 import type { MobileShell, AppMode } from '@kommessa/api/types';
 
+import { CAPACITA_META } from '@kommessa/api/capacita';
+
+import { useAlert } from '@/app/_components/confirm-provider';
 import { useRealtimeUnread } from './use-realtime-unread';
 
 /**
@@ -49,6 +53,7 @@ export function BottomNavShell({
   tenantId,
   isCapo = false,
   hasKontabilita = true,
+  puoAprireLavori,
 }: {
   unreadCount: number;
   shell: MobileShell;
@@ -58,12 +63,22 @@ export function BottomNavShell({
   tenantId: string;
   /** Solo shell kantiere/tecnico: se capo, "Attività" diventa "Squadra". */
   isCapo?: boolean;
+  /**
+   * Se questa persona puo' aprire lavori nuovi (capacita' `capo_squadra`).
+   *
+   * **Senza valore di default, di proposito.** E' il tasto piu' grande della
+   * barra: se un giorno un chiamante nuovo se ne dimentica, TypeScript lo
+   * ferma invece di scegliere al posto suo. Finora quel tasto era identico
+   * per tutti e portava un tecnico in un vicolo cieco.
+   */
+  puoAprireLavori: boolean;
   /** Solo shell kantiere/tecnico: Kontabilità spenta = niente tab Spese. */
   hasKontabilita?: boolean;
 }) {
   const pathname = usePathname() ?? '';
 
   // Real-time: sostituisce il count statico con uno live aggiornato dal canale
+  const avvisa = useAlert();
   const unreadCount = useRealtimeUnread({
     userId,
     tenantId,
@@ -122,11 +137,32 @@ export function BottomNavShell({
       { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
     ];
   } else {
-    // INVARIATO per app_mode='kommessa' (shell 'campo').
+    // Shell 'campo' (tecnici del mondo commesse).
+    //
+    // Lo slot centrale: il microfono per chi puo' aprire lavori, altrimenti un
+    // casco spento che al tocco dice a chi rivolgersi. Lo slot NON sparisce —
+    // una barra che cambia numero di tasti a seconda di chi guarda disorienta,
+    // e uno slot vuoto non spiega niente.
     tabs = [
       { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
       { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
-      { id: 'voce', label: 'Nuova', icon: Mic, href: '/mobile/voice-intake', primary: true, cornerBadge: '+' },
+      puoAprireLavori
+        ? {
+            id: 'voce' as const,
+            label: 'Nuova',
+            icon: Mic,
+            href: '/mobile/voice-intake',
+            primary: true,
+            cornerBadge: '+',
+          }
+        : {
+            id: 'voce' as const,
+            label: 'Tecnico',
+            icon: HardHat,
+            href: '#',
+            primary: true,
+            spento: { messaggio: CAPACITA_META.capo_squadra.messaggioNegato },
+          },
       { id: 'notifiche', label: 'Notifiche', icon: Bell, href: '/mobile/notifiche', badge: unreadCount },
       { id: 'profilo', label: 'Profilo', icon: User, href: '/mobile/profilo' },
     ];
@@ -152,6 +188,9 @@ export function BottomNavShell({
     <MobileBottomNav
       tabs={tabs}
       activeTab={activeTab}
+      onTabSpento={(tab) => {
+        void avvisa({ title: 'Profilo non abilitato', body: tab.spento?.messaggio ?? '' });
+      }}
       linkComponent={({ href, children, ...rest }) => (
         <Link href={href} {...rest}>
           {children}

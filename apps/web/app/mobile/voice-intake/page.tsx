@@ -5,6 +5,8 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
 import { VoiceIntakeFlow, type VoceOption } from './_components/voice-intake-flow';
+import { redirect } from 'next/navigation';
+import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -42,6 +44,10 @@ export default async function VoiceIntakePage({
   const { bozza } = await searchParams;
   await guardMobile();
   await soloMondoCommesse();
+
+  // Aprire un lavoro nuovo e' da capo squadra. Il tasto non si mostra a chi non
+  // puo', ma l'indirizzo si puo' battere a mano: la porta si chiude anche qui.
+  if (!(await possoAprireLavori())) redirect('/mobile');
   const supabase = createServerSupabase();
 
   const { data: vociRaw } = await supabase

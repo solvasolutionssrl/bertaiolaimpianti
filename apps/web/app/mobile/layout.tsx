@@ -9,6 +9,7 @@ import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 import { tenantHasModule } from '../_lib/modules';
 import { devoCambiarePassword } from '../_lib/cambio-password';
+import { possoAprireLavori } from '../_lib/capacita-server';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
 import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
@@ -111,6 +112,10 @@ export default async function MobileLayout({
     ? risolviMobileShell({ appMode, role: ctx.role })
     : 'campo';
 
+  // Se questa persona puo' aprire lavori nuovi: decide il tasto centrale della
+  // barra. Una lettura sola per richiesta (`cache()` dentro `possoAprireLavori`).
+  const apreLavori = ctx ? await possoAprireLavori() : false;
+
   // Caposquadra: solo nella shell kantiere per i tecnici (non admin/office).
   // Per Bertaiola (shell != 'kantiere') resta sempre false → zero differenze.
   let isCapo = false;
@@ -175,6 +180,7 @@ export default async function MobileLayout({
           tenantId={ctx.tenantId}
           isCapo={isCapo}
           hasKontabilita={hasKontabilita}
+          puoAprireLavori={apreLavori}
         />
       ) : null}
 

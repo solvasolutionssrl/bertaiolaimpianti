@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
+import { eCapacita, scriviCapacita } from '@kommessa/api/capacita';
+import { auditPlatform } from '../_lib/audit-platform';
 
 /** Invia un magic link / reset password (Supabase `generateLink`). */
 export async function resetPasswordUser(authId: string) {
@@ -428,4 +430,62 @@ export async function cambiaRuoloTenantUser(userId: string, role: string) {
   if (u?.tenant_id) revalidatePath(`/admin/tenants/${u.tenant_id}`);
   revalidatePath('/admin/utenti');
   return { ok: true as const };
+}
+
+/**
+ * Dare o togliere un potere a una persona, dal pannello di piattaforma.
+ *
+ * Lo stesso gesto che l'ufficio fa da `/office/impostazioni/utenti`, qui
+ * disponibile al supporto: quando un cliente telefona dicendo «Mauro non
+ * riesce a creare i lavori», si risolve senza impersonare nessuno.
+ */
+export async function impostaPotereUtente(input: {
+  userId: string;
+  capacita: string;
+  acceso: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const attore = await requirePlatformAdmin();
+  if (!eCapacita(input?.capacita)) return { ok: false, error: 'Potere non riconosciuto.' };
+
+  const svc = createServiceSupabase();
+  const { data: target } = await svc
+    .from('users')
+    .select('id, tenant_id, role, display_name, permissions')
+    .eq('id', input.userId)
+    .maybeSingle();
+  if (!target) return { ok: false, error: 'Utente non trovato.' };
+  const t = target as {
+    tenant_id: string | null;
+    role: string;
+    display_name: string | null;
+    permissions: unknown;
+  };
+  if (t.role === 'admin' || t.role === 'office') {
+    return {
+      ok: false,
+      error: 'Chi è in ufficio o amministra può già farlo: si cambia il ruolo, non il potere.',
+    };
+  }
+
+  const nuovo = scriviCapacita(t.permissions, input.capacita, input.acceso === true);
+  const { error } = await svc
+    .from('users')
+    .update({ permissions: nuovo } as never)
+    .eq('id', input.userId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditPlatform({
+    tenantId: t.tenant_id,
+    actorUserId: attore.userId,
+    actorEmail: attore.email,
+    entityType: 'utente',
+    entityId: input.userId,
+    action: input.acceso ? 'potere.concedi' : 'potere.revoca',
+    before: { permissions: t.permissions } as Record<string, unknown>,
+    after: { permissions: nuovo } as Record<string, unknown>,
+    metadata: { capacita: input.capacita, persona: t.display_name ?? null },
+  });
+
+  revalidatePath(`/admin/tenants/${t.tenant_id ?? ''}`);
+  return { ok: true };
 }

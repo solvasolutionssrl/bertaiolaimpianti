@@ -41,6 +41,21 @@ export interface MobileTab {
   primary?: boolean;
   /** Badge angolo in alto a destra del FAB (es. "+"). */
   cornerBadge?: string;
+  /**
+   * Il tab c'è ma non porta da nessuna parte: si disegna spento e al tocco
+   * spiega perché.
+   *
+   * Serve per non far sparire uno slot dalla barra. Una barra che cambia
+   * numero di tasti a seconda di chi guarda disorienta — e soprattutto, uno
+   * slot vuoto non dice niente, mentre uno spento dice «questa cosa esiste,
+   * ma non per te», che è l'informazione utile.
+   */
+  spento?: {
+    /** Cosa si dice al tocco. Deve dire anche a chi rivolgersi. */
+    messaggio: string;
+    /** Icona al posto di quella normale, se serve distinguerlo. */
+    icona?: LucideIcon;
+  };
 }
 
 const DEFAULT_MOBILE_TABS: MobileTab[] = [
@@ -61,6 +76,8 @@ export interface MobileBottomNavProps
   extends Omit<React.HTMLAttributes<HTMLElement>, 'onChange'> {
   activeTab?: MobileTabId;
   onTabChange?: (tab: MobileTab) => void;
+  /** Chiamata quando si tocca un tab spento: il messaggio lo mostra il chiamante. */
+  onTabSpento?: (tab: MobileTab) => void;
   tabs?: MobileTab[];
   linkComponent?: React.ComponentType<{
     href: string;
@@ -85,6 +102,7 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
     {
       activeTab,
       onTabChange,
+      onTabSpento,
       tabs = DEFAULT_MOBILE_TABS,
       linkComponent: LinkComp,
       className,
@@ -121,6 +139,37 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
                 onTabChange(tab);
               }
             };
+
+            // FAB CENTRALE, SPENTO: c'è, si vede, e al tocco spiega.
+            if (tab.primary && tab.spento) {
+              const IconaSpenta = tab.spento.icona ?? Icon;
+              return (
+                <li key={tab.id} className="flex flex-1">
+                  <button
+                    type="button"
+                    aria-label={tab.label}
+                    aria-disabled="true"
+                    onClick={() => onTabSpento?.(tab)}
+                    className="flex flex-1 items-stretch justify-center"
+                  >
+                    <span className="relative flex h-16 w-full flex-col items-center justify-end pb-1.5">
+                      <span
+                        className={cn(
+                          'relative -mt-7 flex h-14 w-14 items-center justify-center rounded-2xl',
+                          'border border-dashed border-border bg-muted text-muted-foreground',
+                          'transition-transform active:scale-95',
+                        )}
+                      >
+                        <IconaSpenta className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+                      </span>
+                      <span className="mt-0.5 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-foreground">
+                        {tab.label}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            }
 
             // FAB CENTRALE
             if (tab.primary) {

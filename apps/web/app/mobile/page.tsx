@@ -35,6 +35,7 @@ import {
   type Priorita,
 } from '@kommessa/api/priorita';
 import { IconaPriorita } from '@/app/_components/priorita-ui';
+import { possoAprireLavori } from '../_lib/capacita-server';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -285,6 +286,12 @@ async function CampoOggi({
   // Gated → per Bertaiola (modulo off) la card non compare.
   const hasKantiere = await tenantHasModule('kantiere');
 
+  // Aprire un lavoro nuovo e' da capo squadra. Finora «Sopralluogo» e «Voce»
+  // comparivano a tutti e portavano a un flusso che un tecnico non puo'
+  // chiudere: si registrava, si aspettava la trascrizione, e all'ultimo tocco
+  // arrivava «permessi insufficienti».
+  const apreLavori = await possoAprireLavori();
+
   if (error) {
     return <ErrorState title="Impossibile caricare le commesse" detail={error.message} />;
   }
@@ -385,28 +392,34 @@ async function CampoOggi({
       </Hero>
 
       <div className="flex flex-col gap-7 px-4 pt-4">
-      {/* Azioni rapide */}
+      {/* Azioni rapide. Se non ne resta nessuna la card non si disegna: una
+          scatola vuota col titolo «Azioni rapide» e' peggio di niente. */}
+      {apreLavori || hasKantiere ? (
       <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
         <div className="rounded-xl border border-border bg-card p-4 shadow-soft-lg">
           <SectionNumber n={1} title="Azioni rapide" className="mb-3" />
         <div className="grid grid-cols-2 gap-2">
-          <QuickAction
-            href="/mobile/sopralluogo"
-            icon={Plus}
-            label="Sopralluogo"
-            hint="guidato · foto/video"
-            tone="primary"
-            dataTour="sopralluogo"
-          />
-          <QuickAction
-            href="/mobile/voice-intake"
-            icon={Mic}
-            label="Voce"
-            hint="detta nota"
-            tone="primary"
-            tag="REC"
-            dataTour="vocale"
-          />
+          {apreLavori ? (
+            <>
+              <QuickAction
+                href="/mobile/sopralluogo"
+                icon={Plus}
+                label="Sopralluogo"
+                hint="guidato · foto/video"
+                tone="primary"
+                dataTour="sopralluogo"
+              />
+              <QuickAction
+                href="/mobile/voice-intake"
+                icon={Mic}
+                label="Voce"
+                hint="detta nota"
+                tone="primary"
+                tag="REC"
+                dataTour="vocale"
+              />
+            </>
+          ) : null}
           {hasKantiere ? (
             <QuickAction
               href="/mobile/kantiere/ore"
@@ -419,6 +432,7 @@ async function CampoOggi({
         </div>
         </div>
       </section>
+      ) : null}
 
       {/* Cosa fare oggi: TODO assegnati a me */}
       {myTodos.length > 0 ? (

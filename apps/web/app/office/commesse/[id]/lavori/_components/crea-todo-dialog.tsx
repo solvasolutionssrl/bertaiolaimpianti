@@ -36,6 +36,15 @@ interface Props {
   commessaId: string;
   tecniciTenant: Array<{ id: string; display_name: string | null }>;
   editing?: TodoEdit;
+  /**
+   * Se chiedere «a chi». Vero in ufficio e per un capo squadra; falso per un
+   * tecnico, che scrive una cosa da fare e la lascia a chiunque passi.
+   *
+   * Non e' solo una casella in meno: chiedere a un tecnico di assegnare un
+   * lavoro a un collega gli fa prendere una decisione che non e' sua, e che
+   * il server rifiuterebbe comunque.
+   */
+  puoAssegnare?: boolean;
   onClose: () => void;
 }
 
@@ -44,6 +53,7 @@ export function CreaTodoDialog({
   commessaId,
   tecniciTenant,
   editing,
+  puoAssegnare = true,
   onClose,
 }: Props) {
   const router = useRouter();
@@ -126,23 +136,30 @@ export function CreaTodoDialog({
               className="mt-1.5"
             />
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="t_assegna">Assegnato a</Label>
-              <select
-                id="t_assegna"
-                value={assegnatoA}
-                onChange={(e) => setAssegnatoA(e.target.value)}
-                className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-              >
-                <option value="">Non assegnato</option>
-                {tecniciTenant.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.display_name ?? u.id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div
+            className={cn(
+              'grid grid-cols-1 gap-3',
+              puoAssegnare && 'sm:grid-cols-2',
+            )}
+          >
+            {puoAssegnare ? (
+              <div>
+                <Label htmlFor="t_assegna">Assegnato a</Label>
+                <select
+                  id="t_assegna"
+                  value={assegnatoA}
+                  onChange={(e) => setAssegnatoA(e.target.value)}
+                  className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
+                >
+                  <option value="">Non assegnato</option>
+                  {tecniciTenant.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name ?? u.id.slice(0, 8)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div>
               <Label htmlFor="t_scad">Scadenza (opzionale)</Label>
               <input

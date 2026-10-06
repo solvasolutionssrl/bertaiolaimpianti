@@ -17,6 +17,8 @@ import {
 import { segnalaAiNonDisponibile } from '../_lib/ai-alert';
 import { MSG_AI_NON_DISPONIBILE } from '../_lib/ai-messages';
 import { PRIORITA, normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
+import { CAPACITA_META } from '@kommessa/api/capacita';
+import { possoAprireLavori } from '@/app/_lib/capacita-server';
 import {
   cleanupAllegatoFiles,
   getRiunioneFileRefIds,
@@ -35,6 +37,14 @@ import {
  *    con la sotto-lista approvata.
  */
 
+/**
+ * Chi tocca le riunioni.
+ *
+ * Creare una riunione e generarne il verbale e' un gesto da capo: sta nella
+ * capacita' `capo_squadra`, che l'ufficio ha per mestiere e un tecnico solo
+ * se gliela danno. Modificare ed eliminare restano dell'ufficio: una volta
+ * che il verbale e' agli atti, chi lo corregge e' chi risponde del lavoro.
+ */
 const FULL_ROLES = new Set<AppRole>(['admin', 'office']);
 
 export type Result<T = void> =
@@ -59,8 +69,8 @@ export async function creaRiunione(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono creare una riunione' };
+  if (!(await possoAprireLavori())) {
+    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
   }
 
   const supabase = createServerSupabase();
@@ -232,8 +242,8 @@ export async function generaReportRiunione(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono generare il report' };
+  if (!(await possoAprireLavori())) {
+    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
   }
 
   const corpo = (parsed.data.corpoLibero ?? '').trim();
@@ -397,8 +407,8 @@ export async function materializzaTodoDaRiunione(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono creare TODO' };
+  if (!(await possoAprireLavori())) {
+    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
   }
 
   const supabase = createServerSupabase();
