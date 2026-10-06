@@ -22,6 +22,7 @@ import {
 } from '../../../_lib/openai';
 import { segnalaAiNonDisponibile } from '../../../_lib/ai-alert';
 import { MSG_AI_NON_DISPONIBILE, CODE_AI_NON_DISPONIBILE } from '../../../_lib/ai-messages';
+import { CONTESTO_DETTATURA, vocabolarioTenant } from '../_lib/vocabolario';
 
 /**
  * POST /api/voice/extract
@@ -165,16 +166,26 @@ export async function POST(req: NextRequest) {
       console.warn(
         `[voice/extract] transcribe start — size=${audio.size}B mime="${mime}" → ext=${ext}`,
       );
-      // Modello configurabile per tenant dal pannello super admin.
-      // Fallback: OPENAI_MODEL_TRANSCRIBE env → 'whisper-1'.
-      const transcribeModelForTenant = await resolveTranscribeModelForTenant(
-        ctx.tenantId,
+      // Modello e vocabolario IN PARALLELO: sono due letture indipendenti e
+      // stanno davanti a ogni dettatura, prima ancora di spedire l'audio.
+      //
+      // Il modello esce dai tre livelli (scelta del cliente -> predefinito di
+      // piattaforma -> ambiente); il vocabolario esce dall'anagrafica viva del
+      // cliente. Nessuno dei due e' scritto nel codice.
+      const [transcribeModelForTenant, vocabolario] = await Promise.all([
+        resolveTranscribeModelForTenant(ctx.tenantId),
+        vocabolarioTenant(ctx.tenantId),
+      ]);
+      console.warn(
+        `[voice/extract] modello="${transcribeModelForTenant}" vocabolario=${vocabolario.length} termini`,
       );
       const r = await transcribeAudio({
         audio,
         filename: `voicenote.${ext}`,
         language: 'it',
         model: transcribeModelForTenant,
+        vocabolario,
+        contesto: CONTESTO_DETTATURA,
       });
       transcript = r.text;
       usedTranscribeModel = r.model;

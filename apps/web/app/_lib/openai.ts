@@ -16,6 +16,16 @@
  * cadiamo sul fallback locale dei singoli endpoint (preview mode).
  */
 
+import {
+  MAX_VOCABOLARIO,
+  MODELLO_ESTREMO,
+  famigliaTrascrizione,
+  impostazioniTrascrizioneDaConfig,
+  preparaVocabolario,
+  promptConVocabolario,
+  risolviModelloTrascrizione,
+} from '@kommessa/api/trascrizione';
+
 export const OPENAI_API_BASE = 'https://api.openai.com/v1';
 
 export function getOpenAIKey(): string | undefined {
@@ -83,52 +93,67 @@ export function getVisionModel(): string {
 }
 
 export function getTranscribeModel(): string {
-  return process.env.OPENAI_MODEL_TRANSCRIBE?.trim() || 'whisper-1';
-}
-
-/** Set dei modelli di trascrizione audio supportati (allineato col CHECK
- *  Postgres su tenants.transcribe_model). */
-export const SUPPORTED_TRANSCRIBE_MODELS = [
-  'whisper-1',
-  'gpt-4o-mini-transcribe',
-  'gpt-4o-transcribe',
-] as const;
-export type TranscribeModelId = (typeof SUPPORTED_TRANSCRIBE_MODELS)[number];
-
-export function isSupportedTranscribeModel(s: string): s is TranscribeModelId {
-  return (SUPPORTED_TRANSCRIBE_MODELS as readonly string[]).includes(s);
+  return process.env.OPENAI_MODEL_TRANSCRIBE?.trim() || MODELLO_ESTREMO;
 }
 
 /**
- * Modello di trascrizione effettivo per un tenant:
- *   1) tenants.transcribe_model (override super-admin) se valorizzato
- *   2) altrimenti OPENAI_MODEL_TRANSCRIBE env
- *   3) altrimenti 'whisper-1' (fallback più sicuro)
+ * Il modello di trascrizione per un tenant, su tre livelli.
  *
- * NB: la query usa service role: il super admin sceglie per tenant, e
- *     il voice/extract gira lato server prima di restituire al client.
+ *   1. `tenants.transcribe_model` — la scelta fatta per quel cliente
+ *   2. `platform_settings` riga `modelli_trascrizione` — il predefinito
+ *   3. `OPENAI_MODEL_TRANSCRIBE` — l'ambiente
+ *   4. `MODELLO_ESTREMO` — la rete, se tutto tace
+ *
+ * ⚠️ **Nessun elenco di modelli ammessi in codice, ed è voluto.** Si controlla
+ * solo che il nome abbia una forma plausibile (`risolviModelloTrascrizione`):
+ * quando OpenAI pubblica un modello nuovo deve bastare scriverne il nome nel
+ * pannello, senza un deploy. Un elenco chiuso qui dentro sarebbe la stessa
+ * trappola dei limiti di invio prima del 05/10 — una decisione di prodotto
+ * congelata nel codice.
+ *
+ * Le due letture vanno **in parallelo**: stanno sul percorso critico di ogni
+ * dettatura, e in serie aggiungevano due viaggi verso l'Irlanda prima ancora di
+ * spedire l'audio.
+ *
+ * Service role: il super admin sceglie per tenant, e questa funzione gira lato
+ * server prima di restituire qualunque cosa al browser.
  */
 export async function resolveTranscribeModelForTenant(
   tenantId: string,
 ): Promise<string> {
+  let tenant: string | null = null;
+  let globale: string | null = null;
   try {
     // import dinamico per evitare ciclicità con @kommessa/api
     const { createServiceSupabase } = await import('@kommessa/api/service');
     const supabase = createServiceSupabase();
-    const { data } = await supabase
-      .from('tenants')
-      .select('transcribe_model')
-      .eq('id', tenantId)
-      .maybeSingle();
-    const override = (data as { transcribe_model?: string | null } | null)
-      ?.transcribe_model;
-    if (override && isSupportedTranscribeModel(override)) {
-      return override;
-    }
+    const [scelta, impostazioni] = await Promise.all([
+      supabase
+        .from('tenants')
+        .select('transcribe_model')
+        .eq('id', tenantId)
+        .maybeSingle(),
+      supabase
+        .from('platform_settings' as never)
+        .select('valore')
+        .eq('chiave', 'modelli_trascrizione')
+        .maybeSingle(),
+    ]);
+    tenant =
+      (scelta.data as { transcribe_model?: string | null } | null)
+        ?.transcribe_model ?? null;
+    globale = impostazioniTrascrizioneDaConfig(
+      (impostazioni.data as { valore?: unknown } | null)?.valore ?? null,
+    ).predefinito;
   } catch {
-    // se la query fallisce, non bloccare il dettato: usiamo l'env fallback.
+    // Se il database non risponde non si blocca il dettato: si scende di
+    // livello e si usa l'ambiente.
   }
-  return getTranscribeModel();
+  return risolviModelloTrascrizione({
+    tenant,
+    globale,
+    env: process.env.OPENAI_MODEL_TRANSCRIBE?.trim() || null,
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -315,15 +340,43 @@ export async function* chatCompletionStream(
 export interface TranscribeOptions {
   audio: Blob;
   filename?: string;
+  /** Lingua attesa, codice ISO 639-1 (es. `it`). */
   language?: string;
   model?: string;
+  /**
+   * Parole che con ogni probabilita' si sentiranno: comuni dell'anagrafica,
+   * lavorazioni a catalogo, marche. Vanno passate **letterali**, come vanno
+   * scritte.
+   *
+   * Solo la famiglia `moderna` ha un campo apposta (`keywords`); per le altre
+   * due diventano un suggerimento dentro `prompt`, che e' la tecnica
+   * documentata da OpenAI per Whisper. In entrambi i casi aiutano.
+   */
+  vocabolario?: readonly string[];
+  /** Contesto libero sulla registrazione. */
+  contesto?: string;
 }
+
 
 export interface TranscribeResult {
   text: string;
   model: string;
 }
 
+/**
+ * Trascrive un audio.
+ *
+ * ⚠️ I tre gruppi di modelli accettano campi **diversi**, e il campo sbagliato
+ * non viene ignorato: fa fallire la richiesta. `gpt-transcribe` vuole
+ * `languages` come array e rifiuta `language`; whisper e i gpt-4o vogliono
+ * `language` singola e non sanno cosa sia `keywords`. La famiglia la decide
+ * `famigliaTrascrizione`, che su un identificativo sconosciuto sceglie la via
+ * piu' conservativa.
+ *
+ * `response_format` resta `json`: nessuno dei modelli nuovi sa produrre
+ * `verbose_json`, e a noi serve solo il testo. Volendo un domani i tempi
+ * parola per parola, l'unico che li sa dare e' ancora `whisper-1`.
+ */
 export async function transcribeAudio(
   opts: TranscribeOptions,
 ): Promise<TranscribeResult> {
@@ -331,11 +384,24 @@ export async function transcribeAudio(
   if (!key) throw new Error('OPENAI_API_KEY non configurata');
 
   const model = opts.model ?? getTranscribeModel();
+  const famiglia = famigliaTrascrizione(model);
+  const vocabolario = (opts.vocabolario ?? []).slice(0, MAX_VOCABOLARIO);
+
   const fd = new FormData();
   fd.append('file', opts.audio, opts.filename ?? 'audio.webm');
   fd.append('model', model);
-  if (opts.language) fd.append('language', opts.language);
   fd.append('response_format', 'json');
+
+  if (famiglia === 'moderna') {
+    // Campi dedicati: la lingua e' un array, e il vocabolario ha casa propria.
+    if (opts.language) fd.append('languages[]', opts.language);
+    for (const parola of vocabolario) fd.append('keywords[]', parola);
+    if (opts.contesto) fd.append('prompt', opts.contesto);
+  } else {
+    if (opts.language) fd.append('language', opts.language);
+    const prompt = promptConVocabolario(opts.contesto, vocabolario);
+    if (prompt) fd.append('prompt', prompt);
+  }
 
   const res = await fetch(`${OPENAI_API_BASE}/audio/transcriptions`, {
     method: 'POST',

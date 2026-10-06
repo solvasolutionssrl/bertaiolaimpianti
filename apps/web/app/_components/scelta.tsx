@@ -114,6 +114,7 @@ function TastoTendina({
   onKeyDown,
   vuoto,
   className,
+  idElenco,
   ...aria
 }: {
   children: React.ReactNode;
@@ -123,6 +124,8 @@ function TastoTendina({
   onClick: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   className?: string;
+  /** Id dell'elenco che questo tasto comanda: serve ai lettori di schermo. */
+  idElenco: string;
   id?: string;
   'aria-label'?: string;
 }) {
@@ -131,6 +134,7 @@ function TastoTendina({
       type="button"
       role="combobox"
       aria-expanded={aperto}
+      aria-controls={idElenco}
       aria-haspopup="listbox"
       disabled={disabilitato}
       onClick={onClick}
@@ -459,6 +463,7 @@ export function Scelta({
     <div ref={t.guscio} className={cn('relative', className)}>
       <TastoTendina
         id={id}
+        idElenco={idElenco}
         aperto={t.aperto}
         disabilitato={disabilitato}
         vuoto={!scelta}
@@ -564,6 +569,7 @@ export function SceltaMultipla({
     <div ref={t.guscio} className={cn('relative', className)}>
       <TastoTendina
         id={id}
+        idElenco={idElenco}
         aperto={t.aperto}
         disabilitato={disabilitato}
         vuoto={scelte.length === 0}

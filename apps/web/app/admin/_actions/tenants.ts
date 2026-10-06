@@ -9,6 +9,7 @@ import { FEATURE_REGISTRY, type FeatureKey } from '@/app/_lib/tenant-features-re
 import { chiaviValide } from '@/app/_lib/personalizzazioni-registry';
 import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
 import { requirePlatformAdmin } from '../_lib/guard';
+import { nomeModelloPlausibile } from '@kommessa/api/trascrizione';
 
 /**
  * Server Actions per gestione tenant cross-tenant (solo platform admin).
@@ -721,17 +722,32 @@ export async function endImpersonation() {
 // Modello trascrizione audio per tenant
 // ---------------------------------------------------------------------
 
+/**
+ * ⚠️ Niente `z.enum` qui, ed e' voluto.
+ *
+ * Un elenco chiuso di modelli in questo schema significa che per provare un
+ * modello appena uscito serve un deploy — ed e' esattamente la trappola da cui
+ * siamo usciti con la migration `20261006090000`. Si valida la FORMA del nome
+ * (niente spazi, niente virgole, lunghezza ragionevole), non la sua
+ * appartenenza a una lista: quale sia il catalogo dei modelli lo sa OpenAI, non
+ * noi. `null` = questo cliente segue il predefinito di piattaforma.
+ */
 const TRANSCRIBE_MODEL_SCHEMA = z.object({
   tenantId: z.string().uuid(),
-  // null = usa env fallback (OPENAI_MODEL_TRANSCRIBE o whisper-1).
   model: z
-    .enum(['whisper-1', 'gpt-4o-mini-transcribe', 'gpt-4o-transcribe'])
-    .nullable(),
+    .string()
+    .trim()
+    .nullable()
+    .refine((v) => v === null || v === '' || nomeModelloPlausibile(v), {
+      message:
+        'Il nome del modello non ha una forma valida: lettere, cifre, punti e trattini, senza spazi.',
+    })
+    .transform((v) => (v === '' ? null : v)),
 });
 
 export async function aggiornaModelloTrascrizione(input: {
   tenantId: string;
-  model: 'whisper-1' | 'gpt-4o-mini-transcribe' | 'gpt-4o-transcribe' | null;
+  model: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();
   const parsed = TRANSCRIBE_MODEL_SCHEMA.safeParse(input);

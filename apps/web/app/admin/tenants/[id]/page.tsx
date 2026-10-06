@@ -22,6 +22,7 @@ import { TabStorage } from './_components/tab-storage';
 import { TabBranding } from './_components/tab-branding';
 import { TabNoteInterne } from './_components/tab-note-interne';
 import { TabAi } from './_components/tab-ai';
+import { impostazioniTrascrizioneDaConfig } from '@kommessa/api/trascrizione';
 import { TabModuli } from './_components/tab-moduli';
 import { TabFunzioni } from './_components/tab-funzioni';
 import { TabRouting } from './_components/tab-routing';
@@ -97,6 +98,7 @@ export default async function TenantDetailPage({
     auditRes,
     moduliRes,
     limitiGlobaliRes,
+    modelliRes,
   ] = await Promise.all([
       supabase
         .from('tenants')
@@ -139,7 +141,18 @@ export default async function TenantDetailPage({
         .select('valore')
         .eq('chiave', 'limiti_upload')
         .maybeSingle(),
+      // Predefinito di piattaforma per la trascrizione + i nomi che il tab AI
+      // propone. Sono dato, non codice: vedi migration 20261006090000.
+      supabase
+        .from('platform_settings' as never)
+        .select('valore')
+        .eq('chiave', 'modelli_trascrizione')
+        .maybeSingle(),
     ]);
+
+  const modelliPiattaforma = impostazioniTrascrizioneDaConfig(
+    (modelliRes.data as { valore?: unknown } | null)?.valore ?? null,
+  );
 
   const tenant: any = tenantRes.data;
   if (!tenant) notFound();
@@ -403,6 +416,8 @@ export default async function TenantDetailPage({
             tenantId={tenant.id}
             tenantNome={tenant.nome}
             currentModel={tenant.transcribe_model ?? null}
+            predefinitoPiattaforma={modelliPiattaforma.predefinito}
+            proposti={modelliPiattaforma.ammessi}
           />
         </TabsContent>
 
