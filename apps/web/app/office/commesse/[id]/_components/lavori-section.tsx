@@ -4,6 +4,7 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { elencaTecniciTenant } from '../../../../_actions/commessa-tecnici';
 import { loadCommessa } from '../_lib/get-commessa';
 import { LavoriBoard } from '../lavori/_components/lavori-board';
+import { type Priorita } from '@kommessa/api/priorita';
 
 /**
  * Sezione "Lavori" (TODO + Riunioni + storia) riusabile come server component.
@@ -65,7 +66,7 @@ export async function LavoriSection({ id }: { id: string }) {
     titolo: string;
     descrizione: string | null;
     stato: 'aperto' | 'in_corso' | 'completato' | 'annullato';
-    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    priorita: Priorita;
     assegnato_a: string | null;
     scadenza_at: string | null;
     sort_order: number;

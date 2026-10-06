@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 
 import { requirePortalContext } from '../_lib/portal-context';
+import { PRIORITA_DEFAULT } from '@kommessa/api/priorita';
 
 const inputSchema = z.object({
   oggetto: z
@@ -95,7 +96,8 @@ export async function creaTicketDaPortale(
       oggetto: input.oggetto,
       descrizione: input.descrizione,
       stato: 'aperto',
-      priorita: 'media',
+      // Il portale non chiede l'urgenza: parte dal livello normale.
+      priorita: PRIORITA_DEFAULT,
       source: 'portal_cliente',
     })
     .select('id, codice')

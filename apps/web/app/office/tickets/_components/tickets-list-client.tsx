@@ -25,13 +25,18 @@ import {
   bulkCambiaPriorita,
 } from '../../_actions/bulk';
 import { fmtDataOra } from '../../_lib/format';
+import {
+  PRIORITA_DEFAULT,
+  PRIORITA_IN_ORDINE,
+  type Priorita,
+} from '@kommessa/api/priorita';
 
 export interface TicketRow {
   id: string;
   codice: string;
   oggetto: string;
   stato: 'aperto' | 'in_lavorazione' | 'attesa_cliente' | 'chiuso';
-  priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+  priorita: Priorita;
   source: string;
   created_at: string;
   sla_status: SlaStatus;
@@ -56,25 +61,14 @@ const STATI: Array<{ value: TicketRow['stato']; label: string }> = [
   { value: 'chiuso', label: 'Chiuso' },
 ];
 
-const PRIORITA: Array<{ value: TicketRow['priorita']; label: string }> = [
-  { value: 'bassa', label: 'Bassa' },
-  { value: 'media', label: 'Media' },
-  { value: 'alta', label: 'Alta' },
-  { value: 'urgente', label: 'Urgente' },
-];
+const PRIORITA: Array<{ value: TicketRow['priorita']; label: string }> =
+  PRIORITA_IN_ORDINE.map((m) => ({ value: m.valore, label: m.etichetta }));
 
 const SOURCES_LABEL: Record<string, string> = {
   manual: 'Manuale',
   email: 'Email',
   portal_cliente: 'Portale cliente',
   imported_from_freshdesk: 'Freshdesk (legacy)',
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  bassa: 'text-muted-foreground',
-  media: 'text-foreground',
-  alta: 'text-stato-collaudo',
-  urgente: 'text-stato-critica font-semibold',
 };
 
 type DialogMode = 'assegna' | 'stato' | 'priorita' | null;
@@ -101,7 +95,7 @@ export function TicketsListClient({ rows, staff }: Props) {
   // form state per le dialog
   const [selUser, setSelUser] = React.useState<string>('');
   const [selStato, setSelStato] = React.useState<TicketRow['stato']>('in_lavorazione');
-  const [selPriorita, setSelPriorita] = React.useState<TicketRow['priorita']>('media');
+  const [selPriorita, setSelPriorita] = React.useState<TicketRow['priorita']>(PRIORITA_DEFAULT);
 
   React.useEffect(() => {
     if (!feedback) return;
@@ -250,7 +244,10 @@ export function TicketsListClient({ rows, staff }: Props) {
                       <td className="px-4 py-3 max-w-xs truncate">{t.oggetto}</td>
                       <td className="px-4 py-3">{t.cliente?.ragione_sociale ?? '—'}</td>
                       <td className="px-4 py-3">{labelStato(t.stato)}</td>
-                      <td className={`px-4 py-3 ${PRIORITY_COLORS[t.priorita] ?? ''}`}>
+                      {/* Prima qui c'era una tavolozza tutta sua, su token di
+                          stato: la stessa priorita' si vedeva in un modo nella
+                          lista ticket e in un altro nella board Task. */}
+                      <td className="px-4 py-3">
                         {labelPriorita(t.priorita)}
                       </td>
                       <td className="px-4 py-3">

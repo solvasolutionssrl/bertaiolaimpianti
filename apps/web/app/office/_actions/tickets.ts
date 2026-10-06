@@ -7,14 +7,15 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay } from '@kommessa/api/rome-time';
 
 import { isKantiereOnly } from '@/app/_lib/app-mode';
+import { PRIORITA, PRIORITA_DEFAULT } from '@kommessa/api/priorita';
 
 const creaInput = z.object({
   oggetto: z.string().min(3),
   descrizione: z.string().min(1),
   clienteId: z.string().uuid().optional(),
   priorita: z
-    .enum(['bassa', 'media', 'alta', 'urgente'])
-    .default('media'),
+    .enum(PRIORITA)
+    .default(PRIORITA_DEFAULT),
   source: z
     .enum(['manual', 'email', 'portal_cliente', 'imported_from_freshdesk'])
     .default('manual'),
@@ -215,7 +216,7 @@ export async function assegnaRoundRobin(ticketId: string) {
 
 const aggiornaPrioritaInput = z.object({
   ticketId: z.string().uuid(),
-  nuovaPriorita: z.enum(['bassa', 'media', 'alta', 'urgente']),
+  nuovaPriorita: z.enum(PRIORITA),
 });
 
 /**

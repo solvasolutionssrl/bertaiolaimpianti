@@ -4,14 +4,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  AlertCircle,
   ArrowUpRight,
   Calendar,
   CheckCircle2,
   Circle,
   CircleDot,
   Filter,
-  Flame,
   Loader2,
   Pencil,
   Phone,
@@ -38,9 +36,14 @@ import { convertiRichiestaInBozza } from '../../../_actions/richieste';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { CreaTodoGlobaleDialog } from './crea-todo-globale-dialog';
 import { RichiestaDialog, type RichiestaEsistente } from './richiesta-dialog';
+import { type Priorita } from '@kommessa/api/priorita';
+import {
+  IconaPriorita,
+  PrioritaChip,
+  VOCI_FILTRO_PRIORITA,
+} from '@/app/_components/priorita-ui';
 
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
-type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
 
 interface Row {
   id: string;
@@ -88,31 +91,6 @@ interface Props {
   filtri: Filtri;
 }
 
-const PRIORITA_META: Record<
-  Priorita,
-  { label: string; chip: string; Icon: typeof Flame }
-> = {
-  urgente: {
-    label: 'Urgente',
-    chip: 'bg-red-500/15 text-red-700 border-red-500/40 dark:text-red-400',
-    Icon: Flame,
-  },
-  alta: {
-    label: 'Alta',
-    chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400',
-    Icon: AlertCircle,
-  },
-  media: {
-    label: 'Media',
-    chip: 'bg-blue-500/15 text-blue-700 border-blue-500/40',
-    Icon: Circle,
-  },
-  bassa: {
-    label: 'Bassa',
-    chip: 'bg-muted text-muted-foreground border-border',
-    Icon: Circle,
-  },
-};
 
 export function TodoGlobaleBoard({
   todos,
@@ -271,18 +249,15 @@ export function TodoGlobaleBoard({
             active={!filtri.priorita}
             onClick={() => updateFiltro('priorita', null)}
           />
-          {(['urgente', 'alta', 'media', 'bassa'] as const).map((p) => {
-            const Icon = PRIORITA_META[p].Icon;
-            return (
-              <FiltroRadio
-                key={p}
-                label={PRIORITA_META[p].label}
-                icon={<Icon className="h-3 w-3" />}
-                active={filtri.priorita === p}
-                onClick={() => updateFiltro('priorita', p)}
-              />
-            );
-          })}
+          {VOCI_FILTRO_PRIORITA.map((v) => (
+            <FiltroRadio
+              key={v.valore}
+              label={v.etichetta}
+              icon={<IconaPriorita priorita={v.valore} className="h-3 w-3" />}
+              active={filtri.priorita === v.valore}
+              onClick={() => updateFiltro('priorita', v.valore)}
+            />
+          ))}
         </FiltroGroup>
 
         <FiltroGroup label="Commessa">
@@ -512,8 +487,6 @@ function TodoRow({
   onModifica: () => void;
   onAssegna: (userId: string) => void;
 }) {
-  const meta = PRIORITA_META[row.priorita];
-  const Icon = meta.Icon;
   const completed = row.stato === 'completato' || row.stato === 'annullato';
 
   return (
@@ -541,7 +514,6 @@ function TodoRow({
 
       <Contenitore commessaId={row.commessa_id}>
         <div className="flex flex-wrap items-center gap-2">
-          <Icon className={cn('h-3.5 w-3.5 shrink-0', meta.chip.split(' ')[1])} />
           <p
             className={cn(
               'flex-1 truncate text-sm font-medium',
@@ -550,12 +522,7 @@ function TodoRow({
           >
             {row.titolo}
           </p>
-          <Badge
-            variant="outline"
-            className={cn('text-[10px] uppercase tracking-wide', meta.chip)}
-          >
-            {meta.label}
-          </Badge>
+          <PrioritaChip priorita={row.priorita} />
           {row.stato === 'in_corso' ? (
             <Badge variant="outline" className="text-[10px] uppercase">
               In corso

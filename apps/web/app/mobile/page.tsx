@@ -3,14 +3,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
-  AlertCircle,
   Briefcase,
   Calendar,
   Camera,
   CheckCircle2,
   ChevronRight,
   Clock,
-  Flame,
   MapPin,
   Mic,
   Phone,
@@ -31,6 +29,12 @@ import { getAppModeCached } from '../_lib/app-mode';
 import { titoloCase } from './_lib/display-case';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 import { BozzeDaCompletare } from '../_components/bozze-da-completare';
+import {
+  confrontaPriorita,
+  metaPriorita,
+  type Priorita,
+} from '@kommessa/api/priorita';
+import { IconaPriorita } from '@/app/_components/priorita-ui';
 
 export const metadata: Metadata = {
   title: 'Kommessa mobile',
@@ -282,7 +286,7 @@ async function CampoOggi({
   type TodoMini = {
     id: string;
     titolo: string;
-    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    priorita: Priorita;
     scadenza_at: string | null;
     /** null = richiesta arrivata al telefono, non ancora un lavoro. */
     commessa_id: string | null;
@@ -290,12 +294,6 @@ async function CampoOggi({
     /** Solo sulle richieste: chi ha chiamato e come richiamarlo. */
     cliente: string | null;
     contatto: string | null;
-  };
-  const priOrder: Record<TodoMini['priorita'], number> = {
-    urgente: 0,
-    alta: 1,
-    media: 2,
-    bassa: 3,
   };
   const now = Date.now();
   const myTodos: TodoMini[] = [
@@ -333,9 +331,8 @@ async function CampoOggi({
       const aScaduto = a.scadenza_at && new Date(a.scadenza_at).getTime() < now ? 0 : 1;
       const bScaduto = b.scadenza_at && new Date(b.scadenza_at).getTime() < now ? 0 : 1;
       if (aScaduto !== bScaduto) return aScaduto - bScaduto;
-      const pa = priOrder[a.priorita];
-      const pb = priOrder[b.priorita];
-      if (pa !== pb) return pa - pb;
+      const dPri = confrontaPriorita(a.priorita, b.priorita);
+      if (dPri !== 0) return dPri;
       return a.titolo.localeCompare(b.titolo, 'it');
     })
     .slice(0, 8);
@@ -641,7 +638,7 @@ function TodoMiniCard({
   todo: {
     id: string;
     titolo: string;
-    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    priorita: Priorita;
     scadenza_at: string | null;
     commessa_id: string | null;
     codice_interno: string | null;
@@ -650,13 +647,10 @@ function TodoMiniCard({
   };
   now: number;
 }) {
-  const meta = {
-    urgente: { chip: 'bg-red-500/15 text-red-700 border-red-500/40', icon: Flame },
-    alta: { chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40', icon: AlertCircle },
-    media: { chip: 'bg-blue-500/15 text-blue-700 border-blue-500/40', icon: Clock },
-    bassa: { chip: 'bg-muted text-muted-foreground border-border', icon: Clock },
-  }[todo.priorita];
-  const Icon = meta.icon;
+  // Qui c'era una nona tavolozza, scritta a mano dentro il render: l'unica
+  // dell'app che usava l'icona `Clock` invece di `Circle`, e senza nessuna
+  // variante per il tema scuro.
+  const meta = metaPriorita(todo.priorita);
   const isScaduto = todo.scadenza_at && new Date(todo.scadenza_at).getTime() < now;
   const eRichiesta = todo.commessa_id === null;
   // Un contatto senza chiocciola e con abbastanza cifre è un numero: si può
@@ -674,8 +668,9 @@ function TodoMiniCard({
           'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
           meta.chip,
         ].join(' ')}
+        title={meta.etichetta}
       >
-        <Icon className="h-3.5 w-3.5" />
+        <IconaPriorita priorita={todo.priorita} className="h-3.5 w-3.5" />
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium leading-tight">{todo.titolo}</p>

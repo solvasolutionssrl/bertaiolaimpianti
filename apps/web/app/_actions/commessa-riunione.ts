@@ -16,6 +16,7 @@ import {
 } from '../_lib/openai';
 import { segnalaAiNonDisponibile } from '../_lib/ai-alert';
 import { MSG_AI_NON_DISPONIBILE } from '../_lib/ai-messages';
+import { PRIORITA, normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
 import {
   cleanupAllegatoFiles,
   getRiunioneFileRefIds,
@@ -194,7 +195,7 @@ export async function eliminaRiunione(input: unknown): Promise<Result> {
 
 export interface TodoProposto {
   titolo: string;
-  priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+  priorita: Priorita;
   note?: string;
 }
 
@@ -264,7 +265,7 @@ export async function generaReportRiunione(
 
 Ricevi il verbale grezzo di una riunione (può essere scritto a mano o dettato a voce, italiano). Devi produrre:
 1. un "reportino": il testo dell'utente RISCRITTO in italiano in modo chiaro, scorrevole e ben organizzato, in TESTO SEMPLICE (no markdown). Riordina e riscrivi il contenuto per renderlo ordinato e leggibile: NON tagliare contenuti, NON riassumere, NON sintetizzare, NON inventare nulla; mantieni tutto il senso e i dettagli inseriti dall'utente, correggi solo forma, ordine e leggibilità. Puoi usare "- " per elenchi puntati e a-capo per separare i temi. Tono asciutto, tecnico, professionale.
-2. "todo_proposti": lista di azioni SOLO se esplicitamente menzionate nel verbale. Ogni TODO ha titolo breve (max 80 caratteri, imperativo: "Ordinare pompa…", "Chiamare Mario…"), priorita (bassa/media/alta/urgente — desumi dal tono: "subito"/"entro domani" → urgente; "appena puoi"/"settimana prossima" → media; "quando capita" → bassa) e una note opzionale di contesto (max 200 caratteri).
+2. "todo_proposti": lista di azioni SOLO se esplicitamente menzionate nel verbale. Ogni TODO ha titolo breve (max 80 caratteri, imperativo: "Ordinare pompa…", "Chiamare Mario…"), priorita, SOLO uno fra urgente/alta/bassa (desumi dal tono: "subito"/"entro domani" → urgente; "appena puoi"/"settimana prossima" → alta; tutto il resto, compreso quando nessuno ha espresso fretta → bassa) e una note opzionale di contesto (max 200 caratteri).
 
 REGOLE STRICT PER I TODO:
 - Includi SOLO azioni che qualcuno ha dichiarato esplicitamente nel verbale ("dobbiamo fare X", "bisogna ordinare Y", "chiama Z"). NON aggiungere azioni logicamente sensate ma non menzionate.
@@ -323,7 +324,11 @@ REGOLE STRICT PER I TODO:
         .array(
           z.object({
             titolo: z.string().trim().min(1).max(200),
-            priorita: z.enum(['bassa', 'media', 'alta', 'urgente']),
+            // Volutamente PERMISSIVO in ingresso e normalizzato in uscita: un
+            // modello linguistico puo' restituire «media» anche se il prompt
+            // dice tre livelli, e scartare l'intero verbale per una parola
+            // sarebbe sproporzionato. `normalizzaPriorita` la traduce.
+            priorita: z.string().transform(normalizzaPriorita),
             note: z.string().trim().max(500).optional(),
           }),
         )
@@ -375,7 +380,7 @@ const MaterializzaInput = z.object({
     .array(
       z.object({
         titolo: z.string().trim().min(1).max(200),
-        priorita: z.enum(['bassa', 'media', 'alta', 'urgente']),
+        priorita: z.enum(PRIORITA),
         note: z.string().trim().max(500).optional(),
         assegnatoA: z.string().uuid().nullable().optional(),
       }),

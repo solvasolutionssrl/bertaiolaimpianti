@@ -8,6 +8,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
 import { aggiornaPriorita } from './tickets';
+import { PRIORITA } from '@kommessa/api/priorita';
 
 /**
  * Bulk actions per Tickets e Commesse.
@@ -26,7 +27,8 @@ type BulkResult =
   | { ok: false; error: string };
 
 const STATI_TICKET = ['aperto', 'in_lavorazione', 'attesa_cliente', 'chiuso'] as const;
-const PRIORITA_TICKET = ['bassa', 'media', 'alta', 'urgente'] as const;
+// Stessa scala dei task: un solo vocabolario in tutta l'app.
+const PRIORITA_TICKET = PRIORITA;
 const STATI_COMMESSA = [
   'bozza',
   'aperta',

@@ -8,6 +8,7 @@ import { RispostaForm } from './_components/risposta-form';
 import { ConvertiButton } from './_components/converti-button';
 import { AssegnaButton } from './_components/assegna-button';
 import { SlaBadge, type SlaStatus } from '../_components/sla-badge';
+import { etichettaPriorita } from '@kommessa/api/priorita';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,8 +77,10 @@ export default async function TicketDetailPage({
           <span className="text-xs uppercase tracking-wide text-muted-foreground">
             {t.stato}
           </span>
+          {/* Prima qui compariva il valore grezzo del database, in
+              minuscolo: «urgente», «media». */}
           <span className="text-xs uppercase tracking-wide text-muted-foreground">
-            · {t.priorita}
+            · {etichettaPriorita(t.priorita)}
           </span>
           <SlaBadge status={slaStatus} />
         </div>

@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  AlertCircle,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -49,8 +48,13 @@ import {
 
 import { CreaTodoDialog } from './crea-todo-dialog';
 import { CreaRiunioneDialog } from './crea-riunione-dialog';
+import {
+  confrontaPriorita,
+  metaPriorita,
+  type Priorita,
+} from '@kommessa/api/priorita';
+import { PrioritaChip } from '@/app/_components/priorita-ui';
 
-type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
 type StatoTodo = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
 interface TodoView {
@@ -150,39 +154,6 @@ interface Props {
 // Constants di styling priorità
 // ═══════════════════════════════════════════════════════════════════════
 
-const PRIORITA_META: Record<
-  Priorita,
-  { label: string; chip: string; ring: string; icon: React.ComponentType<{ className?: string }>; order: number }
-> = {
-  urgente: {
-    label: 'Urgente',
-    chip: 'bg-red-500/15 text-red-700 border-red-500/40 dark:text-red-400',
-    ring: 'ring-red-500/30',
-    icon: Flame,
-    order: 0,
-  },
-  alta: {
-    label: 'Alta',
-    chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400',
-    ring: 'ring-amber-500/30',
-    icon: AlertCircle,
-    order: 1,
-  },
-  media: {
-    label: 'Media',
-    chip: 'bg-blue-500/15 text-blue-700 border-blue-500/40 dark:text-blue-400',
-    ring: 'ring-blue-500/20',
-    icon: Circle,
-    order: 2,
-  },
-  bassa: {
-    label: 'Bassa',
-    chip: 'bg-muted text-muted-foreground border-border',
-    ring: '',
-    icon: Circle,
-    order: 3,
-  },
-};
 
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -244,9 +215,8 @@ export function LavoriBoard({
       todos
         .filter((t) => t.stato === 'aperto' || t.stato === 'in_corso')
         .sort((a, b) => {
-          const pa = PRIORITA_META[a.priorita].order;
-          const pb = PRIORITA_META[b.priorita].order;
-          if (pa !== pb) return pa - pb;
+          const d = confrontaPriorita(a.priorita, b.priorita);
+          if (d !== 0) return d;
           return a.sort_order - b.sort_order;
         }),
     [todos],
@@ -817,8 +787,7 @@ function TodoRow({
   const [noteBody, setNoteBody] = React.useState('');
   const [submittingNote, setSubmittingNote] = React.useState(false);
 
-  const meta = PRIORITA_META[todo.priorita];
-  const Icon = meta.icon;
+  const meta = metaPriorita(todo.priorita);
 
   const submitNote = async () => {
     if (noteBody.trim().length === 0) return;
@@ -839,7 +808,7 @@ function TodoRow({
       className={cn(
         'group rounded-md border bg-card p-3 transition-all',
         isMine && 'ring-2',
-        isMine && meta.ring,
+        isMine && meta.anello,
         isDragging && 'opacity-40',
         isDropTarget && 'border-primary ring-2 ring-primary/30',
       )}
@@ -867,14 +836,8 @@ function TodoRow({
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Icon className={cn('h-3.5 w-3.5 shrink-0')} />
             <p className="flex-1 truncate text-sm font-medium">{todo.titolo}</p>
-            <Badge
-              variant="outline"
-              className={cn('text-[10px] uppercase tracking-wide', meta.chip)}
-            >
-              {meta.label}
-            </Badge>
+            <PrioritaChip priorita={todo.priorita} />
             {todo.stato === 'in_corso' ? (
               <Badge variant="outline" className="text-[10px] uppercase">
                 In corso

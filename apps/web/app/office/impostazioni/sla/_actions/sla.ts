@@ -5,9 +5,12 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { assertCanManageTenant } from '../../_components/role-gate';
+import { PRIORITA } from '@kommessa/api/priorita';
 
 const upsertSchema = z.object({
-  priorita: z.enum(['bassa', 'media', 'alta', 'urgente']),
+  // Tre livelli: la riga di policy per il vecchio 'media' resta nel database
+  // ma non si modifica piu' dal pannello, perche' nessun ticket la usera'.
+  priorita: z.enum(PRIORITA),
   response_minutes: z.coerce.number().int().positive(),
   close_minutes: z.coerce.number().int().positive(),
 });

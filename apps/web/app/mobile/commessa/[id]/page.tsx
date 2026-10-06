@@ -53,6 +53,7 @@ import {
 import { canView, loadFolderAclMap } from '../../../_lib/folder-acl';
 import { CloudRetry } from './_components/cloud-retry';
 import { CommessaChiusaNota } from '../../../_components/commessa-chiusa-nota';
+import { type Priorita } from '@kommessa/api/priorita';
 
 export async function generateMetadata({
   params,
@@ -204,7 +205,7 @@ export default async function CommessaDetailPage({
     titolo: string;
     descrizione: string | null;
     stato: 'aperto' | 'in_corso' | 'completato' | 'annullato';
-    priorita: 'bassa' | 'media' | 'alta' | 'urgente';
+    priorita: Priorita;
     assegnato_a: string | null;
     scadenza_at: string | null;
     created_at: string;

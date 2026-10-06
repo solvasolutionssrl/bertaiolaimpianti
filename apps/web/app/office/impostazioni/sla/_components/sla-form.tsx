@@ -4,8 +4,9 @@ import { useState, useTransition } from 'react';
 import { Button, Card, CardContent, Input, Label } from '@kommessa/ui';
 import { Save } from 'lucide-react';
 import { aggiornaSlaPolicy } from '../_actions/sla';
+import { PRIORITA, etichettaPriorita, type Priorita } from '@kommessa/api/priorita';
 
-export type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
+export type { Priorita };
 
 export interface SlaPolicyRow {
   priorita: Priorita;
@@ -13,21 +14,16 @@ export interface SlaPolicyRow {
   close_minutes: number;
 }
 
-const PRIORITA_LABELS: Record<Priorita, string> = {
-  bassa: 'Bassa',
-  media: 'Media',
-  alta: 'Alta',
-  urgente: 'Urgente',
-};
-
 const PRIORITA_DESCR: Record<Priorita, string> = {
-  bassa: 'Richieste informative o non bloccanti.',
-  media: 'Default per nuovi ticket.',
-  alta: 'Disservizio significativo, intervento entro la giornata.',
   urgente: 'Blocco totale, fuori orario, intervento immediato.',
+  alta: 'Disservizio significativo, intervento entro la giornata.',
+  bassa: 'Il livello normale: tutto quello per cui nessuno ha chiesto fretta.',
 };
 
-const ORDER: Priorita[] = ['urgente', 'alta', 'media', 'bassa'];
+// Dall'urgente al normale, come ovunque nell'app. La riga di policy del
+// vecchio «media» resta nel database ma non si modifica piu' da qui: nessun
+// ticket potra' piu' trovarsi su quel livello.
+const ORDER: Priorita[] = [...PRIORITA];
 
 /**
  * Form CRUD per le 4 policy SLA per-priorità del tenant corrente.
@@ -100,7 +96,7 @@ function SlaPolicyCard({
         <form className="space-y-4" onSubmit={onSubmit}>
           <div className="flex items-baseline justify-between">
             <div>
-              <h3 className="font-semibold">{PRIORITA_LABELS[priorita]}</h3>
+              <h3 className="font-semibold">{etichettaPriorita(priorita)}</h3>
               <p className="text-xs text-muted-foreground">
                 {PRIORITA_DESCR[priorita]}
               </p>

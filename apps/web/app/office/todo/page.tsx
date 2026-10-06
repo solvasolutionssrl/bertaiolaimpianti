@@ -19,12 +19,13 @@ import { Badge, Card, CardContent, cn } from '@kommessa/ui';
 import { EmptyState } from '../../_components/empty-state';
 import { elencaAssegnabiliTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard } from './_components/todo-globale-board';
+import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
 
 export const metadata = { title: 'Task' };
 export const dynamic = 'force-dynamic';
 
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
-type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
+
 
 interface SearchParams {
   /** 'richieste' = solo quelle senza commessa; 'commessa' = solo quelle con. */
@@ -186,20 +187,13 @@ export default async function TodoGlobalePage({
     };
   });
 
-  const priOrder: Record<Priorita, number> = {
-    urgente: 0,
-    alta: 1,
-    media: 2,
-    bassa: 3,
-  };
   todos.sort((a, b) => {
     // Le richieste prima: sono le uniche che aspettano una decisione (va in
     // sopralluogo? si butta?), il resto è lavoro già incanalato.
     if (a.eRichiesta !== b.eRichiesta) return a.eRichiesta ? -1 : 1;
     if (a.isScaduto !== b.isScaduto) return a.isScaduto ? -1 : 1;
-    const pa = priOrder[a.priorita];
-    const pb = priOrder[b.priorita];
-    if (pa !== pb) return pa - pb;
+    const dPri = confrontaPriorita(a.priorita, b.priorita);
+    if (dPri !== 0) return dPri;
     return a.titolo.localeCompare(b.titolo, 'it');
   });
 

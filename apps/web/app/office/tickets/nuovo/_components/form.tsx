@@ -4,6 +4,11 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Card, CardContent, Input, Label } from '@kommessa/ui';
 import { creaTicket } from '../../../_actions/tickets';
+import {
+  PRIORITA_DEFAULT,
+  PRIORITA_IN_ORDINE,
+  normalizzaPriorita,
+} from '@kommessa/api/priorita';
 
 export function NuovoTicketForm({
   clienti,
@@ -21,7 +26,7 @@ export function NuovoTicketForm({
         const oggetto = String(fd.get('oggetto') ?? '').trim();
         const descrizione = String(fd.get('descrizione') ?? '').trim();
         const clienteId = String(fd.get('cliente_id') ?? '') || undefined;
-        const priorita = String(fd.get('priorita') ?? 'media') as any;
+        const priorita = normalizzaPriorita(fd.get('priorita'));
         if (oggetto.length < 3) {
           setErr("L'oggetto è troppo corto.");
           return;
@@ -65,16 +70,20 @@ export function NuovoTicketForm({
           </div>
           <div>
             <Label htmlFor="priorita">Priorità</Label>
+            {/* Tre voci, un vocabolario: le stesse della board Task e della
+                richiesta al telefono. Qui il `<select>` nativo va benissimo —
+                tre opzioni non hanno bisogno di una casella di ricerca. */}
             <select
               id="priorita"
               name="priorita"
-              defaultValue="media"
+              defaultValue={PRIORITA_DEFAULT}
               className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="bassa">Bassa</option>
-              <option value="media">Media</option>
-              <option value="alta">Alta</option>
-              <option value="urgente">Urgente</option>
+              {PRIORITA_IN_ORDINE.map((m) => (
+                <option key={m.valore} value={m.valore}>
+                  {m.etichetta}
+                </option>
+              ))}
             </select>
           </div>
           <div>

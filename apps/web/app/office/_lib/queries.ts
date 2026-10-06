@@ -3,6 +3,11 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import type { TenantContext } from '@kommessa/api';
 import { risolviTitoloCommessa } from '../../_lib/commessa-display';
+import {
+  confrontaPriorita,
+  normalizzaPriorita,
+  type Priorita,
+} from '@kommessa/api/priorita';
 
 /**
  * Aggregati read-only per la dashboard ufficio.
@@ -55,7 +60,7 @@ export async function getDashboardKpis(_ctx: TenantContext) {
 /* Dashboard — Cose da gestire (tutti i TODO aperti, per priorità)     */
 /* ------------------------------------------------------------------ */
 
-export type Priorita = 'urgente' | 'alta' | 'media' | 'bassa';
+export type { Priorita };
 
 export interface TodoDaGestireRow {
   id: string;
@@ -69,13 +74,6 @@ export interface TodoDaGestireRow {
   assegnato_nome: string | null;
   isScaduto: boolean;
 }
-
-const PRIO_ORDER: Record<Priorita, number> = {
-  urgente: 0,
-  alta: 1,
-  media: 2,
-  bassa: 3,
-};
 
 /**
  * Tutti i TODO ancora da fare del tenant (stato aperto/in_corso), su TUTTE le
@@ -109,7 +107,7 @@ export async function getTodoDaGestire(limit = 300): Promise<TodoDaGestireRow[]>
     return {
       id: t.id as string,
       titolo: t.titolo as string,
-      priorita: (t.priorita as Priorita) ?? 'media',
+      priorita: normalizzaPriorita(t.priorita),
       scadenza_at: (t.scadenza_at as string | null) ?? null,
       commessa_id: (t.commessa_id as string | null) ?? null,
       codice_interno: (comm?.codice_interno as string | undefined) ?? null,
@@ -127,9 +125,8 @@ export async function getTodoDaGestire(limit = 300): Promise<TodoDaGestireRow[]>
   });
 
   rows.sort((a, b) => {
-    const pa = PRIO_ORDER[a.priorita];
-    const pb = PRIO_ORDER[b.priorita];
-    if (pa !== pb) return pa - pb;
+    const dPri = confrontaPriorita(a.priorita, b.priorita);
+    if (dPri !== 0) return dPri;
     if (a.isScaduto !== b.isScaduto) return a.isScaduto ? -1 : 1;
     const sa = a.scadenza_at ? new Date(a.scadenza_at).getTime() : Infinity;
     const sb = b.scadenza_at ? new Date(b.scadenza_at).getTime() : Infinity;

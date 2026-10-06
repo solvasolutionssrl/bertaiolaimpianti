@@ -3,12 +3,10 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  AlertCircle,
   Calendar,
   CheckCircle2,
   ChevronDown,
   Circle,
-  Flame,
   Loader2,
   PencilLine,
   User,
@@ -20,8 +18,10 @@ import {
   cambiaTodoStato,
 } from '../../../../_actions/commessa-todo';
 import { useAlert } from '@/app/_components/confirm-provider';
+import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
+import { PrioritaChip } from '@/app/_components/priorita-ui';
 
-type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
+
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
 export interface TodoMobileRow {
@@ -45,32 +45,6 @@ interface Props {
   currentUserId: string;
 }
 
-const META: Record<Priorita, { label: string; chip: string; icon: React.ComponentType<{ className?: string }>; order: number }> = {
-  urgente: {
-    label: 'Urgente',
-    chip: 'bg-red-500/15 text-red-700 border-red-500/40 dark:text-red-400',
-    icon: Flame,
-    order: 0,
-  },
-  alta: {
-    label: 'Alta',
-    chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400',
-    icon: AlertCircle,
-    order: 1,
-  },
-  media: {
-    label: 'Media',
-    chip: 'bg-blue-500/15 text-blue-700 border-blue-500/40 dark:text-blue-400',
-    icon: Circle,
-    order: 2,
-  },
-  bassa: {
-    label: 'Bassa',
-    chip: 'bg-muted text-muted-foreground border-border',
-    icon: Circle,
-    order: 3,
-  },
-};
 
 export function CommessaTodoMobile({ todos, currentUserId }: Props) {
   const aperti = React.useMemo(
@@ -78,9 +52,8 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
       todos
         .filter((t) => t.stato === 'aperto' || t.stato === 'in_corso')
         .sort((a, b) => {
-          const pa = META[a.priorita].order;
-          const pb = META[b.priorita].order;
-          if (pa !== pb) return pa - pb;
+          const dPri = confrontaPriorita(a.priorita, b.priorita);
+          if (dPri !== 0) return dPri;
           const am = a.assegnato_a === currentUserId ? 0 : 1;
           const bm = b.assegnato_a === currentUserId ? 0 : 1;
           if (am !== bm) return am - bm;
@@ -150,8 +123,6 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
   const [pending, setPending] = React.useState(false);
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [body, setBody] = React.useState('');
-  const meta = META[todo.priorita];
-  const Icon = meta.icon;
 
   const complete = async () => {
     setPending(true);
@@ -218,16 +189,8 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
             <p className="flex-1 text-[13px] font-medium leading-snug">
               {todo.titolo}
             </p>
-            <Badge
-              variant="outline"
-              className={cn(
-                'shrink-0 gap-0.5 text-[10px] uppercase',
-                meta.chip,
-              )}
-            >
-              <Icon className="h-3 w-3" />
-              {meta.label}
-            </Badge>
+            {/* Sul telefono lo spazio e' poco: solo la parola, senza il numero. */}
+            <PrioritaChip priorita={todo.priorita} corta className="shrink-0" />
           </div>
           {!readonly ? (
             <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground">

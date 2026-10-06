@@ -40,6 +40,7 @@ import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { useUploadQueue } from '@/app/_components/upload-queue-provider';
 import { useLimitiUpload } from '@/app/_components/limiti-upload-provider';
 import { PdfCameraCapture } from '@/app/_components/pdf-camera-capture';
+import { PrioritaChip } from '@/app/_components/priorita-ui';
 
 interface Props {
   commessaId: string;
@@ -63,12 +64,6 @@ interface TodoConferma extends TodoProposto {
   assegnatoA?: string | null;
 }
 
-const PRIORITA_CHIP: Record<TodoProposto['priorita'], string> = {
-  bassa: 'bg-muted text-muted-foreground',
-  media: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  alta: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  urgente: 'bg-red-500/15 text-red-700 dark:text-red-400',
-};
 
 export function CreaRiunioneDialog({
   commessaId,
@@ -637,12 +632,7 @@ export function CreaRiunioneDialog({
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="flex-1 text-sm font-medium">{t.titolo}</p>
-                            <Badge
-                              variant="outline"
-                              className={cn('text-[10px] uppercase', PRIORITA_CHIP[t.priorita])}
-                            >
-                              {t.priorita}
-                            </Badge>
+                            <PrioritaChip priorita={t.priorita} />
                           </div>
                           {t.note ? (
                             <p className="mt-0.5 text-xs text-muted-foreground">{t.note}</p>

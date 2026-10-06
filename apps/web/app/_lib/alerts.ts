@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
+import { parolaPriorita } from '@kommessa/api/priorita';
 
 /** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
 type Pagina<T> = PromiseLike<EsitoPagina<T>>;
@@ -272,7 +273,7 @@ export async function computeAlerts(tenantId: string): Promise<AlertItem[]> {
       out.push({
         type: 'todo_urgenti_non_assegnati',
         severity: t.priorita === 'urgente' ? 'critical' : 'warning',
-        title: `${t.commessa_id ? 'TODO' : 'Richiesta'} ${t.priorita} senza assegnatario`,
+        title: `${t.commessa_id ? 'TODO' : 'Richiesta'} ${parolaPriorita(t.priorita).toLowerCase()} senza assegnatario`,
         description: comm?.codice_interno
           ? `${t.titolo} — ${comm.codice_interno}`
           : t.titolo,

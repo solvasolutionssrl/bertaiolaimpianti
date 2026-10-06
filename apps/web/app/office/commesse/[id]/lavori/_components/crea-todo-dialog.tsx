@@ -20,8 +20,8 @@ import {
   creaTodo,
 } from '../../../../../_actions/commessa-todo';
 import { useAlert } from '@/app/_components/confirm-provider';
-
-type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
+import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
+import { PrioritaSelect } from '@/app/_components/priorita-ui';
 
 interface TodoEdit {
   id: string;
@@ -39,24 +39,6 @@ interface Props {
   onClose: () => void;
 }
 
-const PRIORITA_OPTS: Array<{ value: Priorita; label: string; chip: string }> = [
-  { value: 'bassa', label: 'Bassa', chip: 'bg-muted text-muted-foreground' },
-  {
-    value: 'media',
-    label: 'Media',
-    chip: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  },
-  {
-    value: 'alta',
-    label: 'Alta',
-    chip: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  },
-  {
-    value: 'urgente',
-    label: 'Urgente',
-    chip: 'bg-red-500/15 text-red-700 dark:text-red-400',
-  },
-];
 
 export function CreaTodoDialog({
   commessaId,
@@ -72,7 +54,7 @@ export function CreaTodoDialog({
     editing?.descrizione ?? '',
   );
   const [priorita, setPriorita] = React.useState<Priorita>(
-    editing?.priorita ?? 'media',
+    normalizzaPriorita(editing?.priorita),
   );
   const [assegnatoA, setAssegnatoA] = React.useState<string>(
     editing?.assegnato_a ?? '',
@@ -136,24 +118,13 @@ export function CreaTodoDialog({
             />
           </div>
           <div>
-            <Label>Priorità</Label>
-            <div className="mt-1.5 grid grid-cols-4 gap-1.5">
-              {PRIORITA_OPTS.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setPriorita(p.value)}
-                  className={cn(
-                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-all',
-                    priorita === p.value
-                      ? 'border-primary ring-2 ring-primary/30 ' + p.chip
-                      : 'border-border text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            <Label id="t_prio_label">Priorità</Label>
+            <PrioritaSelect
+              idEtichetta="t_prio_label"
+              valore={priorita}
+              onCambia={setPriorita}
+              className="mt-1.5"
+            />
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>

@@ -6,6 +6,7 @@ import { SectionHeader } from '../../_components/section-header';
 import { EmptyState } from '../../_components/empty-state';
 import type { SlaStatus } from './_components/sla-badge';
 import { TicketsListClient, type TicketRow } from './_components/tickets-list-client';
+import { PRIORITA_IN_ORDINE, pesoPriorita } from '@kommessa/api/priorita';
 
 export const metadata = { title: 'Tickets' };
 export const dynamic = 'force-dynamic';
@@ -19,10 +20,7 @@ const STATI = [
 ];
 const PRIORITA = [
   { value: '', label: 'Tutte' },
-  { value: 'bassa', label: 'Bassa' },
-  { value: 'media', label: 'Media' },
-  { value: 'alta', label: 'Alta' },
-  { value: 'urgente', label: 'Urgente' },
+  ...PRIORITA_IN_ORDINE.map((m) => ({ value: m.valore, label: m.etichetta })),
 ];
 const SOURCES = [
   { value: '', label: 'Tutte' },
@@ -35,14 +33,6 @@ const SLA_FILTER = [
   { value: '', label: 'SLA: tutti' },
   { value: 'alert', label: 'Solo a rischio / breach' },
 ];
-
-// Ordinamento priorità: urgente prima
-const PRIORITY_ORDER: Record<string, number> = {
-  urgente: 0,
-  alta: 1,
-  media: 2,
-  bassa: 3,
-};
 
 interface SearchParams {
   stato?: string;
@@ -104,8 +94,8 @@ export default async function TicketsPage({
   // con NULL in fondo. Lo facciamo client-side perché PostgREST non
   // ordina facilmente per enum custom in modo personalizzato.
   rows = [...rows].sort((a: any, b: any) => {
-    const pa = PRIORITY_ORDER[a.priorita] ?? 99;
-    const pb = PRIORITY_ORDER[b.priorita] ?? 99;
+    const pa = pesoPriorita(a.priorita);
+    const pb = pesoPriorita(b.priorita);
     if (pa !== pb) return pa - pb;
     const ta = a.target_close_at ? new Date(a.target_close_at).getTime() : Infinity;
     const tb = b.target_close_at ? new Date(b.target_close_at).getTime() : Infinity;

@@ -12,6 +12,7 @@ import {
   getTodoFileRefIds,
 } from './_lib/storage-cleanup';
 import { notificaAssegnazione } from './_lib/notifica-assegnazione';
+import { PRIORITA, PRIORITA_DEFAULT } from '@kommessa/api/priorita';
 
 /**
  * Server actions per gestire i TODO di una commessa.
@@ -30,7 +31,8 @@ import { notificaAssegnazione } from './_lib/notifica-assegnazione';
 const FULL_ROLES = new Set<AppRole>(['admin', 'office']);
 const ALL_ROLES = new Set<AppRole>(['admin', 'office', 'tecnico']);
 
-const TODO_PRIORITA = ['bassa', 'media', 'alta', 'urgente'] as const;
+// La scala vive in `@kommessa/api/priorita`: tre livelli, un vocabolario.
+const TODO_PRIORITA = PRIORITA;
 const TODO_STATO = ['aperto', 'in_corso', 'completato', 'annullato'] as const;
 
 type TodoPriorita = (typeof TODO_PRIORITA)[number];
@@ -71,7 +73,7 @@ const CreaInput = z.object({
   commessaId: z.string().uuid().nullable().optional(),
   titolo: z.string().trim().min(1).max(200),
   descrizione: z.string().trim().max(2000).optional(),
-  priorita: z.enum(TODO_PRIORITA).default('media'),
+  priorita: z.enum(TODO_PRIORITA).default(PRIORITA_DEFAULT),
   assegnatoA: z.string().uuid().nullable().optional(),
   scadenzaAt: z.string().datetime().nullable().optional(),
   metadata: z.record(z.unknown()).optional(),

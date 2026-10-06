@@ -1,16 +1,16 @@
 import Link from 'next/link';
 import { Card, CardContent, Skeleton } from '@kommessa/ui';
 import {
-  AlertCircle,
   ArrowUpRight,
   Calendar,
   CheckCircle2,
   Clock,
-  Flame,
   ListChecks,
 } from 'lucide-react';
-import { getTodoDaGestire, type Priorita, type TodoDaGestireRow } from '../_lib/queries';
+import { getTodoDaGestire, type TodoDaGestireRow } from '../_lib/queries';
 import { fmtData } from '../_lib/format';
+import { PRIORITA, metaPriorita, type Priorita } from '@kommessa/api/priorita';
+import { PrioritaChip } from '@/app/_components/priorita-ui';
 
 /**
  * Macro-card "Cose da gestire · Da fare (to-do)" della dashboard.
@@ -19,47 +19,11 @@ import { fmtData } from '../_lib/format';
  * portano al tab Lavori della commessa.
  */
 
-const PRIO_META: Record<
-  Priorita,
-  {
-    label: string;
-    Icon: typeof Flame;
-    dot: string;
-    chip: string;
-    accent: string;
-  }
-> = {
-  urgente: {
-    label: 'Urgente',
-    Icon: Flame,
-    dot: 'bg-red-500',
-    chip: 'bg-red-500/12 text-red-700 border-red-500/30 dark:text-red-400',
-    accent: 'bg-red-500',
-  },
-  alta: {
-    label: 'Alta',
-    Icon: AlertCircle,
-    dot: 'bg-amber-500',
-    chip: 'bg-amber-500/12 text-amber-700 border-amber-500/30 dark:text-amber-400',
-    accent: 'bg-amber-500',
-  },
-  media: {
-    label: 'Media',
-    Icon: Clock,
-    dot: 'bg-blue-500',
-    chip: 'bg-blue-500/12 text-blue-700 border-blue-500/30 dark:text-blue-400',
-    accent: 'bg-blue-500',
-  },
-  bassa: {
-    label: 'Bassa',
-    Icon: Clock,
-    dot: 'bg-slate-400',
-    chip: 'bg-muted text-muted-foreground border-border',
-    accent: 'bg-slate-300',
-  },
-};
 
-const ORDINE: Priorita[] = ['urgente', 'alta', 'media', 'bassa'];
+// Tre colonne invece di quattro: dall'urgente al normale. La tavolozza
+// locale (che usava opacita' `/12` e `/30` mentre tutto il resto dell'app
+// usava `/15` e `/40`, e l'icona Clock invece di Circle) e' sparita.
+const ORDINE: Priorita[] = [...PRIORITA];
 
 export async function TodoDaGestireSection() {
   const rows = await getTodoDaGestire();
@@ -83,7 +47,7 @@ export async function TodoDaGestireSection() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {ORDINE.map((p) => (
               <PriorityColumn key={p} priorita={p} items={perPriorita.get(p) ?? []} />
             ))}
@@ -136,17 +100,11 @@ function PriorityColumn({
   priorita: Priorita;
   items: TodoDaGestireRow[];
 }) {
-  const m = PRIO_META[priorita];
-  const Icon = m.Icon;
+  const m = metaPriorita(priorita);
   return (
     <div className="flex min-w-0 flex-col rounded-lg border border-border bg-muted/25">
       <div className="flex items-center justify-between gap-2 px-2.5 py-2">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${m.chip}`}
-        >
-          <Icon className="h-3 w-3" />
-          {m.label}
-        </span>
+        <PrioritaChip priorita={priorita} className="rounded-full font-semibold" />
         <span className="font-mono text-xs tabular-nums text-muted-foreground">
           {items.length}
         </span>
@@ -157,7 +115,7 @@ function PriorityColumn({
             Nessuno
           </p>
         ) : (
-          items.map((t) => <TodoMiniCard key={t.id} t={t} accent={m.accent} />)
+          items.map((t) => <TodoMiniCard key={t.id} t={t} accent={m.punto} />)
         )}
       </div>
     </div>

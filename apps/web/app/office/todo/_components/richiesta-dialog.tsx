@@ -18,6 +18,8 @@ import {
 import { creaTodo, aggiornaTodo } from '../../../_actions/commessa-todo';
 import { ClientePicker, type ValoreCliente } from '@/app/_components/cliente-picker';
 import { useAlert } from '@/app/_components/confirm-provider';
+import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
+import { PrioritaSelect } from '@/app/_components/priorita-ui';
 
 /**
  * La telefonata, in un modulo.
@@ -32,14 +34,10 @@ import { useAlert } from '@/app/_components/confirm-provider';
  * assegna a qualcuno, se al telefono non si sapeva ancora a chi darla.
  */
 
-type Priorita = 'bassa' | 'media' | 'alta' | 'urgente';
-
-const URGENZA: Array<{ value: Priorita; label: string; chip: string }> = [
-  { value: 'bassa', label: 'Quando capita', chip: 'bg-muted text-muted-foreground' },
-  { value: 'media', label: 'Normale', chip: 'bg-blue-500/15 text-blue-700 dark:text-blue-400' },
-  { value: 'alta', label: 'Presto', chip: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
-  { value: 'urgente', label: 'Urgente', chip: 'bg-red-500/15 text-red-700 dark:text-red-400' },
-];
+// ⚠️ Qui c'erano etichette tutte mie — «Quando capita / Normale / Presto» —
+// sugli stessi identici valori che la pagina Task accanto chiamava
+// «Bassa / Media / Alta». Due vocabolari per la stessa colonna, nella stessa
+// schermata. Ora la scala e' una sola: `@kommessa/api/priorita`.
 
 const ETICHETTA_RUOLO: Record<string, string> = {
   owner: 'Titolari',
@@ -82,7 +80,9 @@ export function RichiestaDialog({
   });
   const [contatto, setContatto] = React.useState(esistente?.contatto ?? '');
   const [dettagli, setDettagli] = React.useState(esistente?.descrizione ?? '');
-  const [urgenza, setUrgenza] = React.useState<Priorita>(esistente?.priorita ?? 'media');
+  const [urgenza, setUrgenza] = React.useState<Priorita>(
+    normalizzaPriorita(esistente?.priorita),
+  );
   const [assegnatoA, setAssegnatoA] = React.useState(esistente?.assegnatoA ?? '');
   const [scadenza, setScadenza] = React.useState(
     esistente?.scadenzaAt ? esistente.scadenzaAt.slice(0, 10) : '',
@@ -202,24 +202,13 @@ export function RichiestaDialog({
           </div>
 
           <div>
-            <Label>Urgenza</Label>
-            <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-              {URGENZA.map((u) => (
-                <button
-                  key={u.value}
-                  type="button"
-                  onClick={() => setUrgenza(u.value)}
-                  className={cn(
-                    'rounded-md border px-2 py-1.5 text-xs font-medium transition-all',
-                    urgenza === u.value
-                      ? 'border-primary ring-2 ring-primary/30 ' + u.chip
-                      : 'border-border text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {u.label}
-                </button>
-              ))}
-            </div>
+            <Label id="r_prio_label">Priorità</Label>
+            <PrioritaSelect
+              idEtichetta="r_prio_label"
+              valore={urgenza}
+              onCambia={setUrgenza}
+              className="mt-1.5"
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
