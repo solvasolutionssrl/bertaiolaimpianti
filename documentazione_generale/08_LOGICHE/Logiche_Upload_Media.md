@@ -1,8 +1,8 @@
 # Logiche Upload Media — analisi difetti e piano di intervento
 
-**Versione**: 2.2
+**Versione**: 2.3
 **Stato**: ✅ tutte le fasi implementate, verificate con test e build
-**Data**: 11/08/2026 (§4quinquies: perché i video non finivano)
+**Data**: 05/10/2026 (§8: i limiti di invio diventano configurabili)
 **Ambito**: upload foto/video/PDF verso R2 (poi sync Nextcloud) da PWA mobile e office
 
 > Documento nato dall'analisi di due problemi segnalati dal cliente Bertaiola:
@@ -448,3 +448,153 @@ Suite: 205 test verdi in `packages/api`, typecheck pulito su `apps/web` e
 **Resta da provare sul campo** (non riproducibile in unit test): la ripresa
 reale su iPhone dopo chiusura dell'app con un video grande a metà, e il
 comportamento della sentinella di stallo su rete di cantiere.
+
+---
+
+## 8. I limiti di invio diventano configurabili (05/10/2026)
+
+**Migration**: `20261005090000_limiti_upload_configurabili.sql` — ✅ applicata e verificata.
+**Push**: `bbd62ec`.
+
+### 8.1 Il problema
+
+Quanti file per volta e quanto può pesare una foto / un video / un PDF erano
+**quattro costanti dentro il componente di selezione**
+(`office/commesse/nuova/_components/media-attach-section.tsx`). Per alzare il
+tetto di un cliente serviva un deploy. Il cap sul numero di file era **30**.
+
+### 8.2 Tre livelli, dal più forte al più debole
+
+| Livello | Dove | Chi lo cambia |
+|---|---|---|
+| **Tetti tecnici** | `packages/api/src/limiti-upload.ts` (`TETTI_UPLOAD`) | nessuno: è il bordo verificato della pipeline |
+| **Default globale** | `platform_settings`, riga `limiti_upload` | super admin, card in `/admin/media` |
+| **Override per tenant** | `tenants.upload_config` | super admin, tab **Upload** di `/admin/tenants/[id]` |
+
+Risoluzione: `min(tetto, tenant ?? globale ?? valori di sicurezza)`.
+
+⭐ **Una chiave assente EREDITA il livello sopra, non azzera.** `{}` su un tenant
+significa «fai come dice il globale». È il motivo per cui l'apply non ha
+cambiato il comportamento di nessuno: all'applicazione tutti e quattro i tenant
+reali (BER, FPMIMP, DEMOK, DEMOC) erano a `{}`, verificato.
+
+### 8.3 Valori
+
+| | Minimo | Default globale | Tetto tecnico |
+|---|---|---|---|
+| File per invio | 1 | **50** (era 30) | 500 |
+| Foto | 1 MB | 25 MB | 200 MB |
+| Video | 1 MB | 500 MB | **2000 MB** |
+| PDF | 1 MB | 50 MB | 500 MB |
+
+⚠️ **Il tetto dei video ha due bordi sopra di sé, e vince il più basso:**
+
+| Bordo | Dove | Valore |
+|---|---|---|
+| apertura dell'upload | `api/upload/media/init/route.ts` → `MAX_SIZE_BYTES`, **dentro lo schema zod** | **2 GiB** |
+| sync verso Nextcloud | `_lib/sync-r2-to-nextcloud.ts` → `SYNC_MAX_BUFFER_BYTES` | 5 GiB |
+
+Il vincolante è il primo: oltre quello l'init risponde `400 Body non valido`,
+cioè l'utente vede un errore tecnico su un file che il pannello gli ha appena
+detto di poter caricare. **Il tetto era stato messo a 5000 MB accoppiandolo alla
+sync** — il bordo documentato — ed era sbagliato: il vincolo vero stava in un
+`.max()` dentro uno schema di validazione, dove non si cerca. Alzando il tetto,
+alzare **prima** quel cap.
+
+### 8.4 Due atteggiamenti opposti, ed è voluto
+
+- in **lettura** (`risolviLimitiUpload`) si taglia ai tetti **in silenzio** e non
+  si solleva mai: un dato storto nel database non deve impedire a un tecnico di
+  caricare le foto del cantiere;
+- in **scrittura** (`validaLimitiUpload`) si **rifiuta** dicendo campo e bordo:
+  tagliare di nascosto il numero che un umano ha appena battuto nel pannello è
+  il modo migliore per fargli credere di aver salvato altro.
+
+Il pannello mostrava «in vigore 500» per un `9999` che poi il salvataggio
+rifiutava, perché l'anteprima usava il resolver della lettura. Ora anteprima e
+salvataggio passano dalla **stessa** funzione.
+
+### 8.5 Come arriva al browser
+
+`_lib/limiti-upload-server.ts` (`server-only` + `cache()`, due letture in
+**parallelo**, tollerante alla colonna assente) → context
+`_components/limiti-upload-provider.tsx` montato nei **due gusci**
+(`office/layout.tsx`, `mobile/layout.tsx`) → `useLimitiUpload()`.
+
+Un aggancio per guscio invece di cinque catene di prop: lo stesso componente di
+selezione è usato da creazione commessa office, wizard sopralluogo, dettatura,
+tab Scatto e tab Media. Fuori dai gusci (banco `/prova-upload`) valgono i valori
+di sicurezza.
+
+⚠️ **Il fallimento di questa catena è invisibile oggi**: senza provider si
+ricade su 50/25/500/50, che sono esattamente i default globali. Si manifesta
+solo quando qualcuno imposta un override. Per verificarla: metti un numero
+diverso su un tenant e guarda il selettore.
+
+### 8.6 Cosa governa e cosa NON governa
+
+Governa la **scelta dei file nel mondo commesse**: Nuova commessa, wizard
+sopralluogo, dettatura, tab Scatto, tab Media. Il limite dei **video** vale
+anche sugli allegati riunione.
+
+**Non** governa: scontrini Kontabilità (8 MB), documenti del personale (15 MB),
+logo del tenant (2 MB), Comando iOS (90 MB per richiesta). Hanno limiti propri,
+scritti nel codice, ed è detto nel pannello stesso.
+
+⚠️ **Il controllo è solo nell'app, al momento della scelta dei file: non è un
+blocco lato server.** Chi dichiara 1 MB può caricare 2 GB. Vedi
+`Osservazioni_Audit_2026-10-05.md` §3.
+
+### 8.7 Niente seconde verità
+
+`VIDEO_MAX_SIZE_BYTES` (500 MB) in `_lib/upload-queue/types.ts` era un limite
+video **indipendente**, usato dai tre percorsi degli allegati riunione. Alzando
+il video di un tenant a 700 MB, il selettore avrebbe accettato e le riunioni
+avrebbero rifiutato lo stesso file, con un «Limite: 500 MB» scritto a mano. La
+costante è stata **rimossa** e i tre punti leggono dal contesto.
+
+⭐ **Lezione**: una costante duplicata che prima era solo ridondante, con un
+pannello sopra diventa una **contraddizione visibile all'utente**. Prima di
+rendere un numero configurabile, cercare dove *altro* quel numero è scritto —
+anche nelle scritte, non solo nelle costanti.
+
+### 8.8 Le soglie di avviso si derivano
+
+«Vicino al limite» a `floor(maxFile × 0.8)` e «video grande» a
+`round(maxVideoMb × 0.4)` — coi default danno esattamente i numeri di sempre
+(40 su 50, >200 MB). ⚠️ **Pavimento a 1**: col limite a 1 file la soglia faceva
+**0**, e l'avviso «vicino al limite» compariva a **zero file selezionati**
+(idem «video grande (>0 MB)»). Pure e testate: `sogliaAvvisoNumero`,
+`sogliaAvvisoVideoMb`.
+
+### 8.9 Il conteggio misura la selezione, non la commessa
+
+Dove la lista resta in piedi fino al salvataggio (creazione commessa, wizard,
+dettatura) il limite è **cumulativo**; dove i file vengono accodati e la lista
+si svuota (tab Scatto, tab Media) è un limite **per infornata, ripetibile**.
+Non è un tetto di foto per commessa.
+
+### 8.10 Tracciabilità
+
+`audit_events`: `platform.limiti_upload.update` (globale) e
+`tenant.limiti_upload.update` (per tenant).
+
+⚠️ Il salvataggio globale **non lasciava nessuna traccia**:
+`audit_events.tenant_id` era `NOT NULL`, l'insert veniva rifiutato, e l'errore
+moriva nel `try/catch` best-effort di `auditPlatform` — che non guardava
+l'esito, **perché supabase-js non solleva**. La colonna è ora **nullable**
+(= evento di piattaforma, che `/admin/audit` sapeva già mostrare come
+`PLATFORM`) e `auditPlatform` **logga** i fallimenti.
+
+⭐ **Lezione**: ogni `catch {}` su una scrittura supabase va letto come «questo
+errore non esiste».
+
+### 8.11 `platform_settings`: mai un segreto
+
+Tabella chiave/valore a scope piattaforma, la prima del progetto. Lettura
+**per chiave** (`chiave IN ('limiti_upload')`), non `USING (true)`: una chiave
+nuova nasce **non leggibile**. È leggibile dagli utenti autenticati perché
+serve, quindi chiavi API e token restano in env. Scritture solo service role
+(`REVOKE ALL` da anon/authenticated: le privilegi di default di Supabase danno
+INSERT/UPDATE/DELETE su ogni tabella nuova di `public`).
+
