@@ -34,7 +34,10 @@ export async function confermaCambioPassword(): Promise<
   const { error } = await service
     .from('users')
     .update({
+      // Entrambe: il cancello e lo stato. Spegnere solo il primo lascerebbe il
+      // promemoria addosso a chi ha appena fatto quello che chiedeva.
       must_change_password: false,
+      password_provvisoria: false,
       password_changed_at: new Date().toISOString(),
     } as never)
     .eq('id', ctx.userId);

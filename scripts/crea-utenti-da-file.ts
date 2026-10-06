@@ -31,9 +31,22 @@
  *   `ruolo` e' facoltativo: senza, tecnico.
  *   `capo` e' facoltativo: una «X» da' i poteri del capo squadra.
  *
+ * PRIMO ACCESSO
+ *   `--cambio=obbligatorio` (predefinito) sbarra la strada finche' la persona
+ *   non sceglie la sua password. `--cambio=promemoria` la fa entrare subito e
+ *   glielo ricorda in app finche' non la cambia: serve quando si consegnano
+ *   gli accessi a una squadra intera in presenza, dove tredici persone che
+ *   devono inventarsi una password nello stesso momento non entrano, chiedono
+ *   aiuto. La regola che combina i due casi sta in un posto puro,
+ *   `statoPasswordAllaNascita`, condiviso con l'applicazione.
+ *
+ * IL FILE DELLE CREDENZIALI
+ *   Se il nome finisce in `.csv` esce un CSV (da aprire e stampare),
+ *   altrimenti un testo incolonnato. In entrambi i casi fuori dal repository.
+ *
  * USO
- *   pnpm tsx scripts/crea-utenti-da-file.ts --tenant=BER --file=~/squadra.xlsx
- *   … --apply --credenziali=~/Desktop/accessi-bertaiola.txt
+ *   pnpm tsx scripts/crea-utenti-da-file.ts --tenant=BER --file=~/squadra.csv
+ *   … --apply --cambio=promemoria --credenziali=~/Desktop/accessi.csv
  */
 import { randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -48,6 +61,7 @@ import {
   aliasLogin,
   componiPasswordTemporanea,
   proponiUsername,
+  statoPasswordAllaNascita,
   validaUsername,
 } from '../packages/api/src/identita';
 
@@ -100,7 +114,10 @@ const RUOLI: Record<string, 'tecnico' | 'office' | 'admin'> = {
 interface Riga {
   nome: string;
   cognome: string;
+  /** Nome utente, oppure la casella vera se nel foglio c'era una email. */
   username: string;
+  /** Valorizzato solo se nel foglio c'era una casella vera. */
+  emailDiretta?: string;
   ruolo: 'tecnico' | 'office' | 'admin';
   capo: boolean;
   problema?: string;
@@ -108,13 +125,31 @@ interface Riga {
 
 function cella(r: unknown[], i: number): string {
   const v = r[i];
-  return v === undefined || v === null ? '' : String(v).trim();
+  if (v === undefined || v === null) return '';
+  // ⚠ `\ufeff` è il segno di codifica che Excel mette in testa a ogni CSV che
+  // salva. Finisce dentro la PRIMA cella del file, e senza toglierlo
+  // l'intestazione non viene riconosciuta come tale: la riga «Nome;Cognome»
+  // diventa una persona che si chiama «Nome», con nome utente «Utente» e un
+  // ruolo che non esiste. Succede con il foglio più normale del mondo.
+  return String(v).replace(/^\ufeff/, '').trim();
 }
 
 function leggiFoglio(percorso: string): Riga[] {
-  // ⚠ `codepage: 65001` non è un dettaglio: senza, un CSV in UTF-8 viene letto
-  // come latin1 e «Nicolò» diventa «NicolÃ²». Verificato provandolo.
-  const wb = XLSX.readFile(percorso, { codepage: 65001 });
+  // Un CSV lo si decodifica **noi**, e si passa alla libreria già come testo.
+  //
+  // ⚠ Non è un dettaglio di stile: con `XLSX.readFile(…, { codepage: 65001 })`
+  // il segno di codifica che Excel mette in testa a ogni CSV **mangia i primi
+  // caratteri della prima cella** — misurato: `"Nome"` arriva come `"me"`, e
+  // nessun taglio di stringa può rimetterli perché non ci sono più. La
+  // conseguenza era un'intestazione non riconosciuta come tale, cioè una
+  // persona di nome «Nome» con nome utente «Utente» e un ruolo inventato,
+  // creata per prima nell'elenco. Letto come testo, la prima cella arriva
+  // `"\ufeffNome"`: intera, e il segno lo toglie `cella()`.
+  //
+  // Un `.xlsx` vero invece è binario e va letto dalla libreria.
+  const wb = /\.csv$/i.test(percorso)
+    ? XLSX.read(readFileSync(percorso, 'utf8'), { type: 'string' })
+    : XLSX.readFile(percorso);
   const ws = wb.Sheets[wb.SheetNames[0]!]!;
   const righe = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false });
 
@@ -135,6 +170,30 @@ function leggiFoglio(percorso: string): Riga[] {
     const ruoloIgnoto = ruoloScritto !== '' && RUOLI[ruoloScritto.toLowerCase()] === undefined;
 
     const utenteGrezzo = cella(r, COL.utente);
+
+    // Una casella vera al posto del nome utente.
+    //
+    // ⚠ Serve per le persone che hanno un accesso da prima con la posta
+    // aziendale: senza questo, lo script costruisce l'alias
+    // `nome@sigla.kommessa.local`, non trova niente, e **crea un secondo
+    // account alla stessa persona**. È il caso che si incontra sempre quando
+    // si passa da «qualche accesso sparso» a «tutta la squadra».
+    if (utenteGrezzo.includes('@')) {
+      const email = utenteGrezzo.toLowerCase();
+      out.push({
+        nome,
+        cognome,
+        username: email,
+        emailDiretta: email,
+        ruolo,
+        capo: cella(r, COL.capo).toUpperCase() === SEGNO_CAPO,
+        ...(ruoloIgnoto
+          ? { problema: `non so cosa sia il ruolo «${ruoloScritto}», lo metto come tecnico` }
+          : {}),
+      });
+      continue;
+    }
+
     const proposto = utenteGrezzo || proponiUsername(nome, cognome) || '';
     const vu = validaUsername(proposto);
 
@@ -158,6 +217,12 @@ async function main() {
   const file = arg('file');
   const applica = flag('apply');
   const credenziali = arg('credenziali');
+  const cambio = (arg('cambio') ?? 'obbligatorio') as 'obbligatorio' | 'promemoria';
+  if (cambio !== 'obbligatorio' && cambio !== 'promemoria') {
+    console.error("--cambio accetta «obbligatorio» o «promemoria».");
+    process.exit(1);
+  }
+  const statoPwd = statoPasswordAllaNascita({ perInvito: false, cambio });
 
   if (!slug || !file) {
     console.error('Uso: --tenant=SIGLA --file=percorso.xlsx [--apply] [--credenziali=percorso.txt]');
@@ -214,11 +279,27 @@ async function main() {
     process.exit(1);
   }
 
-  // Chi esiste già: una chiamata, non una per riga.
-  const esistenti = new Set<string>();
+  // Chi esiste già: una chiamata, non una per riga. Serve l'id e non solo la
+  // presenza, perché a chi c'è già si può comunque mancare la scheda del
+  // personale — ed è il caso che si incontra davvero, quando una persona
+  // aveva un accesso d'ufficio da prima.
+  const esistenti = new Map<string, string>();
   const { data: elenco } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
   for (const au of elenco?.users ?? []) {
-    if (au.email) esistenti.add(au.email.toLowerCase());
+    if (au.email) esistenti.set(au.email.toLowerCase(), au.id);
+  }
+
+  // Chi ha già una scheda del personale.
+  const conSchedaGia = new Set<string>();
+  if (conScheda) {
+    const { data: schede } = await db
+      .from('dipendenti' as never)
+      .select('user_id')
+      .eq('tenant_id', t.id)
+      .not('user_id', 'is', null);
+    for (const d of (schede ?? []) as { user_id: string | null }[]) {
+      if (d.user_id) conSchedaGia.add(d.user_id);
+    }
   }
 
   // Doppioni dentro il foglio stesso: due «m.rossi» nella stessa colonna sono
@@ -233,15 +314,25 @@ async function main() {
       t.login_senza_codice ? '(nessuno, campo vuoto)' : (t.codice_azienda ?? '— non impostato —')
     }`,
   );
+  console.log(
+    `Primo accesso: ${
+      cambio === 'obbligatorio'
+        ? 'cambio password OBBLIGATORIO (non si passa finché non la scelgono)'
+        : 'entrano diretti, con promemoria in app finché non la cambiano'
+    }`,
+  );
   console.log(applica ? '\n*** APPLICO ***\n' : '\n--- PROVA, non scrivo niente (aggiungi --apply) ---\n');
 
   const fatti: { nome: string; username: string; password: string }[] = [];
+  const gia: { nome: string; username: string; nota: string }[] = [];
   let saltati = 0;
   let errori = 0;
 
   for (const r of righe) {
     const etichetta = `${r.nome} ${r.cognome}`.trim();
-    const vu = validaUsername(r.username);
+    const vu: { ok: true; username: string } | { ok: false; motivo: string } = r.emailDiretta
+      ? { ok: true, username: r.emailDiretta }
+      : validaUsername(r.username);
     if (!vu.ok) {
       console.log(`  ✗ ${etichetta.padEnd(28)} ${vu.motivo}`);
       errori += 1;
@@ -252,9 +343,32 @@ async function main() {
       errori += 1;
       continue;
     }
-    const alias = aliasLogin(vu.username, t.slug);
-    if (esistenti.has(alias)) {
-      console.log(`  — ${etichetta.padEnd(28)} «${vu.username}» esiste già: lasciato com'è`);
+    // Una casella vera è già l'indirizzo con cui Supabase autentica; un nome
+    // utente va trasformato nell'alias.
+    const alias = r.emailDiretta ?? aliasLogin(vu.username, t.slug);
+    const idEsistente = esistenti.get(alias);
+    if (idEsistente) {
+      // L'accesso non si tocca: rigenerare la password di chi sta già
+      // lavorando lo butterebbe fuori senza preavviso. La **scheda** invece
+      // gliela si fa, se manca: senza quella la tab Dipendenti non ha la
+      // persona e lo storico non ha a cosa attaccarsi.
+      let nota = "esiste già: accesso lasciato com'è";
+      if (conScheda && !conSchedaGia.has(idEsistente)) {
+        if (!applica) {
+          nota += ' · gli farei la scheda del personale';
+        } else {
+          const { error } = await db.from('dipendenti' as never).insert({
+            tenant_id: t.id,
+            user_id: idEsistente,
+            nome: r.nome,
+            cognome: r.cognome,
+            stato_attivo: true,
+          } as never);
+          nota += error ? ` · scheda NON creata (${error.message})` : ' · scheda creata ora';
+        }
+      }
+      console.log(`  — ${etichetta.padEnd(28)} «${vu.username}» ${nota}`);
+      gia.push({ nome: etichetta, username: vu.username, nota });
       saltati += 1;
       continue;
     }
@@ -297,7 +411,7 @@ async function main() {
       role: r.ruolo,
       display_name: etichetta,
       attivo: true,
-      must_change_password: true,
+      ...statoPwd,
       ...(r.capo && r.ruolo === 'tecnico' ? { permissions: { capo_squadra: true } } : {}),
     } as never);
     if (errProfilo) {
@@ -324,7 +438,9 @@ async function main() {
       `  ✓ ${etichetta.padEnd(28)} ${vu.username.padEnd(20)} ${r.ruolo}${r.capo ? ' · capo squadra' : ''}${notaScheda}`,
     );
     fatti.push({ nome: etichetta, username: vu.username, password });
-    esistenti.add(alias);
+    // Due righe uguali nel foglio non devono creare due account: da qui in
+    // poi questo alias risulta occupato.
+    esistenti.set(alias, uid);
   }
 
   console.log(
@@ -335,13 +451,22 @@ async function main() {
 
   if (applica && fatti.length > 0) {
     const sigla = t.login_senza_codice ? '(lasciare vuoto)' : (t.codice_azienda ?? '—');
+    const quando = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
+    const istruzione =
+      cambio === 'obbligatorio'
+        ? 'Al primo accesso l’app chiede di scegliere una password propria.'
+        : 'Si entra con questa password. Cambiarla dal Profilo quando si vuole.';
+
     const testo = [
-      `Accessi ${t.nome} — generati il ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`,
+      `Accessi ${t.nome} — generati il ${quando}`,
       `Codice azienda: ${sigla}`,
       '',
-      'Ognuno dovrà scegliere la propria password al primo accesso.',
+      istruzione,
       '',
       ...fatti.map((f) => `${f.nome.padEnd(30)} ${f.username.padEnd(22)} ${f.password}`),
+      ...(gia.length > 0
+        ? ['', 'Già presenti, accesso invariato:', ...gia.map((g) => `${g.nome.padEnd(30)} ${g.username}`)]
+        : []),
       '',
     ].join('\n');
 
@@ -349,13 +474,52 @@ async function main() {
 
     if (credenziali) {
       const dove = resolve(credenziali.replace(/^~/, process.env.HOME ?? '~'));
-      writeFileSync(dove, testo, { mode: 0o600 });
+      const contenuto = dove.toLowerCase().endsWith('.csv')
+        ? componiCsv({ tenant: t.nome, sigla, quando, istruzione, fatti, gia })
+        : testo;
+      writeFileSync(dove, contenuto, { mode: 0o600 });
       console.log(`Scritto in ${dove} (leggibile solo da te).`);
       console.log('⚠ Cancellalo quando hai finito di distribuire gli accessi.\n');
     } else {
       console.log('⚠ Questo elenco non è salvato da nessuna parte: copialo adesso.\n');
     }
   }
+}
+
+/**
+ * Il foglio da aprire e stampare.
+ *
+ * ⚠ `\ufeff` in testa non è decorazione: senza quel segno Excel su Windows
+ * legge il CSV come latin1 e «Nicolò» diventa «NicolÃ²» — lo stesso guasto che
+ * in lettura si evita con `codepage: 65001`, dalla parte opposta.
+ *
+ * ⚠ Separatore `;` e non `,`: è quello che Excel italiano si aspetta: con la
+ * virgola tutte le righe finiscono in una colonna sola.
+ */
+function componiCsv(d: {
+  tenant: string;
+  sigla: string;
+  quando: string;
+  istruzione: string;
+  fatti: { nome: string; username: string; password: string }[];
+  gia: { nome: string; username: string; nota: string }[];
+}): string {
+  const cella = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const riga = (...c: string[]) => c.map(cella).join(';');
+
+  return (
+    '\ufeff' +
+    [
+      riga(`Accessi ${d.tenant}`, `generati il ${d.quando}`),
+      riga(`Codice azienda: ${d.sigla}`),
+      riga(d.istruzione),
+      '',
+      riga('Nome', 'Nome utente', 'Password', 'Note'),
+      ...d.fatti.map((f) => riga(f.nome, f.username, f.password, '')),
+      ...d.gia.map((g) => riga(g.nome, g.username, '', g.nota)),
+      '',
+    ].join('\r\n')
+  );
 }
 
 main().catch((e) => {

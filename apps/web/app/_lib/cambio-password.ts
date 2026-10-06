@@ -2,7 +2,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { deveCambiarePassword } from '@kommessa/api/identita';
+import { deveCambiarePassword, mostraPromemoriaPassword } from '@kommessa/api/identita';
 
 import { getTenantContextCached } from './tenant-cache';
 
@@ -20,28 +20,56 @@ import { getTenantContextCached } from './tenant-cache';
  * guasto nel controllo non deve diventare un blocco del lavoro: al massimo
  * qualcuno resta un giorno in più sulla password dell'ufficio.
  */
-export const devoCambiarePassword = cache(async (): Promise<boolean> => {
+export interface StatoPassword {
+  /** Il cancello: non si passa finché non ne sceglie una sua. */
+  obbligato: boolean;
+  /** Lo stato: la password in uso gliel'ha data qualcun altro. */
+  provvisoria: boolean;
+}
+
+/**
+ * I due fatti sulla password di chi sta guardando, in una lettura sola.
+ *
+ * ⚠️ **In caso di guasto risponde «niente da fare», ed è voluto.** Se la
+ * lettura non riesce — colonna che non c'è ancora perché il codice è online
+ * prima della migration, rete che non risponde — l'alternativa sarebbe
+ * mandare TUTTI alla schermata «scegli la password», compresi i novanta per
+ * cento che l'hanno già scelta, e fermare l'azienda. Un guasto nel controllo
+ * non deve diventare un blocco del lavoro: al massimo qualcuno resta un
+ * giorno in più sulla password dell'ufficio.
+ */
+export const statoPassword = cache(async (): Promise<StatoPassword> => {
+  const fuoriServizio: StatoPassword = { obbligato: false, provvisoria: false };
   const ctx = await getTenantContextCached();
-  if (!ctx) return false;
+  if (!ctx) return fuoriServizio;
   try {
     const supabase = createServerSupabase();
     const { data, error } = await supabase
       .from('users')
-      .select('must_change_password')
+      .select('must_change_password, password_provvisoria')
       .eq('id', ctx.userId)
       .maybeSingle();
     if (error) {
       console.warn('[cambio-password] lettura non riuscita, si lascia passare:', error.message);
-      return false;
+      return fuoriServizio;
     }
-    return deveCambiarePassword({
-      mustChangePassword: (data as { must_change_password?: boolean | null } | null)
-        ?.must_change_password,
-    });
+    const riga = data as {
+      must_change_password?: boolean | null;
+      password_provvisoria?: boolean | null;
+    } | null;
+    return {
+      obbligato: deveCambiarePassword({ mustChangePassword: riga?.must_change_password }),
+      provvisoria: mostraPromemoriaPassword({ passwordProvvisoria: riga?.password_provvisoria }),
+    };
   } catch (e) {
     console.warn('[cambio-password] lettura non riuscita, si lascia passare:', e);
-    return false;
+    return fuoriServizio;
   }
+});
+
+/** Il solo cancello, per i gusci che sbarrano la strada. */
+export const devoCambiarePassword = cache(async (): Promise<boolean> => {
+  return (await statoPassword()).obbligato;
 });
 
 /** Dove mandare una persona appena ha scelto la sua password. */

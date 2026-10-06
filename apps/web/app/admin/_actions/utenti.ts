@@ -285,7 +285,11 @@ export async function impostaPasswordManuale(
   // cui password non e' cambiata. L'ordine e' lo stesso di `/cambia-password`.
   const { error: errCancello } = await supabase
     .from('users')
-    .update({ must_change_password: true, password_changed_at: null } as never)
+    .update({
+      must_change_password: true,
+      password_provvisoria: true,
+      password_changed_at: null,
+    } as never)
     .eq('id', parsed.data.userId);
   if (errCancello) {
     console.error('[admin/utenti] password cambiata ma cancello non rialzato:', errCancello.message);

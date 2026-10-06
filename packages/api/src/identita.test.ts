@@ -10,11 +10,13 @@ import {
   aliasLogin,
   componiPasswordTemporanea,
   deveCambiarePassword,
+  mostraPromemoriaPassword,
   eAliasLocale,
   RUOLI_VIVI,
   etichettaAccesso,
   etichettaRuolo,
   normalizzaUsername,
+  statoPasswordAllaNascita,
   proponiUsername,
   usernameDaAlias,
   validaPassword,
@@ -246,6 +248,28 @@ describe('deveCambiarePassword', () => {
   });
 });
 
+describe('mostraPromemoriaPassword', () => {
+  it('solo un sì esplicito mostra il promemoria', () => {
+    expect(mostraPromemoriaPassword({ passwordProvvisoria: true })).toBe(true);
+    expect(mostraPromemoriaPassword({ passwordProvvisoria: false })).toBe(false);
+    expect(mostraPromemoriaPassword({ passwordProvvisoria: null })).toBe(false);
+    expect(mostraPromemoriaPassword({})).toBe(false);
+  });
+
+  it('è un fatto indipendente dal blocco', () => {
+    // Il caso nuovo, quello che con una colonna sola non si poteva scrivere:
+    // entra senza muro, ma la password è ancora quella dell'ufficio.
+    const entraConPromemoria = { mustChangePassword: false, passwordProvvisoria: true };
+    expect(deveCambiarePassword(entraConPromemoria)).toBe(false);
+    expect(mostraPromemoriaPassword(entraConPromemoria)).toBe(true);
+
+    // E il vecchio, che resta il predefinito.
+    const bloccato = { mustChangePassword: true, passwordProvvisoria: true };
+    expect(deveCambiarePassword(bloccato)).toBe(true);
+    expect(mostraPromemoriaPassword(bloccato)).toBe(true);
+  });
+});
+
 describe('etichettaRuolo', () => {
   it('scrive i mestieri in italiano, singolare e plurale', () => {
     expect(etichettaRuolo('admin')).toBe('Amministratore');
@@ -269,6 +293,43 @@ describe('etichettaRuolo', () => {
     for (const r of RUOLI_VIVI) {
       expect(etichettaRuolo(r)).not.toBe('Altro');
       expect(etichettaRuolo(r, 'plurale')).not.toBe('Altri');
+    }
+  });
+});
+
+describe('statoPasswordAllaNascita', () => {
+  it('per invito niente è provvisorio: la password la scegle la persona', () => {
+    expect(statoPasswordAllaNascita({ perInvito: true })).toEqual({
+      must_change_password: false,
+      password_provvisoria: false,
+    });
+    // Anche chiedendo il blocco: non c'è nessuna password nostra da cambiare.
+    expect(statoPasswordAllaNascita({ perInvito: true, cambio: 'obbligatorio' })).toEqual({
+      must_change_password: false,
+      password_provvisoria: false,
+    });
+  });
+
+  it('senza dire niente, blocca: è il predefinito prudente', () => {
+    expect(statoPasswordAllaNascita({ perInvito: false })).toEqual({
+      must_change_password: true,
+      password_provvisoria: true,
+    });
+  });
+
+  it('col promemoria entra, ma resta dichiarato provvisorio', () => {
+    expect(statoPasswordAllaNascita({ perInvito: false, cambio: 'promemoria' })).toEqual({
+      must_change_password: false,
+      password_provvisoria: true,
+    });
+  });
+
+  it('l’invariante regge in tutti i casi: bloccato implica provvisorio', () => {
+    for (const perInvito of [true, false]) {
+      for (const cambio of ['obbligatorio', 'promemoria', undefined] as const) {
+        const r = statoPasswordAllaNascita({ perInvito, ...(cambio ? { cambio } : {}) });
+        if (r.must_change_password) expect(r.password_provvisoria).toBe(true);
+      }
     }
   });
 });

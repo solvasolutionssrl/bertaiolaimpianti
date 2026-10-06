@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { ImpersonationBanner } from '../_components/impersonation-banner';
+import { PromemoriaPassword } from '../_components/promemoria-password';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 import { tenantHasModule } from '../_lib/modules';
 import { devoCambiarePassword } from '../_lib/cambio-password';
@@ -174,6 +175,7 @@ export default async function MobileLayout({
             contenuto: scorre con la pagina ma si ritrova risalendo, e non
             interferisce con la barra in basso ne' con le aree di sicurezza. */}
         {impersonando ? <ImpersonationBanner tenantLabel={etichettaImpersonation} /> : null}
+        <PromemoriaPassword />
         <LimitiUploadProvider limiti={limitiUpload}>{children}</LimitiUploadProvider>
       </main>
 

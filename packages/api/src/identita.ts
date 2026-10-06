@@ -281,6 +281,52 @@ export function deveCambiarePassword(utente: {
   return utente.mustChangePassword === true;
 }
 
+/**
+ * Chi sta ancora usando una password che ha scelto qualcun altro.
+ *
+ * È un fatto **diverso** dal precedente, e tenerli separati è il motivo per
+ * cui esistono due funzioni al posto di una. `deveCambiarePassword` è una
+ * *policy* («e per questo ti blocco»); questa è uno *stato* («la password in
+ * uso te l'ha data l'ufficio»). Coincidevano finché l'unica risposta allo
+ * stato era il blocco: dal momento in cui si vuole far entrare qualcuno
+ * senza muro ma dirglielo, una colonna sola non basta più a scrivere il caso.
+ *
+ * Chi è bloccato è sempre anche provvisorio; il contrario no.
+ */
+export function mostraPromemoriaPassword(utente: {
+  passwordProvvisoria?: boolean | null;
+}): boolean {
+  return utente.passwordProvvisoria === true;
+}
+
+/**
+ * Cosa si scrive sulle due colonne della password quando un account nasce.
+ *
+ * ⚠️ **Esiste per un motivo preciso.** Il nucleo che fa nascere un account
+ * (`app/_actions/_lib/account-core.ts`) è `server-only`, quindi uno script a
+ * riga di comando non può importarlo: `scripts/crea-utenti-da-file.ts` scrive
+ * la riga `users` per conto suo. È l'ottava strada, e il giro di ieri ha
+ * mostrato cosa costano le strade parallele — quattro su sei non scrivevano
+ * `must_change_password`.
+ *
+ * Non si può unificare il *client* (uno vive in Next, l'altro in `tsx`), ma si
+ * può unificare la **decisione**: questa funzione è l'unico posto che sa come
+ * si combinano «è nato per invito» e «blocco o promemoria». Le due strade
+ * restano due, la regola è una.
+ */
+export function statoPasswordAllaNascita(opts: {
+  /** Per invito la password la scegle la persona: non è provvisoria. */
+  perInvito: boolean;
+  /** Predefinito `obbligatorio`: su una password che sanno in due, si blocca. */
+  cambio?: 'obbligatorio' | 'promemoria';
+}): { must_change_password: boolean; password_provvisoria: boolean } {
+  const provvisoria = !opts.perInvito;
+  return {
+    password_provvisoria: provvisoria,
+    must_change_password: provvisoria && (opts.cambio ?? 'obbligatorio') === 'obbligatorio',
+  };
+}
+
 // ───────────────────── Come si chiama un mestiere ─────────────────────
 
 /**

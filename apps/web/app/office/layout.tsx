@@ -15,6 +15,7 @@ import { leggiFunzioniPersonalizzate } from '../_lib/personalizzazioni';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { ImpersonationBanner } from '../_components/impersonation-banner';
+import { PromemoriaPassword } from '../_components/promemoria-password';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
 import { OnboardingTourMount } from '../_components/onboarding-tour-mount';
 import {
@@ -187,9 +188,12 @@ export default async function OfficeLayout({
           la finestra e sparirebbe al primo scroll, senza più tornare. */}
       <OfficeShellClient
         banner={
-          isImpersonating ? (
-            <ImpersonationBanner tenantLabel={impersonatingLabel ?? tenant.name} />
-          ) : null
+          <>
+            {isImpersonating ? (
+              <ImpersonationBanner tenantLabel={impersonatingLabel ?? tenant.name} />
+            ) : null}
+            <PromemoriaPassword />
+          </>
         }
         tenant={tenant}
         user={user}

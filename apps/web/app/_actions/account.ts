@@ -211,7 +211,11 @@ export async function reimpostaAccesso(input: {
 
   const { error: errFlag } = await service
     .from('users')
-    .update({ must_change_password: true, password_changed_at: null } as never)
+    .update({
+      must_change_password: true,
+      password_provvisoria: true,
+      password_changed_at: null,
+    } as never)
     .eq('id', userId)
     .eq('tenant_id', ctx.tenantId);
   if (errFlag) return { ok: false, error: errFlag.message };

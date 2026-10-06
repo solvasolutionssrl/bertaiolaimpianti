@@ -7,6 +7,7 @@ import {
   BYTE_TEMPORANEA,
   aliasLogin,
   componiPasswordTemporanea,
+  statoPasswordAllaNascita,
   validaPassword,
   validaUsername,
 } from '@kommessa/api/identita';
@@ -60,6 +61,23 @@ export type ModoIngresso =
   | { tipo: 'email'; email: string; password?: string }
   | { tipo: 'invito'; email: string; redirectTo: string };
 
+/**
+ * Cosa fa l'app a chi entra con una password che gli ha dato qualcun altro.
+ *
+ *  - `obbligatorio`  non si passa: schermata «scegli la tua password». È il
+ *                    predefinito, e lo resta: su una password che sanno in
+ *                    due, fermarsi è la risposta giusta per difetto.
+ *  - `promemoria`    entra subito, e l'app glielo dice finché non la cambia.
+ *                    Serve quando si consegnano gli accessi a una squadra
+ *                    intera in presenza: tredici persone che devono
+ *                    inventarsi una password nello stesso momento non
+ *                    entrano, chiedono aiuto.
+ *
+ * In entrambi i casi `password_provvisoria` resta `true` finché la persona non
+ * sceglie la sua: la differenza è solo se la si blocca.
+ */
+export type CambioPassword = 'obbligatorio' | 'promemoria';
+
 export interface NascitaAccount {
   tenantId: string;
   tenantSlug: string;
@@ -70,6 +88,8 @@ export interface NascitaAccount {
   capoSquadra?: boolean;
   /** Se passato, l'account viene legato a quella scheda del personale. */
   dipendenteId?: string | null;
+  /** Predefinito `obbligatorio`. Ignorato per gli inviti: la sceglie la persona. */
+  cambioPassword?: CambioPassword;
 }
 
 export interface Attore {
@@ -86,8 +106,10 @@ export interface AccountNato {
   emailAuth: string;
   /** In chiaro, una volta sola. `null` per gli inviti: se la sceglie la persona. */
   password: string | null;
-  /** Se dovrà sceglierne una sua al primo ingresso. */
+  /** Se dovrà sceglierne una sua al primo ingresso, prima di poter lavorare. */
   deveCambiarePassword: boolean;
+  /** Se la password in uso è ancora quella consegnata da noi. */
+  passwordProvvisoria: boolean;
 }
 
 export type EsitoNascita =
@@ -223,12 +245,21 @@ export async function faiNascereUnAccount(
 
   // ── La riga applicativa ──────────────────────────────────────────────────
   //
-  // ⚠️ Chi riceve una password da qualcun altro deve cambiarla al primo
-  // ingresso. Chi arriva per invito se la sceglie già lui, quindi il cancello
-  // non serve. Quattro percorsi su sei non scrivevano affatto questa colonna,
-  // e il valore di default (`false`) lasciava l'account per sempre sulla
-  // password dettata al telefono.
-  const deveCambiarePassword = !perInvito;
+  // ⚠️ Chi riceve una password da qualcun altro sta su una password
+  // provvisoria: la sanno in due. Chi arriva per invito se la sceglie già lui,
+  // quindi non è provvisoria per niente. Quattro percorsi su sei non
+  // scrivevano affatto questa colonna, e il valore di default (`false`)
+  // lasciava l'account per sempre sulla password dettata al telefono.
+  //
+  // Lo *stato* dipende solo da come nasce l'account; il *blocco* è una scelta
+  // di chi lo crea. Due colonne perché sono due fatti: vedi la migration
+  // `20261008090000`.
+  const statoPwd = statoPasswordAllaNascita({
+    perInvito,
+    cambio: input.cambioPassword,
+  });
+  const passwordProvvisoria = statoPwd.password_provvisoria;
+  const deveCambiarePassword = statoPwd.must_change_password;
 
   const riga: Record<string, unknown> = {
     id: userId,
@@ -236,7 +267,7 @@ export async function faiNascereUnAccount(
     role: input.role,
     display_name: displayName,
     attivo: true,
-    must_change_password: deveCambiarePassword,
+    ...statoPwd,
   };
   if (perInvito) riga.invite_sent_at = new Date().toISOString();
   if (input.capoSquadra && input.role === 'tecnico') {
@@ -295,6 +326,7 @@ export async function faiNascereUnAccount(
         ruolo: input.role,
         nome: displayName,
         deve_cambiare_password: deveCambiarePassword,
+        password_provvisoria: passwordProvvisoria,
         ...(input.capoSquadra ? { capo_squadra: true } : {}),
       } as never,
       metadata: (avvisoLegame ? { legame_dipendente_fallito: avvisoLegame } : {}) as never,
@@ -305,6 +337,6 @@ export async function faiNascereUnAccount(
 
   return {
     ok: true,
-    data: { userId, username, emailAuth, password, deveCambiarePassword },
+    data: { userId, username, emailAuth, password, deveCambiarePassword, passwordProvvisoria },
   };
 }
