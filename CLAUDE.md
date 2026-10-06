@@ -89,6 +89,109 @@ Un indirizzo da mandare al cliente che mostra **titolo, eventualmente i dettagli
 >
 > I **dettagli** sono una scelta per singolo link, non una regola nel codice, e il pannello mostra il testo per intero sotto la casella: non si condivide per sbaglio un telefono che si e' appena letto. Sorveglianza cross-tenant in `/admin/link-pubblici`.
 
+### Accessi, poteri e bacheca — lavori del 07/10/2026
+
+Il giorno prima di dare gli accessi a tutta la squadra. Le cose che restano vere:
+
+- **Un posto solo crea gli account**: `app/_actions/account.ts`. Prima erano
+  CINQUE strade (due inviti per posta, tre creazioni manuali), ognuna con la sua
+  copia delle regole sull'username e la sua formula per l'alias. Il contratto
+  dell'identita' sta in `@kommessa/api/identita`: regole username, formula
+  `<utente>@<sigla>.kommessa.local`, policy password, e la composizione della
+  password temporanea — sillabe pronunciabili senza i caratteri che si
+  confondono a voce (l/1, q/g, v/b, 0/O): `Tabero47`. Il risolutore del login
+  **importa** quelle regole invece di riscriverle.
+- **`must_change_password`**: cancello nei due gusci (ufficio e telefono),
+  pagina `/cambia-password`. ⚠️ Su `public.users` i grant sono a livello di
+  **TABELLA**, non per colonna come su `tenants`: una colonna nuova nasce
+  scrivibile dall'utente stesso, e la difesa va nel trigger
+  `users_proteggi_privilegi`, mai nel grant. ⚠️ La pagina colma un buco piu'
+  grosso del primo accesso: **nessun utente di nessun cliente poteva cambiarsi
+  la password** — l'unico modulo ce l'aveva il super admin.
+- **Poteri veri al posto di un pannello che non faceva niente**: il sistema di
+  permessi a 7 aree x 4 livelli **non era letto da nessuna riga di codice** (0
+  utenti su 54 lo avevano compilato). Sostituito da `@kommessa/api/capacita`,
+  con una voce sola — `capo_squadra` — e un posto che la legge. ⭐ **Criterio
+  per aggiungerne una**: non «sarebbe comodo poterlo decidere», ma «c'e' una
+  riga di codice che la legge e si comporta di conseguenza».
+- **Aprire un lavoro e' un potere, non un ruolo**: `creaCommessa`,
+  `creaRiunione` e i todo-da-riunione guardano `capo_squadra`. Chi non ce l'ha
+  non vede il microfono al centro della barra: al suo posto un casco spento che
+  al tocco dice a chi rivolgersi. Lo slot **non sparisce** — una barra che
+  cambia numero di tasti a seconda di chi guarda disorienta.
+- **Scrivere una cosa da fare e' di ogni tecnico in squadra** (migration
+  `20261007100000`), senza assegnatario. ⚠️ Chiuso un buco: a livello di
+  database un tecnico poteva spuntare **qualunque** cosa da fare dello spazio
+  di lavoro — il filtro «solo le mie» viveva nella pagina, e una pagina non e'
+  un presidio.
+- **«Momento» si chiama «Fase lavori»**, e il campo «Fase» non c'e' piu':
+  `file_refs.voce_id` era valorizzato su **0 file su 346**. Con lui sono stati
+  ritirati `fase_target_raggiunto` e `fase_zero_foto` (migration
+  `20261007110000`): senza il campo il contatore resta a zero per sempre e il
+  cron avrebbe gridato «fase senza foto» in eterno su commesse piene di foto.
+  Vocabolario unico in `@kommessa/api/fase-lavori`.
+- **Il personale non e' una cosa del mondo presenze**: l'anagrafica si e'
+  spostata in **Personale → Dipendenti** (`/office/personale/dipendenti`), e
+  cio' che riguarda i turni compare solo dove si timbra. Il vecchio indirizzo
+  rimanda dal **middleware**. Nuova **Attivita' per persona** (cose spuntate,
+  foto caricate, registro): i dati c'erano tutti, nessuna pagina li interrogava
+  per persona. ⚠️ `pianificazione_attiva` resta spenta sui tenant commesse:
+  `pianificazione_blocchi.cantiere_id` e' una chiave esterna rigida su
+  `cantieri`, e un tenant del mondo commesse ha commesse.
+- **Profilo PWA**: via la matrice «cosa, quando, come» (7 eventi x 3 canali) e
+  le ore di silenzio. Non per alleggerire: governavano `/api/push/send-internal`,
+  che **non ha nessun chiamante**, e le sottoscrizioni push sono **zero su
+  tutti e quattro i clienti**. Tabelle e rotte restano: quando colleghiamo
+  l'invio, il pannello torna con una riga.
+- **Notifiche**: `commessa_assegnata` esisteva da marzo, compariva nelle
+  preferenze, e **nessuno la mandava**; un'azione in blocco ne mandava una con
+  un nome diverso (`commessa_assigned`, in inglese, non registrato). Ora
+  `assegnaTecnico` avvisa, il nome e' uno, e le etichette stanno in un posto
+  solo (`_components/notifiche-meta.tsx`) con **solo i tipi che qualcuno manda
+  davvero**.
+- **Funzioni per-tenant gestibili dall'ufficio**: `/office/impostazioni/funzioni`.
+  Il registro dice quali sono dell'ufficio (`gestibileDaUfficio`) e quali
+  restano nostre. Prima funzione cosi': **Turno in cantiere**, che nasce spenta
+  (usata una volta in tutto, su un tenant di prova).
+
+> ⚠️ **Un `redirect()` sotto `<Suspense>` lascia una pagina bianca.** Con un
+> `loading.tsx` accanto — e ce l'ha ogni pagina dell'app — la risposta e' gia'
+> partita quando la pagina renderizza: l'indirizzo resta quello e si vede solo
+> la barra in basso. **Misurato, non dedotto**: il banco
+> `scripts/banco-ui/tecnico-poteri.mjs` ha bocciato la prima versione. Per
+> negare l'accesso a una pagina si usa `mobile/_components/non-abilitato.tsx`
+> (che spiega) oppure il **middleware** (dove il reindirizzamento e' una
+> risposta HTTP e basta). La stessa nota c'era gia' per la landing dell'app, e
+> non e' bastata a non ricascarci.
+
+#### Bacheca: la pagina da televisione (migration `20261007130000`)
+
+Un indirizzo per cliente da aprire sul televisore dell'ufficio: una casella per
+persona, dentro quello che le resta da fare. Rotta `/tv/[token]`, esclusa dal
+middleware. Si accende da **Impostazioni → Bacheca**.
+
+> **Due strati, e diversamente dal collegamento di una commessa.** Li'
+> l'indirizzo **e'** il segreto, perche' deve finire in un messaggio a un
+> cliente. Qui l'indirizzo vive per mesi su uno schermo in una stanza di
+> passaggio: quindi indirizzo casuale **piu'** password (scrypt con sale per
+> riga, mai rileggibile), sessione di 30 giorni, e un freno ai tentativi (10,
+> poi 15 minuti) perche' chi ha l'indirizzo puo' provarle a raffica.
+>
+> ⚠️ **Il cliente lo decide la riga trovata dall'indirizzo, mai il cookie.** Un
+> biglietto firmato con un `tenantId` diverso ma l'indirizzo giusto apriva i
+> dati di un altro cliente. Non sfruttabile da fuori (per firmare serve la
+> chiave del server), ma era il difetto di fidarsi di cio' che il cookie
+> afferma invece di cio' che la riga dice. Trovato provando, non leggendo.
+>
+> ⚠️ `bacheche_pubbliche` ha RLS accesa e **nessuna policy permissiva**, piu'
+> `revoke all from anon, authenticated`: ci accede solo il service role.
+> ⚠️ **I campi vietati non sono nascosti: la query non li legge** — niente
+> clienti, telefoni, indirizzi, foto. Prima della password non si vede nemmeno
+> di chi e' la bacheca.
+>
+> Serve a entrambi i mondi: dove non ci sono cose da fare (FPM ne ha zero)
+> mostra la **pianificazione di oggi**. Logica pura in `@kommessa/api/bacheca`.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.
