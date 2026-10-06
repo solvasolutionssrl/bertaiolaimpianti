@@ -43,11 +43,23 @@ export async function LavoriSection({ id }: { id: string }) {
         .select('id, action, metadata, actor_user_id, actor_role, created_at')
         .eq('entity_type', 'commessa')
         .eq('entity_id', id)
+        // ⚠️ Le azioni sulle cose da fare NON erano in questo elenco, quindi la
+        // board dei lavori mostrava i cambi di stato della commessa e gli
+        // assegnamenti dei tecnici ma non «chi ha spuntato cosa» — che e'
+        // proprio la storia di questa pagina. Ora ci sono: l'id della singola
+        // cosa da fare sta in `metadata.todo_id`, l'evento e' sulla commessa.
         .in('action', [
           'commessa.stato.cambiato',
           'commessa.critica.toggle',
           'commessa.tecnico.assign',
           'commessa.tecnico.unassign',
+          'commessa.todo.crea',
+          'commessa.todo.aggiorna',
+          'commessa.todo.completa',
+          'commessa.todo.stato',
+          'commessa.todo.elimina',
+          'commessa.riunione.crea',
+          'commessa.riunione.materializza_todo',
         ])
         .order('created_at', { ascending: false })
         .limit(80),

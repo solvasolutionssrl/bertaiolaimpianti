@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'personale', label: 'Ferie e permessi', href: '/office/impostazioni/personale', ferieOnly: true },
   { id: 'pagamenti', label: 'Pagamenti',        href: '/office/impostazioni/pagamenti' },
   { id: 'funzioni', label: 'Funzioni',          href: '/office/impostazioni/funzioni' },
+  { id: 'bacheca',  label: 'Bacheca',           href: '/office/impostazioni/bacheca' },
   { id: 'branding', label: 'Branding',          href: '/office/impostazioni/branding' },
   { id: 'storage',  label: 'Storage',           href: '/office/impostazioni/storage', superadminOnly: true },
   { id: 'cartelle', label: 'Permessi cartelle', href: '/office/impostazioni/cartelle', kommessaOnly: true },

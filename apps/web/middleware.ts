@@ -31,6 +31,11 @@ function isPublic(pathname: string): boolean {
   // L'autorizzazione la fa il token: vedi `_lib/link-pubblico-server.ts`.
   if (pathname.startsWith('/c/')) return true;
   if (pathname.startsWith('/api/pubblico/')) return true;
+  // La bacheca da televisione: un indirizzo casuale piu' una password sua, e
+  // nessuna sessione Supabase. Senza questa riga `updateSession` rimanderebbe
+  // al login un televisore che non ha nessun account da offrire.
+  // L'autorizzazione la fa il cookie firmato: vedi `_lib/bacheca-server.ts`.
+  if (pathname.startsWith('/tv/')) return true;
   return false;
 }
 
