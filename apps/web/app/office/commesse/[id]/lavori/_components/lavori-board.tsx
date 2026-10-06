@@ -54,6 +54,7 @@ import {
   type Priorita,
 } from '@kommessa/api/priorita';
 import { PrioritaChip } from '@/app/_components/priorita-ui';
+import { MiniaturaMedia } from '@/app/_components/miniatura-media';
 
 type StatoTodo = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
@@ -1313,18 +1314,12 @@ function RiunioneTimelineEntry({
                         aria-label={`Apri ${al.filename}`}
                         className="group relative aspect-square w-full overflow-hidden rounded border border-border bg-black transition-transform hover:ring-2 hover:ring-primary/30 active:scale-[0.98]"
                       >
-                        <video
-                          src={`/api/media/${al.file_ref_id}`}
-                          preload="metadata"
-                          muted
-                          playsInline
-                          className="h-full w-full object-cover"
+                        <MiniaturaMedia
+                          fileId={al.file_ref_id}
+                          video
+                          alt={al.filename}
+                          className="h-full w-full"
                         />
-                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/30">
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white text-[10px]">
-                            ▶
-                          </span>
-                        </span>
                       </button>
                     );
                   } else {

@@ -14,6 +14,7 @@ import {
 
 import { VideoPlayer } from './video-player';
 import { AnnotationOverlay, type AnnotationTarget } from './annotation-overlay';
+import { MiniaturaMedia } from './miniatura-media';
 
 const PdfViewer = dynamic(() => import('./pdf-viewer').then((m) => m.PdfViewer), {
   ssr: false,
@@ -370,29 +371,21 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
                       aria-label={`Apri ${it.filename}`}
                       title={it.filename}
                     >
-                      {itIsImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={it.src}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          loading="lazy"
+                      {itIsImage || itIsVideo ? (
+                        /*
+                          ⚠️ Qui c'era il caso peggiore di tutti: per ogni video
+                          nella striscia si montava un <video> puntato al file
+                          INTERO. Una riunione con otto filmati voleva dire otto
+                          download da decine di MB, ciascuno dietro un redirect
+                          firmato che scade in cinque minuti — per disegnare
+                          otto quadratini da 56 pixel.
+                        */
+                        <MiniaturaMedia
+                          fileId={it.id}
+                          video={itIsVideo}
+                          alt={it.filename}
+                          className="h-full w-full"
                         />
-                      ) : itIsVideo ? (
-                        <>
-                          <video
-                            src={it.src}
-                            preload="metadata"
-                            muted
-                            playsInline
-                            className="h-full w-full object-cover"
-                          />
-                          <span className="absolute inset-0 flex items-center justify-center">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/60 backdrop-blur-sm">
-                              <ChevronRight className="h-3 w-3 text-white" />
-                            </span>
-                          </span>
-                        </>
                       ) : itIsPdf ? (
                         <span
                           className={

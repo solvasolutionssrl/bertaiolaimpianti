@@ -63,7 +63,26 @@ export async function GET(
 
   if (!ref?.path) return new Response('Non trovato', { status: 404 });
   if (ref.mime?.startsWith('video/')) {
-    return new Response('Video non supportato come proxy', { status: 400 });
+    // Il file vero di un video non passa di qui: si serve da `/api/media/[id]`,
+    // che firma un indirizzo diretto su R2 invece di farlo transitare per la
+    // funzione.
+    //
+    // La sua MINIATURA invece sì, ed è la novità del 06/10/2026: da quando il
+    // telefono estrae il fotogramma al momento dell'invio
+    // (`_lib/poster-video.ts`), un video ha una miniatura come una foto. Prima
+    // qui si rispondeva 400 a qualunque richiesta, compresa `?size=thumb`, e
+    // le gallerie erano costrette a scaricare il filmato intero per disegnare
+    // un riquadro.
+    //
+    // Senza miniatura si risponde **404**, non 400: «non ce l'ho» è una cosa
+    // che la galleria sa gestire mostrando il segnaposto, «hai sbagliato
+    // richiesta» no.
+    if (!wantThumb) {
+      return new Response('Video non supportato come proxy', { status: 400 });
+    }
+    if (!ref.r2_thumb_key) {
+      return new Response('Anteprima non disponibile', { status: 404 });
+    }
   }
 
   // Autorizzazione per-ruolo/per-cartella: la RLS su file_refs è tenant-wide,
@@ -98,6 +117,13 @@ export async function GET(
     }
     // Se R2 non risponde o thumb_key punta a oggetto inesistente: silently
     // cade al full-size (proxy Nextcloud) sotto. Niente errore UI.
+    //
+    // ⚠️ Tranne che per i video: lì «il full-size» è il filmato, decine o
+    // centinaia di MB fatti passare per la funzione serverless per disegnare un
+    // riquadro da 400px. Meglio dire che l'anteprima non c'è.
+    if (ref.mime?.startsWith('video/')) {
+      return new Response('Anteprima non disponibile', { status: 404 });
+    }
   }
 
   // ----- Modalità default (full-size) o fallback thumb ---------------------

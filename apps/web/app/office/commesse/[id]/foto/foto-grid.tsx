@@ -29,6 +29,7 @@ import { MediaLightbox, type MediaItem } from '../../../../_components/media-lig
 import { useConfirm, useAlert } from '../../../../_components/confirm-provider';
 import { fmtDataOra } from '../../../_lib/format';
 import { eliminaMediaOffice } from './_actions/media';
+import { MiniaturaMedia } from '@/app/_components/miniatura-media';
 
 export interface FotoItem {
   id: string;
@@ -164,12 +165,6 @@ function FotoCell({
   const isVideo = f.mime.startsWith('video/');
   const hasAnnotation = !!f.annotation;
 
-  // Thumbnail: immagini → /api/photo/<id>?size=thumb (webp 400px persistente,
-  // fallback full-size). Video → /api/media/<id> (preload metadata in <video>).
-  const thumbSrc =
-    f.thumbnail_url ??
-    (isVideo ? (f.r2_key ? `/api/media/${f.id}` : null) : `/api/photo/${f.id}?size=thumb`);
-
   return (
     <figure className="group relative overflow-hidden rounded-md border border-border bg-card">
       <button
@@ -178,28 +173,19 @@ function FotoCell({
         aria-label={`Apri ${f.filename}`}
         className="relative block w-full text-left"
       >
-        {thumbSrc ? (
-          isVideo ? (
-            <video
-              src={thumbSrc}
-              preload="metadata"
-              muted
-              playsInline
-              className="aspect-square w-full bg-black object-cover"
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={thumbSrc}
-              alt={f.filename}
-              className="aspect-square w-full object-cover transition-transform group-hover:scale-[1.02]"
-            />
-          )
-        ) : (
-          <div className="flex aspect-square w-full items-center justify-center bg-muted text-muted-foreground">
-            {isVideo ? <VideoIcon className="h-6 w-6" /> : <ImgIcon className="h-6 w-6" />}
-          </div>
-        )}
+        {/*
+          Foto e video chiedono la stessa cosa: da quando il telefono estrae il
+          fotogramma all'invio, anche un video ha la sua miniatura. Prima qui
+          c'era un <video preload="metadata"> puntato al filmato INTERO, senza
+          onError e senza stato di attesa: su iPhone restava un rettangolo nero,
+          e intanto ogni cella si tirava giu' l'intestazione di un file enorme.
+        */}
+        <MiniaturaMedia
+          fileId={f.id}
+          video={isVideo}
+          alt={f.filename}
+          className="aspect-square w-full"
+        />
 
         {/* Badge video — in alto a destra (sotto non sfora sulla didascalia) */}
         {isVideo ? (

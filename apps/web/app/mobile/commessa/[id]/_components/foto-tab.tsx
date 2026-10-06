@@ -9,6 +9,7 @@ import { Button, cn } from '@kommessa/ui';
 import { Divider, Stagger } from '../../../_components/blueprint';
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
 import { AddMediaSection } from './add-media-section';
+import { MiniaturaMedia } from '@/app/_components/miniatura-media';
 
 export interface FotoItem {
   id: string;
@@ -195,38 +196,6 @@ function FotoCell({
   onOpen: (item: FotoItem) => void;
 }) {
   const isVideo = item.mime.startsWith('video/');
-  const [imgLoaded, setImgLoaded] = React.useState(false);
-  /**
-   * Anteprima che non arriva (11/08/2026).
-   *
-   * Prima c'era solo `imgLoaded`: se la richiesta falliva — miniatura non
-   * ancora generata, proxy Nextcloud che risponde 502, file cancellato a
-   * mano — non scattava nessun evento e **la rotella girava per sempre**.
-   * Ora l'errore si vede (`onError`) e c'e' comunque una rete di sicurezza a
-   * tempo, perche' su un video pesante il browser puo' restare appeso senza
-   * emettere ne' `loadeddata` ne' `error`.
-   */
-  const [nonDisponibile, setNonDisponibile] = React.useState(false);
-
-  React.useEffect(() => {
-    if (imgLoaded || nonDisponibile) return;
-    // Generosa di proposito: i file più vecchi non hanno copia su R2 e
-    // passano dal proxy Nextcloud, che su rete lenta ci mette. Serve solo a
-    // non far girare la rotella all'infinito, non a essere severi.
-    const t = window.setTimeout(() => setNonDisponibile(true), 25_000);
-    return () => window.clearTimeout(t);
-  }, [imgLoaded, nonDisponibile]);
-
-  // Thumbnail strategy:
-  //  - Per le immagini usiamo SEMPRE /api/photo/<id>?size=thumb: l'endpoint
-  //    redirige al thumb 400x400 webp persistente su R2 (~30 KB cad) quando
-  //    disponibile, altrimenti fa fallback al full-size via proxy Nextcloud.
-  //  - Per i video manteniamo /api/media/<id> (Range-requests, preload=
-  //    metadata in <video>): niente thumb statico ancora.
-  const thumbSrc = item.thumbnail_url
-    ?? (isVideo
-      ? (item.r2_key ? `/api/media/${item.id}` : null)
-      : `/api/photo/${item.id}?size=thumb`);
 
   return (
     <button
@@ -236,58 +205,18 @@ function FotoCell({
       title={item.filename}
       aria-label={`Apri ${item.filename}`}
     >
-      {/* Rotella solo mentre c'è speranza; poi l'icona del tipo di file. */}
-      {!imgLoaded && !nonDisponibile && (
-        <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/60" />
-        </span>
-      )}
-
-      {thumbSrc && !nonDisponibile ? (
-        isVideo ? (
-          <video
-            src={thumbSrc}
-            preload="metadata"
-            muted
-            playsInline
-            className="h-full w-full object-cover"
-            onLoadedData={() => setImgLoaded(true)}
-            onError={() => setNonDisponibile(true)}
-          />
-        ) : (
-          <Image
-            src={thumbSrc}
-            alt={item.filename}
-            width={160}
-            height={160}
-            className={cn(
-              'h-full w-full object-cover transition-opacity duration-200',
-              imgLoaded ? 'opacity-100' : 'opacity-0',
-            )}
-            unoptimized={thumbSrc.startsWith('/api/')}
-            onLoad={() => setImgLoaded(true)}
-            onError={() => setNonDisponibile(true)}
-          />
-        )
-      ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
-          {isVideo ? (
-            <Video className="h-5 w-5" aria-hidden="true" />
-          ) : (
-            <ImageIcon className="h-5 w-5" aria-hidden="true" />
-          )}
-          {nonDisponibile ? (
-            <span className="px-1 text-center text-[9px] leading-tight">
-              anteprima non pronta
-            </span>
-          ) : null}
-        </div>
-      )}
-      {isVideo && (
-        <span className="absolute bottom-1 left-1 rounded-full bg-black/70 px-1.5 py-px font-mono text-[10px] font-bold text-white">
-          ▶
-        </span>
-      )}
+      {/*
+        Attesa, errore e segnaposto stanno tutti in `MiniaturaMedia`. Questa
+        cella era l'unica dell'app che li gestiva (con una rete a tempo contro
+        la rotella eterna): ora quella logica vale per tutte le gallerie, e i
+        video non scaricano piu' il filmato intero per mostrare un riquadro.
+      */}
+      <MiniaturaMedia
+        fileId={item.id}
+        video={isVideo}
+        alt={item.filename}
+        className="h-full w-full"
+      />
     </button>
   );
 }

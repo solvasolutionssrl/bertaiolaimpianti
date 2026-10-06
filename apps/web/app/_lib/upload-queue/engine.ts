@@ -285,6 +285,33 @@ async function finalizza(opzioni: {
     throw new Error(`complete ${res.status}: ${t.slice(0, 200)}`);
   }
   const completato = (await res.json()) as CompleteResponse;
+
+  // Miniatura del video: il fotogramma lo prende il telefono, che il file ce
+  // l'ha gia' in mano. `sharp` lato server non decodifica video, quindi senza
+  // questo passaggio ogni video resterebbe senza anteprima — ed e' il motivo
+  // per cui le gallerie finivano a scaricare il filmato intero per mostrare
+  // un riquadro.
+  //
+  // Dopo il `complete`, mai prima: a questo punto il file e' gia' salvo e
+  // qualunque cosa vada storta qui non puo' piu' toccarlo. Tutto dentro un
+  // `catch` muto, con il suo tempo massimo gia' dentro l'estrattore.
+  if (input.fileMime.startsWith('video/')) {
+    try {
+      const { estraiPosterVideo } = await import('../poster-video');
+      const poster = await estraiPosterVideo(input.file);
+      if (poster) {
+        const fd = new FormData();
+        fd.append('poster', poster.blob, 'poster');
+        await fetch(`/api/upload/media/${completato.fileRefId}/poster`, {
+          method: 'POST',
+          body: fd,
+        });
+      }
+    } catch {
+      // Nessuna anteprima: il video si vede lo stesso, con il segnaposto.
+    }
+  }
+
   return { fileRefId: completato.fileRefId, sizeBytes: completato.sizeBytes };
 }
 

@@ -21,6 +21,7 @@ import { useAlert } from '../../../../_components/confirm-provider';
 import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
 import { useAttesaPicker } from '../../../../_lib/use-attesa-picker';
+import { MiniaturaMedia } from '@/app/_components/miniatura-media';
 
 export interface RiunioneAllegatoMobile {
   id: string;
@@ -283,18 +284,15 @@ function RiunioneCard({
                         aria-label={`Apri ${a.filename}`}
                         className="group relative aspect-square overflow-hidden rounded-md border border-border bg-black transition-transform active:scale-[0.96]"
                       >
-                        <video
-                          src={`/api/media/${a.file_ref_id}`}
-                          preload="metadata"
-                          muted
-                          playsInline
-                          className="h-full w-full object-cover"
+                        {/* Era un <video> puntato al filmato intero, senza
+                            onError e senza segnaposto: se il browser non
+                            disegnava il fotogramma restava nero per sempre. */}
+                        <MiniaturaMedia
+                          fileId={a.file_ref_id}
+                          video
+                          alt={a.filename}
+                          className="h-full w-full"
                         />
-                        <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">
-                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white">
-                            <span aria-hidden="true" className="text-[10px]">▶</span>
-                          </span>
-                        </span>
                       </button>
                     );
                   }
