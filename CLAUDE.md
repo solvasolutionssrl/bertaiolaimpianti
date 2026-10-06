@@ -141,8 +141,9 @@ Il giorno prima di dare gli accessi a tutta la squadra. Le cose che restano vere
 - **Profilo PWA**: via la matrice «cosa, quando, come» (7 eventi x 3 canali) e
   le ore di silenzio. Non per alleggerire: governavano `/api/push/send-internal`,
   che **non ha nessun chiamante**, e le sottoscrizioni push sono **zero su
-  tutti e quattro i clienti**. Tabelle e rotte restano: quando colleghiamo
-  l'invio, il pannello torna con una riga.
+  tutti e quattro i clienti**. ✅ L'08/10 l'invio e' stato collegato e il
+  pannello e' tornato — con un interruttore per avviso invece di ventuno
+  caselle, e solo per gli avvisi che qualcuno manda davvero.
 - **Notifiche**: `commessa_assegnata` esisteva da marzo, compariva nelle
   preferenze, e **nessuno la mandava**; un'azione in blocco ne mandava una con
   un nome diverso (`commessa_assigned`, in inglese, non registrato). Ora
@@ -226,10 +227,9 @@ mostrava il valore grezzo del database a schermo.
   `users.permissions` resta: contiene i poteri nuovi.
 - Tolti quattro tipi di avviso **senza mittente** (`ticket_assigned`,
   `ticket_created`, `dico_mancante`, `intervento_oggi`). Restano i cinque veri.
-- ⚠️ **Resta aperto**: `inviaPushAUtente` e' chiamato da pianificazione, ferie
-  e fine-caricamento, ma **nessun client puo' sottoscriversi** (l'interruttore
-  e' stato tolto il 07/10 perche' non consegnava nulla). Le push sono plumbing
-  pronto e non collegato: o si collega, o si toglie.
+- ✅ **Chiuso l'08/10**: le push erano plumbing pronto e non collegato
+  (`inviaPushAUtente` chiamato da tre punti vivi, nessun client in grado di
+  sottoscriversi). Collegate: vedi «Le notifiche push, collegate».
 - ⚠️ **Resta orfana di proposito** `api/upload/media/route.ts`: nessun
   chiamante, ma un telefono con la PWA in cache potrebbe ancora usarla.
 
@@ -276,6 +276,164 @@ middleware. Si accende da **Impostazioni → Bacheca**.
 >
 > Serve a entrambi i mondi: dove non ci sono cose da fare (FPM ne ha zero)
 > mostra la **pianificazione di oggi**. Logica pura in `@kommessa/api/bacheca`.
+
+### Accessi consegnati, elenco del tecnico, notifiche collegate (07-08/10/2026)
+
+Lavorato nella notte del 07/10; la squadra di Bertaiola entra per la prima
+volta l'08/10 (migration con quel prefisso). Le cose che restano vere:
+
+- **Lo stato della password e la policy sono due colonne** (migration
+  `20261008090000`). `password_provvisoria` dice che la password in uso l'ha
+  scelta qualcun altro; `must_change_password` dice che per questo non si
+  passa. Coincidevano finche' l'unica risposta allo stato era il blocco: dal
+  momento in cui si vuole far entrare qualcuno **senza muro ma dicendoglielo**,
+  una colonna sola non basta a scrivere il caso. Invariante: bloccato implica
+  provvisorio, non il contrario. La regola che combina «nato per invito» e
+  «blocco o promemoria» sta in `statoPasswordAllaNascita`
+  (`@kommessa/api/identita`), condivisa fra il nucleo degli account e lo script
+  a riga di comando — che e' l'ottava strada e non puo' importare il nucleo
+  (`server-only`): **non si unifica il client, si unifica la decisione.**
+  ⚠️ Su `public.users` i grant sono a livello di TABELLA: la colonna nuova
+  nasce scrivibile dall'utente stesso, e un promemoria che il destinatario puo'
+  spegnere senza fare la cosa che chiede e' peggio di niente. La difesa sta nel
+  trigger `users_proteggi_privilegi`. ⚠️ Gli utenti che c'erano restano a
+  `false` di proposito: dichiarare provvisoria la password che l'ufficio usa da
+  maggio aprirebbe l'app con un avviso in faccia a tutti, e **un avviso che
+  compare a tutti e' un avviso che si impara a non leggere.**
+- **La home del tecnico si chiama «Commesse»**, come la tab in basso e come la
+  sezione dell'ufficio. «OGGI» prometteva una giornata e mostrava tutto. Un
+  elenco solo con ricerca, tre pastiglie (Tutto · Commesse · Da fare) e
+  l'ordine **scritto a schermo**: un elenco ordinato per una regola che non si
+  vede e' un elenco di cui non ti fidi. Filtro, ricerca e ordine sono puri e
+  provati in `@kommessa/api/elenco-lavoro`. La regola: cio' che ha una data
+  entro cui va fatto viene prima, dalla piu' vicina; il resto segue
+  nell'ordine in cui e' stato affidato, dall'ultimo. ⚠️ Le scadenze passate
+  salgono in cima **da se'** (una data passata e' un numero piu' piccolo):
+  nessun ramo a parte, cioe' nessun posto in piu' dove sbagliarsi. ⚠️ Chi non
+  ha nemmeno la data di affidamento scende in fondo invece di finire in testa
+  come farebbe uno zero.
+  ⚠️ **Due dati erano gia' in tabella e si buttavano via**: `assegnato_at` di
+  `commessa_tecnici` e le cose da fare **senza assegnatario** (la home guardava
+  solo `assegnato_a = me`, quindi quelle «di chiunque passi» non comparivano).
+  Il predicato e' ora **scritto identico** a quello della scheda commessa: due
+  predicati diversi farebbero comparire una cosa da fare in un posto e non
+  nell'altro, e nessuno saprebbe quale ha ragione.
+- **Lato ufficio si vede CHI, non solo SE**: colonna «In mano a» nell'elenco
+  commesse (due nomi e il resto contato; il caso vuoto dice «Nessuno»).
+  L'elenco leggeva `commessa_tecnici` e se ne faceva un si'/no per l'etichetta
+  «Non preso»: diceva «preso» senza dire da chi, e per saperlo bisognava aprire
+  le commesse una per una. ⚠️ **Da decidere**: lo stato `aperta` si legge «Non
+  presa» e accanto a «In mano a: Mario» si legge male — due etichette che
+  differiscono per una lettera («Non preso» = nessuno, «Non presa» = lo stato)
+  e vogliono dire cose diverse.
+- **Condividere un lavoro: non funzionava, per nessuno.** Il componente stava
+  dentro il Portal del menu «⋯»; al tocco impostava il proprio stato e chiudeva
+  il menu, React batcha i due aggiornamenti, il Portal si smontava e lo stato
+  appena impostato moriva con lui. ⭐ **Nel menu stanno i tasti, non lo stato.**
+  Secondo difetto emerso spostandolo fuori: finiva dentro l'`Hero`, che ha
+  `overflow-hidden` — ora il dialog va su `document.body`.
+  ⚠️ **`navigator.share` non si puo' chiamare dopo un `await`**: vale solo
+  finche' vale l'attivazione dell'utente, e un giro di rete la consuma. Quindi
+  **due tocchi** (il primo crea il collegamento, il secondo lo manda) e nel
+  secondo nessun `await` fra il click e la chiamata. Gli appunti si scrivono
+  **prima** della share, perche' share consuma l'attivazione e dopo WebKit
+  rifiuterebbe la scrittura. `AbortError` non e' un guasto.
+  Testo: **«Condividi il lavoro»**, e via ogni «cliente» — il collegamento non
+  va per forza al cliente.
+
+#### Le notifiche push, collegate (migration `20261008100000`)
+
+**Un mittente solo**: `app/_actions/_lib/avvisa.ts`. Prima otto punti
+inserivano a mano una riga in `notifiche`, quattro mandavano anche la push
+ognuno a modo suo, e **nessuno guardava le preferenze della persona**.
+
+- **L'avviso in app e' il registro e si scrive sempre**; la preferenza governa
+  cio' che *interrompe*. Spegnere una push non deve cancellare la traccia.
+- **Chi non lo puo' ricevere non lo riceve affatto**, nemmeno in app.
+- ⚠️ **Il `waitUntil` sta dentro `avvisa()`, non nei chiamanti.** Tre su quattro
+  se lo ricordavano e uno no: `pianificazione.ts` mandava le push della
+  settimana con un `await` secco, quindi a volte le mandava e a volte no, senza
+  che si vedesse niente. Una cosa che va ricordata a ogni chiamata prima o poi
+  si dimentica: la si mette dove si decide.
+- **Il predefinito dipende dal mestiere**, non e' un valore solo per tutti:
+  `@kommessa/api/avvisi`. Con un valore solo, a un tecnico arriverebbero le
+  richieste di permesso da approvare, che non puo' approvare. ⚠️ E una
+  preferenza in tabella **non puo' riaprire una porta chiusa dal mestiere**:
+  una riga scritta quando la persona era in ufficio non deve far squillare il
+  telefono di un tecnico.
+- **Il testo**: «Ti e' stato affidato un lavoro» / «… Apri per vedere la
+  commessa». ⚠️ Il nome del lavoro va nel **corpo**, non nel titolo: su iOS il
+  titolo si taglia intorno ai quaranta caratteri, e un titolo tagliato a meta'
+  di un indirizzo non dice ne' cosa e' successo ne' dove.
+- **Pagina**: `/mobile/profilo/notifiche` — «su questo telefono» (la
+  sottoscrizione, che appartiene al singolo browser) e «cosa farti sapere» (un
+  interruttore per avviso). Un interruttore e non tre: dei tre canali di prima
+  uno non esiste (nessuna riga manda email di avviso) e un altro non e' una
+  scelta. ⚠️ Il permesso si chiede **dentro il tocco**; su iPhone il caso «non
+  supportato» spiega che serve la PWA installata invece di dire «browser
+  vecchio», perche' su un iPhone del 2025 e' il caso piu' probabile.
+- **Il service worker aveva tre difetti** che si vedono solo quando le push
+  partono davvero (`CACHE_VERSION` v4 → v5): `url` arriva in cima al payload e
+  non finiva in `data`, quindi al tocco si apriva sempre `/mobile`; si apriva
+  una **seconda finestra** anche con l'app aperta (chi caricava foto se le
+  vedeva sparire dietro); mancava `pushsubscriptionchange`, quindi una
+  sottoscrizione rinnovata dal browser non arrivava al server e il telefono
+  **smetteva di ricevere in silenzio**.
+
+> ⚠️ **Due verita' sulle preferenze: ne resta una.** Collegando l'invio si e'
+> scoperto che alla domanda «questa persona vuole questo avviso sul telefono?»
+> il sistema sapeva rispondere in due modi: la vista
+> `notification_preferences_effective` (predefinito **globale**) e il nuovo
+> `pushAttiva` (predefinito del **mestiere**). Non equivalenti. Tolta la vista
+> e la rotta orfana `/api/push/send-internal`. La **tabella**
+> `notification_event_types` resta e non e' un residuo: la chiave esterna da
+> `notification_preferences` e' cio' che impedisce di salvare la preferenza di
+> un avviso inesistente. Cosa non si legge piu' sta scritto nei commenti in
+> tabella (`default_*`, `in_app`, `email`, `quiet_hours_*`).
+
+#### Una commessa dimostrativa in produzione
+
+`scripts/demo/crea-commessa-demo.ts` e `togli-commessa-demo.ts`, dry-run di
+default.
+
+> ⚠️ **Non chiama `genera_codice_commessa`**: quella funzione brucia il numero
+> progressivo anche quando l'inserimento successivo fallisce, e il contatore
+> delle commesse vere non deve avere buchi per una dimostrazione. Il codice
+> `BER-DEMO-01` sta fuori dallo schema `BER-26-NNN`.
+>
+> ⚠️ **Il video si converte in H.264/mp4.** Wikimedia Commons tiene i filmati
+> in WebM, che su iPhone si riproduce solo da Safari 17.4 in avanti.
+> `-pix_fmt yuv420p` (i profili 4:2:2 non li decodifica l'hardware e si cade su
+> un riquadro nero senza errori) e `-movflags +faststart` (sposta l'indice in
+> testa: senza, il telefono scarica tutto il filmato prima del primo
+> fotogramma).
+>
+> ⚠️ **Ogni media ha la sua miniatura, video compreso**: con `status='synced'`
+> il cron non va a cercare i file su Nextcloud (dove non ci sono), ma
+> `/api/photo/<id>` senza `r2_thumb_key` ripiegherebbe proprio su Nextcloud.
+>
+> ⚠️ La chiave R2 ha il **codice due volte**
+> (`.../BER-DEMO-01_BER-DEMO-01_Cliente_Lavoro/...`): non e' un refuso da
+> aggiustare, e' la forma vera: `buildR2Key` mette il codice davanti e poi il
+> nome cartella, che il codice ce l'ha dentro. Verificato sulle chiavi reali.
+
+#### Lo script che consegna gli accessi, due difetti veri
+
+`scripts/crea-utenti-da-file.ts`.
+
+> ⚠️ **Il segno di codifica che Excel mette in testa a ogni CSV mangia i primi
+> caratteri della prima cella.** Misurato: `"Nome"` arriva come `"me"`, e
+> nessun taglio di stringa li rimette perche' non ci sono piu'. L'effetto era
+> un'intestazione non riconosciuta come tale, cioe' una persona di nome «Nome»
+> con nome utente «Utente» creata per prima nell'elenco. `codepage: 65001` non
+> basta: un CSV si decodifica prima e si passa alla libreria come testo.
+>
+> ⚠️ **Il campo «utente» accetta una casella vera.** Senza, per chi ha un
+> accesso da prima con la posta aziendale lo script costruiva l'alias
+> `nome@sigla.kommessa.local`, non trovava niente, e gli **creava un secondo
+> account**. A chi esiste l'accesso non si tocca, ma la scheda del personale
+> gliela si fa se manca.
+
 
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
