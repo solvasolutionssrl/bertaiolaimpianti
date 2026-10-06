@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { MapPin, Clock, Upload, CheckCircle2, Loader2 } from 'lucide-react';
 
-import { Button, Label } from '@kommessa/ui';
+import { Button } from '@kommessa/ui';
 
 import {
   MediaAttachSection,
@@ -13,27 +13,39 @@ import { preparaMedia } from '../../../../_lib/prepara-media';
 import { PdfCameraCapture } from '../../../../_components/pdf-camera-capture';
 import { useUploadQueue } from '../../../../_components/upload-queue-provider';
 import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
-
-export interface VoceOption {
-  id: number;
-  nome: string;
-}
+import {
+  FASE_PREDEFINITA,
+  VOCI_FASE_LAVORI,
+  type FaseLavori,
+} from '@kommessa/api/fase-lavori';
 
 export interface ScattoFormProps {
   commessaId: string;
-  voci: VoceOption[];
-  preselectedVoceId: number | null;
   /** Se la commessa e' chiusa, si chiede conferma prima di caricare. */
   statoCommessa?: string | null;
   nomeCommessa?: string | null;
 }
 
-type Momento = 'sopralluogo' | 'in_corso' | 'finale';
-const MOMENTI: Array<{ value: Momento; label: string }> = [
-  { value: 'sopralluogo', label: 'Sopralluogo' },
-  { value: 'in_corso', label: 'In corso' },
-  { value: 'finale', label: 'Fine' },
-];
+/**
+ * A che punto del lavoro e' stata scattata questa foto.
+ *
+ * ## Si chiamava «Momento», e accanto c'era un campo «Fase»
+ *
+ * Due domande che a schermo sembravano la stessa, e che nessuno capiva: la
+ * prima chiedeva il momento (sopralluogo / in corso / fine), la seconda la
+ * voce di lavorazione a catalogo. La seconda **non e' mai stata compilata**:
+ * zero volte su 346 file in produzione, perche' non aveva preselezione e
+ * nessun collegamento dell'app la passava. L'unico suo effetto — una
+ * sottocartella su Nextcloud — il cliente aveva gia' chiesto di toglierlo
+ * (migration 20260623160000).
+ *
+ * Quindi: il campo «Fase» non c'e' piu', e «Momento» si chiama **Fase
+ * lavori**, che e' come lo chiamano le persone.
+ *
+ * ⚠️ La colonna `file_refs.voce_id` resta, con i suoi indici: non si scrive
+ * piu' e i 346 file esistenti ce l'hanno comunque a null.
+ */
+// I valori e le etichette stanno in @kommessa/api/fase-lavori.
 
 interface Geo {
   lat: number;
@@ -55,8 +67,6 @@ function kindToAllegato(k: MediaFile['kind']): 'foto' | 'video' | 'pdf_acquisito
  */
 export function ScattoForm({
   commessaId,
-  voci,
-  preselectedVoceId,
   statoCommessa,
   nomeCommessa,
 }: ScattoFormProps) {
@@ -64,10 +74,7 @@ export function ScattoForm({
   const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
 
   const [files, setFiles] = React.useState<MediaFile[]>([]);
-  const [voceId, setVoceId] = React.useState<string>(
-    preselectedVoceId != null ? String(preselectedVoceId) : '',
-  );
-  const [momento, setMomento] = React.useState<Momento>('in_corso');
+  const [momento, setMomento] = React.useState<FaseLavori>(FASE_PREDEFINITA);
   const [geo, setGeo] = React.useState<Geo | null>(null);
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [now, setNow] = React.useState<Date>(() => new Date());
@@ -107,7 +114,6 @@ export function ScattoForm({
     if (!(await chiediConferma())) return;
     setBusy(true);
     const daCaricare = files;
-    const voceIdNum = voceId !== '' ? Number(voceId) : null;
     for (const f of daCaricare) {
       // Piena qualità: si carica il file come arriva dal telefono (solo le foto
       // enormi vengono ridotte — vedi `preparaMedia`). La coda globale carica
@@ -120,7 +126,7 @@ export function ScattoForm({
         fileSize: blob.size,
         commessaId,
         momento,
-        voceId: voceIdNum,
+        voceId: null,
         kind: kindToAllegato(f.kind),
         geoLat: geo?.lat ?? null,
         geoLng: geo?.lng ?? null,
@@ -173,47 +179,24 @@ export function ScattoForm({
         description="Scatta, allega dalla galleria o scansiona un documento. Puoi aggiungerne più di uno."
       />
 
-      {/* Fase / voce */}
-      <div className="space-y-2">
-        <Label htmlFor="faseVoceId">Fase</Label>
-        <select
-          id="faseVoceId"
-          value={voceId}
-          onChange={(e) => setVoceId(e.target.value)}
-          className="block h-12 w-full rounded-md border border-input bg-background px-3 text-base"
-        >
-          <option value="">— Seleziona fase —</option>
-          {voci.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.nome}
-            </option>
-          ))}
-        </select>
-        {voci.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Questa commessa non ha fasi attive: gli allegati verranno caricati come "generici".
-          </p>
-        ) : null}
-      </div>
-
-      {/* Momento */}
+      {/* Fase lavori */}
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Momento</legend>
+        <legend className="text-sm font-medium">Fase lavori</legend>
         <div className="grid grid-cols-3 gap-2" role="radiogroup">
-          {MOMENTI.map((m) => (
+          {VOCI_FASE_LAVORI.map((m) => (
             <label
-              key={m.value}
-              className="flex min-h-[48px] cursor-pointer items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-sm font-medium has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
+              key={m.valore}
+              className="flex min-h-[48px] cursor-pointer items-center justify-center gap-1 rounded-md border border-input bg-background px-2 text-center text-sm font-medium leading-tight has-[:checked]:border-primary has-[:checked]:bg-primary/10 has-[:checked]:text-primary"
             >
               <input
                 type="radio"
                 name="momento"
-                value={m.value}
-                checked={momento === m.value}
-                onChange={() => setMomento(m.value)}
+                value={m.valore}
+                checked={momento === m.valore}
+                onChange={() => setMomento(m.valore)}
                 className="sr-only"
               />
-              {m.label}
+              {m.etichetta}
             </label>
           ))}
         </div>

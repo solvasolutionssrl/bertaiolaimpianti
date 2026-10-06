@@ -30,6 +30,7 @@
     "./priorita": "./src/priorita.ts",
     "./identita": "./src/identita.ts",
     "./capacita": "./src/capacita.ts",
+    "./fase-lavori": "./src/fase-lavori.ts",
     "./scelta-opzioni": "./src/scelta-opzioni.ts",
     "./trascrizione": "./src/trascrizione.ts",
     "./link-pubblico": "./src/link-pubblico.ts",

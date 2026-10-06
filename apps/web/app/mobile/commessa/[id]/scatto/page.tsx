@@ -4,7 +4,7 @@ import { MobileBackButton } from '../../../_components/mobile-back-button';
 import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../../../_lib/guard';
-import { ScattoForm, type VoceOption } from './scatto-form';
+import { ScattoForm } from './scatto-form';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -32,10 +32,8 @@ export const metadata = {
  */
 export default async function ScattoPage({
   params,
-  searchParams,
 }: {
   params: { id: string };
-  searchParams?: { voce?: string };
 }) {
   await guardMobile();
   const supabase = createServerSupabase();
@@ -45,11 +43,7 @@ export default async function ScattoPage({
     .select(
       `
         id, codice_interno, nome_cartella, stato,
-        cliente:clienti ( ragione_sociale ),
-        voci:commessa_voci (
-          voce_id, stato,
-          voce:voci_catalogo ( nome )
-        )
+        cliente:clienti ( ragione_sociale )
       `,
     )
     .eq('id', params.id)
@@ -64,16 +58,6 @@ export default async function ScattoPage({
   const cliente = Array.isArray(commessa.cliente)
     ? (commessa.cliente[0] ?? null)
     : commessa.cliente;
-
-  const voci: VoceOption[] = (commessa.voci ?? [])
-    .filter((v) => v.stato !== 'completata' && v.stato !== 'bloccata')
-    .map((v) => ({
-      id: v.voce_id,
-      nome: (Array.isArray(v.voce) ? v.voce[0]?.nome : v.voce?.nome) ?? `Voce #${v.voce_id}`,
-    }))
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'it'));
-
-  const preselectedVoceId = searchParams?.voce ? Number(searchParams.voce) : null;
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 p-4">
@@ -90,8 +74,6 @@ export default async function ScattoPage({
 
       <ScattoForm
         commessaId={params.id}
-        voci={voci}
-        preselectedVoceId={preselectedVoceId}
         statoCommessa={statoCommessa}
         nomeCommessa={commessa.codice_interno}
       />

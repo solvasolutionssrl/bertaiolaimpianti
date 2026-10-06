@@ -4,15 +4,11 @@ import { getTenantContext } from '@kommessa/api/tenant';
 import { Image as ImgIcon } from 'lucide-react';
 import { EmptyState } from '../../../../_components/empty-state';
 import { FotoGrid, type FotoItem } from './foto-grid';
+import { VOCI_FILTRO_FASE } from '@kommessa/api/fase-lavori';
 
 export const dynamic = 'force-dynamic';
 
-const MOMENTI = [
-  { value: '', label: 'Tutte' },
-  { value: 'sopralluogo', label: 'Sopralluogo' },
-  { value: 'in_corso', label: 'In corso' },
-  { value: 'finale', label: 'Finali' },
-] as const;
+// Le etichette stanno in @kommessa/api/fase-lavori: un posto solo.
 
 const TIPI = [
   { value: '', label: 'Tutti' },
@@ -62,21 +58,14 @@ export default async function FotoTab({
   if (searchParams.momento) {
     q = q.eq('momento', searchParams.momento as any);
   }
-  if (searchParams.voce) {
-    q = q.eq('voce_id', Number(searchParams.voce));
-  }
-
-  // Le foto della commessa, l'elenco fasi (per la select filtro) e il
-  // contesto utente (per i permessi di eliminazione) sono indipendenti:
-  // parallelizziamo per dimezzare la latenza.
-  const [{ data, error }, fasi, ctx] = await Promise.all([
-    q,
-    supabase
-      .from('commessa_voci')
-      .select('voce_id, voce:voce_id ( id, nome )')
-      .eq('commessa_id', params.id),
-    getTenantContext(),
-  ]);
+  // Le foto della commessa e il contesto utente (per i permessi di
+  // eliminazione) sono indipendenti: parallelizziamo.
+  //
+  // ⚠️ Non si legge piu' l'elenco delle fasi: alimentava un filtro che su
+  // 346 file in archivio non poteva trovare niente, perche' `voce_id` e'
+  // null su tutti. Un filtro che restituisce sempre vuoto non e' un filtro,
+  // e' un'interfaccia che mente.
+  const [{ data, error }, ctx] = await Promise.all([q, getTenantContext()]);
   const canDelete = ctx?.role === 'admin' || ctx?.role === 'office';
   const rawFoto = error ? [] : data ?? [];
 
@@ -130,36 +119,18 @@ export default async function FotoTab({
           ))}
         </select>
         <label className="text-xs uppercase tracking-wide text-muted-foreground">
-          Momento
+          Fase lavori
         </label>
         <select
           name="momento"
           defaultValue={searchParams.momento ?? ''}
           className="h-9 rounded-md border border-input bg-background px-2"
         >
-          {MOMENTI.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
+          {VOCI_FILTRO_FASE.map((m) => (
+            <option key={m.valore} value={m.valore}>
+              {m.etichetta}
             </option>
           ))}
-        </select>
-        <label className="text-xs uppercase tracking-wide text-muted-foreground">
-          Fase
-        </label>
-        <select
-          name="voce"
-          defaultValue={searchParams.voce ?? ''}
-          className="h-9 rounded-md border border-input bg-background px-2"
-        >
-          <option value="">Tutte</option>
-          {(fasi.data ?? []).map((f: any) => {
-            const v = Array.isArray(f.voce) ? f.voce[0] : f.voce;
-            return (
-              <option key={f.voce_id} value={f.voce_id}>
-                {v?.nome ?? `Voce ${f.voce_id}`}
-              </option>
-            );
-          })}
         </select>
         <button
           type="submit"

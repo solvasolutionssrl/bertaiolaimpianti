@@ -30,6 +30,7 @@ import { useConfirm, useAlert } from '../../../../_components/confirm-provider';
 import { fmtDataOra } from '../../../_lib/format';
 import { eliminaMediaOffice } from './_actions/media';
 import { MiniaturaMedia } from '@/app/_components/miniatura-media';
+import { etichettaFase } from '@kommessa/api/fase-lavori';
 
 export interface FotoItem {
   id: string;
@@ -228,7 +229,7 @@ function FotoCell({
       <figcaption className="px-2 py-1.5 text-[11px] text-muted-foreground">
         <p className="truncate font-medium text-foreground">{f.filename}</p>
         <p>{fmtDataOra(f.taken_at ?? f.uploaded_at)}</p>
-        {f.momento ? <p>{f.momento}</p> : null}
+        {f.momento ? <p>{etichettaFase(f.momento)}</p> : null}
       </figcaption>
     </figure>
   );

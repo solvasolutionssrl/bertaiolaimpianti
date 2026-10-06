@@ -59,17 +59,17 @@ Deno.serve(async (req: Request) => {
 
   try {
     switch (evt.type) {
-      case 'file_ref.insert':
       case 'INSERT': {
-        // Caso DB webhook su file_refs: arriva senza `type=file_ref.insert`,
-        // discriminiamo sulla tabella.
-        if (evt.table === 'file_refs' || evt.type === 'file_ref.insert') {
-          await handleFileRefInsert(admin, evt.record ?? {});
-        } else if (evt.table === 'tickets') {
+        if (evt.table === 'tickets') {
           await handleTicketCreated(admin, evt.record ?? {});
         }
         break;
       }
+      // `file_ref.insert` e `cron.fasi_zero_foto` non si gestiscono piu':
+      // vedi la nota sui due gestori ritirati, sotto.
+      case 'file_ref.insert':
+      case 'cron.fasi_zero_foto':
+        break;
       case 'UPDATE': {
         if (evt.table === 'tickets') {
           await handleTicketUpdate(admin, evt.record ?? {}, evt.old_record ?? {});
@@ -78,9 +78,6 @@ Deno.serve(async (req: Request) => {
       }
       case 'ticket.assigned':
         await handleTicketAssigned(admin, evt.record ?? {});
-        break;
-      case 'cron.fasi_zero_foto':
-        await cronFasiZeroFoto(admin, evt.tenant_id);
         break;
       case 'cron.dico_mancante':
         await cronDicoMancante(admin, evt.tenant_id);
@@ -100,40 +97,21 @@ Deno.serve(async (req: Request) => {
 // Handlers
 // ----------------------------------------------------------------------
 
-async function handleFileRefInsert(admin: SupabaseClient, rec: Record<string, unknown>) {
-  const commessaId = rec.commessa_id as string | undefined;
-  const voceId = rec.voce_id as number | undefined;
-  const tenantId = rec.tenant_id as string | undefined;
-  if (!commessaId || !voceId || !tenantId) return;
-
-  // Leggi conteggio aggiornato e minimo richiesto
-  const { data: cv } = await admin
-    .from('commessa_voci')
-    .select('foto_caricate_count, min_foto_richieste')
-    .eq('commessa_id', commessaId)
-    .eq('voce_id', voceId)
-    .single();
-  if (!cv) return;
-  if (cv.min_foto_richieste <= 0) return;
-  if (cv.foto_caricate_count !== cv.min_foto_richieste) return;
-  // Target appena raggiunto → notifica al responsabile.
-  const { data: commessa } = await admin
-    .from('commesse')
-    .select('id,codice_interno,responsabile_id,nome_cartella')
-    .eq('id', commessaId)
-    .single();
-  if (!commessa?.responsabile_id) return;
-
-  await deliverNotification(admin, {
-    tenantId,
-    userId: commessa.responsabile_id,
-    type: 'fase_target_raggiunto',
-    title: `Foto complete: ${commessa.codice_interno}`,
-    body: `La fase ha raggiunto il numero minimo di foto richieste.`,
-    url: `/commesse/${commessa.id}`,
-    payload: { commessa_id: commessa.id, voce_id: voceId },
-  });
-}
+/**
+ * ⚠️ RITIRATI il 07/10/2026: `handleFileRefInsert` (notifica
+ * «fase_target_raggiunto») e `cronFasiZeroFoto` (notifica «fase_zero_foto»).
+ *
+ * Dipendevano entrambi da `commessa_voci.foto_caricate_count`, che si
+ * incrementa solo quando un media viene caricato **con la fase indicata**. In
+ * produzione: `voce_id` valorizzato su 0 file su 346, `min_foto_richieste > 0`
+ * su 0 righe su 2650, notifiche di quei due tipi mai inviate: 0. Erano codice
+ * che sembrava vivo e non poteva partire.
+ *
+ * Togliendo il campo «Fase» dal caricamento sarebbero diventati pericolosi,
+ * non solo inutili: il contatore resta a zero per sempre, e il cron avrebbe
+ * mandato «fase senza foto da 3 giorni» in eterno su commesse piene di foto.
+ * Un avviso che grida sempre insegna a ignorare tutti gli avvisi.
+ */
 
 async function handleTicketCreated(admin: SupabaseClient, rec: Record<string, unknown>) {
   const tenantId = rec.tenant_id as string | undefined;
@@ -183,43 +161,6 @@ async function handleTicketAssigned(admin: SupabaseClient, rec: Record<string, u
     url: `/tickets/${rec.id}`,
     payload: { ticket_id: rec.id },
   });
-}
-
-async function cronFasiZeroFoto(admin: SupabaseClient, tenantId?: string) {
-  // Fasi `in_corso` o `da_iniziare` di commesse `aperta`/`in_corso` con
-  // `min_foto_richieste > 0` e `foto_caricate_count = 0` da >3 giorni.
-  const threshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-  let q = admin
-    .from('commessa_voci')
-    .select('commessa_id, voce_id, tenant_id, updated_at, foto_caricate_count, min_foto_richieste')
-    .lt('updated_at', threshold)
-    .eq('foto_caricate_count', 0)
-    .gt('min_foto_richieste', 0)
-    .in('stato', ['da_iniziare', 'in_corso']);
-  if (tenantId) q = q.eq('tenant_id', tenantId);
-
-  const { data: fasi } = await q;
-  if (!fasi) return;
-
-  for (const f of fasi) {
-    const { data: commessa } = await admin
-      .from('commesse')
-      .select('id,codice_interno,responsabile_id,nome_cartella,stato')
-      .eq('id', f.commessa_id)
-      .single();
-    if (!commessa?.responsabile_id) continue;
-    if (commessa.stato === 'completata' || commessa.stato === 'archiviata') continue;
-
-    await deliverNotification(admin, {
-      tenantId: f.tenant_id,
-      userId: commessa.responsabile_id,
-      type: 'fase_zero_foto',
-      title: `Fase senza foto da 3+ giorni`,
-      body: `Commessa ${commessa.codice_interno}: ricordati di caricare le foto.`,
-      url: `/commesse/${commessa.id}`,
-      payload: { commessa_id: commessa.id, voce_id: f.voce_id },
-    });
-  }
 }
 
 async function cronDicoMancante(admin: SupabaseClient, tenantId?: string) {

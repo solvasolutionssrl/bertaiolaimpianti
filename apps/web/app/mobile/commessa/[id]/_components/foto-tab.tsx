@@ -10,6 +10,7 @@ import { Divider, Stagger } from '../../../_components/blueprint';
 import { MediaLightbox, type MediaItem } from '../../../../_components/media-lightbox';
 import { AddMediaSection } from './add-media-section';
 import { MiniaturaMedia } from '@/app/_components/miniatura-media';
+import { etichettaFase } from '@kommessa/api/fase-lavori';
 
 export interface FotoItem {
   id: string;
@@ -128,7 +129,7 @@ export function FotoTab({
         <Stagger className="space-y-6">
           {sopralluogo.length > 0 && (
             <FotoMomentoBlock
-              label="Sopralluogo"
+              label={etichettaFase('sopralluogo')}
               count={sopralluogo.length}
               items={sopralluogo}
               onOpen={openAt}
@@ -136,7 +137,7 @@ export function FotoTab({
           )}
           {inCorso.length > 0 && (
             <FotoMomentoBlock
-              label="In corso"
+              label={etichettaFase('in_corso')}
               count={inCorso.length}
               items={inCorso}
               onOpen={openAt}
@@ -144,7 +145,7 @@ export function FotoTab({
           )}
           {finali.length > 0 && (
             <FotoMomentoBlock
-              label="Finali"
+              label={etichettaFase('finale')}
               count={finali.length}
               items={finali}
               onOpen={openAt}

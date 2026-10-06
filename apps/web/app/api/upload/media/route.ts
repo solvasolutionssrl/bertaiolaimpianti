@@ -1,3 +1,19 @@
+/**
+ * ⚠️ ROTTA ORFANA (verificato il 07/10/2026): nessun punto dell'app la chiama
+ * piu'. I caricamenti passano dal motore unico `/api/upload/media/init` +
+ * `/api/upload/media/[id]/complete`.
+ *
+ * **Non e' stata cancellata di proposito.** Un telefono con la PWA non ancora
+ * aggiornata potrebbe avere in cache il codice che la usa, e togliere la
+ * rotta significherebbe foto che non partono senza nessun messaggio. Si
+ * rimuove quando siamo certi che tutti gli apparecchi hanno preso la versione
+ * nuova.
+ *
+ * Il parametro `faseVoceId` che legge qui sotto non e' piu' offerto da nessuna
+ * interfaccia (il campo «Fase» e' stato tolto il 07/10/2026): resta accettato
+ * perche' un client vecchio potrebbe ancora mandarlo, e rifiutarlo
+ * trasformerebbe un dato in piu' in un caricamento fallito.
+ */
 import { type NextRequest } from 'next/server';
 import { revalidatePath } from 'next/cache';
 
