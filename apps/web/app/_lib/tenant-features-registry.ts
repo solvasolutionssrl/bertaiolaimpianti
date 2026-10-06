@@ -6,12 +6,25 @@
  * e leggi `tenantFeatureEnabled(key, kommessaWorld)` dove serve il gate.
  */
 
-export type FeatureKey = 'voci_catalogo' | 'preset_lavoro' | 'portale_clienti';
+export type FeatureKey =
+  | 'voci_catalogo'
+  | 'preset_lavoro'
+  | 'portale_clienti'
+  | 'turno_tecnici';
 
 export interface FeatureDef {
   key: FeatureKey;
   label: string;
   descrizione: string;
+  /**
+   * Se l'ufficio del cliente puo' accenderla da se'
+   * (`/office/impostazioni/funzioni`), oltre al super admin.
+   *
+   * Si concede solo per cio' che riguarda **come lavora quel cliente**, non
+   * per cio' che riguarda la piattaforma: il portale clienti, per esempio,
+   * resta nostro perche' tocca il modello dei dati.
+   */
+  gestibileDaUfficio?: boolean;
   /**
    * Se true, il default (senza override esplicito) segue il "mondo commesse"
    * (app_mode ≠ kantiere): attiva per Kommessa/Completa, spenta per solo-Kantiere.
@@ -34,6 +47,15 @@ export const FEATURE_REGISTRY: FeatureDef[] = [
     label: 'Preset di lavoro',
     descrizione: 'Impostazioni → combinazioni di voci riutilizzabili (mondo commesse).',
     defaultKommessaOnly: true,
+  },
+  {
+    key: 'turno_tecnici',
+    label: 'Turno in cantiere',
+    descrizione:
+      'Il tecnico apre e chiude il turno sulla commessa dalla seconda scheda dell’app. Usata una sola volta in tutto, su un tenant di prova: nasce spenta e si accende a chi la chiede.',
+    defaultKommessaOnly: true,
+    defaultSpenta: true,
+    gestibileDaUfficio: true,
   },
   {
     key: 'portale_clienti',

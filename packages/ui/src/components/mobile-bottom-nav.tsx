@@ -245,12 +245,18 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
             }
 
             // TAB STANDARD
+            const spento = Boolean(tab.spento);
+            const IconaTab = tab.spento?.icona ?? Icon;
             const inner = (
               <span
                 className={cn(
                   'relative flex h-16 min-w-[44px] flex-1 flex-col items-center justify-center gap-1 px-2',
                   'font-mono text-[9px] uppercase tracking-[0.16em] transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                  spento
+                    ? 'text-muted-foreground/45'
+                    : isActive
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {/* barretta cobalto top */}
@@ -258,7 +264,7 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
                   aria-hidden="true"
                   className={cn(
                     'absolute top-0 h-[2px] w-8 rounded-full bg-primary transition-opacity',
-                    isActive ? 'opacity-100' : 'opacity-0',
+                    isActive && !spento ? 'opacity-100' : 'opacity-0',
                   )}
                 />
                 <span
@@ -267,9 +273,9 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
                     isActive ? 'bg-primary/10' : 'bg-transparent',
                   )}
                 >
-                  <Icon
+                  <IconaTab
                     className="h-[18px] w-[18px]"
-                    strokeWidth={isActive ? 2.25 : 1.75}
+                    strokeWidth={isActive && !spento ? 2.25 : 1.75}
                     aria-hidden="true"
                   />
                   {tab.badge && tab.badge > 0 ? (
@@ -284,6 +290,25 @@ const MobileBottomNav = React.forwardRef<HTMLElement, MobileBottomNavProps>(
                 <span className="leading-none">{tab.label}</span>
               </span>
             );
+
+            // Spento: la card resta al suo posto, in grigio, e al tocco dice
+            // perché. Toglierla cambierebbe il numero di tasti della barra —
+            // e chi la usa la cerca sempre nello stesso punto.
+            if (spento) {
+              return (
+                <li key={tab.id} className="flex flex-1">
+                  <button
+                    type="button"
+                    aria-label={tab.label}
+                    aria-disabled="true"
+                    onClick={() => onTabSpento?.(tab)}
+                    className="flex flex-1"
+                  >
+                    {inner}
+                  </button>
+                </li>
+              );
+            }
 
             return (
               <li key={tab.id} className="flex flex-1">

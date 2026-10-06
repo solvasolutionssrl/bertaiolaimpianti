@@ -54,6 +54,7 @@ export function BottomNavShell({
   isCapo = false,
   hasKontabilita = true,
   puoAprireLavori,
+  turnoAttivo = false,
 }: {
   unreadCount: number;
   shell: MobileShell;
@@ -72,6 +73,14 @@ export function BottomNavShell({
    * per tutti e portava un tecnico in un vicolo cieco.
    */
   puoAprireLavori: boolean;
+  /**
+   * Se la funzione «Turno in cantiere» e' accesa per questo cliente.
+   *
+   * Spenta, la card resta al suo posto in grigio e al tocco dice che non e'
+   * abilitata: una barra che cambia numero di tasti a seconda del cliente si
+   * riprogetta ogni volta, e chi la usa cerca le cose sempre nello stesso punto.
+   */
+  turnoAttivo?: boolean;
   /** Solo shell kantiere/tecnico: Kontabilità spenta = niente tab Spese. */
   hasKontabilita?: boolean;
 }) {
@@ -145,7 +154,18 @@ export function BottomNavShell({
     // e uno slot vuoto non spiega niente.
     tabs = [
       { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
-      { id: 'turno', label: 'Turno', icon: Timer, href: '/mobile/turno' },
+      turnoAttivo
+        ? { id: 'turno' as const, label: 'Turno', icon: Timer, href: '/mobile/turno' }
+        : {
+            id: 'turno' as const,
+            label: 'Turno',
+            icon: Timer,
+            href: '#',
+            spento: {
+              messaggio:
+                'La gestione del turno non è abilitata per la vostra azienda. Se vi serve, l’ufficio la può accendere dalle impostazioni.',
+            },
+          },
       puoAprireLavori
         ? {
             id: 'voce' as const,

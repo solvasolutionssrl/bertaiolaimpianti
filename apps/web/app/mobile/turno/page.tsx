@@ -7,6 +7,8 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
 import { MobileBackButton } from '../_components/mobile-back-button';
+import { redirect } from 'next/navigation';
+import { tenantFeatureEnabled } from '../../_lib/tenant-features';
 import {
   InterventiOggiList,
   TurnoClient,
@@ -36,6 +38,12 @@ export const dynamic = 'force-dynamic';
 export default async function MobileTurnoPage() {
   const ctx = await guardMobile();
   await soloMondoCommesse();
+
+  // La funzione si accende per cliente (vedi `tenant-features-registry`). Da
+  // spenta la card nella barra e' grigia, ma l'indirizzo si puo' battere a
+  // mano: la porta si chiude anche qui.
+  if (!(await tenantFeatureEnabled('turno_tecnici', true))) redirect('/mobile');
+
   const supabase = createServerSupabase();
 
   // Inizio della giornata a Roma: il server gira in UTC e la mezzanotte UTC

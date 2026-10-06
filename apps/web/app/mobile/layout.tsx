@@ -10,6 +10,7 @@ import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache
 import { tenantHasModule } from '../_lib/modules';
 import { devoCambiarePassword } from '../_lib/cambio-password';
 import { possoAprireLavori } from '../_lib/capacita-server';
+import { tenantFeatureEnabled } from '../_lib/tenant-features';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
 import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
@@ -116,6 +117,12 @@ export default async function MobileLayout({
   // barra. Una lettura sola per richiesta (`cache()` dentro `possoAprireLavori`).
   const apreLavori = ctx ? await possoAprireLavori() : false;
 
+  // «Turno in cantiere»: funzione per-cliente, spenta di default. La card
+  // resta nella barra ma in grigio (vedi `BottomNavShell`).
+  const turnoAttivo = ctx
+    ? await tenantFeatureEnabled('turno_tecnici', appMode !== 'kantiere')
+    : false;
+
   // Caposquadra: solo nella shell kantiere per i tecnici (non admin/office).
   // Per Bertaiola (shell != 'kantiere') resta sempre false → zero differenze.
   let isCapo = false;
@@ -181,6 +188,7 @@ export default async function MobileLayout({
           isCapo={isCapo}
           hasKontabilita={hasKontabilita}
           puoAprireLavori={apreLavori}
+          turnoAttivo={turnoAttivo}
         />
       ) : null}
 
