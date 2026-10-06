@@ -12,6 +12,14 @@ import { Hero, HeroMeta } from '../_components/blueprint';
 import { CommesseBrowser, type BrowserRow } from './_components/commesse-browser';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
+/**
+ * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
+ * lettura dei cookie, ma dichiararlo rende la regola la stessa su tutte le
+ * rotte dell'app invece di dipendere da cosa capita di leggere.
+ */
+export const dynamic = 'force-dynamic';
+
+
 export const metadata: Metadata = {
   title: 'Tutte le commesse',
 };

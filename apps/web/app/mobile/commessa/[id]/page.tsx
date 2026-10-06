@@ -56,6 +56,14 @@ import { CommessaChiusaNota } from '../../../_components/commessa-chiusa-nota';
 import { type Priorita } from '@kommessa/api/priorita';
 import { leggiLinkPubblico } from '@/app/_actions/link-pubblico';
 
+/**
+ * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
+ * lettura dei cookie, ma dichiararlo rende la regola la stessa su tutte le
+ * rotte dell'app invece di dipendere da cosa capita di leggere.
+ */
+export const dynamic = 'force-dynamic';
+
+
 export async function generateMetadata({
   params,
 }: {

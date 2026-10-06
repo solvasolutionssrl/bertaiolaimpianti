@@ -6,6 +6,7 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
+import { MobileBackButton } from '../_components/mobile-back-button';
 import {
   InterventiOggiList,
   TurnoClient,
@@ -134,7 +135,12 @@ export default async function MobileTurnoPage() {
   );
 
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
+    <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
+      {/* Senza questo tasto la pagina era un vicolo cieco: non e' un tab della
+          barra in basso, e l'unica uscita era chiudere l'app o toccare un tab
+          a caso. `MobileBackButton` e' il tasto canonico, ≥44px: il link
+          testuale piccolo era esattamente il difetto per cui e' nato. */}
+      <MobileBackButton label="Indietro" />
       <header className="pt-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
           <Timer className="h-3.5 w-3.5" aria-hidden="true" />

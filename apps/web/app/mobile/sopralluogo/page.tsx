@@ -5,6 +5,15 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
 import { SopralluogoWizard, type VoceCatalogoOption, type PresetOption } from './wizard';
+import { MobileBackButton } from '../_components/mobile-back-button';
+
+/**
+ * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
+ * lettura dei cookie, ma dichiararlo rende la regola la stessa su tutte le
+ * rotte dell'app invece di dipendere da cosa capita di leggere.
+ */
+export const dynamic = 'force-dynamic';
+
 
 export const metadata: Metadata = {
   title: 'Nuovo sopralluogo',
@@ -61,6 +70,11 @@ export default async function SopralluogoPage() {
   return (
     <div className="flex min-h-[100dvh] flex-col gap-4 p-4">
       <header>
+      {/* Senza questo tasto la pagina era un vicolo cieco: non e' un tab della
+          barra in basso, e l'unica uscita era chiudere l'app o toccare un tab
+          a caso. `MobileBackButton` e' il tasto canonico, ≥44px: il link
+          testuale piccolo era esattamente il difetto per cui e' nato. */}
+      <MobileBackButton label="Indietro" />
         <h1 className="text-xl font-semibold tracking-tight">Nuovo sopralluogo</h1>
         <p className="text-xs text-muted-foreground">
           Passi guidati · cliente, voci, foto/video e creazione commessa su Nextcloud.

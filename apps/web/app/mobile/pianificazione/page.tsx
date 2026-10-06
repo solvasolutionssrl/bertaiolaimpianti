@@ -27,6 +27,7 @@ import { guardMobile } from '../_lib/guard';
 import { tenantHasModule } from '../../_lib/modules';
 import { leggiConfigDipendenti } from '../../_lib/dipendenti-config';
 import { caricaBlocchiRange } from '@/app/office/personale/pianificazione/_lib/query';
+import { MobileBackButton } from '../_components/mobile-back-button';
 
 export const metadata: Metadata = { title: 'La mia settimana' };
 export const dynamic = 'force-dynamic';
@@ -85,8 +86,13 @@ export default async function MiaSettimanaPage({
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
+      {/* Senza questo tasto la pagina era un vicolo cieco: non e' un tab della
+          barra in basso, e l'unica uscita era chiudere l'app o toccare un tab
+          a caso. `MobileBackButton` e' il tasto canonico, ≥44px: il link
+          testuale piccolo era esattamente il difetto per cui e' nato. */}
+      <MobileBackButton label="Indietro" />
       <header className="mt-2">
-        <h1 className="flex items-center gap-2 text-lg font-semibold">
+        <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <CalendarDays className="h-5 w-5 text-primary" />
           La mia settimana
         </h1>

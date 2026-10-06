@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, MapPin, Navigation, Users, User, AlertTriangle } from 'lucide-react';
+import {
+  MapPin,
+  Navigation,
+  Users,
+  User,
+  AlertTriangle,
+} from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
@@ -27,6 +32,7 @@ import {
 import { TurnoAzioniCantiere } from '../../_components/turno-azioni-cantiere';
 import { ChiInCantiere, type PersonaDentro } from './_components/chi-in-cantiere';
 import { AnaliticaCantiere, type AnaliticaCantiereDati } from './_components/analitica-cantiere';
+import { MobileBackButton } from '../../../_components/mobile-back-button';
 
 /** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
 type Pagina<T> = PromiseLike<EsitoPagina<T>>;
@@ -266,15 +272,10 @@ export default async function CantiereMobileDetailPage({
 
   return (
     <div className="flex min-h-[100dvh] flex-col gap-5 p-4">
-      <div>
-        <Link
-          href="/mobile/kantiere/cantieri"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Cantieri
-        </Link>
-      </div>
+      {/* Era un link testuale da 12px con una freccia da 14: il bersaglio per
+          il dito piu' piccolo dell'app, ed esattamente il difetto per cui
+          `MobileBackButton` (pill da 44px) e' stato scritto. */}
+      <MobileBackButton href="/mobile/kantiere/cantieri" label="Cantieri" />
 
       <header className="pt-1">
         <h1 className="text-xl font-semibold tracking-tight">

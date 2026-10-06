@@ -6,6 +6,14 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { guardMobile } from '../../../_lib/guard';
 import { ScattoForm, type VoceOption } from './scatto-form';
 
+/**
+ * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
+ * lettura dei cookie, ma dichiararlo rende la regola la stessa su tutte le
+ * rotte dell'app invece di dipendere da cosa capita di leggere.
+ */
+export const dynamic = 'force-dynamic';
+
+
 export const metadata = {
   title: 'Scatta foto',
 };
