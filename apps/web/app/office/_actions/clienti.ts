@@ -35,6 +35,8 @@ export interface ClienteSimile {
   id: string;
   ragione_sociale: string;
   tipo: 'persona_fisica' | 'azienda' | null;
+  /** Serve a precompilare l'indirizzo quando si sceglie un cliente che c'e' gia'. */
+  indirizzo: string | null;
   citta: string | null;
   telefoni: string[] | null;
   email: string[] | null;
@@ -52,7 +54,7 @@ export async function cercaClientiPerNome(input: {
   const supabase = createServerSupabase();
   const { data } = await supabase
     .from('clienti')
-    .select('id, ragione_sociale, tipo, citta, telefoni, email')
+    .select('id, ragione_sociale, tipo, indirizzo, citta, telefoni, email')
     .ilike('ragione_sociale', `%${term}%`)
     .order('ragione_sociale')
     .limit(limite);

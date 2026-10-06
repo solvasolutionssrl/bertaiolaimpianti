@@ -7,9 +7,6 @@ import {
   Edit3,
   RefreshCw,
   Phone,
-  Mail,
-  MapPin,
-  User,
   FileText,
   Tag,
   Plus,
@@ -18,22 +15,16 @@ import {
   ChevronUp,
   X,
   Search,
-  Users,
-  UserCheck,
 } from 'lucide-react';
 
 import { Button, Input, Label, cn } from '@kommessa/ui';
 import { ContactPickerButton } from './contact-picker-button';
+import { SceltaCliente, type ValoreCliente } from './scelta-cliente';
 import {
   creaVoceCustom,
   vociSimili,
   type VoceSimile as NuovaVoceSimile,
 } from '../office/impostazioni/voci/_actions/voci';
-import {
-  cercaClientiPerNome,
-  type ClienteSimile,
-} from '../office/_actions/clienti';
-
 /**
  * Voice Review (Schermo 2 del voice-intake flow).
  *
@@ -132,23 +123,23 @@ export function VoiceReview({
 
   // Stato per ogni campo "confermabile". Inizializzato come pending con
   // il valore proposto dall'AI.
-  const [cliente, setCliente] = React.useState<FieldState<{
-    ragione_sociale: string;
-    tipo: 'persona_fisica' | 'azienda';
-    telefono: string;
-    email: string;
-    indirizzo: string;
-    citta: string;
-  }>>({
-    status: 'pending',
-    value: {
-      ragione_sociale: data.ragione_sociale ?? '',
-      tipo: data.tipo ?? 'persona_fisica',
-      telefono: data.telefono ?? '',
-      email: data.email ?? '',
-      indirizzo: data.indirizzo ?? '',
-      citta: data.citta ?? '',
-    },
+  /**
+   * Il cliente: una scelta sola, non sei campi.
+   *
+   * Prima c'erano un `FieldState` con sei campi aperti insieme, una ricerca
+   * copiata (400 ms / 3 caratteri, diversa da quella del resto dell'app) e tre
+   * stati separati per i candidati, il cliente associato e il «no, è nuovo».
+   * Il suggerimento finiva renderizzato DOPO la chiusura della card, cioè fuori
+   * schermo con la tastiera aperta. Ora decide tutto `SceltaCliente`.
+   */
+  const [clienteSel, setClienteSel] = React.useState<ValoreCliente>({
+    id: null,
+    ragione_sociale: data.ragione_sociale ?? '',
+    tipo: data.tipo ?? 'persona_fisica',
+    telefono: data.telefono ?? '',
+    email: data.email ?? '',
+    indirizzo: data.indirizzo ?? '',
+    citta: data.citta ?? '',
   });
 
   const [vociState, setVociState] = React.useState<FieldState<number[]>>({
@@ -191,84 +182,17 @@ export function VoiceReview({
   // SEMPRE un cliente nuovo → duplicati (es. più commesse "Mirco Favini").
   // Qui, quando un nome è rilevato, cerchiamo i clienti già in anagrafica:
   // se ne troviamo, chiediamo all'utente se intende uno di quelli.
-  const ragioneSociale = cliente.value.ragione_sociale;
-  const [matchCandidates, setMatchCandidates] = React.useState<ClienteSimile[]>(
-    [],
-  );
-  const [clienteEsistente, setClienteEsistente] =
-    React.useState<ClienteSimile | null>(null);
-  // Nome per cui l'utente ha scelto "è un nuovo cliente": nascondiamo il match
-  // solo per QUEL nome. Se poi cambia nome (magari in uno già esistente) il
-  // match riappare → evitiamo davvero i duplicati.
-  const [dismissedForName, setDismissedForName] = React.useState<string | null>(
-    null,
-  );
-
-  React.useEffect(() => {
-    const term = ragioneSociale.trim();
-    // Già associato a un esistente e il nome combacia → nessuna ricerca.
-    if (
-      clienteEsistente &&
-      clienteEsistente.ragione_sociale.toLowerCase() === term.toLowerCase()
-    ) {
-      return;
-    }
-    // Nome cambiato rispetto al cliente associato → annulla l'associazione.
-    if (clienteEsistente) {
-      setClienteEsistente(null);
-    }
-    if (term.length < 3) {
-      setMatchCandidates([]);
-      return;
-    }
-    let active = true;
-    const handle = setTimeout(() => {
-      void cercaClientiPerNome({ nome: term })
-        .then((res) => {
-          if (active) setMatchCandidates(res);
-        })
-        .catch(() => {
-          if (active) setMatchCandidates([]);
-        });
-    }, 400);
-    return () => {
-      active = false;
-      clearTimeout(handle);
-    };
-  }, [ragioneSociale, clienteEsistente]);
-
-  const associaClienteEsistente = (c: ClienteSimile) => {
-    setClienteEsistente(c);
-    setDismissedForName(null);
-    setMatchCandidates([]);
-    // Allinea i campi mostrati al cliente reale (la panoramica li userà).
-    setCliente((s) => ({
-      status: 'confirmed',
-      value: {
-        ...s.value,
-        ragione_sociale: c.ragione_sociale,
-        tipo: c.tipo === 'azienda' ? 'azienda' : 'persona_fisica',
-        telefono: c.telefoni?.[0] ?? s.value.telefono,
-        email: c.email?.[0] ?? s.value.email,
-        citta: c.citta ?? s.value.citta,
-      },
-    }));
-  };
-
-  const mostraMatch =
-    !clienteEsistente &&
-    dismissedForName !== ragioneSociale.trim() &&
-    ragioneSociale.trim().length >= 3 &&
-    matchCandidates.length > 0;
+  // Il cliente è «a posto» quando ha un nome: con un campo solo non serve un
+  // passaggio di conferma separato.
+  const clienteOk = clienteSel.ragione_sociale.trim().length > 0;
 
   const allConfirmed =
-    cliente.status === 'confirmed' &&
+    clienteOk &&
     vociState.status === 'confirmed' &&
     descrizione.status === 'confirmed' &&
     note.status === 'confirmed';
 
   const handleConfirmAll = () => {
-    setCliente((s) => ({ ...s, status: 'confirmed' }));
     setVociState((s) => ({ ...s, status: 'confirmed' }));
     setDescrizione((s) => ({ ...s, status: 'confirmed' }));
     setNote((s) => ({ ...s, status: 'confirmed' }));
@@ -276,12 +200,12 @@ export function VoiceReview({
 
   const handleSubmit = () => {
     onConfirm({
-      ragione_sociale: cliente.value.ragione_sociale.trim() || undefined,
-      tipo: cliente.value.tipo,
-      telefono: cliente.value.telefono.trim() || undefined,
-      email: cliente.value.email.trim() || undefined,
-      indirizzo: cliente.value.indirizzo.trim() || undefined,
-      citta: cliente.value.citta.trim() || undefined,
+      ragione_sociale: clienteSel.ragione_sociale.trim() || undefined,
+      tipo: clienteSel.tipo,
+      telefono: clienteSel.telefono.trim() || undefined,
+      email: clienteSel.email.trim() || undefined,
+      indirizzo: clienteSel.indirizzo.trim() || undefined,
+      citta: clienteSel.citta.trim() || undefined,
       voci_ids: vociState.value.length > 0 ? vociState.value : undefined,
       descrizione: descrizione.value.trim() || undefined,
       note: note.value.trim() || undefined,
@@ -292,7 +216,7 @@ export function VoiceReview({
       referenti: referenti.length > 0 ? referenti : undefined,
       // Se l'utente ha confermato un cliente già in anagrafica, la commessa
       // verrà associata a quello invece di crearne uno nuovo.
-      clienteId: clienteEsistente?.id,
+      clienteId: clienteSel.id ?? undefined,
     });
   };
 
@@ -302,7 +226,7 @@ export function VoiceReview({
     try {
       const r = await onRegenerateName({
         voci: vociState.value,
-        cliente: cliente.value.ragione_sociale || undefined,
+        cliente: clienteSel.ragione_sociale || undefined,
         note: note.value || undefined,
       });
       setDescrizione({ status: 'pending', value: r.proposta });
@@ -355,267 +279,15 @@ export function VoiceReview({
 
       {/* Cards stagger */}
       <div className="stagger space-y-3">
-        {/* Cliente */}
-        <ReviewCard
-          title="Cliente"
-          icon={<User className="h-4 w-4" aria-hidden="true" />}
-          status={cliente.status}
-          onConfirm={() =>
-            setCliente((s) => ({ ...s, status: 'confirmed' }))
-          }
-          onEdit={() =>
-            setCliente((s) => ({ ...s, status: 'editing' }))
-          }
-        >
-          {cliente.status === 'editing' ? (
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center justify-between pb-1">
-                <span className="text-xs text-muted-foreground">Modifica i campi o importa dalla rubrica</span>
-                <ContactPickerButton
-                  onSelect={(c) =>
-                    setCliente((s) => ({
-                      ...s,
-                      value: {
-                        ...s.value,
-                        ragione_sociale: c.name ?? s.value.ragione_sociale,
-                        telefono: c.tel ?? s.value.telefono,
-                        email: c.email ?? s.value.email,
-                      },
-                    }))
-                  }
-                />
-              </div>
-              <FieldRow
-                label="Ragione sociale"
-                value={cliente.value.ragione_sociale}
-                onChange={(v) =>
-                  setCliente((s) => ({
-                    ...s,
-                    value: { ...s.value, ragione_sociale: v },
-                  }))
-                }
-              />
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-xs font-medium text-muted-foreground">Tipo:</span>
-                <div className="inline-flex rounded-md border border-border p-0.5">
-                  {(['persona_fisica', 'azienda'] as const).map((opt) => {
-                    const active = cliente.value.tipo === opt;
-                    return (
-                      <button
-                        key={opt}
-                        type="button"
-                        onClick={() =>
-                          setCliente((s) => ({
-                            ...s,
-                            value: { ...s.value, tipo: opt },
-                          }))
-                        }
-                        className={
-                          'rounded px-2.5 py-1 text-xs font-medium transition-colors ' +
-                          (active
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:text-foreground')
-                        }
-                      >
-                        {opt === 'persona_fisica' ? 'Persona' : 'Azienda'}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <FieldRow
-                label="Telefono"
-                value={cliente.value.telefono}
-                inputMode="tel"
-                onChange={(v) =>
-                  setCliente((s) => ({
-                    ...s,
-                    value: { ...s.value, telefono: v },
-                  }))
-                }
-              />
-              <FieldRow
-                label="Email"
-                value={cliente.value.email}
-                inputMode="email"
-                onChange={(v) =>
-                  setCliente((s) => ({
-                    ...s,
-                    value: { ...s.value, email: v },
-                  }))
-                }
-              />
-              <FieldRow
-                label="Indirizzo"
-                value={cliente.value.indirizzo}
-                onChange={(v) =>
-                  setCliente((s) => ({
-                    ...s,
-                    value: { ...s.value, indirizzo: v },
-                  }))
-                }
-              />
-              <FieldRow
-                label="Città"
-                value={cliente.value.citta}
-                onChange={(v) =>
-                  setCliente((s) => ({
-                    ...s,
-                    value: { ...s.value, citta: v },
-                  }))
-                }
-              />
-              <Button
-                type="button"
-                size="sm"
-                className="min-h-[40px] w-full"
-                onClick={() =>
-                  setCliente((s) => ({ ...s, status: 'confirmed' }))
-                }
-              >
-                <Check className="h-4 w-4" aria-hidden="true" />
-                Salva modifiche
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-1.5 text-sm">
-              {cliente.value.ragione_sociale ? (
-                <p className="flex items-center gap-2">
-                  <User
-                    className="h-3.5 w-3.5 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span className="font-medium">
-                    {cliente.value.ragione_sociale}
-                  </span>
-                  <span
-                    className={
-                      'inline-flex h-5 items-center rounded-full px-2 text-[10px] font-medium uppercase tracking-wider ' +
-                      (cliente.value.tipo === 'azienda'
-                        ? 'bg-accent/15 text-accent-soft-foreground'
-                        : 'bg-primary-soft text-primary')
-                    }
-                  >
-                    {cliente.value.tipo === 'azienda' ? 'Azienda' : 'Persona'}
-                  </span>
-                </p>
-              ) : (
-                <p className="text-xs italic text-muted-foreground">
-                  Nome cliente non riconosciuto. Tocca Modifica per inserirlo.
-                </p>
-              )}
-              {cliente.value.telefono ? (
-                <p className="flex items-center gap-2 text-muted-foreground">
-                  <Phone className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>{cliente.value.telefono}</span>
-                </p>
-              ) : null}
-              {cliente.value.email ? (
-                <p className="flex items-center gap-2 text-muted-foreground">
-                  <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>{cliente.value.email}</span>
-                </p>
-              ) : null}
-              {cliente.value.indirizzo || cliente.value.citta ? (
-                <p className="flex items-center gap-2 text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>
-                    {[cliente.value.indirizzo, cliente.value.citta]
-                      .filter(Boolean)
-                      .join(', ')}
-                  </span>
-                </p>
-              ) : null}
-            </div>
-          )}
-        </ReviewCard>
-
-        {/* Match anagrafica: cliente già esistente con lo stesso nome. */}
-        {mostraMatch ? (
-          <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-950/25">
-            <div className="flex items-start gap-2">
-              <Users
-                className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
-                aria-hidden="true"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                  Cliente già in anagrafica?
-                </p>
-                <p className="mt-0.5 text-xs leading-snug text-amber-900/80 dark:text-amber-200/80">
-                  Ho rilevato &laquo;{ragioneSociale.trim()}&raquo;.{' '}
-                  {matchCandidates.length === 1
-                    ? 'Esiste già questo cliente. Intendi lui?'
-                    : 'Esistono già clienti simili. Intendi uno di questi?'}
-                </p>
-                <ul className="mt-2 space-y-1.5">
-                  {matchCandidates.map((c) => (
-                    <li key={c.id}>
-                      <button
-                        type="button"
-                        onClick={() => associaClienteEsistente(c)}
-                        className="flex w-full items-center gap-2 rounded-md border border-amber-300 bg-card px-2.5 py-2 text-left transition-colors hover:bg-amber-100/60 active:scale-[0.99] dark:border-amber-500/40 dark:hover:bg-amber-900/30"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium text-foreground">
-                            {c.ragione_sociale}
-                          </span>
-                          {(c.citta || c.telefoni?.[0]) ? (
-                            <span className="block truncate text-[11px] text-muted-foreground">
-                              {[c.citta, c.telefoni?.[0]]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                          <Check className="h-3 w-3" aria-hidden="true" />
-                          Usa
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => setDismissedForName(ragioneSociale.trim())}
-                  className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-800 underline-offset-2 hover:underline dark:text-amber-300"
-                >
-                  No, è un nuovo cliente
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {/* Cliente esistente associato: conferma + possibilità di annullare. */}
-        {clienteEsistente ? (
-          <div className="flex items-center gap-2 rounded-lg border-2 border-emerald-400/60 bg-emerald-50 p-3 dark:border-emerald-500/40 dark:bg-emerald-950/25">
-            <UserCheck
-              className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
-              aria-hidden="true"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-                Cliente esistente associato
-              </p>
-              <p className="truncate text-xs text-emerald-900/80 dark:text-emerald-200/80">
-                {clienteEsistente.ragione_sociale}
-                {clienteEsistente.citta ? ` · ${clienteEsistente.citta}` : ''}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setClienteEsistente(null);
-                setDismissedForName(null);
-              }}
-              className="shrink-0 text-xs font-medium text-emerald-800 underline underline-offset-2 dark:text-emerald-300"
-            >
-              Cambia
-            </button>
-          </div>
-        ) : null}
+        {/*
+          Un campo solo. I clienti dell'anagrafica compaiono ATTACCATI a quello
+          che si sta scrivendo, non in un riquadro dopo la fine della card: era
+          quello il difetto, e non era sfortuna, era dove il riquadro stava nel
+          documento.
+        */}
+        <div className="rounded-lg border border-border bg-card p-3">
+          <SceltaCliente valore={clienteSel} onCambia={setClienteSel} />
+        </div>
 
         {/* Referenti rilevati dall'AI. Telefono editable inline (quick-add):
             se manca, l'utente lo aggiunge subito senza tornare dopo.

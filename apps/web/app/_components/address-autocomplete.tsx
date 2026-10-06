@@ -8,12 +8,20 @@ interface Suggestion {
   label: string;
   lat: number;
   lng: number;
+  citta?: string;
 }
 
 interface Props {
   value: string;
   onChange: (label: string) => void;
-  onSelect: (r: { label: string; lat: number | null; lng: number | null }) => void;
+  onSelect: (r: {
+    label: string;
+    lat: number | null;
+    lng: number | null;
+    /** Il comune, quando il provider lo sa dire. Permette di compilare da
+     *  solo il campo «Città» invece di farlo riscrivere a mano. */
+    citta?: string;
+  }) => void;
   placeholder?: string;
   id?: string;
   /** Classi extra sull'input (per uniformarlo agli input nativi circostanti). */
@@ -110,7 +118,7 @@ export function AddressAutocomplete({
 
   function pick(s: Suggestion) {
     onChange(s.label);
-    onSelect({ label: s.label, lat: s.lat, lng: s.lng });
+    onSelect({ label: s.label, lat: s.lat, lng: s.lng, citta: s.citta });
     setOpen(false);
     setSuggestions([]);
     setActiveIdx(-1);

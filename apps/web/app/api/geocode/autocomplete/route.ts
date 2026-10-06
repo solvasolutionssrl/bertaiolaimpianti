@@ -38,6 +38,14 @@ export interface GeocodeSuggestion {
   label: string;
   lat: number;
   lng: number;
+  /**
+   * Il comune, quando il provider lo sa dire. Serve a compilare da solo il
+   * campo «Città» quando si sceglie un indirizzo: scriverlo due volte e'
+   * lavoro inutile, e chi lo riscrive a mano lo scrive diverso ogni volta
+   * («Valeggio» / «Valeggio s/M» / «VALEGGIO SUL MINCIO»), il che rende poi
+   * inutile il raggruppamento per comune.
+   */
+  citta?: string;
 }
 
 /** Soglia minima sotto la quale non interroghiamo i provider. */
@@ -108,7 +116,7 @@ async function queryPhoton(q: string): Promise<GeocodeSuggestion[]> {
       p.country,
     ]);
     if (!label) continue;
-    out.push({ label, lat, lng });
+    out.push({ label, lat, lng, citta: p.city ?? p.district });
   }
   return out;
 }
@@ -157,7 +165,7 @@ async function queryNominatim(q: string): Promise<GeocodeSuggestion[]> {
       buildLabel([via, a.postcode, citta, a.state, a.country]) ||
       (it.display_name ?? '');
     if (!label) continue;
-    out.push({ label, lat, lng });
+    out.push({ label, lat, lng, citta });
   }
   return out;
 }
@@ -169,6 +177,19 @@ async function queryNominatim(q: string): Promise<GeocodeSuggestion[]> {
 interface GoogleGeocodeResult {
   formatted_address?: string;
   geometry?: { location?: { lat?: number; lng?: number } };
+  address_components?: Array<{ long_name?: string; types?: string[] }>;
+}
+
+/**
+ * Il comune secondo Google. In Italia il livello giusto e' `locality`; dove
+ * manca (frazioni, localita' minori) si ripiega su `administrative_area_level_3`,
+ * che e' il comune amministrativo.
+ */
+function comuneDaGoogle(r: GoogleGeocodeResult): string | undefined {
+  const parti = r.address_components ?? [];
+  const trova = (t: string) =>
+    parti.find((c) => c.types?.includes(t))?.long_name?.trim() || undefined;
+  return trova('locality') ?? trova('administrative_area_level_3');
 }
 
 async function queryGoogle(q: string, key: string): Promise<GeocodeSuggestion[]> {
@@ -189,7 +210,7 @@ async function queryGoogle(q: string, key: string): Promise<GeocodeSuggestion[]>
     const loc = r.geometry?.location;
     const label = r.formatted_address;
     if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number' || !label) continue;
-    out.push({ label, lat: loc.lat, lng: loc.lng });
+    out.push({ label, lat: loc.lat, lng: loc.lng, citta: comuneDaGoogle(r) });
   }
   return out;
 }

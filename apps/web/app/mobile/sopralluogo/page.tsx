@@ -4,7 +4,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
-import { SopralluogoWizard, type ClienteOption, type VoceCatalogoOption, type PresetOption } from './wizard';
+import { SopralluogoWizard, type VoceCatalogoOption, type PresetOption } from './wizard';
 
 export const metadata: Metadata = {
   title: 'Nuovo sopralluogo',
@@ -28,12 +28,12 @@ export default async function SopralluogoPage() {
   await soloMondoCommesse();
   const supabase = createServerSupabase();
 
-  const [{ data: clientiRaw }, { data: vociRaw }, { data: presetRaw }] = await Promise.all([
-    supabase
-      .from('clienti')
-      .select('id, ragione_sociale, indirizzo, citta')
-      .order('ragione_sociale')
-      .limit(200),
+  // L'anagrafica NON si scarica piu' qui. Prima arrivavano i primi 200
+  // clienti e il filtro era in memoria nel browser: con 214 in archivio, gli
+  // ultimi quattordici in ordine alfabetico non comparivano mai fra i
+  // suggerimenti e si creava un doppione senza nessun segnale. Ora cerca il
+  // server, su tutti.
+  const [{ data: vociRaw }, { data: presetRaw }] = await Promise.all([
     supabase
       .from('voci_catalogo')
       .select('id, nome, categoria, default, ordine_visualizzazione')
@@ -44,13 +44,6 @@ export default async function SopralluogoPage() {
       .eq('tenant_id', ctx.tenantId)
       .order('nome'),
   ]);
-
-  const clienti: ClienteOption[] = (clientiRaw ?? []).map((c) => ({
-    id: c.id,
-    nome: c.ragione_sociale,
-    indirizzo: c.indirizzo ?? null,
-    citta: c.citta ?? null,
-  }));
 
   const voci: VoceCatalogoOption[] = (vociRaw ?? []).map((v) => ({
     id: v.id,
@@ -74,7 +67,7 @@ export default async function SopralluogoPage() {
         </p>
       </header>
 
-      <SopralluogoWizard clienti={clienti} voci={voci} preset={preset} />
+      <SopralluogoWizard voci={voci} preset={preset} />
     </div>
   );
 }

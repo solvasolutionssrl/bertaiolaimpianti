@@ -42,6 +42,10 @@ import { type UploadProgressMap } from '../../office/commesse/nuova/_lib/upload-
 import { preparaMedia } from '../../_lib/prepara-media';
 import { RitornoAutomatico } from '../_components/ritorno-automatico';
 import { useUploadQueue } from '../../_components/upload-queue-provider';
+import {
+  SceltaCliente,
+  type ValoreCliente,
+} from '../../_components/scelta-cliente';
 
 interface VoiceSuggested {
   ragione_sociale?: string;
@@ -52,13 +56,6 @@ interface VoiceSuggested {
   descrizione?: string;
   note?: string;
   tag_suggeriti?: string[];
-}
-
-export interface ClienteOption {
-  id: string;
-  nome: string;
-  indirizzo: string | null;
-  citta: string | null;
 }
 
 export interface VoceCatalogoOption {
@@ -75,7 +72,6 @@ export interface PresetOption {
 }
 
 interface WizardProps {
-  clienti: ClienteOption[];
   voci: VoceCatalogoOption[];
   preset: PresetOption[];
 }
@@ -113,7 +109,7 @@ const initialState = (vociDefault: number[]): State => ({
   descrizioneAlternative: [],
 });
 
-export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
+export function SopralluogoWizard({ voci, preset }: WizardProps) {
   const router = useRouter();
   const vociDefault = React.useMemo(
     () => voci.filter((v) => v.default).map((v) => v.id),
@@ -284,7 +280,7 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
       ) : null}
 
       {step === 1 && (
-        <Step1Cliente state={state} setState={setState} clienti={clienti} />
+        <Step1Cliente state={state} setState={setState} />
       )}
       {step === 2 && (
         <Step2Capture state={state} setState={setState} vociDefault={vociDefault} />
@@ -410,23 +406,33 @@ function ProgressBar({ step }: { step: Step }) {
 function Step1Cliente({
   state,
   setState,
-  clienti,
 }: {
   state: State;
   setState: React.Dispatch<React.SetStateAction<State>>;
-  clienti: ClienteOption[];
 }) {
-  const [query, setQuery] = React.useState('');
-  const matches = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return clienti.filter((c) => c.nome.toLowerCase().includes(q)).slice(0, 5);
-  }, [query, clienti]);
+  /**
+   * ⚠️ Qui c'era un difetto che non dava nessun segnale.
+   *
+   * La pagina si scaricava i clienti con `.limit(200)` e poi FILTRAVA IN
+   * MEMORIA. Con 214 clienti in anagrafica, gli ultimi quattordici in ordine
+   * alfabetico non comparivano mai fra i suggerimenti: si creava un doppione
+   * senza accorgersene, e l'app non aveva modo di dirlo. Ora la ricerca la fa
+   * il server, su tutta l'anagrafica.
+   */
+  const valore: ValoreCliente = {
+    id: state.cliente.id ?? null,
+    ragione_sociale: state.cliente.nome,
+    tipo: state.cliente.tipo,
+    telefono: state.cliente.telefono,
+    email: state.cliente.email,
+    indirizzo: state.cliente.indirizzo,
+    citta: state.cliente.citta,
+  };
 
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">1 · Anagrafica cliente</h2>
+        <h2 className="text-base font-semibold">1 · Cliente</h2>
         <ContactPickerButton
           onSelect={(c) =>
             setState((s) => ({
@@ -443,130 +449,23 @@ function Step1Cliente({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="cli-nome">Nome / Ragione sociale</Label>
-        <Input
-          id="cli-nome"
-          autoComplete="off"
-          className="h-12 text-base"
-          value={state.cliente.nome}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setState((s) => ({
-              ...s,
-              cliente: { ...s.cliente, id: undefined, nome: e.target.value },
-            }));
-          }}
-        />
-        {matches.length > 0 ? (
-          <ul className="rounded-md border border-border bg-card text-sm shadow-sm">
-            {matches.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  className="block w-full px-3 py-2 text-left hover:bg-muted"
-                  onClick={() => {
-                    setState((s) => ({
-                      ...s,
-                      cliente: {
-                        ...s.cliente,
-                        id: m.id,
-                        nome: m.nome,
-                        indirizzo: m.indirizzo ?? s.cliente.indirizzo,
-                        citta: m.citta ?? s.cliente.citta,
-                      },
-                    }));
-                    setQuery('');
-                  }}
-                >
-                  <span className="font-medium">{m.nome}</span>
-                  {m.citta ? (
-                    <span className="ml-2 text-xs text-muted-foreground">{m.citta}</span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
-
-      {!state.cliente.id ? (
-        <div className="space-y-2">
-          <Label htmlFor="cli-tipo">Tipo</Label>
-          <select
-            id="cli-tipo"
-            className="block h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={state.cliente.tipo}
-            onChange={(e) =>
-              setState((s) => ({
-                ...s,
-                cliente: { ...s.cliente, tipo: e.target.value as 'persona_fisica' | 'azienda' },
-              }))
-            }
-          >
-            <option value="persona_fisica">Persona fisica</option>
-            <option value="azienda">Azienda / Ente</option>
-          </select>
-        </div>
-      ) : null}
-
-      <div className="space-y-2">
-        <Label htmlFor="cli-indir">Indirizzo intervento</Label>
-        <Input
-          id="cli-indir"
-          className="h-12 text-base"
-          value={state.cliente.indirizzo}
-          onChange={(e) =>
-            setState((s) => ({ ...s, cliente: { ...s.cliente, indirizzo: e.target.value } }))
-          }
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="cli-citta">Città</Label>
-        <Input
-          id="cli-citta"
-          className="h-12 text-base"
-          value={state.cliente.citta}
-          onChange={(e) =>
-            setState((s) => ({ ...s, cliente: { ...s.cliente, citta: e.target.value } }))
-          }
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-2">
-          <Label htmlFor="cli-tel">Telefono</Label>
-          <Input
-            id="cli-tel"
-            inputMode="tel"
-            className="h-12 text-base"
-            value={state.cliente.telefono}
-            onChange={(e) =>
-              setState((s) => ({ ...s, cliente: { ...s.cliente, telefono: e.target.value } }))
-            }
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cli-email">Email</Label>
-          <Input
-            id="cli-email"
-            type="email"
-            inputMode="email"
-            className="h-12 text-base"
-            value={state.cliente.email}
-            onChange={(e) =>
-              setState((s) => ({ ...s, cliente: { ...s.cliente, email: e.target.value } }))
-            }
-          />
-        </div>
-      </div>
-
-      {state.cliente.id ? (
-        <p className="text-xs text-muted-foreground">Cliente esistente selezionato dall&apos;archivio.</p>
-      ) : (
-        <p className="text-xs text-muted-foreground">Nuovo cliente: verrà creato in archivio alla conferma.</p>
-      )}
+      <SceltaCliente
+        valore={valore}
+        onCambia={(v) =>
+          setState((s) => ({
+            ...s,
+            cliente: {
+              id: v.id ?? undefined,
+              nome: v.ragione_sociale,
+              tipo: v.tipo,
+              indirizzo: v.indirizzo,
+              citta: v.citta,
+              telefono: v.telefono,
+              email: v.email,
+            },
+          }))
+        }
+      />
     </section>
   );
 }
