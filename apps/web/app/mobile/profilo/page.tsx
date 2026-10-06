@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ShieldCheck, CalendarCheck, ChevronRight, KeyRound } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { etichettaAccesso } from '@kommessa/api/identita';
 import { Avatar, AvatarFallback } from '@kommessa/ui';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -13,8 +14,6 @@ import { leggiConfigDipendenti } from '../../_lib/dipendenti-config';
 import { InstallPromptHint } from '../_components/install-prompt-hint';
 import { CaricamentiLink } from './_components/caricamenti-link';
 import { LogoutButton } from './logout-button';
-import { PushToggle } from './push-toggle';
-import { PreferenzeNotifiche, type PrefRow } from './preferenze-notifiche';
 import { SpesePanoramica } from '../kantiere/spese/_components/spese-panoramica';
 import type { SpesaRiga } from '../kantiere/spese/_components/spese-client';
 import { elencoCantieriPicker } from '../kantiere/_lib/cantieri-picker-data';
@@ -31,6 +30,14 @@ export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Profilo',
+};
+
+/** Il ruolo come lo chiamano le persone, non come si chiama nell'enum. */
+const RUOLO_A_SCHERMO: Record<string, string> = {
+  admin: 'Amministratore',
+  office: 'Ufficio',
+  tecnico: 'Tecnico',
+  cliente: 'Cliente',
 };
 
 export default async function ProfiloPage() {
@@ -66,38 +73,24 @@ export default async function ProfiloPage() {
     ? (await leggiConfigDipendenti(supabase, ctx.tenantId)).ferieAttiva
     : false;
 
-  // Preferenze notifiche: solo mondo COMMESSE. In Kantiere le notifiche si
-  // gestiscono dalla campanella fissa → niente matrice/quiet-hours (erano di
-  // kommessa). Si evita anche di interrogarle.
-  let prefs: PrefRow[] = [];
-  let quiet: { quiet_hours_start: number | null; quiet_hours_end: number | null } | null = null;
-  if (!soloKantiere) {
-    const [prefsRes, quietRes] = await Promise.all([
-      supabase
-        .from('notification_preferences_effective')
-        .select('event_code, label, description, critical, in_app, push, email, ordine')
-        .eq('user_id', ctx.userId)
-        .order('ordine'),
-      supabase
-        .from('users')
-        .select('quiet_hours_start, quiet_hours_end')
-        .eq('id', ctx.userId)
-        .maybeSingle(),
-    ]);
-    prefs = ((prefsRes.data ?? []) as any[]).map((r) => ({
-      event_code: r.event_code,
-      label: r.label,
-      description: r.description ?? null,
-      critical: r.critical ?? false,
-      in_app: r.in_app ?? true,
-      push: r.push ?? true,
-      email: r.email ?? false,
-    }));
-    quiet = (quietRes.data ?? null) as {
-      quiet_hours_start: number | null;
-      quiet_hours_end: number | null;
-    } | null;
-  }
+  /**
+   * ⚠️ TOLTE il 07/10/2026: la matrice «cosa, quando, come» (sette eventi per
+   * tre canali) e le ore di silenzio.
+   *
+   * Non per alleggerire: perche' governavano una strada che non corre.
+   * L'unico punto che manda una notifica push e rispetta quelle scelte e'
+   * `/api/push/send-internal`, che **non ha nessun chiamante** — lo
+   * invocherebbe una Edge Function che a sua volta nessuno chiama e nessun
+   * cron risveglia. Le notifiche che arrivano davvero (444 righe in
+   * produzione) sono scritte direttamente in tabella e non consultano
+   * nessuna preferenza. In piu': **zero sottoscrizioni push** su tutti e
+   * quattro i clienti, da sempre.
+   *
+   * Ventuno caselle che non cambiano niente sono peggio di nessuna casella:
+   * chi le compila crede di aver deciso qualcosa. Le tabelle e le rotte
+   * restano al loro posto — quando colleghiamo l'invio, questo pannello torna
+   * con una riga.
+   */
 
   // Panoramica spese: solo Kantiere + admin/office con profilo dipendente. Ultime
   // 3 con campi COMPLETI (per aprire il dettaglio direttamente dal profilo) +
@@ -178,11 +171,16 @@ export default async function ProfiloPage() {
         </Avatar>
         <div>
           <h1 className="text-lg font-semibold">{displayName}</h1>
-          <p className="text-xs text-muted-foreground">{ctx.email}</p>
+          {/* Non l'email: per chi entra con nome utente e password
+              l'indirizzo e' un alias inventato da noi (`@ber.kommessa.local`),
+              e vederselo scritto nel profilo non vuol dire niente. */}
+          <p className="font-mono text-xs text-muted-foreground">
+            {etichettaAccesso(ctx.email)}
+          </p>
           <p className="mt-0.5 text-xs">
             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-              {profilo?.role ?? ctx.role}
+              {RUOLO_A_SCHERMO[profilo?.role ?? ctx.role] ?? 'Utente'}
             </span>
           </p>
         </div>
@@ -243,30 +241,6 @@ export default async function ProfiloPage() {
         <span className="min-w-0 flex-1 font-medium">Cambia la password</span>
         <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
       </Link>
-
-      {/* Gestione notifiche granulare: solo mondo commesse (in Kantiere è la
-          campanella a gestire tutto). */}
-      {!soloKantiere ? (
-        <>
-          <section className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Notifiche push
-            </p>
-            <PushToggle />
-          </section>
-
-          <section className="flex flex-col gap-2">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              Cosa, quando, come
-            </p>
-            <PreferenzeNotifiche
-              initial={prefs}
-              quietStart={quiet?.quiet_hours_start ?? null}
-              quietEnd={quiet?.quiet_hours_end ?? null}
-            />
-          </section>
-        </>
-      ) : null}
 
       <section aria-label="Installazione app" className="flex flex-col gap-2">
         <InstallPromptHint />
