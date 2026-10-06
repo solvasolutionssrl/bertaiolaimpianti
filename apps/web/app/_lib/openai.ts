@@ -387,27 +387,73 @@ export async function transcribeAudio(
   const famiglia = famigliaTrascrizione(model);
   const vocabolario = (opts.vocabolario ?? []).slice(0, MAX_VOCABOLARIO);
 
-  const fd = new FormData();
-  fd.append('file', opts.audio, opts.filename ?? 'audio.webm');
-  fd.append('model', model);
-  fd.append('response_format', 'json');
+  /**
+   * Compone la richiesta. `conVocabolario = false` spedisce la trascrizione
+   * nuda: stesso audio, stesso modello, nessun termine atteso.
+   */
+  function componi(conVocabolario: boolean): FormData {
+    const fd = new FormData();
+    fd.append('file', opts.audio, opts.filename ?? 'audio.webm');
+    fd.append('model', model);
+    fd.append('response_format', 'json');
+    const parole = conVocabolario ? vocabolario : [];
 
-  if (famiglia === 'moderna') {
-    // Campi dedicati: la lingua e' un array, e il vocabolario ha casa propria.
-    if (opts.language) fd.append('languages[]', opts.language);
-    for (const parola of vocabolario) fd.append('keywords[]', parola);
-    if (opts.contesto) fd.append('prompt', opts.contesto);
-  } else {
-    if (opts.language) fd.append('language', opts.language);
-    const prompt = promptConVocabolario(opts.contesto, vocabolario);
-    if (prompt) fd.append('prompt', prompt);
+    if (famiglia === 'moderna') {
+      // Campi dedicati: la lingua e' un array, e il vocabolario ha casa
+      // propria. Gli array in multipart vogliono il suffisso `[]` — e' la
+      // convenzione che OpenAI usa anche per `timestamp_granularities[]` e
+      // `known_speaker_names[]`.
+      if (opts.language) fd.append('languages[]', opts.language);
+      for (const parola of parole) fd.append('keywords[]', parola);
+      if (conVocabolario && opts.contesto) fd.append('prompt', opts.contesto);
+    } else {
+      if (opts.language) fd.append('language', opts.language);
+      const prompt = promptConVocabolario(
+        conVocabolario ? opts.contesto : undefined,
+        parole,
+      );
+      if (prompt) fd.append('prompt', prompt);
+    }
+    return fd;
   }
 
-  const res = await fetch(`${OPENAI_API_BASE}/audio/transcriptions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}` },
-    body: fd,
-  });
+  async function spedisci(fd: FormData): Promise<Response> {
+    return fetch(`${OPENAI_API_BASE}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}` },
+      body: fd,
+    });
+  }
+
+  const haVocabolario = vocabolario.length > 0 || Boolean(opts.contesto);
+  let res = await spedisci(componi(true));
+
+  /**
+   * ⚠️ Rete di sicurezza sul vocabolario.
+   *
+   * I campi `keywords[]` / `languages[]` sono nuovi (modelli di maggio 2026) e
+   * la documentazione di OpenAI non e' allineata fra la guida e il riferimento
+   * dell'endpoint: la guida li descrive, il riferimento non li elenca. Se il
+   * nome o la codifica di quei campi non fossero quelli che ci aspettiamo, la
+   * richiesta tornerebbe **400** e la dettatura smetterebbe di funzionare —
+   * per un di piu', non per un guasto.
+   *
+   * Quindi: se la richiesta col vocabolario viene rifiutata per come e' fatta
+   * (4xx), si riprova **una volta** senza. Una trascrizione senza termini
+   * attesi e' una trascrizione un po' peggiore; una trascrizione che non parte
+   * e' un sopralluogo perso.
+   *
+   * Non si ritenta su 401/429/5xx: li' il problema non e' il vocabolario (e'
+   * la chiave, la quota, o OpenAI) e un secondo tentativo sarebbe solo un
+   * altro addebito e un'altra attesa.
+   */
+  if (!res.ok && haVocabolario && res.status >= 400 && res.status < 500 && res.status !== 401 && res.status !== 429) {
+    const dettaglio = await res.text().catch(() => '');
+    console.warn(
+      `[openai] trascrizione rifiutata col vocabolario (HTTP ${res.status}): ${dettaglio.slice(0, 200)} — riprovo senza.`,
+    );
+    res = await spedisci(componi(false));
+  }
 
   if (!res.ok) {
     const errText = await res.text().catch(() => '');
