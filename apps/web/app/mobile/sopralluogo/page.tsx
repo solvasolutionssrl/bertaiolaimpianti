@@ -6,8 +6,9 @@ import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
 import { SopralluogoWizard, type VoceCatalogoOption, type PresetOption } from './wizard';
 import { MobileBackButton } from '../_components/mobile-back-button';
-import { redirect } from 'next/navigation';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
+import { CAPACITA_META } from '@kommessa/api/capacita';
+import { NonAbilitato } from '../_components/non-abilitato';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -38,9 +39,17 @@ export default async function SopralluogoPage() {
   const ctx = await guardMobile();
   await soloMondoCommesse();
 
-  // Aprire un lavoro nuovo e' da capo squadra. Il tasto non si mostra a chi non
-  // puo', ma l'indirizzo si puo' battere a mano: la porta si chiude anche qui.
-  if (!(await possoAprireLavori())) redirect('/mobile');
+  // Aprire un lavoro nuovo e' da capo squadra. Il tasto non si mostra a chi
+  // non puo', ma l'indirizzo si puo' battere a mano: la porta si chiude anche
+  // qui — con una spiegazione, non con un rimbalzo (vedi `NonAbilitato`).
+  if (!(await possoAprireLavori())) {
+    return (
+      <NonAbilitato
+        titolo="Profilo non abilitato"
+        spiegazione={CAPACITA_META.capo_squadra.messaggioNegato}
+      />
+    );
+  }
   const supabase = createServerSupabase();
 
   // L'anagrafica NON si scarica piu' qui. Prima arrivavano i primi 200

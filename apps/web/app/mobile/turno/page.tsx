@@ -7,8 +7,8 @@ import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { guardMobile } from '../_lib/guard';
 import { soloMondoCommesse } from '../_lib/mondo';
 import { MobileBackButton } from '../_components/mobile-back-button';
-import { redirect } from 'next/navigation';
 import { tenantFeatureEnabled } from '../../_lib/tenant-features';
+import { NonAbilitato } from '../_components/non-abilitato';
 import {
   InterventiOggiList,
   TurnoClient,
@@ -41,8 +41,17 @@ export default async function MobileTurnoPage() {
 
   // La funzione si accende per cliente (vedi `tenant-features-registry`). Da
   // spenta la card nella barra e' grigia, ma l'indirizzo si puo' battere a
-  // mano: la porta si chiude anche qui.
-  if (!(await tenantFeatureEnabled('turno_tecnici', true))) redirect('/mobile');
+  // mano: la porta si chiude anche qui — spiegando, non rimbalzando (un
+  // `redirect()` sotto `<Suspense>` lascia una pagina bianca: vedi
+  // `_components/non-abilitato.tsx`).
+  if (!(await tenantFeatureEnabled('turno_tecnici', true))) {
+    return (
+      <NonAbilitato
+        titolo="Funzione non abilitata"
+        spiegazione="La gestione del turno non è accesa per la vostra azienda. Se vi serve, l’ufficio la può accendere dalle impostazioni."
+      />
+    );
+  }
 
   const supabase = createServerSupabase();
 

@@ -46,6 +46,25 @@ export async function middleware(req: NextRequest) {
   // `updateSession` aggiunge anche l'intestazione `x-percorso` alla richiesta:
   // serve al controllo dell'accesso per riportare la gente dov'era, quando la
   // sessione non si riesce a verificare.
+  /**
+   * L'anagrafica del personale si e' spostata da `/office/kantiere/dipendenti`
+   * a `/office/personale/dipendenti` (07/10/2026).
+   *
+   * ⚠️ Il rimando sta QUI e non in una pagina con `redirect()`: sotto
+   * `office/loading.tsx` la risposta e' gia' partita quando la pagina
+   * renderizza, e un `redirect()` da li' lascia **una pagina bianca** con
+   * l'indirizzo invariato — misurato col banco di prova, non dedotto. Nel
+   * middleware il reindirizzamento e' una risposta HTTP e basta.
+   */
+  if (req.nextUrl.pathname.startsWith('/office/kantiere/dipendenti')) {
+    const dove = req.nextUrl.clone();
+    dove.pathname = req.nextUrl.pathname.replace(
+      '/office/kantiere/dipendenti',
+      '/office/personale/dipendenti',
+    );
+    return NextResponse.redirect(dove);
+  }
+
   const response = await updateSession(req);
 
   // Landing role-based dei tenant Kantiere: redirect HTTP QUI, fuori dal render

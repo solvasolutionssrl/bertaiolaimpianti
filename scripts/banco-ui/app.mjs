@@ -156,6 +156,19 @@ async function main() {
     for (const t of tab) {
       const partenza = await valuta(cdp, 'location.pathname');
       if (partenza === t.href) continue;
+      // ⚠️ Si ricerca il tab ADESSO, non ci si fida dell'elenco preso sulla
+      // prima pagina: ci sono pagine che la barra la nascondono (lo scanner
+      // QR, i wizard a tutto schermo) e li' il tab non esiste piu'. Prima un
+      // `querySelector(...).click()` su null buttava giu' tutto il banco con
+      // un errore JavaScript, invece di saltare una riga.
+      const presente = await valuta(
+        cdp,
+        `!!document.querySelector('nav a[href="${t.href}"]')`,
+      );
+      if (!presente) {
+        esito(true, `tab ${t.testo || t.href}`, 'barra nascosta qui, salto');
+        continue;
+      }
       await valuta(cdp, `document.querySelector('nav a[href="${t.href}"]').click(), true`);
       const t0 = Date.now();
       let ok = true;
