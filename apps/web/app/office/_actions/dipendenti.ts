@@ -3,11 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
-import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { auditTenant } from '@/app/_actions/_lib/audit';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { prossimoCodiceDipendente } from '@kommessa/api/kantiere';
+import { creaAccount } from '@/app/_actions/account';
 
 const BaseSchema = z.object({
   nome: z.string().min(1).max(80),
@@ -162,88 +162,66 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
   return { ok: true, ...(avviso ? { avviso } : {}) };
 }
 
-// ── crea utente/accesso app per un dipendente (no email, username+password) ──
-// Stesso modello FPM del super-admin (`creaUtenteManuale`), ma ristretto al
-// tenant di chi chiama: l'ufficio crea l'accesso solo per il PROPRIO spazio.
-// Email sintetica `<username>@<slug>.kommessa.local` (mai consegnata via SMTP),
-// `email_confirm:true` → login immediato con username + password.
-
-const CreaUtenteSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(2)
-    .max(40)
-    .regex(/^[a-z0-9._-]+$/, 'Solo lettere minuscole, numeri, ".", "-", "_"'),
-  displayName: z.string().trim().min(2).max(120),
-  role: z.enum(['tecnico', 'office']),
-  password: z.string().min(8, 'Almeno 8 caratteri').max(72),
-});
-
+// ── crea l'accesso all'app per una persona del personale ────────────────────
+/**
+ * Un tempo questa funzione creava l'account da sé: username, alias di posta,
+ * `createUser`, insert in `users`. Adesso **delega** a `creaAccount`
+ * (`app/_actions/account.ts`), e il motivo è pratico: era una delle cinque
+ * copie dello stesso gesto, e quando abbiamo aggiunto «al primo ingresso
+ * cambia la password» una copia sarebbe rimasta indietro — creando account che
+ * restano per sempre sulla password dettata al telefono, senza nessun segnale.
+ *
+ * Qui resta solo ciò che è davvero di questa pagina: il controllo del modulo e
+ * il legame con la scheda del personale.
+ */
 export async function creaUtenteDipendente(
   input: unknown,
-): Promise<{ ok: true; userId: string; loginEmail: string } | { ok: false; error: string }> {
-  const parsed = CreaUtenteSchema.safeParse(input);
+): Promise<
+  | { ok: true; userId: string; loginEmail: string; username: string; password: string; codiceAzienda: string | null }
+  | { ok: false; error: string }
+> {
+  const parsed = z
+    .object({
+      username: z.string(),
+      displayName: z.string(),
+      role: z.enum(['tecnico', 'office']),
+      // Facoltativa: se non arriva, la genera il server con una sorgente
+      // crittografica invece del browser.
+      password: z.string().optional(),
+      dipendenteId: z.string().uuid().optional().nullable(),
+    })
+    .safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
-  const ctx = await guard();
-  // Un utente 'office' crea accessi per i tecnici; gli account d'ufficio, che
-  // vedono tutto il tenant, restano agli amministratori (come gli inviti).
-  if (parsed.data.role === 'office' && ctx.role !== 'admin') {
-    return { ok: false, error: 'Solo un amministratore può creare un account ufficio.' };
-  }
 
-  let admin;
   try {
-    admin = createServiceSupabase();
+    await guard();
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'Configurazione service-role mancante.' };
-  }
-
-  // Slug minuscolo: Supabase normalizza comunque l'email a lowercase, così il
-  // login mostrato coincide esattamente con quello memorizzato.
-  const loginEmail = `${parsed.data.username}@${ctx.tenantSlug.toLowerCase()}.kommessa.local`;
-
-  const created = await admin.auth.admin.createUser({
-    email: loginEmail,
-    password: parsed.data.password,
-    email_confirm: true,
-    user_metadata: { display_name: parsed.data.displayName },
-    app_metadata: {
-      tenant_id: ctx.tenantId,
-      tenant_slug: ctx.tenantSlug,
-      role: parsed.data.role,
-      manual_account: true,
-    } as never,
-  });
-  if (created.error) {
-    const msg = created.error.message;
-    if (msg.toLowerCase().includes('already')) {
-      return { ok: false, error: `Username "${parsed.data.username}" già in uso.` };
+    const causa = e instanceof Error ? e.message : '';
+    if (causa === 'MODULO_OFF') {
+      return { ok: false, error: 'Il modulo Personale non è attivo per questo spazio di lavoro.' };
     }
-    return { ok: false, error: msg };
+    return { ok: false, error: 'Gli accessi li gestisce l’ufficio.' };
   }
-  const uid = created.data.user?.id;
-  if (!uid) return { ok: false, error: 'auth id mancante' };
 
-  const { error: insErr } = await admin.from('users').insert({
-    id: uid,
-    tenant_id: ctx.tenantId,
+  const esito = await creaAccount({
+    username: parsed.data.username,
+    displayName: parsed.data.displayName,
     role: parsed.data.role,
-    display_name: parsed.data.displayName,
-    attivo: true,
-  } as never);
-  if (insErr) {
-    try {
-      await admin.auth.admin.deleteUser(uid);
-    } catch {
-      /* best-effort */
-    }
-    return { ok: false, error: `Creazione utente fallita: ${insErr.message}` };
-  }
+    password: parsed.data.password,
+    dipendenteId: parsed.data.dipendenteId ?? null,
+  });
+  if (!esito.ok) return { ok: false, error: esito.error };
 
   revalidatePath('/office/kantiere/dipendenti');
-  return { ok: true, userId: uid, loginEmail };
+  revalidatePath('/office/personale/dipendenti');
+  return {
+    ok: true,
+    userId: esito.data.userId,
+    loginEmail: esito.data.aliasInterno,
+    username: esito.data.username,
+    password: esito.data.password,
+    codiceAzienda: esito.data.codiceAzienda,
+  };
 }
 
 export async function eliminaDipendente(input: unknown): Promise<Result> {

@@ -219,7 +219,11 @@ export function DipendentiClient({
   const [open, setOpen] = React.useState(false);
   const [form, setForm] = React.useState<FormState>(EMPTY_FORM);
   // Credenziali create da mostrare una volta sola (la password non si rivede).
-  const [credenziali, setCredenziali] = React.useState<{ loginEmail: string; password: string } | null>(null);
+  const [credenziali, setCredenziali] = React.useState<{
+    username: string;
+    codiceAzienda: string | null;
+    password: string;
+  } | null>(null);
   const [copiato, setCopiato] = React.useState<string | null>(null);
 
   function copia(testo: string, key: string) {
@@ -339,7 +343,7 @@ export function DipendentiClient({
     start(async () => {
       // 1) Risolvi lo user_id da collegare (eventualmente creando l'accesso).
       let userId: string | null = null;
-      let nuoveCredenziali: { loginEmail: string; password: string } | null = null;
+      let nuoveCredenziali: { username: string; codiceAzienda: string | null; password: string } | null = null;
 
       if (form.accountMode === 'existing') {
         userId = form.user_id || null;
@@ -364,7 +368,13 @@ export function DipendentiClient({
           return;
         }
         userId = ures.userId;
-        nuoveCredenziali = { loginEmail: ures.loginEmail, password: form.newPassword };
+        // La password e' quella che ha usato il SERVER: se il modulo l'ha
+        // lasciata vuota, l'ha generata lui con una sorgente crittografica.
+        nuoveCredenziali = {
+          username: ures.username,
+          codiceAzienda: ures.codiceAzienda,
+          password: ures.password,
+        };
       }
 
       // 2) Crea/aggiorna il dipendente con lo user_id risolto.
@@ -387,7 +397,7 @@ export function DipendentiClient({
           body:
             res.error +
             (nuoveCredenziali
-              ? ` — l'accesso ${nuoveCredenziali.loginEmail} è stato creato: collegalo a mano.`
+              ? ` — l'accesso "${nuoveCredenziali.username}" è stato creato: collegalo a mano.`
               : ''),
         });
         return;
@@ -740,10 +750,14 @@ export function DipendentiClient({
                   Accesso creato e collegato al dipendente
                 </p>
                 <p className="mt-1 text-xs text-emerald-700/90 dark:text-emerald-400/80">
-                  Annota subito queste credenziali: la password non sarà più mostrata.
+                  Dettale adesso alla persona: la password non si rivede più. Al
+                  primo accesso l&apos;app le chiederà di scegliersene una sua.
                 </p>
               </div>
-              <CredRow label="Login" value={credenziali.loginEmail} copyKey="cred-login" copiato={copiato} onCopy={copia} mono />
+              {credenziali.codiceAzienda ? (
+                <CredRow label="Azienda" value={credenziali.codiceAzienda} copyKey="cred-az" copiato={copiato} onCopy={copia} mono />
+              ) : null}
+              <CredRow label="Utente" value={credenziali.username} copyKey="cred-login" copiato={copiato} onCopy={copia} mono />
               <CredRow label="Password" value={credenziali.password} copyKey="cred-pw" copiato={copiato} onCopy={copia} mono />
               <DialogFooter>
                 <Button

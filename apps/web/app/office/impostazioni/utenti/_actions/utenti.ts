@@ -22,71 +22,64 @@ const inviteSchema = z.object({
     .or(z.literal('')),
 });
 
-export type UserFormState =
-  | { status: 'idle' }
-  | { status: 'success'; message: string }
-  | { status: 'error'; message: string };
-
-export async function invitaUtente(
-  _prev: UserFormState,
-  formData: FormData,
-): Promise<UserFormState> {
+/**
+ * Invitare per email.
+ *
+ * Resta per chi ha una casella vera: riceve un messaggio e si scrive la
+ * password da sé, senza che nessuno la senta. Per i tecnici — che una casella
+ * aziendale non l'hanno — la strada e' `creaAccount` in
+ * `app/_actions/account.ts`.
+ *
+ * ⚠️ Prima prendeva un `FormData` per `useFormState`, e il menu dei ruoli nel
+ * modulo offriva «owner» e «capo»: due valori che questo schema rifiuta da
+ * quando i ruoli sono stati ridotti a tre (migration 20260101003100). Chi
+ * sceglieva uno dei due riceveva «Dati non validi», senza sapere perche'.
+ */
+export async function invitaUtenteDaOggetto(input: {
+  email: string;
+  role: string;
+  displayName?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const ctx = await requireTenantContext();
   try {
     assertCanManageTenant(ctx);
   } catch {
-    return {
-      status: 'error',
-      message: 'Solo gli amministratori possono invitare utenti.',
-    };
+    return { ok: false, error: 'Solo gli amministratori possono invitare per email.' };
   }
 
   const parsed = inviteSchema.safeParse({
-    email: formData.get('email')?.toString() ?? '',
-    role: formData.get('role')?.toString() ?? 'office',
-    displayName: formData.get('displayName')?.toString() ?? '',
+    email: input?.email ?? '',
+    role: input?.role ?? 'office',
+    displayName: input?.displayName ?? '',
   });
   if (!parsed.success) {
-    return {
-      status: 'error',
-      message: parsed.error.issues[0]?.message ?? 'Dati non validi',
-    };
+    return { ok: false, error: parsed.error.issues[0]?.message ?? 'Dati non validi' };
   }
 
-  // L'invito richiede service-role per chiamare auth.admin.inviteUserByEmail.
   let admin;
   try {
     admin = createServiceSupabase();
   } catch (e) {
     return {
-      status: 'error',
-      message:
-        e instanceof Error
-          ? e.message
-          : 'Configurazione service-role mancante (SUPABASE_SERVICE_ROLE_KEY).',
+      ok: false,
+      error: e instanceof Error ? e.message : 'Configurazione del server incompleta.',
     };
   }
 
-  // Costruisce l'URL di redirect dove l'utente arriva dopo aver cliccato il link.
-  // NEXT_PUBLIC_APP_URL va impostato in Vercel env vars con la URL di produzione.
-  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '')
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+  const appUrl =
+    (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '') ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
   const redirectTo = `${appUrl}/auth/callback?next=/accetta-invito`;
 
   const { data: invited, error: errInv } = await admin.auth.admin.inviteUserByEmail(
     parsed.data.email,
     {
-      data: parsed.data.displayName
-        ? { display_name: parsed.data.displayName }
-        : undefined,
+      data: parsed.data.displayName ? { display_name: parsed.data.displayName } : undefined,
       redirectTo,
     },
   );
   if (errInv || !invited?.user) {
-    return {
-      status: 'error',
-      message: errInv?.message ?? 'Invio invito fallito.',
-    };
+    return { ok: false, error: errInv?.message ?? 'Invio dell’invito non riuscito.' };
   }
 
   // Se quell'email è già una persona di un altro spazio di lavoro, l'invito si
@@ -98,26 +91,17 @@ export async function invitaUtente(
     .maybeSingle();
   const tenantEsistente = (giaEsistente as { tenant_id?: string } | null)?.tenant_id ?? null;
   if (tenantEsistente && tenantEsistente !== ctx.tenantId) {
-    return {
-      status: 'error',
-      message: 'Questa email appartiene già a un altro spazio di lavoro.',
-    };
+    return { ok: false, error: 'Questa email appartiene già a un altro spazio di lavoro.' };
   }
 
-  // Promuovi i custom claims via app_metadata (verranno propagati nel JWT al login).
-  const { error: errMeta } = await admin.auth.admin.updateUserById(
-    invited.user.id,
-    {
-      app_metadata: {
-        tenant_id: ctx.tenantId,
-        tenant_slug: ctx.tenantSlug,
-        role: parsed.data.role,
-      },
+  const { error: errMeta } = await admin.auth.admin.updateUserById(invited.user.id, {
+    app_metadata: {
+      tenant_id: ctx.tenantId,
+      tenant_slug: ctx.tenantSlug,
+      role: parsed.data.role,
     },
-  );
-  if (errMeta) {
-    return { status: 'error', message: errMeta.message };
-  }
+  });
+  if (errMeta) return { ok: false, error: errMeta.message };
 
   const { error: errUpsert } = await admin.from('users').upsert(
     {
@@ -127,18 +111,16 @@ export async function invitaUtente(
       display_name: parsed.data.displayName?.trim() || null,
       attivo: true,
       invite_sent_at: new Date().toISOString(),
-    },
+      // Chi arriva per invito si scrive la password da sé nella pagina
+      // d'invito: non c'è nessuna password temporanea da cambiare.
+      must_change_password: false,
+    } as never,
     { onConflict: 'id' },
   );
-  if (errUpsert) {
-    return { status: 'error', message: errUpsert.message };
-  }
+  if (errUpsert) return { ok: false, error: errUpsert.message };
 
   revalidatePath('/office/impostazioni/utenti');
-  return {
-    status: 'success',
-    message: `Invito inviato a ${parsed.data.email}.`,
-  };
+  return { ok: true };
 }
 
 const roleChangeSchema = z.object({

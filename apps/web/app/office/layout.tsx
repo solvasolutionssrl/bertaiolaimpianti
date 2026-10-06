@@ -6,6 +6,7 @@ import { requireTenantContextCached as requireTenantContext } from '../_lib/tena
 import { leggiSessione } from '@kommessa/api/tenant';
 import { tenantHasModule } from '../_lib/modules';
 import { leggiConfigDipendenti } from '../_lib/dipendenti-config';
+import { devoCambiarePassword } from '../_lib/cambio-password';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { tenantFeatureEnabled } from '../_lib/tenant-features';
 import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
@@ -65,6 +66,14 @@ export default async function OfficeLayout({
   }
   if (ctx.role === 'cliente') {
     redirect('/portal');
+  }
+
+  // Prima di qualunque altra cosa: chi è ancora sulla password dettata
+  // dall'ufficio sceglie la sua. Il controllo sta qui e non nel middleware
+  // perché qui il contesto è già letto, e sta PRIMA delle query della shell:
+  // non si va a prendere branding e notifiche per una pagina che non si mostra.
+  if (await devoCambiarePassword()) {
+    redirect('/cambia-password');
   }
 
   const supabase = createServerSupabase();

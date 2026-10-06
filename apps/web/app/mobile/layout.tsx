@@ -1,12 +1,14 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
 import { tenantHasModule } from '../_lib/modules';
+import { devoCambiarePassword } from '../_lib/cambio-password';
 import { kontabilitaAttiva } from '../_lib/kontabilita-config';
 import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
 import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
@@ -52,6 +54,12 @@ export default async function MobileLayout({
   children: React.ReactNode;
 }) {
   const ctx = await getTenantContext();
+
+  // Stesso cancello dell'ufficio, e sul telefono conta di più: è da qui che
+  // entrano i tecnici con la password che gli hanno letto a voce.
+  if (ctx && (await devoCambiarePassword())) {
+    redirect('/cambia-password');
+  }
 
   // Impersonation: la barra qui non c'era proprio, e un tenant Kantiere si gira
   // quasi tutto da mobile. Stessa lettura dell'ufficio: vale solo un cookie

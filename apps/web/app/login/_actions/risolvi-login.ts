@@ -1,6 +1,7 @@
 'use server';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { aliasLogin, normalizzaUsername } from '@kommessa/api/identita';
 
 /**
  * Risolve i campi del login (codice azienda + username) all'email completa
@@ -36,11 +37,14 @@ export async function risolviLogin(input: {
     return { ok: true, email: identita.toLowerCase() };
   }
 
-  // username "nudo": stesse regole di creaUtenteManuale
-  if (!/^[a-z0-9._-]{2,40}$/i.test(identita)) {
+  // username "nudo": le regole stanno in @kommessa/api/identita, lo stesso
+  // modulo che le applica quando l'account viene creato. Erano scritte in
+  // quattro posti: la quinta volta che cambiano, una copia resta indietro e
+  // l'account entra da una porta e non dall'altra.
+  const username = normalizzaUsername(identita);
+  if (!username) {
     return { ok: false, error: 'non_valido' };
   }
-  const username = identita.toLowerCase();
   const codice = String(input?.codice ?? '').trim();
 
   const svc = createServiceSupabase();
@@ -66,5 +70,5 @@ export async function risolviLogin(input: {
     if (!slug) return { ok: false, error: 'codice_non_valido' };
   }
 
-  return { ok: true, email: `${username}@${slug.toLowerCase()}.kommessa.local` };
+  return { ok: true, email: aliasLogin(username, slug) };
 }

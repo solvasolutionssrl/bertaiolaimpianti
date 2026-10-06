@@ -1,3 +1,6 @@
+import Link from 'next/link';
+import { KeyRound } from 'lucide-react';
+import { etichettaAccesso } from '@kommessa/api/identita';
 import { Card, CardContent } from '@kommessa/ui';
 import { UserCog, ShieldCheck } from 'lucide-react';
 
@@ -74,14 +77,24 @@ export default async function ProfiloPage() {
               {ROLE_DESCR[role] ?? ''}
             </p>
             <div className="mt-4 space-y-2 border-t border-border pt-4">
-              <Row label="Email" value={ctx.email} />
-              <Row label="ID utente" value={ctx.userId.slice(0, 8) + '…'} mono />
-              <Row label="Tenant" value={ctx.tenantSlug} mono />
+              <Row label="Entri come" value={etichettaAccesso(ctx.email)} mono />
+              <Row label="Azienda" value={ctx.tenantSlug} mono />
+            </div>
+            {/* Fino a oggi nessun utente di nessun cliente poteva cambiarsi la
+                password: l'unico modulo per farlo ce l'aveva il super admin. */}
+            <div className="mt-4 border-t border-border pt-4">
+              <Link
+                href="/cambia-password"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+                Cambia la password
+              </Link>
             </div>
           </CardContent>
         </Card>
         <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
-          Per modificare email o ruolo contatta un amministratore del tenant.
+          Il ruolo lo cambia un amministratore.
         </p>
       </div>
     </div>

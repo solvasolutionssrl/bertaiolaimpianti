@@ -28,6 +28,8 @@
     "./rome-time": "./src/rome-time.ts",
     "./limiti-upload": "./src/limiti-upload.ts",
     "./priorita": "./src/priorita.ts",
+    "./identita": "./src/identita.ts",
+    "./capacita": "./src/capacita.ts",
     "./scelta-opzioni": "./src/scelta-opzioni.ts",
     "./trascrizione": "./src/trascrizione.ts",
     "./link-pubblico": "./src/link-pubblico.ts",

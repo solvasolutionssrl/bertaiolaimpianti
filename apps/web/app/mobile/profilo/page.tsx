@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ShieldCheck, CalendarCheck, ChevronRight } from 'lucide-react';
+import { ShieldCheck, CalendarCheck, ChevronRight, KeyRound } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { Avatar, AvatarFallback } from '@kommessa/ui';
@@ -233,6 +233,16 @@ export default async function ProfiloPage() {
         </p>
         <p className="mt-1 font-medium">{tenant?.nome ?? ctx.tenantSlug}</p>
       </section>
+
+      {/* La password: un gesto che prima non esisteva su nessuna superficie. */}
+      <Link
+        href="/cambia-password"
+        className="flex min-h-[52px] items-center gap-3 rounded-lg border bg-card px-4 text-sm"
+      >
+        <KeyRound aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 flex-1 font-medium">Cambia la password</span>
+        <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </Link>
 
       {/* Gestione notifiche granulare: solo mondo commesse (in Kantiere è la
           campanella a gestire tutto). */}

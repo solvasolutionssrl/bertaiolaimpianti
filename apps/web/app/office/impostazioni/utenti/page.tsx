@@ -7,7 +7,6 @@ import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';
 import { UtentiTable, type UtenteRow } from './_components/utenti-table';
 import type { AppRole } from '@kommessa/api';
-import type { UserPermissionOverrides } from '@kommessa/api/types';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Utenti · Impostazioni' };
@@ -18,14 +17,17 @@ interface UserAppRow {
   role: AppRole;
   attivo: boolean;
   avatar_url: string | null;
-  permissions: UserPermissionOverrides | null;
+  permissions: unknown;
+  must_change_password: boolean | null;
+  invite_sent_at: string | null;
+  invite_accepted_at: string | null;
 }
 
 const ROLE_LABEL: Record<AppRole, string> = {
-  admin: 'Admin',
-  office: 'Office',
-  tecnico: 'Tecnico',
-  cliente: 'Cliente',
+  admin: 'Amministratori',
+  office: 'Ufficio',
+  tecnico: 'Tecnici',
+  cliente: 'Clienti',
 };
 
 export default async function UtentiPage() {
@@ -33,84 +35,66 @@ export default async function UtentiPage() {
   const supabase = createServerSupabase();
   const canEdit = canManageTenant(ctx);
 
-  const { data: appUsers, error } = await supabase
+  // Una query sola. `permissions`, `must_change_password` e le colonne
+  // dell'invito non stanno nei tipi generati: il cast è lo stesso idioma usato
+  // in tutto il repo per le tabelle rimaste indietro.
+  const { data: appUsers, error } = await (supabase as any)
     .from('users')
-    .select('id, display_name, role, attivo, avatar_url, permissions')
+    .select(
+      'id, display_name, role, attivo, avatar_url, permissions, must_change_password, invite_sent_at, invite_accepted_at',
+    )
     .eq('tenant_id', ctx.tenantId)
     .order('attivo', { ascending: false })
     .order('display_name', { ascending: true });
 
-  // Query separata per le colonne aggiunte dalla migration invite_tracking
-  // (non ancora nei tipi generati da Supabase, cast esplicito).
-  const { data: inviteRaw } = await (supabase as unknown as any)
-    .from('users')
-    .select('id, invite_sent_at, invite_accepted_at')
-    .eq('tenant_id', ctx.tenantId);
-  const inviteMap = new Map<string, { invite_sent_at: string | null; invite_accepted_at: string | null }>(
-    ((inviteRaw ?? []) as Array<{ id: string; invite_sent_at: string | null; invite_accepted_at: string | null }>)
-      .map((r) => [r.id, { invite_sent_at: r.invite_sent_at, invite_accepted_at: r.invite_accepted_at }]),
-  );
+  const righeApp = (appUsers ?? []) as UserAppRow[];
 
-  const enriched: UtenteRow[] = [];
-  if (appUsers && appUsers.length > 0) {
-    let admin;
+  /**
+   * Con che cosa entra ogni persona, e quando è entrata l'ultima volta.
+   *
+   * ⚠️ Prima qui c'era una chiamata `getUserById` **per ogni utente**: nove
+   * round-trip con nove persone, trecento con trecento — e domani si creano
+   * venti account in un pomeriggio. Ora è una chiamata sola che prende l'elenco
+   * e ne tiene gli id che servono.
+   */
+  const perId = new Map<string, { email: string; last_sign_in_at: string | null }>();
+  if (righeApp.length > 0) {
     try {
-      admin = createServiceSupabase();
+      const admin = createServiceSupabase();
+      const voluti = new Set(righeApp.map((u) => u.id));
+      const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      for (const au of data?.users ?? []) {
+        if (!voluti.has(au.id)) continue;
+        perId.set(au.id, {
+          email: au.email ?? '',
+          last_sign_in_at: au.last_sign_in_at ?? null,
+        });
+      }
     } catch {
-      admin = null;
-    }
-
-    if (admin) {
-      const ids = (appUsers as unknown as UserAppRow[]).map((u) => u.id);
-      const lookups = await Promise.all(
-        ids.map((id) =>
-          admin!.auth.admin
-            .getUserById(id)
-            .then((res) => ({
-              id,
-              email: res.data.user?.email ?? '',
-              last_sign_in_at: res.data.user?.last_sign_in_at ?? null,
-            }))
-            .catch(() => ({ id, email: '', last_sign_in_at: null })),
-        ),
-      );
-      const byId = new Map(lookups.map((l) => [l.id, l]));
-      for (const u of appUsers as UserAppRow[]) {
-        const meta = byId.get(u.id);
-        enriched.push({
-          id: u.id,
-          display_name: u.display_name,
-          role: u.role,
-          attivo: u.attivo,
-          avatar_url: u.avatar_url,
-          email: meta?.email ?? '',
-          last_sign_in_at: meta?.last_sign_in_at ?? null,
-          invite_sent_at: inviteMap.get(u.id)?.invite_sent_at ?? null,
-          invite_accepted_at: inviteMap.get(u.id)?.invite_accepted_at ?? null,
-          permission_overrides: (u.permissions as UserPermissionOverrides | null) ?? null,
-        });
-      }
-    } else {
-      for (const u of appUsers as UserAppRow[]) {
-        enriched.push({
-          id: u.id,
-          display_name: u.display_name,
-          role: u.role,
-          attivo: u.attivo,
-          avatar_url: u.avatar_url,
-          email: '—',
-          last_sign_in_at: null,
-          invite_sent_at: inviteMap.get(u.id)?.invite_sent_at ?? null,
-          invite_accepted_at: inviteMap.get(u.id)?.invite_accepted_at ?? null,
-          permission_overrides: (u.permissions as UserPermissionOverrides | null) ?? null,
-        });
-      }
+      // Senza service role non si sa con cosa entrano: si mostra il resto.
     }
   }
+
+  const enriched: UtenteRow[] = righeApp.map((u) => ({
+    id: u.id,
+    display_name: u.display_name,
+    role: u.role,
+    attivo: u.attivo,
+    avatar_url: u.avatar_url,
+    email: perId.get(u.id)?.email ?? '',
+    last_sign_in_at: perId.get(u.id)?.last_sign_in_at ?? null,
+    invite_sent_at: u.invite_sent_at,
+    invite_accepted_at: u.invite_accepted_at,
+    permissions: u.permissions,
+    must_change_password: u.must_change_password === true,
+  }));
 
   // Calcola stats per la strip
   const totale = enriched.length;
   const attivi = enriched.filter((u) => u.attivo).length;
+  // Chi ha ancora la password consegnata dall'ufficio: è la domanda del giorno
+  // in cui si distribuiscono gli accessi.
+  const daConsegnare = enriched.filter((u) => u.attivo && u.must_change_password).length;
   const perRuolo = (['admin', 'office', 'tecnico', 'cliente'] as AppRole[]).map(
     (r) => ({
       role: r,
@@ -123,8 +107,8 @@ export default async function UtentiPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <SectionHeader
-          title="Utenti del tenant"
-          description="Gestisci accessi, ruoli e disattivazioni."
+          title="Chi entra nell’app"
+          description="Accessi, mestiere, poteri in più. I tecnici entrano con nome utente e password, senza email."
           icon={<Users />}
         />
         {/* Stats strip inline */}
@@ -133,6 +117,12 @@ export default async function UtentiPage() {
           <div className="h-6 w-px bg-border" />
           <Stat label="Attivi" value={attivi} accent />
           <div className="h-6 w-px bg-border" />
+          {daConsegnare > 0 ? (
+            <>
+              <Stat label="Password da scegliere" value={daConsegnare} avviso />
+              <div className="h-6 w-px bg-border" />
+            </>
+          ) : null}
           {perRuolo
             .filter((r) => r.count > 0)
             .map((r) => (
@@ -162,16 +152,21 @@ function Stat({
   label,
   value,
   accent,
+  avviso,
 }: {
   label: string;
   value: number;
   accent?: boolean;
+  avviso?: boolean;
 }) {
+  const colore = avviso
+    ? 'text-amber-600 dark:text-amber-400'
+    : accent
+      ? 'text-primary'
+      : 'text-foreground';
   return (
     <div className="text-center">
-      <p className={`text-base font-semibold tabular-nums ${accent ? 'text-primary' : 'text-foreground'}`}>
-        {value}
-      </p>
+      <p className={`text-base font-semibold tabular-nums ${colore}`}>{value}</p>
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
