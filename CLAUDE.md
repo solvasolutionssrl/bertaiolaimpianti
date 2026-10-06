@@ -164,6 +164,91 @@ Il giorno prima di dare gli accessi a tutta la squadra. Le cose che restano vere
 > risposta HTTP e basta). La stessa nota c'era gia' per la landing dell'app, e
 > non e' bastata a non ricascarci.
 
+#### Un posto solo che fa nascere un account (07/10/2026, secondo giro)
+
+`app/_actions/_lib/account-core.ts` → `faiNascereUnAccount()`. **Tutte** le
+porte passano di qui: l'ufficio (nome utente, invito), il pannello di
+piattaforma (crea manuale, nuovo utente con email, invito) e l'amministratore
+che nasce insieme a un cliente nuovo. La funzione **non decide chi puo'**: la
+guardia la mette chi chiama. Qui sta solo *come* nasce un account.
+
+⚠️ Prima erano **otto strade** e solo due unificate. Cosa divergeva, contato:
+- **Quattro su sei non scrivevano `must_change_password`**: un account creato
+  dal pannello con password dettata a voce restava su quella per sempre. Lo
+  stesso valeva per `impostaPasswordManuale`.
+- `tenant_slug` mancante nei claim di un percorso (`requireTenantContext`
+  solleva finche' il trigger non ripara).
+- `invite_sent_at` scritto da uno solo dei tre inviti: gli altri due
+  risultavano a schermo come «mai invitati».
+- Due percorsi lasciavano l'**utente Auth orfano** se l'inserimento del profilo
+  falliva; uno — l'owner di un cliente nuovo — **non leggeva nemmeno l'esito**
+  e rispondeva «fatto».
+- `cambiaRuoloTenantUser` accettava **qualunque stringa** come ruolo.
+- Il controllo «questa email e' gia' di un altro cliente» lo faceva uno solo.
+- Quattro nomi nell'audit per «e' nato un account» e due `entity_type`.
+
+⚠️ **Il cancello del primo accesso copre anche `/t/[token]`**: il tecnico di un
+cliente del mondo presenze vive sulla timbratura da QR, fuori dai gusci
+`/office` e `/mobile`. Senza, poteva timbrare all'infinito sulla password
+dell'ufficio.
+
+#### Vocabolari unici, e come si riconosce quello che manca
+
+Al 07/10/2026 i vocabolari condivisi sono: `priorita`, `fase-lavori`,
+`capacita`, `identita` (username, alias, password, **etichette dei ruoli**),
+`notifiche-meta` (etichette degli avvisi). Il segnale che ne serve uno nuovo e'
+sempre lo stesso: **la stessa parola scritta in piu' di due posti, con rese
+diverse**. In un giorno ne sono emersi cinque, e in tre casi uno dei posti
+mostrava il valore grezzo del database a schermo.
+
+> ⭐ **Un pannello che promette e non fa niente e' peggio di nessun pannello.**
+> Ne sono stati trovati tre in un giorno: i permessi per utente (7 aree × 4
+> livelli, **zero** utenti su 54 lo avevano compilato, nessun gate lo
+> leggeva), le preferenze notifiche nel profilo (governano
+> `/api/push/send-internal`, che **non ha chiamanti**, e le sottoscrizioni push
+> sono **zero** su tutti e quattro i clienti), e il campo «Fase» (valorizzato
+> su **0 file su 346**). Il danno non e' il codice morto: e' che chi compila
+> crede di aver deciso qualcosa.
+>
+> **La regola per aggiungere una voce a un pannello di impostazioni**: non
+> «sarebbe comodo poterlo decidere», ma **«c'e' una riga di codice che la legge
+> e si comporta di conseguenza?»**. Se non c'e', la voce non si aggiunge.
+
+#### Pulizia del 07/10/2026 (migration `20261007140000`)
+
+- **Tolte tre Edge Functions senza nessun chiamante**: `notify-event`,
+  `onboard-tenant`, `ai-name`. ⚠️ Restano **deployate** finche' non si esegue
+  `supabase functions delete notify-event onboard-tenant ai-name`. I cron veri
+  non passano da Edge Functions: chiamano rotte Next via `net.http_post`.
+  Togliendo `onboard-tenant` il ruolo `owner` diventa **irraggiungibile**.
+- Tolte la vista `users_with_permissions` e le funzioni
+  `get_effective_permissions` / `role_default_permissions`. ⚠️ La **colonna**
+  `users.permissions` resta: contiene i poteri nuovi.
+- Tolti quattro tipi di avviso **senza mittente** (`ticket_assigned`,
+  `ticket_created`, `dico_mancante`, `intervento_oggi`). Restano i cinque veri.
+- ⚠️ **Resta aperto**: `inviaPushAUtente` e' chiamato da pianificazione, ferie
+  e fine-caricamento, ma **nessun client puo' sottoscriversi** (l'interruttore
+  e' stato tolto il 07/10 perche' non consegnava nulla). Le push sono plumbing
+  pronto e non collegato: o si collega, o si toglie.
+- ⚠️ **Resta orfana di proposito** `api/upload/media/route.ts`: nessun
+  chiamante, ma un telefono con la PWA in cache potrebbe ancora usarla.
+
+#### Attese nelle pagine d'ufficio
+
+`office/_components/scheletri.tsx` (`ScheletroTabella`, `ScheletroCard`).
+⚠️ L'area Kantiere dell'ufficio — lo strumento quotidiano di FPM — **non aveva
+nemmeno un `loading.tsx`**: al clic non succedeva niente finche' il server non
+aveva finito. Sedici pagine coperte il 07/10. Una pagina `force-dynamic` senza
+`loading.tsx` e' una pagina che al tocco non dice niente.
+
+> ⚠️ **Il banco di prova puo' mentire, e mentiva.**
+> `(document.querySelector(...)||{click(){}}).click()` faceva un clic a vuoto
+> **in silenzio** quando il collegamento stava in una sezione chiusa della
+> sidebar, e riportava «nessun segno nei primi 500 ms» — un difetto dell'app
+> che non esisteva. Ora apre la sezione, **aspetta il ridisegno** e, se il
+> collegamento proprio non c'e', lo dice. Un banco che non distingue «non
+> funziona» da «non l'ho trovato» e' peggio di nessun banco.
+
 #### Bacheca: la pagina da televisione (migration `20261007130000`)
 
 Un indirizzo per cliente da aprire sul televisore dell'ufficio: una casella per
