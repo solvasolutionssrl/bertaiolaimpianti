@@ -20,6 +20,7 @@ interface UserAppRow {
   avatar_url: string | null;
   permissions: unknown;
   must_change_password: boolean | null;
+  password_provvisoria: boolean | null;
   invite_sent_at: string | null;
   invite_accepted_at: string | null;
 }
@@ -41,7 +42,7 @@ export default async function UtentiPage() {
    * massimo manca un pallino, non l'elenco delle persone.
    */
   const COLONNE_COMPLETE =
-    'id, display_name, role, attivo, avatar_url, permissions, must_change_password, invite_sent_at, invite_accepted_at';
+    'id, display_name, role, attivo, avatar_url, permissions, must_change_password, password_provvisoria, invite_sent_at, invite_accepted_at';
   const COLONNE_SICURE = 'id, display_name, role, attivo, avatar_url, permissions';
 
   const leggi = (colonne: string) =>
@@ -98,6 +99,7 @@ export default async function UtentiPage() {
     invite_accepted_at: u.invite_accepted_at,
     permissions: u.permissions,
     must_change_password: u.must_change_password === true,
+    password_provvisoria: u.password_provvisoria === true,
   }));
 
   // Calcola stats per la strip
@@ -105,7 +107,13 @@ export default async function UtentiPage() {
   const attivi = enriched.filter((u) => u.attivo).length;
   // Chi ha ancora la password consegnata dall'ufficio: è la domanda del giorno
   // in cui si distribuiscono gli accessi.
-  const daConsegnare = enriched.filter((u) => u.attivo && u.must_change_password).length;
+  //
+  // ⚠️ Si conta `password_provvisoria`, non `must_change_password`. Chi entra
+  // con il solo promemoria — senza muro — ha `must_change_password` a `false`
+  // ed è esattamente una delle persone che questo numero deve contare: con il
+  // conteggio vecchio l'ufficio avrebbe letto «0 password da consegnare» il
+  // giorno in cui ne ha consegnate dodici.
+  const daConsegnare = enriched.filter((u) => u.attivo && u.password_provvisoria).length;
   const perRuolo = (['admin', 'office', 'tecnico', 'cliente'] as AppRole[]).map(
     (r) => ({
       role: r,
@@ -130,7 +138,7 @@ export default async function UtentiPage() {
           <div className="h-6 w-px bg-border" />
           {daConsegnare > 0 ? (
             <>
-              <Stat label="Password da scegliere" value={daConsegnare} avviso />
+              <Stat label="Password provvisoria" value={daConsegnare} avviso />
               <div className="h-6 w-px bg-border" />
             </>
           ) : null}

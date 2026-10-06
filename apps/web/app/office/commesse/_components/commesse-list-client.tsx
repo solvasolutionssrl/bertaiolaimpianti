@@ -35,6 +35,8 @@ export interface CommessaRow {
   responsabile: { id: string; display_name: string | null } | null;
   /** True se la commessa ha almeno un tecnico in commessa_tecnici. */
   assegnata?: boolean;
+  /** I nomi di chi è sul lavoro, nell'ordine in cui è stato assegnato. */
+  squadra?: string[];
   /** Titolo umano del lavoro (es. "Agri Campeggio Località Gatti"). */
   cantiere: string | null;
 }
@@ -189,6 +191,10 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                   <th className="px-4 py-2.5 font-medium">Cliente</th>
                   <th className="px-4 py-2.5 font-medium">Cantiere</th>
                   <th className="px-4 py-2.5 font-medium">Stato</th>
+                  {/* «In mano a» = i tecnici sul lavoro. «Responsabile» è chi
+                      lo segue dall'ufficio: due cose diverse che prima si
+                      leggevano in una colonna sola, cioè nessuna delle due. */}
+                  <th className="px-4 py-2.5 font-medium">In mano a</th>
                   <th className="px-4 py-2.5 font-medium">Apertura</th>
                   <th className="px-4 py-2.5 font-medium">Responsabile</th>
                 </tr>
@@ -273,6 +279,9 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                               : undefined
                           }
                         />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <Squadra nomi={c.squadra ?? []} />
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground">
                         {fmtData(c.data_apertura ?? null)}
@@ -451,5 +460,34 @@ export function CommesseListClient({ rows, responsabili }: Props) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/**
+ * Chi è sul lavoro, in una cella di tabella.
+ *
+ * Due nomi per esteso e il resto contato. Elencarli tutti allargherebbe la
+ * colonna fino a schiacciare cliente e cantiere, che è il motivo per cui
+ * questa informazione non c'era: sembrava non entrarci. Il nome completo di
+ * tutti resta nel `title`, dove serve solo a chi lo cerca.
+ *
+ * Il caso vuoto non è un trattino: «Nessuno» è un'informazione, e in un
+ * elenco di lavori da smaltire è l'informazione che conta.
+ */
+function Squadra({ nomi }: { nomi: string[] }) {
+  if (nomi.length === 0) {
+    return <span className="text-xs font-medium text-stato-collaudo">Nessuno</span>;
+  }
+  const primi = nomi.slice(0, 2);
+  const restanti = nomi.length - primi.length;
+  return (
+    <span className="flex items-center gap-1 text-foreground/85" title={nomi.join(', ')}>
+      <span className="line-clamp-1">{primi.join(', ')}</span>
+      {restanti > 0 ? (
+        <span className="shrink-0 rounded-full bg-muted px-1.5 py-px font-mono text-[10px] font-semibold tabular-nums text-muted-foreground">
+          +{restanti}
+        </span>
+      ) : null}
+    </span>
   );
 }

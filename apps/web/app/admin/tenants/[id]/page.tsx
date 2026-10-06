@@ -122,7 +122,7 @@ export default async function TenantDetailPage({
       supabase
         .from('users')
         .select(
-          'id, display_name, role, attivo, created_at, permissions, must_change_password',
+          'id, display_name, role, attivo, created_at, permissions, must_change_password, password_provvisoria',
         )
         .eq('tenant_id', params.id)
         .order('display_name'),

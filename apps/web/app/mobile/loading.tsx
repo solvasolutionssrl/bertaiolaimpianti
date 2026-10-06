@@ -1,39 +1,46 @@
 import { Skeleton } from '@kommessa/ui';
 
+/**
+ * L'attesa della home del telefono.
+ *
+ * ⚠️ Serve a **entrambe** le shell — il tecnico e l'ufficio — quindi disegna
+ * la forma che hanno in comune: intestazione scura, una card di azioni, e un
+ * elenco. Modellarla su una delle due farebbe saltare il contenuto all'altra
+ * nel momento in cui i dati arrivano.
+ */
 export default function MobileHomeLoading() {
   return (
-    <div className="flex min-h-[100dvh] flex-col gap-7 p-4 pb-24">
-      {/* Hero */}
-      <div className="pt-2 space-y-2">
-        <Skeleton className="h-2.5 w-56 rounded-full" />
-        <Skeleton className="h-8 w-44 rounded-md" />
-        <Skeleton className="h-3 w-60 rounded-full" />
-      </div>
-
-      {/* Metriche card */}
-      <div className="space-y-3">
-        <Skeleton className="h-3 w-32 rounded-full" />
-        <Skeleton className="h-[112px] w-full rounded-lg" />
-      </div>
-
-      {/* Quick actions */}
-      <div className="space-y-3">
-        <Skeleton className="h-3 w-28 rounded-full" />
-        <div className="grid grid-cols-2 gap-2">
-          <Skeleton className="h-[88px] rounded-lg" />
-          <Skeleton className="h-[88px] rounded-lg" />
+    <div className="flex min-h-[100dvh] flex-col pb-24">
+      {/* Intestazione */}
+      <div className="bg-primary px-4 pb-16 pt-5">
+        <div className="space-y-2">
+          <Skeleton className="h-2.5 w-48 rounded-full bg-primary-foreground/20" />
+          <Skeleton className="h-8 w-52 rounded-md bg-primary-foreground/20" />
+          <Skeleton className="h-3 w-44 rounded-full bg-primary-foreground/15" />
         </div>
       </div>
 
-      {/* Ultime commesse */}
-      <div className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <Skeleton className="h-3 w-36 rounded-full" />
-          <Skeleton className="h-3 w-12 rounded-full" />
+      <div className="flex flex-col gap-6 px-4 pt-4">
+        {/* La card che si sovrappone all'intestazione */}
+        <div className="-mt-12">
+          <Skeleton className="h-[136px] w-full rounded-xl" />
         </div>
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[88px] rounded-lg" />
+
+        {/* Ricerca e pastiglie */}
+        <div className="space-y-3">
+          <Skeleton className="h-11 w-full rounded-lg" />
+          <div className="flex gap-1.5">
+            <Skeleton className="h-9 w-24 rounded-full" />
+            <Skeleton className="h-9 w-28 rounded-full" />
+            <Skeleton className="h-9 w-24 rounded-full" />
+          </div>
+          <Skeleton className="h-2.5 w-40 rounded-full" />
+        </div>
+
+        {/* L'elenco */}
+        <div className="flex flex-col gap-1.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-[84px] rounded-lg" />
           ))}
         </div>
       </div>

@@ -27,6 +27,7 @@ import {
 import type { DipendenteDisponibile } from './_components/squadra-panel';
 import { CondividiCommessa } from '@/app/_components/condividi-commessa';
 import { leggiLinkPubblico } from '@/app/_actions/link-pubblico';
+import { appOrigin } from '@/app/_lib/app-origin';
 
 export default async function CommessaLayout({
   params,
@@ -141,6 +142,7 @@ export default async function CommessaLayout({
               commessaId={params.id}
               linkAttivo={linkPubblico}
               dettagliTesto={(c as { note_iniziali?: string | null }).note_iniziali ?? null}
+              origine={appOrigin()}
             />
           ) : null}
           <Button asChild variant="outline" size="sm" className="gap-2">

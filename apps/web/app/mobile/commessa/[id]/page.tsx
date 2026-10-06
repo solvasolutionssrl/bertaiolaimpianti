@@ -55,6 +55,7 @@ import { CloudRetry } from './_components/cloud-retry';
 import { CommessaChiusaNota } from '../../../_components/commessa-chiusa-nota';
 import { type Priorita } from '@kommessa/api/priorita';
 import { leggiLinkPubblico } from '@/app/_actions/link-pubblico';
+import { appOrigin } from '@/app/_lib/app-origin';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 /**
@@ -566,6 +567,7 @@ export default async function CommessaDetailPage({
                 nomeCommessa={nomeCommessa}
                 linkPubblico={linkPubblico}
                 dettagliTesto={dettagliTesto}
+                origine={appOrigin()}
               />
             ) : null}
           </div>

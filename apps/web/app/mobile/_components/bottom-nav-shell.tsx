@@ -153,7 +153,11 @@ export function BottomNavShell({
     // una barra che cambia numero di tasti a seconda di chi guarda disorienta,
     // e uno slot vuoto non spiega niente.
     tabs = [
-      { id: 'commesse', label: 'Oggi', icon: Briefcase, href: '/mobile' },
+      // ⚠️ Si chiamava «Oggi»: un nome che prometteva la giornata e apriva
+      // l'elenco di tutto, e che non corrispondeva a nessuna parola usata
+      // altrove — l'ufficio chiama «Commesse» la stessa cosa. La tab, il
+      // titolo della pagina e la sezione dell'ufficio ora dicono lo stesso.
+      { id: 'commesse', label: 'Commesse', icon: Briefcase, href: '/mobile' },
       turnoAttivo
         ? { id: 'turno' as const, label: 'Turno', icon: Timer, href: '/mobile/turno' }
         : {

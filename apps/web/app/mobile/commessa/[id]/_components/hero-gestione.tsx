@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { MoreVertical, Pencil, Plus } from 'lucide-react';
+import { MoreVertical, Pencil, Plus, Share2 } from 'lucide-react';
 
 import { Portal } from '../../../_components/portal';
 import {
@@ -24,14 +24,21 @@ interface Props {
   nomeCommessa?: string | null;
   /** Il link pubblico attivo, se c'e'. Senza token: non si rilegge. */
   linkPubblico: LinkPubblicoVista | null;
-  /** Il testo che il cliente leggerebbe scegliendo di mostrare i dettagli. */
+  /** Il testo che chi riceve il collegamento leggerebbe, coi dettagli accesi. */
   dettagliTesto: string | null;
+  /** L'origine con cui si compone l'indirizzo pubblico, letta dal server. */
+  origine: string;
 }
 
 /**
  * Menu "⋯" di gestione nell'hero commessa (admin/office): raccoglie le azioni
- * secondarie — Modifica e Aggiungi tipologie — che prima stavano sparse nel
- * corpo dell'hero. Portalizzato su body perché l'Hero ha `overflow-hidden`.
+ * secondarie — Modifica, Aggiungi tipologie, Condividi il lavoro — che prima
+ * stavano sparse nel corpo dell'hero. Portalizzato su body perché l'Hero ha
+ * `overflow-hidden`.
+ *
+ * ⚠️ **Nel menu stanno i tasti, non lo stato.** Il menu si smonta al tocco:
+ * ogni dialog che si apre da qui va montato fuori e comandato con una coppia
+ * `open`/`onOpenChange`, come fanno tipologie e condivisione qui sotto.
  */
 export function HeroGestione({
   commessaId,
@@ -42,9 +49,11 @@ export function HeroGestione({
   nomeCommessa,
   linkPubblico,
   dettagliTesto,
+  origine,
 }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [tipOpen, setTipOpen] = React.useState(false);
+  const [condividiOpen, setCondividiOpen] = React.useState(false);
   // Il dialog qui e' controllato da noi: la conferma la chiede chi apre.
   const chiediConferma = useConfermaCommessaChiusa(statoCommessa, nomeCommessa);
   const btnRef = React.useRef<HTMLButtonElement>(null);
@@ -106,15 +115,21 @@ export function HeroGestione({
               {/* Condividere e' l'unico gesto che fa uscire un dato dal
                   perimetro degli account: sta qui, con le altre azioni
                   secondarie, e non come tasto sempre a vista. */}
-              <div role="menuitem" className="rounded-lg">
-                <CondividiCommessa
-                  commessaId={commessaId}
-                  linkAttivo={linkPubblico}
-                  dettagliTesto={dettagliTesto}
-                  variante="voce-menu"
-                  onChiudiMenu={() => setMenuOpen(false)}
-                />
-              </div>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setCondividiOpen(true);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-muted active:bg-muted"
+              >
+                <Share2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Condividi il lavoro
+                {linkPubblico ? (
+                  <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                ) : null}
+              </button>
             </div>
           </div>
         </Portal>
@@ -130,6 +145,24 @@ export function HeroGestione({
         variant="sheet"
         open={tipOpen}
         onOpenChange={setTipOpen}
+        renderTrigger={false}
+      />
+
+      {/* ⚠️ Sempre montato, e FUORI dal Portal del menu. Dentro non funzionava
+          per nessuno: la voce chiudeva il menu e apriva il dialog nello stesso
+          gesto, React 18 batcha i due aggiornamenti, il Portal si smontava e
+          portava con se' il componente — con lo stato «aperto» appena scritto.
+          Un componente con stato dentro un contenitore che si smonta al click
+          perde lo stato nello stesso istante in cui lo imposta. Il tasto sta
+          nel menu, lo stato sta qui. Vale per qualunque cosa si aggiunga a quel
+          menu. */}
+      <CondividiCommessa
+        commessaId={commessaId}
+        linkAttivo={linkPubblico}
+        dettagliTesto={dettagliTesto}
+        origine={origine}
+        aperto={condividiOpen}
+        onApertoChange={setCondividiOpen}
         renderTrigger={false}
       />
     </>

@@ -64,6 +64,7 @@ interface UtenteRow {
   permissions?: unknown;
   /** Se e' ancora sulla password consegnata dall'ufficio. */
   must_change_password?: boolean | null;
+  password_provvisoria?: boolean | null;
 }
 
 const ROLES = ['admin', 'office', 'tecnico'] as const;
@@ -246,9 +247,20 @@ export function TabUtenti({
                         <Badge
                           variant="outline"
                           className="border-amber-500/40 text-amber-700 dark:text-amber-400"
-                          title="Non ha ancora scelto la sua password"
+                          title="Non ha ancora scelto la sua password, e non passa finché non lo fa"
                         >
                           Password da scegliere
+                        </Badge>
+                      ) : u.password_provvisoria ? (
+                        /* Provvisoria ma senza muro: entra con la password che
+                           gli abbiamo dato noi. Da distinguere, perché qui non
+                           c'è niente che lo fermi. */
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/30 text-amber-700/90 dark:text-amber-400/90"
+                          title="Usa ancora la password consegnata dall'ufficio"
+                        >
+                          Password provvisoria
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="border-success/30 text-success">

@@ -33,6 +33,7 @@
     "./fase-lavori": "./src/fase-lavori.ts",
     "./bacheca": "./src/bacheca.ts",
     "./scelta-opzioni": "./src/scelta-opzioni.ts",
+    "./elenco-lavoro": "./src/elenco-lavoro.ts",
     "./trascrizione": "./src/trascrizione.ts",
     "./link-pubblico": "./src/link-pubblico.ts",
     "./richiesta-bozza": "./src/richiesta-bozza.ts",

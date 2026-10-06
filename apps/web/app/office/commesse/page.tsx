@@ -94,19 +94,36 @@ export default async function CommessePage({
   const rows = error ? [] : data ?? [];
   const total = count ?? 0;
 
-  // Carica tecnici assegnati per le commesse mostrate, per derivare
-  // l'etichetta "Non preso" (aperta/bozza senza tecnici) lato UI.
+  // Chi è sul lavoro, non soltanto se qualcuno c'è.
+  //
+  // ⚠️ Prima questa lettura prendeva solo `commessa_id` e se ne faceva un
+  // insieme di sì/no, per l'etichetta «Non preso». L'elenco diceva quindi
+  // «preso» senza dire **da chi**, e per saperlo bisognava aprire la commessa
+  // una per una — cioè proprio il gesto che un elenco esiste per evitare.
+  // Il nome arriva con un embed, non con una seconda query: `display_name`
+  // degli utenti disattivati compreso, che con la lista dei soli attivi non si
+  // sarebbe risolto.
   const visibleIds = rows.map((r) => r.id as string);
-  let assegnateSet = new Set<string>();
+  const squadre = new Map<string, string[]>();
   if (visibleIds.length > 0) {
     const { data: ass } = await supabase
       .from('commessa_tecnici')
-      .select('commessa_id')
-      .in('commessa_id', visibleIds);
-    assegnateSet = new Set(
-      ((ass ?? []) as Array<{ commessa_id: string }>).map((r) => r.commessa_id),
-    );
+      .select('commessa_id, assegnato_at, utente:users!commessa_tecnici_user_id_fkey ( display_name )')
+      .in('commessa_id', visibleIds)
+      .order('assegnato_at', { ascending: true });
+    for (const r of (ass ?? []) as Array<{
+      commessa_id: string;
+      utente: { display_name: string | null } | Array<{ display_name: string | null }> | null;
+    }>) {
+      const u = Array.isArray(r.utente) ? r.utente[0] : r.utente;
+      const nome = u?.display_name?.trim();
+      if (!nome) continue;
+      const gia = squadre.get(r.commessa_id) ?? [];
+      gia.push(nome);
+      squadre.set(r.commessa_id, gia);
+    }
   }
+  const assegnateSet = new Set(squadre.keys());
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const hasFilters = Boolean(
     searchParams.q ||
@@ -232,6 +249,7 @@ export default async function CommessePage({
                 ? { id: resp.id, display_name: resp.display_name ?? null }
                 : null,
               assegnata: assegnateSet.has(c.id),
+              squadra: squadre.get(c.id) ?? [],
               cantiere,
             };
             return r;

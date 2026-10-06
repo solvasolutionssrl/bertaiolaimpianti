@@ -4,17 +4,11 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import {
   Briefcase,
-  Calendar,
-  Camera,
-  CheckCircle2,
   ChevronRight,
   Clock,
   MapPin,
   Mic,
-  Phone,
   Plus,
-  Sparkles,
-  TrendingUp,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -29,14 +23,10 @@ import { getAppModeCached } from '../_lib/app-mode';
 import { titoloCase } from './_lib/display-case';
 import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 import { BozzeDaCompletare } from '../_components/bozze-da-completare';
-import {
-  confrontaPriorita,
-  metaPriorita,
-  type Priorita,
-} from '@kommessa/api/priorita';
-import { IconaPriorita } from '@/app/_components/priorita-ui';
+import type { Priorita } from '@kommessa/api/priorita';
 import { possoAprireLavori } from '../_lib/capacita-server';
 import { CampanellaHero } from './_components/campanella-hero';
+import { ElencoLavoro, type VoceLavoro } from './_components/elenco-lavoro';
 
 /**
  * Dati dell'utente, quindi sempre freschi. Next lo dedurrebbe comunque dalla
@@ -248,20 +238,26 @@ async function CampoOggi({
   const supabase = createServerSupabase();
   const nonLette = await contaNonLette(supabase, ctx.userId);
 
-  // Tecnico: vede solo le commesse a cui è assegnato (commessa_tecnici).
-  // L'assegnazione è gestita da admin/office via la pagina commessa.
+  // Un tecnico vede le commesse a cui è assegnato. ⚠️ Si legge anche
+  // `assegnato_at`: è *l'ordine in cui le cose gli sono state affidate*, che
+  // è il criterio con cui si ordina ciò che non ha una scadenza. Prima si
+  // leggeva solo l'id e quell'informazione, che era già in tabella, si
+  // buttava via.
   const { data: assegnazioni } = await supabase
     .from('commessa_tecnici')
-    .select('commessa_id')
+    .select('commessa_id, assegnato_at')
     .eq('user_id', ctx.userId);
-  const assignedIds = (assegnazioni ?? [])
-    .map((r) => r.commessa_id as string)
-    .filter(Boolean);
+
+  const affidataIl = new Map<string, string | null>();
+  for (const r of (assegnazioni ?? []) as Array<{ commessa_id: string; assegnato_at: string | null }>) {
+    if (r.commessa_id) affidataIl.set(r.commessa_id, r.assegnato_at ?? null);
+  }
+  const assignedIds = [...affidataIl.keys()];
 
   // Un sentinella che non combacia con niente: serve perché una RICHIESTA
   // assegnata non dipende dalle commesse, e chi non ne ha nessuna deve vederla
   // comunque. Prima qui si usciva subito, e un capo con una richiesta in mano
-  // vedeva «nessuna commessa assegnata» senza mai saperlo.
+  // vedeva «nessuna commessa assegnata».
   const idsCommesse =
     assignedIds.length > 0 ? assignedIds : ['00000000-0000-0000-0000-000000000000'];
 
@@ -282,35 +278,47 @@ async function CampoOggi({
       // sta in `commessaVisibileSuMobile`) e le bozze, che non sono lavoro
       // assegnato.
       .in('stato', STATI_COMMESSA_SU_MOBILE.filter((s) => s !== 'bozza'))
-      .order('data_apertura', { ascending: false })
-      .order('codice_interno', { ascending: false })
-      .limit(30),
-    // TODO assegnati al tecnico (cross-commessa) — solo aperti / in_corso.
-    // Ordino lato JS per priorità + scadenza.
+      .limit(200),
+
+    // Le cose da fare delle MIE commesse.
+    //
+    // ⚠️ La regola è **la stessa** della scheda commessa: le sue, quelle
+    // assegnate a lui, e quelle di nessuno — non quelle date a un collega.
+    // Scritta identica di proposito: se l'elenco e la scheda usassero due
+    // predicati diversi, una cosa da fare comparirebbe in un posto e non
+    // nell'altro, e nessuno saprebbe quale dei due ha ragione. Prima qui si
+    // guardava solo `assegnato_a = me`, quindi le cose da fare «di chiunque
+    // passi» — quelle che i tecnici si scrivono fra loro — non comparivano
+    // affatto in questa pagina.
     supabase
       .from('commessa_todo' as never)
       .select(
-        `id, titolo, priorita, scadenza_at, commessa_id,
+        `id, titolo, descrizione, priorita, scadenza_at, created_at, assegnato_a, commessa_id,
          commessa:commesse!commessa_todo_commessa_id_fkey ( codice_interno )`,
       )
-      .eq('assegnato_a', ctx.userId)
-      .in('stato', ['aperto', 'in_corso'])
       .in('commessa_id', idsCommesse)
-      .limit(50),
+      .in('stato', ['aperto', 'in_corso'])
+      .or(`assegnato_a.eq.${ctx.userId},assegnato_a.is.null,created_by.eq.${ctx.userId}`)
+      .limit(200),
+
     // Le RICHIESTE assegnate a me: non hanno una commessa, quindi non possono
-    // passare dal filtro qui sopra.
+    // passare dal filtro qui sopra. Queste sì solo le mie: una richiesta senza
+    // assegnatario è un mucchio dell'ufficio, non lavoro di questo tecnico.
     supabase
       .from('commessa_todo' as never)
       .select(
-        `id, titolo, priorita, scadenza_at, commessa_id, contatto, cliente_testo,
+        `id, titolo, descrizione, priorita, scadenza_at, created_at, commessa_id, contatto, cliente_testo,
          richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale )`,
       )
       .eq('assegnato_a', ctx.userId)
       .is('commessa_id', null)
       .in('stato', ['aperto', 'in_corso'])
-      .limit(50),
+      .limit(100),
   ]);
-  const { data, error } = commesseRes;
+
+  if (commesseRes.error) {
+    return <ErrorState title="Impossibile caricare le commesse" detail={commesseRes.error.message} />;
+  }
 
   // Modulo Kantiere (FPM): mostra l'accesso al rapportino giornaliero.
   // Gated → per Bertaiola (modulo off) la card non compare.
@@ -322,68 +330,81 @@ async function CampoOggi({
   // arrivava «permessi insufficienti».
   const apreLavori = await possoAprireLavori();
 
-  if (error) {
-    return <ErrorState title="Impossibile caricare le commesse" detail={error.message} />;
-  }
+  // ── Tutto in un elenco solo ────────────────────────────────────────────
+  //
+  // Le commesse e le cose da fare diventano voci della stessa forma. Filtro,
+  // ricerca e ordine stanno nel modulo puro `@kommessa/api/elenco-lavoro`:
+  // qui si traduce soltanto una riga di database in una voce a schermo.
+  const commesse = (commesseRes.data ?? []) as any[];
 
-  // Ordina TODO: scaduti prima, poi per priorità (urgente→bassa), poi
-  // titolo. Limita a 8 in dashboard — i rimanenti sono dentro le commesse.
-  type TodoMini = {
-    id: string;
-    titolo: string;
-    priorita: Priorita;
-    scadenza_at: string | null;
-    /** null = richiesta arrivata al telefono, non ancora un lavoro. */
-    commessa_id: string | null;
-    codice_interno: string | null;
-    /** Solo sulle richieste: chi ha chiamato e come richiamarlo. */
-    cliente: string | null;
-    contatto: string | null;
-  };
-  const now = Date.now();
-  const myTodos: TodoMini[] = [
-    ...((todosRes.data ?? []) as Array<any>).map((t) => {
-      const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
-      return {
-        id: t.id as string,
-        titolo: t.titolo as string,
-        priorita: t.priorita as TodoMini['priorita'],
-        scadenza_at: (t.scadenza_at as string | null) ?? null,
-        commessa_id: (t.commessa_id as string | null) ?? null,
-        codice_interno: (comm?.codice_interno as string | undefined) ?? null,
-        cliente: null,
-        contatto: null,
-      };
-    }),
-    ...((richiesteRes.data ?? []) as Array<any>).map((t) => {
-      const chi = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
-      return {
-        id: t.id as string,
-        titolo: t.titolo as string,
-        priorita: t.priorita as TodoMini['priorita'],
-        scadenza_at: (t.scadenza_at as string | null) ?? null,
-        commessa_id: null,
-        codice_interno: null,
-        cliente:
-          (chi?.ragione_sociale as string | undefined) ??
-          (t.cliente_testo as string | null) ??
-          null,
-        contatto: (t.contatto as string | null) ?? null,
-      };
-    }),
-  ]
-    .sort((a, b) => {
-      const aScaduto = a.scadenza_at && new Date(a.scadenza_at).getTime() < now ? 0 : 1;
-      const bScaduto = b.scadenza_at && new Date(b.scadenza_at).getTime() < now ? 0 : 1;
-      if (aScaduto !== bScaduto) return aScaduto - bScaduto;
-      const dPri = confrontaPriorita(a.priorita, b.priorita);
-      if (dPri !== 0) return dPri;
-      return a.titolo.localeCompare(b.titolo, 'it');
-    })
-    .slice(0, 8);
+  const vociCommesse: VoceLavoro[] = commesse.map((r) => {
+    const cliente = Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente;
+    const nomeCliente: string | null = cliente?.ragione_sociale ?? null;
+    const lavoro = pickTitolo(r) ?? r.nome_cartella ?? null;
+    return {
+      tipo: 'commessa',
+      id: r.id as string,
+      titolo: nomeCliente || lavoro || r.codice_interno,
+      // Tutto ciò su cui si lascia trovare: «rossi valeggio» deve bastare,
+      // anche se il cognome sta nel cliente e il paese nell'indirizzo.
+      cerca: [r.codice_interno, nomeCliente, lavoro, r.cliente_indirizzo_cantiere]
+        .filter(Boolean)
+        .join(' '),
+      // Una commessa non ha una data entro cui va fatta: il suo posto
+      // nell'elenco lo decide quando è stata affidata.
+      scadenza: null,
+      affidataIl: affidataIl.get(r.id as string) ?? r.data_apertura ?? null,
+      codice: r.codice_interno as string,
+      stato: r.stato as StatoCommessa,
+      critica: Boolean(r.is_critica),
+      cliente: nomeCliente,
+      lavoro,
+      indirizzo: (r.cliente_indirizzo_cantiere as string | null) ?? null,
+    };
+  });
 
-  // Niente commesse E niente richieste: allora sì, non c'è nulla da mostrare.
-  if (assignedIds.length === 0 && myTodos.length === 0) {
+  const vociTodo: VoceLavoro[] = ((todosRes.data ?? []) as any[]).map((t) => {
+    const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
+    const codice = (comm?.codice_interno as string | undefined) ?? null;
+    return {
+      tipo: 'todo',
+      id: t.id as string,
+      titolo: t.titolo as string,
+      cerca: [codice, t.descrizione].filter(Boolean).join(' '),
+      scadenza: (t.scadenza_at as string | null) ?? null,
+      // ⚠️ `created_at` e non il momento dell'assegnazione: su
+      // `commessa_todo` quel momento non è registrato da nessuna parte. È il
+      // dato più vicino che esiste, e vale solo per le voci senza scadenza.
+      affidataIl: (t.created_at as string | null) ?? null,
+      priorita: t.priorita as Priorita,
+      commessaId: t.commessa_id as string,
+      codiceCommessa: codice,
+    };
+  });
+
+  const vociRichieste: VoceLavoro[] = ((richiesteRes.data ?? []) as any[]).map((t) => {
+    const chi = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
+    const nome =
+      (chi?.ragione_sociale as string | undefined) ?? (t.cliente_testo as string | null) ?? null;
+    return {
+      tipo: 'richiesta',
+      id: t.id as string,
+      titolo: t.titolo as string,
+      cerca: [nome, t.contatto, t.descrizione].filter(Boolean).join(' '),
+      scadenza: (t.scadenza_at as string | null) ?? null,
+      affidataIl: (t.created_at as string | null) ?? null,
+      priorita: t.priorita as Priorita,
+      cliente: nome,
+      contatto: (t.contatto as string | null) ?? null,
+    };
+  });
+
+  const voci = [...vociCommesse, ...vociTodo, ...vociRichieste];
+  const quanteCommesse = vociCommesse.length;
+  const quanteDaFare = vociTodo.length + vociRichieste.length;
+
+  // Niente commesse E niente da fare: allora sì, non c'è nulla da mostrare.
+  if (voci.length === 0) {
     return (
       <CampoVuoto
         title="Nessuna commessa assegnata"
@@ -392,21 +413,8 @@ async function CampoOggi({
     );
   }
 
-  const rows: CommessaRow[] = ((data ?? []) as any[]).map((r) => ({
-    id: r.id,
-    codice_interno: r.codice_interno,
-    nome_cartella: r.nome_cartella,
-    stato: r.stato as StatoCommessa,
-    is_critica: Boolean(r.is_critica),
-    cliente_indirizzo_cantiere: r.cliente_indirizzo_cantiere,
-    data_apertura: r.data_apertura,
-    titolo: pickTitolo(r),
-    cliente: Array.isArray(r.cliente) ? (r.cliente[0] ?? null) : r.cliente,
-  }));
-
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col pb-24">
-      {/* Hero dark */}
       <Hero>
         <div className="flex items-start justify-between gap-3">
           <HeroMeta>
@@ -418,136 +426,82 @@ async function CampoOggi({
             initialCount={nonLette}
           />
         </div>
+        {/* «OGGI» prometteva una giornata e mostrava tutto; e il nome non
+            corrispondeva a nessuna delle tab in basso. Questa pagina è
+            l'elenco di cosa si ha in mano, e si chiama come la tab che la
+            apre e come la sezione che l'ufficio guarda. */}
         <h1 className="mt-2 font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
-          OGGI
+          COMMESSE
         </h1>
         <p className="mt-2 text-sm text-primary-foreground/70">
-          {rows.length === 0
-            ? 'Nessuna commessa attiva.'
-            : `${rows.length} ${rows.length === 1 ? 'commessa' : 'commesse'} in carico`}
+          {[
+            quanteCommesse > 0
+              ? `${quanteCommesse} ${quanteCommesse === 1 ? 'commessa' : 'commesse'} in carico`
+              : null,
+            quanteDaFare > 0 ? `${quanteDaFare} da fare` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || 'Nessuna commessa attiva.'}
         </p>
       </Hero>
 
-      <div className="flex flex-col gap-7 px-4 pt-4">
-      {/* Azioni rapide. Se non ne resta nessuna la card non si disegna: una
-          scatola vuota col titolo «Azioni rapide» e' peggio di niente. */}
-      {apreLavori || hasKantiere ? (
-      <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-soft-lg">
-          <SectionNumber n={1} title="Azioni rapide" className="mb-3" />
-        <div className="grid grid-cols-2 gap-2">
-          {apreLavori ? (
-            <>
-              <QuickAction
-                href="/mobile/sopralluogo"
-                icon={Plus}
-                label="Sopralluogo"
-                hint="guidato · foto/video"
-                tone="primary"
-                dataTour="sopralluogo"
-              />
-              <QuickAction
-                href="/mobile/voice-intake"
-                icon={Mic}
-                label="Voce"
-                hint="detta nota"
-                tone="primary"
-                tag="REC"
-                dataTour="vocale"
-              />
-            </>
-          ) : null}
-          {hasKantiere ? (
-            <QuickAction
-              href="/mobile/kantiere/ore"
-              icon={Clock}
-              label="Le mie ore"
-              hint="rapportino di oggi"
-              tone="primary"
-            />
-          ) : null}
-        </div>
-        </div>
-      </section>
-      ) : null}
+      <div className="flex flex-col gap-6 px-4 pt-4">
+        {/* Azioni rapide. Se non ne resta nessuna la card non si disegna: una
+            scatola vuota col titolo «Azioni rapide» e' peggio di niente. */}
+        {apreLavori || hasKantiere ? (
+          <section className="-mt-12 space-y-3 animate-fade-up [animation-delay:40ms]">
+            <div className="rounded-xl border border-border bg-card p-4 shadow-soft-lg">
+              <SectionNumber n={1} title="Azioni rapide" className="mb-3" />
+              <div className="grid grid-cols-2 gap-2">
+                {apreLavori ? (
+                  <>
+                    <QuickAction
+                      href="/mobile/sopralluogo"
+                      icon={Plus}
+                      label="Sopralluogo"
+                      hint="guidato · foto/video"
+                      tone="primary"
+                      dataTour="sopralluogo"
+                    />
+                    <QuickAction
+                      href="/mobile/voice-intake"
+                      icon={Mic}
+                      label="Voce"
+                      hint="detta nota"
+                      tone="primary"
+                      tag="REC"
+                      dataTour="vocale"
+                    />
+                  </>
+                ) : null}
+                {hasKantiere ? (
+                  <QuickAction
+                    href="/mobile/kantiere/ore"
+                    icon={Clock}
+                    label="Le mie ore"
+                    hint="rapportino di oggi"
+                    tone="primary"
+                  />
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
-      {/* Cosa fare oggi: TODO assegnati a me */}
-      {myTodos.length > 0 ? (
-        <section className="space-y-2 animate-fade-up [animation-delay:60ms]">
-          <SectionNumber
-            n={2}
-            title="Cosa fare"
-            trailing={
-              <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-                {String(myTodos.length).padStart(2, '0')}
-              </span>
-            }
-          />
-          <ul className="space-y-1.5">
-            {myTodos.map((t) => (
-              <TodoMiniCard key={t.id} todo={t} now={now} />
-            ))}
-          </ul>
+        <section
+          className={[
+            'animate-fade-up [animation-delay:60ms]',
+            apreLavori || hasKantiere ? '' : '-mt-10',
+          ].join(' ')}
+        >
+          <ElencoLavoro voci={voci} />
         </section>
-      ) : null}
-
-      {/* Commesse */}
-      <section className="space-y-3 animate-fade-up [animation-delay:80ms]">
-        <SectionNumber
-          n={myTodos.length > 0 ? 3 : 2}
-          title="In carico"
-          trailing={
-            <span className="font-mono text-[10px] tabular-nums text-muted-foreground/70">
-              {String(rows.length).padStart(2, '0')}
-            </span>
-          }
-        />
-        {rows.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <Stagger className="flex flex-col gap-2">
-            {rows.map((c, idx) => (
-              <CommessaCard key={c.id} commessa={c} index={idx + 1} />
-            ))}
-          </Stagger>
-        )}
-      </section>
       </div>
     </div>
   );
 }
 
 // ─── SHARED COMPONENTS ───────────────────────────────────────────────────────
-
-function MetricCell({
-  value,
-  label,
-  icon,
-  tone,
-}: {
-  value: number;
-  label: string;
-  icon: React.ReactNode;
-  tone: 'primary' | 'warn' | 'neutral';
-}) {
-  const accent = {
-    primary: 'text-primary',
-    warn: 'text-stato-collaudo',
-    neutral: 'text-foreground',
-  }[tone];
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
-        {icon}
-        {label}
-      </span>
-      <span className={`font-mono text-3xl font-bold tabular-nums leading-none ${accent}`}>
-        {String(value).padStart(2, '0')}
-      </span>
-    </div>
-  );
-}
 
 function QuickAction({
   href,
@@ -680,120 +634,6 @@ function CommessaCard({ commessa, index }: { commessa: CommessaRow; index: numbe
       />
     </Link>
   );
-}
-
-/**
- * Una cosa da fare, sulla home del telefono: un task di commessa o una
- * **richiesta** arrivata al telefono in ufficio.
- *
- * Le due si comportano diversamente di proposito. Il task porta alla commessa.
- * La richiesta no — non ce l'ha ancora — e la prima cosa che serve a chi la
- * riceve è **richiamare la persona**: se c'è un numero, il tasto lo chiama.
- */
-function TodoMiniCard({
-  todo,
-  now,
-}: {
-  todo: {
-    id: string;
-    titolo: string;
-    priorita: Priorita;
-    scadenza_at: string | null;
-    commessa_id: string | null;
-    codice_interno: string | null;
-    cliente: string | null;
-    contatto: string | null;
-  };
-  now: number;
-}) {
-  // Qui c'era una nona tavolozza, scritta a mano dentro il render: l'unica
-  // dell'app che usava l'icona `Clock` invece di `Circle`, e senza nessuna
-  // variante per il tema scuro.
-  const meta = metaPriorita(todo.priorita);
-  const isScaduto = todo.scadenza_at && new Date(todo.scadenza_at).getTime() < now;
-  const eRichiesta = todo.commessa_id === null;
-  // Un contatto senza chiocciola e con abbastanza cifre è un numero: si può
-  // chiamare. Altrimenti è una email e resta scritta.
-  const numero =
-    todo.contatto && !todo.contatto.includes('@')
-      ? todo.contatto.replace(/[^+\d]/g, '')
-      : null;
-  const chiamabile = numero && numero.replace(/\D/g, '').length >= 6 ? numero : null;
-
-  const contenuto = (
-    <>
-      <span
-        className={[
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border',
-          meta.chip,
-        ].join(' ')}
-        title={meta.etichetta}
-      >
-        <IconaPriorita priorita={todo.priorita} className="h-3.5 w-3.5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium leading-tight">{todo.titolo}</p>
-        <p className="mt-0.5 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-          {eRichiesta ? (
-            <span className="font-semibold text-amber-700 dark:text-amber-400">Richiesta</span>
-          ) : null}
-          {todo.codice_interno ? (
-            <span className="tabular-nums">{todo.codice_interno}</span>
-          ) : null}
-          {todo.cliente ? <span className="truncate normal-case tracking-normal">{todo.cliente}</span> : null}
-          {todo.scadenza_at ? (
-            <span className={isScaduto ? 'font-semibold text-destructive' : ''}>
-              <Calendar className="mr-0.5 inline h-2.5 w-2.5" />
-              {fmtScadenza(todo.scadenza_at)}
-            </span>
-          ) : null}
-        </p>
-      </div>
-    </>
-  );
-
-  if (eRichiesta) {
-    return (
-      <li>
-        <div className="flex items-center gap-2 rounded-md border border-l-2 border-border border-l-amber-500/70 bg-card p-2.5 shadow-soft">
-          {contenuto}
-          {chiamabile ? (
-            <a
-              href={`tel:${chiamabile}`}
-              aria-label={`Chiama ${todo.cliente ?? 'il cliente'}`}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors active:bg-primary/20"
-            >
-              <Phone className="h-4 w-4" aria-hidden="true" />
-            </a>
-          ) : null}
-        </div>
-      </li>
-    );
-  }
-
-  return (
-    <li>
-      <Link
-        href={`/mobile/commessa/${todo.commessa_id}#lavori`}
-        className="flex items-center gap-2 rounded-md border border-border bg-card p-2.5 shadow-soft transition-colors active:bg-muted"
-      >
-        {contenuto}
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-      </Link>
-    </li>
-  );
-}
-
-function fmtScadenza(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('it-IT', {
-      timeZone: 'Europe/Rome',
-      day: '2-digit',
-      month: 'short',
-    });
-  } catch {
-    return iso;
-  }
 }
 
 function CampoVuoto({ title, body }: { title: string; body: string }) {

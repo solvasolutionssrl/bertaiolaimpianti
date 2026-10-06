@@ -55,8 +55,10 @@ export interface UtenteRow {
   invite_accepted_at: string | null;
   /** `users.permissions`: i poteri in più di quelli del ruolo. */
   permissions: unknown;
-  /** Se è ancora sulla password consegnata dall'ufficio. */
+  /** Se non lo lasciamo passare finché non sceglie la sua password. */
   must_change_password: boolean;
+  /** Se la password in uso gliel'abbiamo data noi. */
+  password_provvisoria: boolean;
 }
 
 const ROLE_OPTS: { value: AppRole; label: string; hint?: string }[] = [
@@ -239,6 +241,7 @@ export function UtentiTable({
                       <StatoAccesso
                         attivo={u.attivo}
                         devoCambiare={u.must_change_password}
+                        passwordProvvisoria={u.password_provvisoria}
                         invitoMandato={u.invite_sent_at}
                         invitoAccettato={u.invite_accepted_at}
                         maiEntrato={u.last_sign_in_at === null}
@@ -441,12 +444,14 @@ export function UtentiTable({
 function StatoAccesso({
   attivo,
   devoCambiare,
+  passwordProvvisoria,
   invitoMandato,
   invitoAccettato,
   maiEntrato,
 }: {
   attivo: boolean;
   devoCambiare: boolean;
+  passwordProvvisoria: boolean;
   invitoMandato: string | null;
   invitoAccettato: string | null;
   maiEntrato: boolean;
@@ -457,6 +462,19 @@ function StatoAccesso({
       <Pallino
         colore="bg-amber-500"
         testo={maiEntrato ? 'Password da consegnare' : 'Deve scegliere la password'}
+        forte="text-amber-700 dark:text-amber-400"
+      />
+    );
+  }
+  // Provvisoria ma senza muro: è entrato (o può entrare) con la password che
+  // gli abbiamo dato noi. ⚠️ Va detto in modo diverso da «deve scegliere»,
+  // perché qui non c'è niente che lo fermi: se l'ufficio legge la stessa
+  // scritta nei due casi, non sa su quale dei due deve insistere.
+  if (passwordProvvisoria) {
+    return (
+      <Pallino
+        colore="bg-amber-400"
+        testo={maiEntrato ? 'Password da consegnare' : 'Password provvisoria'}
         forte="text-amber-700 dark:text-amber-400"
       />
     );
