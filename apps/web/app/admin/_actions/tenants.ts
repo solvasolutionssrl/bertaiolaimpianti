@@ -5,6 +5,10 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import {
+  RUOLI_ACCOUNT,
+  faiNascereUnAccount,
+} from '@/app/_actions/_lib/account-core';
 import { FEATURE_REGISTRY, type FeatureKey } from '@/app/_lib/tenant-features-registry';
 import { chiaviValide } from '@/app/_lib/personalizzazioni-registry';
 import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
@@ -126,15 +130,35 @@ export async function creaTenant(
     return { ok: false, error: `Tenant non creato: ${tErr?.message ?? 'errore'}` };
   }
 
-  // 2. invito owner via Auth Admin API
-  const inviteRes = await supabase.auth.admin.inviteUserByEmail(data.owner_email, {
-    data: {
-      display_name: data.owner_name,
-    },
-  });
+  // 2. L'amministratore del cliente nuovo: stesso nucleo di ogni altro account.
+  //
+  // ⚠️ Prima qui l'esito dell'inserimento in `users` **non veniva nemmeno
+  // letto** (`await supabase.from('users').insert(...)` senza `const { error }`):
+  // se falliva, restava un utente Auth senza profilo — che entra, non ha
+  // tenant e vede la pagina d'errore — e `creaTenant` rispondeva comunque
+  // «fatto». In silenzio.
+  const appUrl =
+    (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '') ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
-  if (inviteRes.error) {
-    // tenant creato ma invito fallito — non rollback (l'admin può reinviare)
+  const esitoOwner = await faiNascereUnAccount(
+    {
+      tenantId: tenant.id,
+      tenantSlug: tenant.slug,
+      displayName: data.owner_name,
+      role: 'admin',
+      ingresso: {
+        tipo: 'invito',
+        email: data.owner_email,
+        redirectTo: `${appUrl}/auth/callback?next=/accetta-invito`,
+      },
+    },
+    { userId: ctx.userId, role: 'admin' },
+  );
+
+  if (!esitoOwner.ok) {
+    // Il cliente è creato e resta: l'amministratore si può reinvitare dal
+    // pannello. Si dice cosa è andato storto invece di tacerlo.
     await auditPlatform({
       actorUserId: ctx.userId,
       actorEmail: ctx.email,
@@ -142,34 +166,12 @@ export async function creaTenant(
       entityType: 'tenant',
       entityId: tenant.id,
       action: 'create',
-      after: { nome: data.nome, slug: data.slug, invite_failed: inviteRes.error.message },
+      after: { nome: data.nome, slug: data.slug, invite_failed: esitoOwner.error },
     });
     return {
       ok: false,
-      error: `Tenant creato ma invito owner fallito: ${inviteRes.error.message}`,
+      error: `Spazio di lavoro creato, ma l’amministratore no: ${esitoOwner.error}`,
     };
-  }
-
-  const newAuthUserId = inviteRes.data.user?.id;
-
-  // 3. propaga app_metadata sull'utente invitato (tenant_id + role=owner)
-  if (newAuthUserId) {
-    await supabase.auth.admin.updateUserById(newAuthUserId, {
-      app_metadata: {
-        tenant_id: tenant.id,
-        tenant_slug: tenant.slug,
-        role: 'admin',
-      } as never,
-    });
-
-    // 4. crea profile in public.users (il trigger sync_user_claims propagherà i claim)
-    await supabase.from('users').insert({
-      id: newAuthUserId,
-      tenant_id: tenant.id,
-      role: 'admin',
-      display_name: data.owner_name,
-      attivo: true,
-    } as never);
   }
 
   await auditPlatform({
@@ -792,22 +794,29 @@ export async function aggiornaModelloTrascrizione(input: {
 const CREA_UTENTE_SCHEMA = z.object({
   tenantId: z.string().uuid(),
   email: z.string().email(),
-  password: z.string().min(8, 'Almeno 8 caratteri'),
+  password: z.string().optional(),
   nome: z.string().min(2).max(120),
-  role: z.enum(['admin', 'office', 'tecnico']),
+  role: z.enum(RUOLI_ACCOUNT),
 });
 
 /**
- * Crea un utente del tenant con email+password impostate dall'admin (NESSUNA
- * email di invito). L'account è pronto: l'admin consegna le credenziali.
+ * Crea un utente del tenant con email e password decise dal pannello: nessun
+ * messaggio inviato, l'account è pronto e le credenziali si consegnano a voce.
+ *
+ * ⚠️ Era la sesta copia. Due difetti suoi, che il nucleo condiviso toglie:
+ * non scriveva `tenant_slug` nei claim (unico percorso a ometterlo, e senza
+ * quello `requireTenantContext` solleva finché il trigger non ripara), e non
+ * scriveva `must_change_password`, lasciando l'account sulla password
+ * consegnata a voce. Aveva anche `min(8)` **senza massimo**: oltre i 72 byte
+ * bcrypt tronca in silenzio.
  */
 export async function creaUtenteTenant(input: {
   tenantId: string;
   email: string;
-  password: string;
+  password?: string;
   nome: string;
   role: 'admin' | 'office' | 'tecnico';
-}): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+}): Promise<{ ok: true; userId: string; password: string } | { ok: false; error: string }> {
   const admin = await requirePlatformAdmin();
   const parsed = CREA_UTENTE_SCHEMA.safeParse(input);
   if (!parsed.success) {
@@ -815,53 +824,31 @@ export async function creaUtenteTenant(input: {
   }
   const supabase = createServiceSupabase();
 
-  // 1) crea l'utente auth con password, email già confermata, niente email inviata
-  const { data: created, error: authErr } = await supabase.auth.admin.createUser({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    email_confirm: true,
-    user_metadata: { display_name: parsed.data.nome },
-    app_metadata: {
-      tenant_id: parsed.data.tenantId,
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug')
+    .eq('id', parsed.data.tenantId)
+    .maybeSingle();
+  if (!tenant) return { ok: false, error: 'Tenant non trovato' };
+
+  const esito = await faiNascereUnAccount(
+    {
+      tenantId: parsed.data.tenantId,
+      tenantSlug: (tenant as { slug: string }).slug,
+      displayName: parsed.data.nome,
       role: parsed.data.role,
-    } as never,
-  });
-  if (authErr || !created?.user) {
-    const msg = authErr?.message ?? 'creazione utente fallita';
-    return {
-      ok: false,
-      error: msg.toLowerCase().includes('already')
-        ? 'Esiste già un utente con questa email.'
-        : msg,
-    };
-  }
-
-  // 2) profilo applicativo nel tenant (il trigger sync_user_claims popola i JWT claims)
-  const { error: profErr } = await supabase.from('users').insert({
-    id: created.user.id,
-    tenant_id: parsed.data.tenantId,
-    role: parsed.data.role,
-    display_name: parsed.data.nome,
-    attivo: true,
-  } as never);
-  if (profErr) {
-    // rollback best-effort dell'utente auth per non lasciare orfani
-    await supabase.auth.admin.deleteUser(created.user.id).catch(() => {});
-    return { ok: false, error: profErr.message };
-  }
-
-  await auditPlatform({
-    actorUserId: admin.userId,
-    actorEmail: admin.email,
-    tenantId: parsed.data.tenantId,
-    entityType: 'user',
-    entityId: created.user.id,
-    action: 'tenant.user.create_with_password',
-    after: { email: parsed.data.email, role: parsed.data.role },
-  });
+      ingresso: {
+        tipo: 'email',
+        email: parsed.data.email,
+        password: parsed.data.password,
+      },
+    },
+    { userId: admin.userId, role: 'admin' },
+  );
+  if (!esito.ok) return { ok: false, error: esito.error };
 
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
-  return { ok: true, userId: created.user.id };
+  return { ok: true, userId: esito.data.userId, password: esito.data.password ?? '' };
 }
 
 // ---------------------------------------------------------------------

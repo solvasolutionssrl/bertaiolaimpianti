@@ -47,6 +47,13 @@ export const NOTIFICA_META: Record<string, NotificaMeta> = {
   ticket_assigned: { label: 'Ticket assegnato', Icon: Ticket },
   ticket_created: { label: 'Nuovo ticket', Icon: Ticket },
   ticket_nuovo_portale: { label: 'Ticket dal cliente', Icon: MessageSquare },
+  // Mandati da `office/_actions/bulk.ts` come `commessa_${stato}`: il tipo si
+  // compone a runtime, quindi è facile dimenticarsene guardando solo gli
+  // `insert` espliciti. ⚠️ Non sono registrati in `notification_event_types`:
+  // esistono a schermo ma nessuna preferenza può governarli.
+  commessa_completata: { label: 'Lavoro completato', Icon: Briefcase },
+  commessa_collaudo: { label: 'Lavoro in collaudo', Icon: Briefcase },
+  commessa_archiviata: { label: 'Lavoro archiviato', Icon: Briefcase },
   // ── mondo presenze ──
   kantiere_modifica_tecnico: { label: 'Ore modificate dal tecnico', Icon: PencilRuler },
   pianificazione_pubblicata: { label: 'Pianificazione pubblicata', Icon: CalendarClock },

@@ -5,6 +5,10 @@ import { z } from 'zod';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { eCapacita, scriviCapacita } from '@kommessa/api/capacita';
+import {
+  RUOLI_ACCOUNT,
+  faiNascereUnAccount,
+} from '@/app/_actions/_lib/account-core';
 import { auditPlatform } from '../_lib/audit-platform';
 
 /** Invia un magic link / reset password (Supabase `generateLink`). */
@@ -169,18 +173,25 @@ export async function attivaUserGlobal(userId: string) {
 
 const creaManualeSchema = z.object({
   tenantId: z.string().uuid(),
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .min(2)
-    .max(40)
-    .regex(/^[a-z0-9._-]+$/, 'Solo lettere minuscole, numeri, ".", "-", "_"'),
-  displayName: z.string().trim().min(2).max(120),
-  role: z.enum(['admin', 'office', 'tecnico']),
-  password: z.string().min(8).max(72),
+  username: z.string(),
+  displayName: z.string(),
+  role: z.enum(RUOLI_ACCOUNT),
+  password: z.string().optional(),
+  capoSquadra: z.boolean().optional(),
 });
 
+/**
+ * Crea un account con nome utente e password, dal pannello di piattaforma.
+ *
+ * ⚠️ **Era la quinta copia, e la più pericolosa.** Faceva esattamente quello
+ * che fa l'ufficio — alias `.local`, password dettata a voce — ma **senza
+ * scrivere `must_change_password`**: l'account restava per sempre sulla
+ * password letta al telefono. Adesso passa dal nucleo condiviso, che quel
+ * campo lo scrive sempre.
+ *
+ * Le regole su nome utente e password non sono più qui: stanno in
+ * `@kommessa/api/identita`, dove le legge anche il risolutore del login.
+ */
 export async function creaUtenteManuale(
   input: z.infer<typeof creaManualeSchema>,
 ): Promise<
@@ -202,79 +213,31 @@ export async function creaUtenteManuale(
   if (!tenant) return { ok: false, error: 'Tenant non trovato' };
   if (tenant.sospeso) return { ok: false, error: 'Tenant sospeso' };
 
-  // Email sintetica — login identifier, mai consegnata.
-  const loginEmail = `${parsed.data.username}@${tenant.slug}.kommessa.local`;
-
-  // Verifica collisione (Supabase non fa upsert su email)
-  const { data: existsCheck } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', '00000000-0000-0000-0000-000000000000') // dummy se serve, ma controllo via admin API
-    .maybeSingle();
-  void existsCheck;
-
-  const created = await supabase.auth.admin.createUser({
-    email: loginEmail,
-    password: parsed.data.password,
-    email_confirm: true, // skip flow di conferma — l'utente può loggare subito
-    user_metadata: { display_name: parsed.data.displayName },
-    app_metadata: {
-      tenant_id: parsed.data.tenantId,
-      tenant_slug: tenant.slug,
+  const esito = await faiNascereUnAccount(
+    {
+      tenantId: parsed.data.tenantId,
+      tenantSlug: tenant.slug,
+      displayName: parsed.data.displayName,
       role: parsed.data.role,
-      manual_account: true, // flag per distinguere dagli invitati via email
-    } as never,
-  });
-  if (created.error) {
-    const msg = created.error.message;
-    if (msg.toLowerCase().includes('already')) {
-      return { ok: false, error: `Username "${parsed.data.username}" già usato in questo tenant` };
-    }
-    return { ok: false, error: msg };
-  }
-  const uid = created.data.user?.id;
-  if (!uid) return { ok: false, error: 'auth id mancante' };
-
-  // Riga applicativa
-  const { error: insErr } = await supabase.from('users').insert({
-    id: uid,
-    tenant_id: parsed.data.tenantId,
-    role: parsed.data.role,
-    display_name: parsed.data.displayName,
-    attivo: true,
-  } as never);
-  if (insErr) {
-    // Best-effort cleanup
-    try {
-      await supabase.auth.admin.deleteUser(uid);
-    } catch {
-      /* swallow */
-    }
-    return { ok: false, error: `Insert users fallita: ${insErr.message}` };
-  }
-
-  await supabase.from('audit_events').insert({
-    tenant_id: parsed.data.tenantId,
-    actor_user_id: ctx.userId,
-    actor_role: 'admin',
-    entity_type: 'user',
-    entity_id: uid,
-    action: 'create_manual',
-    after_data: {
-      login_email: loginEmail,
-      role: parsed.data.role,
-      display_name: parsed.data.displayName,
-    } as Record<string, unknown>,
-    metadata: {
-      platform: true,
-      actor_email: ctx.email,
-      mode: 'manual',
-    } as Record<string, unknown>,
-  } as never);
+      ingresso: {
+        tipo: 'utente',
+        username: parsed.data.username,
+        password: parsed.data.password,
+      },
+      capoSquadra: parsed.data.capoSquadra,
+    },
+    { userId: ctx.userId, role: 'admin' },
+  );
+  if (!esito.ok) return { ok: false, error: esito.error };
 
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
   revalidatePath('/admin/utenti');
-  return { ok: true, loginEmail, password: parsed.data.password, userId: uid };
+  return {
+    ok: true,
+    loginEmail: esito.data.emailAuth,
+    password: esito.data.password ?? '',
+    userId: esito.data.userId,
+  };
 }
 
 // ─── Imposta password manualmente (no email) ────────────────────────
@@ -309,7 +272,24 @@ export async function impostaPasswordManuale(
   const upd = await supabase.auth.admin.updateUserById(parsed.data.userId, {
     password: parsed.data.password,
   });
+
   if (upd.error) return { ok: false, error: upd.error.message };
+
+  // ⚠️ Chi riceve una password da qualcun altro deve cambiarla al primo
+  // ingresso: e' la stessa regola di `reimpostaAccesso` lato ufficio, che qui
+  // mancava. Senza, una password consegnata a voce dal pannello restava quella
+  // per sempre.
+  //
+  // ⚠️ DOPO il cambio, mai prima: se il cambio fallisce, alzare il cancello
+  // obbligherebbe la persona a scegliere una password nuova per un account la
+  // cui password non e' cambiata. L'ordine e' lo stesso di `/cambia-password`.
+  const { error: errCancello } = await supabase
+    .from('users')
+    .update({ must_change_password: true, password_changed_at: null } as never)
+    .eq('id', parsed.data.userId);
+  if (errCancello) {
+    console.error('[admin/utenti] password cambiata ma cancello non rialzato:', errCancello.message);
+  }
 
   await supabase.from('audit_events').insert({
     tenant_id: u.tenant_id ?? null,
@@ -332,9 +312,10 @@ const invitaTenantUserSchema = z.object({
   tenantId: z.string().uuid(),
   email: z.string().email(),
   displayName: z.string().min(2).max(120),
-  role: z.enum(['admin', 'office', 'tecnico']),
+  role: z.enum(RUOLI_ACCOUNT),
 });
 
+/** Invita per email dal pannello di piattaforma. Stesso nucleo dell'ufficio. */
 export async function invitaUtenteTenant(input: z.infer<typeof invitaTenantUserSchema>) {
   const ctx = await requirePlatformAdmin();
   const parsed = invitaTenantUserSchema.safeParse(input);
@@ -348,48 +329,25 @@ export async function invitaUtenteTenant(input: z.infer<typeof invitaTenantUserS
     .maybeSingle();
   if (!tenant) return { ok: false as const, error: 'Tenant non trovato' };
 
-  const invite = await supabase.auth.admin.inviteUserByEmail(parsed.data.email, {
-    data: { display_name: parsed.data.displayName },
-  });
-  if (invite.error) return { ok: false as const, error: invite.error.message };
-  const uid = invite.data.user?.id;
-  if (!uid) return { ok: false as const, error: 'auth id mancante' };
+  const appUrl =
+    (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/+$/, '') ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
-  await supabase.auth.admin.updateUserById(uid, {
-    app_metadata: {
-      tenant_id: parsed.data.tenantId,
-      tenant_slug: tenant.slug,
+  const esito = await faiNascereUnAccount(
+    {
+      tenantId: parsed.data.tenantId,
+      tenantSlug: tenant.slug,
+      displayName: parsed.data.displayName,
       role: parsed.data.role,
-    } as never,
-  });
-
-  const { error: insErr } = await supabase.from('users').insert({
-    id: uid,
-    tenant_id: parsed.data.tenantId,
-    role: parsed.data.role,
-    display_name: parsed.data.displayName,
-    attivo: true,
-  } as never);
-  if (insErr) {
-    // Senza la riga applicativa l'accesso resterebbe a metà: si toglie anche l'utente Auth.
-    const { error: delErr } = await supabase.auth.admin.deleteUser(uid);
-    if (delErr) console.error('[admin/utenti] utente Auth rimasto senza profilo:', uid, delErr.message);
-    return { ok: false as const, error: `Profilo non creato: ${insErr.message}` };
-  }
-
-  await supabase.from('audit_events').insert({
-    tenant_id: parsed.data.tenantId,
-    actor_user_id: ctx.userId,
-    actor_role: 'admin',
-    entity_type: 'user',
-    entity_id: uid,
-    action: 'invite',
-    after_data: {
-      email: parsed.data.email,
-      role: parsed.data.role,
-    } as Record<string, unknown>,
-    metadata: { platform: true, actor_email: ctx.email } as Record<string, unknown>,
-  } as never);
+      ingresso: {
+        tipo: 'invito',
+        email: parsed.data.email,
+        redirectTo: `${appUrl}/auth/callback?next=/accetta-invito`,
+      },
+    },
+    { userId: ctx.userId, role: 'admin' },
+  );
+  if (!esito.ok) return { ok: false as const, error: esito.error };
 
   revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
   revalidatePath('/admin/utenti');
@@ -398,6 +356,13 @@ export async function invitaUtenteTenant(input: z.infer<typeof invitaTenantUserS
 
 export async function cambiaRuoloTenantUser(userId: string, role: string) {
   const ctx = await requirePlatformAdmin();
+  // ⚠️ Accettava QUALUNQUE stringa e la scriveva in `users.role` e nei claim:
+  // un refuso diventava un ruolo inesistente, e `current_role()` nelle policy
+  // RLS non corrispondeva a niente — cioè l'utente non vedeva più nulla,
+  // senza nessun errore.
+  if (!(RUOLI_ACCOUNT as readonly string[]).includes(role)) {
+    return { ok: false as const, error: `Ruolo non riconosciuto: ${role}` };
+  }
   const supabase = createServiceSupabase();
   const { data: u } = await supabase
     .from('users')

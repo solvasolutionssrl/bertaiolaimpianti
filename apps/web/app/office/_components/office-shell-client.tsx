@@ -234,7 +234,12 @@ function buildNav(
       variant: 'section',
       defaultOpen: true,
       children: [
-        { id: 'dipendenti', label: 'Dipendenti', href: '/office/personale/dipendenti' },
+        // ⚠️ «Dipendenti» NON si mette qui: la aggiunge `injectPersonale`, che
+        // e' l'unico punto che guarda il modulo. Messa a mano qui era
+        // incondizionata, e dopo lo spostamento della pagina sotto
+        // `/office/personale/` (protetta dal modulo `dipendenti`) diventava
+        // una voce di menu che non apre niente — lo stesso difetto che quello
+        // spostamento doveva eliminare, riprodotto nell'altro verso.
         { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
         { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
         { id: 'clienti', label: 'Clienti', href: '/office/clienti' },

@@ -22,7 +22,7 @@ const MONDI = {
     '/office/kantiere',
     '/office/kantiere/rapportini',
     '/office/kantiere/cantieri',
-    '/office/kantiere/dipendenti',
+    '/office/personale/dipendenti',
     '/office/kantiere/sedi',
     '/office/kantiere/mezzi',
     '/office/kantiere/kontabilita',

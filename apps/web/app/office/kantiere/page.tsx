@@ -11,6 +11,7 @@ import { TurniAttivi } from './_components/turni-attivi';
 import { BarsOrizzontali, AreaTrend, DonutOre } from './_components/charts';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import { turniAttivi } from '@/app/office/_actions/kantiere-turni-attivi';
+import { tenantHasModule } from '@/app/_lib/modules';
 import {
   Users,
   QrCode,
@@ -92,6 +93,9 @@ function settimanaDa(): string {
 export default async function KantierePanoramica() {
   const ctx = await requireTenantContext();
   const supabase = createServerSupabase();
+  // La scorciatoia «Dipendenti» qui sotto porta a una pagina protetta dal
+  // modulo: senza, sarebbe un riquadro che non apre niente.
+  const hasDipendenti = await tenantHasModule('dipendenti');
 
   // ===== KPI 1: dipendenti attivi =====
   const { count: dipendentiAttivi } = await supabase
@@ -565,7 +569,11 @@ export default async function KantierePanoramica() {
             { href: '/office/kantiere/cantieri', label: 'Cantieri', Icon: HardHat },
             { href: '/office/kantiere/qr', label: 'QR code', Icon: QrCode },
             { href: '/office/kantiere/rapportini', label: 'Rapportini', Icon: ClipboardList },
-            { href: '/office/personale/dipendenti', label: 'Dipendenti', Icon: Users },
+            // Solo se il modulo c'e': la pagina sta sotto `/office/personale/`,
+            // protetta da `tenantHasModule('dipendenti')`.
+            ...(hasDipendenti
+              ? [{ href: '/office/personale/dipendenti', label: 'Dipendenti', Icon: Users }]
+              : []),
             { href: '/office/kantiere/report', label: 'Report ore', Icon: Clock },
             { href: '/office/kantiere/anomalie', label: 'Anomalie', Icon: AlertTriangle },
           ].map(({ href, label, Icon }) => (

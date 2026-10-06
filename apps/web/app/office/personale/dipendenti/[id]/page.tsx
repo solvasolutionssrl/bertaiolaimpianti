@@ -1,4 +1,4 @@
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { COLONNE_QUOTE, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';

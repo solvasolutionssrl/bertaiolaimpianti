@@ -91,7 +91,7 @@ try {
   await foto(cdp, 'quote-04-ore-costi');
 
   // ── Scheda dipendente ─────────────────────────────────────────────────────
-  await vaiA(cdp, `/office/kantiere/dipendenti/${MARCO}`);
+  await vaiA(cdp, `/office/personale/dipendenti/${MARCO}`);
   await pausa(2000);
   t = await testo(cdp);
   esito(/Viaggio eccedente/.test(t), 'la scheda dipendente mostra il viaggio eccedente');

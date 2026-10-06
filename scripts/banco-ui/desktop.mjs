@@ -30,7 +30,7 @@ const ROTTE = {
     ['/office/kantiere/rapportini', 'Presenze e ore'],
     ['/office/kantiere/ore-costi', 'Ore e costi'],
     ['/office/kantiere/kontabilita', 'Kontabilità'],
-    ['/office/kantiere/dipendenti', 'Dipendenti'],
+    ['/office/personale/dipendenti', 'Dipendenti'],
     ['/office/kantiere/mezzi', 'Parco mezzi'],
     ['/office/kantiere/sedi', 'Sedi'],
     ['/office/kantiere/qr', 'QR code'],
@@ -213,7 +213,36 @@ async function main() {
       await cdp.invia('Network.emulateNetworkConditions', {
         offline: false, latency: 400, downloadThroughput: 200_000, uploadThroughput: 200_000,
       });
-      await valuta(cdp, `(document.querySelector('aside nav a[href="${path}"]')||{click(){}}).click(), true`);
+      // ⚠️ Prima qui c'era `(document.querySelector(...)||{click(){}}).click()`:
+      // se il collegamento non era nel DOM il banco **non diceva niente** e
+      // riportava «nessun segno», cioè un difetto dell'app che non esisteva.
+      // Tre voci su tredici stanno dentro sezioni chiuse della sidebar, e
+      // sparivano cosi'. Adesso: si apre la sezione che le contiene, e se il
+      // collegamento proprio non c'e' lo si dice.
+      // ⚠️ Si apre PRIMA e si controlla DOPO: il clic su una sezione cambia lo
+      // stato di React, e il DOM non è aggiornato nello stesso giro. La prima
+      // versione controllava subito dopo il clic e dichiarava «non c'è» un
+      // collegamento che un istante più tardi c'era.
+      const giaLi = await valuta(
+        cdp,
+        `!!document.querySelector('aside nav a[href="${path}"]')`,
+      );
+      if (!giaLi) {
+        await valuta(
+          cdp,
+          `[...document.querySelectorAll('aside [aria-expanded="false"]')].forEach((t) => t.click()), true`,
+        );
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      const cE = await valuta(
+        cdp,
+        `!!document.querySelector('aside nav a[href="${path}"]')`,
+      );
+      if (!cE) {
+        esito(false, `${nome}`, 'il collegamento non è nella sidebar');
+        continue;
+      }
+      await valuta(cdp, `document.querySelector('aside nav a[href="${path}"]').click(), true`);
       // entro mezzo secondo dal click deve esserci UN segno: skeleton, spinner,
       // o la voce marcata come attiva.
       await new Promise((r) => setTimeout(r, 500));

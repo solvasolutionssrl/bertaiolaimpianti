@@ -1,3 +1,4 @@
+import Link from 'next/link';
 /**
  * /t/[token] — Landing page per la scansione del QR Kantiere.
  *
@@ -28,6 +29,7 @@ import { LandingPubblica } from './_components/landing-pubblica';
 import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
 import { sonoCapoSquadra } from '@/app/mobile/kantiere/_lib/capo';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
+import { devoCambiarePassword } from '@/app/_lib/cambio-password';
 
 export const dynamic = 'force-dynamic';
 
@@ -249,6 +251,40 @@ export default async function TokenPage({
         cantiere={titolo}
         token={token}
       />
+    );
+  }
+
+  /**
+   * 4a-bis. Deve ancora scegliere la sua password.
+   *
+   * ⚠️ Il cancello del primo accesso sta nei gusci di `/office` e `/mobile`,
+   * ma **il tecnico di un cliente del mondo presenze vive qui**: scansiona il
+   * QR e timbra, senza passare da nessuno dei due. Senza questo controllo un
+   * account nuovo poteva timbrare entrata, pausa e uscita all'infinito
+   * restando per sempre sulla password dettata dall'ufficio — cioè il
+   * cancello era aggirabile proprio sulla superficie più usata.
+   *
+   * Non si rimbalza (un `redirect()` qui lascerebbe una pagina bianca, come
+   * misurato il 07/10): si mostra dove andare.
+   */
+  if (await devoCambiarePassword()) {
+    return (
+      <Schermo>
+        <IconaQr />
+        <h1 className="text-center text-lg font-semibold tracking-tight text-foreground">
+          Scegli la tua password
+        </h1>
+        <p className="max-w-xs text-center text-sm text-muted-foreground">
+          Prima di timbrare devi sostituire la password che ti hanno dato in
+          ufficio con una che sai solo tu.
+        </p>
+        <Link
+          href="/cambia-password"
+          className="inline-flex h-11 items-center rounded-lg bg-foreground px-5 text-sm font-semibold text-background"
+        >
+          Scegli la password
+        </Link>
+      </Schermo>
     );
   }
 

@@ -35,17 +35,33 @@ export default async function UtentiPage() {
   const supabase = createServerSupabase();
   const canEdit = canManageTenant(ctx);
 
-  // Una query sola. `permissions`, `must_change_password` e le colonne
-  // dell'invito non stanno nei tipi generati: il cast è lo stesso idioma usato
-  // in tutto il repo per le tabelle rimaste indietro.
-  const { data: appUsers, error } = await (supabase as any)
-    .from('users')
-    .select(
-      'id, display_name, role, attivo, avatar_url, permissions, must_change_password, invite_sent_at, invite_accepted_at',
-    )
-    .eq('tenant_id', ctx.tenantId)
-    .order('attivo', { ascending: false })
-    .order('display_name', { ascending: true });
+  /**
+   * Una query sola, con un ripiego.
+   *
+   * ⚠️ `must_change_password` arriva con una migration che si applica a mano:
+   * se il codice va online prima, una `select` che la nomina **fallisce
+   * tutta** e la pagina mostra zero utenti — senza che si capisca perché. È
+   * la stessa difensiva che usano `tenant-features.ts` e
+   * `dipendenti-modalita.ts`: si riprova con le colonne di sempre, così al
+   * massimo manca un pallino, non l'elenco delle persone.
+   */
+  const COLONNE_COMPLETE =
+    'id, display_name, role, attivo, avatar_url, permissions, must_change_password, invite_sent_at, invite_accepted_at';
+  const COLONNE_SICURE = 'id, display_name, role, attivo, avatar_url, permissions';
+
+  const leggi = (colonne: string) =>
+    (supabase as any)
+      .from('users')
+      .select(colonne)
+      .eq('tenant_id', ctx.tenantId)
+      .order('attivo', { ascending: false })
+      .order('display_name', { ascending: true });
+
+  let { data: appUsers, error } = await leggi(COLONNE_COMPLETE);
+  if (error) {
+    console.warn('[utenti] colonne nuove non disponibili, ripiego:', error.message);
+    ({ data: appUsers, error } = await leggi(COLONNE_SICURE));
+  }
 
   const righeApp = (appUsers ?? []) as UserAppRow[];
 

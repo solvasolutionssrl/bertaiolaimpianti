@@ -47,6 +47,11 @@ import { creaUtenteTenant, impersonateUser } from '../../../_actions/tenants';
 import { impostaPotereUtente } from '../../../_actions/utenti';
 import { haCapacita } from '@kommessa/api/capacita';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import {
+  BYTE_TEMPORANEA,
+  componiPasswordTemporanea,
+  proponiUsername,
+} from '@kommessa/api/identita';
 
 interface UtenteRow {
   id: string;
@@ -517,7 +522,7 @@ export function TabUtenti({
                       setManualDisplayName(e.target.value);
                       // Auto-popola username dal nome se è vuoto
                       if (!manualUsername) {
-                        setManualUsername(slugifyUsername(e.target.value));
+                        setManualUsername(proponiDaNome(e.target.value));
                       }
                     }}
                     placeholder="Es. Mario Rossi"
@@ -946,23 +951,34 @@ function CredField({
   );
 }
 
-function slugifyUsername(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, '.')
-    .replace(/\.+/g, '.')
-    .replace(/^\.|\.$/g, '')
-    .slice(0, 40);
+/**
+ * Il nome utente proposto dal nome della persona.
+ *
+ * ⚠️ Era una copia locale che **sostituiva in silenzio** i caratteri non
+ * ammessi con un punto, invece di dire che non vanno: chi scriveva «Mario
+ * Rossi» si ritrovava `mario.rossi` senza sapere perché. Ora propone
+ * `m.rossi` come fa l'ufficio, e la validazione vera la fa il server con le
+ * stesse regole (`@kommessa/api/identita`).
+ */
+function proponiDaNome(nomeCompleto: string): string {
+  const pezzi = nomeCompleto.trim().split(/\s+/);
+  const proposto =
+    pezzi.length > 1
+      ? proponiUsername(pezzi[0]!, pezzi.slice(1).join(' '))
+      : proponiUsername(pezzi[0] ?? '');
+  return proposto ?? '';
 }
 
-function generaPassword(len = 14): string {
-  // Crittograficamente sicura. Caratteri inequivoci (no 0/O, 1/l/I).
-  const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
-  const arr = new Uint32Array(len);
-  crypto.getRandomValues(arr);
-  let out = '';
-  for (let i = 0; i < len; i++) out += alphabet[arr[i]! % alphabet.length];
-  return out;
+/**
+ * Una password temporanea **dettabile al telefono**.
+ *
+ * ⚠️ Quella di prima era di quattordici caratteri con dentro `!@#$%`: sicura
+ * e inutilizzabile, perché queste credenziali si consegnano **a voce**. Ora è
+ * la stessa dell'ufficio (`Tabero47`): sillabe pronunciabili, senza i
+ * caratteri che si confondono parlando.
+ */
+function generaPassword(): string {
+  const byte = new Uint8Array(BYTE_TEMPORANEA);
+  crypto.getRandomValues(byte);
+  return componiPasswordTemporanea(byte);
 }

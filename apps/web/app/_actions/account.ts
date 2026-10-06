@@ -4,12 +4,10 @@ import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { faiNascereUnAccount } from './_lib/account-core';
 import {
   BYTE_TEMPORANEA,
-  aliasLogin,
   componiPasswordTemporanea,
-  validaPassword,
-  validaUsername,
 } from '@kommessa/api/identita';
 
 import { requireTenantContextCached } from '@/app/_lib/tenant-cache';
@@ -129,113 +127,43 @@ export async function creaAccount(input: {
   role: RuoloCreabile;
   /** Se assente, la genera il server. È il caso normale. */
   password?: string;
+  /** Da dare subito, invece che in un secondo giro che può fallire da solo. */
+  capoSquadra?: boolean;
   /** Se passato, l'account viene legato a quella scheda del personale. */
   dipendenteId?: string | null;
 }): Promise<Esito<AccountCreato>> {
-  const ruolo = input?.role;
-  if (!RUOLI_CREABILI.includes(ruolo)) return { ok: false, error: 'Ruolo non valido.' };
-
-  const g = await guardia(ruolo);
+  const g = await guardia(input?.role);
   if (!g.ok) return { ok: false, error: g.errore };
   const { ctx, service } = g;
 
-  const vu = validaUsername(input?.username);
-  if (!vu.ok) return { ok: false, error: vu.motivo };
-  const username = vu.username;
-
-  const displayName = String(input?.displayName ?? '').trim();
-  if (displayName.length < 2 || displayName.length > 120) {
-    return { ok: false, error: 'Il nome della persona deve stare fra 2 e 120 caratteri.' };
-  }
-
-  // Password: quella data, oppure una generata. In entrambi i casi passa dalla
-  // stessa validazione — una password scelta a mano dall'ufficio non è più
-  // affidabile di una generata, spesso è meno.
-  const password = input?.password?.trim() || nuovaPasswordTemporanea();
-  const vp = validaPassword(password, { username });
-  if (!vp.ok) return { ok: false, error: vp.motivo };
-
-  const aliasInterno = aliasLogin(username, ctx.tenantSlug);
-
-  const creato = await service.auth.admin.createUser({
-    email: aliasInterno,
-    password,
-    // Nessuna casella da confermare: l'indirizzo non esiste per definizione.
-    email_confirm: true,
-    user_metadata: { display_name: displayName },
-    app_metadata: {
-      tenant_id: ctx.tenantId,
-      tenant_slug: ctx.tenantSlug,
-      role: ruolo,
-      manual_account: true,
-    } as never,
-  });
-  if (creato.error) {
-    const msg = creato.error.message.toLowerCase();
-    // GoTrue non dice «username occupato», dice «already registered». Tradotto,
-    // perché chi compila il modulo ha scritto un nome utente, non un'email.
-    if (msg.includes('already')) {
-      return { ok: false, error: `Il nome utente “${username}” è già usato in questo spazio di lavoro.` };
-    }
-    return { ok: false, error: creato.error.message };
-  }
-  const userId = creato.data.user?.id;
-  if (!userId) return { ok: false, error: 'Supabase non ha restituito l’id dell’account.' };
-
-  const { error: errProfilo } = await service.from('users').insert({
-    id: userId,
-    tenant_id: ctx.tenantId,
-    role: ruolo,
-    display_name: displayName,
-    attivo: true,
-    must_change_password: true,
-  } as never);
-  if (errProfilo) {
-    // Un account in Auth senza riga in `users` è un fantasma: entra e non ha
-    // tenant, quindi vede la pagina d'errore. Meglio toglierlo.
-    try {
-      await service.auth.admin.deleteUser(userId);
-    } catch {
-      /* best-effort: se non si cancella, resta un account senza profilo */
-    }
-    return { ok: false, error: `Account non creato: ${errProfilo.message}` };
-  }
-
-  // Legame con la scheda del personale, se ce n'è una. Non blocca: l'accesso
-  // funziona anche senza, e si può collegare dopo dalla scheda.
-  let avvisoLegame: string | null = null;
-  if (input?.dipendenteId) {
-    const { error } = await service
-      .from('dipendenti' as never)
-      .update({ user_id: userId } as never)
-      .eq('id', input.dipendenteId)
-      .eq('tenant_id', ctx.tenantId);
-    if (error) avvisoLegame = error.message;
-  }
-
-  await auditTenant(service as never, {
-    tenantId: ctx.tenantId,
-    actorUserId: ctx.userId,
-    actorRole: ctx.role,
-    entityType: 'utente',
-    entityId: userId,
-    action: 'account.crea',
-    // ⚠️ Mai la password, nemmeno qui: l'audit lo legge tutto l'ufficio.
-    after: { username, ruolo, nome: displayName, deve_cambiare_password: true } as never,
-    metadata: avvisoLegame ? { legame_dipendente_fallito: avvisoLegame } : undefined,
-  });
+  const esito = await faiNascereUnAccount(
+    {
+      tenantId: ctx.tenantId,
+      tenantSlug: ctx.tenantSlug,
+      displayName: input?.displayName ?? '',
+      role: input.role,
+      ingresso: {
+        tipo: 'utente',
+        username: input?.username ?? '',
+        password: input?.password,
+      },
+      capoSquadra: input?.capoSquadra,
+      dipendenteId: input?.dipendenteId ?? null,
+    },
+    { userId: ctx.userId, role: ctx.role === 'admin' ? 'admin' : 'office' },
+  );
+  if (!esito.ok) return { ok: false, error: esito.error };
 
   revalidatePath('/office/impostazioni/utenti');
-  revalidatePath('/office/personale/dipendenti');
   revalidatePath('/office/personale/dipendenti');
 
   return {
     ok: true,
     data: {
-      userId,
-      username,
-      password,
-      aliasInterno,
+      userId: esito.data.userId,
+      username: esito.data.username ?? '',
+      password: esito.data.password ?? '',
+      aliasInterno: esito.data.emailAuth,
       codiceAzienda: await codiceAziendaDelTenant(service, ctx.tenantId),
     },
   };
