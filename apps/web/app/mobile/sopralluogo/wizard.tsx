@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Check,
@@ -314,7 +315,6 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
           state={state}
           mediaCount={mediaFiles.length}
           submitting={submitting}
-          uploading={false}
           onSubmit={handleSubmit}
         />
       )}
@@ -361,7 +361,9 @@ export function SopralluogoWizard({ clienti, voci, preset }: WizardProps) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ProgressBar({ step }: { step: Step }) {
-  const labels = ['Cliente', 'Cattura', 'Voci', 'Riepilogo', 'Nome', 'Foto/video', 'Conferma', 'Fatto'];
+  // Ogni passo porta il nome del suo effetto, non della schermata: «Conferma»
+  // non diceva che quel tasto crea la commessa e le sue cartelle.
+  const labels = ['Cliente', 'Cattura', 'Voci', 'Riepilogo', 'Nome', 'Foto/video', 'Conferma e crea', 'Fatto'];
   return (
     <div className="flex items-center gap-0.5 text-[9px] font-medium uppercase tracking-wider">
       {labels.map((l, i) => {
@@ -1349,16 +1351,19 @@ function Step7Conferma({
   state,
   mediaCount,
   submitting,
-  uploading,
   onSubmit,
 }: {
   state: State;
   mediaCount: number;
   submitting: boolean;
-  uploading: boolean;
   onSubmit: () => void;
 }) {
-  const busy = submitting || uploading;
+  // In questo wizard i media NON bloccano: vanno nella coda persistente e
+  // salgono per conto loro. C'era una prop `uploading` passata fissa a `false`
+  // e un messaggio «Carico foto/video…» che quindi non e' mai comparso a
+  // nessuno. Tolti: un ramo che non si accende e' solo una bugia che qualcuno
+  // un giorno leggera' come verita'.
+  const busy = submitting;
   return (
     <section className="space-y-4">
       <h2 className="text-base font-semibold">7 · Conferma e crea</h2>
@@ -1384,12 +1389,14 @@ function Step7Conferma({
         {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            {uploading ? `Carico foto/video (${mediaCount} file)…` : 'Creo la commessa…'}
+            Creo la commessa…
           </>
         ) : (
           <>
             <Check className="h-4 w-4" aria-hidden="true" />
             Crea commessa{mediaCount > 0 ? ` + ${mediaCount} foto/video` : ''}
+            {/* Stessa freccia del dettato vocale: questo tasto conclude. */}
+            <ArrowRight className="ml-auto h-5 w-5" aria-hidden="true" />
           </>
         )}
       </Button>

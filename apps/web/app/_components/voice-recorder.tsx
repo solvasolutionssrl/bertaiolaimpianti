@@ -287,7 +287,11 @@ export function VoiceRecorder({
 
     // Troppo breve per contenere qualcosa: si butta, senza passare dall'AI.
     if (Date.now() - state.startedAt < DURATA_MINIMA_MS) {
-      setAvviso('Registrazione troppo breve: tieni premuto il microfono e parla.');
+      // ⚠️ NON dire «tieni premuto»: questo tasto si tocca per avviare e si
+      // tocca per fermare (la scelta e' spiegata in testa al file). Il vecchio
+      // messaggio insegnava il gesto sbagliato proprio a chi aveva appena
+      // sbagliato, ed e' una delle ragioni per cui il tasto «non si capisce».
+      setAvviso('Troppo breve: tocca il microfono, parla, poi tocca per fermare.');
       try {
         if (recorderRef.current) {
           recorderRef.current.onstop = () => {
@@ -363,6 +367,12 @@ export function VoiceRecorder({
   }
 
   const isRecording = state.kind === 'recording';
+  /**
+   * Fermo e toccabile: ne' in registrazione, ne' in attesa del permesso, ne'
+   * mentre si chiude l'audio. Solo qui ha senso invitare a toccare. (Gli
+   * errori non sono uno stato: vivono in `avviso`, e il tasto resta `idle`.)
+   */
+  const pronto = !disabled && state.kind === 'idle';
   const elapsed = isRecording ? state.elapsedSec : 0;
   const atLimit = elapsed >= maxDurationSec - 5;
 
@@ -386,6 +396,29 @@ export function VoiceRecorder({
             <span
               aria-hidden="true"
               className="pointer-events-none absolute inset-0 -m-2 animate-pulse rounded-full bg-accent/20"
+            />
+          </>
+        ) : pronto ? (
+          <>
+            {/*
+              A riposo il tasto non diceva in nessun modo di essere un tasto:
+              un cerchio blu fermo in mezzo allo schermo si legge come
+              un'illustrazione. Qui c'e' un'onda lenta che parte dal bordo —
+              molto piu' lenta e piu' tenue di quella della registrazione, che
+              resta inconfondibile — piu' un anello fisso che disegna il bordo
+              premibile.
+
+              `motion-safe:` e non `animate-` secco: chi ha chiesto al sistema
+              operativo di ridurre le animazioni vede l'anello fermo, che e'
+              comunque un'affordance.
+            */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -m-2 rounded-full bg-[hsl(220_80%_45%)]/20 motion-safe:animate-ping [animation-duration:2.8s]"
+            />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 -m-1 rounded-full ring-2 ring-[hsl(220_80%_45%)]/25"
             />
           </>
         ) : null}
@@ -472,7 +505,7 @@ export function VoiceRecorder({
                 isXl ? 'text-base' : 'text-sm'
               } font-medium text-foreground`}
             >
-              Tocca per iniziare
+              Tocca il microfono e parla
             </p>
             <p className="text-xs text-muted-foreground">
               Max {Math.round(maxDurationSec / 60)} min · l&apos;audio non viene

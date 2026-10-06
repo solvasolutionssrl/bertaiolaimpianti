@@ -22,6 +22,13 @@ interface Config {
 }
 
 /**
+ * Tempo massimo per una singola creazione di cartella. Generoso: Hetzner sta in
+ * Germania e sotto carico rallenta. Serve a fermare la `fetch` che non torna
+ * mai, non a tagliare quella lenta.
+ */
+const MKCOL_TIMEOUT_MS = 15_000;
+
+/**
  * Nextcloud / Hetzner Storage Share adapter (WebDAV + OCS API).
  *
  * Status: provider candidato per produzione (Hetzner Storage Share era
@@ -72,27 +79,94 @@ export class NextcloudStorageProvider implements StorageProvider {
     return res;
   }
 
+  /**
+   * Cartelle gia' create da QUESTA istanza del provider.
+   *
+   * `MKCOL` non e' ricorsivo, quindi ogni cartella in fondo a un ramo chiede di
+   * creare prima tutti i suoi genitori. Senza memoria, costruire l'albero
+   * standard di una commessa (13 voci, fino a due livelli) faceva **49 MKCOL**
+   * di cui circa **35 su cartelle create un attimo prima**: rispondevano 405,
+   * ma il viaggio fino all'Irlanda si pagava comunque.
+   *
+   * La memoria vive quanto l'istanza, cioe' quanto una richiesta: non e' una
+   * cache da invalidare, e non puo' dire il falso su una cartella creata da
+   * qualcun altro, perche' `MKCOL` su una cartella esistente e' innocuo.
+   */
+  private readonly gia = new Set<string>();
+
+  /**
+   * Un solo MKCOL, con memoria e con un tempo massimo.
+   *
+   * ⚠️ Il timeout non e' un dettaglio: prima non c'era **nessun** `AbortSignal`,
+   * e una `fetch` che restava appesa bloccava l'intera creazione della commessa
+   * senza che niente scadesse mai.
+   */
+  private async mkcol(path: string): Promise<void> {
+    if (this.gia.has(path)) return;
+    let ultimo: unknown;
+    // Due tentativi: `MKCOL` e' idempotente (405 = esiste gia'), quindi
+    // ripetere non puo' fare danni, e un singolo intoppo di rete non deve
+    // costare l'intera cartella della commessa.
+    for (let tentativo = 0; tentativo < 2; tentativo += 1) {
+      try {
+        const res = await fetch(this.webdav(path), {
+          method: 'MKCOL',
+          headers: { Authorization: this.authHeader },
+          signal: AbortSignal.timeout(MKCOL_TIMEOUT_MS),
+        });
+        // 201 Created · 405 Method Not Allowed (già esiste) · 409 Conflict
+        if (![201, 405, 409].includes(res.status)) {
+          throw new Error(`MKCOL ${path} → ${res.status}`);
+        }
+        this.gia.add(path);
+        return;
+      } catch (e) {
+        ultimo = e;
+      }
+    }
+    throw ultimo instanceof Error ? ultimo : new Error(`MKCOL ${path} fallito`);
+  }
+
   async createFolder(path: string): Promise<void> {
-    // MKCOL non è ricorsivo; dobbiamo creare i parent
+    // MKCOL non è ricorsivo; dobbiamo creare i parent, dal piu' esterno.
     const segments = path.split('/').filter(Boolean);
     let current = '';
     for (const seg of segments) {
       current += `/${seg}`;
-      const res = await fetch(this.webdav(current), {
-        method: 'MKCOL',
-        headers: { Authorization: this.authHeader },
-      });
-      // 201 Created · 405 Method Not Allowed (già esiste) · 409 Conflict
-      if (![201, 405, 409].includes(res.status)) {
-        throw new Error(`MKCOL ${current} → ${res.status}`);
-      }
+      await this.mkcol(current);
     }
   }
 
+  /**
+   * L'albero di una commessa, **un livello alla volta**.
+   *
+   * Dentro uno stesso livello le cartelle non dipendono l'una dall'altra:
+   * `Preventivi`, `Schemi` e `Materiali` si possono creare insieme. Dipende
+   * invece ogni livello dal precedente, perche' il genitore deve esistere.
+   *
+   * Prima era un ciclo `for … await`, una cartella per volta: con 150-400 ms di
+   * viaggio verso Hetzner facevano da 8 a 30 secondi, **attesi** dentro la
+   * creazione della commessa. Ora sono tre ondate.
+   */
   async createFolderTree(rootPath: string, tree: string[]): Promise<void> {
     await this.createFolder(rootPath);
+
+    // Si raccolgono tutti i percorsi, compresi gli intermedi (`Foto` esiste
+    // solo perche' esiste `Foto/Sopralluogo`), raggruppati per profondita'.
+    const perLivello = new Map<number, string[]>();
     for (const sub of tree) {
-      await this.createFolder(`${rootPath}/${sub}`);
+      let corrente = rootPath;
+      for (const seg of sub.split('/').filter(Boolean)) {
+        corrente += `/${seg}`;
+        const profondita = corrente.split('/').filter(Boolean).length;
+        const righe = perLivello.get(profondita) ?? [];
+        if (!righe.includes(corrente)) righe.push(corrente);
+        perLivello.set(profondita, righe);
+      }
+    }
+
+    for (const profondita of [...perLivello.keys()].sort((a, b) => a - b)) {
+      await Promise.all(perLivello.get(profondita)!.map((p) => this.mkcol(p)));
     }
   }
 

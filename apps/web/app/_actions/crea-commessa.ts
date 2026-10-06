@@ -1,11 +1,15 @@
 'use server';
 
+import { waitUntil } from '@vercel/functions';
 import { revalidatePath } from 'next/cache';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
 import { createServiceSupabase } from '@kommessa/api/service';
-import { requireTenantContext } from '@kommessa/api/tenant';
+// Versione deduplicata per richiesta: `isKantiereOnly` qui sotto passa dalla
+// stessa cache, quindi `supabase.auth.getUser()` viene chiamata UNA volta
+// invece di due. Erano due viaggi di rete in fila prima ancora di cominciare.
+import { requireTenantContextCached } from '@/app/_lib/tenant-cache';
 import { isKantiereOnly } from '@/app/_lib/app-mode';
 import type { AppRole, Json } from '@kommessa/api';
 import { getStorageProvider } from '@kommessa/integrations/storage';
@@ -95,7 +99,7 @@ export async function creaCommessa(
   // 1) Auth + ruolo
   let ctx;
   try {
-    ctx = await requireTenantContext();
+    ctx = await requireTenantContextCached();
   } catch {
     return { ok: false, error: 'Sessione non valida. Effettua nuovamente il login.' };
   }
@@ -344,62 +348,86 @@ export async function creaCommessa(
     }
   }
 
-  // 8) Creazione cartelle su cloud storage (best-effort; non blocca se fallisce).
-  // Oltre allo SCAFFOLD base passiamo l'unione voci A+B: il provisioning
-  // creerà le sottocartelle extra delle voci selezionate (es. la voce 11
-  // "Colonne sanitario" → Foto/In corso/ColonneSanitario), applicando
-  // l'override cartella_template del tenant se presente.
-  const storageResult = await provisionaCartelle({
-    tenantId: ctx.tenantId,
-    nomeCartella,
-    cloudFolderPath,
-    vociAttive: vociUnion,
-  });
+  // 8-9) Cartelle, audit e versione 1: FUORI dal percorso critico.
+  //
+  // ⚠️ Era qui che se ne andavano i 40 secondi lamentati da chi crea una
+  // commessa dal telefono. `provisionaCartelle` era dichiarato «best-effort,
+  // non blocca se fallisce» ed era comunque `await`-ato: non bloccava in caso
+  // di ERRORE, ma bloccava sempre in caso di LENTEZZA, che e' il caso normale.
+  // Sono 50-70 richieste WebDAV verso la Germania.
+  //
+  // Niente di tutto questo serve a comporre la risposta: il codice interno e il
+  // percorso della cartella sono gia' decisi e gia' scritti su `commesse`.
+  //
+  // `waitUntil` e non `void`: senza, Vercel chiude l'invocazione appena parte
+  // la risposta e il lavoro muore a meta' (la stessa regola seguita in
+  // `finalizza-bozza` e `api/v1/esecuzioni`).
+  //
+  // E' sicuro farlo dopo la risposta perche' chi sincronizza un file su
+  // Nextcloud **crea da se' la cartella padre** (`sync-r2-to-nextcloud.ts`):
+  // una foto scattata subito non trova la porta chiusa.
+  waitUntil(
+    (async () => {
+      const storageResult = await provisionaCartelle({
+        tenantId: ctx.tenantId,
+        nomeCartella,
+        cloudFolderPath,
+        vociAttive: vociUnion,
+      });
 
-  // 9) Audit
-  await supabase.from('audit_events').insert({
-    tenant_id: ctx.tenantId,
-    actor_user_id: ctx.userId,
-    actor_role: ctx.role,
-    entity_type: 'commessa',
-    entity_id: commessa.id,
-    action: 'create',
-    after_data: {
-      codice_interno: codiceInterno,
-      nome_cartella: nomeCartella,
-      cliente_id: clienteId,
-      voci: vociUnion,
-      storage: storageResult,
-    } as unknown as Json,
-  });
+      const { error: errAudit } = await supabase.from('audit_events').insert({
+        tenant_id: ctx.tenantId,
+        actor_user_id: ctx.userId,
+        actor_role: ctx.role,
+        entity_type: 'commessa',
+        entity_id: commessa.id,
+        action: 'create',
+        after_data: {
+          codice_interno: codiceInterno,
+          nome_cartella: nomeCartella,
+          cliente_id: clienteId,
+          voci: vociUnion,
+          storage: storageResult,
+        } as unknown as Json,
+      });
+      // supabase-js non solleva: senza questa riga la traccia della creazione
+      // potrebbe sparire in silenzio, e adesso che l'insert gira dopo la
+      // risposta nessuno se ne accorgerebbe mai.
+      if (errAudit) {
+        console.error('[crea-commessa] audit non scritto:', errAudit.message);
+      }
 
-  // 9b) Versione 1 (creazione) — base dello storico. Best-effort: non blocca.
-  try {
-    const snapshotV1 = buildSnapshot(
-      {
-        descrizione_ai_finale: data.descrizioneFinale,
-        cliente_indirizzo_cantiere: data.indirizzoCantiere ?? null,
-        note_iniziali: data.noteIniziali?.trim() || null,
-        is_critica: false,
-        stato: 'aperta',
-        responsabile_id: ctx.userId,
-        cliente_id: clienteId,
-      },
-      data.referenti ?? [],
-    );
-    const nomeV1 = await nomeUtente(supabase, ctx.userId);
-    await scriviVersione(supabase, {
-      tenantId: ctx.tenantId,
-      commessaId: commessa.id,
-      snapshot: snapshotV1,
-      diff: [],
-      azione: 'creazione',
-      modificatoDa: ctx.userId,
-      modificatoDaNome: nomeV1,
-    });
-  } catch (e) {
-    console.warn('[crea-commessa] scrittura versione 1 fallita (non-fatal):', e);
-  }
+      // Versione 1 (creazione) — base dello storico. Best-effort: non blocca.
+      try {
+        const snapshotV1 = buildSnapshot(
+          {
+            descrizione_ai_finale: data.descrizioneFinale,
+            cliente_indirizzo_cantiere: data.indirizzoCantiere ?? null,
+            note_iniziali: data.noteIniziali?.trim() || null,
+            is_critica: false,
+            stato: 'aperta',
+            responsabile_id: ctx.userId,
+            cliente_id: clienteId,
+          },
+          data.referenti ?? [],
+        );
+        const nomeV1 = await nomeUtente(supabase, ctx.userId);
+        await scriviVersione(supabase, {
+          tenantId: ctx.tenantId,
+          commessaId: commessa.id,
+          snapshot: snapshotV1,
+          diff: [],
+          azione: 'creazione',
+          modificatoDa: ctx.userId,
+          modificatoDaNome: nomeV1,
+        });
+      } catch (e) {
+        console.warn('[crea-commessa] scrittura versione 1 fallita (non-fatal):', e);
+      }
+    })().catch((e) => {
+      console.error('[crea-commessa] lavoro post-risposta fallito:', e);
+    }),
+  );
 
   // 10) Revalidate
   revalidatePath('/office/commesse');

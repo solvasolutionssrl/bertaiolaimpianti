@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowRight,
   Loader2,
   Sparkles,
   Lightbulb,
@@ -369,6 +370,14 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
         <>
           <Sparkles className="h-4 w-4" aria-hidden="true" />
           Crea commessa{mediaFiles.length > 0 ? ` + ${mediaFiles.length} foto/video` : ''}
+          {/*
+            La freccia a destra dice che questo tasto porta FUORI dal modulo:
+            è l'ultimo. In fondo a una schermata di revisione piena di tasti
+            «Modifica» non si capiva quale fosse l'azione che conclude.
+            `ml-auto` la spinge al bordo, staccata dal testo, così non si legge
+            come parte della frase.
+          */}
+          <ArrowRight className="ml-auto h-5 w-5" aria-hidden="true" />
         </>
       )}
     </Button>
@@ -396,7 +405,9 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
           {[
             { n: 1, label: 'Registra' },
             { n: 2, label: 'Rivedi' },
-            { n: 3, label: 'Conferma' },
+            // «Conferma» diceva dove sei, non cosa succede premendo: il passo
+            // si chiama col suo effetto.
+            { n: 3, label: 'Conferma e crea' },
           ].map((s, i, arr) => {
             const done = s.n < stepNum;
             const current = s.n === stepNum;

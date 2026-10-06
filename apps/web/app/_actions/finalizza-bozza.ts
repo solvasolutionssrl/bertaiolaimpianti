@@ -4,7 +4,10 @@ import { waitUntil } from '@vercel/functions';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
-import { requireTenantContext } from '@kommessa/api/tenant';
+// Versione deduplicata per richiesta: `isKantiereOnly` qui sotto passa dalla
+// stessa cache, quindi `supabase.auth.getUser()` viene chiamata UNA volta
+// invece di due. Erano due viaggi di rete in fila prima ancora di cominciare.
+import { requireTenantContextCached } from '@/app/_lib/tenant-cache';
 import { isKantiereOnly } from '@/app/_lib/app-mode';
 import {
   buildR2Key,
@@ -72,7 +75,7 @@ export async function finalizzaBozza(
   // 1) Auth
   let ctx;
   try {
-    ctx = await requireTenantContext();
+    ctx = await requireTenantContextCached();
   } catch {
     return { ok: false, error: 'Sessione non valida. Effettua nuovamente il login.' };
   }
