@@ -25,6 +25,7 @@ node scripts/banco-ui/impostazioni.mjs           # Impostazioni Kantiere: sezion
 node scripts/banco-ui/lavoro-da-sede.mjs         # «Lavoro dalla sede sul progetto» in avvio e fine turno (BANCO_SALVA=1 avvia e chiude un turno sul demo)
 node scripts/banco-ui/ore-quote.mjs              # quote delle ore nelle pagine ufficio (dopo registra-giornata con BANCO_SALVA=1)
 node scripts/banco-ui/elenco-commesse.mjs        # l'elenco del tecnico: titolo, tab, ricerca, pastiglie, ordine, sbordo
+node scripts/banco-ui/notifiche-preferenze.mjs   # la pagina notifiche governa qualcosa: la scelta resta dopo un ricaricamento
 ```
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ShieldCheck, CalendarCheck, ChevronRight, KeyRound } from 'lucide-react';
+import { Bell, ShieldCheck, CalendarCheck, ChevronRight, KeyRound } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { etichettaAccesso, etichettaRuolo } from '@kommessa/api/identita';
@@ -67,22 +67,17 @@ export default async function ProfiloPage() {
     : false;
 
   /**
-   * ⚠️ TOLTE il 07/10/2026: la matrice «cosa, quando, come» (sette eventi per
-   * tre canali) e le ore di silenzio.
+   * Le notifiche hanno una pagina propria: `/mobile/profilo/notifiche`.
    *
-   * Non per alleggerire: perche' governavano una strada che non corre.
-   * L'unico punto che manda una notifica push e rispetta quelle scelte e'
-   * `/api/push/send-internal`, che **non ha nessun chiamante** — lo
-   * invocherebbe una Edge Function che a sua volta nessuno chiama e nessun
-   * cron risveglia. Le notifiche che arrivano davvero (444 righe in
-   * produzione) sono scritte direttamente in tabella e non consultano
-   * nessuna preferenza. In piu': **zero sottoscrizioni push** su tutti e
-   * quattro i clienti, da sempre.
-   *
-   * Ventuno caselle che non cambiano niente sono peggio di nessuna casella:
-   * chi le compila crede di aver deciso qualcosa. Le tabelle e le rotte
-   * restano al loro posto — quando colleghiamo l'invio, questo pannello torna
-   * con una riga.
+   * ⚠️ Storia breve, perche' spiega la forma di quella pagina. Il 07/10/2026
+   * da qui e' stata tolta una matrice di ventuno caselle — sette eventi per
+   * tre canali, piu' le ore di silenzio — perche' **governava una strada che
+   * non correva**: l'unico lettore era `/api/push/send-internal`, senza
+   * chiamanti, e le sottoscrizioni push erano zero su tutti e quattro i
+   * clienti. La nota di allora diceva «quando colleghiamo l'invio, questo
+   * pannello torna con una riga». L'invio e' collegato l'08/10 e il pannello
+   * e' tornato: un interruttore per avviso, solo quelli che qualcuno manda
+   * davvero e solo quelli previsti per il mestiere di chi guarda.
    */
 
   // Panoramica spese: solo Kantiere + admin/office con profilo dipendente. Ultime
@@ -183,6 +178,24 @@ export default async function ProfiloPage() {
           dei file in salita. Il pannello fluttuante sparisce quando ha finito,
           quindi senza questa voce un upload fallito diventerebbe irraggiungibile. */}
       {soloKantiere ? null : <CaricamentiLink />}
+
+      {/* Notifiche: cosa farti sapere e su quale telefono. Vale per entrambi i
+          mondi — la pianificazione e i permessi sono avvisi come gli altri. */}
+      <Link
+        href="/mobile/profilo/notifiche"
+        className="flex items-center gap-3 rounded-lg border bg-card p-4 active:scale-[0.99]"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Bell className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">Notifiche</span>
+          <span className="block text-xs text-muted-foreground">
+            Cosa farti sapere, e su quale telefono
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
 
       {/* Ferie e permessi (modulo Dipendenti): richieste + eventuali approvazioni. */}
       {hasFerie ? (

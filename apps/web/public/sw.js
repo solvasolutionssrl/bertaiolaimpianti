@@ -16,7 +16,7 @@
  * Versioning: bump `CACHE_VERSION` ad ogni release per forzare clean-up.
  */
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const SHELL_CACHE = `kommessa-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `kommessa-runtime-${CACHE_VERSION}`;
 const VALID_CACHES = new Set([SHELL_CACHE, RUNTIME_CACHE]);
@@ -215,7 +215,12 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Push notifications (iOS 16.4+ richiede PWA installata) — stub.
+// ─────────────────────── Notifiche sul telefono ───────────────────────
+//
+// Su iOS servono la PWA installata sulla schermata iniziale (16.4+) e il
+// permesso chiesto dentro un gesto dell'utente: vedi
+// `mobile/profilo/notifiche`.
+
 self.addEventListener('push', (event) => {
   if (!event.data) return;
   let payload = {};
@@ -224,12 +229,20 @@ self.addEventListener('push', (event) => {
   } catch {
     payload = { title: 'Kommessa', body: event.data.text() };
   }
+
+  // ⚠️ `url` arriva in CIMA al payload (`{ title, body, url }`), e prima
+  // finiva solo `payload.data` dentro `data`: l'indirizzo si perdeva qui, e
+  // `notificationclick` apriva sempre `/mobile` qualunque cosa fosse
+  // successo. Un avviso che non porta dove serve è mezzo avviso.
+  const dati = Object.assign({}, payload.data || {});
+  if (payload.url && !dati.url) dati.url = payload.url;
+
   event.waitUntil(
     self.registration.showNotification(payload.title || 'Kommessa', {
       body: payload.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
-      data: payload.data || {},
+      data: dati,
     }),
   );
 });
@@ -237,5 +250,56 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/mobile';
-  event.waitUntil(self.clients.openWindow(url));
+
+  // ⚠️ Prima si chiamava `openWindow` e basta: con l'app già aperta si
+  // apriva una SECONDA finestra, e chi stava caricando delle foto se le
+  // vedeva sparire dietro. Si cerca una finestra nostra già viva, la si porta
+  // davanti e la si manda all'indirizzo; solo se non ce n'è si apre.
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((finestre) => {
+        for (const f of finestre) {
+          if (new URL(f.url).origin !== self.location.origin) continue;
+          if ('navigate' in f) return f.navigate(url).then((c) => (c || f).focus());
+          return f.focus();
+        }
+        return self.clients.openWindow(url);
+      })
+      .catch(() => self.clients.openWindow(url)),
+  );
+});
+
+// ⚠️ Il browser può rinnovare da sé una sottoscrizione (chiave scaduta,
+// riparazione interna). Senza questo pezzo la sottoscrizione nuova non arriva
+// al server e quel telefono **smette di ricevere in silenzio**: nessun
+// errore, nessun avviso, solo notifiche che non arrivano più.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  const vecchia = event.oldSubscription;
+  event.waitUntil(
+    (async () => {
+      try {
+        const nuova =
+          event.newSubscription ||
+          (await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vecchia ? vecchia.options.applicationServerKey : undefined,
+          }));
+        if (!nuova) return;
+        const json = nuova.toJSON();
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: nuova.endpoint,
+            keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+            userAgent: 'rinnovo automatico',
+          }),
+        });
+      } catch (e) {
+        // Niente da fare da qui: lo si riprende alla prossima apertura della
+        // pagina delle notifiche, che riallinea la sottoscrizione.
+      }
+    })(),
+  );
 });

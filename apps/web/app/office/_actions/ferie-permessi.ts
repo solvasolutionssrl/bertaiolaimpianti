@@ -2,7 +2,6 @@
 
 import { randomUUID } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
-import { waitUntil } from '@vercel/functions';
 import { z } from 'zod';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -23,7 +22,7 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
 import { PALETTE_GRUPPI } from '@/app/_lib/palette-gruppi';
 import { auditTenant } from '@/app/_actions/_lib/audit';
-import { inviaPushAUtente } from '@/lib/push';
+import { avvisa } from '@/app/_actions/_lib/avvisa';
 
 /**
  * Server actions di Ferie e permessi (modulo Dipendenti, sotto-flag ferie_attiva).
@@ -536,19 +535,12 @@ export async function richiediPermesso(
     const title = 'Nuova richiesta permesso';
     const body = `${nome} · ${tipoLabel} · ${fmtRange(d.dataInizio, d.dataFine)}`;
     const url = '/office/personale/permessi';
-    const { error: eNotifica } = await svc.from('notifiche' as never).insert({
-      tenant_id: ctx.tenantId,
-      user_id: approverUserId,
-      type: 'permesso_richiesto',
-      payload: { title, body, url },
-    } as never);
-    if (eNotifica) console.error('[ferie-permessi] notifica non registrata:', eNotifica.message);
-    // Senza waitUntil la function si ferma dopo la risposta e il push si perde.
-    waitUntil(
-      inviaPushAUtente(svc as never, approverUserId, { title, body, url }).catch((e) =>
-        console.error('[ferie-permessi] push non inviato:', e),
-      ),
-    );
+    // Un posto solo per l'avviso in app e quello sul telefono: dentro
+    // `avvisa()` stanno le preferenze della persona, il suo mestiere e il
+    // `waitUntil` che tiene in vita la consegna oltre la risposta.
+    await avvisa([
+      { userId: approverUserId, codice: 'permesso_richiesto', titolo: title, corpo: body, url },
+    ]);
   }
 
   revalidatePath(PATH_PERMESSI);
@@ -653,18 +645,9 @@ export async function decidiPermesso(
     const title = 'Esito richiesta permesso';
     const body = `La tua richiesta (${tipoPermesso(r.tipo)?.label ?? r.tipo}) è ${esitoLabel}.`;
     const url = '/mobile/permessi';
-    const { error: eNotifica } = await svc.from('notifiche' as never).insert({
-      tenant_id: ctx.tenantId,
-      user_id: targetUser,
-      type: 'permesso_esito',
-      payload: { title, body, url },
-    } as never);
-    if (eNotifica) console.error('[ferie-permessi] notifica non registrata:', eNotifica.message);
-    waitUntil(
-      inviaPushAUtente(svc as never, targetUser, { title, body, url }).catch((e) =>
-        console.error('[ferie-permessi] push non inviato:', e),
-      ),
-    );
+    await avvisa([
+      { userId: targetUser, codice: 'permesso_esito', titolo: title, corpo: body, url },
+    ]);
   }
 
   revalidatePath(PATH_PERMESSI);
@@ -847,18 +830,9 @@ export async function registraAssenzaUfficio(
     const title = 'Assenza registrata';
     const body = `${tipoLabel} · ${fmtRange(d.dataInizio, d.dataFine)}. L'ha inserita l'ufficio.`;
     const url = '/mobile/permessi';
-    const { error: eNotifica } = await svc.from('notifiche' as never).insert({
-      tenant_id: ctx.tenantId,
-      user_id: dip.user_id,
-      type: 'permesso_esito',
-      payload: { title, body, url },
-    } as never);
-    if (eNotifica) console.error('[ferie-permessi] notifica non registrata:', eNotifica.message);
-    waitUntil(
-      inviaPushAUtente(svc as never, dip.user_id, { title, body, url }).catch((e) =>
-        console.error('[ferie-permessi] push non inviato:', e),
-      ),
-    );
+    await avvisa([
+      { userId: dip.user_id, codice: 'permesso_esito', titolo: title, corpo: body, url },
+    ]);
   }
 
   revalidatePath(PATH_PERMESSI);

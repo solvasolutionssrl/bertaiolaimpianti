@@ -24,7 +24,7 @@ import { labelTipoPermesso } from '@kommessa/api/permessi-tipi';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { leggiConfigDipendenti } from '@/app/_lib/dipendenti-config';
 import { auditTenant } from '@/app/_actions/_lib/audit';
-import { inviaPushAUtente } from '@/lib/push';
+import { avvisa } from '@/app/_actions/_lib/avvisa';
 import {
   caricaBlocchiRange,
   caricaBloccoById,
@@ -1072,27 +1072,23 @@ export async function pubblicaSettimana(
       const body = `La tua settimana dal ${dal} è stata pubblicata.`;
       const url = '/mobile/pianificazione';
 
-      // In-app (service bypassa RLS: inserisce notifiche per altri utenti).
-      const { error: errNotif } = await service.from('notifiche' as never).insert(
+      // Un avviso per tutta la squadra in una chiamata: `avvisa()` legge i
+      // mestieri e le preferenze con due letture e inserisce in un colpo.
+      //
+      // ⚠️ Qui il push partiva con un `await` secco, senza `waitUntil`: su
+      // Vercel la funzione si chiude appena risponde, quindi le notifiche
+      // della settimana a volte partivano e a volte no, senza che si vedesse
+      // niente. Ora quel pezzo sta dentro `avvisa()`, dove non si dimentica.
+      const esito = await avvisa(
         conLogin.map((d) => ({
-          tenant_id: ctx.tenantId,
-          user_id: d.user_id,
-          type: 'pianificazione_pubblicata',
-          payload: { title, body, url },
-        })) as never,
+          userId: d.user_id as string,
+          codice: 'pianificazione_pubblicata',
+          titolo: title,
+          corpo: body,
+          url,
+        })),
       );
-      if (!errNotif) notificati = conLogin.length;
-
-      // Push best-effort (in locale senza VAPID non blocca).
-      try {
-        await Promise.all(
-          conLogin.map((d) =>
-            inviaPushAUtente(service as never, d.user_id as string, { title, body, url }).catch(() => null),
-          ),
-        );
-      } catch {
-        // push non configurato → ignora
-      }
+      notificati = esito.registrati;
     }
   }
 
