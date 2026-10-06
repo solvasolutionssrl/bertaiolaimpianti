@@ -227,7 +227,7 @@ export async function creaAccount(input: {
 
   revalidatePath('/office/impostazioni/utenti');
   revalidatePath('/office/personale/dipendenti');
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
 
   return {
     ok: true,

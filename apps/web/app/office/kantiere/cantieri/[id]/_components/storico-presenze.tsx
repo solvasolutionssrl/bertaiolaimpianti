@@ -172,7 +172,7 @@ export function StoricoPresenze({ data }: { data: StoricoData }) {
                   >
                     <td className="px-3 py-2">
                       <Link
-                        href={`/office/kantiere/dipendenti/${p.dipendenteId}`}
+                        href={`/office/personale/dipendenti/${p.dipendenteId}`}
                         className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
                       >
                         {p.nome}

@@ -64,6 +64,18 @@ interface Props {
   gestionaleAttivo?: boolean;
   /** id dipendente → identificativo sul gestionale, per chi è collegato. */
   externalPerDipendente?: Record<string, string>;
+  /**
+   * Se questo cliente ha il mondo presenze (modulo Kantiere).
+   *
+   * L'anagrafica del personale serve a **tutti**: nome, mansione, chi è
+   * l'utente dell'app, se è in forza. Quello che riguarda i turni — lavoro a
+   * turni, modalità dell'app, tesserino QR — esiste solo dove si timbra, e
+   * mostrarlo a un cliente che non timbra significa chiedergli di decidere
+   * qualcosa che non ha nessun effetto.
+   */
+  mondoPresenze?: boolean;
+  /** Da dove si apre la scheda di una persona. */
+  basePath?: string;
 }
 
 /** Modalità di gestione dell'accesso app per il dipendente. */
@@ -210,6 +222,8 @@ export function DipendentiClient({
   tenantSlug,
   gestionaleAttivo = false,
   externalPerDipendente,
+  mondoPresenze = true,
+  basePath = '/office/personale/dipendenti',
 }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
@@ -555,9 +569,13 @@ export function DipendentiClient({
                     <th className="px-3 py-2 font-medium">Codice</th>
                     <th className="px-3 py-2 font-medium">Accesso</th>
                     <th className="px-3 py-2 font-medium">Ruolo</th>
-                    <th className="px-3 py-2 font-medium">Turni</th>
-                    {/* Dice cosa chiede l'app a questa persona, non dove sta. */}
-                    <th className="px-3 py-2 font-medium">Modalità app</th>
+                    {mondoPresenze ? (
+                      <>
+                        <th className="px-3 py-2 font-medium">Turni</th>
+                        {/* Dice cosa chiede l'app a questa persona, non dove sta. */}
+                        <th className="px-3 py-2 font-medium">Modalità app</th>
+                      </>
+                    ) : null}
                     <th className="px-3 py-2 font-medium">Stato</th>
                     <th className="w-32 px-3 py-2" aria-label="Azioni" />
                   </tr>
@@ -576,7 +594,7 @@ export function DipendentiClient({
                       >
                         <td className="px-3 py-2 font-medium">
                           <Link
-                            href={`/office/kantiere/dipendenti/${d.id}`}
+                            href={`${basePath}/${d.id}`}
                             className="text-primary hover:underline"
                           >
                             {d.cognome} {d.nome}
@@ -607,6 +625,8 @@ export function DipendentiClient({
                         <td className="px-3 py-2 text-xs text-muted-foreground">
                           {utente ? etichettaRuolo(utente.role) : 'n.d.'}
                         </td>
+                        {mondoPresenze ? (
+                        <>
                         <td className="px-3 py-2">
                           {d.a_turni ? (
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
@@ -629,6 +649,8 @@ export function DipendentiClient({
                             {LABEL_MODALITA[d.modalitaLavoro]}
                           </span>
                         </td>
+                        </>
+                        ) : null}
                         <td className="px-3 py-2">
                           <span
                             className={
@@ -651,7 +673,7 @@ export function DipendentiClient({
                           <div className="flex items-center justify-end gap-1">
                             <Button asChild size="sm" variant="outline">
                               <Link
-                                href={`/office/kantiere/dipendenti/${d.id}`}
+                                href={`${basePath}/${d.id}`}
                                 aria-label={`Apri scheda di ${d.cognome} ${d.nome}`}
                               >
                                 Apri
@@ -991,25 +1013,31 @@ export function DipendentiClient({
                   Dipendente attivo
                 </Label>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  id="a_turni"
-                  name="a_turni"
-                  type="checkbox"
-                  checked={form.a_turni}
-                  onChange={handleChange}
-                  className="h-4 w-4 rounded border-border accent-primary"
-                />
-                <Label htmlFor="a_turni" className="cursor-pointer select-none">
-                  Lavoro a turni
-                </Label>
-                <span className="text-xs text-muted-foreground">(influisce sul calcolo delle maggiorazioni)</span>
-              </div>
+              {mondoPresenze ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    id="a_turni"
+                    name="a_turni"
+                    type="checkbox"
+                    checked={form.a_turni}
+                    onChange={handleChange}
+                    className="h-4 w-4 rounded border-border accent-primary"
+                  />
+                  <Label htmlFor="a_turni" className="cursor-pointer select-none">
+                    Lavoro a turni
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    (influisce sul calcolo delle maggiorazioni)
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             {/* Come lavora: NON è un ruolo e non tocca i permessi. Cambia solo
                 cosa l'app chiede a questa persona sul telefono, ed è scritto a
-                schermo perché chi sceglie sappia cosa sta cambiando davvero. */}
+                schermo perché chi sceglie sappia cosa sta cambiando davvero.
+                Esiste solo dove si timbra. */}
+            {mondoPresenze ? (
             <div className="rounded-md border border-border bg-muted/30 p-3">
               <span className="block text-xs font-medium text-foreground">
                 Come lavora · serve all&apos;app
@@ -1047,6 +1075,7 @@ export function DipendentiClient({
                 Non cambia i permessi: quelli restano il ruolo dell&apos;account.
               </p>
             </div>
+            ) : null}
 
             <DialogFooter className="gap-2 pt-2">
               <Button type="button" variant="outline" onClick={closeDialog} disabled={pending}>

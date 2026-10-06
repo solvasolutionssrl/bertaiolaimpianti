@@ -463,7 +463,7 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
   }
 
   revalidatePath('/office/kantiere/rapportini');
-  revalidatePath(`/office/kantiere/dipendenti/${dipendenteId}`);
+  revalidatePath(`/office/personale/dipendenti/${dipendenteId}`);
   return { ok: true };
 }
 
@@ -661,7 +661,7 @@ export async function ricalcolaPresenzePeriodo(
   }
 
   revalidatePath('/office/kantiere/rapportini');
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
   return { ok: true, giorni: n };
 }
 
@@ -777,7 +777,7 @@ export async function aggiungiPausaGiornata(
   }
 
   revalidatePath('/office/kantiere/rapportini');
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
   revalidatePath('/office/kantiere/anomalie');
   return { ok: true, minutiPausa: minuti };
 }

@@ -50,7 +50,7 @@ async function contesto() {
 }
 
 function rivalida() {
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
   revalidatePath('/office/kantiere/cantieri');
   revalidatePath('/office/integrazione');
 }

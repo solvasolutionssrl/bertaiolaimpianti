@@ -80,6 +80,17 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   // Tecnici
   'commessa.tecnico.assign': 'Assegnato tecnico',
   'commessa.tecnico.unassign': 'Rimosso tecnico',
+  // Accessi e poteri (07/10/2026)
+  'account.crea': 'Creato un accesso',
+  'account.reimposta_password': 'Data una password nuova',
+  'account.password_scelta': 'Ha scelto la sua password',
+  'potere.concedi': 'Dato il potere di capo squadra',
+  'potere.revoca': 'Tolto il potere di capo squadra',
+  'funzione.accendi': 'Accesa una funzione',
+  'funzione.spegni': 'Spenta una funzione',
+  // Collegamenti per il cliente (06/10/2026)
+  'link_pubblico.crea': 'Creato un collegamento per il cliente',
+  'link_pubblico.revoca': 'Spento il collegamento per il cliente',
 };
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
   commessa: 'commessa',

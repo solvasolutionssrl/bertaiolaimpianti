@@ -57,7 +57,9 @@ import {
   TimbratureRiepilogo,
   TimbratureSommario,
   type TimbraturaInput,
-} from '../../../_components/timbrature-riepilogo';
+// ⚠️ Il riepilogo delle timbrature vive ancora sotto `office/kantiere/`: è
+// roba del mondo presenze, e questa scheda la mostra solo a chi ce l'ha.
+} from '../../../../kantiere/_components/timbrature-riepilogo';
 import { aggiornaDipendente } from '../../../../_actions/dipendenti';
 import { CalendarioOre, type GiornoCalendario } from './calendario-ore';
 import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
@@ -372,7 +374,7 @@ export function DipendenteDetailClient({
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link
-            href="/office/kantiere/dipendenti"
+            href="/office/personale/dipendenti"
             className="flex items-center gap-1 transition-colors hover:text-foreground"
           >
             <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />

@@ -107,7 +107,7 @@ export async function creaDipendente(input: unknown): Promise<Result> {
       costo_orario: parsed.data.costo_orario ?? null,
     },
   });
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
   return { ok: true, id, ...(avviso ? { avviso } : {}) };
 }
 
@@ -157,8 +157,8 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
         : {}),
     },
   });
-  revalidatePath('/office/kantiere/dipendenti');
-  revalidatePath(`/office/kantiere/dipendenti/${parsed.data.id}`);
+  revalidatePath('/office/personale/dipendenti');
+  revalidatePath(`/office/personale/dipendenti/${parsed.data.id}`);
   return { ok: true, ...(avviso ? { avviso } : {}) };
 }
 
@@ -212,7 +212,7 @@ export async function creaUtenteDipendente(
   });
   if (!esito.ok) return { ok: false, error: esito.error };
 
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
   revalidatePath('/office/personale/dipendenti');
   return {
     ok: true,
@@ -256,6 +256,6 @@ export async function eliminaDipendente(input: unknown): Promise<Result> {
     action: 'dipendente.elimina',
     before: primaRaw ?? null,
   });
-  revalidatePath('/office/kantiere/dipendenti');
+  revalidatePath('/office/personale/dipendenti');
   return { ok: true };
 }

@@ -234,7 +234,7 @@ function buildNav(
       variant: 'section',
       defaultOpen: true,
       children: [
-        { id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' },
+        { id: 'dipendenti', label: 'Dipendenti', href: '/office/personale/dipendenti' },
         { id: 'mezzi', label: 'Parco mezzi', href: '/office/kantiere/mezzi', icon: Truck },
         { id: 'sedi', label: 'Sedi', href: '/office/kantiere/sedi', icon: MapPin },
         { id: 'clienti', label: 'Clienti', href: '/office/clienti' },
@@ -348,7 +348,7 @@ function injectPersonale(
     (n) => n.id === 'dipendenti' || (n.children ?? []).some((c) => c.id === 'dipendenti'),
   );
   if (opts.hasDipendenti && !dipendentiGiaInMenu) {
-    voci.push({ id: 'dipendenti', label: 'Dipendenti', href: '/office/kantiere/dipendenti' });
+    voci.push({ id: 'dipendenti', label: 'Dipendenti', href: '/office/personale/dipendenti' });
   }
   if (opts.hasPianificazione) {
     voci.push({

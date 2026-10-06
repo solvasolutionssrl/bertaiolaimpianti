@@ -565,7 +565,7 @@ export default async function KantierePanoramica() {
             { href: '/office/kantiere/cantieri', label: 'Cantieri', Icon: HardHat },
             { href: '/office/kantiere/qr', label: 'QR code', Icon: QrCode },
             { href: '/office/kantiere/rapportini', label: 'Rapportini', Icon: ClipboardList },
-            { href: '/office/kantiere/dipendenti', label: 'Dipendenti', Icon: Users },
+            { href: '/office/personale/dipendenti', label: 'Dipendenti', Icon: Users },
             { href: '/office/kantiere/report', label: 'Report ore', Icon: Clock },
             { href: '/office/kantiere/anomalie', label: 'Anomalie', Icon: AlertTriangle },
           ].map(({ href, label, Icon }) => (

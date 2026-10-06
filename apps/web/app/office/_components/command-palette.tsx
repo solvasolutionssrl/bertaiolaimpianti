@@ -59,7 +59,10 @@ type Requisito = 'commesse' | 'kantiere' | 'dipendenti' | 'voci' | 'preset';
 function requisitoSoddisfatto(requisito: Requisito | undefined, m: MondoRicerca): boolean {
   if (!requisito) return true;
   // Dipendenti vive sotto /office/kantiere: servono entrambi i moduli.
-  if (requisito === 'dipendenti') return m.kantiere && m.dipendenti;
+  // ⚠️ Chiedeva ANCHE il modulo presenze: con «Dipendenti» acceso e Kantiere
+  // spento la voce non compariva mai nella ricerca rapida, pur essendo nel
+  // menu. Il personale non e' una cosa del mondo presenze.
+  if (requisito === 'dipendenti') return m.dipendenti;
   return m[requisito];
 }
 
@@ -174,7 +177,7 @@ const MENU_ITEMS: NavResult[] = [
     group: 'menu',
     title: 'Dipendenti',
     subtitle: 'Personale · Dipendenti',
-    href: '/office/kantiere/dipendenti',
+    href: '/office/personale/dipendenti',
     icon: Users,
     richiede: 'dipendenti',
   },

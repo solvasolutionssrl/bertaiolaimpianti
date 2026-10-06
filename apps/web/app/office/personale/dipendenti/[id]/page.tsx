@@ -8,6 +8,8 @@ import { tenantHasModule } from '@/app/_lib/modules';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
+import { SchedaPersonaCommesse } from './_components/scheda-persona-commesse';
+import { AttivitaPersona } from '../_components/attivita-persona';
 
 /** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
 type Pagina<T> = PromiseLike<EsitoPagina<T>>;
@@ -54,7 +56,14 @@ function dataToMeseRome(d: string): string {
 
 export default async function DipendenteDetailPage({ params, searchParams }: PageProps) {
   const ctx = await requireTenantContext();
-  if (!(await tenantHasModule('kantiere'))) redirect('/office');
+
+  // Chi non timbra ha la sua scheda: chi e', con cosa entra, cosa ha fatto.
+  // Tutto cio' che segue qui sotto (timbrature, rapportini, chilometri,
+  // calendario ore) su un tenant senza il modulo presenze sarebbe vuoto.
+  if (!(await tenantHasModule('kantiere'))) {
+    return <SchedaPersonaCommesse tenantId={ctx.tenantId} dipendenteId={params.id} />;
+  }
+
   const supabase = createServerSupabase();
 
   // ── 1. Dipendente ─────────────────────────────────────────────────────────
@@ -446,6 +455,13 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
         kmPasseggero={kmPasseggero}
         minutiGuida={minutiGuida}
         calendario={{ mese: meseSel, giorni: giorniCalendario }}
+      />
+      {/* Cosa ha fatto nell'app: vale anche dove si timbra. Le ore raccontano
+          quanto, questo racconta cosa. */}
+      <AttivitaPersona
+        tenantId={ctx.tenantId}
+        userId={dip.user_id}
+        nome={`${dip.nome} ${dip.cognome}`.trim()}
       />
     </div>
   );
