@@ -54,6 +54,7 @@ import {
 } from '@/app/_lib/dipendenti-modalita-registry';
 import type { DipendenteRow, UtenteRow } from '../page';
 import { DipendenteCollegato } from './nuovi-dal-gestionale';
+import { etichettaRuolo } from '@kommessa/api/identita';
 
 interface Props {
   dipendenti: DipendenteRow[];
@@ -199,12 +200,6 @@ function autoMatchUserId(
 /** Ruolo utente normalizzato per i filtri */
 type FiltroRuolo = '' | 'office' | 'tecnico' | 'altro';
 
-function etichettaRuolo(role: string | null | undefined): string {
-  if (!role) return 'n.d.';
-  if (role === 'admin' || role === 'office') return 'Ufficio';
-  if (role === 'tecnico') return 'Tecnico';
-  return role;
-}
 
 function categoriaRuolo(user_id: string | null, utenti: UtenteRow[]): FiltroRuolo {
   if (!user_id) return 'tecnico'; // senza account = tecnico (solo timbratura)

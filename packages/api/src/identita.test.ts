@@ -11,7 +11,9 @@ import {
   componiPasswordTemporanea,
   deveCambiarePassword,
   eAliasLocale,
+  RUOLI_VIVI,
   etichettaAccesso,
+  etichettaRuolo,
   normalizzaUsername,
   proponiUsername,
   usernameDaAlias,
@@ -241,5 +243,32 @@ describe('deveCambiarePassword', () => {
     expect(deveCambiarePassword({ mustChangePassword: false })).toBe(false);
     expect(deveCambiarePassword({ mustChangePassword: null })).toBe(false);
     expect(deveCambiarePassword({})).toBe(false);
+  });
+});
+
+describe('etichettaRuolo', () => {
+  it('scrive i mestieri in italiano, singolare e plurale', () => {
+    expect(etichettaRuolo('admin')).toBe('Amministratore');
+    expect(etichettaRuolo('admin', 'plurale')).toBe('Amministratori');
+    expect(etichettaRuolo('tecnico')).toBe('Tecnico');
+    expect(etichettaRuolo('tecnico', 'plurale')).toBe('Tecnici');
+  });
+
+  it('non mostra MAI il valore grezzo di un ruolo che non conosce', () => {
+    // Fra gli altri, i due dismessi: `owner` e `capo` non li assume più
+    // nessuno, ma una riga vecchia nell'audit può ancora contenerli.
+    for (const r of ['owner', 'capo', 'chissa', '', null, 42]) {
+      const out = etichettaRuolo(r);
+      expect(out).toBe('Altro');
+      expect(out).not.toBe(String(r));
+    }
+    expect(etichettaRuolo('owner', 'plurale')).toBe('Altri');
+  });
+
+  it('ogni ruolo vivo ha entrambe le forme', () => {
+    for (const r of RUOLI_VIVI) {
+      expect(etichettaRuolo(r)).not.toBe('Altro');
+      expect(etichettaRuolo(r, 'plurale')).not.toBe('Altri');
+    }
   });
 });

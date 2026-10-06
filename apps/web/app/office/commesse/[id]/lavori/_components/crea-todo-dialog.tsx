@@ -22,6 +22,7 @@ import {
 import { useAlert } from '@/app/_components/confirm-provider';
 import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaSelect } from '@/app/_components/priorita-ui';
+import { Scelta } from '@/app/_components/scelta';
 
 interface TodoEdit {
   id: string;
@@ -145,19 +146,23 @@ export function CreaTodoDialog({
             {puoAssegnare ? (
               <div>
                 <Label htmlFor="t_assegna">Assegnato a</Label>
-                <select
+                {/* Tendina con ricerca: con venti persone in elenco, trovare
+                    quella giusta scorrendo un `<select>` di sistema è il gesto
+                    che l'ufficio ripete a raffica. */}
+                <Scelta
                   id="t_assegna"
-                  value={assegnatoA}
-                  onChange={(e) => setAssegnatoA(e.target.value)}
-                  className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-                >
-                  <option value="">Non assegnato</option>
-                  {tecniciTenant.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.display_name ?? u.id.slice(0, 8)}
-                    </option>
-                  ))}
-                </select>
+                  className="mt-1.5"
+                  opzioni={tecniciTenant.map((u) => ({
+                    valore: u.id,
+                    etichetta: u.display_name ?? u.id.slice(0, 8),
+                  }))}
+                  valore={assegnatoA || null}
+                  onCambia={(v) => setAssegnatoA(v ?? '')}
+                  etichettaNessuno="Non assegnato"
+                  segnaposto="Non assegnato"
+                  segnapostoRicerca="Cerca una persona…"
+                  aria-label="Assegnato a"
+                />
               </div>
             ) : null}
             <div>

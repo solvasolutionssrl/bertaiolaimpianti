@@ -20,6 +20,8 @@ import { ClientePicker, type ValoreCliente } from '@/app/_components/cliente-pic
 import { useAlert } from '@/app/_components/confirm-provider';
 import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaSelect } from '@/app/_components/priorita-ui';
+import { Scelta } from '@/app/_components/scelta';
+import { etichettaRuolo } from '@kommessa/api/identita';
 
 /**
  * La telefonata, in un modulo.
@@ -39,13 +41,6 @@ import { PrioritaSelect } from '@/app/_components/priorita-ui';
 // «Bassa / Media / Alta». Due vocabolari per la stessa colonna, nella stessa
 // schermata. Ora la scala e' una sola: `@kommessa/api/priorita`.
 
-const ETICHETTA_RUOLO: Record<string, string> = {
-  owner: 'Titolari',
-  admin: 'Amministratori',
-  office: 'Ufficio',
-  capo: 'Capi',
-  tecnico: 'Tecnici',
-};
 
 export interface RichiestaEsistente {
   id: string;
@@ -214,23 +209,25 @@ export function RichiestaDialog({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="min-w-0">
               <Label htmlFor="r_assegna">Chi se ne occupa</Label>
-              <select
+              {/* Qui le persone sono raggruppate per mestiere: la tendina
+                  con ricerca tiene i gruppi e in più si può filtrare. */}
+              <Scelta
                 id="r_assegna"
-                value={assegnatoA}
-                onChange={(e) => setAssegnatoA(e.target.value)}
-                className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-              >
-                <option value="">Nessuno, per ora</option>
-                {gruppi.map((g) => (
-                  <optgroup key={g.ruolo} label={ETICHETTA_RUOLO[g.ruolo] ?? g.ruolo}>
-                    {g.utenti.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.display_name ?? u.id.slice(0, 8)}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+                className="mt-1.5"
+                opzioni={gruppi.flatMap((g) =>
+                  g.utenti.map((u) => ({
+                    valore: u.id,
+                    etichetta: u.display_name ?? u.id.slice(0, 8),
+                    gruppo: etichettaRuolo(g.ruolo, 'plurale'),
+                  })),
+                )}
+                valore={assegnatoA || null}
+                onCambia={(v) => setAssegnatoA(v ?? '')}
+                etichettaNessuno="Nessuno, per ora"
+                segnaposto="Nessuno, per ora"
+                segnapostoRicerca="Cerca una persona…"
+                aria-label="Chi se ne occupa"
+              />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Riceve una notifica sul telefono.
               </p>

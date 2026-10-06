@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ShieldCheck, CalendarCheck, ChevronRight, KeyRound } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { etichettaAccesso } from '@kommessa/api/identita';
+import { etichettaAccesso, etichettaRuolo } from '@kommessa/api/identita';
 import { Avatar, AvatarFallback } from '@kommessa/ui';
 import type { CategoriaSpesa } from '@kommessa/api/spese';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -32,13 +32,6 @@ export const metadata: Metadata = {
   title: 'Profilo',
 };
 
-/** Il ruolo come lo chiamano le persone, non come si chiama nell'enum. */
-const RUOLO_A_SCHERMO: Record<string, string> = {
-  admin: 'Amministratore',
-  office: 'Ufficio',
-  tecnico: 'Tecnico',
-  cliente: 'Cliente',
-};
 
 export default async function ProfiloPage() {
   const ctx = await guardMobile();
@@ -180,7 +173,7 @@ export default async function ProfiloPage() {
           <p className="mt-0.5 text-xs">
             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               <ShieldCheck className="h-3 w-3" aria-hidden="true" />
-              {RUOLO_A_SCHERMO[profilo?.role ?? ctx.role] ?? 'Utente'}
+              {etichettaRuolo(profilo?.role ?? ctx.role)}
             </span>
           </p>
         </div>

@@ -7,6 +7,7 @@ import { AdminRequiredNotice } from '../_components/admin-required';
 import { canManageTenant } from '../_components/role-gate';
 import { UtentiTable, type UtenteRow } from './_components/utenti-table';
 import type { AppRole } from '@kommessa/api';
+import { etichettaRuolo } from '@kommessa/api/identita';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Utenti · Impostazioni' };
@@ -23,12 +24,6 @@ interface UserAppRow {
   invite_accepted_at: string | null;
 }
 
-const ROLE_LABEL: Record<AppRole, string> = {
-  admin: 'Amministratori',
-  office: 'Ufficio',
-  tecnico: 'Tecnici',
-  cliente: 'Clienti',
-};
 
 export default async function UtentiPage() {
   const ctx = await requireTenantContext();
@@ -114,7 +109,7 @@ export default async function UtentiPage() {
   const perRuolo = (['admin', 'office', 'tecnico', 'cliente'] as AppRole[]).map(
     (r) => ({
       role: r,
-      label: ROLE_LABEL[r],
+      label: etichettaRuolo(r, 'plurale'),
       count: enriched.filter((u) => u.role === r && u.attivo).length,
     }),
   );

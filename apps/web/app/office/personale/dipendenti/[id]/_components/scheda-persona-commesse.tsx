@@ -7,6 +7,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { haCapacita } from '@kommessa/api/capacita';
 
 import { AttivitaPersona } from '../../_components/attivita-persona';
+import { etichettaRuolo } from '@kommessa/api/identita';
 
 /**
  * La scheda di una persona per un cliente che **non timbra**.
@@ -98,7 +99,7 @@ export async function SchedaPersonaCommesse({
               <>
                 <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                   <UserRound className="h-3 w-3" aria-hidden="true" />
-                  {RUOLO[account.role] ?? account.role}
+                  {etichettaRuolo(account.role)}
                 </span>
                 {haCapacita({ role: account.role, permissions: account.permissions }, 'capo_squadra')
                   && account.role === 'tecnico' ? (
@@ -122,9 +123,3 @@ export async function SchedaPersonaCommesse({
   );
 }
 
-const RUOLO: Record<string, string> = {
-  admin: 'Amministratore',
-  office: 'Ufficio',
-  tecnico: 'Tecnico',
-  cliente: 'Cliente',
-};

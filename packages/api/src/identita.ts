@@ -280,3 +280,37 @@ export function deveCambiarePassword(utente: {
 }): boolean {
   return utente.mustChangePassword === true;
 }
+
+// ───────────────────── Come si chiama un mestiere ─────────────────────
+
+/**
+ * Il ruolo come lo chiamano le persone, non come si chiama nell'enum.
+ *
+ * ⚠️ Esisteva in **sei** posti con cinque rese diverse: `Admin` / `Amministratore`
+ * / `Amministratori` / `Titolari` / il valore grezzo. Uno dei sei elencava
+ * ancora `owner` e `capo`, due ruoli dismessi da marzo che nessun account può
+ * più assumere: a schermo comparivano gruppi vuoti con nomi che non
+ * significano più niente.
+ *
+ * ⚠️ Non mostra MAI il valore grezzo per un ruolo che non conosce: un utente
+ * non deve leggere `office` in una pagina.
+ */
+const ETICHETTE_RUOLO: Record<string, { singolare: string; plurale: string }> = {
+  admin: { singolare: 'Amministratore', plurale: 'Amministratori' },
+  office: { singolare: 'Ufficio', plurale: 'Ufficio' },
+  tecnico: { singolare: 'Tecnico', plurale: 'Tecnici' },
+  cliente: { singolare: 'Cliente', plurale: 'Clienti' },
+};
+
+/** Come si scrive un ruolo a schermo. `plurale` per i titoli di gruppo. */
+export function etichettaRuolo(
+  ruolo: unknown,
+  forma: 'singolare' | 'plurale' = 'singolare',
+): string {
+  const e = typeof ruolo === 'string' ? ETICHETTE_RUOLO[ruolo] : undefined;
+  if (!e) return forma === 'plurale' ? 'Altri' : 'Altro';
+  return e[forma];
+}
+
+/** I ruoli vivi, in ordine di ampiezza. I dismessi (`owner`, `capo`) non ci sono. */
+export const RUOLI_VIVI = ['admin', 'office', 'tecnico', 'cliente'] as const;

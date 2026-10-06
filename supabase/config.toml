@@ -74,10 +74,13 @@ inspector_port = 8083
 [functions.inbound-email]
 verify_jwt = false
 
-# Database webhook + pg_cron → autenticato con shared secret `x-webhook-secret`
-[functions.notify-event]
-verify_jwt = false
-
-# Onboarding admin → autenticato con `x-admin-secret` shared secret
-[functions.onboard-tenant]
-verify_jwt = false
+# ⚠️ RIMOSSE il 07/10/2026: `notify-event`, `onboard-tenant` e `ai-name`.
+# Nessun chiamante: nessun `functions.invoke`, nessun `net.http_post` nelle
+# migration, nessun cron. Il provisioning di un cliente lo fa `creaTenant` in
+# TypeScript, il suggerimento del nome cartella lo fa `/api/suggerisci-nome`
+# chiamando OpenAI direttamente, e la catena delle notifiche push non ha mai
+# avuto un mittente vivo. I cron veri non passano da Edge Functions: chiamano
+# rotte Next via `net.http_post` (vedi le migration `cron_*`).
+#
+# Restano deployate sul progetto remoto finché non si esegue:
+#   supabase functions delete notify-event onboard-tenant ai-name

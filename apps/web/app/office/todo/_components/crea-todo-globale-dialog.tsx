@@ -19,6 +19,7 @@ import { creaTodo } from '../../../_actions/commessa-todo';
 import { useAlert } from '@/app/_components/confirm-provider';
 import { PRIORITA_DEFAULT, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaSelect } from '@/app/_components/priorita-ui';
+import { Scelta } from '@/app/_components/scelta';
 
 interface Props {
   commesseAttive: Array<{ id: string; codice_interno: string; nome_cartella: string }>;
@@ -139,19 +140,20 @@ export function CreaTodoGlobaleDialog({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="g_assegna">Assegnato a</Label>
-              <select
+              <Scelta
                 id="g_assegna"
-                value={assegnatoA}
-                onChange={(e) => setAssegnatoA(e.target.value)}
-                className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-              >
-                <option value="">Non assegnato</option>
-                {tecnici.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.display_name ?? u.id.slice(0, 8)}
-                  </option>
-                ))}
-              </select>
+                className="mt-1.5"
+                opzioni={tecnici.map((u) => ({
+                  valore: u.id,
+                  etichetta: u.display_name ?? u.id.slice(0, 8),
+                }))}
+                valore={assegnatoA || null}
+                onCambia={(v) => setAssegnatoA(v ?? '')}
+                etichettaNessuno="Non assegnato"
+                segnaposto="Non assegnato"
+                segnapostoRicerca="Cerca una persona…"
+                aria-label="Assegnato a"
+              />
             </div>
             <div>
               <Label htmlFor="g_scad">Scadenza (opzionale)</Label>

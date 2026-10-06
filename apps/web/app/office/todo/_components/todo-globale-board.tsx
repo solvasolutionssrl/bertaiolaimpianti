@@ -37,6 +37,8 @@ import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { CreaTodoGlobaleDialog } from './crea-todo-globale-dialog';
 import { RichiestaDialog, type RichiestaEsistente } from './richiesta-dialog';
 import { type Priorita } from '@kommessa/api/priorita';
+import { Scelta } from '@/app/_components/scelta';
+import { etichettaRuolo } from '@kommessa/api/identita';
 import {
   IconaPriorita,
   PrioritaChip,
@@ -583,22 +585,23 @@ function TodoRow({
         {/* Non assegnato: si assegna da qui, senza aprire niente. È il gesto
             che l'ufficio ripete a raffica smaltendo il mucchio. */}
         {canWrite && !completed && !row.assegnato_a ? (
-          <select
-            value=""
-            disabled={pending}
-            aria-label={`Assegna «${row.titolo}» a una persona`}
-            onChange={(e) => {
-              if (e.target.value) onAssegna(e.target.value);
+          <Scelta
+            opzioni={assegnabili.map((u) => ({
+              valore: u.id,
+              etichetta: u.display_name ?? u.id.slice(0, 8),
+              gruppo: etichettaRuolo(u.role, 'plurale'),
+            }))}
+            valore={null}
+            onCambia={(v) => {
+              if (v) onAssegna(v);
             }}
-            className="h-8 max-w-[9rem] rounded-md border border-dashed border-primary/40 bg-primary/5 px-2 text-xs font-medium text-primary disabled:opacity-50"
-          >
-            <option value="">Assegna a…</option>
-            {assegnabili.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.display_name ?? u.id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
+            segnaposto="Assegna a…"
+            segnapostoRicerca="Cerca…"
+            disabilitato={pending}
+            larghezzaElenco="auto"
+            className="max-w-[9rem]"
+            aria-label={`Assegna «${row.titolo}» a una persona`}
+          />
         ) : null}
 
         {row.eRichiesta ? (

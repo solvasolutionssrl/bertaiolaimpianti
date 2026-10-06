@@ -9,16 +9,11 @@ import { requireTenantContext } from '@kommessa/api/tenant';
 
 import { SectionHeader } from '../_components/section-header';
 import { ProfiloForm } from './_components/profilo-form';
+import { etichettaRuolo } from '@kommessa/api/identita';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Profilo · Impostazioni' };
 
-const ROLE_LABEL: Record<string, string> = {
-  admin: 'Amministratore',
-  office: 'Ufficio',
-  tecnico: 'Tecnico',
-  cliente: 'Cliente',
-};
 
 const ROLE_DESCR: Record<string, string> = {
   admin: 'Accesso completo: commesse, utenti, impostazioni tenant.',
@@ -71,7 +66,7 @@ export default async function ProfiloPage() {
               </p>
             </div>
             <p className="text-sm font-semibold text-foreground">
-              {ROLE_LABEL[role] ?? role}
+              {etichettaRuolo(role)}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               {ROLE_DESCR[role] ?? ''}

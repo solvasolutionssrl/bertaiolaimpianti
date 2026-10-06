@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import type { AppRole } from '@kommessa/api';
 import { CAPACITA_META, haCapacita } from '@kommessa/api/capacita';
-import { etichettaAccesso } from '@kommessa/api/identita';
+import { etichettaAccesso, etichettaRuolo } from '@kommessa/api/identita';
 
 import { reimpostaAccesso } from '@/app/_actions/account';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
@@ -65,12 +65,6 @@ const ROLE_OPTS: { value: AppRole; label: string; hint?: string }[] = [
   { value: 'tecnico', label: 'Tecnico', hint: 'Lavora in cantiere, usa il telefono' },
 ];
 
-const ROLE_LABEL: Record<AppRole, string> = {
-  admin: 'Amministratore',
-  office: 'Ufficio',
-  tecnico: 'Tecnico',
-  cliente: 'Cliente',
-};
 
 const ROLE_VARIANT: Record<AppRole, 'default' | 'secondary' | 'outline'> = {
   admin: 'default',
@@ -238,7 +232,7 @@ export function UtentiTable({
                     </div>
 
                     <div className="md:col-span-2">
-                      <Badge variant={ROLE_VARIANT[u.role]}>{ROLE_LABEL[u.role]}</Badge>
+                      <Badge variant={ROLE_VARIANT[u.role]}>{etichettaRuolo(u.role)}</Badge>
                     </div>
 
                     <div className="md:col-span-2">
