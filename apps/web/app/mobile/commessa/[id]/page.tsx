@@ -54,6 +54,7 @@ import { canView, loadFolderAclMap } from '../../../_lib/folder-acl';
 import { CloudRetry } from './_components/cloud-retry';
 import { CommessaChiusaNota } from '../../../_components/commessa-chiusa-nota';
 import { type Priorita } from '@kommessa/api/priorita';
+import { leggiLinkPubblico } from '@/app/_actions/link-pubblico';
 
 export async function generateMetadata({
   params,
@@ -426,6 +427,10 @@ export default async function CommessaDetailPage({
   const fotoFinali = tutteFoto.filter((f) => f.momento === 'finale');
   const fotoTot = tutteFoto.length;
 
+  // Il link pubblico attivo, se c'e'. Solo admin/office lo possono vedere e
+  // creare: la funzione stessa torna `null` agli altri.
+  const linkPubblico = canEditCommessa ? await leggiLinkPubblico(commessa.id) : null;
+
   // "Dettagli" = trascrizione integrale del capo (verità sacrosanta).
   // Fallback su descrizione AI per le commesse create prima dell'introduzione
   // del campo note_iniziali.
@@ -521,6 +526,8 @@ export default async function CommessaDetailPage({
                 presets={tipPresets}
                 statoCommessa={stato}
                 nomeCommessa={nomeCommessa}
+                linkPubblico={linkPubblico}
+                dettagliTesto={dettagliTesto}
               />
             ) : null}
           </div>

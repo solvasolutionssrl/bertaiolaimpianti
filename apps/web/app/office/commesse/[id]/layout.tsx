@@ -25,6 +25,8 @@ import {
   type MembroSquadra,
 } from '../../_actions/commessa-squadre';
 import type { DipendenteDisponibile } from './_components/squadra-panel';
+import { CondividiCommessa } from '@/app/_components/condividi-commessa';
+import { leggiLinkPubblico } from '@/app/_actions/link-pubblico';
 
 export default async function CommessaLayout({
   params,
@@ -38,6 +40,9 @@ export default async function CommessaLayout({
   const cliente = Array.isArray(c.cliente) ? c.cliente[0] : c.cliente;
   const resp = Array.isArray(c.responsabile) ? c.responsabile[0] : c.responsabile;
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
+  // Il link pubblico attivo, se c'e'. Per chi non puo' condividere la funzione
+  // torna `null` da sola: il controllo non sta solo qui.
+  const linkPubblico = canManageTecnici ? await leggiLinkPubblico(params.id) : null;
   // Completata o archiviata: il lavoro e' finito, ma alla scheda si puo'
   // ancora attaccare roba — con una conferma. Qui si dice solo com'e' messa.
   const chiusa = commessaSoloLettura(c.stato as string | null);
@@ -130,7 +135,14 @@ export default async function CommessaLayout({
         <span className="break-words text-xl font-medium">
           {cliente?.ragione_sociale ?? '—'}
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          {canManageTecnici ? (
+            <CondividiCommessa
+              commessaId={params.id}
+              linkAttivo={linkPubblico}
+              dettagliTesto={(c as { note_iniziali?: string | null }).note_iniziali ?? null}
+            />
+          ) : null}
           <Button asChild variant="outline" size="sm" className="gap-2">
             <Link
               href={`/office/commesse/${params.id}/report`}

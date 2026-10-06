@@ -30,6 +30,7 @@
     "./priorita": "./src/priorita.ts",
     "./scelta-opzioni": "./src/scelta-opzioni.ts",
     "./trascrizione": "./src/trascrizione.ts",
+    "./link-pubblico": "./src/link-pubblico.ts",
     "./richiesta-bozza": "./src/richiesta-bozza.ts",
     "./upload-multipart": "./src/upload-multipart.ts",
     "./upload-queue-policy": "./src/upload-queue-policy.ts",

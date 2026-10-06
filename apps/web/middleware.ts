@@ -25,6 +25,12 @@ function isPublic(pathname: string): boolean {
   // esclusione `updateSession` non trova la sessione e rimanda al login con un
   // 307 — il token non verrebbe mai nemmeno letto.
   if (pathname.startsWith('/api/link/')) return true;
+  // Link pubblico di una commessa: foto e video condivisi con chi NON ha un
+  // account. Qui una sessione non c'e' per definizione, e `updateSession`
+  // rimanderebbe al login un cliente che ha solo ricevuto un indirizzo.
+  // L'autorizzazione la fa il token: vedi `_lib/link-pubblico-server.ts`.
+  if (pathname.startsWith('/c/')) return true;
+  if (pathname.startsWith('/api/pubblico/')) return true;
   return false;
 }
 

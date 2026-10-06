@@ -11,6 +11,8 @@ import {
   type TipologiaPreset,
 } from '../../../../_components/aggiungi-tipologie-dialog';
 import { useConfermaCommessaChiusa } from '../../../../_components/conferma-commessa-chiusa';
+import { CondividiCommessa } from '../../../../_components/condividi-commessa';
+import type { LinkPubblicoVista } from '../../../../_actions/link-pubblico';
 
 interface Props {
   commessaId: string;
@@ -20,6 +22,10 @@ interface Props {
   /** Se la commessa e' chiusa, aggiungere tipologie chiede conferma. */
   statoCommessa?: string | null;
   nomeCommessa?: string | null;
+  /** Il link pubblico attivo, se c'e'. Senza token: non si rilegge. */
+  linkPubblico: LinkPubblicoVista | null;
+  /** Il testo che il cliente leggerebbe scegliendo di mostrare i dettagli. */
+  dettagliTesto: string | null;
 }
 
 /**
@@ -34,6 +40,8 @@ export function HeroGestione({
   presets,
   statoCommessa,
   nomeCommessa,
+  linkPubblico,
+  dettagliTesto,
 }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [tipOpen, setTipOpen] = React.useState(false);
@@ -95,6 +103,18 @@ export function HeroGestione({
                 <Plus className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Aggiungi tipologie
               </button>
+              {/* Condividere e' l'unico gesto che fa uscire un dato dal
+                  perimetro degli account: sta qui, con le altre azioni
+                  secondarie, e non come tasto sempre a vista. */}
+              <div role="menuitem" className="rounded-lg">
+                <CondividiCommessa
+                  commessaId={commessaId}
+                  linkAttivo={linkPubblico}
+                  dettagliTesto={dettagliTesto}
+                  variante="voce-menu"
+                  onChiudiMenu={() => setMenuOpen(false)}
+                />
+              </div>
             </div>
           </div>
         </Portal>

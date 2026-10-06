@@ -25,6 +25,7 @@ import {
   X,
   Smartphone,
   type LucideIcon,
+  Link2,
 } from 'lucide-react';
 import { Badge, cn } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
@@ -69,6 +70,12 @@ const NAV_GROUPS: AdminNavGroup[] = [
     label: 'Contenuti & storage',
     items: [
       { id: 'media', label: 'Media & sync', href: '/admin/media', icon: CloudUpload },
+      {
+        id: 'link-pubblici',
+        label: 'Link pubblici',
+        href: '/admin/link-pubblici',
+        icon: Link2,
+      },
       { id: 'storage-r2', label: 'Storage R2', href: '/admin/storage-r2', icon: HardDrive },
       { id: 'bozze', label: 'Bozze', href: '/admin/bozze', icon: FileEdit },
       {
