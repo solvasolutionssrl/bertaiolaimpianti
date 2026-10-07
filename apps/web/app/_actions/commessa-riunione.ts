@@ -123,8 +123,38 @@ export async function aggiornaRiunione(input: unknown): Promise<Result> {
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
+
+  /**
+   * ⚠️ **Questo controllo e' il seguito di `creaRiunione`, e dimenticarlo ha
+   * fatto sparire i riassunti.**
+   *
+   * L'08/10 scrivere una riunione e' diventato di ogni tecnico in squadra, ma
+   * **modificarla** era rimasto di admin/ufficio. Sembra un dettaglio e non lo
+   * e': il riassunto dell'AI non si scrive alla creazione — la riunione nasce
+   * prima, e il riassunto arriva con un `aggiornaRiunione` subito dopo. Quindi
+   * per un tecnico la riunione si salvava, le cose da fare si creavano, e il
+   * riassunto spariva. Misurato su due riunioni vere in produzione prima che
+   * qualcuno se ne accorgesse.
+   *
+   * Un tecnico modifica **solo le proprie**: la RLS lo imporrebbe comunque
+   * (`commessa_riunione_update_tecnico`), ma senza questo controllo l'update
+   * colpirebbe zero righe e l'errore che arriverebbe a schermo parlerebbe di
+   * righe non trovate invece che di permessi.
+   */
   if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono modificare' };
+    if (ctx.role !== 'tecnico') {
+      return { ok: false, error: 'Non hai i permessi per modificare una riunione.' };
+    }
+    const supabaseCheck = createServerSupabase();
+    const { data: riga } = await supabaseCheck
+      .from('commessa_riunione' as never)
+      .select('created_by')
+      .eq('id', parsed.data.id)
+      .maybeSingle();
+    const autore = (riga as { created_by: string | null } | null)?.created_by ?? null;
+    if (autore !== ctx.userId) {
+      return { ok: false, error: 'Puoi modificare solo le riunioni che hai scritto tu.' };
+    }
   }
 
   const update: Record<string, unknown> = {};
@@ -166,8 +196,14 @@ export async function eliminaRiunione(input: unknown): Promise<Result> {
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
+  // Cancellare resta dell'ufficio, anche per l'autore: una riunione e' un
+  // pezzo di storia del lavoro. Chi l'ha scritta la corregge, non la fa
+  // sparire.
   if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono eliminare' };
+    return {
+      ok: false,
+      error: 'Una riunione la toglie solo l’ufficio. Se c’è un errore, correggila.',
+    };
   }
   const supabase = createServerSupabase();
   const { data: r } = await supabase

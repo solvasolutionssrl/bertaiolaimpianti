@@ -28,6 +28,7 @@ node scripts/banco-ui/elenco-commesse.mjs        # l'elenco del tecnico: titolo,
 node scripts/banco-ui/notifiche-preferenze.mjs   # la pagina notifiche governa qualcosa: la scelta resta dopo un ricaricamento
 node scripts/banco-ui/condividi.mjs              # il dialog «Condividi il lavoro» si apre davvero e non è incollato al bordo
 node scripts/banco-ui/tendine.mjs                # le tendine nei dialog: non tagliate, e scegliere non chiude il dialog (BANCO_MOBILE=1)
+node scripts/banco-ui/riunione-tecnico.mjs       # un tecnico scrive una riunione con l’AI (BANCO_SALVA=1 salva sul demo: ripulire)
 ```
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve

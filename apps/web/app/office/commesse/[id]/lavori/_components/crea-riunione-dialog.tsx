@@ -301,11 +301,18 @@ export function CreaRiunioneDialog({
       const riunioneId = created.data.id;
 
       if (reportino.trim()) {
-        await aggiornaRiunione({
+        // ⚠️ L'esito si guarda. Prima no, e quando questa chiamata falliva la
+        // riunione si salvava lo stesso, senza il riassunto e senza che
+        // nessuno lo dicesse: il lavoro dell'AI spariva in silenzio. È
+        // successo davvero, su due riunioni vere.
+        const conRiassunto = await aggiornaRiunione({
           id: riunioneId,
           reportino: reportino.trim(),
           reportinoModello: reportModello || null,
         });
+        if (!conRiassunto.ok) {
+          throw new Error(`Riunione salvata, ma il riassunto no: ${conRiassunto.error}`);
+        }
       }
 
       // Allegati: NON più bloccanti. Vanno nella UploadQueue globale che

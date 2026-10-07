@@ -122,7 +122,14 @@ Il giorno prima di dare gli accessi a tutta la squadra. Le cose che restano vere
   al tocco dice a chi rivolgersi. Lo slot **non sparisce** — una barra che
   cambia numero di tasti a seconda di chi guarda disorienta.
 - **Scrivere una riunione e' di ogni tecnico in squadra** (migration
-  `20261008110000`). Una riunione qui non e' un verbale: e' il sopralluogo
+  `20261008110000`). ⚠️ **E modificarla**: il riassunto dell'AI non si scrive
+  alla creazione — la riunione nasce prima e il riassunto arriva subito dopo
+  con `aggiornaRiunione`. Aperta solo la creazione, per un tecnico la riunione
+  si salvava, le cose da fare si creavano e **il riassunto spariva in
+  silenzio** (il client non ne guardava nemmeno l'esito). Successo davvero, su
+  due riunioni vere, prima che qualcuno se ne accorgesse. ⭐ **Aprire un
+  permesso vuol dire aprirlo per tutto il gesto, non per la prima chiamata del
+  gesto.** Banco: `scripts/banco-ui/riunione-tecnico.mjs`. Una riunione qui non e' un verbale: e' il sopralluogo
   raccontato, cioe' lavoro **dentro** una commessa gia' assegnata, come una
   cosa da fare. ⚠️ Prima non poteva **nessun tecnico**, nemmeno un capo
   squadra: `commessa_riunione_write` ammetteva solo admin e ufficio, quindi il
