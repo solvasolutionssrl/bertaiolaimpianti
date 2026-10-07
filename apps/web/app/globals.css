@@ -388,6 +388,38 @@
   .stagger > *:nth-child(7) { animation-delay: 0.18s; }
   .stagger > *:nth-child(8) { animation-delay: 0.21s; }
 
+  /*
+    Evidenzia per qualche secondo la cosa su cui si è appena arrivati da una
+    notifica.
+
+    ⚠️ Un anello, non uno sfondo: lo sfondo di queste schede dice già qualcosa
+    (ambra = richiesta, bianco = cosa da fare) e cambiarlo per tre secondi
+    racconta una bugia. L'anello si aggiunge e non toglie niente.
+
+    ⚠️ Per chi ha chiesto meno movimento l'anello **resta fermo e visibile**
+    invece di sparire: serve a far trovare una riga in mezzo a venti, e
+    toglierlo del tutto vorrebbe dire togliere la funzione, non l'animazione.
+  */
+  @keyframes evidenzia {
+    0%   { box-shadow: 0 0 0 0   rgb(245 158 11 / 0);    }
+    8%   { box-shadow: 0 0 0 4px rgb(245 158 11 / 0.65); }
+    30%  { box-shadow: 0 0 0 4px rgb(245 158 11 / 0.2);  }
+    45%  { box-shadow: 0 0 0 4px rgb(245 158 11 / 0.65); }
+    70%  { box-shadow: 0 0 0 4px rgb(245 158 11 / 0.2);  }
+    85%  { box-shadow: 0 0 0 4px rgb(245 158 11 / 0.55); }
+    100% { box-shadow: 0 0 0 0   rgb(245 158 11 / 0);    }
+  }
+  .animate-evidenzia {
+    animation: evidenzia 3s cubic-bezier(0.4, 0, 0.2, 1) both;
+    border-radius: inherit;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-evidenzia {
+      animation: none;
+      box-shadow: 0 0 0 3px rgb(245 158 11 / 0.6);
+    }
+  }
+
   @keyframes ping-soft {
     0%   { transform: scale(1);   opacity: 1; }
     80%  { transform: scale(2.2); opacity: 0; }

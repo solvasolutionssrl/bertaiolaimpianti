@@ -101,16 +101,35 @@ export function Hero({
   children,
   className,
   paddingTop = '1.5rem',
+  tono = 'lavoro',
 }: {
   children: React.ReactNode;
   className?: string;
   /** Padding-top visivo (oltre al safe-area del layout). Default 1.5rem. */
   paddingTop?: string;
+  /**
+   * Di che cosa è l'intestazione.
+   *
+   * ⭐ **Il colore è il tipo di cosa, non una decorazione.** `lavoro` è il blu
+   * del marchio: commesse, elenchi, pagine di contesto. `richiesta` è
+   * l'arancione, ed è lo **stesso** segnale che le richieste hanno già nei due
+   * elenchi dove compaiono — il bordo sinistro ambra sulla scheda del telefono
+   * e il badge «Richiesta» nella board dell'ufficio. Aprendo la scheda il
+   * colore continua, invece di ricominciare da capo.
+   *
+   * ⚠️ `--accent` esiste già come token (lo usa il bagliore in basso a destra
+   * qui sotto): non si introduce un arancione nuovo.
+   */
+  tono?: 'lavoro' | 'richiesta';
 }) {
+  const eRichiesta = tono === 'richiesta';
   return (
     <div
       className={cn(
-        'relative mb-2 overflow-hidden bg-primary px-5 pb-12 text-primary-foreground',
+        'relative mb-2 overflow-hidden px-5 pb-12',
+        eRichiesta
+          ? 'bg-accent text-accent-foreground'
+          : 'bg-primary text-primary-foreground',
         className,
       )}
       style={{
@@ -133,11 +152,12 @@ export function Hero({
           WebkitMaskImage: 'radial-gradient(ellipse at 50% 0%, black 25%, transparent 70%)',
         }}
       />
-      {/* Accent glow arancio in basso a destra per "vita" */}
+      {/* Bagliore in basso a destra per "vita": sul blu è arancio, sull'arancio
+          è blu — altrimenti sarebbe un alone dello stesso colore, cioè niente. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -bottom-20 -right-16 h-48 w-48 rounded-full opacity-25 blur-3xl"
-        style={{ background: 'hsl(var(--accent))' }}
+        style={{ background: eRichiesta ? 'hsl(var(--primary))' : 'hsl(var(--accent))' }}
       />
       <div className="relative">{children}</div>
     </div>

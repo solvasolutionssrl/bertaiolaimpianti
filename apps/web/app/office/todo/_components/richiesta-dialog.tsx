@@ -82,6 +82,8 @@ export interface RichiestaEsistente {
   scadenzaAt: string | null;
   clienteId: string | null;
   clienteNome: string | null;
+  /** Dove bisogna andare, se diverso dall'indirizzo del cliente. */
+  indirizzo: string | null;
   /** Chi ci va: gli id di chi e' stato mandato. */
   squadra?: string[];
 }
@@ -107,6 +109,7 @@ export function RichiestaDialog({
     ragione_sociale: esistente?.clienteNome ?? '',
   });
   const [contatto, setContatto] = React.useState(esistente?.contatto ?? '');
+  const [dove, setDove] = React.useState(esistente?.indirizzo ?? '');
   const [dettagli, setDettagli] = React.useState(esistente?.descrizione ?? '');
   const [urgenza, setUrgenza] = React.useState<Priorita>(
     normalizzaPriorita(esistente?.priorita),
@@ -227,6 +230,7 @@ export function RichiestaDialog({
       clienteId: chi.clienteId,
       clienteTesto: chi.clienteTesto,
       contatto: comeRichiamare,
+      indirizzo: dove.trim() || null,
     };
 
     const res = esistente
@@ -310,6 +314,31 @@ export function RichiestaDialog({
                 cliente.telefono.trim()
                   ? `Vuoto: si usa ${cliente.telefono.trim()}`
                   : 'Numero di telefono o email'
+              }
+              className="mt-1.5 h-10"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="r_dove" className="flex items-baseline gap-2">
+              Dove bisogna andare
+              <span className="text-xs font-normal text-muted-foreground">
+                se diverso dall’indirizzo del cliente
+              </span>
+            </Label>
+            {/* ⭐ Vuoto non vuol dire «non si sa»: vuol dire «quello del
+                cliente», e chi legge ripiega lì. Copiarci dentro l'indirizzo
+                dell'anagrafica farebbe una seconda verità che non si aggiorna
+                più. Per questo il segnaposto dice cosa succede lasciandolo
+                vuoto, invece di precompilarlo. */}
+            <Input
+              id="r_dove"
+              value={dove}
+              onChange={(e) => setDove(e.target.value)}
+              placeholder={
+                cliente.indirizzo.trim()
+                  ? `Vuoto: si usa ${[cliente.indirizzo.trim(), cliente.citta.trim()].filter(Boolean).join(', ')}`
+                  : 'via, civico, città'
               }
               className="mt-1.5 h-10"
             />

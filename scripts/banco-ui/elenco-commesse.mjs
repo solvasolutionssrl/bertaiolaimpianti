@@ -54,6 +54,8 @@ async function scrivi(cdp, selettore, testo) {
 }
 
 const { cdp, chiudi } = await apriChrome({ mobile: true });
+
+const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
 try {
   console.log(`\n\x1b[1mBanco: l'elenco del tecnico (${BASE})\x1b[0m\n`);
   await accediCome(cdp, TECNICO);
@@ -258,7 +260,49 @@ try {
       : `${geometria.fra}px fra · ${geometria.dentro}px dentro`,
   );
 
-  // ── 8. il campo di ricerca non fa ingrandire la pagina ──
+  // ── 8. ⭐ arrivando da un avviso, la cosa giusta si accende ──
+  //
+  // ⚠️ Prima il collegamento di un avviso finiva con `#lavori`, un'àncora che
+  // in tutto il repo non esiste — e che comunque non potrebbe selezionare una
+  // tab. Si apriva la commessa e quale delle venti cose da fare fosse quella
+  // dell'avviso lo si indovinava.
+  const conEvidenzia = await valuta(cdp, `(() => {
+    const a = document.querySelector('[data-blocco-lavoro] a[href*="evidenzia="]');
+    return a ? a.getAttribute('href') : null;
+  })()`);
+  esito(Boolean(conEvidenzia), 'le cose da fare puntano alla loro riga, non a un’àncora morta', conEvidenzia ?? 'nessun collegamento');
+
+  if (conEvidenzia) {
+    await vaiA(cdp, conEvidenzia);
+    await finoA(cdp, `location.pathname.startsWith('/mobile/commessa/')`, { timeoutMs: 20_000 }).catch(() => {});
+    await attendi(1200);
+    const acceso = await valuta(cdp, `(() => {
+      const el = document.querySelector('.animate-evidenzia');
+      if (!el) return { acceso: false };
+      const id = ${JSON.stringify('evidenzia')};
+      const atteso = new URL(location.href).searchParams.get(id);
+      return {
+        acceso: true,
+        // L'anello deve stare attorno ALLA riga giusta, non alla prima.
+        contieneIlTesto: (el.textContent || '').trim().length > 0,
+        quante: document.querySelectorAll('.animate-evidenzia').length,
+        atteso,
+      };
+    })()`);
+    esito(acceso.acceso, '⭐ la riga dell’avviso si accende', acceso.acceso ? `${acceso.quante} riga/e` : 'nessun anello');
+    if (acceso.acceso) {
+      esito(acceso.quante === 1, 'se ne accende una sola', `${acceso.quante}`);
+      // ⚠️ E si deve SPEGNERE: un anello che resta acceso torna a lampeggiare
+      // a ogni ricaricamento, e dopo un po' non vuol dire piu' niente.
+      await attendi(3500);
+      const spento = await valuta(cdp, `document.querySelectorAll('.animate-evidenzia').length === 0`);
+      esito(spento, '⭐ e si spegne da sola dopo qualche secondo');
+    }
+  }
+
+  // ── 9. il campo di ricerca non fa ingrandire la pagina ──
+  await vaiA(cdp, '/mobile');
+  await finoA(cdp, `document.querySelector('input[type=search]')`, { timeoutMs: 20_000 });
   const dimensione = await valuta(
     cdp,
     `parseFloat(getComputedStyle(document.querySelector('input[type=search]')).fontSize)`,

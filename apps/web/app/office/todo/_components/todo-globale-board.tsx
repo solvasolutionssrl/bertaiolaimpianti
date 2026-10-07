@@ -74,6 +74,8 @@ interface Row {
   codice_interno: string | null;
   cliente_nome: string | null;
   contatto: string | null;
+  /** Dove bisogna andare, se diverso dall'indirizzo del cliente. */
+  indirizzo: string | null;
   cliente_id: string | null;
   eRichiesta: boolean;
   isScaduto: boolean;
@@ -464,6 +466,7 @@ export function TodoGlobaleBoard({
                       scadenzaAt: t.scadenza_at,
                       clienteId: t.cliente_id,
                       clienteNome: t.cliente_nome,
+                      indirizzo: t.indirizzo,
                       squadra: t.squadra.map((p) => p.id),
                     })
                   }

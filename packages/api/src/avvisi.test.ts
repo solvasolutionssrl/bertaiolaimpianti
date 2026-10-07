@@ -90,7 +90,48 @@ describe('componiAssegnazione', () => {
     const c = componiAssegnazione({ tipo: 'commessa', oggetto: 'Zanetti Paolo — Caldaia' });
     expect(c.titolo).toBe('Ti è stato affidato un lavoro');
     expect(c.corpo).toContain('Zanetti Paolo');
-    expect(c.corpo).toContain('Apri per');
+  });
+
+  it('⭐ il corpo dice cosa, per chi e dove', () => {
+    const r = componiAssegnazione({
+      tipo: 'richiesta',
+      oggetto: 'Cambio caldaia',
+      cliente: 'Rossi Mario',
+      dove: 'Via Roma 12, Valeggio sul Mincio',
+    });
+    expect(r.corpo).toBe('Cambio caldaia · Rossi Mario · Via Roma 12, Valeggio sul Mincio');
+  });
+
+  it('⚠️ niente «Apri per…»: quello spazio è indirizzo che non si legge', () => {
+    const r = componiAssegnazione({
+      tipo: 'richiesta',
+      oggetto: 'Cambio caldaia',
+      cliente: 'Rossi Mario',
+    });
+    expect(r.corpo).not.toContain('Apri per');
+  });
+
+  it('quello che non si sa non lascia separatori a vuoto', () => {
+    const r = componiAssegnazione({
+      tipo: 'richiesta',
+      oggetto: 'Cambio caldaia',
+      cliente: '   ',
+      dove: null,
+    });
+    expect(r.corpo).toBe('Cambio caldaia');
+  });
+
+  it('su una cosa da fare il codice della commessa viene prima del cliente', () => {
+    // Chi lavora su piu' commesse si orienta col codice: e' la prima cosa che
+    // cerca, e sulla schermata bloccata ci stanno poche parole.
+    const t = componiAssegnazione({
+      tipo: 'todo',
+      oggetto: 'Portare la pompa',
+      codiceCommessa: 'BER-26-209',
+      cliente: 'Bianchi Anna',
+      dove: 'Via Verdi 4',
+    });
+    expect(t.corpo).toBe('Portare la pompa · BER-26-209 · Bianchi Anna · Via Verdi 4');
   });
 
   it('la cosa da fare porta con sé il codice della commessa', () => {
@@ -104,10 +145,10 @@ describe('componiAssegnazione', () => {
     expect(t.corpo).toContain('BER-26-012');
   });
 
-  it('la richiesta invita a richiamare, perché non ha una commessa da aprire', () => {
+  it('la richiesta si riconosce dal titolo', () => {
     const r = componiAssegnazione({ tipo: 'richiesta', oggetto: 'Caldaia in blocco, signora Elena' });
     expect(r.titolo).toContain('richiesta');
-    expect(r.corpo).toContain('richiamare');
+    expect(r.corpo).toContain('Caldaia in blocco');
   });
 
   it('senza oggetto non lascia una riga vuota', () => {

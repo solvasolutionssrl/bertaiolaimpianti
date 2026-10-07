@@ -92,7 +92,7 @@ export default async function TodoGlobalePage({
     .select(
       `id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at,
        sort_order, metadata, created_at, completato_at, commessa_id,
-       cliente_id, cliente_testo, contatto,
+       cliente_id, cliente_testo, contatto, indirizzo,
        richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale ),
        commessa:commesse!commessa_todo_commessa_id_fkey (
          id, codice_interno, nome_cartella,
@@ -175,6 +175,8 @@ export default async function TodoGlobalePage({
     cliente_nome: string | null;
     /** Solo sulle richieste: come richiamare. */
     contatto: string | null;
+    /** Solo sulle richieste: dove andare, se diverso da quello del cliente. */
+    indirizzo: string | null;
     cliente_id: string | null;
     eRichiesta: boolean;
     isScaduto: boolean;
@@ -223,6 +225,7 @@ export default async function TodoGlobalePage({
           null)
         : ((cli?.ragione_sociale as string | undefined) ?? null),
       contatto: (t.contatto as string | null) ?? null,
+      indirizzo: (t.indirizzo as string | null) ?? null,
       cliente_id: (t.cliente_id as string | null) ?? null,
       eRichiesta,
       isScaduto: t.scadenza_at

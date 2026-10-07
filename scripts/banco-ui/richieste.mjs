@@ -35,6 +35,7 @@ const attendi = (ms) => new Promise((r) => setTimeout(r, ms));
 const MARCA = `BANCO ${Date.now().toString().slice(-6)}`;
 const TITOLO = `${MARCA} prova richiesta`;
 const CLIENTE = `${MARCA} Cliente`;
+const INDIRIZZO = 'Via Roma 12, Valeggio sul Mincio';
 
 /** Il tecnico del mondo commesse: su di lui si prova la seconda mano. */
 const TECNICO = { email: 'marco@demok.kommessa.local', password: 'Demo2026!' };
@@ -122,6 +123,13 @@ try {
     })()`;
     await scriviIn(tel, '3401234567');
   }
+
+  // Dove bisogna andare: e' la cosa che al tecnico mancava del tutto.
+  await scriviIn(`document.querySelector('[role=dialog] #r_dove')`, INDIRIZZO);
+  esito(
+    (await valuta(cdp, `document.querySelector('[role=dialog] #r_dove')?.value ?? ''`)) === INDIRIZZO,
+    'si può dire dove bisogna andare',
+  );
 
   // Chi se ne occupa: la prima persona dell'elenco.
   const comboOccupa = `[...document.querySelectorAll('[role=dialog] button[aria-haspopup=listbox]')].filter(b => b.offsetParent !== null)[0]`;
@@ -284,6 +292,98 @@ try {
     'e sta nel blocco «senza commessa», non in mezzo ai lavori',
     doveSta ?? 'non trovata in nessun blocco',
   );
+
+  // ══ ⭐ la scheda della richiesta ════════════════════════════════════════
+  //
+  // ⚠️ Finora una richiesta era l'unica cosa dell'elenco che non si potesse
+  // aprire: niente indirizzo, niente di cio' che era stato detto al telefono.
+  const apreScheda = await clicVero(
+    cdp,
+    `[...document.querySelectorAll('[data-blocco-lavoro] a[href^="/mobile/richiesta/"]')]
+       .find(a => (a.textContent || '').includes(${JSON.stringify(TITOLO)}))`,
+    { attesaMs: 1500 },
+  );
+  esito(apreScheda.fatto, '⭐ la richiesta si apre dall’elenco', apreScheda.perche ?? '');
+
+  if (apreScheda.fatto) {
+    await finoA(cdp, `location.pathname.startsWith('/mobile/richiesta/')`, { timeoutMs: 15_000 }).catch(() => {});
+    await attendi(900);
+    const scheda = await valuta(cdp, `(() => {
+      const h = document.querySelector('h1');
+      const hero = h ? h.closest('[class*="bg-accent"]') : null;
+      const scrim = [...document.querySelectorAll('div[aria-hidden="true"]')]
+        .filter(d => d.className && String(d.className).includes('fixed') && String(d.className).includes('top-0'));
+      const colori = scrim.map(d => getComputedStyle(d).backgroundColor);
+      const testo = document.body.textContent || '';
+      return {
+        titolo: h ? h.textContent.trim() : null,
+        heroArancione: Boolean(hero),
+        sfondoHero: hero ? getComputedStyle(hero).backgroundColor : null,
+        coloriStriscia: colori,
+        vedeCliente: testo.includes(${JSON.stringify(CLIENTE)}),
+        vedeIndirizzo: testo.includes('Via Roma 12'),
+        tastoMappa: Boolean([...document.querySelectorAll('a')].find(a => /google\\.com\\/maps/.test(a.href))),
+        tastoChiama: Boolean([...document.querySelectorAll('a')].find(a => a.href.startsWith('tel:'))),
+        tastoFatta: Boolean([...document.querySelectorAll('button')].find(b => /segna come fatta/i.test(b.textContent))),
+        sbordo: document.documentElement.scrollWidth - innerWidth,
+      };
+    })()`);
+    esito(scheda.titolo === TITOLO, 'la scheda mostra la richiesta giusta', scheda.titolo ?? '—');
+    esito(scheda.heroArancione, '⭐ l’intestazione è arancione, non blu', scheda.sfondoHero ?? '—');
+    esito(
+      Array.isArray(scheda.coloriStriscia) &&
+        scheda.coloriStriscia.length > 0 &&
+        scheda.coloriStriscia.some((c) => c === scheda.sfondoHero),
+      '⚠️ e la striscia dietro l’isola è dello stesso colore',
+      Array.isArray(scheda.coloriStriscia) ? scheda.coloriStriscia.join(' | ') : '—',
+    );
+    esito(scheda.vedeCliente, '⭐ si vede per chi è', scheda.vedeCliente ? '' : 'cliente assente');
+    esito(scheda.vedeIndirizzo, '⭐ si vede DOVE bisogna andare');
+    esito(scheda.tastoMappa, 'c’è il collegamento alla mappa');
+    esito(scheda.tastoChiama, 'c’è il tasto per chiamare');
+    esito(scheda.tastoFatta, 'c’è il tasto per segnarla fatta');
+    esito(scheda.sbordo <= 1, 'la scheda non sborda di lato', `${scheda.sbordo}px`);
+  }
+
+  // ══ ⭐ l'avviso dice di cosa si tratta ═════════════════════════════════
+  await vaiA(cdp, '/mobile/notifiche');
+  await finoA(cdp, `document.querySelectorAll('button').length > 2`, { timeoutMs: 20_000 });
+  await attendi(900);
+  const avviso = await valuta(cdp, `(() => {
+    const righe = [...document.querySelectorAll('button')]
+      .filter(b => /affidat/i.test(b.textContent || ''));
+    if (righe.length === 0) return { trovato: false };
+    const t = (righe[0].textContent || '').split(/[\\s]+/).join(' ');
+    return { trovato: true, testo: t.slice(0, 150) };
+  })()`);
+  esito(avviso.trovato, 'l’avviso è arrivato', avviso.testo ?? '');
+  if (avviso.trovato) {
+    esito(
+      avviso.testo.includes(TITOLO),
+      '⭐ l’avviso dice COSA, già nell’elenco',
+      avviso.testo,
+    );
+    esito(avviso.testo.includes(CLIENTE), '⭐ e PER CHI');
+    esito(avviso.testo.includes('Via Roma 12'), '⭐ e DOVE');
+  }
+
+  // Il tasto deve portare sulla scheda, non in un elenco di venti righe.
+  await clicVero(cdp, `[...document.querySelectorAll('button')].find(b => /affidat/i.test(b.textContent || ''))`, { attesaMs: 900 });
+  const vai = await valuta(cdp, `(() => {
+    const b = [...document.querySelectorAll('button')].find(x => /apri la richiesta|vedi cosa fare|apri la commessa/i.test(x.textContent || ''));
+    return b ? b.textContent.trim() : null;
+  })()`);
+  esito(vai === 'Apri la richiesta', '⭐ il tasto dice dove porta', vai ?? 'nessun tasto');
+  if (vai) {
+    await clicVero(cdp, `[...document.querySelectorAll('button')].find(x => /apri la richiesta/i.test(x.textContent || ''))`, { attesaMs: 1800 });
+    const dove = await valuta(cdp, `location.pathname`);
+    esito(dove.startsWith('/mobile/richiesta/'), '⭐ e porta sulla richiesta, non su un elenco', dove);
+  }
+
+  // Si torna all'elenco per chiudere la richiesta.
+  await vaiA(cdp, '/mobile');
+  await finoA(cdp, `document.querySelectorAll('[data-blocco-lavoro]').length > 0`, { timeoutMs: 25_000 }).catch(() => {});
+  await attendi(700);
 
   // ⭐ E deve poterla **chiudere**. Una richiesta e' l'unica cosa da fare che
   // non ha una pagina dove aprirla: senza un tasto qui, chi ci era andato non

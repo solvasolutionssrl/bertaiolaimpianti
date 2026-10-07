@@ -146,32 +146,48 @@ export function componiAssegnazione(dati: {
   oggetto: string;
   /** Il codice della commessa, quando c'è. */
   codiceCommessa?: string | null;
+  /** Per chi: il cliente, come si chiama in anagrafica o come e' stato detto. */
+  cliente?: string | null;
+  /** Dove bisogna andare, quando si sa. */
+  dove?: string | null;
 }): { titolo: string; corpo: string } {
   const oggetto = (dati.oggetto ?? '').trim();
+  const cliente = (dati.cliente ?? '').trim();
+  const dove = (dati.dove ?? '').trim();
+  const codice = (dati.codiceCommessa ?? '').trim();
+
+  /**
+   * ⚠️ **Niente «Apri per…» in coda.**
+   *
+   * C'era, e serviva quando il corpo diceva solo il nome del lavoro: senza
+   * quella frase la notifica non suggeriva nessun gesto. Ora il corpo dice
+   * cosa, per chi e dove — e su una schermata bloccata lo spazio e' due righe:
+   * ogni carattere speso per «Apri per vedere la commessa» e' un pezzo di
+   * indirizzo che non si legge. Il gesto, davanti a un indirizzo, e' ovvio.
+   */
+  const corpo = (parti: Array<string | null | undefined>, ripiego: string) => {
+    const vive = parti.map((p) => (p ?? '').trim()).filter(Boolean);
+    return vive.length > 0 ? vive.join(' · ') : ripiego;
+  };
 
   if (dati.tipo === 'commessa') {
     return {
       titolo: 'Ti è stato affidato un lavoro',
-      corpo: [oggetto || 'Un nuovo lavoro', 'Apri per vedere la commessa.']
-        .filter(Boolean)
-        .join(' · '),
+      corpo: corpo([oggetto, cliente, dove], 'Un nuovo lavoro'),
     };
   }
 
   if (dati.tipo === 'richiesta') {
     return {
       titolo: 'Ti è stata affidata una richiesta',
-      corpo: [oggetto || 'Una richiesta arrivata in ufficio', 'Apri per richiamare.']
-        .filter(Boolean)
-        .join(' · '),
+      // Per una richiesta il cliente e il posto sono **la** notizia: chi la
+      // riceve deve sapere da chi andare prima ancora di aprire l'app.
+      corpo: corpo([oggetto, cliente, dove], 'Una richiesta arrivata in ufficio'),
     };
   }
 
-  const dove = dati.codiceCommessa?.trim();
   return {
     titolo: 'Ti è stata affidata una cosa da fare',
-    corpo: [oggetto || 'Una cosa da fare', dove, 'Apri per vedere i dettagli.']
-      .filter(Boolean)
-      .join(' · '),
+    corpo: corpo([oggetto, codice, cliente, dove], 'Una cosa da fare'),
   };
 }

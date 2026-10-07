@@ -35,6 +35,7 @@ import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { cambiaTodoStato } from '@/app/_actions/commessa-todo';
 import { titoloCase } from '../_lib/display-case';
 import { Stagger } from './blueprint';
+import { Evidenziabile } from './evidenzia';
 
 /**
  * **L'elenco di cosa ha in mano un tecnico: un elenco solo, cercabile.**
@@ -327,8 +328,12 @@ function Blocco({
           Senza commessa
           <span className="h-px flex-1 bg-border" aria-hidden="true" />
         </h3>
+        {/* Anche qui: chi arriva da un avviso vecchio atterra sulla home, e la
+            riga giusta si accende invece di nascondersi fra le altre. */}
         {gruppo.dentro.map((v) => (
-          <SchedaDaFare key={`${v.tipo}:${v.id}`} voce={soloDaFare(v)} adesso={adesso} />
+          <Evidenziabile key={`${v.tipo}:${v.id}`} id={v.id}>
+            <SchedaDaFare voce={soloDaFare(v)} adesso={adesso} />
+          </Evidenziabile>
         ))}
       </section>
     );
@@ -367,7 +372,9 @@ function Blocco({
         <ul className="-mt-1 ml-4 flex flex-col gap-1.5 border-l-2 border-primary/30 pl-3 pt-2.5">
           {gruppo.dentro.map((v) => (
             <li key={`${v.tipo}:${v.id}`}>
-              <SchedaDaFare voce={soloDaFare(v)} adesso={adesso} dentroUnBlocco />
+              <Evidenziabile id={v.id}>
+                <SchedaDaFare voce={soloDaFare(v)} adesso={adesso} dentroUnBlocco />
+              </Evidenziabile>
             </li>
           ))}
         </ul>
@@ -561,13 +568,22 @@ function SchedaDaFare({
   if (eRichiesta) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-l-2 border-border border-l-amber-500/70 bg-card p-2.5 shadow-soft">
-        {/* ⚠️ Una richiesta e' l'unica cosa da fare che **non ha una pagina**:
-            non ha una commessa, quindi non c'e' nessun posto dove aprirla e
-            spuntarla. Finora si vedeva, si poteva chiamare il cliente, e
-            basta: chi ci era andato non aveva modo di dire che era fatta, e
-            l'ufficio restava ad aspettare. Il cerchietto sta qui. */}
+        {/* Il cerchietto per chiuderla senza aprirla: in un elenco si spunta
+            di corsa, ed e' il gesto piu' frequente. */}
         <SpuntaRichiesta id={voce.id} titolo={voce.titolo} />
-        {dentro}
+        {/* ⚠️ Il corpo e' un collegamento, il cerchietto e il telefono no:
+            tre bersagli diversi sulla stessa riga, e un tasto dentro un
+            collegamento non si annida. Prima era tutto un `<div>` e la
+            richiesta era l'unica cosa dell'elenco che non si potesse aprire:
+            si vedeva il titolo, si poteva chiamare, e basta — niente
+            indirizzo, niente di cio' che era stato detto al telefono. */}
+        <Link
+          href={`/mobile/richiesta/${voce.id}`}
+          className="flex min-w-0 flex-1 items-center gap-2"
+        >
+          {dentro}
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        </Link>
         {chiamabile ? (
           <a
             href={`tel:${chiamabile}`}
@@ -583,7 +599,7 @@ function SchedaDaFare({
 
   return (
     <Link
-      href={`/mobile/commessa/${voce.commessaId}#lavori`}
+      href={`/mobile/commessa/${voce.commessaId}?evidenzia=${voce.id}`}
       className={[
         'flex items-center gap-2 rounded-lg border p-2.5 transition-colors active:bg-muted',
         // Dentro un blocco la riga è subordinata alla commessa sopra: niente

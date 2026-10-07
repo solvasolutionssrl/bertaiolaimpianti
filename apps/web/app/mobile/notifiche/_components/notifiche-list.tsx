@@ -57,14 +57,25 @@ function corpo(n: NotificaRow): string | null {
     const nome = typeof p.dipendenteNome === 'string' ? p.dipendenteNome : 'Il tecnico';
     return `${nome} ha corretto le ore registrate per quella giornata. Apri la giornata per vedere il dettaglio aggiornato (cantieri, orari e pause).`;
   }
-  // Per le altre notifiche il testo ricco è nel payload: mostralo per intero
-  // (nella lista è troncato, qui no).
+  /**
+   * ⚠️⚠️ **`payload.body` veniva scritto e mai letto.**
+   *
+   * Il mittente mette **apposta** nel corpo il nome del lavoro, il cliente e
+   * il posto: il titolo non li può contenere, perché su iOS si taglia intorno
+   * ai quaranta caratteri. Qui si leggeva `descrizione` (che le assegnazioni
+   * non scrivono) e poi `title` — mai `body`. Risultato: nella lista e nel
+   * dettaglio si leggeva tre volte «Ti è stata affidata una cosa da fare», e
+   * **la schermata bloccata del telefono diceva più cose dell'app**, perché la
+   * push il corpo lo mostra.
+   */
   const full =
-    typeof p.descrizione === 'string'
-      ? p.descrizione
-      : typeof p.title === 'string'
-        ? p.title
-        : null;
+    typeof p.body === 'string'
+      ? p.body
+      : typeof p.descrizione === 'string'
+        ? p.descrizione
+        : typeof p.title === 'string'
+          ? p.title
+          : null;
   // Evita di ripetere identico il titolo.
   return full && full !== titolo(n) ? full : null;
 }
@@ -77,8 +88,23 @@ function corpo(n: NotificaRow): string | null {
  */
 function destinazioneMobile(n: NotificaRow): { href: string; label: string } | null {
   const p = (n.payload ?? {}) as Record<string, unknown>;
-  // Una richiesta arrivata al telefono non ha (ancora) una commessa da aprire:
-  // si va dove la si trova, cioè l'elenco delle proprie cose da fare.
+
+  /**
+   * ⭐ **Il collegamento lo scrive il mittente, non lo indovina il lettore.**
+   *
+   * Qui la destinazione si **ricostruiva** da `commessa_id` e `e_richiesta`,
+   * ignorando `payload.url` che il mittente scrive da sempre — e che il
+   * desktop invece legge. Due logiche divergenti sulla stessa riga: il
+   * mittente ha scritto «porta a questa cosa da fare» e il telefono apriva la
+   * commessa intera, oppure la home con venti righe.
+   *
+   * Ora si legge l'indirizzo scritto. La ricostruzione resta **sotto**, per le
+   * righe scritte prima di oggi: una notifica di ieri deve continuare a
+   * portare da qualche parte.
+   */
+  const urlScritto = typeof p.url === 'string' && p.url.startsWith('/mobile') ? p.url : null;
+  if (urlScritto) return { href: urlScritto, label: etichettaDestinazione(n, urlScritto) };
+
   if (n.type === 'todo_assegnato' && p.e_richiesta === true) {
     return { href: '/mobile', label: 'Vedi cosa fare' };
   }
@@ -89,6 +115,15 @@ function destinazioneMobile(n: NotificaRow): { href: string; label: string } | n
     return { href: `/mobile/commessa/${p.commessa_id}`, label: 'Apri la commessa' };
   }
   return null;
+}
+
+/** Cosa si legge sul tasto: dipende da dove porta, non dal tipo di avviso. */
+function etichettaDestinazione(n: NotificaRow, href: string): string {
+  if (href.startsWith('/mobile/richiesta/')) return 'Apri la richiesta';
+  if (href.includes('evidenzia=')) return 'Vedi cosa fare';
+  if (href.startsWith('/mobile/commessa/')) return 'Apri la commessa';
+  if (href.startsWith('/mobile/kantiere/cruscotto')) return 'Vedi la giornata';
+  return 'Apri';
 }
 
 function fmtQuando(iso: string): string {
@@ -225,6 +260,16 @@ export function NotificheList({ rows }: { rows: NotificaRow[] }) {
                 <p className={'text-sm leading-snug ' + (unread ? 'font-semibold' : 'font-medium')}>
                   {titolo(n)}
                 </p>
+                {/* ⭐ **Di cosa si tratta, senza aprire niente.** Nella lista
+                    si leggeva solo il titolo — «Ti è stata affidata una cosa
+                    da fare» — identico per tutte, e per sapere quale bisognava
+                    toccarne una per volta. Qui ora c'è il lavoro, il cliente e
+                    il posto, su due righe al massimo. */}
+                {corpo(n) ? (
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+                    {corpo(n)}
+                  </p>
+                ) : null}
                 <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
                   <span>{meta.label}</span>
                   <span>· {fmtQuando(n.created_at)}</span>

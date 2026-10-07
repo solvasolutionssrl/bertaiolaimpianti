@@ -8,6 +8,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import type { AppRole } from '@kommessa/api';
 import { notificaCommessaAssegnata } from './_lib/notifica-assegnazione';
+import { contestoDellaCommessa } from './_lib/contesto-lavoro';
 
 /**
  * Server actions per assegnare/togliere tecnici alle commesse.
@@ -108,12 +109,17 @@ export async function assegnaTecnico(input: unknown): Promise<AssignResult> {
   const primaRiga =
     (c?.descrizione_ai_finale ?? c?.descrizione_ai_proposta ?? '').split('\n')[0]?.trim() || null;
   const titolo = [c?.codice_interno, primaRiga].filter(Boolean).join(' · ');
+  // Per chi e dove: le due domande di chi legge l'avviso sul telefono. La
+  // catena dei ripieghi sta in un posto solo.
+  const contesto = await contestoDellaCommessa(supabase, parsed.data.commessaId);
   await notificaCommessaAssegnata({
     tenantId: ctx.tenantId,
     userId: parsed.data.userId,
     attoreUserId: ctx.userId,
     commessaId: parsed.data.commessaId,
     titolo: titolo || 'un lavoro',
+    cliente: contesto.cliente,
+    dove: contesto.dove,
   });
 
   revalidatePath(`/office/commesse/${parsed.data.commessaId}`);

@@ -37,6 +37,8 @@ export interface RichiestaDaConvertire {
   clienteTesto: string | null;
   /** Ragione sociale del cliente collegato, per il display al resume. */
   clienteLabel?: string | null;
+  /** Dove bisogna andare, se l'ufficio l'ha scritto sulla richiesta. */
+  indirizzo?: string | null;
 }
 
 /** Il payload della bozza: un `Partial` dell'input di `creaCommessa`. */
@@ -49,6 +51,14 @@ export interface PayloadBozzaDaRichiesta {
   };
   descrizioneFinale?: string;
   noteIniziali?: string;
+  /**
+   * Il posto dove si va, se la richiesta lo diceva.
+   *
+   * ⚠️ Finisce in «Indirizzo cantiere» del modulo, non nell'indirizzo del
+   * cliente: su una richiesta quel campo e' gia' «se diverso da quello del
+   * cliente», ed e' la stessa domanda.
+   */
+  indirizzoCantiere?: string;
   _clienteLabel?: string;
   /** Da quale richiesta viene: serve ad agganciarla alla commessa creata. */
   _richiestaTodoId: string;
@@ -71,6 +81,7 @@ export function payloadBozzaDaRichiesta(
   const descrizione = pulito(r.descrizione);
   const contatto = pulito(r.contatto);
   const clienteTesto = pulito(r.clienteTesto);
+  const dove = pulito(r.indirizzo);
 
   const out: PayloadBozzaDaRichiesta = { _richiestaTodoId: r.id };
 
@@ -86,6 +97,9 @@ export function payloadBozzaDaRichiesta(
       else out.clienteNew.telefoni = [contatto];
     }
   }
+
+  // ─── dove si va ──────────────────────────────────────────────────────────
+  if (dove) out.indirizzoCantiere = dove;
 
   // ─── la descrizione, solo se ci sta intera ───────────────────────────────
   if (titolo.length > 0 && titolo.length <= DESCRIZIONE_MAX) {

@@ -18,6 +18,7 @@ import {
   cambiaTodoStato,
 } from '../../../../_actions/commessa-todo';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { Evidenziabile } from '../../../_components/evidenzia';
 import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaChip } from '@/app/_components/priorita-ui';
 
@@ -86,8 +87,16 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
     <div className="space-y-3">
       {aperti.length > 0 ? (
         <ul className="space-y-1.5">
+          {/* ⭐ Arrivando da una notifica si atterra qui con `?evidenzia=<id>`:
+              quella riga si porta a schermo e si accende per tre secondi.
+              Prima il collegamento finiva con `#lavori`, un'àncora che in tutto
+              il repo non esiste — e che comunque non potrebbe selezionare una
+              tab. Si apriva la commessa, e quale delle venti cose da fare
+              fosse quella dell'avviso lo si indovinava. */}
           {aperti.map((t) => (
-            <TodoCard key={t.id} todo={t} isMine={t.assegnato_a === currentUserId} />
+            <Evidenziabile key={t.id} id={t.id}>
+              <TodoCard todo={t} isMine={t.assegnato_a === currentUserId} />
+            </Evidenziabile>
           ))}
         </ul>
       ) : null}
@@ -106,7 +115,9 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
                   className="absolute -left-4 top-5 z-10 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-card"
                   aria-hidden="true"
                 />
-                <TodoCard todo={t} isMine={t.assegnato_a === currentUserId} readonly />
+                <Evidenziabile id={t.id}>
+                  <TodoCard todo={t} isMine={t.assegnato_a === currentUserId} readonly />
+                </Evidenziabile>
               </div>
             ))}
           </div>

@@ -100,3 +100,49 @@ describe('payloadBozzaDaRichiesta', () => {
     expect(p.clienteNew).toBeUndefined();
   });
 });
+
+describe('indirizzo: dove bisogna andare', () => {
+  it('se la richiesta lo dice, finisce in «Indirizzo cantiere»', () => {
+    const out = payloadBozzaDaRichiesta({
+      id: 'r1',
+      titolo: 'Cambio caldaia',
+      descrizione: null,
+      contatto: null,
+      clienteId: null,
+      clienteTesto: 'Elena Rossi',
+      indirizzo: 'Via Roma 12, Valeggio sul Mincio',
+    });
+    expect(out.indirizzoCantiere).toBe('Via Roma 12, Valeggio sul Mincio');
+  });
+
+  it('⚠️ vuoto NON diventa una stringa vuota: il campo resta assente', () => {
+    // Vuoto vuol dire «quello del cliente»: scriverci dentro una stringa
+    // vuota farebbe comparire un indirizzo cantiere che azzera il ripiego.
+    for (const v of [null, undefined, '', '   ']) {
+      const out = payloadBozzaDaRichiesta({
+        id: 'r1',
+        titolo: 'x',
+        descrizione: null,
+        contatto: null,
+        clienteId: null,
+        clienteTesto: null,
+        indirizzo: v,
+      });
+      expect(out.indirizzoCantiere).toBeUndefined();
+    }
+  });
+
+  it('non tocca il resto del payload', () => {
+    const out = payloadBozzaDaRichiesta({
+      id: 'r1',
+      titolo: 'Cambio caldaia',
+      descrizione: null,
+      contatto: '3401234567',
+      clienteId: null,
+      clienteTesto: 'Elena Rossi',
+      indirizzo: 'Via Roma 12',
+    });
+    expect(out.clienteNew?.telefoni).toEqual(['3401234567']);
+    expect(out._richiestaTodoId).toBe('r1');
+  });
+});

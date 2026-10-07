@@ -561,10 +561,64 @@ cose che non tornavano. Migration `20261008120000`.
   grezzo; e `.limit(200)` su 202 commesse attive rendeva **invisibili** le
   ultime due, nel filtro e nel modulo, senza nessun segnale.
 
-Banchi: `scripts/banco-ui/richieste.mjs` (28 controlli: telefonata → cliente
-nuovo → chi ci va → il tecnico la vede e la **chiude dal telefono** → l'ufficio
-la elimina, e si ripulisce da solo) e `riunione-audio-corto.mjs` (10, con
-microfono finto).
+#### La richiesta diventa una cosa che si apre (07/10/2026 sera)
+
+Migration `20261008140000`. Il tecnico la riceveva e non poteva farci niente:
+vedeva un titolo e un tasto per chiamare.
+
+- **`commessa_todo.indirizzo`: dove bisogna andare.** Mancava del tutto. ⭐ E'
+  un **override**, non una copia: vuoto significa «quello del cliente», e chi
+  legge **ripiega li'** (`_actions/_lib/contesto-lavoro.ts`). Copiarci dentro
+  l'indirizzo dell'anagrafica alla creazione farebbe una seconda verita' che
+  non si aggiorna piu'. Si porta fino alla commessa: richiesta →
+  `indirizzoCantiere` della bozza → modulo.
+- **Una pagina sua**: `/mobile/richiesta/[id]`, con cliente, indirizzo (tasto
+  mappa), contatto (tasto chiama), cosa e' stato detto al telefono, priorita',
+  scadenza, chi ne risponde e chi ci va, le **note** (stessa tabella delle note
+  di una cosa da fare: non un secondo posto dove scrivere la stessa cosa) e il
+  tasto per chiuderla. ⚠️ **La RLS qui non basta**: `commessa_todo_read` e'
+  tenant-wide, il filtro «le mie» vive nelle pagine — il controllo e' scritto
+  **identico** a quello della home.
+- ⭐ **Il colore dice che cosa e'.** `Hero` ha una prop `tono`: `lavoro` (blu
+  del marchio) e `richiesta` (arancione, token `--accent` che esisteva gia').
+  E' lo **stesso** segnale che le richieste hanno nei due elenchi — il bordo
+  ambra sulla scheda del telefono, il badge nella board — e aprendola il colore
+  continua invece di ricominciare. ⚠️ Con l'intestazione arancione va coperta
+  anche la **striscia dietro la Dynamic Island**, che il guscio disegna blu
+  fissa: `ScrimStatusBar`, `z-40` sopra il `z-30` del layout.
+
+#### Le notifiche dicono cosa, per chi e dove
+
+- ⚠️⚠️ **`payload.body` veniva scritto e mai letto dalla PWA.** Il mittente ci
+  mette apposta il nome del lavoro (il titolo non lo puo' contenere: su iOS si
+  taglia sui quaranta caratteri), e `notifiche-list.tsx` leggeva `descrizione`
+  poi `title`, **mai** `body`. Si leggeva tre volte «Ti e' stata affidata una
+  cosa da fare», e **la schermata bloccata del telefono diceva piu' cose
+  dell'app**, perche' la push il corpo lo mostra.
+- Il corpo ora e' **cosa · per chi · dove** (`componiAssegnazione`), e si vede
+  **nell'elenco**, non solo aprendo. Via il «Apri per…» in coda: quello spazio
+  e' indirizzo che non si legge. I quattro mittenti passano il contesto — ce
+  l'avevano gia' in mano, era solo una riga non scritta; la catena dei ripieghi
+  sta in un posto solo (`contestoDelTodo` / `contestoDellaCommessa`).
+- ⭐ **Il collegamento lo scrive il mittente, non lo indovina il lettore.** La
+  PWA **ricostruiva** la destinazione da `commessa_id` ignorando `payload.url`
+  — che il desktop invece legge: due logiche divergenti sulla stessa riga. Ora
+  si legge l'indirizzo scritto, con la ricostruzione sotto per le righe vecchie.
+- ⚠️ **`#lavori` era un'àncora morta**: in tutto il repo non esiste nessun
+  `id="lavori"`, e i todo stanno dentro una tab che un hash non puo'
+  selezionare. Una richiesta porta alla sua pagina; una cosa da fare porta a
+  `/mobile/commessa/<id>?evidenzia=<todoId>`, e **quella riga si porta a
+  schermo e si accende per tre secondi** (`_components/evidenzia.tsx`).
+  ⚠️ L'anello si spegne da solo e l'indirizzo non si tocca: riscriverlo
+  romperebbe il tasto «indietro». Per chi ha chiesto meno movimento l'anello
+  resta **fermo e visibile**, perche' serve a trovare una riga fra venti.
+
+Banchi: `scripts/banco-ui/richieste.mjs` (45 controlli: telefonata → cliente
+nuovo → dove andare → chi ci va → il tecnico la **apre**, legge l'avviso che
+dice cosa/per chi/dove, atterra sulla scheda dal tasto e la **chiude dal
+telefono** → l'ufficio la elimina, e si ripulisce da solo),
+`elenco-commesse.mjs` (25, l'evidenziazione che si accende e **si spegne**) e
+`riunione-audio-corto.mjs` (10, con microfono finto).
 
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 

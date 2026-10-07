@@ -31,6 +31,18 @@ export async function notificaAssegnazione(opts: {
   commessaId: string | null;
   /** Il codice della commessa, se chi chiama ce l'ha già sotto mano. */
   codiceCommessa?: string | null;
+  /**
+   * Per chi è il lavoro, e dove si va.
+   *
+   * ⚠️ **Non sono dettagli: sono la notizia.** L'avviso diceva «Ti è stata
+   * affidata una cosa da fare» e, nel corpo, il titolo. Chi lo riceve sul
+   * telefono voleva sapere *da chi* deve andare e *dove*, e doveva aprire
+   * l'app per scoprirlo — ammesso di capire quale delle venti righe fosse.
+   * Chi chiama questi due dati **ce li ha già in mano**: non passarli era solo
+   * una riga non scritta.
+   */
+  cliente?: string | null;
+  dove?: string | null;
 }): Promise<void> {
   if (opts.userId === opts.attoreUserId) return;
 
@@ -39,6 +51,8 @@ export async function notificaAssegnazione(opts: {
     tipo: eRichiesta ? 'richiesta' : 'todo',
     oggetto: opts.titolo,
     codiceCommessa: opts.codiceCommessa ?? null,
+    cliente: opts.cliente ?? null,
+    dove: opts.dove ?? null,
   });
 
   await avvisa([
@@ -47,13 +61,22 @@ export async function notificaAssegnazione(opts: {
       codice: 'todo_assegnato',
       titolo,
       corpo,
-      // Una richiesta non ha una commessa da aprire: porta alla home, dove
-      // compare con il tasto per richiamare.
-      url: opts.commessaId ? `/mobile/commessa/${opts.commessaId}#lavori` : '/mobile',
+      /**
+       * ⚠️ **Si atterra sulla cosa, non nel suo quartiere.**
+       *
+       * Prima: una richiesta portava alla home (venti righe, indovina quale) e
+       * una cosa da fare portava a `…#lavori`, che è un'**àncora morta** — in
+       * tutto il repo non esiste nessun `id="lavori"`, e i todo stanno dentro
+       * una tab che un hash non può nemmeno selezionare.
+       *
+       * Ora: una richiesta ha una pagina sua; una cosa da fare porta alla
+       * commessa con `?evidenzia=`, e lì la riga si accende per tre secondi.
+       */
+      url: opts.commessaId
+        ? `/mobile/commessa/${opts.commessaId}?evidenzia=${opts.todoId}`
+        : `/mobile/richiesta/${opts.todoId}`,
       extra: {
         todo_id: opts.todoId,
-        // Solo se c'è: il renderer della PWA ricava il collegamento da questo
-        // campo, e una richiesta non ce l'ha.
         ...(opts.commessaId ? { commessa_id: opts.commessaId } : {}),
         e_richiesta: eRichiesta,
         actor_user_id: opts.attoreUserId,
@@ -83,12 +106,17 @@ export async function notificaCommessaAssegnata(opts: {
   commessaId: string;
   /** Come si chiama il lavoro a schermo: codice più titolo, se c'è. */
   titolo: string;
+  /** Per chi è, e dove si va: le due domande di chi lo legge sul telefono. */
+  cliente?: string | null;
+  dove?: string | null;
 }): Promise<void> {
   if (opts.userId === opts.attoreUserId) return;
 
   const { titolo, corpo } = componiAssegnazione({
     tipo: 'commessa',
     oggetto: opts.titolo,
+    cliente: opts.cliente ?? null,
+    dove: opts.dove ?? null,
   });
 
   await avvisa([

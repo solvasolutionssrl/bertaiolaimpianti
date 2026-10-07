@@ -12,6 +12,7 @@ import {
   getTodoFileRefIds,
 } from './_lib/storage-cleanup';
 import { notificaAssegnazione } from './_lib/notifica-assegnazione';
+import { contestoDelTodo } from './_lib/contesto-lavoro';
 import { PRIORITA, PRIORITA_DEFAULT } from '@kommessa/api/priorita';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
@@ -98,6 +99,14 @@ const CreaInput = z.object({
   clienteTesto: z.string().trim().max(200).nullable().optional(),
   /** Come richiamare: numero o email, testo libero. */
   contatto: z.string().trim().max(200).nullable().optional(),
+  /**
+   * Dove bisogna andare, **se diverso** dall'indirizzo del cliente.
+   *
+   * ⚠️ Vuoto non vuol dire «non si sa»: vuol dire «quello del cliente». Chi
+   * legge ripiega li'. Copiarlo qui alla creazione farebbe una seconda verita'
+   * che non si aggiorna piu' quando cambia l'anagrafica.
+   */
+  indirizzo: z.string().trim().max(300).nullable().optional(),
 });
 
 export async function creaTodo(
@@ -181,6 +190,7 @@ export async function creaTodo(
     cliente_id: parsed.data.clienteId ?? null,
     cliente_testo: parsed.data.clienteTesto ?? null,
     contatto: parsed.data.contatto ?? null,
+    indirizzo: parsed.data.indirizzo ?? null,
   };
   const { data, error } = await supabase
     .from('commessa_todo' as never)
@@ -199,10 +209,14 @@ export async function creaTodo(
   });
 
   if (parsed.data.assegnatoA) {
+    const contesto = await contestoDelTodo(supabase, id);
     await notificaAssegnazione({
       tenantId: ctx.tenantId,
       userId: parsed.data.assegnatoA,
       attoreUserId: ctx.userId,
+      cliente: contesto.cliente,
+      dove: contesto.dove,
+      codiceCommessa: contesto.codiceCommessa,
       todoId: id,
       titolo: parsed.data.titolo,
       commessaId,
@@ -232,6 +246,7 @@ const AggiornaInput = z.object({
   clienteId: z.string().uuid().nullable().optional(),
   clienteTesto: z.string().trim().max(200).nullable().optional(),
   contatto: z.string().trim().max(120).nullable().optional(),
+  indirizzo: z.string().trim().max(300).nullable().optional(),
 });
 
 export async function aggiornaTodo(input: unknown): Promise<Result> {
@@ -259,6 +274,7 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
   if (parsed.data.clienteTesto !== undefined)
     update.cliente_testo = parsed.data.clienteTesto;
   if (parsed.data.contatto !== undefined) update.contatto = parsed.data.contatto;
+  if (parsed.data.indirizzo !== undefined) update.indirizzo = parsed.data.indirizzo;
 
   if (Object.keys(update).length === 0) {
     return { ok: false, error: 'Nessun campo da aggiornare' };
@@ -292,10 +308,14 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
   );
 
   if (riga.assegnato_a && riga.assegnato_a !== assegnatoPrima) {
+    const contesto = await contestoDelTodo(supabase, parsed.data.id);
     await notificaAssegnazione({
       tenantId: ctx.tenantId,
       userId: riga.assegnato_a,
       attoreUserId: ctx.userId,
+      cliente: contesto.cliente,
+      dove: contesto.dove,
+      codiceCommessa: contesto.codiceCommessa,
       todoId: parsed.data.id,
       titolo: riga.titolo,
       commessaId,
@@ -436,12 +456,17 @@ export async function affidaSquadraTodo(input: unknown): Promise<Result> {
     squadra: voluti,
   });
 
+  // Si legge una volta sola, fuori dal giro: mandare tre persone non deve
+  // voler dire leggere tre volte la stessa riga.
+  const contesto = await contestoDelTodo(supabase, parsed.data.todoId);
   for (const u of entrano) {
     if (u === ctx.userId) continue; // non si avvisa chi manda se stesso
     await notificaAssegnazione({
       tenantId: ctx.tenantId,
       userId: u,
       attoreUserId: ctx.userId,
+      cliente: contesto.cliente,
+      dove: contesto.dove,
       todoId: parsed.data.todoId,
       titolo: todo.titolo,
       commessaId: null,

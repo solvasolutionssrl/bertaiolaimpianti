@@ -49,7 +49,7 @@ export async function convertiRichiestaInBozza(
   const { data: rigaRaw, error: errLettura } = await supabase
     .from('commessa_todo' as never)
     .select(
-      `id, titolo, descrizione, contatto, cliente_id, cliente_testo, commessa_id,
+      `id, titolo, descrizione, contatto, cliente_id, cliente_testo, commessa_id, indirizzo,
        cliente:clienti ( ragione_sociale )`,
     )
     .eq('id', parsed.data.todoId)
@@ -65,6 +65,7 @@ export async function convertiRichiestaInBozza(
     cliente_id: string | null;
     cliente_testo: string | null;
     commessa_id: string | null;
+    indirizzo: string | null;
     cliente: { ragione_sociale: string } | null;
   };
 
@@ -81,6 +82,7 @@ export async function convertiRichiestaInBozza(
     clienteId: riga.cliente_id,
     clienteTesto: riga.cliente_testo,
     clienteLabel: riga.cliente?.ragione_sociale ?? null,
+    indirizzo: riga.indirizzo,
   });
 
   // Numero bozza per-tenant, atomico. I buchi sono ammessi di proposito: una
