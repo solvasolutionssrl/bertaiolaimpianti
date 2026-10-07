@@ -28,14 +28,56 @@ const DialogOverlay = React.forwardRef<
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
+/**
+ * Il segno con cui un pannello portato su `document.body` dichiara di
+ * appartenere a chi l'ha aperto.
+ *
+ * ⚠️ **Perché serve.** Una tendina dentro un dialog non può stare accanto al
+ * suo tasto: `DialogContent` ha `overflow-y-auto` (per i moduli lunghi) e una
+ * `transform` per centrarsi, e quell'accoppiata taglia tutto ciò che sborda —
+ * anche un `position: fixed`, perché una trasformazione diventa il riferimento
+ * dei discendenti fissi. L'unica uscita è portare il pannello su `body`.
+ *
+ * Ma da lì, per Radix, un clic su una voce dell'elenco è **fuori** dal dialog,
+ * e il dialog si chiuderebbe mentre la persona sta scegliendo. Il pannello si
+ * marca, e qui si riconosce.
+ *
+ * È il motivo per cui la nota in CLAUDE.md diceva «niente Portal dentro un
+ * dialog Radix»: era vero finché non c'era questo riconoscimento. Ora un
+ * portale si può usare, **a patto di marcarlo**.
+ */
+export const SEGNO_PANNELLO_PORTATO = 'data-popover-portale';
+
+function dentroUnPannelloPortato(bersaglio: EventTarget | null): boolean {
+  const el = bersaglio as HTMLElement | null;
+  return Boolean(el?.closest?.(`[${SEGNO_PANNELLO_PORTATO}]`));
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      // I due eventi si guardano entrambi: `pointerdown` arriva per primo e
+      // basterebbe quasi sempre, ma `interactOutside` copre anche il fuoco da
+      // tastiera. Chi passa un gestore suo lo riceve comunque, dopo.
+      onPointerDownOutside={(e) => {
+        if (dentroUnPannelloPortato(e.target)) {
+          e.preventDefault();
+          return;
+        }
+        onPointerDownOutside?.(e);
+      }}
+      onInteractOutside={(e) => {
+        if (dentroUnPannelloPortato(e.target)) {
+          e.preventDefault();
+          return;
+        }
+        onInteractOutside?.(e);
+      }}
       // Container responsivo:
       // - max-w-[calc(100vw-1rem)] lascia 8px su ciascun lato anche su
       //   iPhone SE (375px) → niente crop verticale, niente bordi

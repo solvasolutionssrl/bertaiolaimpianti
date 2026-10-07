@@ -276,12 +276,33 @@ export function CondividiCommessa({
       role="dialog"
       aria-modal="true"
       aria-label="Condividi il lavoro"
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 sm:items-center"
+      /*
+       * Sul telefono il pannello **non** e' incollato in basso.
+       *
+       * Com'era: `items-end` e angoli arrotondati solo in cima, cioe' a filo
+       * col bordo dello schermo. Su un iPhone quel bordo e' occupato dalla
+       * barra di sistema (la striscia del gesto «home»), quindi l'ultimo tasto
+       * finiva sotto una zona che intercetta lo scorrimento: si prova a
+       * premerlo e invece si chiude l'app.
+       *
+       * ⚠️ Non basta uno stacco fisso: con `viewport-fit=cover` l'altezza
+       * della finestra comprende quella barra, e quanto misura dipende dal
+       * modello. Quindi **10% dello schermo PIU' la zona di sicurezza**, letta
+       * dal sistema. Su un telefono senza barra `env(...)` vale zero e resta
+       * il solo 10%.
+       *
+       * Da schermo largo torna centrato come prima (`sm:`).
+       */
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/50 px-3 pb-[calc(10dvh+env(safe-area-inset-bottom,0px))] sm:items-center sm:px-4 sm:pb-0"
       onClick={() => cambiaApertura(false)}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-background p-4 sm:rounded-2xl"
+        /* Angoli tondi su tutti e quattro i lati: staccato dal bordo, due
+           angoli vivi in fondo si leggono come un pannello tagliato.
+           Il `max-h` lascia fuori lo stacco appena aggiunto, altrimenti un
+           contenuto lungo tornerebbe a toccare il bordo. */
+        className="max-h-[calc(90dvh-10dvh-env(safe-area-inset-bottom,0px))] w-full max-w-lg overflow-y-auto rounded-2xl bg-background p-4 shadow-soft-lg sm:max-h-[90dvh]"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div className="min-w-0">

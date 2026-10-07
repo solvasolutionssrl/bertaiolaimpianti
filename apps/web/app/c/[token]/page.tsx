@@ -70,8 +70,19 @@ export default async function PaginaPubblica({
       .from('file_refs')
       .select('id, filename, mime')
       .eq('commessa_id', link.commessaId)
+      // Il filtro sullo stato è anche ciò che tiene fuori il cestino: chi
+      // cancella un media gli mette `status='deleted'` (oltre a `deleted_at`),
+      // quindi una foto buttata via smette di essere pubblica da sola. Non
+      // serve un secondo filtro, serve saperlo.
       .in('status', ['uploaded', 'syncing', 'synced'])
-      .order('created_at', { ascending: true })
+      // ⚠️ `uploaded_at`, non `created_at`: su `file_refs` quella colonna
+      // **non esiste**, e PostgREST risponde con un errore invece di una
+      // lista. Per due giorni la galleria pubblica non ha mostrato un file a
+      // nessuno — vedi la nota qui sotto sul perché non si era visto.
+      // `.order('id')` in coda perché due file caricati nello stesso istante
+      // non si scambino di posto a ogni apertura.
+      .order('uploaded_at', { ascending: true })
+      .order('id', { ascending: true })
       .limit(300),
   ]);
 
@@ -84,6 +95,28 @@ export default async function PaginaPubblica({
   if (!commessa) return <LinkNonValido />;
 
   const tenant = tenantRes.data as { nome: string; logo_url: string | null } | null;
+
+  /**
+   * ⚠️ **«Non ci sono foto» e «non sono riuscito a leggerle» non sono la
+   * stessa cosa, e questa pagina le confondeva.**
+   *
+   * `mediaRes.data ?? []` trasformava un errore in un elenco vuoto, e la
+   * pagina diceva al cliente «non ci sono ancora foto da mostrare» su una
+   * commessa che ne ha sei. Il difetto vero era un nome di colonna sbagliato
+   * nell'ordinamento, ma è **rimasto invisibile due giorni** perché il ripiego
+   * lo raccontava come una cosa normale: nessun errore nei log, nessun segno a
+   * schermo, solo una galleria vuota che sembrava giusta.
+   *
+   * Un ripiego su un dato assente va bene; un ripiego su un dato **non letto**
+   * nasconde il guasto. Ora l'errore si distingue, si scrive nei log del
+   * server e a schermo diventa un messaggio diverso.
+   */
+  const letturaFallita = Boolean(mediaRes.error);
+  if (mediaRes.error) {
+    console.error(
+      `[link pubblico] media della commessa ${link.commessaId} non letti: ${mediaRes.error.message}`,
+    );
+  }
 
   const media: MediaPubblico[] = ((mediaRes.data ?? []) as MediaPubblico[]).filter(
     (m) => mediaVisibilePubblicamente(m.mime),
@@ -157,7 +190,14 @@ export default async function PaginaPubblica({
         ) : null}
       </div>
 
-      {media.length === 0 ? (
+      {letturaFallita ? (
+        /* Messaggio neutro: su una pagina pubblica non si scrive cosa non ha
+           funzionato. Il dettaglio sta nei log del server, dove serve. */
+        <p className="rounded-lg border border-dashed border-destructive/40 px-4 py-8 text-center text-sm text-muted-foreground">
+          Le foto non si caricano in questo momento. Riprovate più tardi, oppure
+          chiedete un collegamento nuovo.
+        </p>
+      ) : media.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
           Non ci sono ancora foto da mostrare.
         </p>

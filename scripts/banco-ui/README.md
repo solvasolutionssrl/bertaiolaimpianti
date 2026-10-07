@@ -26,6 +26,8 @@ node scripts/banco-ui/lavoro-da-sede.mjs         # «Lavoro dalla sede sul proge
 node scripts/banco-ui/ore-quote.mjs              # quote delle ore nelle pagine ufficio (dopo registra-giornata con BANCO_SALVA=1)
 node scripts/banco-ui/elenco-commesse.mjs        # l'elenco del tecnico: titolo, tab, ricerca, pastiglie, ordine, sbordo
 node scripts/banco-ui/notifiche-preferenze.mjs   # la pagina notifiche governa qualcosa: la scelta resta dopo un ricaricamento
+node scripts/banco-ui/condividi.mjs              # il dialog «Condividi il lavoro» si apre davvero e non è incollato al bordo
+node scripts/banco-ui/tendine.mjs                # le tendine nei dialog: non tagliate, e scegliere non chiude il dialog (BANCO_MOBILE=1)
 ```
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve

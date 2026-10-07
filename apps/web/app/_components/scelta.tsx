@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@kommessa/ui';
 import {
@@ -67,6 +68,17 @@ interface BaseProps {
 
 // ── il guscio: tasto + overlay, logica di apertura e tastiera ───────────────
 
+/**
+ * Il segno che marca il pannello della tendina ovunque finisca nel documento.
+ *
+ * Serve a due cose che senza di lui si romperebbero a vicenda:
+ *  - a questo componente, per non chiudersi quando si clicca dentro il proprio
+ *    elenco (che dal punto di vista del DOM e' «fuori» dal tasto);
+ *  - al dialog che lo contiene, per non chiudersi **lui** credendo che sia un
+ *    clic fuori. Vedi `packages/ui/.../dialog.tsx`.
+ */
+export const SEGNO_PANNELLO = 'data-popover-portale';
+
 function useChiudiSuClicFuori(
   aperto: boolean,
   chiudi: () => void,
@@ -75,7 +87,12 @@ function useChiudiSuClicFuori(
   React.useEffect(() => {
     if (!aperto) return;
     function suClic(e: MouseEvent | TouchEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) chiudi();
+      const bersaglio = e.target as HTMLElement | null;
+      // ⚠️ Il pannello vive su `document.body`, non dentro il tasto: senza
+      // questa riga ogni clic su una voce sarebbe «fuori», la tendina si
+      // chiuderebbe prima della scelta e non si potrebbe selezionare niente.
+      if (bersaglio?.closest?.(`[${SEGNO_PANNELLO}]`)) return;
+      if (ref.current && !ref.current.contains(bersaglio as Node)) chiudi();
     }
     // `mousedown` e non `click`: così la tendina si chiude prima che il clic
     // raggiunga quello che c'è sotto, e non si perde il primo tocco.
@@ -89,21 +106,78 @@ function useChiudiSuClicFuori(
   return ref;
 }
 
+/** L'altezza massima dell'elenco più un margine di cortesia. */
+const ALTEZZA_ELENCO = 280;
+
+export interface PosizionePannello {
+  /** Coordinate di finestra: il pannello è `fixed`, non dentro la pagina. */
+  top: number;
+  left: number;
+  larghezza: number;
+  versoAlto: boolean;
+}
+
 /**
- * Decide se aprire verso il basso o verso l'alto. Una tendina che esce dallo
- * schermo costringe a scorrere la pagina mentre si sceglie, e su un dialog
- * spesso non si può proprio.
+ * Dove disegnare il pannello.
+ *
+ * ⚠️ **Perché il pannello non può più stare accanto al tasto.**
+ * Prima era `position: absolute` dentro il tasto, e dentro un dialog veniva
+ * **tagliato**: `DialogContent` ha `overflow-y-auto` (per i moduli lunghi) e
+ * una `transform` per centrarsi. Quell'accoppiata è una trappola nota: il
+ * primo taglia tutto ciò che sborda, e il secondo impedisce persino a un
+ * `position: fixed` di uscirne, perché una trasformazione rende l'elemento il
+ * riferimento dei discendenti fissi. Quindi l'elenco delle persone finiva
+ * mozzato a metà, su desktop e su telefono.
+ *
+ * L'unica uscita è portare il pannello su `document.body` e posizionarlo a
+ * mano. Da lì nessun antenato lo taglia — al prezzo di dover ricalcolare le
+ * coordinate quando qualcosa si muove, che è ciò che fa l'effetto qui sotto.
  */
-function useVersoAlto(aperto: boolean, ref: React.RefObject<HTMLElement>) {
-  const [versoAlto, setVersoAlto] = React.useState(false);
+// ⚠️ Il nome deve cominciare per `use`, anche se tutto il resto del file è in
+// italiano: la regola `react-hooks/rules-of-hooks` riconosce un hook dal nome,
+// e `usaPosizione` faceva fallire la compilazione. Non è una preferenza di
+// stile, è l'unico modo che ha il controllo per sapere che qui dentro si
+// possono chiamare gli hook.
+function usePosizione(
+  aperto: boolean,
+  ref: React.RefObject<HTMLElement>,
+): PosizionePannello | null {
+  const [pos, setPos] = React.useState<PosizionePannello | null>(null);
+
   React.useEffect(() => {
-    if (!aperto || !ref.current) return;
-    const r = ref.current.getBoundingClientRect();
-    const sotto = window.innerHeight - r.bottom;
-    // 280 è l'altezza massima dell'elenco più un margine di cortesia.
-    setVersoAlto(sotto < 280 && r.top > sotto);
+    if (!aperto) {
+      setPos(null);
+      return;
+    }
+    const calcola = () => {
+      const el = ref.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const sotto = window.innerHeight - r.bottom;
+      // Una tendina che esce dallo schermo costringe a scorrere mentre si
+      // sceglie, e dentro un dialog spesso non si può proprio.
+      const versoAlto = sotto < ALTEZZA_ELENCO && r.top > sotto;
+      setPos({
+        top: versoAlto ? r.top : r.bottom,
+        left: r.left,
+        larghezza: r.width,
+        versoAlto,
+      });
+    };
+    calcola();
+
+    // `capture: true` perché a scorrere è quasi sempre il corpo del dialog,
+    // non la finestra: senza, il pannello resterebbe fermo mentre il tasto si
+    // sposta sotto di lui.
+    window.addEventListener('scroll', calcola, true);
+    window.addEventListener('resize', calcola);
+    return () => {
+      window.removeEventListener('scroll', calcola, true);
+      window.removeEventListener('resize', calcola);
+    };
   }, [aperto, ref]);
-  return versoAlto;
+
+  return pos;
 }
 
 function TastoTendina({
@@ -174,7 +248,7 @@ function Elenco({
   scegli,
   eSelezionata,
   multipla,
-  versoAlto,
+  posizione,
   larghezza,
   segnapostoRicerca,
   nessunRisultato,
@@ -189,7 +263,7 @@ function Elenco({
   scegli: (o: OpzioneScelta) => void;
   eSelezionata: (v: string) => boolean;
   multipla: boolean;
-  versoAlto: boolean;
+  posizione: PosizionePannello | null;
   larghezza: 'tasto' | 'auto';
   segnapostoRicerca: string;
   nessunRisultato: string;
@@ -212,13 +286,25 @@ function Elenco({
   const gruppi = raggruppaOpzioni(opzioni);
   let indice = -1;
 
-  return (
+  // Il pannello esce dal documento della pagina: vedi `usePosizione`.
+  if (!posizione) return null;
+
+  const pannello = (
     <div
-      className={cn(
-        'absolute left-0 z-50 overflow-hidden rounded-md border border-border bg-popover shadow-lg',
-        versoAlto ? 'bottom-full mb-1' : 'top-full mt-1',
-        larghezza === 'tasto' ? 'right-0' : 'min-w-full',
-      )}
+      {...{ [SEGNO_PANNELLO]: '' }}
+      style={{
+        position: 'fixed',
+        top: posizione.versoAlto ? undefined : posizione.top + 4,
+        bottom: posizione.versoAlto
+          ? Math.max(0, window.innerHeight - posizione.top) + 4
+          : undefined,
+        left: posizione.left,
+        width: larghezza === 'tasto' ? posizione.larghezza : undefined,
+        minWidth: larghezza === 'tasto' ? undefined : posizione.larghezza,
+        // Sopra il dialog (`z-50`) e sopra la barra in basso della PWA.
+        zIndex: 100,
+      }}
+      className="overflow-hidden rounded-md border border-border bg-popover shadow-lg"
     >
       {conRicerca ? (
         <div className="flex items-center gap-1.5 border-b border-border px-2">
@@ -313,6 +399,12 @@ function Elenco({
       {piede}
     </div>
   );
+
+  // ⚠️ `document.body` e non un contenitore nostro: un portale dentro il
+  // dialog sarebbe di nuovo dentro il riquadro che taglia. E il pannello si
+  // marca con `SEGNO_PANNELLO`, altrimenti il dialog che lo contiene legge il
+  // clic su una voce come un clic fuori e si chiude.
+  return typeof document === 'undefined' ? null : createPortal(pannello, document.body);
 }
 
 /** Logica condivisa fra scelta singola e multipla. */
@@ -333,7 +425,7 @@ function useTendina(opzioni: readonly OpzioneScelta[]) {
   }, []);
 
   const guscio = useChiudiSuClicFuori(aperto, chiudi);
-  const versoAlto = useVersoAlto(aperto, guscio);
+  const posizione = usePosizione(aperto, guscio);
 
   // Ogni volta che l'elenco visibile cambia, la voce attiva torna alla prima
   // utile: altrimenti dopo aver digitato si resterebbe puntati su un indice
@@ -352,7 +444,7 @@ function useTendina(opzioni: readonly OpzioneScelta[]) {
     visibili,
     chiudi,
     guscio,
-    versoAlto,
+    posizione,
   };
 }
 
@@ -495,7 +587,7 @@ export function Scelta({
           scegli={conferma}
           eSelezionata={(v) => (v === VUOTO ? valore === null : v === valore)}
           multipla={false}
-          versoAlto={t.versoAlto}
+          posizione={t.posizione}
           larghezza={larghezzaElenco}
           segnapostoRicerca={segnapostoRicerca}
           nessunRisultato={nessunRisultato}
@@ -631,7 +723,7 @@ export function SceltaMultipla({
           scegli={conferma}
           eSelezionata={(v) => valori.includes(v)}
           multipla
-          versoAlto={t.versoAlto}
+          posizione={t.posizione}
           larghezza={larghezzaElenco}
           segnapostoRicerca={segnapostoRicerca}
           nessunRisultato={nessunRisultato}
