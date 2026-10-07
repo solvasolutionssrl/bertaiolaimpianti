@@ -29,7 +29,41 @@ node scripts/banco-ui/notifiche-preferenze.mjs   # la pagina notifiche governa q
 node scripts/banco-ui/condividi.mjs              # il dialog «Condividi il lavoro» si apre davvero e non è incollato al bordo
 node scripts/banco-ui/tendine.mjs                # le tendine nei dialog: non tagliate, e scegliere non chiude il dialog (BANCO_MOBILE=1)
 node scripts/banco-ui/riunione-tecnico.mjs       # un tecnico scrive una riunione con l’AI (BANCO_SALVA=1 salva sul demo: ripulire)
+node scripts/banco-ui/richieste.mjs              # il giro dell’ufficio: telefonata → cliente nuovo → chi ci va → spunta → elimina (si ripulisce da solo)
+node scripts/banco-ui/riunione-audio-corto.mjs   # mezzo secondo di registrazione: avviso calmo, non un popup di errore (microfono finto)
 ```
+
+## ⚠️ Il dito vero, e perché conta
+
+`elemento.click()` **non è un clic**: è una chiamata al DOM, e ignora
+`pointer-events`, ignora chi sta sopra, ignora `visibility`. Un pannello
+spento da `pointer-events: none` — quello che Radix fa al `<body>` quando apre
+un dialog modale — accetta `click()` e rifiuta il dito di una persona.
+
+Il banco delle tendine ha dato **11 verdi per settimane** su una tendina che
+nessuno riusciva a usare, e lo ha fatto così.
+
+Dove si misura se una cosa **si può usare**, si usano questi, da `comune.mjs`:
+
+| | |
+|---|---|
+| `clicVero(cdp, espressione)` | tocca davvero; se il dito finisce altrove lo **dice** («in quel punto risponde `<TEXTAREA>`») invece di fingere. Porta l’elemento in vista prima, come farebbe una persona |
+| `scriviVero(cdp, testo)` | batte sulla tastiera; se il fuoco viene strappato, il testo non arriva — ed è ciò che si vuole misurare |
+| `premiTasto(cdp, 'Escape')` | un tasto non stampabile |
+| `chiHaIlFuoco(cdp, selettore)` | chi ha il cursore adesso, e se è dentro un dato recinto |
+| `chiRiceveIlTocco(cdp, x, y)` | chi risponderebbe in quel punto: distingue «non funziona» da «c’è qualcosa davanti» |
+
+E tre regole imparate sbagliando, tutte dentro questi banchi:
+
+1. **Un controllo non deve SPARIRE quando non riesce a misurare.** In
+   `elenco-commesse.mjs` un `if` saltava in silenzio il confronto fra gli
+   spazi quando nessun blocco aveva due figli: venti verdi e di quello,
+   niente. Ora, se non misura, lo dice.
+2. **Non fotografare subito dopo il clic: aspettare.** La riga eliminata era
+   già cancellata nel database e ancora a schermo, e il banco inventava un
+   guasto.
+3. **Guardare la cosa, non tutta la pagina.** «Il titolo non c’è più» falliva
+   perché il titolo era nel dialog di conferma ancora aperto.
 
 `BANCO_VISIBILE=1` apre il browser a schermo invece che di nascosto: serve
 quando un controllo fallisce e si vuole vedere cosa succede.

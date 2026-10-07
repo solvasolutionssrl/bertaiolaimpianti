@@ -31,7 +31,19 @@ const CHROME =
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 /** Avvia Chrome pulito e ci si collega. `mobile` emula un iPhone. */
-export async function apriChrome({ mobile = false, larghezza = 1440, altezza = 900 } = {}) {
+export async function apriChrome({
+  mobile = false,
+  larghezza = 1440,
+  altezza = 900,
+  /**
+   * Dà a Chrome un microfono finto e concede il permesso senza chiederlo.
+   *
+   * Serve a misurare cio' che succede **prima** dell'AI: quanto dura una
+   * registrazione, cosa si vede se dura troppo poco. Senza, `getUserMedia`
+   * solleva e il banco puo' solo guardare il tasto.
+   */
+  microfonoFinto = false,
+} = {}) {
   const profilo = mkdtempSync(join(tmpdir(), 'banco-ui-'));
   const args = [
     `--remote-debugging-port=${PORTA_CDP}`,
@@ -39,6 +51,9 @@ export async function apriChrome({ mobile = false, larghezza = 1440, altezza = 9
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-features=Translate,MediaRouter',
+    ...(microfonoFinto
+      ? ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream']
+      : []),
     `--window-size=${larghezza},${altezza + 90}`,
     'about:blank',
   ];
@@ -177,6 +192,19 @@ export async function chiRiceveIlTocco(cdp, x, y) {
  * elemento lo dice, invece di far finta di aver cliccato.
  */
 export async function clicVero(cdp, espressioneElemento, { attesaMs = 350 } = {}) {
+  // ⚠️ Prima si porta in vista. Una persona davanti a un modulo lungo scorre
+  // fino al campo e poi lo tocca; un banco che non lo fa riporta «elemento
+  // assente» su un campo che c'e' e si vede benissimo, due dita piu' in
+  // basso. Misurato: il tasto «Chi se ne occupa» spariva appena il modulo
+  // della telefonata si allungava con la scheda del cliente nuovo.
+  await valuta(
+    cdp,
+    `(() => { const el = (${espressioneElemento});
+       if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+       return 1; })()`,
+  );
+  await new Promise((r) => setTimeout(r, 180));
+
   const c = await centroDi(cdp, espressioneElemento);
   if (!c) return { fatto: false, perche: 'elemento assente o senza superficie' };
 

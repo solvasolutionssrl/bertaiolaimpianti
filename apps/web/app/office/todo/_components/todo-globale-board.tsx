@@ -667,12 +667,21 @@ function TodoRow({
               title={`Ci vanno: ${row.squadra.map((p) => p.nome).join(', ')}`}
             >
               <Users className="mr-0.5 inline h-3 w-3" />
-              Ci {row.squadra.length === 1 ? 'va' : 'vanno'}{' '}
-              {row.squadra
-                .slice(0, 2)
-                .map((p) => (p.id === currentUserId ? 'tu' : p.nome))
-                .join(', ')}
-              {row.squadra.length > 2 ? ` +${row.squadra.length - 2}` : ''}
+              {/* ⚠️ «Ci va tu» non si legge. Il «tu» vale solo quando e' una
+                  persona sola, altrimenti il verbo e il pronome litigano: in
+                  due o piu' si scrivono i nomi. */}
+              {row.squadra.length === 1 ? (
+                row.squadra[0]!.id === currentUserId ? (
+                  'Ci vai tu'
+                ) : (
+                  `Ci va ${row.squadra[0]!.nome}`
+                )
+              ) : (
+                <>
+                  Ci vanno {row.squadra.slice(0, 2).map((p) => p.nome).join(', ')}
+                  {row.squadra.length > 2 ? ` +${row.squadra.length - 2}` : ''}
+                </>
+              )}
             </span>
           ) : null}
           {row.scadenza_at ? (

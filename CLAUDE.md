@@ -474,6 +474,69 @@ default.
 > gliela si fa se manca.
 
 
+### Dopo la prima riunione con la squadra (07/10/2026 pomeriggio)
+
+I tecnici sono entrati la mattina; il pomeriggio e' arrivata la prima lista di
+cose che non tornavano. Migration `20261008120000`.
+
+- ⭐ **«In mano a» e «chi ci va» sono due domande, non due verita' sulla
+  stessa.** La segretaria affida la richiesta a un caposquadra — che in
+  Bertaiola e' un dipendente con ruolo **`office`**, non una capacita' — e lui
+  la gira a uno o piu' tecnici. `commessa_todo.assegnato_a` **resta** e dice
+  chi ne RISPONDE; la tabella nuova `commessa_todo_squadra` dice chi ci VA. Si
+  legge la catena intera: Erica → Cristian → Luca + Thomas. L'alternativa era
+  sostituire la colonna: 103 letture in 19 file, in produzione, per perdere chi
+  aveva incaricato chi. ⚠️ Un tecnico non riassegna: lo dicono la policy
+  `commessa_todo_squadra_write` **e** il trigger `commessa_todo_tecnico_guard`
+  che gia' gli impediva di toccare `assegnato_a`. ⚠️ Mandare qualcuno su un
+  task **di commessa** lo mette in `commessa_tecnici`: altrimenti riceve un
+  collegamento a una pagina che non puo' aprire. ⚠️ Il predicato «le mie cose
+  da fare» resta scritto **identico** nella home e nella scheda commessa.
+- **Il cliente nuovo si registra al telefono.** C'era `ClientePicker`, che del
+  cliente prendeva **solo il nome** e non salvava niente in anagrafica. Ora
+  `SceltaCliente`, lo stesso del sopralluogo e del dettato, e la scheda si crea
+  davvero (`creaCliente`). ⚠️ E `aggiornaTodo` non accettava
+  `clienteId`/`clienteTesto`/`contatto`: **una richiesta registrata non si
+  poteva correggere**, ne' il nome ne' il numero. Misurato sui dati veri:
+  «Lago Maria Rosanna» come testo libero, col telefono in un campo a parte, e
+  la stessa richiesta scritta **due volte a quattro minuti di distanza**.
+- **Spuntare chiede conferma**, nei tre punti dove si spunta (commessa ufficio,
+  board Task, commessa PWA). Il cerchietto e' un bersaglio di 40-44px accanto
+  al titolo: scorrendo si prende per sbaglio, e dall'altra parte qualcuno
+  smette di aspettare quella cosa. ⚠️ `askConfirm` **fuori** da
+  `startTransition`, sempre.
+- **Eliminare si puo', dalla board Task.** `eliminaTodo` esisteva ed era
+  collegata **solo** dentro una commessa: l'unica uscita era segnare come fatta
+  una cosa mai fatta. Non si confonde con `annullato`, che il codice stesso
+  chiama «una cancellazione travestita»: quello e' cio' che era vero e non si
+  fa piu', e resta nello storico.
+- **L'elenco del tecnico e' fatto di blocchi.** Una cosa da fare poteva stare
+  dieci righe sopra la commessa a cui appartiene. ⭐ **L'ordine dei gruppi non
+  e' una regola nuova**: si ordina con `ordinaElenco` di sempre e i gruppi
+  seguono la voce piu' urgente che contengono, cosi' non esiste una seconda
+  regola da tenere allineata alla prima. `raggruppaElenco` in
+  `@kommessa/api/elenco-lavoro` (26 asserzioni). ⚠️ Un gruppo puo' non avere
+  capofila — succede cercando — e la riga va mostrata lo stesso.
+- **La registrazione troppo breve non e' un errore.** ⚠️ **Non c'era un limite
+  da togliere: ne mancava uno.** Il modulo delle riunioni ha un registratore
+  tutto suo e non conosceva la soglia dei tre secondi che gli altri cinque
+  punti dell'app hanno da agosto: mezzo secondo di audio arrivava all'AI,
+  tornava vuoto (422) e diventava il popup «Trascrizione fallita». Sotto il
+  decimo di secondo rifiuta OpenAI stessa, quindi il bordo esiste comunque e
+  l'unica cosa che si sceglie e' **come dirlo**: avviso calmo in linea, tasto
+  subito ripremibile. Regola e messaggi in `app/_lib/registrazione.ts`, un
+  posto solo per entrambi i registratori. ⚠️ Trovato di contorno: il dettato
+  finiva nel testo mandato all'AI **due volte** (sta sia in `corpoLibero` sia
+  in `trascrizione`, ed e' voluto; era il concatenamento a non saperlo).
+- Di contorno, nella stessa pagina: la commessa si sceglieva da un `<select>`
+  di sistema con **202 voci** su Bertaiola, che stampava il `nome_cartella`
+  grezzo; e `.limit(200)` su 202 commesse attive rendeva **invisibili** le
+  ultime due, nel filtro e nel modulo, senza nessun segnale.
+
+Banchi: `scripts/banco-ui/richieste.mjs` (21 controlli, giro completo
+ufficio → tecnico → pulizia) e `riunione-audio-corto.mjs` (10, con microfono
+finto).
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.
@@ -576,7 +639,8 @@ La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semp
 - **Zoom iOS all'apertura**: input con font < 16px → WebKit zooma la pagina. Globals già forza 16px sui form field; per input custom usare `text-base`.
 - **Elemento nascosto sotto la bottom-nav**: un `fixed` dentro la shell resta intrappolato nello stacking context → **`createPortal` su body + z alto** (pattern `Portal`, `mobile/_components/portal.tsx`).
 - **Tastiera che copre i tasti**: aggancia alla **`visualViewport`** (spaziatore bianco = altezza tastiera, oppure restringi il foglio).
-- **Dropdown dentro un dialog Radix**: serve un **Portal su `document.body`**, e il pannello va **marcato** con `data-popover-portale`. ⚠️ Questa riga diceva l'opposto fino all'08/10 («overlay assoluto in-flow, NON un Portal») ed era sbagliata a meta': il Portal da solo fa chiudere il dialog (Radix legge il clic come «fuori»), ma l'overlay in-flow viene **tagliato**, perche' `DialogContent` ha `overflow-y-auto` *e* una `transform` — e una trasformazione impedisce persino a un `position: fixed` di uscire. L'elenco delle persone compariva mozzato a meta'. La soluzione tiene insieme le due cose: Portal + marcatura, e `DialogContent` ignora gli eventi che vengono da li' (`SEGNO_PANNELLO_PORTATO` in `packages/ui/.../dialog.tsx`). Banco: `scripts/banco-ui/tendine.mjs`.
+- **Dropdown dentro un dialog Radix — servono QUATTRO cose insieme**, e per settimane ce n'erano due: **(1)** Portal su `document.body` (un overlay in-flow viene **tagliato**: `DialogContent` ha `overflow-y-auto` *e* una `transform`, e una trasformazione impedisce persino a un `position: fixed` di uscire); **(2)** il pannello **marcato** `data-popover-portale`, altrimenti Radix legge il clic su una voce come «fuori» e chiude il dialog sotto (`SEGNO_PANNELLO_PORTATO` in `packages/ui/.../dialog.tsx`); **(3)** ⚠️ **`pointerEvents: 'auto'` esplicito** — un dialog modale Radix mette `pointer-events: none` su tutto il `<body>` e li riaccende **solo** nel proprio recinto: il pannello si vedeva e **il dito ci passava attraverso**, colpendo il campo sotto (`elementFromPoint` sul centro di una voce restituiva la `<textarea>` della descrizione); **(4)** ⚠️ un **`FocusScope`** attorno al pannello — non per intrappolare (`trapped` resta falso) ma per il solo fatto di montarsi: cosi' mette in **pausa** la gabbia del fuoco del dialog, che altrimenti strappa il cursore alla casella di ricerca all'istante. E la tastiera va agganciata **anche al pannello**: gli eventi di un Portal risalgono l'albero di React, dove il pannello e' un *fratello* del tasto, quindi col cursore nella casella le frecce non arrivavano a nessuno. Banco: `scripts/banco-ui/tendine.mjs` (23 controlli, computer e telefono).
+> ⚠️⚠️ **Un banco che sceglie con `elemento.click()` non misura niente di tutto questo**: e' una chiamata al DOM e **ignora `pointer-events`**. Quel banco dava **11 verdi** su una tendina che nessuno riusciva a usare. In `scripts/banco-ui/comune.mjs` ci sono ora `clicVero`, `scriviVero`, `premiTasto`, `chiHaIlFuoco`, `chiRiceveIlTocco`: eventi veri del browser, e `clicVero` dice «in quel punto risponde `<TEXTAREA>`» invece di fingere di aver cliccato.
 - **Tasti fissi in alto (campanella, «＋ Spesa»)**: 34px a `safe-area + 6px`, tocco da 44px con un'area invisibile `before:`. La fascia in alto a destra fino a 40px va lasciata libera: niente a destra sulla riga del titolo, «Aggiornato alle» sta sulla riga sotto (14/09/2026, prima la campanella copriva il testo su Cantieri, Ore, Spese). Banco `scripts/banco-ui/campanella.mjs`.
 
 #### Audit Kantiere + correzioni payroll/sicurezza/log (06/07/2026)
