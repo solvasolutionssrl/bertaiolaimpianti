@@ -89,7 +89,8 @@ interface Props {
    * collega d'ufficio non si poteva nemmeno cercare.
    */
   assegnabili: Array<{ id: string; display_name: string | null; role: string }>;
-  commesseAttive: Array<{ id: string; codice_interno: string; nome_cartella: string }>;
+  /** Titolo gia' composto a monte: `nome_cartella` non si mostra mai grezza. */
+  commesseAttive: Array<{ id: string; codice: string; titolo: string; cliente: string | null }>;
   filtri: Filtri;
 }
 
@@ -263,18 +264,22 @@ export function TodoGlobaleBoard({
         </FiltroGroup>
 
         <FiltroGroup label="Commessa">
-          <select
-            value={filtri.commessa ?? ''}
-            onChange={(e) => updateFiltro('commessa', e.target.value || null)}
-            className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs"
-          >
-            <option value="">Tutte</option>
-            {commesseAttive.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.codice_interno} — {c.nome_cartella.slice(0, 30)}
-              </option>
-            ))}
-          </select>
+          {/* Duecento commesse non si scorrono a occhio: si cercano. */}
+          <Scelta
+            opzioni={commesseAttive.map((c) => ({
+              valore: c.id,
+              etichetta: c.codice,
+              dettaglio: [c.cliente, c.titolo].filter(Boolean).join(' — ') || undefined,
+              cerca: [c.codice, c.cliente, c.titolo].filter(Boolean).join(' '),
+            }))}
+            valore={filtri.commessa ?? null}
+            onCambia={(v) => updateFiltro('commessa', v)}
+            etichettaNessuno="Tutte"
+            segnaposto="Tutte"
+            segnapostoRicerca="Cerca una commessa…"
+            larghezzaElenco="auto"
+            aria-label="Filtra per commessa"
+          />
         </FiltroGroup>
 
         <FiltroGroup label="Assegnato">

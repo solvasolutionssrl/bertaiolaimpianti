@@ -20,6 +20,19 @@ import { EmptyState } from '../../_components/empty-state';
 import { elencaAssegnabiliTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard } from './_components/todo-globale-board';
 import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
+import { leggiTutto } from '@kommessa/api/pagine';
+import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
+
+/** Una commessa come serve a chi la deve scegliere da una tendina. */
+type ComessaPicker = {
+  id: string;
+  codice_interno: string;
+  nome_cartella: string | null;
+  descrizione_ai_finale: string | null;
+  descrizione_ai_proposta: string | null;
+  note_iniziali: string | null;
+  cliente: { ragione_sociale: string | null } | null;
+};
 
 export const metadata = { title: 'Task' };
 export const dynamic = 'force-dynamic';
@@ -108,13 +121,25 @@ export default async function TodoGlobalePage({
   const { data: todosRaw } = await q.limit(300);
 
   // ─── liste per filtri (commesse attive + tecnici) ──────────────────
-  const [commesseRes, assegnabili] = await Promise.all([
-    supabase
-      .from('commesse')
-      .select('id, codice_interno, nome_cartella')
-      .in('stato', ['bozza', 'aperta', 'in_corso', 'collaudo'])
-      .order('codice_interno', { ascending: false })
-      .limit(200),
+  const [commesseRighe, assegnabili] = await Promise.all([
+    // ⚠️ Lettura **completa**, non `.limit(200)`: su Bertaiola le commesse
+    // attive sono 202, e le ultime due non comparivano ne' nel filtro ne' nel
+    // modulo — senza nessun segnale. E' lo stesso difetto dei clienti di
+    // settembre: un tetto scelto a occhio diventa un dato invisibile appena i
+    // dati crescono.
+    leggiTutto<ComessaPicker>(
+      (da, a) =>
+        supabase
+          .from('commesse')
+          .select(
+            'id, codice_interno, nome_cartella, descrizione_ai_finale, descrizione_ai_proposta, note_iniziali, cliente:clienti(ragione_sociale)',
+          )
+          .in('stato', ['bozza', 'aperta', 'in_corso', 'collaudo'])
+          .order('codice_interno', { ascending: false })
+          .order('id')
+          .range(da, a),
+      { contesto: 'commesse per il filtro dei task' },
+    ),
     // Un task o una richiesta si dà a CHIUNQUE della squadra, non solo ai
     // tecnici: «chiama il fornitore» è roba d'ufficio, «passa a vedere la
     // caldaia» è roba da capo.
@@ -210,11 +235,23 @@ export default async function TodoGlobalePage({
     scaduti: todos.filter((t) => t.isScaduto).length,
   };
 
-  const commesseAttive = (commesseRes.data ?? []) as Array<{
-    id: string;
-    codice_interno: string;
-    nome_cartella: string;
-  }>;
+  // ⚠️ Il titolo si compone qui, non a schermo: `nome_cartella` e' la directory
+  // su Nextcloud (`{codice}_{cliente}_{lavoro}`) e non si mostra mai grezza.
+  // Prima la tendina del modulo e il filtro della barra la stampavano tale e
+  // quale, uno dei due troncata a trenta caratteri.
+  const commesseAttive = commesseRighe.map((c) => ({
+    id: c.id,
+    codice: c.codice_interno,
+    titolo: risolviTitoloCommessa({
+      descrizione_ai_finale: c.descrizione_ai_finale,
+      descrizione_ai_proposta: c.descrizione_ai_proposta,
+      note_iniziali: c.note_iniziali,
+      nome_cartella: c.nome_cartella,
+      codice_interno: c.codice_interno,
+      cliente_nome: c.cliente?.ragione_sociale ?? null,
+    }),
+    cliente: c.cliente?.ragione_sociale ?? null,
+  }));
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">

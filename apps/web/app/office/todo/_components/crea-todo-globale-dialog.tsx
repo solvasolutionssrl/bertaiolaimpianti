@@ -22,7 +22,8 @@ import { PrioritaSelect } from '@/app/_components/priorita-ui';
 import { Scelta } from '@/app/_components/scelta';
 
 interface Props {
-  commesseAttive: Array<{ id: string; codice_interno: string; nome_cartella: string }>;
+  /** Titolo gia' composto a monte: `nome_cartella` non si mostra mai grezza. */
+  commesseAttive: Array<{ id: string; codice: string; titolo: string; cliente: string | null }>;
   /**
    * Tutta la squadra, non solo i tecnici: «ordina la pompa» è roba d'ufficio.
    * Prima qui arrivavano solo i `role='tecnico'` e un task non si poteva
@@ -85,21 +86,25 @@ export function CreaTodoGlobaleDialog({
           <DialogTitle>Nuovo TODO</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
+          <div className="min-w-0">
             <Label htmlFor="g_commessa">Commessa *</Label>
-            <select
+            {/* Duecento commesse in un `<select>` di sistema vogliono dire
+                scorrere a occhio: qui si scrive il codice o il cliente. */}
+            <Scelta
               id="g_commessa"
-              value={commessaId}
-              onChange={(e) => setCommessaId(e.target.value)}
-              className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            >
-              <option value="">— Seleziona commessa —</option>
-              {commesseAttive.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.codice_interno} · {c.nome_cartella}
-                </option>
-              ))}
-            </select>
+              className="mt-1.5"
+              opzioni={commesseAttive.map((c) => ({
+                valore: c.id,
+                etichetta: c.codice,
+                dettaglio: [c.cliente, c.titolo].filter(Boolean).join(' — ') || undefined,
+                cerca: [c.codice, c.cliente, c.titolo].filter(Boolean).join(' '),
+              }))}
+              valore={commessaId || null}
+              onCambia={(v) => setCommessaId(v ?? '')}
+              segnaposto="Scegli la commessa…"
+              segnapostoRicerca="Cerca per codice o cliente…"
+              aria-label="Commessa"
+            />
             {commesseAttive.length === 0 ? (
               <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
                 Nessuna commessa attiva. Crea prima una commessa.

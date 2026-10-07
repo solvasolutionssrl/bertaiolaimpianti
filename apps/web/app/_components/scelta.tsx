@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { FocusScope } from '@radix-ui/react-focus-scope';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '@kommessa/ui';
 import {
@@ -26,16 +27,31 @@ import {
  * veloce di qualunque cosa possiamo disegnare, e non va sostituita per
  * simmetria. La soglia pratica è intorno alla decina di voci.
  *
- * ## Tre regole che vengono da bug veri
+ * ## Quattro regole che vengono da bug veri
  *
- * 1. ⚠️ **L'elenco è un overlay assoluto in-flow, NON un Portal.** Dentro un
- *    dialog Radix un Portal viene letto come clic «fuori» e chiude il dialog
- *    sotto. È la stessa regola di `cliente-picker.tsx` e sta in CLAUDE.md.
- * 2. **La casella di ricerca compare solo quando serve** (oltre
+ * 1. ⚠️ **L'elenco è un Portal su `document.body`, marcato
+ *    `SEGNO_PANNELLO`.** Le due cose insieme, e nessuna da sola: un overlay
+ *    in-flow viene **tagliato** (`DialogContent` ha `overflow-y-auto` *e* una
+ *    `transform`, e una trasformazione taglia anche un `position: fixed`), ma
+ *    un Portal non marcato viene letto da Radix come clic «fuori» e chiude il
+ *    dialog sotto.
+ * 2. ⚠️ **Dentro un dialog il Portal da solo non basta**, e per settimane non
+ *    è bastato: un dialog modale Radix spegne i puntatori su tutto il
+ *    `<body>` (`pointer-events: none`) e li riaccende **solo** nel proprio
+ *    recinto. Il pannello si vedeva e il dito lo attraversava, colpendo il
+ *    campo che stava sotto. Quindi: `pointerEvents: 'auto'` esplicito, e un
+ *    `FocusScope` che mette in **pausa** la gabbia del fuoco del dialog —
+ *    senza, il cursore nella casella di ricerca viene strappato all'istante.
+ * 3. **La casella di ricerca compare solo quando serve** (oltre
  *    `SOGLIA_RICERCA` voci). Sotto, una casella vuota in cima è solo un
  *    ostacolo fra il dito e la voce da toccare.
- * 3. **Le frecce scavalcano le voci spente** invece di fermarcisi sopra: una
+ * 4. **Le frecce scavalcano le voci spente** invece di fermarcisi sopra: una
  *    freccia che non muove niente sembra un tasto rotto.
+ *
+ * ⚠️ **Un banco che sceglie con `elemento.click()` non misura niente di tutto
+ * questo**: una chiamata al DOM ignora `pointer-events`. Il banco
+ * `scripts/banco-ui/tendine.mjs` dava undici verdi su una tendina che nessuno
+ * riusciva a usare. Si misura col dito vero (`clicVero`, `scriviVero`).
  *
  * La meccanica di ricerca — token su più campi, accenti piegati, chi comincia
  * con quello che hai scritto davanti — sta in `@kommessa/api/scelta-opzioni`,
@@ -254,6 +270,7 @@ function Elenco({
   nessunRisultato,
   idElenco,
   piede,
+  onTastiera,
 }: {
   opzioni: OpzioneScelta[];
   query: string;
@@ -269,9 +286,11 @@ function Elenco({
   nessunRisultato: string;
   idElenco: string;
   piede?: React.ReactNode;
+  onTastiera: (e: React.KeyboardEvent) => void;
 }) {
   const conRicerca = opzioni.length > SOGLIA_RICERCA || query.length > 0;
   const rifLista = React.useRef<HTMLDivElement>(null);
+  const rifRicerca = React.useRef<HTMLInputElement>(null);
 
   // Tiene la voce attiva dentro la finestra visibile mentre si scorre con le
   // frecce. `block: 'nearest'` muove il minimo indispensabile: uno scatto al
@@ -292,6 +311,12 @@ function Elenco({
   const pannello = (
     <div
       {...{ [SEGNO_PANNELLO]: '' }}
+      // La tastiera sta **anche** qui, non solo sul tasto: quando il cursore è
+      // nella casella di ricerca il tasto non ha più il fuoco, e senza questa
+      // riga le frecce e Invio non muovono niente. Gli eventi di un Portal
+      // risalgono l'albero di React, non quello del documento, e il pannello è
+      // un fratello del tasto: non lo raggiungerebbero mai.
+      onKeyDown={onTastiera}
       style={{
         position: 'fixed',
         top: posizione.versoAlto ? undefined : posizione.top + 4,
@@ -303,6 +328,12 @@ function Elenco({
         minWidth: larghezza === 'tasto' ? undefined : posizione.larghezza,
         // Sopra il dialog (`z-50`) e sopra la barra in basso della PWA.
         zIndex: 100,
+        // ⚠️ Un dialog modale Radix mette `pointer-events: none` sul `<body>`
+        // e li riaccende solo dentro di sé. Il pannello sta su `body`, quindi
+        // senza questa riga si vede e **il dito ci passa attraverso**,
+        // colpendo il campo che sta sotto. Misurato: `elementFromPoint` sul
+        // centro di una voce restituiva la `<textarea>` della descrizione.
+        pointerEvents: 'auto',
       }}
       className="overflow-hidden rounded-md border border-border bg-popover shadow-lg"
     >
@@ -310,9 +341,11 @@ function Elenco({
         <div className="flex items-center gap-1.5 border-b border-border px-2">
           <Search aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <input
-            // La casella vive dentro l'overlay in-flow: non serve nessun
-            // Portal, e il focus resta dentro il dialog che ci contiene.
-            autoFocus
+            // ⚠️ Niente `autoFocus` di React: il fuoco lo dà il `FocusScope`
+            // qui sotto, **dopo** essersi messo in cima alla pila. Al
+            // contrario, l'autoFocus di React arriva prima, la gabbia del
+            // dialog è ancora attiva e strappa via il cursore.
+            ref={rifRicerca}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={segnapostoRicerca}
@@ -404,7 +437,34 @@ function Elenco({
   // dialog sarebbe di nuovo dentro il riquadro che taglia. E il pannello si
   // marca con `SEGNO_PANNELLO`, altrimenti il dialog che lo contiene legge il
   // clic su una voce come un clic fuori e si chiude.
-  return typeof document === 'undefined' ? null : createPortal(pannello, document.body);
+  //
+  // ⚠️ Il `FocusScope` **non serve a intrappolare** (`trapped` resta falso):
+  // serve al solo fatto di esistere. Montandosi si mette in cima alla pila dei
+  // fuochi di Radix, e questo **mette in pausa** la gabbia del dialog, che
+  // altrimenti riporterebbe il cursore dentro di sé appena tocca la casella di
+  // ricerca. Smontandosi la riattiva e restituisce il fuoco al tasto.
+  //
+  // Il fuoco iniziale lo decidiamo noi: nella casella di ricerca se c'è,
+  // altrimenti **da nessuna parte** — il tasto lo tiene, e le frecce
+  // continuano a funzionare da lì. Lasciando fare a Radix, senza casella il
+  // fuoco finirebbe sulla prima voce, e il segno di «voce attiva» (che qui è
+  // uno stato nostro, non il fuoco) racconterebbe un'altra storia.
+  const dentroPortale = (
+    <FocusScope
+      asChild
+      trapped={false}
+      onMountAutoFocus={(e) => {
+        e.preventDefault();
+        if (conRicerca) rifRicerca.current?.focus({ preventScroll: true });
+      }}
+    >
+      {pannello}
+    </FocusScope>
+  );
+
+  return typeof document === 'undefined'
+    ? null
+    : createPortal(dentroPortale, document.body);
 }
 
 /** Logica condivisa fra scelta singola e multipla. */
@@ -551,6 +611,21 @@ export function Scelta({
     t.chiudi();
   }
 
+  // Un gestore solo per tutti e due i posti da cui possono arrivare i tasti:
+  // il tasto (tendina chiusa, o aperta senza casella di ricerca) e il pannello
+  // (cursore nella casella). Due copie divergerebbero.
+  const tastiera = (e: React.KeyboardEvent) =>
+    tastieraElenco({
+      e,
+      aperto: t.aperto,
+      apri: () => t.setAperto(true),
+      chiudi: t.chiudi,
+      attivo: t.attivo,
+      setAttivo: t.setAttivo,
+      visibili: t.visibili,
+      conferma,
+    });
+
   return (
     <div ref={t.guscio} className={cn('relative', className)}>
       <TastoTendina
@@ -560,18 +635,7 @@ export function Scelta({
         disabilitato={disabilitato}
         vuoto={!scelta}
         onClick={() => (t.aperto ? t.chiudi() : t.setAperto(true))}
-        onKeyDown={(e) =>
-          tastieraElenco({
-            e,
-            aperto: t.aperto,
-            apri: () => t.setAperto(true),
-            chiudi: t.chiudi,
-            attivo: t.attivo,
-            setAttivo: t.setAttivo,
-            visibili: t.visibili,
-            conferma,
-          })
-        }
+        onKeyDown={tastiera}
         {...aria}
       >
         <span className="truncate">{scelta ? scelta.etichetta : segnaposto}</span>
@@ -592,6 +656,7 @@ export function Scelta({
           segnapostoRicerca={segnapostoRicerca}
           nessunRisultato={nessunRisultato}
           idElenco={idElenco}
+          onTastiera={tastiera}
         />
       ) : null}
     </div>
@@ -657,6 +722,18 @@ export function SceltaMultipla({
     // Niente `chiudi()`: si continua a spuntare.
   }
 
+  const tastiera = (e: React.KeyboardEvent) =>
+    tastieraElenco({
+      e,
+      aperto: t.aperto,
+      apri: () => t.setAperto(true),
+      chiudi: t.chiudi,
+      attivo: t.attivo,
+      setAttivo: t.setAttivo,
+      visibili: t.visibili,
+      conferma,
+    });
+
   return (
     <div ref={t.guscio} className={cn('relative', className)}>
       <TastoTendina
@@ -666,18 +743,7 @@ export function SceltaMultipla({
         disabilitato={disabilitato}
         vuoto={scelte.length === 0}
         onClick={() => (t.aperto ? t.chiudi() : t.setAperto(true))}
-        onKeyDown={(e) =>
-          tastieraElenco({
-            e,
-            aperto: t.aperto,
-            apri: () => t.setAperto(true),
-            chiudi: t.chiudi,
-            attivo: t.attivo,
-            setAttivo: t.setAttivo,
-            visibili: t.visibili,
-            conferma,
-          })
-        }
+        onKeyDown={tastiera}
         {...aria}
       >
         {scelte.length === 0 ? (
@@ -728,6 +794,7 @@ export function SceltaMultipla({
           segnapostoRicerca={segnapostoRicerca}
           nessunRisultato={nessunRisultato}
           idElenco={idElenco}
+          onTastiera={tastiera}
           piede={
             <div className="flex items-center justify-between gap-2 border-t border-border px-2 py-1.5">
               <span className="text-xs text-muted-foreground">

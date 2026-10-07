@@ -122,6 +122,142 @@ export async function foto(cdp, nome) {
 
 export { valuta, finoA };
 
+// ── il dito e la tastiera veri ───────────────────────────────────────────────
+//
+// ⚠️ `elemento.click()` NON e' un clic. E' una chiamata al DOM: ignora
+// `pointer-events`, ignora chi sta sopra, ignora `visibility`. Un pannello
+// spento da `pointer-events: none` — quello che fa Radix al `<body>` quando
+// apre un dialog modale — accetta `click()` e rifiuta il dito di una persona.
+// Il banco delle tendine ha dato 11 verdi per settimane su una tendina che
+// nessuno riusciva a usare, e lo ha fatto cosi'.
+//
+// Queste funzioni passano dalla coda degli eventi del browser
+// (`Input.dispatchMouseEvent`, `Input.dispatchKeyEvent`): vedono quello che
+// vede un dito. Dove si misura se una cosa **si puo' usare**, si usano queste.
+
+/**
+ * Centro visibile di un elemento, scelto da un'espressione JS che lo
+ * restituisce. Torna `null` se non c'e' o se non ha superficie.
+ */
+export async function centroDi(cdp, espressioneElemento) {
+  return await valuta(
+    cdp,
+    `(() => {
+      const el = (${espressioneElemento});
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return null;
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2),
+               largo: Math.round(r.width), alto: Math.round(r.height) };
+    })()`,
+  );
+}
+
+/**
+ * Chi riceverebbe davvero il tocco in quel punto: l'elemento piu' in alto
+ * secondo il browser. Serve a distinguere «non funziona» da «c'e' qualcosa
+ * davanti» — o, come nel caso delle tendine, da «e' trasparente al dito».
+ */
+export async function chiRiceveIlTocco(cdp, x, y) {
+  return await valuta(
+    cdp,
+    `(() => {
+      const e = document.elementFromPoint(${x}, ${y});
+      if (!e) return null;
+      const cls = typeof e.className === 'string' ? e.className : '';
+      return { tag: e.tagName, classi: cls.slice(0, 60),
+               testo: (e.textContent || '').trim().slice(0, 40) };
+    })()`,
+  );
+}
+
+/**
+ * Clic vero. `espressioneElemento` e' un'espressione JS che torna l'elemento.
+ * Restituisce `{ fatto, perche, bersaglio }`: se il dito finisce su un altro
+ * elemento lo dice, invece di far finta di aver cliccato.
+ */
+export async function clicVero(cdp, espressioneElemento, { attesaMs = 350 } = {}) {
+  const c = await centroDi(cdp, espressioneElemento);
+  if (!c) return { fatto: false, perche: 'elemento assente o senza superficie' };
+
+  const sotto = await chiRiceveIlTocco(cdp, c.x, c.y);
+  const mio = await valuta(
+    cdp,
+    `(() => {
+      const el = (${espressioneElemento});
+      const r = el.getBoundingClientRect();
+      const e = document.elementFromPoint(Math.round(r.left + r.width/2), Math.round(r.top + r.height/2));
+      return !!(e && (e === el || el.contains(e) || e.contains(el)));
+    })()`,
+  );
+  if (!mio) {
+    return {
+      fatto: false,
+      perche: `il tocco non arriva all'elemento: in quel punto risponde <${sotto?.tag ?? '?'}>`,
+      bersaglio: sotto,
+    };
+  }
+
+  for (const type of ['mousePressed', 'mouseReleased']) {
+    await cdp.invia('Input.dispatchMouseEvent', {
+      type, x: c.x, y: c.y, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1,
+    });
+  }
+  await new Promise((r) => setTimeout(r, attesaMs));
+  return { fatto: true, bersaglio: sotto };
+}
+
+/**
+ * Scrive su chi ha il fuoco, un carattere per volta, con eventi di tastiera
+ * veri. Se il fuoco viene strappato da una gabbia (`FocusScope` di Radix) il
+ * testo non arriva — ed e' esattamente cio' che si vuole misurare.
+ */
+export async function scriviVero(cdp, testo, { ritardoMs = 30 } = {}) {
+  // ⚠️ `keyDown` con `text` **e** un `char` a parte inseriscono il carattere
+  // DUE volte: «a» diventa «aa». Misurato. La terna giusta e'
+  // rawKeyDown (nessun testo) → char (il testo) → keyUp, come fa Puppeteer.
+  for (const ch of testo) {
+    await cdp.invia('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: ch });
+    await cdp.invia('Input.dispatchKeyEvent', { type: 'char', text: ch, unmodifiedText: ch, key: ch });
+    await cdp.invia('Input.dispatchKeyEvent', { type: 'keyUp', key: ch });
+    if (ritardoMs) await new Promise((r) => setTimeout(r, ritardoMs));
+  }
+}
+
+/** Un tasto non stampabile (Escape, ArrowDown, Enter, Backspace, Tab). */
+export async function premiTasto(cdp, key, { attesaMs = 150 } = {}) {
+  const codici = {
+    Escape: { windowsVirtualKeyCode: 27, code: 'Escape' },
+    Enter: { windowsVirtualKeyCode: 13, code: 'Enter', text: '\r' },
+    ArrowDown: { windowsVirtualKeyCode: 40, code: 'ArrowDown' },
+    ArrowUp: { windowsVirtualKeyCode: 38, code: 'ArrowUp' },
+    Backspace: { windowsVirtualKeyCode: 8, code: 'Backspace' },
+    Tab: { windowsVirtualKeyCode: 9, code: 'Tab' },
+  };
+  const extra = codici[key] ?? {};
+  await cdp.invia('Input.dispatchKeyEvent', { type: 'keyDown', key, ...extra });
+  await cdp.invia('Input.dispatchKeyEvent', { type: 'keyUp', key, ...extra });
+  await new Promise((r) => setTimeout(r, attesaMs));
+}
+
+/** Chi ha il fuoco adesso: tag, tipo, etichetta e se e' dentro un dato recinto. */
+export async function chiHaIlFuoco(cdp, dentroSelettore = null) {
+  return await valuta(
+    cdp,
+    `(() => {
+      const a = document.activeElement;
+      if (!a) return null;
+      return {
+        tag: a.tagName,
+        tipo: a.getAttribute('type') || '',
+        etichetta: a.getAttribute('aria-label') || a.getAttribute('placeholder') || (a.textContent || '').trim().slice(0, 30),
+        valore: 'value' in a ? String(a.value ?? '') : '',
+        dentro: ${dentroSelettore ? `!!a.closest(${JSON.stringify(dentroSelettore)})` : 'null'},
+      };
+    })()`,
+  );
+}
+
 // ── stampa ──────────────────────────────────────────────────────────────────
 
 let ok = 0;
