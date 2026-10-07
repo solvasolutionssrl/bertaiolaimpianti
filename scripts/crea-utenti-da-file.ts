@@ -309,10 +309,18 @@ async function main() {
 
   console.log(`\n${t.nome} (${t.slug}) — ${righe.length} righe nel foglio`);
   console.log(`Scheda del personale: ${conScheda ? 'sì, il modulo è attivo' : 'no, modulo spento'}`);
+  // ⚠️ `login_senza_codice` NON vuol dire «questo cliente non ha un codice»:
+  // vuol dire «e'' il cliente predefinito, quindi il campo si puo' lasciare
+  // vuoto». Il codice ce l'ha, e scriverlo sul foglio e' meglio che non
+  // scriverlo: se un domani il predefinito si sposta su un altro cliente,
+  // chi ha imparato «campo vuoto» resta fuori senza capire perche'.
+  // ⚠️ E il codice NON e' la sigla: per Bertaiola la sigla e' `BER` ma il
+  // codice e' `BERTAIOLA`, e battendo `BER` il login risponde «codice azienda
+  // non valido». Misurato.
   console.log(
     `Codice azienda da battere al login: ${
-      t.login_senza_codice ? '(nessuno, campo vuoto)' : (t.codice_azienda ?? '— non impostato —')
-    }`,
+      t.codice_azienda ?? '— non impostato —'
+    }${t.login_senza_codice ? ' (si pu\u00f2 anche lasciare vuoto: \u00e8 il cliente predefinito)' : ''}`,
   );
   console.log(
     `Primo accesso: ${
@@ -450,7 +458,14 @@ async function main() {
   );
 
   if (applica && fatti.length > 0) {
-    const sigla = t.login_senza_codice ? '(lasciare vuoto)' : (t.codice_azienda ?? '—');
+    // Sul foglio va il codice, sempre. L'eventuale «si puo' lasciare vuoto» e'
+    // una comodita' in piu', non l'istruzione principale.
+    const sigla = [
+      t.codice_azienda ?? '\u2014',
+      t.login_senza_codice ? '(si pu\u00f2 anche lasciare vuoto)' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
     const quando = new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' });
     const istruzione =
       cambio === 'obbligatorio'

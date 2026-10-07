@@ -417,6 +417,24 @@ default.
 > aggiustare, e' la forma vera: `buildR2Key` mette il codice davanti e poi il
 > nome cartella, che il codice ce l'ha dentro. Verificato sulle chiavi reali.
 
+> ⚠️ **Il codice azienda NON e' la sigla, e `login_senza_codice` non vuol dire
+> «non ha un codice».** Per Bertaiola la sigla e' `BER` ma il codice e'
+> **`BERTAIOLA`**: battendo `BER` il login risponde «codice azienda non
+> valido». Misurato con un account vero, non dedotto.
+>
+> `login_senza_codice = true` vuol dire «e' il cliente **predefinito**»: a
+> campo vuoto il risolutore cerca il tenant con quel flag, e un indice unico
+> parziale garantisce che ce ne sia **uno solo**. Quindi il campo vuoto non e'
+> ambiguo — ma dipende da un flag che un domani puo' spostarsi su un altro
+> cliente, e chi ha imparato «campo vuoto» resterebbe fuori senza capire
+> perche'. **Sul foglio delle credenziali va il codice**, con «si puo' anche
+> lasciare vuoto» come nota.
+>
+> Nessun rischio di collisione fra aziende: l'identita' vera e'
+> `<utente>@<sigla>.kommessa.local`, quindi un `luca.ottoboni` di un altro
+> cliente e' un altro account. Il codice serve solo a dire **da quale azienda
+> vieni**, non a rendere unico il nome utente.
+
 #### Lo script che consegna gli accessi, due difetti veri
 
 `scripts/crea-utenti-da-file.ts`.
