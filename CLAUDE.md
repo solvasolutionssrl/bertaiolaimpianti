@@ -620,6 +620,140 @@ telefono** → l'ufficio la elimina, e si ripulisce da solo),
 `elenco-commesse.mjs` (25, l'evidenziazione che si accende e **si spegne**) e
 `riunione-audio-corto.mjs` (10, con microfono finto).
 
+### Password che scade, zoom, autore e due colonne (07/10/2026, terzo giro)
+
+Otto punti dopo il secondo giro di prova del cliente. Migration
+`20261009090000`. Cio' che resta vero:
+
+- **La password scade quattro volte l'anno**, date fisse uguali per tutti: 10
+  dicembre, 10 marzo, 10 giugno, 10 settembre. Dal **primo del mese** si avvisa
+  (riga fissa nel guscio + popup **una volta al giorno**, perche' il numero di
+  giorni cambia ogni giorno); dal giorno della scadenza non si passa.
+  ⭐ **Una regola sola**: la scadenza che riguarda una persona e' la prima data
+  del calendario che la sua password non ha soddisfatto, e una data e'
+  soddisfatta se la password e' stata scelta **dentro la finestra di avviso**.
+  Cambiarla il 3 dicembre vale per il 10 — altrimenti l'avviso non servirebbe a
+  niente. ⚠️ Il contrario di una finestra e' un bordo: chi la cambia il 30
+  novembre viene riavvisato il primo dicembre. E' il prezzo delle date fisse, in
+  cambio tutta l'azienda ha la password nuova dal 10.
+  ⚠️ **`password_changed_at` era scritta da tre strade e letta da nessuna**:
+  esisteva dal 07/10 e non compariva in nessuna `select`. Terzo caso di «scritto
+  e mai letto» in due giorni.
+  ⚠️⚠️ **L'orologio ha tre ripieghi in fila, e togliendone uno si mura
+  qualcuno**: la data in cui l'ha scelta, altrimenti la nascita dell'account,
+  mai prima di `REGOLA_DAL` (il giorno in cui la regola esiste). Senza il
+  secondo, un tecnico assunto a febbraio e fatto entrare *senza muro* (la
+  scelta dell'08/10) si troverebbe murato al primo accesso; senza il terzo, ci
+  si troverebbe tutta l'azienda il mattino del deploy — `password_changed_at`
+  e' NULL su tutti e cinquantaquattro gli utenti che c'erano. Regola pura in
+  `@kommessa/api/scadenza-password` (25 asserzioni, **viste fallire**: 5 rosse
+  togliendo la finestra, 7 togliendo il pavimento). Verificato sui dati veri:
+  tutti e 65 gli utenti attivi dei quattro clienti partono dal 07/10, prima
+  scadenza **10 dicembre 2026**, nessuno bloccato oggi.
+  ⚠️ **Un cancello solo per due ragioni**: `obbligato = must_change_password ||
+  scaduta` dentro `statoPassword()`, cosi' i **quattro** presidi che gia'
+  sbarrano la strada (i due gusci, `/t/[token]`, la pagina del cambio) non si
+  toccano. ⚠️ E resta **fail-open**: un errore di lettura che diventasse
+  «scaduta» chiuderebbe fuori l'azienda nello stesso istante.
+  ⚠️ Il testo della pagina del cambio ha **tre** versioni (password
+  dell'ufficio / scaduta / scelta tua): dire la frase sbagliata fa sembrare
+  l'applicazione rotta.
+- **Le foto si ingrandiscono, in tutta l'applicazione.** ⚠️ Lo zoom del browser
+  qui e' **spento di proposito** (`maximumScale: 1`, `userScalable: false`,
+  `touch-action: manipulation`): in cantiere un pizzicotto coi guanti lascia la
+  pagina storta, ed e' una scelta del cliente. Quindi lo zoom vive **dentro il
+  visore**, dove l'unica cosa che si muove e' l'immagine: pizzicotto a due dita,
+  rotellina, doppio clic, piu' i **tasti +/−** per chi non prova nessuno dei
+  due (uno zoom nascosto in un gesto che nessuno annuncia e' uno zoom che non
+  esiste). Conti puri in `@kommessa/api/zoom-foto` (22 asserzioni): ⭐ il punto
+  sotto le dita resta fermo (senza, si pizzica un angolo e quello che si voleva
+  vedere scappa via) e ⭐ lo spostamento si ferma dove la foto finisce (e' cio'
+  che rende inservibili i visori fatti in casa: la foto scorre via e non si sa
+  come riportarla). Motore unico: `_components/foto-zoomabile.tsx`
+  (`FotoZoomabile` + `VisoreFoto`), innestato in `MediaLightbox` (7 superfici),
+  nella galleria del link pubblico, nella ricevuta di una spesa e — dove una
+  foto c'era e **non si poteva aprire affatto** — nelle anteprime dei file in
+  coda (`media-attach-section`, che copre creazione commessa, Scatto, tab Foto,
+  sopralluogo e dettatura) e negli allegati di una riunione.
+  ⚠️ **Tre trappole, tutte gia' costate tempo qui**: `react-remove-scroll`
+  annulla ogni `wheel`/`touchmove` che non venga da dentro il dialog (si ferma
+  l'evento prima, ascoltatore **nativo** `passive: false`); il gesto del dito
+  vuol dire due cose e vince lo stato (`puoScorrereFraLeFoto`); e `VisoreFoto`
+  sta su `body`, quindi vuole `pointerEvents: 'auto'` **e** la marcatura
+  `data-popover-portale`, o dentro un dialog Radix si vede e il dito ci passa
+  attraverso. ⚠️ **Un `useState` dopo un'uscita anticipata** in
+  `media-lightbox.tsx`: trovato dal build, non rileggendo il codice.
+  ⚠️ Lasciate fuori di proposito le foto mostrate **mentre** qualcosa le
+  elabora (invio spesa, analisi OCR, scatto del QR): sotto una rotella, per due
+  secondi, lo zoom non vuol dire niente.
+- **Chi l'ha creata si vede.** `commessa_todo.created_by` era popolata su tutte
+  le righe da sempre e si leggeva **solo** dentro la scheda di una commessa
+  d'ufficio. Ora: nella board (riga, col mestiere di chi smista), nella scheda
+  del telefono (nel dettaglio: sul telefono non si smista, si fa) e sulla
+  richiesta («Registrata da», prima il nome era appiccicato alla data senza
+  dire che cosa fosse). ⭐ **Un campo diventa un presidio nel momento in cui
+  qualcuno lo legge**: il trigger `commessa_todo_tecnico_guard` non proteggeva
+  `created_by` — ne' `cliente_id`, `cliente_testo`, `contatto`, `indirizzo`,
+  cioe' le colonne delle richieste, aggiunte **dopo** che quel trigger era
+  stato scritto. Riscritto per intero (migration `20261009090000`).
+- ⭐ **«In mano a» e «Ci va» erano giusti come modello e sbagliati come
+  parole.** A schermo si leggeva «In mano a: Nessuno» con, una riga sotto, «Ci
+  va: Mario»: due modi di dire casalinghi che sembravano smentirsi su una
+  richiesta semplicemente girata a Mario. Vocabolario unico in
+  `@kommessa/api/assegnazione` (11 asserzioni): **Responsabile** (⚠️ non
+  «tecnico assegnato»: chi ne risponde non e' per forza un tecnico — in
+  Bertaiola il caposquadra ha ruolo `office`) e **Tecnico assegnato / Tecnici
+  assegnati**. ⭐ **E la riga vuota non si scrive**: una riga senza valore non
+  e' un'informazione, e' un punto interrogativo in piu'. Le stesse parole sulla
+  colonna dell'elenco commesse, che era «In mano a» e accanto allo stato «Non
+  presa» si leggeva male — ⚠️ chiusa l'ambiguita' «Non preso»/«Non presa» che
+  era annotata come aperta.
+- **Due colonne, perche' sono due mucchi** (`/office/todo`, ora «Task e
+  Richieste»): Task a sinistra (65%, tinta blu) e Richieste a destra (35%, tinta
+  ambra). Prima era un elenco solo con le richieste in cima **perche' ordinate
+  prima**, e nessuno poteva sapere se fosse una regola o un caso. ⚠️ Con due
+  colonne sempre visibili **il filtro «Tipo» non ha piu' senso** e si poteva
+  svuotare una colonna da un filtro che sta altrove: tolto. ⚠️ Il badge
+  «Richiesta» sulla riga: tolto, lo dice la colonna. ⚠️ Si affiancano da `xl`:
+  sotto, con i 220px dei filtri, la colonna stretta scenderebbe sotto i 300px e
+  le sue due tendine non ci starebbero. La tinta e' **ambra** come i badge che
+  le richieste hanno gia' su questa pagina: ⚠️ sul telefono l'intestazione usa
+  `--accent` (#F26B23), che e' un altro arancione — due arancioni per la stessa
+  cosa su due superfici, da unificare quando si decide quale.
+  Di contorno, sulla stessa pagina: aggiunto il `loading.tsx` che mancava (era
+  `force-dynamic` senza), tolto il doppio margine (la pagina si stringeva di
+  360px: ⭐ i margini li mette il guscio), via «TODO» dalle scritte, e l'empty
+  state non cita piu' un pulsante che non esiste.
+- **Un posto solo dice le voci del menu.** La barra dell'ufficio nel mondo
+  commesse era una lista piatta di nove voci; ora ha le macrofamiglie come il
+  mondo presenze: **Dashboard** in alto da sola, **Progetti** (Commesse,
+  Clienti, Task e Richieste), **Personale**, **Altro**. ⚠️ `injectPersonale`
+  ora **si aggiunge** a una sezione che esiste gia' invece di crearne una
+  seconda con lo stesso id. ⚠️ E la palette ⌘K aveva un **secondo elenco
+  scritto a mano** «che riflette la nav»: non la rifletteva — aveva *Tickets*,
+  che in barra non c'e' per nessuno, e **non aveva** Task, Turni, Co-pilot,
+  Kontabilita', Personalizzazioni, Gestionale, Sedi, Parco mezzi, Ore e costi,
+  Report, Registro modifiche. Ora le voci «Vai a» si **appiattiscono dalla
+  barra** (e col filtro per moduli in regalo), piu' un elenco corto e
+  dichiarato di pagine che in barra non ci sono.
+- ⚠️ **Il terzo tetto scelto a occhio in tre giorni.** `.limit(120)` sulla
+  lista commesse del telefono (su un cliente che ne ha oltre duecento): non
+  «le ultime 120 e poi si scorre», le altre **non esistevano**, nemmeno per la
+  ricerca, che lavora in memoria su cio' che e' arrivato. E il contatore
+  scriveva «120 attive nel tenant», cioe' un numero falso. Dal computer si
+  vedevano tutte (la pagina d'ufficio e' paginata): la stessa domanda aveva due
+  risposte a seconda di dove la facevi. Sistemati con `leggiTutto`/`leggiPerId`
+  anche `.limit(300)` sulla board e `.limit(200)` **senza ordinamento** sulle
+  commesse del tecnico (non duecento ultime: duecento qualsiasi).
+
+Banchi: `scripts/banco-ui/zoom-foto.mjs` (14 controlli: rotellina, pizzicotto a
+due dita vere via CDP, doppio clic, tasti, il freno dello spostamento) e
+`richieste.mjs` portato a **51** (le due colonne misurate — 65%/35% e le due
+tinte calcolate — l'autore su ogni riga, e le parole nuove).
+⚠️ Sul tenant dimostrativo il **formato pieno** di una foto non arriva: i file
+stanno solo su R2 e `/api/photo/<id>` senza `size=thumb` passa da Nextcloud. Il
+banco lo **dice** invece di misurare a vuoto.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

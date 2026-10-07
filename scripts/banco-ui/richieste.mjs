@@ -75,7 +75,19 @@ const tastoDialog = (re) =>
 
 /** La riga della board che contiene un certo testo. */
 const rigaCon = (testo) =>
-  `[...document.querySelectorAll('div')].find(d => d.className && String(d.className).includes('hover:bg-muted/30') && (d.textContent || '').includes(${JSON.stringify(testo)}))`;
+  `[...document.querySelectorAll('div')].find(d => d.className && String(d.className).includes('hover:bg-background/60') && (d.textContent || '').includes(${JSON.stringify(testo)}))`;
+
+/**
+ * Una delle due colonne, per nome. ⚠️ Prima le righe si riconoscevano dalla
+ * tinta ambra che ognuna portava addosso; adesso la tinta e' della colonna e
+ * una riga, da sola, non dice piu' di che tipo e'. Si guarda dove sta.
+ */
+const colonna = (nome) =>
+  `[...document.querySelectorAll('section')].find(s => new RegExp(${JSON.stringify(nome)}, 'i').test(s.querySelector('h2')?.textContent || ''))`;
+
+/** Le righe dentro una colonna. */
+const righeDi = (nome) =>
+  `[...(${colonna(nome)}?.querySelectorAll('div') ?? [])].filter(d => d.className && String(d.className).includes('hover:bg-background/60'))`;
 
 try {
   console.log(`\n\x1b[1mBanco: Task e richieste (${BASE})\x1b[0m\n`);
@@ -88,7 +100,7 @@ try {
   // ══ 1. registra una telefonata da un cliente che non c'è ═══════════════
   console.log('\n  \x1b[1mLa telefonata di un cliente nuovo\x1b[0m');
 
-  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /richiesta al telefono/i.test(b.textContent))`, { attesaMs: 900 });
+  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /al telefono/i.test(b.textContent))`, { attesaMs: 900 });
   esito(
     await valuta(cdp, `Boolean(document.querySelector('[role=dialog]'))`),
     'il modulo della telefonata si apre',
@@ -172,8 +184,36 @@ try {
   })()`);
   esito(Boolean(riga), 'la richiesta compare nella board', riga ? riga.slice(0, 70) : 'NON TROVATA');
   if (riga) {
-    esito(/in mano a/i.test(riga), '⭐ la riga dice chi ne risponde', (riga.match(/In mano a [^·]{0,24}/i) ?? [''])[0]);
-    esito(/ci v[ae]/i.test(riga), '⭐ e dice anche chi ci va', (riga.match(/Ci v[ae] [^·]{0,24}/i) ?? [''])[0]);
+    // ⭐ Le due cose si leggono ancora, ma con parole formali e **senza la
+    // riga vuota**: prima si leggeva «In mano a nessuno» accanto a «Ci va
+    // Mario», due modi di dire casalinghi che sembravano smentirsi. In un
+    // elenco fitto le icone distinguono i due fatti e le parole stanno nel
+    // suggerimento, dove si leggono per intero.
+    const titoli = await valuta(cdp, `(() => {
+      const d = ${rigaCon(TITOLO)};
+      if (!d) return [];
+      return [...d.querySelectorAll('[title]')].map(e => e.getAttribute('title'));
+    })()`);
+    const tutti = titoli.join(' || ');
+    esito(/Responsabile:/i.test(tutti), '⭐ la riga dice chi ne risponde', (tutti.match(/Responsabile: [^|·]{0,24}/i) ?? [''])[0]);
+    esito(
+      /Tecnic[oi] assegnat[oi]:/i.test(tutti),
+      '⭐ e dice anche chi ci va, con la parola giusta',
+      (tutti.match(/Tecnic[oi] assegnat[oi]: [^|·]{0,24}/i) ?? [''])[0],
+    );
+    esito(
+      !/nessuno/i.test(riga),
+      '⭐ e NON scrive «nessuno» accanto a un nome',
+      /nessuno/i.test(riga) ? riga.slice(0, 80) : 'nessuna riga vuota',
+    );
+    // ⭐ Chi ha risposto al telefono. Il campo c'era in tabella su tutte le
+    // righe e non si vedeva da nessuna parte fuori dalla scheda di una
+    // commessa.
+    esito(
+      /Registrata da /i.test(tutti),
+      '⭐ la riga dice chi l\u2019ha registrata',
+      (tutti.match(/Registrata da [^|·]{0,30}/i) ?? [''])[0],
+    );
   }
 
   // ══ 2-bis. ⭐ sui task di commessa la catena doppia NON c'è ════════════
@@ -191,35 +231,87 @@ try {
   console.log('\n  \x1b[1mSui task di commessa, niente seconda mano\x1b[0m');
 
   const suiTask = await valuta(cdp, `(() => {
-    const righe = [...document.querySelectorAll('div')]
-      .filter(d => d.className && String(d.className).includes('hover:bg-muted/30'));
-    // Una riga di task di commessa si riconosce dal codice commessa e
-    // dall'assenza del badge «Richiesta».
-    const diCommessa = righe.filter(d => {
-      const t = d.textContent || '';
-      return !/Richiesta/.test(t) && /[A-Z]{2,}-\\d{2}-\\d{3}/.test(t);
-    });
-    if (diCommessa.length === 0) return { quante: 0 };
+    const righe = ${righeDi('Task')};
+    if (righe.length === 0) return { quante: 0 };
     return {
-      quante: diCommessa.length,
-      conManda: diCommessa.filter(d =>
+      quante: righe.length,
+      conManda: righe.filter(d =>
         [...d.querySelectorAll('button[aria-label]')]
           .some(b => /^Manda qualcuno/i.test(b.getAttribute('aria-label') || ''))).length,
-      conCiVa: diCommessa.filter(d => /Ci v[ae] /.test(d.textContent || '')).length,
-      conInManoA: diCommessa.filter(d => /In mano a/.test(d.textContent || '')).length,
+      conTecnici: righe.filter(d =>
+        [...d.querySelectorAll('[title]')]
+          .some(e => /Tecnic[oi] assegnat/i.test(e.getAttribute('title') || ''))).length,
+      conAutore: righe.filter(d =>
+        [...d.querySelectorAll('[title]')]
+          .some(e => /^Creato da /i.test(e.getAttribute('title') || ''))).length,
     };
   })()`);
   esito(suiTask.quante > 0, 'ci sono task di commessa da guardare', `${suiTask.quante}`);
   if (suiTask.quante > 0) {
     esito(suiTask.conManda === 0, '⭐ nessun tasto «Manda…» su un task di commessa', `${suiTask.conManda} su ${suiTask.quante}`);
-    esito(suiTask.conCiVa === 0, '⭐ nessuna riga «Ci va…» su un task di commessa', `${suiTask.conCiVa} su ${suiTask.quante}`);
-    esito(suiTask.conInManoA === 0, 'e nemmeno «In mano a»: lì si dice solo il nome', `${suiTask.conInManoA} su ${suiTask.quante}`);
+    esito(suiTask.conTecnici === 0, '⭐ nessun «Tecnici assegnati» su un task di commessa', `${suiTask.conTecnici} su ${suiTask.quante}`);
+    esito(
+      suiTask.conAutore > 0,
+      '⭐ e anche un task dice chi l\u2019ha creato',
+      `${suiTask.conAutore} su ${suiTask.quante}`,
+    );
+  }
+
+  // ══ 2-ter. ⭐ due colonne, non un elenco con le richieste in cima ══════
+  //
+  // Prima erano un mucchio solo: le richieste stavano sopra perche' ordinate
+  // prima, e nessuno poteva sapere se fosse una regola o un caso. Non sono la
+  // stessa cosa e non si lavorano allo stesso modo.
+  console.log('\n  \x1b[1mDue colonne affiancate\x1b[0m');
+
+  const geo = await valuta(cdp, `(() => {
+    const t = ${colonna('Task')};
+    const r = ${colonna('Richieste')};
+    if (!t || !r) return { ci: false, task: Boolean(t), richieste: Boolean(r) };
+    const rt = t.getBoundingClientRect();
+    const rr = r.getBoundingClientRect();
+    const stile = (el) => {
+      const c = el.querySelector('div');
+      return c ? getComputedStyle(c).backgroundColor : '';
+    };
+    return {
+      ci: true,
+      affiancate: Math.abs(rt.top - rr.top) < 40,
+      largoTask: Math.round(rt.width),
+      largoRichieste: Math.round(rr.width),
+      quotaTask: Math.round((rt.width / (rt.width + rr.width)) * 100),
+      sfondoTask: stile(t),
+      sfondoRichieste: stile(r),
+    };
+  })()`);
+
+  esito(geo.ci, 'le due colonne ci sono entrambe', geo.ci ? 'Task + Richieste' : `task=${geo.task} richieste=${geo.richieste}`);
+  if (geo.ci) {
+    esito(geo.affiancate, '⭐ sono affiancate, non una sopra l\u2019altra', `Task ${geo.largoTask}px · Richieste ${geo.largoRichieste}px`);
+    esito(
+      geo.quotaTask >= 58 && geo.quotaTask <= 72,
+      '⭐ i Task prendono circa due terzi dello spazio',
+      `${geo.quotaTask}% / ${100 - geo.quotaTask}%`,
+    );
+    // Il colore dice che cosa e': blu i lavori, ambra le telefonate. E' lo
+    // stesso segnale che le richieste hanno nei badge e sul telefono.
+    const tinta = (c) => {
+      const m = /rgba?\((\d+), (\d+), (\d+)/.exec(c || '');
+      return m ? { r: +m[1], g: +m[2], b: +m[3] } : null;
+    };
+    const tt = tinta(geo.sfondoTask);
+    const tr = tinta(geo.sfondoRichieste);
+    esito(
+      Boolean(tt && tr) && (tt.b > tt.r) && (tr.r > tr.b),
+      '⭐ la tinta distingue le colonne: blu i task, ambra le richieste',
+      `${geo.sfondoTask} vs ${geo.sfondoRichieste}`,
+    );
   }
 
   // ══ 3. il cliente è finito in anagrafica ═══════════════════════════════
   console.log('\n  \x1b[1mIl cliente in anagrafica\x1b[0m');
 
-  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /richiesta al telefono/i.test(b.textContent))`, { attesaMs: 900 });
+  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /al telefono/i.test(b.textContent))`, { attesaMs: 900 });
   await scriviIn(campoCliente, CLIENTE);
   await attendi(1400);
   const trovato = await valuta(cdp, `(() => {
@@ -238,7 +330,7 @@ try {
   // ══ 4. spuntare chiede, e dire di no non fa niente ═════════════════════
   console.log('\n  \x1b[1mSpuntare, e dire di no\x1b[0m');
 
-  const cerchietto = `${rigaCon(TITOLO)}?.querySelector('button[aria-label="Completa TODO"]')`;
+  const cerchietto = `${rigaCon(TITOLO)}?.querySelector('button[aria-label^="Segna come fatt"]')`;
   const c1 = await clicVero(cdp, cerchietto, { attesaMs: 700 });
   esito(c1.fatto, 'il cerchietto per spuntare c’è', c1.perche ?? '');
 
@@ -255,7 +347,7 @@ try {
   await clicVero(cdp, tastoDialog('annulla'), { attesaMs: 800 });
   const ancoraAperta = await valuta(cdp, `(() => {
     const d = ${rigaCon(TITOLO)};
-    return d ? Boolean(d.querySelector('button[aria-label="Completa TODO"]')) : false;
+    return d ? Boolean(d.querySelector('button[aria-label^="Segna come fatt"]')) : false;
   })()`);
   esito(
     ancoraAperta,

@@ -20,7 +20,7 @@ import { EmptyState } from '../../_components/empty-state';
 import { elencaAssegnabiliTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard } from './_components/todo-globale-board';
 import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
-import { leggiTutto } from '@kommessa/api/pagine';
+import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 /** Una commessa come serve a chi la deve scegliere da una tendina. */
@@ -34,15 +34,13 @@ type ComessaPicker = {
   cliente: { ragione_sociale: string | null } | null;
 };
 
-export const metadata = { title: 'Task' };
+export const metadata = { title: 'Task e Richieste' };
 export const dynamic = 'force-dynamic';
 
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
 
 interface SearchParams {
-  /** 'richieste' = solo quelle senza commessa; 'commessa' = solo quelle con. */
-  tipo?: string;
   stato?: string;
   priorita?: string;
   assegnato?: string;
@@ -81,10 +79,6 @@ export default async function TodoGlobalePage({
   const assegnatoFiltro = searchParams.assegnato ?? null;
   const commessaFiltro = searchParams.commessa ?? null;
   const qFiltro = (searchParams.q ?? '').trim();
-  const tipoFiltro =
-    searchParams.tipo === 'richieste' || searchParams.tipo === 'commessa'
-      ? searchParams.tipo
-      : null;
 
   // ─── query principale ──────────────────────────────────────────────
   let q = supabase
@@ -99,6 +93,7 @@ export default async function TodoGlobalePage({
          cliente:clienti ( ragione_sociale )
        ),
        assegnato:users!commessa_todo_assegnato_a_fkey ( id, display_name ),
+       autore:users!commessa_todo_created_by_fkey ( id, display_name ),
        squadra:commessa_todo_squadra (
          user_id,
          persona:users!commessa_todo_squadra_user_id_fkey ( id, display_name )
@@ -113,16 +108,25 @@ export default async function TodoGlobalePage({
     q = q.eq('assegnato_a', assegnatoFiltro);
   }
   if (commessaFiltro) q = q.eq('commessa_id', commessaFiltro);
-  // `.is()` e non `.eq(..., null)`: quest'ultimo non trova i NULL.
-  if (tipoFiltro === 'richieste') q = q.is('commessa_id', null);
-  else if (tipoFiltro === 'commessa') q = q.not('commessa_id', 'is', null);
   if (qFiltro) {
     q = q.or(
       `titolo.ilike.%${qFiltro}%,descrizione.ilike.%${qFiltro}%`,
     );
   }
 
-  const { data: todosRaw } = await q.limit(300);
+  // ⚠️ Qui c'era `.limit(300)`, cioe' lo stesso difetto delle 120 commesse sul
+  // telefono e delle 202 nel filtro: un tetto scelto a occhio che il giorno in
+  // cui i dati crescono fa sparire delle righe senza dire niente. Si legge a
+  // pagine. Il terzo `.order('id')` chiude l'ordinamento su una colonna unica:
+  // senza, fra una pagina e l'altra una riga puo' perdersi o ripetersi.
+  const todosRaw = await leggiTutto<any>(
+    (da, a) =>
+      q
+        .order('priorita')
+        .order('id')
+        .range(da, a) as unknown as PromiseLike<EsitoPagina<any>>,
+    { contesto: 'task e richieste' },
+  );
 
   // ─── liste per filtri (commesse attive + tecnici) ──────────────────
   const [commesseRighe, assegnabili] = await Promise.all([
@@ -178,6 +182,9 @@ export default async function TodoGlobalePage({
     /** Solo sulle richieste: dove andare, se diverso da quello del cliente. */
     indirizzo: string | null;
     cliente_id: string | null;
+    /** Quando e' stata scritta, e da chi: su una richiesta, chi ha risposto. */
+    created_at: string;
+    autore_nome: string | null;
     eRichiesta: boolean;
     isScaduto: boolean;
     fonteRiunione: boolean;
@@ -192,6 +199,7 @@ export default async function TodoGlobalePage({
         : comm.cliente
       : null;
     const ass = Array.isArray(t.assegnato) ? t.assegnato[0] : t.assegnato;
+    const aut = Array.isArray(t.autore) ? t.autore[0] : t.autore;
     const richiedente = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
     const fonte = (t.metadata as { fonte?: string } | null)?.fonte ?? '';
     const eRichiesta = (t.commessa_id ?? null) === null;
@@ -227,6 +235,8 @@ export default async function TodoGlobalePage({
       contatto: (t.contatto as string | null) ?? null,
       indirizzo: (t.indirizzo as string | null) ?? null,
       cliente_id: (t.cliente_id as string | null) ?? null,
+      created_at: t.created_at as string,
+      autore_nome: (aut?.display_name as string | undefined) ?? null,
       eRichiesta,
       isScaduto: t.scadenza_at
         ? new Date(t.scadenza_at as string).getTime() < now
@@ -235,10 +245,9 @@ export default async function TodoGlobalePage({
     };
   });
 
+  // ⚠️ Non si ordina piu' per «prima le richieste»: adesso stanno in una
+  // colonna loro, e dentro ciascuna colonna conta solo l'urgenza.
   todos.sort((a, b) => {
-    // Le richieste prima: sono le uniche che aspettano una decisione (va in
-    // sopralluogo? si butta?), il resto è lavoro già incanalato.
-    if (a.eRichiesta !== b.eRichiesta) return a.eRichiesta ? -1 : 1;
     if (a.isScaduto !== b.isScaduto) return a.isScaduto ? -1 : 1;
     const dPri = confrontaPriorita(a.priorita, b.priorita);
     if (dPri !== 0) return dPri;
@@ -246,8 +255,9 @@ export default async function TodoGlobalePage({
   });
 
   // ─── KPI sintetici ─────────────────────────────────────────────────
+  // ⚠️ Il conto delle richieste non sta piu' qui: lo porta l'intestazione
+  // della sua colonna, che e' il posto dove uno lo cerca.
   const kpi = {
-    richieste: todos.filter((t) => t.eRichiesta).length,
     // Il mucchio da smistare: aperte e senza nessuno che ci stia dietro.
     daAssegnare: todos.filter(
       (t) => !t.assegnato_a && t.stato !== 'completato' && t.stato !== 'annullato',
@@ -277,19 +287,20 @@ export default async function TodoGlobalePage({
   }));
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-4 p-4 lg:p-6">
+    /* ⚠️ Nessun `mx-auto max-w-* p-*` qui: i margini li mette il guscio
+       (`<main>` e' gia' `max-w-[1760px] px-3 py-4 md:px-5`). Questa pagina li
+       aggiungeva una seconda volta e si stringeva di 360px — con due colonne
+       affiancate quei pixel sono righe che vanno a capo. */
+    <div className="w-full space-y-4">
       {/* Header compatto: titolo + KPI inline */}
       <header className="flex flex-wrap items-end justify-between gap-4 border-b border-border pb-4">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Lavori
           </p>
-          <h1 className="mt-0.5 text-xl font-bold tracking-tight">Task e richieste</h1>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight">Task e Richieste</h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {kpi.richieste > 0 ? (
-            <KpiChip icon={<Phone />} label="Richieste" value={kpi.richieste} tone="amber" />
-          ) : null}
           {kpi.daAssegnare > 0 ? (
             <KpiChip
               icon={<UserPlus />}
@@ -313,7 +324,6 @@ export default async function TodoGlobalePage({
         assegnabili={assegnabili}
         commesseAttive={commesseAttive}
         filtri={{
-          tipo: tipoFiltro,
           stato: searchParams.stato ?? null,
           priorita: prioritaFiltro,
           assegnato: assegnatoFiltro,

@@ -29,7 +29,7 @@ import { LandingPubblica } from './_components/landing-pubblica';
 import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
 import { sonoCapoSquadra } from '@/app/mobile/kantiere/_lib/capo';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
-import { devoCambiarePassword } from '@/app/_lib/cambio-password';
+import { statoPassword } from '@/app/_lib/cambio-password';
 
 export const dynamic = 'force-dynamic';
 
@@ -267,22 +267,25 @@ export default async function TokenPage({
    * Non si rimbalza (un `redirect()` qui lascerebbe una pagina bianca, come
    * misurato il 07/10): si mostra dove andare.
    */
-  if (await devoCambiarePassword()) {
+  const statoPwd = await statoPassword();
+  if (statoPwd.obbligato) {
+    const scaduta = statoPwd.motivo === 'scaduta';
     return (
       <Schermo>
         <IconaQr />
         <h1 className="text-center text-lg font-semibold tracking-tight text-foreground">
-          Scegli la tua password
+          {scaduta ? 'La tua password \u00e8 scaduta' : 'Scegli la tua password'}
         </h1>
         <p className="max-w-xs text-center text-sm text-muted-foreground">
-          Prima di timbrare devi sostituire la password che ti hanno dato in
-          ufficio con una che sai solo tu.
+          {scaduta
+            ? 'Ogni tre mesi serve una password nuova. Scegline una e torni subito a timbrare.'
+            : 'Prima di timbrare devi sostituire la password che ti hanno dato in ufficio con una che sai solo tu.'}
         </p>
         <Link
           href="/cambia-password"
           className="inline-flex h-11 items-center rounded-lg bg-foreground px-5 text-sm font-semibold text-background"
         >
-          Scegli la password
+          {scaduta ? 'Cambia la password' : 'Scegli la password'}
         </Link>
       </Schermo>
     );

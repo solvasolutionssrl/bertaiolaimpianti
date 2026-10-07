@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { VideoPlayer } from './video-player';
+import { FotoZoomabile } from './foto-zoomabile';
 import { AnnotationOverlay, type AnnotationTarget } from './annotation-overlay';
 import { MiniaturaMedia } from './miniatura-media';
 
@@ -91,6 +92,18 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
     setIndex((i) => Math.max(i - 1, 0));
   }, []);
 
+  /**
+   * La foto è a riposo? Lo dice `FotoZoomabile`, e serve **qui** perché lo
+   * scorrimento laterale fra le foto non deve rubare il gesto a chi sta
+   * spostando un'immagine ingrandita.
+   *
+   * ⚠️ Sta fra gli altri hook, prima dell'uscita anticipata di `!current`:
+   * un `useState` dopo un `return` viene chiamato solo in alcuni render, e
+   * React conta gli hook per posizione. Lo ha trovato il build, non la
+   * rilettura del codice.
+   */
+  const [zoomARiposo, setZoomARiposo] = React.useState(true);
+
   // Tasti ←/→
   React.useEffect(() => {
     if (!open) return;
@@ -122,7 +135,15 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
   const lightTheme = true;
   // Swipe abilitato solo per immagini (video/PDF catturano i touch interni).
   // Per gli altri si naviga con frecce / thumbnail strip.
-  const swipeEnabled = isImage && items.length > 1;
+  //
+  // ⚠️ **E solo finché la foto non è ingrandita.** Lo scorrimento del dito è
+  // un gesto solo che vuol dire due cose: a riposo «mostrami la prossima»,
+  // ingrandita «sposta quello che sto guardando». Senza questa riga, chi
+  // ingrandisce un numero di matricola e trascina per leggerlo si ritrova
+  // sulla foto dopo. Lo stato è dichiarato in cima: qui siamo già dopo
+  // un'uscita anticipata, e un hook dopo un `return` cambia l'ordine degli
+  // hook fra un render e l'altro.
+  const swipeEnabled = isImage && items.length > 1 && zoomARiposo;
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (!swipeEnabled) return;
@@ -274,12 +295,14 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
               className="flex h-full w-full items-center justify-center"
             >
               {isImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                // ⭐ Un motore di zoom solo per tutta l'applicazione: pizzicotto
+                // sul telefono, rotellina e doppio clic sul computer, più i
+                // tasti per chi non prova né l'uno né l'altro. I conti stanno
+                // in `@kommessa/api/zoom-foto`.
+                <FotoZoomabile
                   src={current.src}
                   alt={current.filename}
-                  className="max-h-full max-w-full select-none object-contain"
-                  draggable={false}
+                  onStatoZoom={setZoomARiposo}
                 />
               ) : isVideo ? (
                 <div className="h-full w-full">

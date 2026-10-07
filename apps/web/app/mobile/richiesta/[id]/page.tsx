@@ -3,6 +3,11 @@ import { Calendar, MapPin, Phone, User, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
+import {
+  ETICHETTA_RESPONSABILE,
+  descriviAssegnazione,
+  type RigaAssegnazione,
+} from '@kommessa/api/assegnazione';
 
 import { guardMobile } from '../../_lib/guard';
 import { Hero, HeroMeta, MetaLine } from '../../_components/blueprint';
@@ -202,8 +207,18 @@ export default async function RichiestaMobilePage({
   const priorita = normalizzaPriorita(r.priorita);
   const scaduta = r.scadenza_at ? new Date(r.scadenza_at).getTime() < Date.now() : false;
 
-  const inManoA = r.assegnato_a ? (nomi.get(r.assegnato_a) ?? '—') : null;
-  const ciVanno = squadraIds.map((i) => nomi.get(i) ?? '—');
+  // ⭐ Chi se ne occupa: due fatti diversi, e le parole stanno in un posto solo
+  // (`@kommessa/api/assegnazione`). Qui si leggeva «In mano a: Nessuno» con
+  // «Ci va: Mario» una riga sotto — due modi di dire casalinghi che sembravano
+  // contraddirsi su una richiesta semplicemente girata a Mario.
+  const nomeDi = (id: string) => (id === ctx.userId ? 'Te' : (nomi.get(id) ?? '—'));
+  const righeAssegnazione = descriviAssegnazione(
+    {
+      responsabile: r.assegnato_a ? nomeDi(r.assegnato_a) : null,
+      tecnici: squadraIds.map(nomeDi),
+    },
+    'richiesta',
+  );
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col pb-28">
@@ -346,35 +361,40 @@ export default async function RichiestaMobilePage({
                 </dd>
               </div>
             ) : null}
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted-foreground">In mano a</dt>
-              <dd className="min-w-0 truncate font-medium">
-                {inManoA ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                    {r.assegnato_a === ctx.userId ? 'Te' : inManoA}
-                  </span>
-                ) : (
-                  <span className="italic text-muted-foreground">Nessuno</span>
-                )}
-              </dd>
-            </div>
-            {ciVanno.length > 0 ? (
-              <div className="flex items-start justify-between gap-3">
-                <dt className="shrink-0 text-muted-foreground">
-                  Ci {ciVanno.length === 1 ? 'va' : 'vanno'}
-                </dt>
-                <dd className="inline-flex min-w-0 items-start gap-1.5 text-right font-medium">
-                  <Users className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0">{ciVanno.join(', ')}</span>
+            {righeAssegnazione.map((riga: RigaAssegnazione) => (
+              <div key={riga.etichetta} className="flex items-start justify-between gap-3">
+                <dt className="shrink-0 text-muted-foreground">{riga.etichetta}</dt>
+                <dd
+                  className={
+                    riga.vuoto
+                      ? 'italic text-muted-foreground'
+                      : 'inline-flex min-w-0 items-start gap-1.5 text-right font-medium'
+                  }
+                >
+                  {riga.vuoto ? (
+                    riga.valore
+                  ) : (
+                    <>
+                      {riga.etichetta === ETICHETTA_RESPONSABILE ? (
+                        <User className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <Users className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className="min-w-0">{riga.valore}</span>
+                    </>
+                  )}
                 </dd>
               </div>
-            ) : null}
+            ))}
             <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted-foreground">Registrata</dt>
+              {/* Chi ha preso la telefonata. Il nome c'era gia' qui, ma
+                  appiccicato alla data senza dire che cosa fosse. */}
+              <dt className="text-muted-foreground">
+                {r.created_by ? 'Registrata da' : 'Registrata'}
+              </dt>
               <dd className="min-w-0 truncate text-muted-foreground">
+                {r.created_by ? `${nomeDi(r.created_by)} · ` : ''}
                 {fmtData(r.created_at)}
-                {r.created_by ? ` · ${nomi.get(r.created_by) ?? '—'}` : ''}
               </dd>
             </div>
             {chiusa && r.completato_at ? (

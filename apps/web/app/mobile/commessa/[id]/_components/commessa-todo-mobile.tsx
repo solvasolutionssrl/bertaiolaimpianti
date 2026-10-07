@@ -258,6 +258,16 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
 
       {expanded && !readonly ? (
         <div className="mt-2 space-y-2 rounded-md bg-muted/40 p-2">
+          {/* Chi l'ha scritta. ⚠️ `created_by_nome` era gia' una prop di questo
+              componente e non veniva stampata da nessuna parte: il dato
+              arrivava fin qui e moriva. Sta nel dettaglio e non nella riga
+              fitta perche' sul telefono non si smista — si fa. Nella board
+              dell'ufficio, dove si smista, sta invece nella riga. */}
+          <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+            {todo.created_by_nome
+              ? `Creata da ${todo.created_by_nome} · ${fmtDataBreve(todo.created_at)}`
+              : `Creata il ${fmtDataBreve(todo.created_at)}`}
+          </p>
           {todo.descrizione ? (
             <p className="whitespace-pre-wrap text-xs leading-relaxed">
               {todo.descrizione}

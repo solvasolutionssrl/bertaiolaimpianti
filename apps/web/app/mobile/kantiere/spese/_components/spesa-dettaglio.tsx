@@ -29,6 +29,7 @@ import {
 } from '@/app/_actions/kantiere-spese';
 import { useSheetOpen } from '@/app/mobile/kantiere/_lib/sheet-flag';
 import { Portal } from '@/app/mobile/_components/portal';
+import { FotoZoomabile } from '@/app/_components/foto-zoomabile';
 import type { SpesaRiga } from './spese-client';
 
 /** Il codice del metodo. Non e' piu' un elenco chiuso: lo gestisce l'ufficio. */
@@ -689,13 +690,12 @@ export function SpesaDettaglio({
           >
             <X className="h-6 w-6" aria-hidden="true" />
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/kantiere/spese/${spesa.id}/foto`}
-            alt=""
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-full max-w-full object-contain"
-          />
+          {/* Si ingrandisce: su uno scontrino stropicciato l'importo e la
+              partita IVA si leggono solo da vicino, ed e' il motivo per cui
+              la foto viene scattata. Stesso motore del resto dell'app. */}
+          <div className="h-full w-full" onClick={(e) => e.stopPropagation()}>
+            <FotoZoomabile src={`/api/kantiere/spese/${spesa.id}/foto`} alt="Ricevuta" />
+          </div>
         </div>
         </Portal>
       ) : null}

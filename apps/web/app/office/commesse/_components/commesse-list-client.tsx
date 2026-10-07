@@ -18,6 +18,10 @@ import {
 import { Download, Tag, UserCheck, Workflow } from 'lucide-react';
 
 import { useBulkSelection } from '../../_components/use-bulk-selection';
+import {
+  ETICHETTA_TECNICI_PIU,
+  etichettaNonAssegnato,
+} from '@kommessa/api/assegnazione';
 import { BulkActionBar } from '../../_components/bulk-action-bar';
 import {
   bulkAggiungiTag,
@@ -191,10 +195,16 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                   <th className="px-4 py-2.5 font-medium">Cliente</th>
                   <th className="px-4 py-2.5 font-medium">Cantiere</th>
                   <th className="px-4 py-2.5 font-medium">Stato</th>
-                  {/* «In mano a» = i tecnici sul lavoro. «Responsabile» è chi
-                      lo segue dall'ufficio: due cose diverse che prima si
-                      leggevano in una colonna sola, cioè nessuna delle due. */}
-                  <th className="px-4 py-2.5 font-medium">In mano a</th>
+                  {/* «Tecnici assegnati» = chi ci va. «Responsabile» = chi lo
+                      segue dall'ufficio: due cose diverse che prima si
+                      leggevano in una colonna sola, cioè nessuna delle due.
+                      ⚠️ L'etichetta era «In mano a», e accanto allo stato «Non
+                      presa» si leggeva male: due diciture che differivano per
+                      una lettera e volevano dire cose opposte («Non preso» =
+                      nessun tecnico, «Non presa» = lo stato della commessa).
+                      Ora la parola e' quella del vocabolario unico, la stessa
+                      che si legge sulle richieste e sul telefono. */}
+                  <th className="px-4 py-2.5 font-medium">{ETICHETTA_TECNICI_PIU}</th>
                   <th className="px-4 py-2.5 font-medium">Apertura</th>
                   <th className="px-4 py-2.5 font-medium">Responsabile</th>
                 </tr>
@@ -476,7 +486,13 @@ export function CommesseListClient({ rows, responsabili }: Props) {
  */
 function Squadra({ nomi }: { nomi: string[] }) {
   if (nomi.length === 0) {
-    return <span className="text-xs font-medium text-stato-collaudo">Nessuno</span>;
+    // «Nessuno» accanto a uno stato che si chiama «Non presa» era la stessa
+    // cosa detta due volte con due parole diverse.
+    return (
+      <span className="text-xs font-medium text-stato-collaudo">
+        {etichettaNonAssegnato('task')}
+      </span>
+    );
   }
   const primi = nomi.slice(0, 2);
   const restanti = nomi.length - primi.length;

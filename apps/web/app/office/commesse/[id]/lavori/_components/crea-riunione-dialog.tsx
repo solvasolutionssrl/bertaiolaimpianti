@@ -47,6 +47,7 @@ import { useUploadQueue } from '@/app/_components/upload-queue-provider';
 import { useLimitiUpload } from '@/app/_components/limiti-upload-provider';
 import { PdfCameraCapture } from '@/app/_components/pdf-camera-capture';
 import { PrioritaChip } from '@/app/_components/priorita-ui';
+import { VisoreFoto } from '@/app/_components/foto-zoomabile';
 
 interface Props {
   commessaId: string;
@@ -96,6 +97,8 @@ export function CreaRiunioneDialog({
   const [corpoLibero, setCorpoLibero] = React.useState('');
   const [trascrizione, setTrascrizione] = React.useState('');
   const [attachments, setAttachments] = React.useState<AttachmentDraft[]>([]);
+  /** L'allegato che si sta guardando a schermo pieno, se ce n'e' uno. */
+  const [guarda, setGuarda] = React.useState<{ src: string; nome: string } | null>(null);
 
   // ─── Dettatura ─────────────────────────────────────────────────────
   const [recording, setRecording] = React.useState(false);
@@ -429,6 +432,7 @@ export function CreaRiunioneDialog({
 
   // ─── render ───────────────────────────────────────────────────────
   return (
+    <>
     <Dialog open onOpenChange={(o) => !o && void handleClose()}>
       <DialogContent
         className="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
@@ -602,12 +606,25 @@ export function CreaRiunioneDialog({
                       className="relative overflow-hidden rounded-md border border-border bg-muted/20"
                     >
                       {a.kind === 'foto' ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={a.previewUrl}
-                          alt={a.filename}
-                          className="aspect-square w-full object-cover"
-                        />
+                        // L'anteprima e' tagliata al quadrato: da qui si apre
+                        // per intero e si ingrandisce, prima di allegarla a una
+                        // riunione da cui poi nascono le cose da fare.
+                        // ⚠️ Il visore sta su `body` con `pointer-events: auto`
+                        // e la marcatura del portale: siamo dentro un dialog
+                        // Radix, che spegne i puntatori su tutto il resto.
+                        <button
+                          type="button"
+                          onClick={() => setGuarda({ src: a.previewUrl, nome: a.filename })}
+                          aria-label={`Guarda ${a.filename}`}
+                          className="block w-full"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={a.previewUrl}
+                            alt={a.filename}
+                            className="aspect-square w-full object-cover"
+                          />
+                        </button>
                       ) : a.kind === 'video' ? (
                         <div className="relative aspect-square w-full bg-black">
                           <video
@@ -824,6 +841,16 @@ export function CreaRiunioneDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+
+    {guarda ? (
+      <VisoreFoto
+        src={guarda.src}
+        alt={guarda.nome}
+        didascalia={guarda.nome}
+        onChiudi={() => setGuarda(null)}
+      />
+    ) : null}
+    </>
   );
 }
 

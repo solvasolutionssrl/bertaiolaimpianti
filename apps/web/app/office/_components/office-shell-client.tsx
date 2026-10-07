@@ -7,11 +7,13 @@ import { createBrowserSupabase } from '@kommessa/api/client';
 import { registraEventoAccesso } from '@/app/_actions/auth-events';
 import {
   BarChart3,
+  Bell,
   Boxes,
   Briefcase,
   Calculator,
   CalendarCheck,
   CalendarDays,
+  CircleDot,
   Coins,
   FileSpreadsheet,
   FileText,
@@ -19,6 +21,8 @@ import {
   LayoutDashboard,
   MapPin,
   ReceiptText,
+  Search,
+  Settings,
   SlidersHorizontal,
   Sparkles,
   Timer,
@@ -80,8 +84,11 @@ const BASE_NAV: OfficeNavItem[] = DEFAULT_OFFICE_NAV.map((item) => {
     case 'tickets':
       return { ...item, href: '/office/tickets' };
     case 'todo':
-      // Etichetta visibile: "Task" (più immediato di "TODO" in italiano)
-      return { ...item, label: 'Task', href: '/office/todo' };
+      // ⚠️ Due nomi per due mucchi diversi, e la voce li contiene entrambi:
+      // dentro ci sono i **task** (lavori di una commessa) e le **richieste**
+      // (le telefonate). «Task» da solo nascondeva metà della pagina, e la
+      // «R» maiuscola e' voluta: sono due nomi propri di cose, non un elenco.
+      return { ...item, label: 'Task e Richieste', href: '/office/todo' };
     case 'clienti':
       return { ...item, href: '/office/clienti' };
     case 'ricerca':
@@ -148,8 +155,72 @@ function buildNav(
   appMode?: 'kommessa' | 'kantiere' | 'full',
 ): OfficeNavItem[] {
   if (!hasKantiere) {
-    // Ramo Bertaiola: riproduce esattamente BASE_FULL_NAV (nessuna modifica).
-    return [...BASE_FULL_NAV];
+    // ─── Ramo del mondo commesse (Bertaiola) ──────────────────────────
+    //
+    // Era una lista piatta di nove voci senza nessun raggruppamento: la
+    // dashboard, i lavori, le persone, la ricerca, l'AI e le impostazioni
+    // tutte allo stesso livello, nell'ordine in cui erano state aggiunte.
+    // Con nove voci ci si arriva per abitudine, non leggendo.
+    //
+    // Le macrofamiglie sono le stesse del mondo presenze, che quella forma la
+    // ha da giugno: la Dashboard sta da sola in alto perche' e' la pagina da
+    // cui si parte, poi i gruppi, e in fondo «Altro» con cio' che si apre una
+    // volta al mese.
+    //
+    // ⚠️ `sec-personale` si dichiara **qui** con «Turni e ore» dentro:
+    // `injectPersonale` ci aggiunge Dipendenti, Pianificazione e Ferie quando
+    // il modulo e' attivo. Dichiararla a meta' strada sarebbe bastato finche'
+    // il gruppo aveva una sola provenienza — e Bertaiola, che quel modulo non
+    // ce l'ha, vedrebbe «Turni e ore» da sola in mezzo alla lista.
+    const vociImpostazioni =
+      BASE_NAV.find((n) => n.id === 'settings' || n.id === 'impostazioni')?.children ?? [];
+    return [
+      { id: 'home', label: 'Dashboard', href: '/office', icon: LayoutDashboard },
+      {
+        id: 'sec-progetti',
+        label: 'Progetti',
+        href: '#',
+        icon: Briefcase,
+        variant: 'section',
+        defaultOpen: true,
+        children: [
+          { id: 'commesse', label: 'Commesse', href: '/office/commesse' },
+          { id: 'clienti', label: 'Clienti', href: '/office/clienti', icon: Users },
+          { id: 'todo', label: 'Task e Richieste', href: '/office/todo', icon: CircleDot },
+        ],
+      },
+      {
+        id: 'sec-personale',
+        label: 'Personale',
+        href: '#',
+        icon: Users,
+        variant: 'section',
+        defaultOpen: true,
+        children: [{ id: 'turni', label: 'Turni e ore', href: '/office/turni', icon: Timer }],
+      },
+      {
+        id: 'sec-altro',
+        label: 'Altro',
+        href: '#',
+        icon: Boxes,
+        variant: 'section',
+        defaultOpen: false,
+        children: [
+          { id: 'ricerca', label: 'Ricerca', href: '/office/cerca', icon: Search },
+          // ⚠️ L'id resta `notifiche`: e' quello su cui il guscio attacca il
+          // pallino col numero dei messaggi non letti.
+          { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche', icon: Bell },
+          { id: 'copilot', label: 'Co-pilot', href: '/office/copilot', icon: Sparkles },
+          {
+            id: 'impostazioni',
+            label: 'Impostazioni',
+            href: '/office/impostazioni',
+            icon: Settings,
+            children: [...vociImpostazioni],
+          },
+        ],
+      },
+    ];
   }
 
   if (appMode === 'kantiere') {
@@ -254,7 +325,7 @@ function buildNav(
       defaultOpen: false,
       children: [
         { id: 'commesse', label: 'Commesse', href: '/office/commesse' },
-        { id: 'todo', label: 'Task', href: '/office/todo' },
+        { id: 'todo', label: 'Task e Richieste', href: '/office/todo' },
         { id: 'turni', label: 'Turni', href: '/office/turni' },
       ],
     },
@@ -371,6 +442,18 @@ function injectPersonale(
     );
   }
   if (voci.length === 0) return nav;
+
+  // ⚠️ Se la sezione esiste gia' (il mondo commesse la dichiara con «Turni e
+  // ore» dentro) ci si **aggiunge**, non si sostituisce: creando una seconda
+  // sezione con lo stesso id si avrebbero due «Personale» in colonna, e le
+  // sezioni si ricordano aperte per id.
+  const giaC = nav.findIndex((n) => n.id === 'sec-personale');
+  if (giaC >= 0) {
+    const out = [...nav];
+    const esistente = out[giaC]!;
+    out[giaC] = { ...esistente, children: [...voci, ...(esistente.children ?? [])] };
+    return out;
+  }
 
   const sezione: OfficeNavItem = {
     id: 'sec-personale',
@@ -571,6 +654,8 @@ export function OfficeShellClient({
         onOpenChange={setPaletteOpen}
         onLogout={handleLogout}
         mondo={mondoRicerca}
+        /* La stessa barra che si vede a sinistra: un elenco solo. */
+        nav={nav}
       />
     </>
   );

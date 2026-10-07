@@ -19,7 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { cn } from '@kommessa/ui';
+import { cn, type OfficeNavItem } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
 
 /**
@@ -71,7 +71,12 @@ interface BaseResult {
   group: ResultGroupId;
   title: string;
   subtitle?: string;
-  icon: LucideIcon;
+  /**
+   * ⚠️ Non `LucideIcon` ma il tipo piu' largo: le icone che arrivano dalla
+   * barra sono dichiarate li' come componenti generici, e stringerle qui
+   * vorrebbe dire non poter riusare la barra — cioe' tornare a due elenchi.
+   */
+  icon: React.ComponentType<{ className?: string }>;
   /** Mondo o funzione che serve perché la voce abbia senso. */
   richiede?: Requisito;
 }
@@ -104,33 +109,66 @@ const GROUP_ORDER: ResultGroupId[] = [
   'menu',
 ];
 
-/** Voci di menu hardcoded — riflettono la nav della OfficeShell. */
-const MENU_ITEMS: NavResult[] = [
-  {
-    id: 'menu-dashboard',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Dashboard',
-    subtitle: 'Panoramica giornaliera',
-    href: '/office',
-    icon: LayoutDashboard,
-  },
-  {
-    id: 'menu-commesse',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Commesse',
-    href: '/office/commesse',
-    icon: Briefcase,
-    richiede: 'commesse',
-  },
+/**
+ * **Le voci «Vai a» si leggono dalla barra, non si riscrivono.**
+ *
+ * ⚠️ Erano un secondo elenco scritto a mano «che riflette la nav della
+ * OfficeShell», e non la rifletteva: aveva **Tickets**, che nella barra non
+ * c'e' per nessuno, e **non aveva** Task, Turni, Co-pilot, Kontabilita',
+ * Personalizzazioni, Gestionale, Sedi, Parco mezzi, Ore e costi, Report e
+ * Registro modifiche. Nessuno ha sbagliato: la lista e' stata scritta una
+ * volta, e tutto quello che e' arrivato dopo non lo sapeva.
+ *
+ * Appiattendo la barra si eredita anche il filtro per moduli e funzioni del
+ * tenant, che la barra fa gia' e questo elenco rifaceva a modo suo, piu'
+ * grossolano.
+ */
+function vociDaBarra(nav: OfficeNavItem[]): NavResult[] {
+  const fuori: NavResult[] = [];
+  const scendi = (voci: OfficeNavItem[], genitore?: OfficeNavItem) => {
+    for (const v of voci) {
+      // Un'intestazione di gruppo non e' una destinazione: `href` e' '#'.
+      if (v.href && v.href !== '#') {
+        fuori.push({
+          id: 'menu-' + v.id,
+          kind: 'nav',
+          group: 'menu',
+          title: v.label,
+          subtitle: genitore && genitore.href === '#' ? genitore.label : undefined,
+          href: v.href,
+          icon: v.icon ?? genitore?.icon ?? Settings,
+        });
+      }
+      if (v.children?.length) scendi(v.children, v);
+    }
+  };
+  scendi(nav);
+  return fuori;
+}
+
+/**
+ * Pagine vere che **non stanno nella barra**, e che senza questo elenco non si
+ * raggiungerebbero piu' da nessuna parte. Non e' un residuo: e' la lista,
+ * corta e dichiarata, di cio' che si apre solo da qui.
+ */
+const FUORI_BARRA: NavResult[] = [
   {
     id: 'menu-commesse-nuova',
     kind: 'nav',
     group: 'menu',
     title: 'Nuova commessa',
-    subtitle: 'Commesse · Nuova',
+    subtitle: 'Commesse',
     href: '/office/commesse/nuova',
+    icon: Briefcase,
+    richiede: 'commesse',
+  },
+  {
+    id: 'menu-commesse-panoramica',
+    kind: 'nav',
+    group: 'menu',
+    title: 'Panoramica commesse',
+    subtitle: 'Commesse',
+    href: '/office/commesse/panoramica',
     icon: Briefcase,
     richiede: 'commesse',
   },
@@ -141,125 +179,6 @@ const MENU_ITEMS: NavResult[] = [
     title: 'Tickets',
     href: '/office/tickets',
     icon: TicketCheck,
-    richiede: 'commesse',
-  },
-  {
-    id: 'menu-clienti',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Clienti',
-    href: '/office/clienti',
-    icon: Users,
-  },
-  {
-    id: 'menu-kantiere-cantieri',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Cantieri',
-    subtitle: 'Kantiere · Cantieri',
-    href: '/office/kantiere/cantieri',
-    icon: HardHat,
-    richiede: 'kantiere',
-  },
-  {
-    id: 'menu-kantiere-presenze',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Presenze e ore',
-    subtitle: 'Kantiere · Presenze e ore',
-    href: '/office/kantiere/rapportini',
-    icon: Clock,
-    richiede: 'kantiere',
-  },
-  {
-    id: 'menu-dipendenti',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Dipendenti',
-    subtitle: 'Personale · Dipendenti',
-    href: '/office/personale/dipendenti',
-    icon: Users,
-    richiede: 'dipendenti',
-  },
-  {
-    id: 'menu-cerca',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Ricerca avanzata',
-    href: '/office/cerca',
-    icon: Search,
-  },
-  {
-    id: 'menu-notifiche',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Notifiche',
-    href: '/office/notifiche',
-    icon: Bell,
-  },
-  {
-    id: 'menu-impostazioni',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Impostazioni',
-    href: '/office/impostazioni',
-    icon: Settings,
-  },
-  {
-    id: 'menu-imp-profilo',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Profilo',
-    subtitle: 'Impostazioni · Profilo',
-    href: '/office/impostazioni/profilo',
-    icon: Settings,
-  },
-  {
-    id: 'menu-imp-voci',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Voci catalogo',
-    subtitle: 'Impostazioni · Voci',
-    href: '/office/impostazioni/voci',
-    icon: Settings,
-    richiede: 'voci',
-  },
-  {
-    id: 'menu-imp-preset',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Preset di lavoro',
-    subtitle: 'Impostazioni · Preset',
-    href: '/office/impostazioni/preset',
-    icon: Settings,
-    richiede: 'preset',
-  },
-  {
-    id: 'menu-imp-utenti',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Utenti',
-    subtitle: 'Impostazioni · Utenti',
-    href: '/office/impostazioni/utenti',
-    icon: Settings,
-  },
-  {
-    id: 'menu-imp-branding',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Branding',
-    subtitle: 'Impostazioni · Branding',
-    href: '/office/impostazioni/branding',
-    icon: Settings,
-  },
-  {
-    id: 'menu-imp-storage',
-    kind: 'nav',
-    group: 'menu',
-    title: 'Storage',
-    subtitle: 'Impostazioni · Storage',
-    href: '/office/impostazioni/storage',
-    icon: Settings,
     richiede: 'commesse',
   },
 ];
@@ -325,9 +244,21 @@ interface CommandPaletteProps {
   onLogout: () => void | Promise<void>;
   /** Mondi e funzioni del tenant. Assente = palette del mondo commesse. */
   mondo?: MondoRicerca;
+  /**
+   * La barra come viene davvero disegnata: da qui esce l'elenco «Vai a».
+   * Assente = solo le pagine fuori barra (non succede nell'app: il guscio la
+   * passa sempre).
+   */
+  nav?: OfficeNavItem[];
 }
 
-export function CommandPalette({ open, onOpenChange, onLogout, mondo = MONDO_COMMESSE }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  onLogout,
+  mondo = MONDO_COMMESSE,
+  nav = [],
+}: CommandPaletteProps) {
   const router = useRouter();
   const { commesse: mCommesse, kantiere: mKantiere, dipendenti: mDipendenti, voci: mVoci, preset: mPreset } = mondo;
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -485,13 +416,19 @@ export function CommandPalette({ open, onOpenChange, onLogout, mondo = MONDO_COM
     return buildQuickActions(router, onLogout).filter((a) => requisitoSoddisfatto(a.richiede, m));
   }, [router, onLogout, mCommesse, mKantiere, mDipendenti, mVoci, mPreset]);
 
-  // Voci di menu del tenant. Senza mondo commesse la Dashboard è quella Kantiere.
+  // Le voci della barra (gia' filtrate per moduli da chi la costruisce) piu'
+  // le poche pagine che nella barra non ci sono. ⚠️ Nessuna correzione della
+  // Dashboard per il mondo presenze: nella barra il suo indirizzo e' gia'
+  // quello giusto, ed e' esattamente la riga che prima si doveva ricordare qui.
   const menuItems = React.useMemo(() => {
     const m = { commesse: mCommesse, kantiere: mKantiere, dipendenti: mDipendenti, voci: mVoci, preset: mPreset };
-    return MENU_ITEMS.filter((v) => requisitoSoddisfatto(v.richiede, m)).map((v) =>
-      v.id === 'menu-dashboard' && !mCommesse && mKantiere ? { ...v, href: '/office/kantiere' } : v,
+    const dallaBarra = vociDaBarra(nav);
+    const visti = new Set(dallaBarra.map((v) => v.href));
+    const extra = FUORI_BARRA.filter(
+      (v) => !visti.has(v.href) && requisitoSoddisfatto(v.richiede, m),
     );
-  }, [mCommesse, mKantiere, mDipendenti, mVoci, mPreset]);
+    return [...dallaBarra, ...extra];
+  }, [nav, mCommesse, mKantiere, mDipendenti, mVoci, mPreset]);
 
   const flatResults = React.useMemo<PaletteResult[]>(() => {
     const q = debouncedQuery;

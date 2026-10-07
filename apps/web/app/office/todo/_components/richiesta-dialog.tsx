@@ -29,6 +29,7 @@ import { useAlert } from '@/app/_components/confirm-provider';
 import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaSelect } from '@/app/_components/priorita-ui';
 import { Scelta, SceltaMultipla } from '@/app/_components/scelta';
+import { ETICHETTA_RESPONSABILE, ETICHETTA_TECNICI_PIU } from '@kommessa/api/assegnazione';
 import { etichettaRuolo } from '@kommessa/api/identita';
 
 /**
@@ -368,7 +369,7 @@ export function RichiestaDialog({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="min-w-0">
-              <Label htmlFor="r_assegna">Chi se ne occupa</Label>
+              <Label htmlFor="r_assegna">{ETICHETTA_RESPONSABILE}</Label>
               {/* Qui le persone sono raggruppate per mestiere: la tendina
                   con ricerca tiene i gruppi e in più si può filtrare. */}
               <Scelta
@@ -380,10 +381,11 @@ export function RichiestaDialog({
                 etichettaNessuno="Nessuno, per ora"
                 segnaposto="Nessuno, per ora"
                 segnapostoRicerca="Cerca una persona…"
-                aria-label="Chi se ne occupa"
+                aria-label={ETICHETTA_RESPONSABILE}
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Ne risponde lui. Riceve una notifica sul telefono.
+                Ne risponde lui e riceve una notifica sul telefono. Può essere un
+                caposquadra, che poi manda i suoi tecnici.
               </p>
             </div>
             <div className="min-w-0">
@@ -399,11 +401,13 @@ export function RichiestaDialog({
           </div>
 
           {/* ⭐ La seconda mano. Il caposquadra riapre la richiesta che
-              l'ufficio gli ha dato e manda i suoi: «in mano a» resta lui. */}
+              l'ufficio gli ha dato e manda i suoi: il responsabile resta lui.
+              Le due etichette vengono dal vocabolario unico, le stesse che si
+              leggono sulla scheda del telefono. */}
           <div className="min-w-0 rounded-md border border-border bg-muted/20 p-3">
             <Label htmlFor="r_squadra" className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-              Chi ci va
+              {ETICHETTA_TECNICI_PIU}
             </Label>
             <SceltaMultipla
               id="r_squadra"
@@ -413,11 +417,11 @@ export function RichiestaDialog({
               onCambia={setSquadra}
               segnaposto="Nessuno, per ora"
               segnapostoRicerca="Cerca una persona…"
-              aria-label="Chi ci va"
+              aria-label={ETICHETTA_TECNICI_PIU}
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Uno o più tecnici. La vedono sul telefono e possono spuntarla; chi
-              se ne occupa resta chi l’ha in mano.
+              Uno o più tecnici: la vedono sul telefono e possono spuntarla. Il
+              responsabile non cambia.
             </p>
           </div>
         </div>

@@ -53,7 +53,7 @@ export function CreaTodoGlobaleDialog({
     if (!commessaId) {
       await showAlert({
         title: 'Manca la commessa',
-        body: 'Seleziona la commessa a cui assegnare il TODO.',
+        body: 'Scegli la commessa a cui appartiene il task.',
       });
       return;
     }
@@ -83,7 +83,7 @@ export function CreaTodoGlobaleDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Nuovo TODO</DialogTitle>
+          <DialogTitle>Nuovo task su una commessa</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="min-w-0">
@@ -173,16 +173,16 @@ export function CreaTodoGlobaleDialog({
           </div>
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="outline" onClick={onClose} disabled={submitting}>
+          <Button size="sm" variant="outline" onClick={onClose} disabled={submitting}>
             Annulla
           </Button>
-          <Button onClick={submit} disabled={submitting || !commessaId}>
+          <Button size="sm" onClick={submit} disabled={submitting || !commessaId}>
             {submitting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
-            Crea TODO
+            Crea il task
           </Button>
         </DialogFooter>
       </DialogContent>

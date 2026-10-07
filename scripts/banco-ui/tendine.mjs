@@ -74,10 +74,10 @@ try {
   await vaiA(cdp, '/office/todo');
   await finoA(cdp, `document.querySelectorAll('button').length > 3`, { timeoutMs: 25_000 });
 
-  // ══ PARTE 1 — tendina corta: «Chi se ne occupa» nella richiesta al telefono ══
-  console.log('\n  \x1b[1mLa richiesta al telefono · «Chi se ne occupa»\x1b[0m');
+  // ══ PARTE 1 — tendina corta: «Responsabile» nella richiesta al telefono ══
+  console.log('\n  \x1b[1mLa richiesta al telefono · «Responsabile»\x1b[0m');
 
-  const apre = await apriDialog(cdp, 'richiesta al telefono');
+  const apre = await apriDialog(cdp, 'al telefono');
   esito(
     await valuta(cdp, `Boolean(document.querySelector('[role=dialog]'))`),
     `il dialog si apre dal tasto «${apre}»`,
@@ -166,7 +166,7 @@ try {
   // persone sono quattro, le commesse diciotto: la ricerca si prova lì.
   console.log('\n  \x1b[1mTask su una commessa · la casella «Cerca»\x1b[0m');
 
-  const apre2 = await apriDialog(cdp, 'task su una commessa');
+  const apre2 = await apriDialog(cdp, 'nuovo task');
   esito(
     await valuta(cdp, `Boolean(document.querySelector('[role=dialog]'))`),
     `il dialog si apre dal tasto «${apre2}»`,

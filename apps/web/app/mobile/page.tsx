@@ -16,6 +16,7 @@ import { StatoLed } from '@kommessa/ui';
 import type { StatoCommessa } from '@kommessa/api/types';
 import { getMobileShell } from '@kommessa/api/types';
 import { STATI_COMMESSA_SU_MOBILE } from '@kommessa/api/stato-lavoro';
+import { leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 
 import { guardMobile } from './_lib/guard';
 import { tenantHasModule } from '../_lib/modules';
@@ -279,23 +280,45 @@ async function CampoOggi({
   );
 
   const [commesseRes, todosRes, richiesteRes, mandatiRes] = await Promise.all([
-    supabase
-      .from('commesse')
-      .select(
-        `
+    // ⚠️ **Qui c'era `.limit(200)` e nessun ordinamento**: non «le ultime
+    // duecento», ma duecento qualsiasi. Finche' un tecnico ne ha trenta non si
+    // vede; il giorno in cui ne ha duecentocinquanta spariscono cinquanta
+    // lavori senza nessun segnale, e quali non lo sa nessuno. E' la stessa
+    // forma del difetto trovato sulla lista d'ufficio (`.limit(200)` su 202
+    // commesse) e di quello appena corretto sulla lista del telefono.
+    //
+    // `leggiPerId` legge a gruppi di cento id e a pagine: toglie anche il
+    // secondo bordo, cioe' la lunghezza dell'indirizzo HTTP, che con un
+    // `.in()` di molte decine di id si raggiunge prima del limite di righe.
+    leggiPerId<string, any>(
+      idsCommesse,
+      (gruppo, da, a) =>
+        supabase
+          .from('commesse')
+          .select(
+            `
           id, codice_interno, nome_cartella, stato, is_critica,
           cliente_indirizzo_cantiere, data_apertura,
           descrizione_ai_finale, descrizione_ai_proposta, note_iniziali,
           cliente:clienti ( id, ragione_sociale )
         `,
-      )
-      .in('id', idsCommesse)
-      // Le completate restano: per il tecnico questa lista e' l'unico modo di
-      // riaprire da telefono il lavoro di ieri. Fuori le archiviate (la regola
-      // sta in `commessaVisibileSuMobile`) e le bozze, che non sono lavoro
-      // assegnato.
-      .in('stato', STATI_COMMESSA_SU_MOBILE.filter((s) => s !== 'bozza'))
-      .limit(200),
+          )
+          .in('id', gruppo)
+          // Le completate restano: per il tecnico questa lista e' l'unico modo
+          // di riaprire da telefono il lavoro di ieri. Fuori le archiviate (la
+          // regola sta in `commessaVisibileSuMobile`) e le bozze, che non sono
+          // lavoro assegnato.
+          .in('stato', STATI_COMMESSA_SU_MOBILE.filter((s) => s !== 'bozza'))
+          .order('id')
+          .range(da, a) as unknown as PromiseLike<EsitoPagina<any>>,
+      { contesto: 'commesse del tecnico' },
+    ).then(
+      (data) => ({ data, error: null as { message: string } | null }),
+      (e: unknown) => ({
+        data: [] as any[],
+        error: { message: e instanceof Error ? e.message : String(e) },
+      }),
+    ),
 
     // Le cose da fare delle MIE commesse.
     //
@@ -316,6 +339,12 @@ async function CampoOggi({
       .in('commessa_id', idsCommesse)
       .in('stato', ['aperto', 'in_corso'])
       .or(`assegnato_a.eq.${ctx.userId},assegnato_a.is.null,created_by.eq.${ctx.userId}`)
+      // Un ordine dichiarato, cosi' il tetto taglia le piu' vecchie e non
+      // duecento a caso. Duecento cose da fare aperte su un solo tecnico non
+      // e' una situazione reale: se un giorno lo diventa, lo strumento e'
+      // `leggiPerId`, come per le commesse qui sopra.
+      .order('created_at', { ascending: false })
+      .order('id')
       .limit(200),
 
     // Le RICHIESTE assegnate a me: non hanno una commessa, quindi non possono
@@ -330,6 +359,8 @@ async function CampoOggi({
       .eq('assegnato_a', ctx.userId)
       .is('commessa_id', null)
       .in('stato', ['aperto', 'in_corso'])
+      .order('created_at', { ascending: false })
+      .order('id')
       .limit(100),
 
     // Le richieste su cui mi hanno mandato.

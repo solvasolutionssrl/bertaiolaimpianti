@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { ImageOff, Play, X } from 'lucide-react';
 
+import { FotoZoomabile } from '@/app/_components/foto-zoomabile';
+
 /**
  * La galleria della pagina pubblica.
  *
@@ -86,13 +88,15 @@ export function GalleriaPubblica({
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={`/api/pubblico/${token}/media/${aperto.id}`}
-              alt={aperto.filename}
-              className="max-h-full max-w-full object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
+            // Anche qui si ingrandisce: è la pagina che il cliente apre dal
+            // messaggio, e una foto di cantiere su un telefono senza zoom
+            // serve a poco. Stesso motore del resto dell'applicazione.
+            <div className="h-full w-full" onClick={(e) => e.stopPropagation()}>
+              <FotoZoomabile
+                src={`/api/pubblico/${token}/media/${aperto.id}`}
+                alt={aperto.filename}
+              />
+            </div>
           )}
         </div>
       ) : null}

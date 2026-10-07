@@ -31,6 +31,7 @@ node scripts/banco-ui/tendine.mjs                # le tendine nei dialog: non ta
 node scripts/banco-ui/riunione-tecnico.mjs       # un tecnico scrive una riunione con l’AI (BANCO_SALVA=1 salva sul demo: ripulire)
 node scripts/banco-ui/richieste.mjs              # il giro dell’ufficio: telefonata → cliente nuovo → chi ci va → spunta → elimina (si ripulisce da solo)
 node scripts/banco-ui/riunione-audio-corto.mjs   # mezzo secondo di registrazione: avviso calmo, non un popup di errore (microfono finto)
+node scripts/banco-ui/zoom-foto.mjs              # una foto si guarda da vicino: rotellina, pizzicotto a due dita, doppio clic, tasti, il freno dello spostamento
 ```
 
 ## ⚠️ Il dito vero, e perché conta

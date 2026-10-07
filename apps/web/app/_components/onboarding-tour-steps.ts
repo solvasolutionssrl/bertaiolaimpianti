@@ -24,9 +24,9 @@ export const OFFICE_TOUR_STEPS: TourStep[] = [
   {
     id: 'office-sidebar',
     target: 'nav[aria-label="Navigazione laterale"]',
-    title: 'La tua sidebar',
+    title: 'La tua barra',
     description:
-      'Ogni voce porta a una sezione del gestionale: commesse, tickets, clienti, turni, impostazioni.',
+      'Tre gruppi: in «Progetti» ci sono commesse, clienti e la lista di task e richieste; in «Personale» le ore; in «Altro» ricerca, avvisi e impostazioni.',
     placement: 'right',
   },
   {

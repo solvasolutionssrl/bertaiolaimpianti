@@ -48,7 +48,10 @@
     "./paghe-causali": "./src/paghe-causali.ts",
     "./paghe-essepaghe": "./src/paghe-essepaghe.ts",
     "./paghe-mappatura": "./src/paghe-mappatura.ts",
-    "./indirizzo-scelto": "./src/indirizzo-scelto.ts"
+    "./indirizzo-scelto": "./src/indirizzo-scelto.ts",
+    "./scadenza-password": "./src/scadenza-password.ts",
+    "./assegnazione": "./src/assegnazione.ts",
+    "./zoom-foto": "./src/zoom-foto.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

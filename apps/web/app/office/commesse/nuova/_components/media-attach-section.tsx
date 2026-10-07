@@ -44,6 +44,7 @@ import {
   sogliaAvvisoNumero,
   sogliaAvvisoVideoMb,
 } from '@kommessa/api/limiti-upload';
+import { VisoreFoto } from '@/app/_components/foto-zoomabile';
 import { useAttesaPicker } from '../../../../_lib/use-attesa-picker';
 
 export interface MediaFile {
@@ -113,6 +114,8 @@ export function MediaAttachSection({
   const [skipOpen, setSkipOpen] = React.useState(false);
   const [validationErrors, setValidationErrors] = React.useState<ValidationError[]>([]);
   const [confirmCancel, setConfirmCancel] = React.useState(false);
+  /** La foto in coda che si sta guardando a schermo pieno, se ce n'e' una. */
+  const [guarda, setGuarda] = React.useState<{ src: string; nome: string } | null>(null);
 
   // Attesa del picker di sistema: iOS esporta e ricodifica gli originali prima
   // di consegnarli, e in quella finestra a schermo non succede niente.
@@ -223,6 +226,7 @@ export function MediaAttachSection({
   const nearLimit = files.length >= warnNearLimit && !atLimit;
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center gap-3">
@@ -336,7 +340,20 @@ export function MediaAttachSection({
                   className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
                 >
                   {f.kind === 'image' ? (
-                    <img src={f.previewUrl} alt={f.file.name} className="h-full w-full object-cover" />
+                    // ⚠️ L'anteprima e' tagliata al quadrato (`object-cover`):
+                    // guardandola non si sa cosa si sta mandando. Da qui si
+                    // apre, e si ingrandisce — e' il momento in cui ci si
+                    // accorge che la foto e' mossa, non dopo averla caricata.
+                    // Questo componente lo usano cinque flussi: creazione
+                    // commessa, Scatto, tab Foto, sopralluogo e dettatura.
+                    <button
+                      type="button"
+                      onClick={() => setGuarda({ src: f.previewUrl, nome: f.file.name })}
+                      aria-label={`Guarda ${f.file.name}`}
+                      className="h-full w-full"
+                    >
+                      <img src={f.previewUrl} alt={f.file.name} className="h-full w-full object-cover" />
+                    </button>
                   ) : f.kind === 'video' ? (
                     <VideoThumb src={f.previewUrl} sizeMB={f.sizeMB} />
                   ) : (
@@ -655,6 +672,16 @@ export function MediaAttachSection({
         </DialogContent>
       </Dialog>
     </Card>
+
+    {guarda ? (
+      <VisoreFoto
+        src={guarda.src}
+        alt={guarda.nome}
+        didascalia={guarda.nome}
+        onChiudi={() => setGuarda(null)}
+      />
+    ) : null}
+    </>
   );
 }
 
