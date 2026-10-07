@@ -30,6 +30,8 @@ interface Props {
    * Senza questo, quell'informazione viaggiava a memoria fino in ufficio.
    */
   puoScrivereTodo?: boolean;
+  /** Scrivere una riunione: di chiunque sia in squadra, dall'08/10/2026. */
+  puoScrivereRiunione?: boolean;
   /** Se la commessa e' chiusa, le aggiunte chiedono conferma. */
   statoCommessa?: string | null;
   nomeCommessa?: string | null;
@@ -53,6 +55,7 @@ export function CommessaLavoriMobile({
   currentUserId,
   canWrite,
   puoScrivereTodo = false,
+  puoScrivereRiunione = false,
   statoCommessa,
   nomeCommessa,
   todos,
@@ -70,12 +73,20 @@ export function CommessaLavoriMobile({
 
   return (
     <div>
-      {/* I tasti. Il nero («Nuovo Da Fare») lo vede chiunque sia in squadra; il
-          verbale con l'AI resta a chi ha i poteri del capo. Se c'e' solo il
-          primo, prende tutta la riga: due colonne con una sola cosa dentro
-          lasciano un buco che sembra un errore. */}
-      {canWrite || puoScrivereTodo ? (
-        <div className={canWrite ? 'mb-5 grid grid-cols-2 gap-2.5' : 'mb-5'}>
+      {/* I tasti. Li vede chiunque sia in squadra, tutti e due.
+          ⚠️ Il verbale con l'AI era riservato a chi ha i poteri del capo, e non
+          aveva senso: una riunione è il sopralluogo raccontato dentro un
+          lavoro già assegnato, come una cosa da fare. Se resta un tasto solo
+          prende tutta la riga — due colonne con una cosa dentro lasciano un
+          buco che sembra un errore. */}
+      {canWrite || puoScrivereTodo || puoScrivereRiunione ? (
+        <div
+          className={
+            puoScrivereTodo && (canWrite || puoScrivereRiunione)
+              ? 'mb-5 grid grid-cols-2 gap-2.5'
+              : 'mb-5'
+          }
+        >
           <Button
             onClick={async () => {
               if (await chiediConferma()) setTodoOpen(true);
@@ -85,7 +96,7 @@ export function CommessaLavoriMobile({
             <Plus className="h-4 w-4" />
             Nuovo Da Fare
           </Button>
-          {canWrite ? (
+          {canWrite || puoScrivereRiunione ? (
             <Button
               variant="outline"
               onClick={async () => {
@@ -118,7 +129,7 @@ export function CommessaLavoriMobile({
           <div className="rounded-lg border border-dashed border-border/60 bg-background/50 p-5 text-center text-sm text-muted-foreground">
             <p>
               Nessun lavoro tracciato.
-              {canWrite || puoScrivereTodo ? ' Il primo si crea qui sopra.' : ''}
+              {canWrite || puoScrivereTodo || puoScrivereRiunione ? ' Il primo si crea qui sopra.' : ''}
             </p>
           </div>
         ) : null}

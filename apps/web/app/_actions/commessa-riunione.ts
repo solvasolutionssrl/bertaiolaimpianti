@@ -69,9 +69,16 @@ export async function creaRiunione(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!(await possoAprireLavori())) {
-    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
-  }
+  // ⚠️ Nessun controllo sul capo squadra, ed è una scelta: una riunione è il
+  // sopralluogo raccontato — quattro righe dettate davanti alla caldaia — cioè
+  // lavoro DENTRO una commessa già assegnata, non un atto di apertura.
+  // `capo_squadra` resta «aprire un lavoro nuovo».
+  //
+  // Chi può scrivere su quale commessa lo decide la RLS
+  // (`commessa_riunione_insert_tecnico`, migration 20261008110000): solo le
+  // commesse su cui è in squadra, e firmata da lui. Un presidio nel database
+  // vale più di un `if` qui, perché vale anche per le strade che non passano
+  // da questa funzione.
 
   const supabase = createServerSupabase();
   const { data, error } = await supabase
@@ -242,9 +249,9 @@ export async function generaReportRiunione(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!(await possoAprireLavori())) {
-    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
-  }
+  // Qui non si scrive niente: si manda del testo all'AI e si riceve un
+  // riassunto. Il presidio è la sessione — la stessa di tutte le altre
+  // funzioni che usano l'AI e che un tecnico già adopera (dettatura, scontrini).
 
   const corpo = (parsed.data.corpoLibero ?? '').trim();
   const trasc = (parsed.data.trascrizione ?? '').trim();
@@ -407,9 +414,13 @@ export async function materializzaTodoDaRiunione(
 
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
-  if (!(await possoAprireLavori())) {
-    return { ok: false, error: CAPACITA_META.capo_squadra.messaggioNegato };
-  }
+  // Le cose da fare che nascono dalla riunione passano dalla RLS di
+  // `commessa_todo`, che per un tecnico accetta solo «a nessuno» o «a me
+  // stesso» (migration 20261007100000). Qui si toglie l'assegnatario PRIMA,
+  // invece di lasciare che sia il database a rifiutare: altrimenti il
+  // messaggio che arriva a schermo sarebbe una violazione di policy, cioè
+  // niente che una persona possa capire o correggere.
+  const eTecnico = ctx.role === 'tecnico';
 
   const supabase = createServerSupabase();
 
@@ -429,7 +440,7 @@ export async function materializzaTodoDaRiunione(
     titolo: t.titolo,
     descrizione: t.note ?? null,
     priorita: t.priorita,
-    assegnato_a: t.assegnatoA ?? null,
+    assegnato_a: eTecnico ? (t.assegnatoA === ctx.userId ? ctx.userId : null) : (t.assegnatoA ?? null),
     sort_order: nextOrder++,
     metadata: { fonte: `riunione:${parsed.data.riunioneId}` },
     created_by: ctx.userId,

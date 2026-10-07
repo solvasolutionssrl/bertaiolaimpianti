@@ -142,7 +142,12 @@ try {
       cdp,
       `[...document.querySelectorAll('button')].some(b => b.textContent.includes('Riunione AI'))`,
     );
-    esito(!riunione, 'il tasto «Riunione AI» non c’è');
+    // ⚠️ Fino all'08/10 questo controllo diceva il contrario: «il tasto non
+    // c'è». Era giusto per il codice e sbagliato per il prodotto — e in ogni
+    // caso non funzionava per nessun tecnico, perché la RLS di
+    // `commessa_riunione` ammetteva solo admin e ufficio: un capo squadra
+    // passava il controllo dell'app e veniva fermato dal database.
+    esito(riunione, 'il tasto «Riunione AI» c’è per ogni tecnico in squadra');
   } else {
     esito(false, 'nessuna commessa assegnata al tecnico demo', 'non posso provare la scheda');
   }

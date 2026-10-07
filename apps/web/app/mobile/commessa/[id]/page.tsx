@@ -809,6 +809,10 @@ export default async function CommessaDetailPage({
               currentUserId={ctx.userId}
               canWrite={canManageTecnici || apreLavori}
               puoScrivereTodo
+              // Chi apre questa pagina o è dell'ufficio o è in squadra su
+              // questa commessa: in entrambi i casi può scriverci una
+              // riunione. Il confine vero lo tiene la RLS.
+              puoScrivereRiunione
               statoCommessa={stato}
               nomeCommessa={nomeCommessa}
               todos={todosMobile}

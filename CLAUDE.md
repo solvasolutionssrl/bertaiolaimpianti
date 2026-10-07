@@ -114,11 +114,25 @@ Il giorno prima di dare gli accessi a tutta la squadra. Le cose che restano vere
   con una voce sola — `capo_squadra` — e un posto che la legge. ⭐ **Criterio
   per aggiungerne una**: non «sarebbe comodo poterlo decidere», ma «c'e' una
   riga di codice che la legge e si comporta di conseguenza».
-- **Aprire un lavoro e' un potere, non un ruolo**: `creaCommessa`,
-  `creaRiunione` e i todo-da-riunione guardano `capo_squadra`. Chi non ce l'ha
+- **Aprire un lavoro e' un potere, non un ruolo**: `creaCommessa` guarda
+  `capo_squadra`. ⚠️ Dall'08/10 le riunioni **non** lo guardano piu' (vedi
+  sotto): `capo_squadra` vuol dire «aprire un lavoro NUOVO», non «lavorare
+  dentro un lavoro». Chi non ce l'ha
   non vede il microfono al centro della barra: al suo posto un casco spento che
   al tocco dice a chi rivolgersi. Lo slot **non sparisce** — una barra che
   cambia numero di tasti a seconda di chi guarda disorienta.
+- **Scrivere una riunione e' di ogni tecnico in squadra** (migration
+  `20261008110000`). Una riunione qui non e' un verbale: e' il sopralluogo
+  raccontato, cioe' lavoro **dentro** una commessa gia' assegnata, come una
+  cosa da fare. ⚠️ Prima non poteva **nessun tecnico**, nemmeno un capo
+  squadra: `commessa_riunione_write` ammetteva solo admin e ufficio, quindi il
+  controllo applicativo lasciava passare un capo squadra e poi il database lo
+  fermava. Puo' scriverne e correggere **le proprie**, solo sulle commesse su
+  cui e' in squadra; cancellarne resta dell'ufficio (una riunione e' storia del
+  lavoro). I todo che ne nascono non si assegnano a un collega: lo impedisce
+  gia' la RLS dei todo, e l'azione toglie l'assegnatario **prima** di scrivere,
+  perche' il messaggio «violazione di policy» non e' una cosa che una persona
+  possa correggere.
 - **Scrivere una cosa da fare e' di ogni tecnico in squadra** (migration
   `20261007100000`), senza assegnatario. ⚠️ Chiuso un buco: a livello di
   database un tecnico poteva spuntare **qualunque** cosa da fare dello spazio
