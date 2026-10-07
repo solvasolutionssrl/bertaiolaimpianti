@@ -291,6 +291,42 @@ function Elenco({
   const conRicerca = opzioni.length > SOGLIA_RICERCA || query.length > 0;
   const rifLista = React.useRef<HTMLDivElement>(null);
   const rifRicerca = React.useRef<HTMLInputElement>(null);
+  const rifPannello = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * ⚠️ **La rotellina dentro un dialog modale.**
+   *
+   * Radix blocca lo scorrimento della pagina mentre un dialog e' aperto, e lo
+   * fa con `react-remove-scroll`, che mette un ascoltatore di `wheel` su
+   * `document` e **annulla** ogni evento che non venga da dentro il dialog.
+   * Il pannello sta su `body`, quindi e' «fuori»: l'elenco si poteva scorrere
+   * solo trascinando la barra di lato.
+   *
+   * La via d'uscita prevista dalla libreria sono gli `shards`, che pero' li
+   * passa Radix e non sono raggiungibili da qui. Allora si ferma l'evento
+   * **prima** che arrivi a `document`: il percorso e' pannello → body → html
+   * → document, e uno `stopPropagation` sul pannello lo toglie di mezzo. Il
+   * browser scorre da solo, come farebbe senza nessun dialog.
+   *
+   * ⚠️ Ascoltatore **nativo** e non `onWheel` di React: un Portal fuori dalla
+   * radice fa dipendere la propagazione da come React aggancia gli eventi al
+   * contenitore, ed e' un dettaglio su cui non vale la pena scommettere.
+   * ⚠️ `passive: false` anche se non si chiama `preventDefault`: senza, il
+   * browser puo' trattarlo come passivo e ignorare il nostro intervento.
+   *
+   * `touchmove` per lo stesso motivo, sul telefono.
+   */
+  React.useEffect(() => {
+    const el = rifPannello.current;
+    if (!el) return;
+    const fermaQui = (e: Event) => e.stopPropagation();
+    el.addEventListener('wheel', fermaQui, { passive: false });
+    el.addEventListener('touchmove', fermaQui, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', fermaQui);
+      el.removeEventListener('touchmove', fermaQui);
+    };
+  }, [posizione]);
 
   // Tiene la voce attiva dentro la finestra visibile mentre si scorre con le
   // frecce. `block: 'nearest'` muove il minimo indispensabile: uno scatto al
@@ -310,6 +346,7 @@ function Elenco({
 
   const pannello = (
     <div
+      ref={rifPannello}
       {...{ [SEGNO_PANNELLO]: '' }}
       // La tastiera sta **anche** qui, non solo sul tasto: quando il cursore è
       // nella casella di ricerca il tasto non ha più il fuoco, e senza questa

@@ -14,6 +14,10 @@ import { Button, Input, Label, cn } from '@kommessa/ui';
 
 import { useRicercaClienti } from './cliente-picker';
 import { AddressAutocomplete } from './address-autocomplete';
+import {
+  indirizzoDopoScelta,
+  cittaDopoScelta,
+} from '@kommessa/api/indirizzo-scelto';
 
 /**
  * «Chi è il cliente?» — **una domanda alla volta**.
@@ -37,17 +41,32 @@ import { AddressAutocomplete } from './address-autocomplete';
  * a quello che si sta scrivendo. Si sceglie e si è finito: niente altri campi
  * da compilare, perché i dati ci sono già in anagrafica.
  *
- * Se non c'è, si preme «È un cliente nuovo» e **solo allora** l'app chiede il
- * resto, nell'ordine in cui lo si saprebbe dire: prima *persona o azienda*
- * (che cambia come si chiama il campo dopo), poi i contatti, poi l'indirizzo
- * con i comuni suggeriti.
+ * Se non c'è, si preme «Crea «…»» e **solo allora** l'app chiede il resto.
  *
- * ## Perché chiedere il tipo prima e non insieme
+ * ## La scheda è quella del modulo «nuova commessa»
  *
- * Perché cambia la domanda successiva. A una persona si chiede il nome, a
- * un'azienda la ragione sociale: sono due cose diverse, e un unico campo
- * «Ragione sociale» davanti a un idraulico che sta annotando «la signora
- * Elena» è una domanda mal posta. Sono due tocchi che tolgono un'ambiguità.
+ * ⚠️ Stessi campi e stesso ordine: nome a tutta riga, poi *tipo · indirizzo ·
+ * città · telefono · email* su due colonne. Chi in ufficio apre un lavoro e
+ * chi risponde al telefono compilano la **stessa** scheda, altrimenti si
+ * finisce con due anagrafiche diverse a seconda di da dove è entrato il
+ * cliente.
+ *
+ * ⚠️ C'era un passo in mezzo — «è una persona o un'azienda?», due tasti grossi
+ * — motivato dal fatto che cambia come si chiama il campo dopo. È stato
+ * tolto: il tipo ora è il secondo campo della scheda, come nel modulo della
+ * commessa, e l'etichetta del nome lo segue lo stesso. Un tocco in meno su un
+ * gesto che l'ufficio ripete molte volte al giorno, e un posto solo dove
+ * quella scelta vive.
+ *
+ * ## ⚠️ La via scritta a mano non si butta via
+ *
+ * I suggerimenti di indirizzo servono a non avere lo stesso paese scritto in
+ * quattro modi. Ma Photon e Nominatim, quando la via non la trovano,
+ * restituiscono volentieri il **comune**: chi scriveva «Via Roma 12 Valeggio»
+ * e sceglieva quel suggerimento si ritrovava nel campo «Valeggio sul
+ * Mincio», con la via sparita. Ora l'etichetta del suggerimento sostituisce
+ * il testo **solo se ha una via dentro** (`via` nella risposta dell'API);
+ * altrimenti resta quello che c'è scritto e si prende solo il comune.
  */
 
 export interface ValoreCliente {
@@ -71,7 +90,7 @@ export const CLIENTE_VUOTO: ValoreCliente = {
   citta: '',
 };
 
-type Fase = 'cerca' | 'tipo' | 'dati' | 'scelto';
+type Fase = 'cerca' | 'dati' | 'scelto';
 
 function faseIniziale(v: ValoreCliente): Fase {
   if (v.id) return 'scelto';
@@ -119,11 +138,6 @@ export function SceltaCliente({
 
   function iniziaNuovo() {
     onCambia({ ...CLIENTE_VUOTO, ragione_sociale: termine.trim() });
-    setFase('tipo');
-  }
-
-  function scegliTipo(tipo: ValoreCliente['tipo']) {
-    onCambia({ ...valore, id: null, tipo, ragione_sociale: termine.trim() });
     setFase('dati');
   }
 
@@ -168,43 +182,13 @@ export function SceltaCliente({
     );
   }
 
-  // ── persona o azienda ─────────────────────────────────────────────────────
-  if (fase === 'tipo') {
-    return (
-      <div className="space-y-2">
-        <p className="text-sm font-medium">
-          «{termine.trim()}» è una persona o un&apos;azienda?
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              { v: 'persona_fisica' as const, Icona: User, testo: 'Persona' },
-              { v: 'azienda' as const, Icona: Building2, testo: 'Azienda' },
-            ]
-          ).map(({ v, Icona, testo }) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => scegliTipo(v)}
-              className="flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-sm font-medium transition hover:border-primary/50 active:scale-[0.98]"
-            >
-              <Icona aria-hidden="true" className="h-5 w-5 text-primary" />
-              {testo}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => setFase('cerca')}
-          className="text-xs text-muted-foreground underline underline-offset-2"
-        >
-          Torna a cercare
-        </button>
-      </div>
-    );
-  }
-
   // ── i dati del cliente nuovo ──────────────────────────────────────────────
+  //
+  // ⚠️ Gli stessi campi del modulo «nuova commessa», e nello stesso ordine:
+  // nome a tutta riga, poi tipo · indirizzo · comune · telefono · email su due
+  // colonne. Chi in ufficio apre un lavoro e chi risponde al telefono devono
+  // compilare la **stessa** scheda, o si finisce con due anagrafiche diverse a
+  // seconda di da dove e' entrato il cliente.
   if (fase === 'dati') {
     const azienda = valore.tipo === 'azienda';
     return (
@@ -223,65 +207,104 @@ export function SceltaCliente({
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
+          <div className="min-w-0">
+            <Label htmlFor={`${idCampo}-tipo`}>Tipo</Label>
+            <select
+              id={`${idCampo}-tipo`}
+              value={valore.tipo}
+              onChange={(e) =>
+                campo('tipo', e.target.value as 'persona_fisica' | 'azienda')
+              }
+              className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="persona_fisica">Persona fisica</option>
+              <option value="azienda">Azienda / Ente</option>
+            </select>
+          </div>
+
+          <div className="min-w-0">
+            <Label htmlFor={`${idCampo}-ind`}>Indirizzo</Label>
+            {/*
+              Qui c'era un campo di testo libero, ed è il motivo per cui lo
+              stesso paese finiva in anagrafica scritto in quattro modi
+              diversi. I suggerimenti arrivano dai provider di mappe;
+              scegliendone uno, il comune si compila da solo.
+            */}
+            <AddressAutocomplete
+              id={`${idCampo}-ind`}
+              value={valore.indirizzo}
+              onChange={(t) => campo('indirizzo', t)}
+              onSelect={(r) => {
+                /**
+                 * ⚠️ **Mentre si scrive, qui non si tocca niente.**
+                 *
+                 * `AddressAutocomplete` chiama `onSelect` a ogni carattere
+                 * battuto (serve a chi tiene le coordinate, per buttarle via
+                 * quando diventano stantie) e lo fa **insieme** a `onChange`,
+                 * nello stesso gesto. Le due chiamate leggono lo stesso
+                 * `valore` vecchio, quindi la seconda cancella la prima: con
+                 * una riga che ricopiava `valore.indirizzo` il campo si
+                 * bloccava sul primo carattere. Misurato: scrivendo «Via Roma
+                 * 12» restava «V».
+                 *
+                 * Una scelta vera si riconosce dalle coordinate.
+                 */
+                if (r.lat === null) return;
+                // La regola — «un suggerimento non rende mai il campo meno
+                // preciso di com'era» — sta in `@kommessa/api/indirizzo-scelto`
+                // con le sue prove: dipende da cosa risponde un servizio
+                // esterno quel giorno, e non si collauda a mano.
+                onCambia({
+                  ...valore,
+                  indirizzo: indirizzoDopoScelta({
+                    scritto: valore.indirizzo,
+                    etichetta: r.label,
+                    via: r.via,
+                  }),
+                  citta: cittaDopoScelta({
+                    scritta: valore.citta,
+                    dalProvider: r.citta,
+                  }),
+                });
+              }}
+              placeholder="via, viale, piazza + civico"
+              className="mt-1.5"
+            />
+          </div>
+
+          <div className="min-w-0">
+            <Label htmlFor={`${idCampo}-citta`}>Città</Label>
+            <Input
+              id={`${idCampo}-citta`}
+              value={valore.citta}
+              onChange={(e) => campo('citta', e.target.value)}
+              placeholder="si compila da sola scegliendo l'indirizzo"
+              className="mt-1.5"
+            />
+          </div>
+
+          <div className="min-w-0">
             <Label htmlFor={`${idCampo}-tel`}>Telefono</Label>
             <Input
               id={`${idCampo}-tel`}
               value={valore.telefono}
               onChange={(e) => campo('telefono', e.target.value)}
               inputMode="tel"
-              placeholder="facoltativo"
               className="mt-1.5"
             />
           </div>
-          <div>
+
+          <div className="min-w-0">
             <Label htmlFor={`${idCampo}-mail`}>Email</Label>
             <Input
               id={`${idCampo}-mail`}
               value={valore.email}
               onChange={(e) => campo('email', e.target.value)}
               inputMode="email"
-              placeholder="facoltativa"
+              type="email"
               className="mt-1.5"
             />
           </div>
-        </div>
-
-        <div>
-          <Label htmlFor={`${idCampo}-ind`}>Indirizzo</Label>
-          {/*
-            Qui c'era un campo di testo libero, ed è il motivo per cui lo stesso
-            paese finiva in anagrafica scritto in quattro modi diversi. I
-            suggerimenti arrivano dai provider di mappe; scegliendone uno, il
-            comune si compila da solo.
-          */}
-          <AddressAutocomplete
-            id={`${idCampo}-ind`}
-            value={valore.indirizzo}
-            onChange={(t) => campo('indirizzo', t)}
-            onSelect={(r) =>
-              onCambia({
-                ...valore,
-                indirizzo: r.label,
-                // Solo se il provider lo sa dire e il campo è ancora vuoto:
-                // una città scritta a mano non si sovrascrive mai.
-                citta: r.citta && !valore.citta.trim() ? r.citta : valore.citta,
-              })
-            }
-            placeholder="Via, numero, paese"
-            className="mt-1.5"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor={`${idCampo}-citta`}>Comune</Label>
-          <Input
-            id={`${idCampo}-citta`}
-            value={valore.citta}
-            onChange={(e) => campo('citta', e.target.value)}
-            placeholder="si compila da solo scegliendo l'indirizzo"
-            className="mt-1.5"
-          />
         </div>
 
         <div className="flex items-center gap-2">

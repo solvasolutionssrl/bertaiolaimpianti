@@ -24,12 +24,18 @@ import { possoAprireLavori } from '@/app/_lib/capacita-server';
  *  - tecnico: read; può cambiare stato (complete / annulla / in_corso) e
  *    aggiungere note + allegati. Non può creare/eliminare/riassegnare.
  *
- * ⭐ **«In mano a» e «chi ci va» sono due cose diverse.** `assegnato_a` dice
- * chi ne risponde — la persona a cui l'ufficio l'ha affidata; la tabella
- * `commessa_todo_squadra` dice chi ci mette le mani, e la scrive chi
- * organizza (`affidaSquadraTodo`). Il caposquadra, che in Bertaiola è un
- * `office`, resta in mano a e manda i suoi: così si legge tutta la catena.
- * Non sono due risposte alla stessa domanda, sono due domande.
+ * ⭐ **«In mano a» e «chi ci va» sono due cose diverse, e solo sulle
+ * RICHIESTE.** Su una richiesta al telefono `assegnato_a` dice chi ne
+ * risponde — la persona a cui l'ufficio l'ha affidata — e la tabella
+ * `commessa_todo_squadra` dice chi ci mette le mani (`affidaSquadraTodo`). Il
+ * caposquadra, che in Bertaiola è un `office`, resta in mano a e manda i
+ * suoi: così si legge tutta la catena.
+ *
+ * ⚠️ **Dentro una commessa no.** Lì il lavoro ha già la sua squadra
+ * (`commessa_tecnici`) e una cosa da fare ha un assegnatario solo: una
+ * seconda mano non aggiungerebbe niente se non un campo da compilare e un
+ * secondo posto dove guardare. Lo impedisce anche la policy
+ * `commessa_todo_squadra_write` (migration `20261008130000`).
  *
  * RLS SQL applica già la maggior parte di questi vincoli (vedi
  * 20260101003400_todo_riunione.sql); qui rinforziamo lato applicativo
@@ -358,6 +364,18 @@ export async function affidaSquadraTodo(input: unknown): Promise<Result> {
     tenant_id: string;
   };
 
+  // ⚠️ Solo le richieste al telefono. Dentro una commessa il lavoro ha gia' la
+  // sua squadra e la cosa da fare ha un assegnatario solo. Lo dice anche la
+  // policy; qui si risponde in italiano invece di far arrivare una violazione
+  // di vincolo, che non e' una cosa a cui una persona possa rimediare.
+  if (todo.commessa_id !== null) {
+    return {
+      ok: false,
+      error:
+        'Dentro una commessa non si manda una seconda squadra: la cosa da fare si assegna a una persona, e chi lavora sul lavoro e\' gia\' nella squadra della commessa.',
+    };
+  }
+
   // Le persone devono stare in questo spazio di lavoro. Un id arrivato dal
   // browser non e' una garanzia, e la chiave esterna da sola non guarda il
   // tenant.
@@ -412,37 +430,11 @@ export async function affidaSquadraTodo(input: unknown): Promise<Result> {
     if (dErr) return { ok: false, error: `Non sono riuscito a togliere: ${dErr.message}` };
   }
 
-  // ⚠️ Mandare qualcuno su un task **di commessa** vuol dire metterlo in
-  // squadra su quella commessa. Non e' una comodita': la cosa da fare compare
-  // nel suo elenco con un collegamento a `/mobile/commessa/<id>`, e se non e'
-  // in squadra quella pagina non la vede. Senza questa riga si manda una
-  // persona su un lavoro dandogli un collegamento che si apre su niente.
-  if (todo.commessa_id && entrano.length > 0) {
-    const { error: ctErr } = await supabase
-      .from('commessa_tecnici' as never)
-      .upsert(
-        entrano.map((u) => ({
-          commessa_id: todo.commessa_id,
-          user_id: u,
-          tenant_id: todo.tenant_id,
-          assegnato_da: ctx.userId,
-        })) as never,
-        { onConflict: 'commessa_id,user_id', ignoreDuplicates: true },
-      );
-    // Non si torna indietro: la squadra della cosa da fare e' scritta, e
-    // lasciarla a metà sarebbe peggio. Si registra e si va avanti.
-    if (ctErr) {
-      console.error('[affidaSquadraTodo] squadra di commessa non aggiornata:', ctErr.message);
-    }
-  }
-
-  await audit(
-    ctx,
-    todo.commessa_id ? 'commessa.todo.squadra' : 'richiesta.squadra',
-    todo.commessa_id,
-    parsed.data.todoId,
-    { entrano, escono, squadra: voluti },
-  );
+  await audit(ctx, 'richiesta.squadra', null, parsed.data.todoId, {
+    entrano,
+    escono,
+    squadra: voluti,
+  });
 
   for (const u of entrano) {
     if (u === ctx.userId) continue; // non si avvisa chi manda se stesso
@@ -452,11 +444,11 @@ export async function affidaSquadraTodo(input: unknown): Promise<Result> {
       attoreUserId: ctx.userId,
       todoId: parsed.data.todoId,
       titolo: todo.titolo,
-      commessaId: todo.commessa_id,
+      commessaId: null,
     });
   }
 
-  rivalida(todo.commessa_id);
+  rivalida(null);
   return { ok: true };
 }
 
@@ -487,13 +479,20 @@ export async function cambiaTodoStato(input: unknown): Promise<Result> {
 
   /**
    * Un tecnico spunta solo cio' che lo riguarda: una cosa da fare su una
-   * commessa su cui e' in squadra, oppure una assegnata a lui (anche una
-   * richiesta senza commessa, che l'ufficio gli ha passato).
+   * commessa su cui e' in squadra, una assegnata a lui, **o una richiesta su
+   * cui lo hanno mandato**.
    *
-   * ⚠️ Fino a oggi questo controllo **non c'era da nessuna parte**: non qui e
-   * non in RLS, dove la policy diceva solo «sei un tecnico di questo spazio di
-   * lavoro». Il filtro «solo le mie» viveva nella pagina, e una pagina non e'
-   * un presidio. Adesso lo dicono entrambi; qui per poterlo spiegare.
+   * ⚠️ Fino al 07/10 questo controllo **non c'era da nessuna parte**: non qui
+   * e non in RLS, dove la policy diceva solo «sei un tecnico di questo spazio
+   * di lavoro». Il filtro «solo le mie» viveva nella pagina, e una pagina non
+   * e' un presidio. Adesso lo dicono entrambi; qui per poterlo spiegare.
+   *
+   * ⚠️⚠️ **E il terzo caso e' arrivato dopo il presidio.** Aperta la seconda
+   * mano sulle richieste, la RLS la riconosceva e questa guardia no: il
+   * tecnico mandato vedeva la richiesta sul telefono, premeva il cerchietto e
+   * si sentiva rispondere «Questa richiesta non e' tua». E' la stessa forma
+   * del riassunto delle riunioni che spariva: ⭐ **aprire un permesso vuol
+   * dire aprirlo per tutto il gesto, e il gesto passa da due presidi.**
    */
   if (ctx.role === 'tecnico') {
     const { data: riga } = await supabase
@@ -505,15 +504,24 @@ export async function cambiaTodoStato(input: unknown): Promise<Result> {
     if (!r) return { ok: false, error: 'Questa cosa da fare non c’è più.' };
     if (r.assegnato_a !== ctx.userId) {
       if (!r.commessa_id) {
-        return { ok: false, error: 'Questa richiesta non è tua.' };
-      }
-      const { count } = await supabase
-        .from('commessa_tecnici' as never)
-        .select('user_id', { count: 'exact', head: true })
-        .eq('commessa_id', r.commessa_id)
-        .eq('user_id', ctx.userId);
-      if ((count ?? 0) === 0) {
-        return { ok: false, error: 'Non sei nella squadra di questo lavoro.' };
+        // Una richiesta: o e' sua, o ce lo hanno mandato.
+        const { count } = await supabase
+          .from('commessa_todo_squadra' as never)
+          .select('user_id', { count: 'exact', head: true })
+          .eq('todo_id', parsed.data.id)
+          .eq('user_id', ctx.userId);
+        if ((count ?? 0) === 0) {
+          return { ok: false, error: 'Questa richiesta non è tua.' };
+        }
+      } else {
+        const { count } = await supabase
+          .from('commessa_tecnici' as never)
+          .select('user_id', { count: 'exact', head: true })
+          .eq('commessa_id', r.commessa_id)
+          .eq('user_id', ctx.userId);
+        if ((count ?? 0) === 0) {
+          return { ok: false, error: 'Non sei nella squadra di questo lavoro.' };
+        }
       }
     }
   }

@@ -60,7 +60,11 @@ interface Row {
   /** Chi ne RISPONDE: la persona a cui l'ufficio l'ha affidata. */
   assegnato_a: string | null;
   assegnato_nome: string | null;
-  /** Chi ci VA: mandati da chi l'ha in mano. Due domande, due posti. */
+  /**
+   * Chi ci VA: mandati da chi l'ha in mano. Due domande, due posti.
+   * ⚠️ **Solo sulle richieste**: su una cosa da fare di commessa e' sempre
+   * vuoto, perche' li' la squadra e' quella della commessa.
+   */
   squadra: Array<{ id: string; nome: string }>;
   scadenza_at: string | null;
   sort_order: number;
@@ -650,18 +654,25 @@ function TodoRow({
           {row.eRichiesta && row.contatto ? (
             <span className="font-mono">{row.contatto}</span>
           ) : null}
-          {/* ⭐ Due cose diverse e si leggono diverse: chi ne RISPONDE e chi
-              ci VA. Prima qui c'era un nome solo, e il caposquadra che girava
-              il lavoro ai suoi non aveva nessun posto dove dirlo. */}
+          {/* ⭐ Su una RICHIESTA sono due cose diverse e si leggono diverse:
+              chi ne RISPONDE e chi ci VA. Il caposquadra che gira il lavoro ai
+              suoi non aveva nessun posto dove dirlo.
+              Dentro una commessa resta una cosa sola, e si dice come sempre. */}
           {row.assegnato_nome ? (
             <span className={isMine ? 'text-primary' : ''}>
               <User className="mr-0.5 inline h-3 w-3" />
-              In mano a {isMine ? 'te' : row.assegnato_nome}
+              {row.eRichiesta
+                ? `In mano a ${isMine ? 'te' : row.assegnato_nome}`
+                : isMine
+                  ? 'Tu'
+                  : row.assegnato_nome}
             </span>
           ) : (
-            <span className="italic">In mano a nessuno</span>
+            <span className="italic">
+              {row.eRichiesta ? 'In mano a nessuno' : 'Non assegnato'}
+            </span>
           )}
-          {row.squadra.length > 0 ? (
+          {row.eRichiesta && row.squadra.length > 0 ? (
             <span
               className="text-foreground"
               title={`Ci vanno: ${row.squadra.map((p) => p.nome).join(', ')}`}
@@ -719,8 +730,12 @@ function TodoRow({
         {/* ⭐ Mandare i suoi e' il gesto del caposquadra, e si fa dalla riga
             come si assegna: aprire un modulo per girare un lavoro che si e'
             appena letto e' un passaggio in piu' ripetuto venti volte al
-            giorno. «In mano a» resta a lui. */}
-        {canWrite && !completed ? (
+            giorno. «In mano a» resta a lui.
+            ⚠️ **Solo sulle richieste.** Dentro una commessa il lavoro ha gia'
+            la sua squadra e la cosa da fare ha un assegnatario solo: una
+            seconda tendina qui sarebbe un campo da compilare che non decide
+            niente, e un secondo posto dove guardare per sapere chi ci pensa. */}
+        {canWrite && !completed && row.eRichiesta ? (
           <SceltaMultipla
             opzioni={assegnabili.map((u) => ({
               valore: u.id,

@@ -46,6 +46,17 @@ export interface GeocodeSuggestion {
    * inutile il raggruppamento per comune.
    */
   citta?: string;
+  /**
+   * La via (con il civico, se c'è) **quando il suggerimento ne ha una**.
+   *
+   * ⚠️ Serve a distinguere un indirizzo vero da un paese. Photon e Nominatim,
+   * se la via non la trovano, restituiscono volentieri il **comune**: chi
+   * aveva scritto «Via Roma 12 Valeggio» e sceglieva quel suggerimento si
+   * ritrovava nel campo «Valeggio sul Mincio», con la via buttata via. Ora chi
+   * chiama sa che quel suggerimento non ha una via, e tiene il testo battuto a
+   * mano prendendo solo comune e coordinate.
+   */
+  via?: string;
 }
 
 /** Soglia minima sotto la quale non interroghiamo i provider. */
@@ -116,7 +127,7 @@ async function queryPhoton(q: string): Promise<GeocodeSuggestion[]> {
       p.country,
     ]);
     if (!label) continue;
-    out.push({ label, lat, lng, citta: p.city ?? p.district });
+    out.push({ label, lat, lng, citta: p.city ?? p.district, via: via || undefined });
   }
   return out;
 }
@@ -165,7 +176,7 @@ async function queryNominatim(q: string): Promise<GeocodeSuggestion[]> {
       buildLabel([via, a.postcode, citta, a.state, a.country]) ||
       (it.display_name ?? '');
     if (!label) continue;
-    out.push({ label, lat, lng, citta });
+    out.push({ label, lat, lng, citta, via: via || undefined });
   }
   return out;
 }
@@ -192,6 +203,17 @@ function comuneDaGoogle(r: GoogleGeocodeResult): string | undefined {
   return trova('locality') ?? trova('administrative_area_level_3');
 }
 
+/** La via (e il civico) di un risultato Google, se ne ha una. */
+function viaDaGoogle(r: GoogleGeocodeResult): string | undefined {
+  const parti = r.address_components ?? [];
+  const trova = (t: string) =>
+    parti.find((c) => c.types?.includes(t))?.long_name?.trim() || undefined;
+  const strada = trova('route');
+  if (!strada) return undefined;
+  const civico = trova('street_number');
+  return civico ? `${strada} ${civico}` : strada;
+}
+
 async function queryGoogle(q: string, key: string): Promise<GeocodeSuggestion[]> {
   const url =
     `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}` +
@@ -210,7 +232,13 @@ async function queryGoogle(q: string, key: string): Promise<GeocodeSuggestion[]>
     const loc = r.geometry?.location;
     const label = r.formatted_address;
     if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number' || !label) continue;
-    out.push({ label, lat: loc.lat, lng: loc.lng, citta: comuneDaGoogle(r) });
+    out.push({
+      label,
+      lat: loc.lat,
+      lng: loc.lng,
+      citta: comuneDaGoogle(r),
+      via: viaDaGoogle(r),
+    });
   }
   return out;
 }

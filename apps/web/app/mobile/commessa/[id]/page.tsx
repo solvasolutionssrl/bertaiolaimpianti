@@ -208,42 +208,19 @@ export default async function CommessaDetailPage({
   // non ti riguarda smette di essere un elenco di cose da fare e diventa un
   // rumore da scorrere. Senza assegnatario significa «chiunque passi», e quelle
   // si vedono tutte.
-  //
-  // ⭐ E **quelle su cui lo hanno mandato**: chi ha in mano una cosa da fare
-  // puo' girarla a uno o piu' tecnici, e in quel caso l'assegnatario resta il
-  // caposquadra. Senza questa riga il tecnico vedrebbe la cosa nell'elenco
-  // della home (che la legge dalla squadra) e non qui dentro: due predicati
-  // diversi sulla stessa domanda, ed e' esattamente cio' che si e' evitato
-  // scrivendoli identici.
-  const idsMandatiQui = eTecnico
-    ? ((
-        await supabase
-          .from('commessa_todo_squadra' as never)
-          .select('todo_id, todo:commessa_todo!commessa_todo_squadra_todo_id_fkey(commessa_id)')
-          .eq('user_id', ctx.userId)
-          .limit(200)
-      ).data ?? [])
-        .filter((r: any) => {
-          const td = Array.isArray(r.todo) ? r.todo[0] : r.todo;
-          return td?.commessa_id === params.id;
-        })
-        .map((r: any) => r.todo_id as string)
-    : [];
-
   const todoSelect =
     'id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at, created_at, completato_at, created_by, completato_da';
   const todoBase = supabase
     .from('commessa_todo' as never)
     .select(todoSelect)
     .eq('commessa_id', params.id);
+  // ⚠️ Niente clausola sulla squadra: `commessa_todo_squadra` vale **solo**
+  // per le richieste al telefono, e una richiesta non ha una commessa — quindi
+  // qui dentro non ce n'e' mai nessuna. C'e' stata per mezza giornata, e
+  // costava una lettura in piu' a ogni apertura di scheda.
   const todoQuery = (eTecnico
     ? todoBase.or(
-        [
-          `assegnato_a.eq.${ctx.userId}`,
-          'assegnato_a.is.null',
-          `created_by.eq.${ctx.userId}`,
-          ...(idsMandatiQui.length > 0 ? [`id.in.(${idsMandatiQui.join(',')})`] : []),
-        ].join(','),
+        `assegnato_a.eq.${ctx.userId},assegnato_a.is.null,created_by.eq.${ctx.userId}`,
       )
     : todoBase
   )

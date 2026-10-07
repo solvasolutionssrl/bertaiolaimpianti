@@ -480,22 +480,50 @@ I tecnici sono entrati la mattina; il pomeriggio e' arrivata la prima lista di
 cose che non tornavano. Migration `20261008120000`.
 
 - ⭐ **«In mano a» e «chi ci va» sono due domande, non due verita' sulla
-  stessa.** La segretaria affida la richiesta a un caposquadra — che in
-  Bertaiola e' un dipendente con ruolo **`office`**, non una capacita' — e lui
-  la gira a uno o piu' tecnici. `commessa_todo.assegnato_a` **resta** e dice
-  chi ne RISPONDE; la tabella nuova `commessa_todo_squadra` dice chi ci VA. Si
-  legge la catena intera: Erica → Cristian → Luca + Thomas. L'alternativa era
-  sostituire la colonna: 103 letture in 19 file, in produzione, per perdere chi
-  aveva incaricato chi. ⚠️ Un tecnico non riassegna: lo dicono la policy
-  `commessa_todo_squadra_write` **e** il trigger `commessa_todo_tecnico_guard`
-  che gia' gli impediva di toccare `assegnato_a`. ⚠️ Mandare qualcuno su un
-  task **di commessa** lo mette in `commessa_tecnici`: altrimenti riceve un
-  collegamento a una pagina che non puo' aprire. ⚠️ Il predicato «le mie cose
-  da fare» resta scritto **identico** nella home e nella scheda commessa.
+  stessa — e solo sulle RICHIESTE.** La segretaria affida la richiesta a un
+  caposquadra (in Bertaiola un dipendente con ruolo **`office`**, non una
+  capacita') e lui la gira a uno o piu' tecnici.
+  `commessa_todo.assegnato_a` **resta** e dice chi ne RISPONDE; la tabella
+  `commessa_todo_squadra` dice chi ci VA. Si legge la catena intera: Erica →
+  Cristian → Luca + Thomas. L'alternativa era sostituire la colonna: 103
+  letture in 19 file, in produzione, per perdere chi aveva incaricato chi.
+  ⚠️ **Dentro una commessa no** (migration `20261008130000`): li' il lavoro ha
+  gia' la sua squadra (`commessa_tecnici`) e la cosa da fare ha un assegnatario
+  solo. ⭐ **Un campo che esiste dove non serve non e' neutro**: e' una domanda
+  in piu' a cui qualcuno prova a rispondere, e una seconda verita' su «chi se
+  ne occupa» dove ce n'era una sola e chiara. Lo impediscono il `with check`
+  della policy e l'azione, che risponde in italiano.
+  ⚠️ Un tecnico non riassegna: lo dicono la policy **e** il trigger
+  `commessa_todo_tecnico_guard` che gia' gli impediva di toccare `assegnato_a`.
+  ⚠️⚠️ **Aprire la seconda mano vuol dire aprirla in TUTTI i presidi.** La
+  RLS riconosceva il tecnico mandato e la guardia applicativa di
+  `cambiaTodoStato` no: lui vedeva la richiesta sul telefono, premeva il
+  cerchietto e si sentiva rispondere «Questa richiesta non e' tua». Stessa
+  forma del riassunto delle riunioni sparito il giorno prima — ⭐ *aprire un
+  permesso vuol dire aprirlo per tutto il gesto* — ma questa volta l'ha trovato
+  un banco, non due riunioni perse.
+  ⚠️ Una richiesta e' l'unica cosa da fare **senza una pagina** (non ha una
+  commessa): il cerchietto per chiuderla sta nell'elenco della home, o chi ci
+  va non ha modo di dire che e' fatta.
 - **Il cliente nuovo si registra al telefono.** C'era `ClientePicker`, che del
   cliente prendeva **solo il nome** e non salvava niente in anagrafica. Ora
   `SceltaCliente`, lo stesso del sopralluogo e del dettato, e la scheda si crea
-  davvero (`creaCliente`). ⚠️ E `aggiornaTodo` non accettava
+  davvero (`creaCliente`). La scheda ha **gli stessi sei campi del modulo
+  «nuova commessa»**, nello stesso ordine e su due colonne: chi apre un lavoro
+  e chi risponde al telefono compilano la stessa cosa, o si finisce con due
+  anagrafiche diverse a seconda di da dove e' entrato il cliente. Tolto il
+  passo «e' una persona o un'azienda?»: il tipo e' il secondo campo, come li'.
+  ⚠️ ⭐ **Un suggerimento della mappa non deve mai rendere il campo meno
+  preciso di com'era.** Photon e Nominatim, quando la via non la trovano,
+  restituiscono volentieri il **comune**: chi scriveva «Via Roma 12 Valeggio» e
+  sceglieva quel suggerimento si ritrovava «Valeggio sul Mincio», con la via
+  sparita. Ora `/api/geocode/autocomplete` dichiara la `via` del suggerimento e
+  la regola sta in `@kommessa/api/indirizzo-scelto` (pura, 10 asserzioni):
+  dipende da cosa risponde un servizio esterno quel giorno, e non si collauda a
+  mano. ⚠️ `AddressAutocomplete` chiama `onSelect` **a ogni carattere battuto**,
+  insieme a `onChange` e con lo stesso `valore` vecchio: una riga che rileggeva
+  `valore.indirizzo` bloccava il campo sul primo carattere. Una scelta vera si
+  riconosce dalle coordinate (`lat !== null`). ⚠️ E `aggiornaTodo` non accettava
   `clienteId`/`clienteTesto`/`contatto`: **una richiesta registrata non si
   poteva correggere**, ne' il nome ne' il numero. Misurato sui dati veri:
   «Lago Maria Rosanna» come testo libero, col telefono in un campo a parte, e
@@ -533,9 +561,10 @@ cose che non tornavano. Migration `20261008120000`.
   grezzo; e `.limit(200)` su 202 commesse attive rendeva **invisibili** le
   ultime due, nel filtro e nel modulo, senza nessun segnale.
 
-Banchi: `scripts/banco-ui/richieste.mjs` (21 controlli, giro completo
-ufficio → tecnico → pulizia) e `riunione-audio-corto.mjs` (10, con microfono
-finto).
+Banchi: `scripts/banco-ui/richieste.mjs` (28 controlli: telefonata → cliente
+nuovo → chi ci va → il tecnico la vede e la **chiude dal telefono** → l'ufficio
+la elimina, e si ripulisce da solo) e `riunione-audio-corto.mjs` (10, con
+microfono finto).
 
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
@@ -640,6 +669,7 @@ La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semp
 - **Elemento nascosto sotto la bottom-nav**: un `fixed` dentro la shell resta intrappolato nello stacking context → **`createPortal` su body + z alto** (pattern `Portal`, `mobile/_components/portal.tsx`).
 - **Tastiera che copre i tasti**: aggancia alla **`visualViewport`** (spaziatore bianco = altezza tastiera, oppure restringi il foglio).
 - **Dropdown dentro un dialog Radix — servono QUATTRO cose insieme**, e per settimane ce n'erano due: **(1)** Portal su `document.body` (un overlay in-flow viene **tagliato**: `DialogContent` ha `overflow-y-auto` *e* una `transform`, e una trasformazione impedisce persino a un `position: fixed` di uscire); **(2)** il pannello **marcato** `data-popover-portale`, altrimenti Radix legge il clic su una voce come «fuori» e chiude il dialog sotto (`SEGNO_PANNELLO_PORTATO` in `packages/ui/.../dialog.tsx`); **(3)** ⚠️ **`pointerEvents: 'auto'` esplicito** — un dialog modale Radix mette `pointer-events: none` su tutto il `<body>` e li riaccende **solo** nel proprio recinto: il pannello si vedeva e **il dito ci passava attraverso**, colpendo il campo sotto (`elementFromPoint` sul centro di una voce restituiva la `<textarea>` della descrizione); **(4)** ⚠️ un **`FocusScope`** attorno al pannello — non per intrappolare (`trapped` resta falso) ma per il solo fatto di montarsi: cosi' mette in **pausa** la gabbia del fuoco del dialog, che altrimenti strappa il cursore alla casella di ricerca all'istante. E la tastiera va agganciata **anche al pannello**: gli eventi di un Portal risalgono l'albero di React, dove il pannello e' un *fratello* del tasto, quindi col cursore nella casella le frecce non arrivavano a nessuno. Banco: `scripts/banco-ui/tendine.mjs` (23 controlli, computer e telefono).
+- ⚠️ **E la rotellina del mouse**, quinta cosa: Radix blocca lo scorrimento della pagina mentre un dialog e' aperto con `react-remove-scroll`, che mette un ascoltatore di `wheel` su `document` e **annulla** ogni evento che non venga da dentro il dialog. Il pannello sta su `body`, quindi era «fuori»: l'elenco si scorreva **solo trascinando la barra di lato**. La via d'uscita prevista dalla libreria (`shards`) la passa Radix e non e' raggiungibile; si ferma l'evento **prima** che arrivi a `document`, con uno `stopPropagation` sul pannello (ascoltatore **nativo**, `passive: false`, anche `touchmove`).
 > ⚠️⚠️ **Un banco che sceglie con `elemento.click()` non misura niente di tutto questo**: e' una chiamata al DOM e **ignora `pointer-events`**. Quel banco dava **11 verdi** su una tendina che nessuno riusciva a usare. In `scripts/banco-ui/comune.mjs` ci sono ora `clicVero`, `scriviVero`, `premiTasto`, `chiHaIlFuoco`, `chiRiceveIlTocco`: eventi veri del browser, e `clicVero` dice «in quel punto risponde `<TEXTAREA>`» invece di fingere di aver cliccato.
 - **Tasti fissi in alto (campanella, «＋ Spesa»)**: 34px a `safe-area + 6px`, tocco da 44px con un'area invisibile `before:`. La fascia in alto a destra fino a 40px va lasciata libera: niente a destra sulla riga del titolo, «Aggiornato alle» sta sulla riga sotto (14/09/2026, prima la campanella copriva il testo su Cantieri, Ore, Spese). Banco `scripts/banco-ui/campanella.mjs`.
 

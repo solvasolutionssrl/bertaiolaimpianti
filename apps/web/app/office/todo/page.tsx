@@ -159,7 +159,12 @@ export default async function TodoGlobalePage({
     priorita: Priorita;
     assegnato_a: string | null;
     assegnato_nome: string | null;
-    /** Chi ci va: mandati da chi l'ha in mano. Vuoto = nessuno, per ora. */
+    /**
+     * Chi ci va: mandati da chi l'ha in mano. Vuoto = nessuno, per ora.
+     * ⚠️ **Solo sulle richieste.** L'embed qui sotto legge comunque tutte le
+     * righe, ma la tabella non accetta cose da fare di commessa (policy
+     * `commessa_todo_squadra_write`): per quelle torna sempre vuoto.
+     */
     squadra: Array<{ id: string; nome: string }>;
     scadenza_at: string | null;
     sort_order: number;

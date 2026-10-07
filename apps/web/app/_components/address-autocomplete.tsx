@@ -9,6 +9,8 @@ interface Suggestion {
   lat: number;
   lng: number;
   citta?: string;
+  /** La via, se il suggerimento ne ha una: un paese non ce l'ha. */
+  via?: string;
 }
 
 interface Props {
@@ -21,6 +23,15 @@ interface Props {
     /** Il comune, quando il provider lo sa dire. Permette di compilare da
      *  solo il campo «Città» invece di farlo riscrivere a mano. */
     citta?: string;
+    /**
+     * La via del suggerimento scelto, se ne ha una.
+     *
+     * ⚠️ **`undefined` vuol dire che il suggerimento e' un paese, non un
+     * indirizzo**: Photon e Nominatim, quando la via non la trovano,
+     * restituiscono volentieri il comune. Chi riceve questo esito NON deve
+     * sostituire il testo battuto a mano con `label`, o la via sparisce.
+     */
+    via?: string;
   }) => void;
   placeholder?: string;
   id?: string;
@@ -118,7 +129,7 @@ export function AddressAutocomplete({
 
   function pick(s: Suggestion) {
     onChange(s.label);
-    onSelect({ label: s.label, lat: s.lat, lng: s.lng, citta: s.citta });
+    onSelect({ label: s.label, lat: s.lat, lng: s.lng, citta: s.citta, via: s.via });
     setOpen(false);
     setSuggestions([]);
     setActiveIdx(-1);

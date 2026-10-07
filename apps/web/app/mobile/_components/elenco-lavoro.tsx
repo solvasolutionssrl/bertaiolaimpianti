@@ -2,10 +2,13 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowDownUp,
   Calendar,
   ChevronRight,
+  Circle,
+  Loader2,
   MapPin,
   Phone,
   Search,
@@ -28,6 +31,8 @@ import {
 } from '@kommessa/api/elenco-lavoro';
 
 import { IconaPriorita } from '@/app/_components/priorita-ui';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { cambiaTodoStato } from '@/app/_actions/commessa-todo';
 import { titoloCase } from '../_lib/display-case';
 import { Stagger } from './blueprint';
 
@@ -451,6 +456,53 @@ function SchedaCommessa({
  * chi la riceve è **richiamare la persona**: se c'è un numero, il tasto lo
  * chiama.
  */
+/**
+ * Il cerchietto che chiude una richiesta, dal telefono.
+ *
+ * Stessa domanda dei tre punti dell'ufficio e della scheda commessa: spuntare
+ * si chiede. Qui il bersaglio e' 44px, il minimo sotto un dito con i guanti, e
+ * sta a sinistra come su ogni altra cosa da fare dell'app.
+ */
+function SpuntaRichiesta({ id, titolo }: { id: string; titolo: string }) {
+  const router = useRouter();
+  const chiediConferma = useConfirm();
+  const mostraAvviso = useAlert();
+  const [inCorso, setInCorso] = React.useState(false);
+
+  const spunta = async () => {
+    const ok = await chiediConferma({
+      title: 'Segnare come fatta?',
+      description: `"${titolo}"\n\nL'ufficio la vede chiusa. Si puo' riaprire da li'.`,
+      confirmLabel: 'Sì, è fatta',
+    });
+    if (!ok) return;
+    setInCorso(true);
+    const res = await cambiaTodoStato({ id, stato: 'completato' });
+    setInCorso(false);
+    if (!res.ok) {
+      await mostraAvviso({ title: 'Non sono riuscito a chiuderla', body: res.error });
+      return;
+    }
+    router.refresh();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={spunta}
+      disabled={inCorso}
+      aria-label="Segna la richiesta come fatta"
+      className="-m-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-emerald-500/10 active:text-emerald-600 disabled:opacity-50"
+    >
+      {inCorso ? (
+        <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+      ) : (
+        <Circle className="h-5 w-5" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 function SchedaDaFare({
   voce,
   adesso,
@@ -509,6 +561,12 @@ function SchedaDaFare({
   if (eRichiesta) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-l-2 border-border border-l-amber-500/70 bg-card p-2.5 shadow-soft">
+        {/* ⚠️ Una richiesta e' l'unica cosa da fare che **non ha una pagina**:
+            non ha una commessa, quindi non c'e' nessun posto dove aprirla e
+            spuntarla. Finora si vedeva, si poteva chiamare il cliente, e
+            basta: chi ci era andato non aveva modo di dire che era fatta, e
+            l'ufficio restava ad aspettare. Il cerchietto sta qui. */}
+        <SpuntaRichiesta id={voce.id} titolo={voce.titolo} />
         {dentro}
         {chiamabile ? (
           <a

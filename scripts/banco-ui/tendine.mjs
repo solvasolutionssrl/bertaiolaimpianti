@@ -188,6 +188,42 @@ try {
   esito(Boolean(lunga) && lunga.voci > 8, 'ci sono abbastanza voci per la ricerca', lunga ? `${lunga.voci} voci` : '—');
   esito(Boolean(lunga?.haRicerca), 'la casella di ricerca compare', lunga?.segnaposto ?? '');
 
+  // ── ⭐ la rotellina del mouse ──
+  //
+  // Radix blocca lo scorrimento della pagina mentre un dialog e' aperto, con
+  // un ascoltatore di `wheel` su `document` che annulla tutto cio' che non
+  // viene da dentro il dialog. Il pannello sta su `body`, quindi era «fuori»:
+  // l'elenco si poteva scorrere **solo trascinando la barra di lato**.
+  const misuraRotella = await valuta(cdp, `(() => {
+    const p = ${PANNELLO}; if (!p) return null;
+    const l = p.querySelector('[role=listbox]'); if (!l) return null;
+    const r = l.getBoundingClientRect();
+    return { scrollTop: l.scrollTop, puoScorrere: l.scrollHeight > l.clientHeight,
+             x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+  })()`);
+  esito(
+    Boolean(misuraRotella?.puoScorrere),
+    'l’elenco è più lungo di quanto si vede (si può provare a scorrerlo)',
+    misuraRotella ? '' : 'pannello non trovato',
+  );
+  if (misuraRotella?.puoScorrere) {
+    for (let i = 0; i < 3; i += 1) {
+      await cdp.invia('Input.dispatchMouseEvent', {
+        type: 'mouseWheel', x: misuraRotella.x, y: misuraRotella.y, deltaX: 0, deltaY: 120,
+      });
+      await attendi(180);
+    }
+    const dopoRotella = await valuta(cdp, `${PANNELLO}.querySelector('[role=listbox]').scrollTop`);
+    esito(
+      dopoRotella > misuraRotella.scrollTop,
+      '⭐ la rotellina del mouse scorre l’elenco',
+      `scrollTop ${misuraRotella.scrollTop} → ${dopoRotella}`,
+    );
+    // Si torna in cima, così i controlli dopo trovano le voci dove le aspettano.
+    await valuta(cdp, `(${PANNELLO}.querySelector('[role=listbox]').scrollTop = 0, 1)`);
+    await attendi(200);
+  }
+
   if (lunga?.haRicerca) {
     // ⭐ Il fuoco deve STARE nella casella. La gabbia del dialog lo strappa.
     const fuoco = await chiHaIlFuoco(cdp, '[data-popover-portale]');

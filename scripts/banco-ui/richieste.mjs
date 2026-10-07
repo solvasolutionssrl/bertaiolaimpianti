@@ -100,21 +100,20 @@ try {
   await scriviIn(campoCliente, CLIENTE);
   await attendi(900);
 
-  const nuovo = await clicVero(cdp, tastoDialog('cliente nuovo|^crea «|crea «'), { attesaMs: 500 });
+  const nuovo = await clicVero(cdp, tastoDialog('cliente nuovo|^crea «|crea «'), { attesaMs: 600 });
   esito(nuovo.fatto, '⭐ si può dire «è un cliente nuovo»', nuovo.perche ?? '');
 
   if (nuovo.fatto) {
-    // Fase «tipo»: persona o azienda.
-    await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button')].find(b => b.offsetParent !== null && b.textContent.trim() === 'Persona')`, { attesaMs: 500 });
-
-    const campi = await valuta(cdp, `(() => {
-      const et = [...document.querySelectorAll('[role=dialog] label')].map(l => l.textContent.trim());
-      return et;
-    })()`);
+    // ⭐ Gli stessi sei campi del modulo «nuova commessa», e senza passi in
+    // mezzo: c'era un «è una persona o un'azienda?» che adesso è il secondo
+    // campo della scheda, come nel modulo della commessa.
+    const campi = await valuta(cdp, `[...document.querySelectorAll('[role=dialog] label')].map(l => l.textContent.trim())`);
+    const attesi = ['Tipo', 'Indirizzo', 'Citt', 'Telefono', 'Email'];
+    const mancanti = attesi.filter((a) => !campi.some((c) => c.toLowerCase().startsWith(a.toLowerCase())));
     esito(
-      Array.isArray(campi) && campi.some((e) => /telefono/i.test(e)) && campi.some((e) => /indirizzo|comune|citt/i.test(e)),
-      '⭐ chiede i dati veri: telefono e indirizzo, non solo il nome',
-      Array.isArray(campi) ? campi.join(' · ').slice(0, 90) : '—',
+      mancanti.length === 0,
+      '⭐ la scheda ha gli stessi campi del modulo «nuova commessa»',
+      mancanti.length === 0 ? campi.slice(1, 7).join(' · ') : `mancano: ${mancanti.join(', ')}`,
     );
 
     const tel = `(() => {
@@ -167,6 +166,46 @@ try {
   if (riga) {
     esito(/in mano a/i.test(riga), '⭐ la riga dice chi ne risponde', (riga.match(/In mano a [^·]{0,24}/i) ?? [''])[0]);
     esito(/ci v[ae]/i.test(riga), '⭐ e dice anche chi ci va', (riga.match(/Ci v[ae] [^·]{0,24}/i) ?? [''])[0]);
+  }
+
+  // ══ 2-bis. ⭐ sui task di commessa la catena doppia NON c'è ════════════
+  //
+  // ⚠️ Per mezza giornata c'è stata anche lì, ed era troppo: dentro una
+  // commessa il lavoro ha gia' la sua squadra e la cosa da fare ha un
+  // assegnatario solo. Un campo che esiste dove non serve non e' neutro: e'
+  // una domanda in piu' a cui qualcuno prova a rispondere, e una seconda
+  // verita' su «chi se ne occupa» dove ce n'era una sola e chiara.
+  // ⚠️ `\\d` e non `\d`: questo codice viaggia dentro un template literal, e
+  // li' `\d` vale la lettera «d». La prima versione cercava «DEMOK-d2-d3»,
+  // non trovava nessuna riga, e dichiarava «0 task di commessa» su una board
+  // che ne aveva trentaquattro. E' la stessa trappola gia' scritta in cima a
+  // `elenco-commesse.mjs`, e ci sono ricascato lo stesso.
+  console.log('\n  \x1b[1mSui task di commessa, niente seconda mano\x1b[0m');
+
+  const suiTask = await valuta(cdp, `(() => {
+    const righe = [...document.querySelectorAll('div')]
+      .filter(d => d.className && String(d.className).includes('hover:bg-muted/30'));
+    // Una riga di task di commessa si riconosce dal codice commessa e
+    // dall'assenza del badge «Richiesta».
+    const diCommessa = righe.filter(d => {
+      const t = d.textContent || '';
+      return !/Richiesta/.test(t) && /[A-Z]{2,}-\\d{2}-\\d{3}/.test(t);
+    });
+    if (diCommessa.length === 0) return { quante: 0 };
+    return {
+      quante: diCommessa.length,
+      conManda: diCommessa.filter(d =>
+        [...d.querySelectorAll('button[aria-label]')]
+          .some(b => /^Manda qualcuno/i.test(b.getAttribute('aria-label') || ''))).length,
+      conCiVa: diCommessa.filter(d => /Ci v[ae] /.test(d.textContent || '')).length,
+      conInManoA: diCommessa.filter(d => /In mano a/.test(d.textContent || '')).length,
+    };
+  })()`);
+  esito(suiTask.quante > 0, 'ci sono task di commessa da guardare', `${suiTask.quante}`);
+  if (suiTask.quante > 0) {
+    esito(suiTask.conManda === 0, '⭐ nessun tasto «Manda…» su un task di commessa', `${suiTask.conManda} su ${suiTask.quante}`);
+    esito(suiTask.conCiVa === 0, '⭐ nessuna riga «Ci va…» su un task di commessa', `${suiTask.conCiVa} su ${suiTask.quante}`);
+    esito(suiTask.conInManoA === 0, 'e nemmeno «In mano a»: lì si dice solo il nome', `${suiTask.conInManoA} su ${suiTask.quante}`);
   }
 
   // ══ 3. il cliente è finito in anagrafica ═══════════════════════════════
@@ -246,9 +285,45 @@ try {
     doveSta ?? 'non trovata in nessun blocco',
   );
 
+  // ⭐ E deve poterla **chiudere**. Una richiesta e' l'unica cosa da fare che
+  // non ha una pagina dove aprirla: senza un tasto qui, chi ci era andato non
+  // aveva modo di dire che era fatta.
+  const cerchiettoTecnico = `(() => {
+    const b = [...document.querySelectorAll('[data-blocco-lavoro] button[aria-label]')]
+      .filter(x => /fatta/i.test(x.getAttribute('aria-label') || ''));
+    return b.find(x => {
+      const riga = x.closest('div');
+      return riga && (riga.textContent || '').includes(${JSON.stringify(TITOLO)});
+    }) ?? null;
+  })()`;
+  const spunta = await clicVero(cdp, cerchiettoTecnico, { attesaMs: 800 });
+  esito(spunta.fatto, '⭐ dal telefono la richiesta si può chiudere', spunta.perche ?? '');
+
+  if (spunta.fatto) {
+    const domanda = await valuta(cdp, `(() => {
+      const d = document.querySelector('[role=dialog], [role=alertdialog]');
+      return d ? (d.textContent || '').split(/[\\s]+/).join(' ').trim().slice(0, 70) : null;
+    })()`);
+    esito(Boolean(domanda) && /fatta/i.test(domanda), 'e chiede conferma anche qui', domanda ?? 'NESSUNA DOMANDA');
+    await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button, [role=alertdialog] button')].find(b => /è fatta/i.test(b.textContent))`, { attesaMs: 1500 });
+    // ⚠️ Si guarda l'ELENCO, non tutta la pagina: il titolo resta nel dialog
+    // di conferma finche' quello e' a schermo, e il banco dichiarava fallita
+    // una chiusura riuscita. E' la seconda volta oggi.
+    const sparita = await finoA(
+      cdp,
+      `![...document.querySelectorAll('[data-blocco-lavoro]')]
+         .some(s => (s.textContent || '').includes(${JSON.stringify(TITOLO)}))`,
+      { timeoutMs: 15_000, cosa: 'la richiesta chiusa' },
+    ).then(() => true).catch(() => false);
+    esito(sparita, '⭐ chiusa, sparisce dalle sue cose da fare');
+  }
+
   // Si torna in ufficio per chiudere il giro.
+  // ⚠️ Fra le COMPLETATE: il tecnico l'ha appena chiusa, e la board di
+  // partenza mostra solo cio' che e' aperto. (Che e' anche la prova che la
+  // chiusura dal telefono e' arrivata fino al database.)
   await accediCon(cdp, { email: 'demo@demok.kommessa.local', password: 'Demo2026!' });
-  await vaiA(cdp, '/office/todo');
+  await vaiA(cdp, '/office/todo?stato=completato');
   await finoA(cdp, `document.querySelectorAll('button').length > 3`, { timeoutMs: 25_000 });
   await attendi(500);
 

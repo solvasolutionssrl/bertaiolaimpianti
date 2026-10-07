@@ -47,7 +47,8 @@
     "./pagine": "./src/pagine.ts",
     "./paghe-causali": "./src/paghe-causali.ts",
     "./paghe-essepaghe": "./src/paghe-essepaghe.ts",
-    "./paghe-mappatura": "./src/paghe-mappatura.ts"
+    "./paghe-mappatura": "./src/paghe-mappatura.ts",
+    "./indirizzo-scelto": "./src/indirizzo-scelto.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
