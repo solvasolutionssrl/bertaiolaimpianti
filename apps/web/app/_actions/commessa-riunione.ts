@@ -17,8 +17,6 @@ import {
 import { segnalaAiNonDisponibile } from '../_lib/ai-alert';
 import { MSG_AI_NON_DISPONIBILE } from '../_lib/ai-messages';
 import { PRIORITA, normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
-import { CAPACITA_META } from '@kommessa/api/capacita';
-import { possoAprireLavori } from '@/app/_lib/capacita-server';
 import {
   cleanupAllegatoFiles,
   getRiunioneFileRefIds,
