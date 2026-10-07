@@ -1,6 +1,12 @@
 'use client';
 
 import * as React from 'react';
+
+import {
+  DURATA_MINIMA_MS,
+  AVVISO_TROPPO_BREVE,
+  AVVISO_NIENTE_DA_CAPIRE,
+} from '@/app/_lib/registrazione';
 import { useRouter } from 'next/navigation';
 import {
   Calendar,
@@ -95,9 +101,21 @@ export function CreaRiunioneDialog({
   const [recording, setRecording] = React.useState(false);
   const [transcribing, setTranscribing] = React.useState(false);
   const [recSecs, setRecSecs] = React.useState(0);
+  /**
+   * L'avviso calmo, in linea, sotto il microfono.
+   *
+   * ⚠️ Non un popup. Quando la registrazione e' troppo breve o non si e'
+   * capito niente non si e' rotto nulla: basta riparlare. Un dialog di errore
+   * su un gesto da rifare insegna a temere il tasto.
+   */
+  const [avvisoVoce, setAvvisoVoce] = React.useState<string | null>(null);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const chunksRef = React.useRef<BlobPart[]>([]);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Quando e' partita: serve a sapere se e' durata abbastanza. */
+  const iniziataRef = React.useRef<number>(0);
+  /** Se e' stata scartata perche' breve, `onstop` non deve mandare niente. */
+  const scartaRef = React.useRef(false);
 
   const startRec = async () => {
     try {
@@ -114,8 +132,18 @@ export function CreaRiunioneDialog({
           timerRef.current = null;
         }
         setRecSecs(0);
+        if (scartaRef.current) {
+          scartaRef.current = false;
+          return; // troppo breve: l'avviso l'ha gia' messo `stopRec`
+        }
         const blob = new Blob(chunksRef.current, { type: mr.mimeType });
-        if (blob.size === 0) return;
+        if (blob.size === 0) {
+          // ⚠️ Prima qui c'era un `return` muto: il tasto tornava come prima e
+          // non compariva nessun testo. «Ho premuto e non e' successo niente»
+          // e' un guasto peggiore di un errore, perche' non si sa cosa fare.
+          setAvvisoVoce(AVVISO_TROPPO_BREVE);
+          return;
+        }
         setTranscribing(true);
         try {
           const fd = new FormData();
@@ -125,6 +153,14 @@ export function CreaRiunioneDialog({
             method: 'POST',
             body: fd,
           });
+          // ⚠️ 422 = «l'audio c'era, testo riconosciuto: nessuno». Capita con un
+          // sussurro, col rumore di un cantiere, o con tre secondi di esitazione.
+          // Non e' un guasto dell'app e non merita un popup: avviso in linea e
+          // tasto subito ripremibile. Prima diventava «Trascrizione fallita».
+          if (res.status === 422) {
+            setAvvisoVoce(AVVISO_NIENTE_DA_CAPIRE);
+            return;
+          }
           if (!res.ok) {
             const j = (await res.json().catch(() => null)) as {
               error?: string;
@@ -158,6 +194,9 @@ export function CreaRiunioneDialog({
       recorderRef.current = mr;
       setRecording(true);
       setRecSecs(0);
+      setAvvisoVoce(null);
+      iniziataRef.current = Date.now();
+      scartaRef.current = false;
       timerRef.current = setInterval(() => setRecSecs((s) => s + 1), 1000);
     } catch (e) {
       await showAlert({
@@ -168,6 +207,16 @@ export function CreaRiunioneDialog({
   };
 
   const stopRec = () => {
+    // ⚠️ La soglia dei tre secondi. Gli altri cinque punti dell'app che
+    // registrano ce l'hanno da agosto, dentro `VoiceRecorder`; questo dialog
+    // ha un registratore proprio e non l'aveva: mezzo secondo di audio
+    // arrivava all'AI, tornava vuoto e diventava il popup «Trascrizione
+    // fallita». La regola ora sta in `@/app/_lib/registrazione`, un posto
+    // solo per tutti e due.
+    if (Date.now() - iniziataRef.current < DURATA_MINIMA_MS) {
+      scartaRef.current = true;
+      setAvvisoVoce(AVVISO_TROPPO_BREVE);
+    }
     recorderRef.current?.stop();
     setRecording(false);
     if (timerRef.current) {
@@ -453,6 +502,18 @@ export function CreaRiunioneDialog({
                   onStop={stopRec}
                 />
               </div>
+
+              {/* L'avviso calmo: la registrazione era troppo breve, o non si
+                  e' capito niente. Non e' un errore, e non si presenta come
+                  tale: si rilegge la frase e si ritocca il microfono. */}
+              {avvisoVoce && !recording && !transcribing ? (
+                <p
+                  role="status"
+                  className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-center text-[11px] text-amber-800 dark:text-amber-300"
+                >
+                  {avvisoVoce}
+                </p>
+              ) : null}
 
               {recording ? (
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">

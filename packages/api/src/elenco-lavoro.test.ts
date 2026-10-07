@@ -4,6 +4,7 @@ import {
   componiElenco,
   contaPerFiltro,
   ordinaElenco,
+  raggruppaElenco,
   vocePassaFiltro,
   voceCorrisponde,
   type VoceElenco,
@@ -179,5 +180,107 @@ describe('componiElenco', () => {
   it('senza opzioni non butta via niente', () => {
     const voci = [v({ id: 'a' }), v({ id: 'b', tipo: 'todo' })];
     expect(componiElenco(voci)).toHaveLength(2);
+  });
+});
+
+describe('raggruppaElenco', () => {
+  it('mette ogni cosa da fare sotto il suo lavoro', () => {
+    const voci = [
+      v({ id: 'c1', tipo: 'commessa', titolo: 'Rossi', gruppo: 'c1', affidataIl: '2026-10-01T08:00:00Z' }),
+      v({ id: 'c2', tipo: 'commessa', titolo: 'Bianchi', gruppo: 'c2', affidataIl: '2026-10-02T08:00:00Z' }),
+      v({ id: 't1', tipo: 'todo', titolo: 'Portare la pompa', gruppo: 'c1' }),
+      v({ id: 't2', tipo: 'todo', titolo: 'Misurare lo scarico', gruppo: 'c2' }),
+      v({ id: 't3', tipo: 'todo', titolo: 'Foto del quadro', gruppo: 'c1' }),
+    ];
+    const g = raggruppaElenco(voci);
+    // Due commesse + nessuna voce sciolta.
+    expect(g).toHaveLength(2);
+    const c1 = g.find((x) => x.chiave === 'c1')!;
+    expect(c1.capofila?.id).toBe('c1');
+    expect(c1.dentro.map((x) => x.id).sort()).toEqual(['t1', 't3']);
+    const c2 = g.find((x) => x.chiave === 'c2')!;
+    expect(c2.dentro.map((x) => x.id)).toEqual(['t2']);
+  });
+
+  it('⭐ l ordine dei gruppi segue la voce piu urgente che contengono', () => {
+    const voci = [
+      // c1 e' stata affidata DOPO c2, quindi nell'elenco piatto starebbe prima.
+      v({ id: 'c1', tipo: 'commessa', titolo: 'Rossi', gruppo: 'c1', affidataIl: '2026-10-05T08:00:00Z' }),
+      v({ id: 'c2', tipo: 'commessa', titolo: 'Bianchi', gruppo: 'c2', affidataIl: '2026-10-01T08:00:00Z' }),
+      // ...ma su c2 c'e' una cosa da fare con una scadenza: il blocco sale.
+      v({ id: 't2', tipo: 'todo', titolo: 'Urgente', gruppo: 'c2', scadenza: '2026-10-09T08:00:00Z' }),
+    ];
+    expect(raggruppaElenco(voci).map((x) => x.chiave)).toEqual(['c2', 'c1']);
+  });
+
+  it('le scadenze passate tirano il blocco in cima, senza rami a parte', () => {
+    const voci = [
+      v({ id: 'c1', tipo: 'commessa', titolo: 'Rossi', gruppo: 'c1', affidataIl: '2026-10-06T08:00:00Z' }),
+      v({ id: 'c2', tipo: 'commessa', titolo: 'Bianchi', gruppo: 'c2', affidataIl: '2026-10-05T08:00:00Z' }),
+      v({ id: 't2', tipo: 'todo', titolo: 'Dimenticata', gruppo: 'c2', scadenza: '2026-09-01T08:00:00Z' }),
+    ];
+    expect(raggruppaElenco(voci)[0]!.chiave).toBe('c2');
+  });
+
+  it('⚠️ le richieste al telefono finiscono in un gruppo senza chiave, in fondo', () => {
+    const voci = [
+      v({ id: 'r1', tipo: 'richiesta', titolo: 'Cambio caldaia', gruppo: null }),
+      v({ id: 'c1', tipo: 'commessa', titolo: 'Rossi', gruppo: 'c1', affidataIl: '2026-10-01T08:00:00Z' }),
+    ];
+    const g = raggruppaElenco(voci);
+    expect(g.map((x) => x.chiave)).toEqual(['c1', null]);
+    expect(g[1]!.capofila).toBeNull();
+    expect(g[1]!.dentro.map((x) => x.id)).toEqual(['r1']);
+  });
+
+  it('⚠️ un gruppo senza capofila resta: e il caso della ricerca', () => {
+    // La ricerca ha trovato la cosa da fare ma non la commessa: la commessa
+    // non e' fra le voci. La riga va mostrata comunque.
+    const voci = [v({ id: 't1', tipo: 'todo', titolo: 'Portare la pompa', gruppo: 'c9' })];
+    const g = raggruppaElenco(voci);
+    expect(g).toHaveLength(1);
+    expect(g[0]!.chiave).toBe('c9');
+    expect(g[0]!.capofila).toBeNull();
+    expect(g[0]!.dentro.map((x) => x.id)).toEqual(['t1']);
+  });
+
+  it('in ordine alfabetico i gruppi seguono lo stesso comparatore', () => {
+    const voci = [
+      v({ id: 'c1', tipo: 'commessa', titolo: 'Zanetti', gruppo: 'c1' }),
+      v({ id: 'c2', tipo: 'commessa', titolo: 'Abbiati', gruppo: 'c2' }),
+    ];
+    expect(raggruppaElenco(voci, 'alfabetico').map((x) => x.chiave)).toEqual(['c2', 'c1']);
+  });
+
+  it('la capofila si riconosce dal tipo, non dalla posizione', () => {
+    // In ordine alfabetico «Aggiungere…» precede «Rossi»: se si prendesse la
+    // prima riga del gruppo, la capofila sarebbe una cosa da fare.
+    const voci = [
+      v({ id: 'c1', tipo: 'commessa', titolo: 'Rossi', gruppo: 'c1' }),
+      v({ id: 't1', tipo: 'todo', titolo: 'Aggiungere la valvola', gruppo: 'c1' }),
+    ];
+    const g = raggruppaElenco(voci, 'alfabetico');
+    expect(g[0]!.capofila?.id).toBe('c1');
+    expect(g[0]!.dentro.map((x) => x.id)).toEqual(['t1']);
+  });
+
+  it('niente voci, niente gruppi', () => {
+    expect(raggruppaElenco([])).toEqual([]);
+  });
+
+  it('una commessa senza niente dentro resta un gruppo, vuoto', () => {
+    const g = raggruppaElenco([v({ id: 'c1', tipo: 'commessa', titolo: 'Rossi', gruppo: 'c1' })]);
+    expect(g).toHaveLength(1);
+    expect(g[0]!.dentro).toEqual([]);
+  });
+
+  it('non tocca l array di partenza', () => {
+    const voci = [
+      v({ id: 'c2', tipo: 'commessa', titolo: 'B', gruppo: 'c2' }),
+      v({ id: 'c1', tipo: 'commessa', titolo: 'A', gruppo: 'c1' }),
+    ];
+    const copia = [...voci];
+    raggruppaElenco(voci, 'alfabetico');
+    expect(voci).toEqual(copia);
   });
 });

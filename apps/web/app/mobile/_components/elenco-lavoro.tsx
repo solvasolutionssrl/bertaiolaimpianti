@@ -21,6 +21,7 @@ import {
   ORDINI_ELENCO,
   componiElenco,
   contaPerFiltro,
+  raggruppaElenco,
   type FiltroElenco,
   type OrdineElenco,
   type VoceElenco,
@@ -100,6 +101,19 @@ export function ElencoLavoro({ voci }: { voci: VoceLavoro[] }) {
   const visibili = React.useMemo(
     () => componiElenco(voci, { filtro, query, ordine }) as VoceLavoro[],
     [voci, filtro, query, ordine],
+  );
+
+  /**
+   * Le voci messe sotto il loro lavoro.
+   *
+   * ⚠️ Si raggruppa **dopo** filtro e ricerca, mai prima: cercando «pompa»
+   * deve restare la cosa da fare che si chiama così, anche se la sua commessa
+   * non corrisponde. Quel gruppo resta senza capofila e sopra ci va
+   * un'intestazione leggera col codice — che la voce porta con sé.
+   */
+  const gruppi = React.useMemo(
+    () => raggruppaElenco(visibili, ordine),
+    [visibili, ordine],
   );
 
   // «Adesso» si fissa una volta per ridisegno e si passa giù: calcolarlo
@@ -185,9 +199,14 @@ export function ElencoLavoro({ voci }: { voci: VoceLavoro[] }) {
           </p>
         </div>
       ) : (
-        <Stagger className="flex flex-col gap-1.5">
-          {visibili.map((v, i) => (
-            <Scheda key={`${v.tipo}:${v.id}`} voce={v} indice={i + 1} adesso={adesso} />
+        <Stagger className="flex flex-col gap-5">
+          {gruppi.map((g, i) => (
+            <Blocco
+              key={g.chiave ?? '—senza-commessa—'}
+              gruppo={g as GruppoLavoro}
+              indice={i + 1}
+              adesso={adesso}
+            />
           ))}
         </Stagger>
       )}
@@ -232,6 +251,123 @@ function Pastiglia({
         {String(quante).padStart(2, '0')}
       </span>
     </button>
+  );
+}
+
+// ─────────────────────────── I blocchi ───────────────────────────
+
+/**
+ * Restringe una voce a «cosa da fare».
+ *
+ * ⚠️ Dentro un gruppo la capofila e' stata tolta a monte, quindi cio' che
+ * resta e' per costruzione un todo o una richiesta — ma il tipo non lo sa.
+ * Una funzione che **controlla** invece di un `as never` che spegne il
+ * controllo: se un domani un gruppo contenesse due commesse, qui si sente.
+ */
+function soloDaFare(v: VoceLavoro): Extract<VoceLavoro, { tipo: 'todo' | 'richiesta' }> {
+  if (v.tipo === 'commessa') {
+    throw new Error(`Voce di tipo commessa dentro un gruppo: ${v.id}`);
+  }
+  return v;
+}
+
+/** Un gruppo, coi tipi di questa pagina. */
+interface GruppoLavoro {
+  chiave: string | null;
+  capofila: Extract<VoceLavoro, { tipo: 'commessa' }> | null;
+  dentro: VoceLavoro[];
+}
+
+/**
+ * Un lavoro e le sue cose da fare, in un blocco solo.
+ *
+ * ## Perché un blocco e non due schede di fila
+ *
+ * ⚠️ Prima l'elenco era una colonna piatta: commesse e cose da fare,
+ * mescolate per urgenza, con `gap-1.5` uguale fra tutte e la differenza
+ * affidata al peso di un'ombra. A colpo d'occhio erano schede dello stesso
+ * rango, e una cosa da fare poteva stare dieci righe sopra la commessa a cui
+ * apparteneva. L'unico filo era il codice scritto in dieci pixel.
+ *
+ * Qui il filo si **vede**: le cose da fare sono rientrate sotto la loro
+ * commessa, legate da una linea verticale, e fra un blocco e il successivo c'è
+ * il doppio dello spazio che c'è dentro il blocco. La gerarchia la fa la
+ * distanza, non il colore: si legge anche di sbieco, con il telefono in mano e
+ * i guanti.
+ *
+ * ## I due casi che non sono un lavoro
+ *
+ * **Senza capofila** (`chiave` c'è, `capofila` no): la ricerca ha trovato la
+ * cosa da fare e non la commessa. Intestazione leggera col codice, così si sa
+ * di cosa si tratta.
+ *
+ * **Senza chiave**: richieste al telefono e cose da fare senza lavoro. Una
+ * fascia che le separa, in fondo. Prima stavano in mezzo alle commesse.
+ */
+function Blocco({
+  gruppo,
+  indice,
+  adesso,
+}: {
+  gruppo: GruppoLavoro;
+  indice: number;
+  adesso: number;
+}) {
+  // Niente lavoro: le cose sciolte, con una fascia che lo dice.
+  if (gruppo.chiave === null) {
+    return (
+      <section data-blocco-lavoro="senza-commessa" className="flex flex-col gap-1.5">
+        <h3 className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+          <span className="h-px flex-1 bg-border" aria-hidden="true" />
+          Senza commessa
+          <span className="h-px flex-1 bg-border" aria-hidden="true" />
+        </h3>
+        {gruppo.dentro.map((v) => (
+          <SchedaDaFare key={`${v.tipo}:${v.id}`} voce={soloDaFare(v)} adesso={adesso} />
+        ))}
+      </section>
+    );
+  }
+
+  // Senza capofila il codice si prende da una delle cose da fare, che lo
+  // porta con sé: è l'unico modo di dire di quale lavoro si tratta quando la
+  // ricerca ha tenuto la riga e scartato la commessa.
+  const codice =
+    gruppo.capofila?.codice ??
+    gruppo.dentro.reduce<string | null>(
+      (trovato, v) => trovato ?? (v.tipo === 'todo' ? v.codiceCommessa : null),
+      null,
+    );
+
+  return (
+    // ⚠️ `data-blocco-lavoro` non e' decorazione: e' l'aggancio con cui il
+    // banco misura rientro e spazi. Senza, raccoglieva tutte le <section>
+    // della pagina e riportava «-3208px fra un blocco e l'altro».
+    <section data-blocco-lavoro={gruppo.chiave} className="flex flex-col">
+      {gruppo.capofila ? (
+        <SchedaCommessa voce={gruppo.capofila} indice={indice} />
+      ) : (
+        <h3 className="px-1 pb-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+          {codice ?? 'Altro lavoro'}
+        </h3>
+      )}
+
+      {gruppo.dentro.length > 0 ? (
+        /* Il rientro e la linea: il legame fra il lavoro e le sue cose da fare
+           si vede, invece di stare scritto in dieci pixel di codice.
+           ⚠️ La linea parte **sotto la card** (`-mt-1`) e non un filo più giù:
+           staccata di sei pixel sembrava il bordo di un'altra cosa. E il
+           colore è quello del marchio al 30%, non un grigio al 70%: su fondo
+           chiaro il grigio spariva, misurato guardando la schermata. */
+        <ul className="-mt-1 ml-4 flex flex-col gap-1.5 border-l-2 border-primary/30 pl-3 pt-2.5">
+          {gruppo.dentro.map((v) => (
+            <li key={`${v.tipo}:${v.id}`}>
+              <SchedaDaFare voce={soloDaFare(v)} adesso={adesso} dentroUnBlocco />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
@@ -318,9 +454,16 @@ function SchedaCommessa({
 function SchedaDaFare({
   voce,
   adesso,
+  dentroUnBlocco,
 }: {
   voce: Extract<VoceLavoro, { tipo: 'todo' | 'richiesta' }>;
   adesso: number;
+  /**
+   * Dentro il blocco della sua commessa il codice non si ripete: sta
+   * nell'intestazione due righe sopra, e ripeterlo su ogni riga riempie di
+   * rumore proprio lo spazio che il raggruppamento ha liberato.
+   */
+  dentroUnBlocco?: boolean;
 }) {
   const meta = metaPriorita(voce.priorita);
   const scaduta = voce.scadenza ? new Date(voce.scadenza).getTime() < adesso : false;
@@ -346,7 +489,7 @@ function SchedaDaFare({
           {eRichiesta ? (
             <span className="font-semibold text-amber-700 dark:text-amber-400">Richiesta</span>
           ) : null}
-          {!eRichiesta && voce.codiceCommessa ? (
+          {!eRichiesta && !dentroUnBlocco && voce.codiceCommessa ? (
             <span className="tabular-nums">{voce.codiceCommessa}</span>
           ) : null}
           {eRichiesta && voce.cliente ? (
@@ -383,7 +526,16 @@ function SchedaDaFare({
   return (
     <Link
       href={`/mobile/commessa/${voce.commessaId}#lavori`}
-      className="flex items-center gap-2 rounded-lg border border-border bg-card p-2.5 shadow-soft transition-colors active:bg-muted"
+      className={[
+        'flex items-center gap-2 rounded-lg border p-2.5 transition-colors active:bg-muted',
+        // Dentro un blocco la riga è subordinata alla commessa sopra: niente
+        // ombra e fondo più tenue, così la card del lavoro resta la testa e
+        // queste si leggono come il suo contenuto. Fuori da un blocco (le
+        // cose senza lavoro) resta una scheda a sé.
+        dentroUnBlocco
+          ? 'border-border/60 bg-card/60'
+          : 'border-border bg-card shadow-soft',
+      ].join(' ')}
     >
       {dentro}
       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />

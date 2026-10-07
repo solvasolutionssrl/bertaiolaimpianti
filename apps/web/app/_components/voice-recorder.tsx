@@ -1,6 +1,11 @@
 'use client';
 
 import * as React from 'react';
+
+import {
+  DURATA_MINIMA_MS,
+  AVVISO_TROPPO_BREVE,
+} from '@/app/_lib/registrazione';
 import { Mic, Square, AlertTriangle, X } from 'lucide-react';
 
 import { Button } from '@kommessa/ui';
@@ -59,8 +64,11 @@ type State =
  * frasi inventate a partire dal rumore, il flusso si impantanava e il tasto
  * restava inutilizzabile. Sotto questa soglia la registrazione si butta e
  * basta: nessuna chiamata all'AI, nessuna attesa, tasto subito ripremibile.
+ *
+ * ⚠️ La soglia e il suo messaggio stanno in `@/app/_lib/registrazione`: il
+ * dialog delle riunioni ha un registratore proprio, e finche' il numero stava
+ * scritto qui lui non lo conosceva.
  */
-const DURATA_MINIMA_MS = 3000;
 
 const PICK_MIME_TYPES = [
   'audio/webm;codecs=opus',
@@ -291,7 +299,7 @@ export function VoiceRecorder({
       // tocca per fermare (la scelta e' spiegata in testa al file). Il vecchio
       // messaggio insegnava il gesto sbagliato proprio a chi aveva appena
       // sbagliato, ed e' una delle ragioni per cui il tasto «non si capisce».
-      setAvviso('Troppo breve: tocca il microfono, parla, poi tocca per fermare.');
+      setAvviso(AVVISO_TROPPO_BREVE);
       try {
         if (recorderRef.current) {
           recorderRef.current.onstop = () => {

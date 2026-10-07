@@ -14,8 +14,10 @@ import {
   Pencil,
   Phone,
   UserPlus,
+  Users,
   Plus,
   Sparkles,
+  Trash2,
   User,
   X,
 } from 'lucide-react';
@@ -30,6 +32,8 @@ import {
 
 import {
   aggiornaTodo,
+  affidaSquadraTodo,
+  eliminaTodo,
   cambiaTodoStato,
 } from '../../../_actions/commessa-todo';
 import { convertiRichiestaInBozza } from '../../../_actions/richieste';
@@ -37,7 +41,7 @@ import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { CreaTodoGlobaleDialog } from './crea-todo-globale-dialog';
 import { RichiestaDialog, type RichiestaEsistente } from './richiesta-dialog';
 import { type Priorita } from '@kommessa/api/priorita';
-import { Scelta } from '@/app/_components/scelta';
+import { Scelta, SceltaMultipla } from '@/app/_components/scelta';
 import { etichettaRuolo } from '@kommessa/api/identita';
 import {
   IconaPriorita,
@@ -53,8 +57,11 @@ interface Row {
   descrizione: string | null;
   stato: Stato;
   priorita: Priorita;
+  /** Chi ne RISPONDE: la persona a cui l'ufficio l'ha affidata. */
   assegnato_a: string | null;
   assegnato_nome: string | null;
+  /** Chi ci VA: mandati da chi l'ha in mano. Due domande, due posti. */
+  squadra: Array<{ id: string; nome: string }>;
   scadenza_at: string | null;
   sort_order: number;
   metadata: Record<string, unknown> | null;
@@ -135,12 +142,58 @@ export function TodoGlobaleBoard({
     setQDraft('');
   }
 
-  const onComplete = (id: string) =>
+  /**
+   * Spuntare qualcosa si chiede.
+   *
+   * ⚠️ `chiediConferma` **fuori** da `start`: la transizione puo' abortire la
+   * callback prima che la persona abbia risposto.
+   */
+  const onComplete = async (id: string, titolo: string) => {
+    const ok = await chiediConferma({
+      title: 'Segnare come fatta?',
+      description: `"${titolo}"\n\nPassa fra le cose fatte. Si puo' riaprire.`,
+      confirmLabel: 'Sì, è fatta',
+    });
+    if (!ok) return;
     start(async () => {
       const res = await cambiaTodoStato({ id, stato: 'completato' });
       if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
       router.refresh();
     });
+  };
+
+  /**
+   * Buttare via una richiesta o un task.
+   *
+   * ⚠️ Da questa pagina non si poteva: `eliminaTodo` esisteva ed era
+   * collegata solo dentro una commessa, quindi l'unica uscita era segnare
+   * come fatta una cosa che non era stata fatta. Sulla board di Bertaiola
+   * sono rimaste righe di prova — «aaaaaa», «ghugugyuguvb» — che nessuno
+   * poteva togliere.
+   *
+   * Non si confonde con «annullata»: quella e' una cosa che era vera e non si
+   * fa piu', e resta nello storico. Questa non doveva esistere.
+   */
+  const onElimina = async (row: Row) => {
+    const ok = await chiediConferma({
+      title: row.eRichiesta ? 'Eliminare la richiesta?' : 'Eliminare il task?',
+      description:
+        `"${row.titolo}"\n\n` +
+        'Si cancellano anche le note e gli allegati. Non si torna indietro.\n\n' +
+        'Se invece la cosa era vera e non si fa più, meglio segnarla come fatta: resta nello storico.',
+      destructive: true,
+      confirmLabel: 'Elimina',
+    });
+    if (!ok) return;
+    start(async () => {
+      const res = await eliminaTodo({ id: row.id });
+      if (!res.ok) {
+        await showAlert({ title: 'Non eliminata', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+  };
 
   // Assegnare dalla riga, senza aprire niente: è il gesto che l'ufficio fa a
   // raffica quando smaltisce il mucchio delle cose non assegnate. La notifica
@@ -150,6 +203,19 @@ export function TodoGlobaleBoard({
       const res = await aggiornaTodo({ id, assegnatoA: userId || null });
       if (!res.ok) {
         await showAlert({ title: 'Non assegnato', body: res.error });
+        return;
+      }
+      router.refresh();
+    });
+
+  // Mandare i tecnici dalla riga. ⭐ «In mano a» non si tocca: chi l'ha
+  // ricevuta dall'ufficio ne risponde comunque, e l'ufficio deve sapere a chi
+  // chiedere come sta andando.
+  const mandaDallaRiga = (id: string, userIds: string[]) =>
+    start(async () => {
+      const res = await affidaSquadraTodo({ todoId: id, userIds });
+      if (!res.ok) {
+        await showAlert({ title: 'Non sono riuscito a mandarli', body: res.error });
         return;
       }
       router.refresh();
@@ -374,11 +440,14 @@ export function TodoGlobaleBoard({
                   key={t.id}
                   row={t}
                   isMine={t.assegnato_a === currentUserId}
+                  currentUserId={currentUserId}
                   pending={pending}
                   canWrite={canWrite}
                   assegnabili={assegnabili}
-                  onComplete={() => onComplete(t.id)}
+                  onComplete={() => onComplete(t.id, t.titolo)}
                   onAssegna={(userId) => assegnaDallaRiga(t.id, userId)}
+                  onManda={(userIds) => mandaDallaRiga(t.id, userIds)}
+                  onElimina={() => onElimina(t)}
                   onCreaCommessa={() => creaCommessaDaRichiesta(t)}
                   onModifica={() =>
                     setRichiestaInModifica({
@@ -391,6 +460,7 @@ export function TodoGlobaleBoard({
                       scadenzaAt: t.scadenza_at,
                       clienteId: t.cliente_id,
                       clienteNome: t.cliente_nome,
+                      squadra: t.squadra.map((p) => p.id),
                     })
                   }
                 />
@@ -471,11 +541,17 @@ function FiltroRadio({
   );
 }
 
+/** L'etichetta del cestino dice cosa si butta: cambia la parola, non l'icona. */
+function eRichiestaOTask(row: Row): string {
+  return row.eRichiesta ? 'Elimina la richiesta' : 'Elimina il task';
+}
+
 // ─── Sub components ───────────────────────────────────────────────────
 
 function TodoRow({
   row,
   isMine,
+  currentUserId,
   pending,
   canWrite,
   assegnabili,
@@ -483,9 +559,12 @@ function TodoRow({
   onCreaCommessa,
   onModifica,
   onAssegna,
+  onManda,
+  onElimina,
 }: {
   row: Row;
   isMine: boolean;
+  currentUserId: string;
   pending: boolean;
   canWrite: boolean;
   assegnabili: Array<{ id: string; display_name: string | null; role: string }>;
@@ -493,6 +572,8 @@ function TodoRow({
   onCreaCommessa: () => void;
   onModifica: () => void;
   onAssegna: (userId: string) => void;
+  onManda: (userIds: string[]) => void;
+  onElimina: () => void;
 }) {
   const completed = row.stato === 'completato' || row.stato === 'annullato';
 
@@ -569,14 +650,31 @@ function TodoRow({
           {row.eRichiesta && row.contatto ? (
             <span className="font-mono">{row.contatto}</span>
           ) : null}
+          {/* ⭐ Due cose diverse e si leggono diverse: chi ne RISPONDE e chi
+              ci VA. Prima qui c'era un nome solo, e il caposquadra che girava
+              il lavoro ai suoi non aveva nessun posto dove dirlo. */}
           {row.assegnato_nome ? (
             <span className={isMine ? 'text-primary' : ''}>
               <User className="mr-0.5 inline h-3 w-3" />
-              {isMine ? 'Tu' : row.assegnato_nome}
+              In mano a {isMine ? 'te' : row.assegnato_nome}
             </span>
           ) : (
-            <span className="italic">Non assegnato</span>
+            <span className="italic">In mano a nessuno</span>
           )}
+          {row.squadra.length > 0 ? (
+            <span
+              className="text-foreground"
+              title={`Ci vanno: ${row.squadra.map((p) => p.nome).join(', ')}`}
+            >
+              <Users className="mr-0.5 inline h-3 w-3" />
+              Ci {row.squadra.length === 1 ? 'va' : 'vanno'}{' '}
+              {row.squadra
+                .slice(0, 2)
+                .map((p) => (p.id === currentUserId ? 'tu' : p.nome))
+                .join(', ')}
+              {row.squadra.length > 2 ? ` +${row.squadra.length - 2}` : ''}
+            </span>
+          ) : null}
           {row.scadenza_at ? (
             <span className={row.isScaduto ? 'font-semibold text-destructive' : ''}>
               <Calendar className="mr-0.5 inline h-3 w-3" />
@@ -609,6 +707,28 @@ function TodoRow({
           />
         ) : null}
 
+        {/* ⭐ Mandare i suoi e' il gesto del caposquadra, e si fa dalla riga
+            come si assegna: aprire un modulo per girare un lavoro che si e'
+            appena letto e' un passaggio in piu' ripetuto venti volte al
+            giorno. «In mano a» resta a lui. */}
+        {canWrite && !completed ? (
+          <SceltaMultipla
+            opzioni={assegnabili.map((u) => ({
+              valore: u.id,
+              etichetta: u.display_name ?? u.id.slice(0, 8),
+              gruppo: etichettaRuolo(u.role, 'plurale'),
+            }))}
+            valori={row.squadra.map((p) => p.id)}
+            onCambia={onManda}
+            segnaposto="Manda…"
+            segnapostoRicerca="Cerca una persona…"
+            disabilitato={pending}
+            larghezzaElenco="auto"
+            className="max-w-[11rem]"
+            aria-label={`Manda qualcuno su «${row.titolo}»`}
+          />
+        ) : null}
+
         {row.eRichiesta ? (
           canWrite && !completed ? (
             <>
@@ -630,6 +750,21 @@ function TodoRow({
         ) : (
           <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
         )}
+
+        {/* Il cestino sta per ultimo, lontano dal cerchietto che spunta: due
+            gesti opposti vicini si sbagliano. */}
+        {canWrite ? (
+          <button
+            type="button"
+            onClick={onElimina}
+            disabled={pending}
+            title={eRichiestaOTask(row)}
+            aria-label={eRichiestaOTask(row)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
       </div>
     </div>
   );

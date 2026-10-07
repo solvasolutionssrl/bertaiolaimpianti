@@ -312,12 +312,30 @@ export function LavoriBoard({
 
   // ─── handlers ────────────────────────────────────────────────────────
 
-  const onComplete = (id: string) =>
+  /**
+   * Spuntare qualcosa si chiede.
+   *
+   * Il tasto e' un cerchietto di quaranta pixel accanto al titolo: con il
+   * mouse si prende per sbaglio scorrendo, col dito ancora piu' facilmente. E
+   * una cosa data per fatta non e' una riga che cambia colore: e' qualcuno in
+   * ufficio che smette di aspettarla.
+   *
+   * ⚠️ `askConfirm` **fuori** da `startTransition`: la transizione puo'
+   * abortire la callback prima che la persona abbia risposto.
+   */
+  const onComplete = async (id: string, titolo: string) => {
+    const ok = await askConfirm({
+      title: 'Segnare come fatta?',
+      description: `"${titolo}"\n\nPassa fra le cose fatte. Si puo' riaprire.`,
+      confirmLabel: 'Sì, è fatta',
+    });
+    if (!ok) return;
     start(async () => {
       const res = await cambiaTodoStato({ id, stato: 'completato' });
       if (!res.ok) await showAlert({ title: 'Errore', body: res.error });
       router.refresh();
     });
+  };
 
   const onReopen = (id: string) =>
     start(async () => {
@@ -330,7 +348,7 @@ export function LavoriBoard({
     // askConfirm FUORI da startTransition (vedi nota su onDeleteRiunione).
     const ok = await askConfirm({
       title: 'Eliminare il TODO?',
-      description: `"${todo.titolo}" — l'azione cancella anche le note e gli allegati associati.`,
+      description: `"${todo.titolo}"\n\nSi cancellano anche le note e gli allegati. Non si torna indietro.`,
       destructive: true,
       confirmLabel: 'Elimina',
     });
@@ -353,8 +371,8 @@ export function LavoriBoard({
     const ok = await askConfirm({
       title: 'Eliminare la riunione?',
       description: r.titolo
-        ? `"${r.titolo}" del ${fmtData(r.data_riunione)} — cancellazione definitiva.`
-        : `Riunione del ${fmtData(r.data_riunione)} — cancellazione definitiva.`,
+        ? `"${r.titolo}" del ${fmtData(r.data_riunione)}\n\nNon si torna indietro.`
+        : `Riunione del ${fmtData(r.data_riunione)}\n\nNon si torna indietro.`,
       destructive: true,
       confirmLabel: 'Elimina',
     });
@@ -587,7 +605,7 @@ function TodoDraggableList({
   noteByTodo: Map<string, NotaView[]>;
   canWrite: boolean;
   pending: boolean;
-  onComplete: (id: string) => void;
+  onComplete: (id: string, titolo: string) => void;
   onEdit: (t: TodoView) => void;
   onDelete: (t: TodoView) => void;
   onNoteAdded: () => void;
@@ -725,7 +743,7 @@ function TodoDraggableList({
               notes={noteByTodo.get(t.id) ?? []}
               canEdit={canWrite}
               pending={pending}
-              onComplete={() => onComplete(t.id)}
+              onComplete={() => onComplete(t.id, t.titolo)}
               onEdit={() => onEdit(t)}
               onDelete={() => onDelete(t)}
               onNoteAdded={onNoteAdded}

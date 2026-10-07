@@ -289,7 +289,16 @@ export async function generaReportRiunione(
 
   const corpo = (parsed.data.corpoLibero ?? '').trim();
   const trasc = (parsed.data.trascrizione ?? '').trim();
-  const testo = [corpo, trasc].filter(Boolean).join('\n\n— Trascrizione dettato —\n');
+  // ⚠️ **Il dettato finiva nell'AI due volte.** Il dialog scrive la
+  // trascrizione sia nel corpo (dove si puo' correggere) sia nel campo della
+  // trascrizione (dove resta grezza), ed e' voluto; ma qui i due campi
+  // venivano appiccicati uno dopo l'altro. Risultato: l'AI leggeva lo stesso
+  // racconto due volte e riassumeva un verbale che sembrava ripetersi. Se la
+  // trascrizione e' gia' dentro il corpo non si aggiunge.
+  const trascDaAggiungere = trasc && !corpo.includes(trasc) ? trasc : '';
+  const testo = [corpo, trascDaAggiungere]
+    .filter(Boolean)
+    .join('\n\n— Trascrizione dettato —\n');
   if (testo.length < 20) {
     return {
       ok: false,

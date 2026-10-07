@@ -167,7 +167,98 @@ try {
     `${sbordo.doc} vs ${sbordo.vista}`,
   );
 
-  // ── 7. il campo di ricerca non fa ingrandire la pagina ──
+  // ── 7. ⭐ la divisione fra un lavoro e il successivo si VEDE ──
+  //
+  // Prima era una colonna piatta: commesse e cose da fare mescolate per
+  // urgenza, `gap-1.5` uguale fra tutte, e la differenza affidata al peso di
+  // un'ombra. Qui si misura la geometria, non le classi: il rientro, lo
+  // spazio fra i blocchi, la fascia delle cose senza lavoro.
+
+  // L'ordine era stato messo su alfabetico dal controllo precedente: si torna
+  // a «prima le scadenze», che e' quello che la gente vede aprendo l'app.
+  await valuta(cdp, `${tastoOrdine}?.click(), true`);
+  await new Promise((r) => setTimeout(r, 500));
+
+  const geometria = await valuta(
+    cdp,
+    `(() => {
+      const blocchi = [...document.querySelectorAll('[data-blocco-lavoro]')];
+      if (blocchi.length === 0) return { blocchi: 0 };
+
+      // Un blocco con dentro almeno una cosa da fare rientrata.
+      const conFigli = blocchi.find(s => s.querySelector('ul > li'));
+      let rientro = null, dentro = null, fra = null;
+      if (conFigli) {
+        const card = conFigli.querySelector('a[href*="/mobile/commessa/"]');
+        const figlio = conFigli.querySelector('ul > li');
+        if (card && figlio) {
+          rientro = Math.round(figlio.getBoundingClientRect().left - card.getBoundingClientRect().left);
+        }
+        const figli = [...conFigli.querySelectorAll('ul > li')];
+        if (figli.length > 1) {
+          dentro = Math.round(figli[1].getBoundingClientRect().top - figli[0].getBoundingClientRect().bottom);
+        } else {
+          // ⚠️ Nessun blocco con due cose da fare: lo spazio interno si legge
+          // dal CSS invece di non leggerlo. Un controllo che SPARISCE quando
+          // non riesce a misurare e' peggio di uno che fallisce: il banco
+          // dichiarava venti verdi e di questo non diceva niente.
+          const ul = conFigli.querySelector('ul');
+          dentro = ul ? Math.round(parseFloat(getComputedStyle(ul).rowGap || '0')) : null;
+        }
+      }
+      if (blocchi.length > 1) {
+        const a = blocchi[0].getBoundingClientRect(), b = blocchi[1].getBoundingClientRect();
+        fra = Math.round(b.top - a.bottom);
+      } else {
+        const cont = blocchi[0]?.parentElement;
+        fra = cont ? Math.round(parseFloat(getComputedStyle(cont).rowGap || '0')) : null;
+      }
+      // La linea verticale che lega le cose da fare al loro lavoro.
+      const ul = document.querySelector('[data-blocco-lavoro] ul');
+      const bordo = ul ? parseFloat(getComputedStyle(ul).borderLeftWidth) : 0;
+
+      const senzaCommessa = [...document.querySelectorAll('h3')]
+        .some(h => /senza commessa/i.test(h.textContent ?? ''));
+
+      // Dentro un blocco il codice della commessa non si ripete.
+      let codiceRipetuto = false;
+      if (conFigli) {
+        const card = conFigli.querySelector('a[href*="/mobile/commessa/"]');
+        const codice = card ? (card.textContent ?? '').match(/[A-Z]{2,}-\d{2}-\d{3}/)?.[0] ?? null : null;
+        if (codice) {
+          codiceRipetuto = [...conFigli.querySelectorAll('ul > li')]
+            .some(li => (li.textContent ?? '').includes(codice));
+        }
+      }
+      return {
+        blocchi: blocchi.length, rientro, dentro, fra, bordo, senzaCommessa, codiceRipetuto,
+        conFigli: Boolean(conFigli),
+      };
+    })()`,
+  );
+
+  esito(geometria.blocchi > 1, 'l’elenco è fatto di blocchi, non di una colonna piatta', `${geometria.blocchi} blocchi`);
+  esito(geometria.conFigli, 'almeno un lavoro ha le sue cose da fare dentro');
+  if (geometria.conFigli) {
+    esito(
+      geometria.rientro !== null && geometria.rientro >= 12,
+      '⭐ le cose da fare sono rientrate sotto il loro lavoro',
+      `${geometria.rientro}px di rientro`,
+    );
+    esito(geometria.bordo >= 2, 'una linea verticale le lega al lavoro', `${geometria.bordo}px`);
+    esito(!geometria.codiceRipetuto, 'dentro il blocco il codice non si ripete su ogni riga');
+  }
+  esito(
+    geometria.fra !== null &&
+      geometria.dentro !== null &&
+      geometria.fra > geometria.dentro,
+    '⭐ fra un lavoro e il successivo c’è più spazio che dentro un lavoro',
+    geometria.fra === null || geometria.dentro === null
+      ? 'NON MISURABILE: fra=' + geometria.fra + ' dentro=' + geometria.dentro
+      : `${geometria.fra}px fra · ${geometria.dentro}px dentro`,
+  );
+
+  // ── 8. il campo di ricerca non fa ingrandire la pagina ──
   const dimensione = await valuta(
     cdp,
     `parseFloat(getComputedStyle(document.querySelector('input[type=search]')).fontSize)`,

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Phone, Save } from 'lucide-react';
+import { Loader2, Phone, Save, Users } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -12,15 +12,23 @@ import {
   DialogTitle,
   Input,
   Label,
-  cn,
 } from '@kommessa/ui';
 
-import { creaTodo, aggiornaTodo } from '../../../_actions/commessa-todo';
-import { ClientePicker, type ValoreCliente } from '@/app/_components/cliente-picker';
+import {
+  creaTodo,
+  aggiornaTodo,
+  affidaSquadraTodo,
+} from '../../../_actions/commessa-todo';
+import {
+  SceltaCliente,
+  CLIENTE_VUOTO,
+  type ValoreCliente,
+} from '@/app/_components/scelta-cliente';
+import { creaCliente } from '../../_actions/clienti';
 import { useAlert } from '@/app/_components/confirm-provider';
 import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaSelect } from '@/app/_components/priorita-ui';
-import { Scelta } from '@/app/_components/scelta';
+import { Scelta, SceltaMultipla } from '@/app/_components/scelta';
 import { etichettaRuolo } from '@kommessa/api/identita';
 
 /**
@@ -28,19 +36,41 @@ import { etichettaRuolo } from '@kommessa/api/identita';
  *
  * L'ufficio ha la cornetta in mano: i campi stanno nell'ordine in cui le cose
  * vengono dette — cosa serve, chi è, come si richiama, i dettagli — e l'unico
- * obbligatorio è il primo. Se del cliente si sa solo il nome, basta il nome; i
- * dati veri (indirizzo, partita IVA, referenti) li chiede il form della
- * commessa quando il lavoro si concretizza, non adesso.
+ * obbligatorio è il primo.
  *
  * Lo stesso modulo serve a modificare una richiesta già registrata: è lì che si
- * assegna a qualcuno, se al telefono non si sapeva ancora a chi darla.
+ * assegna a qualcuno, se al telefono non si sapeva ancora a chi darla, ed è lì
+ * che il caposquadra manda i suoi.
+ *
+ * ## ⭐ Chi ne risponde e chi ci va
+ *
+ * Due campi, due domande. **Chi se ne occupa** è la persona a cui l'ufficio
+ * affida la richiesta — spesso un caposquadra, che qui è un account d'ufficio.
+ * **Chi ci va** sono i tecnici che quella persona manda: compaiono accanto,
+ * non al posto suo, così si legge tutta la catena e l'ufficio sa sempre a chi
+ * chiedere come sta andando.
+ *
+ * ## Il cliente si può registrare adesso
+ *
+ * ⚠️ Prima qui c'era il selettore ridotto, che del cliente prendeva **solo il
+ * nome** e non lo salvava in anagrafica: se chi chiamava era nuovo, il nome
+ * restava testo libero e il numero finiva in un campo a parte. Misurato sui
+ * dati veri: «Lago Maria Rosanna», solo testo, col telefono nel contatto, e la
+ * stessa richiesta scritta **due volte** a quattro minuti di distanza — perché
+ * una richiesta registrata non si poteva nemmeno correggere.
+ *
+ * Ora si usa `SceltaCliente`, lo stesso componente del sopralluogo e del
+ * dettato: cerca, e se non c'è chiede il resto (persona o azienda, contatti,
+ * indirizzo coi comuni suggeriti). Alla registrazione la scheda cliente si
+ * **crea davvero**. Secondo motivo per preferirlo: mostra i risultati in linea
+ * invece che in un riquadro sovrapposto, e un riquadro sovrapposto dentro un
+ * dialog viene tagliato.
  */
 
 // ⚠️ Qui c'erano etichette tutte mie — «Quando capita / Normale / Presto» —
 // sugli stessi identici valori che la pagina Task accanto chiamava
 // «Bassa / Media / Alta». Due vocabolari per la stessa colonna, nella stessa
 // schermata. Ora la scala e' una sola: `@kommessa/api/priorita`.
-
 
 export interface RichiestaEsistente {
   id: string;
@@ -52,6 +82,8 @@ export interface RichiestaEsistente {
   scadenzaAt: string | null;
   clienteId: string | null;
   clienteNome: string | null;
+  /** Chi ci va: gli id di chi e' stato mandato. */
+  squadra?: string[];
 }
 
 export function RichiestaDialog({
@@ -70,8 +102,9 @@ export function RichiestaDialog({
 
   const [titolo, setTitolo] = React.useState(esistente?.titolo ?? '');
   const [cliente, setCliente] = React.useState<ValoreCliente>({
+    ...CLIENTE_VUOTO,
     id: esistente?.clienteId ?? null,
-    nome: esistente?.clienteNome ?? '',
+    ragione_sociale: esistente?.clienteNome ?? '',
   });
   const [contatto, setContatto] = React.useState(esistente?.contatto ?? '');
   const [dettagli, setDettagli] = React.useState(esistente?.descrizione ?? '');
@@ -79,6 +112,7 @@ export function RichiestaDialog({
     normalizzaPriorita(esistente?.priorita),
   );
   const [assegnatoA, setAssegnatoA] = React.useState(esistente?.assegnatoA ?? '');
+  const [squadra, setSquadra] = React.useState<string[]>(esistente?.squadra ?? []);
   const [scadenza, setScadenza] = React.useState(
     esistente?.scadenzaAt ? esistente.scadenzaAt.slice(0, 10) : '',
   );
@@ -93,8 +127,75 @@ export function RichiestaDialog({
       if (!per.has(k)) per.set(k, []);
       per.get(k)!.push(u);
     }
-    return ordine.filter((r) => per.has(r)).map((r) => ({ ruolo: r, utenti: per.get(r)! }));
+    // ⚠️ Un ruolo fuori da `ordine` sparirebbe dalla tendina **in silenzio**.
+    // Quelli che non sono previsti vanno in fondo invece di non esistere.
+    const noti = new Set(ordine);
+    const altri = [...per.keys()].filter((r) => !noti.has(r)).sort();
+    return [...ordine, ...altri]
+      .filter((r) => per.has(r))
+      .map((r) => ({ ruolo: r, utenti: per.get(r)! }));
   }, [assegnabili]);
+
+  const opzioniPersone = React.useMemo(
+    () =>
+      gruppi.flatMap((g) =>
+        g.utenti.map((u) => ({
+          valore: u.id,
+          etichetta: u.display_name ?? u.id.slice(0, 8),
+          gruppo: etichettaRuolo(g.ruolo, 'plurale'),
+        })),
+      ),
+    [gruppi],
+  );
+
+  /**
+   * Il cliente, pronto da agganciare alla richiesta.
+   *
+   * Tre casi: era in anagrafica (si usa l'id), è nuovo e si è compilata la
+   * scheda (si crea, e si usa l'id nuovo), oppure del nome non si sa altro (
+   * resta testo libero, come prima).
+   */
+  async function risolviCliente(): Promise<
+    { clienteId: string | null; clienteTesto: string | null } | 'errore'
+  > {
+    const nome = cliente.ragione_sociale.trim();
+    if (cliente.id) return { clienteId: cliente.id, clienteTesto: null };
+    if (!nome) return { clienteId: null, clienteTesto: null };
+
+    // Si crea la scheda solo se si è detto qualcosa in più del nome:
+    // altrimenti si riempirebbe l'anagrafica di righe con un nome e niente.
+    const qualcosaInPiu =
+      Boolean(cliente.telefono.trim()) ||
+      Boolean(cliente.email.trim()) ||
+      Boolean(cliente.indirizzo.trim()) ||
+      Boolean(cliente.citta.trim());
+    if (!qualcosaInPiu) return { clienteId: null, clienteTesto: nome };
+
+    try {
+      const { id } = await creaCliente({
+        ragioneSociale: nome,
+        tipo: cliente.tipo,
+        indirizzo: cliente.indirizzo.trim() || null,
+        citta: cliente.citta.trim() || null,
+        cap: null,
+        provincia: null,
+        partitaIva: null,
+        codiceFiscale: null,
+        telefoni: [cliente.telefono.trim()].filter(Boolean),
+        email: [cliente.email.trim()].filter(Boolean),
+        note: null,
+      });
+      return { clienteId: id, clienteTesto: null };
+    } catch (e) {
+      await showAlert({
+        title: 'Scheda cliente non creata',
+        body:
+          (e instanceof Error ? e.message : 'Riprova') +
+          '\n\nLa richiesta non è stata registrata: correggi e riprova.',
+      });
+      return 'errore';
+    }
+  }
 
   const salva = async () => {
     if (titolo.trim().length === 0) {
@@ -105,6 +206,17 @@ export function RichiestaDialog({
       return;
     }
     setSalvando(true);
+
+    const chi = await risolviCliente();
+    if (chi === 'errore') {
+      setSalvando(false);
+      return;
+    }
+
+    // Se il numero non è stato scritto a parte ma il cliente ce l'ha, quello
+    // vale: chi risponde al telefono lo batte una volta sola.
+    const comeRichiamare = contatto.trim() || cliente.telefono.trim() || null;
+
     const comuni = {
       titolo: titolo.trim(),
       descrizione: dettagli.trim() || undefined,
@@ -112,21 +224,46 @@ export function RichiestaDialog({
       assegnatoA: assegnatoA || null,
       // La data nuda vale «entro quel giorno»: si fissa a fine giornata.
       scadenzaAt: scadenza ? new Date(`${scadenza}T18:00:00`).toISOString() : null,
+      clienteId: chi.clienteId,
+      clienteTesto: chi.clienteTesto,
+      contatto: comeRichiamare,
     };
+
     const res = esistente
       ? await aggiornaTodo({ id: esistente.id, ...comuni })
-      : await creaTodo({
-          ...comuni,
-          clienteId: cliente.id,
-          clienteTesto: cliente.id ? null : cliente.nome.trim() || null,
-          contatto: contatto.trim() || null,
-          metadata: { fonte: 'telefono' },
-        });
-    setSalvando(false);
+      : await creaTodo({ ...comuni, metadata: { fonte: 'telefono' } });
+
     if (!res.ok) {
+      setSalvando(false);
       await showAlert({ title: 'Non salvata', body: res.error });
       return;
     }
+
+    // La squadra si scrive dopo, perché prima serve l'id della richiesta.
+    // ⚠️ `creaTodo` torna l'id, `aggiornaTodo` no: i due rami sono due tipi
+    // diversi, e la differenza va letta qui invece di forzarla con un cast.
+    const todoId = esistente
+      ? esistente.id
+      : (res as { ok: true; data: { id: string } }).data.id;
+    const squadraPrima = (esistente?.squadra ?? []).slice().sort().join(',');
+    if (squadra.slice().sort().join(',') !== squadraPrima) {
+      const r2 = await affidaSquadraTodo({ todoId, userIds: squadra });
+      if (!r2.ok) {
+        setSalvando(false);
+        // ⚠️ La richiesta **è** salvata: dirlo, altrimenti si riprova da capo
+        // e si creano doppioni. È il difetto che ha prodotto due «Lago Maria
+        // Rosanna» a quattro minuti di distanza.
+        await showAlert({
+          title: 'Salvata, ma non ho mandato nessuno',
+          body: `${r2.error}\n\nLa richiesta è registrata: riapri e riprova a mandarli.`,
+        });
+        router.refresh();
+        onClose();
+        return;
+      }
+    }
+
+    setSalvando(false);
     router.refresh();
     onClose();
   };
@@ -154,35 +291,29 @@ export function RichiestaDialog({
             />
           </div>
 
-          {esistente ? (
-            esistente.clienteNome ? (
-              <div className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                Cliente: <span className="font-medium text-foreground">{esistente.clienteNome}</span>
-              </div>
-            ) : null
-          ) : (
-            <>
-              <ClientePicker
-                valore={cliente}
-                onChange={(v) => setCliente(v)}
-                id="r_cliente"
-                label="Chi ha chiamato"
-                placeholder="Nome o ragione sociale…"
-                notaSenzaMatch="Non è in anagrafica: per ora resta il nome scritto qui. La scheda cliente si crea quando diventa una commessa."
-              />
+          {/* Anche in modifica: un nome battuto male o un numero sbagliato si
+              correggono qui. Prima erano in sola lettura, e l'unica strada era
+              registrare la telefonata una seconda volta. */}
+          <SceltaCliente
+            valore={cliente}
+            onCambia={setCliente}
+            etichetta="Chi ha chiamato"
+          />
 
-              <div>
-                <Label htmlFor="r_contatto">Come richiamare</Label>
-                <Input
-                  id="r_contatto"
-                  value={contatto}
-                  onChange={(e) => setContatto(e.target.value)}
-                  placeholder="Numero di telefono o email"
-                  className="mt-1.5 h-10"
-                />
-              </div>
-            </>
-          )}
+          <div>
+            <Label htmlFor="r_contatto">Come richiamare</Label>
+            <Input
+              id="r_contatto"
+              value={contatto}
+              onChange={(e) => setContatto(e.target.value)}
+              placeholder={
+                cliente.telefono.trim()
+                  ? `Vuoto: si usa ${cliente.telefono.trim()}`
+                  : 'Numero di telefono o email'
+              }
+              className="mt-1.5 h-10"
+            />
+          </div>
 
           <div>
             <Label htmlFor="r_dettagli">Dettagli</Label>
@@ -214,13 +345,7 @@ export function RichiestaDialog({
               <Scelta
                 id="r_assegna"
                 className="mt-1.5"
-                opzioni={gruppi.flatMap((g) =>
-                  g.utenti.map((u) => ({
-                    valore: u.id,
-                    etichetta: u.display_name ?? u.id.slice(0, 8),
-                    gruppo: etichettaRuolo(g.ruolo, 'plurale'),
-                  })),
-                )}
+                opzioni={opzioniPersone}
                 valore={assegnatoA || null}
                 onCambia={(v) => setAssegnatoA(v ?? '')}
                 etichettaNessuno="Nessuno, per ora"
@@ -229,7 +354,7 @@ export function RichiestaDialog({
                 aria-label="Chi se ne occupa"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Riceve una notifica sul telefono.
+                Ne risponde lui. Riceve una notifica sul telefono.
               </p>
             </div>
             <div className="min-w-0">
@@ -242,6 +367,29 @@ export function RichiestaDialog({
                 className="mt-1.5 h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
               />
             </div>
+          </div>
+
+          {/* ⭐ La seconda mano. Il caposquadra riapre la richiesta che
+              l'ufficio gli ha dato e manda i suoi: «in mano a» resta lui. */}
+          <div className="min-w-0 rounded-md border border-border bg-muted/20 p-3">
+            <Label htmlFor="r_squadra" className="flex items-center gap-1.5">
+              <Users className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              Chi ci va
+            </Label>
+            <SceltaMultipla
+              id="r_squadra"
+              className="mt-1.5"
+              opzioni={opzioniPersone}
+              valori={squadra}
+              onCambia={setSquadra}
+              segnaposto="Nessuno, per ora"
+              segnapostoRicerca="Cerca una persona…"
+              aria-label="Chi ci va"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Uno o più tecnici. La vedono sul telefono e possono spuntarla; chi
+              se ne occupa resta chi l’ha in mano.
+            </p>
           </div>
         </div>
 

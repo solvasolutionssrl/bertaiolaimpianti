@@ -20,9 +20,16 @@ import { possoAprireLavori } from '@/app/_lib/capacita-server';
  *
  * Permessi:
  *  - admin / office: full CRUD (crea, modifica titolo/desc/priorità/assegna,
- *    cambia stato, riordina, elimina, note, allegati).
+ *    manda la squadra, cambia stato, riordina, elimina, note, allegati).
  *  - tecnico: read; può cambiare stato (complete / annulla / in_corso) e
  *    aggiungere note + allegati. Non può creare/eliminare/riassegnare.
+ *
+ * ⭐ **«In mano a» e «chi ci va» sono due cose diverse.** `assegnato_a` dice
+ * chi ne risponde — la persona a cui l'ufficio l'ha affidata; la tabella
+ * `commessa_todo_squadra` dice chi ci mette le mani, e la scrive chi
+ * organizza (`affidaSquadraTodo`). Il caposquadra, che in Bertaiola è un
+ * `office`, resta in mano a e manda i suoi: così si legge tutta la catena.
+ * Non sono due risposte alla stessa domanda, sono due domande.
  *
  * RLS SQL applica già la maggior parte di questi vincoli (vedi
  * 20260101003400_todo_riunione.sql); qui rinforziamo lato applicativo
@@ -211,6 +218,14 @@ const AggiornaInput = z.object({
   priorita: z.enum(TODO_PRIORITA).optional(),
   assegnatoA: z.string().uuid().nullable().optional(),
   scadenzaAt: z.string().datetime().nullable().optional(),
+  // ⚠️ Questi tre mancavano, e senza di loro **una richiesta al telefono non
+  // si poteva correggere**: ne' il cliente ne' il numero per richiamare. Chi
+  // aveva battuto male un nome o preso un numero sbagliato poteva solo
+  // riaprirne un'altra — ed e' successo: la stessa richiesta scritta due
+  // volte a quattro minuti di distanza.
+  clienteId: z.string().uuid().nullable().optional(),
+  clienteTesto: z.string().trim().max(200).nullable().optional(),
+  contatto: z.string().trim().max(120).nullable().optional(),
 });
 
 export async function aggiornaTodo(input: unknown): Promise<Result> {
@@ -233,6 +248,11 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
     update.assegnato_a = parsed.data.assegnatoA;
   if (parsed.data.scadenzaAt !== undefined)
     update.scadenza_at = parsed.data.scadenzaAt;
+  if (parsed.data.clienteId !== undefined)
+    update.cliente_id = parsed.data.clienteId;
+  if (parsed.data.clienteTesto !== undefined)
+    update.cliente_testo = parsed.data.clienteTesto;
+  if (parsed.data.contatto !== undefined) update.contatto = parsed.data.contatto;
 
   if (Object.keys(update).length === 0) {
     return { ok: false, error: 'Nessun campo da aggiornare' };
@@ -277,6 +297,166 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
   }
 
   rivalida(commessaId);
+  return { ok: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// CHI CI VA (admin/office) — la seconda mano
+// ────────────────────────────────────────────────────────────
+
+const SquadraInput = z.object({
+  todoId: z.string().uuid(),
+  /** L'elenco COMPLETO di chi ci va: chi non c'e' dentro viene tolto. */
+  userIds: z.array(z.string().uuid()).max(20),
+});
+
+/**
+ * Gira una cosa da fare a uno o piu' tecnici, lasciandola **in mano a** chi
+ * ce l'ha.
+ *
+ * La segretaria prende la telefonata e la affida a un caposquadra (che in
+ * Bertaiola e' un `office`); il caposquadra manda i suoi. `assegnato_a` non si
+ * tocca: continua a dire a chi l'ufficio deve chiedere come sta andando.
+ *
+ * ⚠️ **L'elenco e' completo, non incrementale.** Arriva lo stato finale e qui
+ * si calcola chi entra e chi esce: un'azione «aggiungi» separata dalla
+ * «togli» obbligherebbe la pagina a tenere il conto di cosa e' cambiato, ed e'
+ * il genere di conto che si sbaglia quando due persone modificano insieme.
+ *
+ * ⚠️ **Si avvisa solo chi entra.** Chi era gia' in squadra non ricalcola
+ * niente, e un avviso che arriva ogni volta che un collega viene aggiunto e'
+ * un avviso che si impara a non leggere.
+ */
+export async function affidaSquadraTodo(input: unknown): Promise<Result> {
+  const parsed = SquadraInput.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+
+  const ctx = await safeCtx();
+  if (!ctx) return { ok: false, error: 'Sessione non valida' };
+  if (!FULL_ROLES.has(ctx.role)) {
+    // Un tecnico a cui la richiesta e' stata data NON la passa a sua volta:
+    // se non ci puo' andare lo dice a chi gliel'ha chiesta. Lo impedisce anche
+    // la policy `commessa_todo_squadra_write`, qui si dice perche'.
+    return {
+      ok: false,
+      error: 'Solo chi organizza il lavoro puo\' mandare qualcuno: chiedi all\'ufficio.',
+    };
+  }
+
+  const supabase = createServerSupabase();
+
+  const { data: todoRiga, error: tErr } = await supabase
+    .from('commessa_todo' as never)
+    .select('id, commessa_id, titolo, tenant_id')
+    .eq('id', parsed.data.todoId)
+    .maybeSingle();
+  if (tErr) return { ok: false, error: `Lettura fallita: ${tErr.message}` };
+  if (!todoRiga) return { ok: false, error: 'Questa cosa da fare non esiste piu\'.' };
+  const todo = todoRiga as {
+    commessa_id: string | null;
+    titolo: string;
+    tenant_id: string;
+  };
+
+  // Le persone devono stare in questo spazio di lavoro. Un id arrivato dal
+  // browser non e' una garanzia, e la chiave esterna da sola non guarda il
+  // tenant.
+  const voluti = [...new Set(parsed.data.userIds)];
+  if (voluti.length > 0) {
+    const { data: ammessi, error: uErr } = await supabase
+      .from('users')
+      .select('id')
+      .eq('tenant_id', ctx.tenantId)
+      .in('id', voluti);
+    if (uErr) return { ok: false, error: `Lettura fallita: ${uErr.message}` };
+    if ((ammessi ?? []).length !== voluti.length) {
+      return { ok: false, error: 'Qualcuno di questi non e\' in questo spazio di lavoro.' };
+    }
+  }
+
+  const { data: giaRaw, error: gErr } = await supabase
+    .from('commessa_todo_squadra' as never)
+    .select('user_id')
+    .eq('todo_id', parsed.data.todoId);
+  if (gErr) return { ok: false, error: `Lettura fallita: ${gErr.message}` };
+  const gia = new Set(
+    ((giaRaw ?? []) as Array<{ user_id: string }>).map((r) => r.user_id),
+  );
+
+  const entrano = voluti.filter((u) => !gia.has(u));
+  const escono = [...gia].filter((u) => !voluti.includes(u));
+
+  if (entrano.length === 0 && escono.length === 0) return { ok: true };
+
+  // ⚠️ Prima si aggiunge, poi si toglie: se l'inserimento fallisce la squadra
+  // resta quella di prima, invece di restare vuota.
+  if (entrano.length > 0) {
+    const { error: iErr } = await supabase
+      .from('commessa_todo_squadra' as never)
+      .insert(
+        entrano.map((u) => ({
+          todo_id: parsed.data.todoId,
+          user_id: u,
+          tenant_id: todo.tenant_id,
+          assegnato_da: ctx.userId,
+        })) as never,
+      );
+    if (iErr) return { ok: false, error: `Non sono riuscito a mandarli: ${iErr.message}` };
+  }
+  if (escono.length > 0) {
+    const { error: dErr } = await supabase
+      .from('commessa_todo_squadra' as never)
+      .delete()
+      .eq('todo_id', parsed.data.todoId)
+      .in('user_id', escono);
+    if (dErr) return { ok: false, error: `Non sono riuscito a togliere: ${dErr.message}` };
+  }
+
+  // ⚠️ Mandare qualcuno su un task **di commessa** vuol dire metterlo in
+  // squadra su quella commessa. Non e' una comodita': la cosa da fare compare
+  // nel suo elenco con un collegamento a `/mobile/commessa/<id>`, e se non e'
+  // in squadra quella pagina non la vede. Senza questa riga si manda una
+  // persona su un lavoro dandogli un collegamento che si apre su niente.
+  if (todo.commessa_id && entrano.length > 0) {
+    const { error: ctErr } = await supabase
+      .from('commessa_tecnici' as never)
+      .upsert(
+        entrano.map((u) => ({
+          commessa_id: todo.commessa_id,
+          user_id: u,
+          tenant_id: todo.tenant_id,
+          assegnato_da: ctx.userId,
+        })) as never,
+        { onConflict: 'commessa_id,user_id', ignoreDuplicates: true },
+      );
+    // Non si torna indietro: la squadra della cosa da fare e' scritta, e
+    // lasciarla a metà sarebbe peggio. Si registra e si va avanti.
+    if (ctErr) {
+      console.error('[affidaSquadraTodo] squadra di commessa non aggiornata:', ctErr.message);
+    }
+  }
+
+  await audit(
+    ctx,
+    todo.commessa_id ? 'commessa.todo.squadra' : 'richiesta.squadra',
+    todo.commessa_id,
+    parsed.data.todoId,
+    { entrano, escono, squadra: voluti },
+  );
+
+  for (const u of entrano) {
+    if (u === ctx.userId) continue; // non si avvisa chi manda se stesso
+    await notificaAssegnazione({
+      tenantId: ctx.tenantId,
+      userId: u,
+      attoreUserId: ctx.userId,
+      todoId: parsed.data.todoId,
+      titolo: todo.titolo,
+      commessaId: todo.commessa_id,
+    });
+  }
+
+  rivalida(todo.commessa_id);
   return { ok: true };
 }
 

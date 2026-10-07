@@ -98,7 +98,11 @@ export default async function TodoGlobalePage({
          id, codice_interno, nome_cartella,
          cliente:clienti ( ragione_sociale )
        ),
-       assegnato:users!commessa_todo_assegnato_a_fkey ( id, display_name )`,
+       assegnato:users!commessa_todo_assegnato_a_fkey ( id, display_name ),
+       squadra:commessa_todo_squadra (
+         user_id,
+         persona:users!commessa_todo_squadra_user_id_fkey ( id, display_name )
+       )`,
     )
     .in('stato', statiFiltro);
 
@@ -155,6 +159,8 @@ export default async function TodoGlobalePage({
     priorita: Priorita;
     assegnato_a: string | null;
     assegnato_nome: string | null;
+    /** Chi ci va: mandati da chi l'ha in mano. Vuoto = nessuno, per ora. */
+    squadra: Array<{ id: string; nome: string }>;
     scadenza_at: string | null;
     sort_order: number;
     metadata: Record<string, unknown> | null;
@@ -190,6 +196,15 @@ export default async function TodoGlobalePage({
       priorita: t.priorita as Priorita,
       assegnato_a: (t.assegnato_a as string | null) ?? null,
       assegnato_nome: (ass?.display_name as string | undefined) ?? null,
+      squadra: ((t.squadra ?? []) as Array<any>)
+        .map((s) => {
+          const pr = Array.isArray(s.persona) ? s.persona[0] : s.persona;
+          return {
+            id: (pr?.id as string | undefined) ?? (s.user_id as string),
+            nome: (pr?.display_name as string | undefined) ?? '—',
+          };
+        })
+        .sort((x, y) => x.nome.localeCompare(y.nome, 'it')),
       scadenza_at: (t.scadenza_at as string | null) ?? null,
       sort_order: t.sort_order as number,
       metadata: (t.metadata as Record<string, unknown> | null) ?? null,

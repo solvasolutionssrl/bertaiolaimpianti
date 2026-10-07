@@ -17,7 +17,7 @@ import {
   aggiungiNotaTodo,
   cambiaTodoStato,
 } from '../../../../_actions/commessa-todo';
-import { useAlert } from '@/app/_components/confirm-provider';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { PrioritaChip } from '@/app/_components/priorita-ui';
 
@@ -119,12 +119,27 @@ export function CommessaTodoMobile({ todos, currentUserId }: Props) {
 function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boolean; readonly?: boolean }) {
   const router = useRouter();
   const showAlert = useAlert();
+  const chiediConferma = useConfirm();
   const [expanded, setExpanded] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [noteOpen, setNoteOpen] = React.useState(false);
   const [body, setBody] = React.useState('');
 
+  /**
+   * Spuntare qualcosa si chiede.
+   *
+   * ⚠️ Qui piu' che altrove: il cerchietto e' un bersaglio da 44 pixel in cima
+   * alla scheda, su un telefono tenuto con una mano in cantiere. Scorrendo
+   * l'elenco si prende per sbaglio, e dall'altra parte c'e' qualcuno in
+   * ufficio che smette di aspettare quella cosa.
+   */
   const complete = async () => {
+    const ok = await chiediConferma({
+      title: 'Segnare come fatta?',
+      description: `"${todo.titolo}"\n\nPassa fra le cose fatte. Si puo' riaprire dall'ufficio.`,
+      confirmLabel: 'Sì, è fatta',
+    });
+    if (!ok) return;
     setPending(true);
     const res = await cambiaTodoStato({ id: todo.id, stato: 'completato' });
     setPending(false);

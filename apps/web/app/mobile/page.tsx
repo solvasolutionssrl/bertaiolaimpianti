@@ -261,7 +261,21 @@ async function CampoOggi({
   const idsCommesse =
     assignedIds.length > 0 ? assignedIds : ['00000000-0000-0000-0000-000000000000'];
 
-  const [commesseRes, todosRes, richiesteRes] = await Promise.all([
+  // ⭐ Su cosa mi hanno **mandato**. Chi ha in mano una cosa da fare puo'
+  // girarla a uno o piu' tecnici (`commessa_todo_squadra`), e quella cosa non
+  // passa da nessuno dei due filtri qui sotto: una richiesta al telefono non
+  // ha commessa, e un task di commessa puo' stare su un lavoro di cui questo
+  // tecnico non e' in squadra. Una lettura a parte, sul proprio indice.
+  const { data: squadraRaw } = await supabase
+    .from('commessa_todo_squadra' as never)
+    .select('todo_id')
+    .eq('user_id', ctx.userId)
+    .limit(200);
+  const idsMandati = ((squadraRaw ?? []) as Array<{ todo_id: string }>).map(
+    (r) => r.todo_id,
+  );
+
+  const [commesseRes, todosRes, richiesteRes, mandatiRes] = await Promise.all([
     supabase
       .from('commesse')
       .select(
@@ -314,6 +328,22 @@ async function CampoOggi({
       .is('commessa_id', null)
       .in('stato', ['aperto', 'in_corso'])
       .limit(100),
+
+    // Le cose su cui mi hanno mandato. Si leggono i campi di tutte e due le
+    // forme (task di commessa e richiesta al telefono) perche' qui dentro
+    // possono esserci entrambe: lo dice `commessa_id`.
+    idsMandati.length > 0
+      ? supabase
+          .from('commessa_todo' as never)
+          .select(
+            `id, titolo, descrizione, priorita, scadenza_at, created_at, commessa_id, contatto, cliente_testo,
+             commessa:commesse!commessa_todo_commessa_id_fkey ( codice_interno ),
+             richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale )`,
+          )
+          .in('id', idsMandati)
+          .in('stato', ['aperto', 'in_corso'])
+          .limit(200)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (commesseRes.error) {
@@ -354,6 +384,8 @@ async function CampoOggi({
       // nell'elenco lo decide quando è stata affidata.
       scadenza: null,
       affidataIl: affidataIl.get(r.id as string) ?? r.data_apertura ?? null,
+      // Una commessa è capofila del proprio blocco: il gruppo è il suo id.
+      gruppo: r.id as string,
       codice: r.codice_interno as string,
       stato: r.stato as StatoCommessa,
       critica: Boolean(r.is_critica),
@@ -376,6 +408,8 @@ async function CampoOggi({
       // `commessa_todo` quel momento non è registrato da nessuna parte. È il
       // dato più vicino che esiste, e vale solo per le voci senza scadenza.
       affidataIl: (t.created_at as string | null) ?? null,
+      // Sotto la sua commessa.
+      gruppo: t.commessa_id as string,
       priorita: t.priorita as Priorita,
       commessaId: t.commessa_id as string,
       codiceCommessa: codice,
@@ -393,15 +427,66 @@ async function CampoOggi({
       cerca: [nome, t.contatto, t.descrizione].filter(Boolean).join(' '),
       scadenza: (t.scadenza_at as string | null) ?? null,
       affidataIl: (t.created_at as string | null) ?? null,
+      // Una richiesta al telefono non ha un lavoro: sta nel blocco in fondo.
+      gruppo: null,
       priorita: t.priorita as Priorita,
       cliente: nome,
       contatto: (t.contatto as string | null) ?? null,
     };
   });
 
-  const voci = [...vociCommesse, ...vociTodo, ...vociRichieste];
+  // Le cose su cui mi hanno mandato: la stessa riga di database puo' essere un
+  // task di commessa o una richiesta, e lo dice `commessa_id`.
+  const vociMandate: VoceLavoro[] = ((mandatiRes.data ?? []) as any[]).map((t) => {
+    const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
+    const codice = (comm?.codice_interno as string | undefined) ?? null;
+    if (t.commessa_id) {
+      return {
+        tipo: 'todo',
+        id: t.id as string,
+        titolo: t.titolo as string,
+        cerca: [codice, t.descrizione].filter(Boolean).join(' '),
+        scadenza: (t.scadenza_at as string | null) ?? null,
+        affidataIl: (t.created_at as string | null) ?? null,
+        // Sotto la sua commessa.
+        gruppo: t.commessa_id as string,
+        priorita: t.priorita as Priorita,
+        commessaId: t.commessa_id as string,
+        codiceCommessa: codice,
+      };
+    }
+    const chi = Array.isArray(t.richiedente) ? t.richiedente[0] : t.richiedente;
+    const nome =
+      (chi?.ragione_sociale as string | undefined) ?? (t.cliente_testo as string | null) ?? null;
+    return {
+      tipo: 'richiesta',
+      id: t.id as string,
+      titolo: t.titolo as string,
+      cerca: [nome, t.contatto, t.descrizione].filter(Boolean).join(' '),
+      scadenza: (t.scadenza_at as string | null) ?? null,
+      affidataIl: (t.created_at as string | null) ?? null,
+      // Una richiesta al telefono non ha un lavoro: sta nel blocco in fondo.
+      gruppo: null,
+      priorita: t.priorita as Priorita,
+      cliente: nome,
+      contatto: (t.contatto as string | null) ?? null,
+    };
+  });
+
+  // ⚠️ Si uniscono **per id**: una cosa da fare puo' arrivare da due strade
+  // (assegnata a me *e* mandata a me) e comparirebbe due volte. La prima
+  // vince: le due letture producono la stessa voce.
+  const vistiDaFare = new Set<string>();
+  const daFare: VoceLavoro[] = [];
+  for (const v of [...vociTodo, ...vociRichieste, ...vociMandate]) {
+    if (vistiDaFare.has(v.id)) continue;
+    vistiDaFare.add(v.id);
+    daFare.push(v);
+  }
+
+  const voci = [...vociCommesse, ...daFare];
   const quanteCommesse = vociCommesse.length;
-  const quanteDaFare = vociTodo.length + vociRichieste.length;
+  const quanteDaFare = daFare.length;
 
   // Niente commesse E niente da fare: allora sì, non c'è nulla da mostrare.
   if (voci.length === 0) {
