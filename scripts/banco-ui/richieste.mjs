@@ -100,7 +100,7 @@ try {
   // ══ 1. registra una telefonata da un cliente che non c'è ═══════════════
   console.log('\n  \x1b[1mLa telefonata di un cliente nuovo\x1b[0m');
 
-  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /al telefono/i.test(b.textContent))`, { attesaMs: 900 });
+  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /nuova richiesta/i.test(b.textContent))`, { attesaMs: 900 });
   esito(
     await valuta(cdp, `Boolean(document.querySelector('[role=dialog]'))`),
     'il modulo della telefonata si apre',
@@ -293,6 +293,20 @@ try {
       '⭐ i Task prendono circa due terzi dello spazio',
       `${geo.quotaTask}% / ${100 - geo.quotaTask}%`,
     );
+    // ⭐ Il tasto deve dire che da li' si **crea**: la sola cornetta diceva
+    // di cosa si tratta, non che ci si puo' aggiungere qualcosa.
+    const tastoNuova = await valuta(cdp, `(() => {
+      const c = ${colonna('Richieste')};
+      const b = [...(c?.querySelectorAll('button') ?? [])].find(x => /nuova richiesta/i.test(x.textContent || ''));
+      if (!b) return null;
+      return { testo: (b.textContent || '').trim(), icone: b.querySelectorAll('svg').length };
+    })()`);
+    esito(
+      Boolean(tastoNuova) && tastoNuova.icone >= 2,
+      '⭐ il tasto delle richieste ha il «+» oltre alla cornetta',
+      tastoNuova ? `«${tastoNuova.testo}», ${tastoNuova.icone} icone` : 'tasto non trovato',
+    );
+
     // Il colore dice che cosa e': blu i lavori, ambra le telefonate. E' lo
     // stesso segnale che le richieste hanno nei badge e sul telefono.
     const tinta = (c) => {
@@ -308,10 +322,71 @@ try {
     );
   }
 
+  // ══ 2-quater. ⭐ la colonna stretta resta leggibile ═══════════════════
+  //
+  // ⚠️ Il 35% a 1280px sono 250 pixel: li' dentro il titolo si riduceva a
+  // «PROVA LAR…», i comandi si sfilacciavano su quattro righe e un indirizzo
+  // di posta usciva dal bordo. Si misura, non si guarda.
+  console.log('\n  \x1b[1mLa colonna stretta\x1b[0m');
+
+  const stretta = await valuta(cdp, `(() => {
+    const c = ${colonna('Richieste')};
+    if (!c) return null;
+    const rc = c.getBoundingClientRect();
+    const righe = [...c.querySelectorAll('div')].filter(d => d.className && String(d.className).includes('hover:bg-background/60'));
+    const fuori = [...c.querySelectorAll('*')].filter(e => {
+      const b = e.getBoundingClientRect();
+      return b.width > 0 && (b.right > rc.right + 1 || b.left < rc.left - 1);
+    }).length;
+    const prima = righe[0];
+    const titolo = prima ? prima.querySelector('p') : null;
+    return {
+      larghezza: Math.round(rc.width),
+      righe: righe.length,
+      fuori,
+      altezzaRiga: prima ? Math.round(prima.getBoundingClientRect().height) : null,
+      titoloLargo: titolo ? Math.round(titolo.getBoundingClientRect().width) : null,
+      // ⚠️ Non si cerca nel testo di tutta la riga: li' «Bianchi» e «da» si
+      // attaccano (textContent non mette spazi fra elementi vicini) e il
+      // controllo diceva di no su una riga giusta. Si guarda l'elemento che
+      // porta l'autore: deve dirlo **a parole** e non con un disegno.
+      autore: (() => {
+        if (!prima) return null;
+        const e = [...prima.querySelectorAll('[title]')]
+          .find(x => /^(Registrata|Creato) da /.test(x.getAttribute('title') || ''));
+        if (!e) return null;
+        return { testo: (e.textContent || '').trim(), icone: e.querySelectorAll('svg').length };
+      })(),
+    };
+  })()`);
+
+  if (!stretta || stretta.righe === 0) {
+    esito(false, 'c\u2019\u00e8 una richiesta nella colonna stretta da misurare', 'NON MISURABILE');
+  } else {
+    esito(stretta.fuori === 0, '⭐ niente esce dal bordo della colonna', `${stretta.fuori} elementi fuori`);
+    esito(
+      stretta.titoloLargo !== null && stretta.titoloLargo > stretta.larghezza * 0.6,
+      '⭐ il titolo prende tutta la riga, non un angolo',
+      `titolo ${stretta.titoloLargo}px su ${stretta.larghezza}px`,
+    );
+    esito(
+      stretta.altezzaRiga !== null && stretta.altezzaRiga < 320,
+      'e la riga non diventa una colonna di comandi',
+      `${stretta.altezzaRiga}px`,
+    );
+    esito(
+      Boolean(stretta.autore) && /^da \S/.test(stretta.autore.testo) && stretta.autore.icone === 0,
+      '⭐ chi l\u2019ha scritta si legge a parole, non da un\u2019icona',
+      stretta.autore
+        ? `«${stretta.autore.testo}», ${stretta.autore.icone} icone`
+        : 'autore non trovato',
+    );
+  }
+
   // ══ 3. il cliente è finito in anagrafica ═══════════════════════════════
   console.log('\n  \x1b[1mIl cliente in anagrafica\x1b[0m');
 
-  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /al telefono/i.test(b.textContent))`, { attesaMs: 900 });
+  await clicVero(cdp, `[...document.querySelectorAll('button')].filter(b => b.offsetParent !== null).find(b => /nuova richiesta/i.test(b.textContent))`, { attesaMs: 900 });
   await scriviIn(campoCliente, CLIENTE);
   await attendi(1400);
   const trovato = await valuta(cdp, `(() => {

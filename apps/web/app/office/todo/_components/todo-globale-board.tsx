@@ -480,8 +480,13 @@ export function TodoGlobaleBoard({
             azione={
               canWrite ? (
                 <Button size="sm" onClick={() => setRichiestaOpen(true)}>
+                  {/* ⭐ Il «+» accanto alla cornetta. Il telefono da solo dice
+                      di cosa si tratta ma non che da qui si **crea**: era
+                      l'unico tasto dell'ufficio senza il segno che lo dice,
+                      e accanto a «Nuovo task» sembrava un filtro. */}
+                  <Plus className="h-3.5 w-3.5" />
                   <Phone className="h-3.5 w-3.5" />
-                  Al telefono
+                  Nuova richiesta
                 </Button>
               ) : null
             }
@@ -616,7 +621,13 @@ function Colonna({
           {azione ? <div className="ml-auto shrink-0">{azione}</div> : null}
         </header>
 
-        <CardContent className="divide-y divide-border/60 p-0">
+        {/* ⚠️ **`sm:p-0` non è ridondante.** `CardContent` nasce
+            `p-6 pt-3 sm:p-7 sm:pt-4`: sopra i 640px vince la regola con la
+            media query, e il solo `p-0` non la annulla. Ogni colonna perdeva
+            **56px** — in quella stretta sono un quarto della larghezza, ed è
+            il motivo per cui i comandi non ci stavano. Misurato risalendo la
+            catena degli antenati, non dedotto. */}
+        <CardContent className="divide-y divide-border/60 p-0 sm:p-0">
           {quante === 0 ? vuoto : children}
         </CardContent>
       </Card>
@@ -736,7 +747,11 @@ function TodoRow({
     gruppo: etichettaRuolo(u.role, 'plurale'),
   }));
 
-  const azioni = (
+  // ⚠️ **I comandi sono due famiglie, non una.** Le tendine sono larghe e
+  // vogliono una riga loro quando la colonna è stretta; i tasti sono piccoli e
+  // stanno in fila. Tenuti insieme, nella colonna al 35% andavano a capo in
+  // una pila sfilacciata alta 138px — più di una riga intera.
+  const selettori = (
     <>
       {/* Non assegnato: si assegna da qui, senza aprire niente. È il gesto
           che l'ufficio ripete a raffica smaltendo il mucchio. */}
@@ -751,7 +766,7 @@ function TodoRow({
           segnapostoRicerca="Cerca…"
           disabilitato={pending}
           larghezzaElenco="auto"
-          className="max-w-[9rem]"
+          className={compatta ? 'w-full' : 'max-w-[9rem]'}
           aria-label={`Assegna «${row.titolo}» a una persona`}
         />
       ) : null}
@@ -769,15 +784,23 @@ function TodoRow({
           opzioni={opzioniPersone}
           valori={row.squadra.map((p) => p.id)}
           onCambia={onManda}
+          // In colonna stretta: «2 scelti» invece delle pastiglie coi nomi,
+          // che li' andrebbero a capo o si ridurrebbero a una lettera. I nomi
+          // stanno gia' due righe sopra, nella riga di chi ci va.
+          riassunto={compatta}
           segnaposto="Manda…"
           segnapostoRicerca="Cerca una persona…"
           disabilitato={pending}
           larghezzaElenco="auto"
-          className="max-w-[11rem]"
+          className={compatta ? 'w-full' : 'max-w-[11rem]'}
           aria-label={`Manda qualcuno su «${row.titolo}»`}
         />
       ) : null}
+    </>
+  );
 
+  const tasti = (
+    <>
       {row.eRichiesta ? (
         canWrite && !completed ? (
           <>
@@ -791,6 +814,11 @@ function TodoRow({
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
+            {/* ⚠️ **Niente `flex-1` qui.** Restringere questo tasto non lo
+                tronca: l'etichetta non va a capo e non si accorcia, quindi
+                esce dalla sua scatola e finisce sopra il cestino. Larghezza
+                naturale, e se un giorno non ci stesse e' la riga ad andare a
+                capo. */}
             <Button size="sm" variant="outline" onClick={onCreaCommessa} disabled={pending}>
               Crea commessa
             </Button>
@@ -800,22 +828,24 @@ function TodoRow({
         <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
       )}
 
-      {/* Il cestino sta per ultimo, lontano dal cerchietto che spunta: due
-          gesti opposti vicini si sbagliano. */}
-      {canWrite ? (
-        <button
-          type="button"
-          onClick={onElimina}
-          disabled={pending}
-          title={eRichiestaOTask(row)}
-          aria-label={eRichiestaOTask(row)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
     </>
   );
+
+  // Il cestino sta per ultimo, lontano dal cerchietto che spunta: due gesti
+  // opposti vicini si sbagliano. Nella colonna stretta finisce all'estremo
+  // opposto della riga, che è la stessa distanza detta in un altro modo.
+  const cestino = canWrite ? (
+    <button
+      type="button"
+      onClick={onElimina}
+      disabled={pending}
+      title={eRichiestaOTask(row)}
+      aria-label={eRichiestaOTask(row)}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+    </button>
+  ) : null;
 
   return (
     <div className={cn('px-4 py-3 transition-colors hover:bg-background/60')}>
@@ -840,15 +870,21 @@ function TodoRow({
 
         <Contenitore commessaId={row.commessa_id}>
           <div className="flex flex-wrap items-center gap-2">
+            {/* ⚠️ Nella colonna stretta il titolo si prende **tutta la riga**
+                e non si tronca. Con la pastiglia della priorità accanto gli
+                restavano dieci caratteri e si leggeva «PROVA LAR…», cioè
+                niente: il titolo è la sola cosa per cui si guarda un elenco.
+                La priorità scende sotto, con la sola parola. */}
             <p
               className={cn(
-                'min-w-0 flex-1 truncate text-sm font-medium',
+                'min-w-0 text-sm font-medium',
+                compatta ? 'basis-full line-clamp-2' : 'flex-1 truncate',
                 completed && 'text-muted-foreground line-through',
               )}
             >
               {row.titolo}
             </p>
-            <PrioritaChip priorita={row.priorita} />
+            <PrioritaChip priorita={row.priorita} corta={compatta} />
             {row.stato === 'in_corso' ? (
               <Badge variant="outline" className="text-[10px] uppercase">
                 In corso
@@ -871,13 +907,31 @@ function TodoRow({
         </Contenitore>
 
         {!compatta ? (
-          <div className="flex shrink-0 items-center gap-1.5">{azioni}</div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {selettori}
+            {tasti}
+            {cestino}
+          </div>
         ) : null}
       </div>
 
+      {/* La colonna stretta: le tendine una per riga e larghe quanto la
+          colonna, poi i tasti in una riga sola — il cestino all'estremo
+          opposto da chi agisce, come nella riga larga. */}
+      {/* ⚠️ **Niente rientro sotto il titolo in colonna stretta.** Allineare i
+          comandi al testo e' piu' bello, ma costa 48px dei 202 disponibili: con
+          quelli, matita, «Crea commessa» e cestino non stanno piu' su una riga
+          e si sfilacciano su tre. Qui lo spazio vale piu' dell'allineamento. */}
       {compatta ? (
-        <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5 pl-12">
-          {azioni}
+        <div className="mt-2 space-y-1.5">
+          <div className="flex flex-col gap-1.5">{selettori}</div>
+          {/* ⚠️ `flex-wrap` e i tasti che si restringono: senza, a 250px
+              «Crea commessa» finiva **sopra** il cestino. Al peggio si va a
+              capo, che e' brutto; sovrapporsi e' rotto. */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">{tasti}</div>
+            {cestino}
+          </div>
         </div>
       ) : null}
     </div>
@@ -919,15 +973,24 @@ function MetaRiga({
   const perEsteso = righe.map((r) => `${r.etichetta}: ${r.valore}`).join(' · ');
 
   return (
-    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
       {row.codice_interno ? <span className="font-mono">{row.codice_interno}</span> : null}
       {row.cliente_nome ? (
-        <span className={row.eRichiesta ? 'font-medium text-foreground' : undefined}>
+        <span
+          className={cn(
+            'max-w-full break-words',
+            row.eRichiesta && 'font-medium text-foreground',
+          )}
+        >
           {row.cliente_nome}
         </span>
       ) : null}
+      {/* ⚠️ `break-all`: un indirizzo di posta e' una parola sola e lunga, e in
+          una colonna da 250px usciva dal bordo. Si spezza invece di sbordare —
+          un numero o una email si leggono anche andando a capo, fuori dalla
+          colonna non si leggono affatto. */}
       {row.eRichiesta && row.contatto ? (
-        <span className="font-mono">{row.contatto}</span>
+        <span className="max-w-full break-all font-mono">{row.contatto}</span>
       ) : null}
 
       {responsabile ? (
@@ -952,19 +1015,26 @@ function MetaRiga({
         </span>
       ) : null}
 
-      {/* Chi l'ha scritta. Su una richiesta e' chi ha risposto al telefono, ed
-          e' la prima cosa che si chiede quando una riga non si capisce. */}
-      {row.autore_nome ? (
-        <span title={`${row.eRichiesta ? 'Registrata' : 'Creato'} da ${row.autore_nome} il ${fmtDataBreve(row.created_at)}`}>
-          <Pencil className="mr-0.5 inline h-2.5 w-2.5" />
-          {row.autore_nome}
-        </span>
-      ) : null}
-
       {row.scadenza_at ? (
         <span className={row.isScaduto ? 'font-semibold text-destructive' : ''}>
           <Calendar className="mr-0.5 inline h-3 w-3" />
           {fmtDataBreve(row.scadenza_at)}
+        </span>
+      ) : null}
+
+      {/* Chi l'ha scritta. Su una richiesta e' chi ha risposto al telefono, ed
+          e' la prima cosa che si chiede quando una riga non si capisce.
+          ⚠️ **Era un'icona di matita, e la matita vuol dire «modifica».** In
+          una riga fitta un disegno che si deve indovinare non informa: fa
+          fermare. Qui bastano due parole, che si leggono senza passare il
+          mouse sopra, e sta in fondo perche' e' la cosa meno urgente della
+          riga — prima viene il lavoro, poi chi lo ha scritto. */}
+      {row.autore_nome ? (
+        <span
+          className="opacity-80"
+          title={`${row.eRichiesta ? 'Registrata' : 'Creato'} da ${row.autore_nome} il ${fmtDataBreve(row.created_at)}`}
+        >
+          da {row.autore_nome}
         </span>
       ) : null}
     </div>

@@ -172,8 +172,6 @@ function buildNav(
     // il modulo e' attivo. Dichiararla a meta' strada sarebbe bastato finche'
     // il gruppo aveva una sola provenienza — e Bertaiola, che quel modulo non
     // ce l'ha, vedrebbe «Turni e ore» da sola in mezzo alla lista.
-    const vociImpostazioni =
-      BASE_NAV.find((n) => n.id === 'settings' || n.id === 'impostazioni')?.children ?? [];
     return [
       { id: 'home', label: 'Dashboard', href: '/office', icon: LayoutDashboard },
       {
@@ -211,12 +209,19 @@ function buildNav(
           // pallino col numero dei messaggi non letti.
           { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche', icon: Bell },
           { id: 'copilot', label: 'Co-pilot', href: '/office/copilot', icon: Sparkles },
+          // ⚠️ **Senza figli, di proposito.** Questa barra disegna due livelli:
+          // dentro un gruppo, le sotto-voci di Impostazioni finirebbero al
+          // terzo e non le disegnerebbe nessuno. E' esattamente come fa il
+          // mondo presenze, che questa forma la ha da giugno.
+          // Non si perde niente: la pagina delle impostazioni ha una sua
+          // barra di **tredici** schede, filtrate per modulo e per ruolo —
+          // mentre le sei sotto-voci di prima non erano filtrate affatto, e
+          // tre di loro aprivano una pagina inesistente su certi clienti.
           {
             id: 'impostazioni',
             label: 'Impostazioni',
             href: '/office/impostazioni',
             icon: Settings,
-            children: [...vociImpostazioni],
           },
         ],
       },

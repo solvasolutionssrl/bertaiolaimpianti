@@ -707,6 +707,18 @@ export interface SceltaMultiplaProps extends BaseProps {
   onCambia: (valori: string[]) => void;
   /** Massimo di voci scegliibili. Oltre, le altre si spengono. */
   massimo?: number;
+  /**
+   * In poco spazio: nel tasto si dice **quanti** invece di **chi**.
+   *
+   * ⚠️ Non e' una preferenza estetica. Le pastiglie coi nomi vanno a capo
+   * quando il tasto e' stretto, e la riga cresce spostando quello che ha
+   * sotto; e stringerle fino a farcele stare le riduce a una lettera piu' la
+   * crocetta — cioe' a niente, con in piu' il rischio di togliere la persona
+   * sbagliata. Dove si usa (la colonna stretta delle richieste) i nomi sono
+   * gia' scritti due righe sopra: qui serve sapere che ce ne sono due e
+   * potersi aprire.
+   */
+  riassunto?: boolean;
 }
 
 /**
@@ -725,6 +737,7 @@ export function SceltaMultipla({
   segnapostoRicerca = 'Cerca…',
   nessunRisultato = 'Nessun risultato.',
   massimo,
+  riassunto = false,
   disabilitato,
   className,
   larghezzaElenco = 'tasto',
@@ -785,12 +798,16 @@ export function SceltaMultipla({
       >
         {scelte.length === 0 ? (
           <span className="truncate">{segnaposto}</span>
+        ) : riassunto ? (
+          <span className="truncate" title={scelte.map((o) => o.etichetta).join(', ')}>
+            {scelte.length === 1 ? scelte[0]!.etichetta : `${scelte.length} scelti`}
+          </span>
         ) : (
           <>
             {scelte.slice(0, CHIP_VISIBILI).map((o) => (
               <span
                 key={o.valore}
-                className="inline-flex max-w-[11rem] items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-foreground"
+                className="inline-flex min-w-0 max-w-[11rem] items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs text-foreground"
               >
                 <span className="truncate">{o.etichetta}</span>
                 <span

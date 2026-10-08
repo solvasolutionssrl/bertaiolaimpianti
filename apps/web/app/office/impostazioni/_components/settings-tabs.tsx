@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@kommessa/ui';
 
-interface NavItem {
+export interface VoceImpostazioni {
   id: string;
   label: string;
   href: string;
@@ -15,7 +15,15 @@ interface NavItem {
   ferieOnly?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
+/**
+ * Le sezioni delle impostazioni, **in un posto solo**.
+ *
+ * Le legge questa barra di schede e le legge la ricerca rapida (⌘K): prima la
+ * ⌘K aveva una sua copia scritta a mano, con sei voci su tredici e senza
+ * nessun filtro, quindi proponeva pagine che per certi clienti non si aprono.
+ * Chi aggiunge una sezione la aggiunge qui e compare in entrambe.
+ */
+export const VOCI_IMPOSTAZIONI: VoceImpostazioni[] = [
   { id: 'profilo',  label: 'Profilo',           href: '/office/impostazioni/profilo' },
   { id: 'voci',     label: 'Voci catalogo',     href: '/office/impostazioni/voci' },
   { id: 'preset',   label: 'Preset lavoro',     href: '/office/impostazioni/preset' },
@@ -47,7 +55,7 @@ export function SettingsTopNav({
   hiddenIds?: string[];
 }) {
   const pathname = usePathname() ?? '';
-  const visible = NAV_ITEMS.filter(
+  const visible = VOCI_IMPOSTAZIONI.filter(
     (item) =>
       (!item.superadminOnly || isPlatformAdmin) &&
       (!item.kantiereOnly || hasKantiere) &&

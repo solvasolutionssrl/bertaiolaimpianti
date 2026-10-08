@@ -394,7 +394,18 @@ function OfficeShell({
 
     // Se l'item ha figli e siamo in label-mode: il click apre/chiude invece di
     // navigare. Su sidebar collapsata si comporta come link normale al parent.
-    if (hasChildren && showLabel) {
+    //
+    // ⚠️⚠️ **`!isChild`: questa barra disegna DUE livelli, non tre.**
+    // `renderNav` apre i figli delle voci di primo livello e si ferma li': i
+    // figli di un figlio non vengono disegnati da nessuno. Senza questa
+    // condizione una voce di secondo livello che ha dei figli diventava un
+    // tasto con la freccia che apriva **il vuoto** — cioe' un comando che
+    // promette e non fa niente, che e' peggio di nessun comando. E' successo
+    // davvero: spostando «Impostazioni» dentro il gruppo «Altro», le sue sei
+    // sotto-voci sono finite al terzo livello e sono scomparse, lasciando al
+    // loro posto una freccia inutile. Chi ha dei figli da mostrare sta al
+    // primo livello; chi sta al secondo e' un collegamento e basta.
+    if (hasChildren && showLabel && !isChild) {
       return (
         <button
           type="button"

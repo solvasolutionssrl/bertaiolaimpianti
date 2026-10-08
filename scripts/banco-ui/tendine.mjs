@@ -77,7 +77,7 @@ try {
   // ══ PARTE 1 — tendina corta: «Responsabile» nella richiesta al telefono ══
   console.log('\n  \x1b[1mLa richiesta al telefono · «Responsabile»\x1b[0m');
 
-  const apre = await apriDialog(cdp, 'al telefono');
+  const apre = await apriDialog(cdp, 'nuova richiesta');
   esito(
     await valuta(cdp, `Boolean(document.querySelector('[role=dialog]'))`),
     `il dialog si apre dal tasto «${apre}»`,

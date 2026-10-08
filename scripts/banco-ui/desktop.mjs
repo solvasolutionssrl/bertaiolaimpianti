@@ -166,6 +166,32 @@ async function main() {
     // ── 3. click sulle voci di menu: risponde? ──────────────────────────────
     console.log('\n\x1b[1m3. Le voci di menu rispondono al click\x1b[0m');
     await vaiA(cdp, rotte[0][0]);
+
+    // ⭐ **Nessuna voce promette una freccia che non apre niente.**
+    // La barra disegna DUE livelli: una voce di secondo livello che avesse dei
+    // figli diventerebbe un tasto con la freccia su cui nessuno disegna
+    // niente. E' successo spostando «Impostazioni» dentro «Altro»: le sue sei
+    // sotto-voci sono sparite e al loro posto e' rimasto un comando inutile.
+    // Si misura dal di fuori: un tasto che si apre deve far comparire delle
+    // voci.
+    const frecceVuote = await valuta(cdp, `(() => {
+      const nav = document.querySelector('nav[aria-label="Navigazione laterale"]');
+      if (!nav) return null;
+      const dentroUnGruppo = (el) => Boolean(el.closest('[id^="nav-children-"]'));
+      const bugiardi = [...nav.querySelectorAll('button[aria-expanded]')]
+        .filter(dentroUnGruppo)
+        .map((b) => (b.textContent || '').trim().slice(0, 24));
+      return { bugiardi, quanti: nav.querySelectorAll('button[aria-expanded]').length };
+    })()`);
+    esito(
+      Boolean(frecceVuote) && frecceVuote.bugiardi.length === 0,
+      '⭐ nessuna voce di menu ha una freccia che non apre niente',
+      frecceVuote
+        ? frecceVuote.bugiardi.length
+          ? 'promettono e non aprono: ' + frecceVuote.bugiardi.join(', ')
+          : `${frecceVuote.quanti} gruppi, tutti veri`
+        : 'NON MISURABILE: barra non trovata',
+    );
     const voci = await valuta(
       cdp,
       `[...document.querySelectorAll('aside nav a[href^="/office"]')].map(a => ({

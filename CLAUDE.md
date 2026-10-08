@@ -746,9 +746,49 @@ Otto punti dopo il secondo giro di prova del cliente. Migration
   anche `.limit(300)` sulla board e `.limit(200)` **senza ordinamento** sulle
   commesse del tecnico (non duecento ultime: duecento qualsiasi).
 
+#### Rifiniture dopo la prova (08/10/2026)
+
+Quattro cose viste usandola, e due sono difetti introdotti il giorno prima.
+
+- ⚠️⚠️ **La barra dell'ufficio disegna DUE livelli, non tre.** Spostando
+  «Impostazioni» dentro il gruppo «Altro», le sue sei sotto-voci sono finite al
+  terzo livello e **non le disegnava piu' nessuno** — al loro posto restava una
+  freccia che apriva il vuoto, cioe' ⭐ *un comando che promette e non fa
+  niente*. Ora `renderNavLink` non mette la freccia a una voce di secondo
+  livello (`!isChild`), e Impostazioni e' un collegamento, come fa gia' il
+  mondo presenze. **Niente e' andato perso**: la pagina delle impostazioni ha
+  una barra di **tredici** schede filtrate per modulo e per ruolo, e le
+  sotto-pagine sono tornate nella ⌘K — lette da `VOCI_IMPOSTAZIONI`, cioe' da
+  quello stesso elenco, non da una terza copia. Banco: `desktop.mjs` controlla
+  ora che **nessuna voce di menu abbia una freccia che non apre niente**.
+- ⚠️ **`CardContent` nasce `p-6 pt-3 sm:p-7 sm:pt-4`, e `p-0` da solo non lo
+  annulla**: sopra i 640px vince la regola con la media query. Le due colonne
+  di «Task e Richieste» perdevano **56px ciascuna** — in quella stretta un
+  quarto della larghezza, ed era il motivo per cui i comandi non ci stavano.
+  Serve `p-0 sm:p-0`. Trovato risalendo la catena degli antenati con una
+  misura, dopo tre tentativi fatti a stima che peggioravano le cose.
+- **La colonna stretta delle richieste, rivista misurando.** A 1280px sono 250
+  pixel: li' il titolo si riduceva a «PROVA LAR…», i comandi si sfilacciavano
+  su quattro righe (138px di soli tasti) e un indirizzo di posta usciva dal
+  bordo. Ora il titolo prende **tutta la riga** su due righe, la priorita' si
+  dice con la sola parola, le tendine stanno su righe loro e i tasti su una
+  sola col cestino all'estremo opposto. ⚠️ Due tentativi hanno peggiorato le
+  cose prima di questo: `flex-nowrap` sul tasto della scelta multipla riduceva
+  le pastiglie a «× U ×», e `flex-1` su «Crea commessa» **non lo tronca** —
+  l'etichetta esce dalla scatola e finisce sopra il cestino. ⭐ Nuova prop
+  `riassunto` su `SceltaMultipla`: in poco spazio si dice **quanti** invece di
+  **chi** («2 scelti»), perche' i nomi sono gia' scritti due righe sopra.
+- **Il tasto delle richieste ha il «+» oltre alla cornetta** e si chiama «Nuova
+  richiesta»: la cornetta da sola diceva di cosa si tratta, non che da li' si
+  **crea**.
+- ⚠️ **L'autore non si dice con una matita.** La matita vuol dire «modifica»:
+  in una riga fitta un disegno da indovinare non informa, fa fermare. Ora due
+  parole — «da Barbara» — in fondo alla riga, che e' la cosa meno urgente:
+  prima il lavoro, poi chi l'ha scritto.
+
 Banchi: `scripts/banco-ui/zoom-foto.mjs` (14 controlli: rotellina, pizzicotto a
 due dita vere via CDP, doppio clic, tasti, il freno dello spostamento) e
-`richieste.mjs` portato a **51** (le due colonne misurate — 65%/35% e le due
+`richieste.mjs` portato a **56** (le due colonne misurate — 65%/35% e le due
 tinte calcolate — l'autore su ogni riga, e le parole nuove).
 ⚠️ Sul tenant dimostrativo il **formato pieno** di una foto non arriva: i file
 stanno solo su R2 e `/api/photo/<id>` senza `size=thumb` passa da Nextcloud. Il

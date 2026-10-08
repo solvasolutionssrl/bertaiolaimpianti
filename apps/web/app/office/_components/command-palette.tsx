@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { cn, type OfficeNavItem } from '@kommessa/ui';
+import { VOCI_IMPOSTAZIONI } from '../impostazioni/_components/settings-tabs';
 import { createBrowserSupabase } from '@kommessa/api/client';
 
 /**
@@ -182,6 +183,39 @@ const FUORI_BARRA: NavResult[] = [
     richiede: 'commesse',
   },
 ];
+
+/**
+ * Le sezioni delle **impostazioni**: non stanno nella barra (li' Impostazioni
+ * e' un collegamento solo, perche' la barra disegna due livelli) ma qui hanno
+ * senso, ed e' comodo arrivarci battendo due lettere.
+ *
+ * ⭐ **Si leggono dall'elenco della pagina**, `VOCI_IMPOSTAZIONI`, non da una
+ * copia: la copia che c'era qui aveva sei voci su tredici e nessun filtro, e
+ * proponeva «Voci catalogo» a chi quella pagina non ce l'ha.
+ *
+ * ⚠️ Le voci riservate al super admin restano fuori: la ricerca rapida non sa
+ * chi e' chi, e proporre una pagina che risponde «non trovata» e' peggio che
+ * non proporla.
+ */
+function vociImpostazioni(m: MondoRicerca): NavResult[] {
+  return VOCI_IMPOSTAZIONI.filter(
+    (v) =>
+      !v.superadminOnly &&
+      (!v.kantiereOnly || m.kantiere) &&
+      (!v.kommessaOnly || m.commesse) &&
+      (!v.ferieOnly || m.dipendenti) &&
+      (v.id !== 'voci' || m.voci) &&
+      (v.id !== 'preset' || m.preset),
+  ).map((v) => ({
+    id: 'menu-imp-' + v.id,
+    kind: 'nav' as const,
+    group: 'menu' as const,
+    title: v.label,
+    subtitle: 'Impostazioni',
+    href: v.href,
+    icon: Settings,
+  }));
+}
 
 /** Genera le azioni rapide. `onLogout` viene iniettato dal parent. */
 function buildQuickActions(router: ReturnType<typeof useRouter>, onLogout: () => void | Promise<void>): ActionResult[] {
@@ -424,7 +458,7 @@ export function CommandPalette({
     const m = { commesse: mCommesse, kantiere: mKantiere, dipendenti: mDipendenti, voci: mVoci, preset: mPreset };
     const dallaBarra = vociDaBarra(nav);
     const visti = new Set(dallaBarra.map((v) => v.href));
-    const extra = FUORI_BARRA.filter(
+    const extra = [...FUORI_BARRA, ...vociImpostazioni(m)].filter(
       (v) => !visti.has(v.href) && requisitoSoddisfatto(v.richiede, m),
     );
     return [...dallaBarra, ...extra];
