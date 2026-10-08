@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { PencilLine, Plus, Loader2, AlertCircle, X } from 'lucide-react';
+import { PencilLine, Loader2, AlertCircle, X } from 'lucide-react';
 import {
   Button,
   cn,
@@ -28,41 +28,37 @@ interface Props {
 }
 
 /**
- * Editor inline per il campo "Dettagli" della commessa.
+ * Editor inline per il campo "Dettagli" della commessa — la nota di chi ha
+ * aperto il lavoro, che i tecnici leggono in cantiere.
  *
- * Comportamento:
- *  - Bottone "Modifica" (se canEdit) apre dialog con textarea pre-popolata.
- *  - Bottone "Aggiungi nota" sotto il testo apre dialog vuota con il testo
- *    esistente pre-aggiunto in cima (concatena con doppio newline).
- *  - Conferma "Esci senza salvare?" con ConfirmDialog custom (no confirm() browser).
+ * Comportamento: la matita (se `canEdit`) apre un dialog con il testo dentro;
+ * uscendo con modifiche non salvate si chiede conferma con `ConfirmDialog`,
+ * mai col `confirm()` del browser.
+ *
+ * ⚠️ Qui c'era anche una modalità "aggiungi in fondo" (`startAppend`), con
+ * tanto di titolo e descrizione dedicati nel dialog: **nessun tasto l'ha mai
+ * aperta**, in nessuna delle due superfici. Tolta l'08/10/2026 insieme alla
+ * sua icona. Se serve davvero un «Aggiungi nota» che non tocchi il testo
+ * esistente, si rifà con un tasto che si vede.
  */
 export function DettagliEdit({ commessaId, initial, canEdit, triggerClassName }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
-  const [mode, setMode] = React.useState<'replace' | 'append'>('replace');
   const [draft, setDraft] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [confirmCloseOpen, setConfirmCloseOpen] = React.useState(false);
 
   const startEdit = () => {
-    setMode('replace');
     setDraft(initial ?? '');
     setError(null);
     setOpen(true);
   };
 
-  const startAppend = () => {
-    setMode('append');
-    setDraft('');
-    setError(null);
-    setOpen(true);
-  };
-
-  const isDirty = React.useMemo(() => {
-    if (mode === 'replace') return (draft ?? '').trim() !== (initial ?? '').trim();
-    return draft.trim().length > 0;
-  }, [draft, initial, mode]);
+  const isDirty = React.useMemo(
+    () => (draft ?? '').trim() !== (initial ?? '').trim(),
+    [draft, initial],
+  );
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -80,11 +76,7 @@ export function DettagliEdit({ commessaId, initial, canEdit, triggerClassName }:
   const handleSubmit = async () => {
     setSaving(true);
     setError(null);
-    const finalText =
-      mode === 'append' && initial
-        ? `${initial.trim()}\n\n${draft.trim()}`
-        : draft;
-    const res = await aggiornaDettagliCommessa({ commessaId, testo: finalText });
+    const res = await aggiornaDettagliCommessa({ commessaId, testo: draft });
     setSaving(false);
     if (!res.ok) {
       setError(res.error);
@@ -120,26 +112,18 @@ export function DettagliEdit({ commessaId, initial, canEdit, triggerClassName }:
           }}
         >
           <DialogHeader>
-            <DialogTitle>
-              {mode === 'replace' ? 'Modifica dettagli' : 'Aggiungi nota ai dettagli'}
-            </DialogTitle>
+            <DialogTitle>Modifica dettagli</DialogTitle>
             <DialogDescription>
-              {mode === 'replace'
-                ? 'Aggiorna la descrizione del lavoro. Visibile a tutti i tecnici nella PWA.'
-                : "Aggiungi una nota in fondo. Il testo precedente resta intatto."}
+              Aggiorna la descrizione del lavoro. La leggono i tecnici sul telefono.
             </DialogDescription>
           </DialogHeader>
 
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            rows={mode === 'replace' ? 10 : 6}
+            rows={10}
             autoFocus
-            placeholder={
-              mode === 'replace'
-                ? "C'è da fare l'installazione del…"
-                : 'Nuova nota da aggiungere…'
-            }
+            placeholder="C'è da fare l'installazione del…"
             className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed"
           />
 

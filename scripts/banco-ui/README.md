@@ -32,6 +32,7 @@ node scripts/banco-ui/riunione-tecnico.mjs       # un tecnico scrive una riunion
 node scripts/banco-ui/richieste.mjs              # il giro dell’ufficio: telefonata → cliente nuovo → chi ci va → spunta → elimina (si ripulisce da solo)
 node scripts/banco-ui/riunione-audio-corto.mjs   # mezzo secondo di registrazione: avviso calmo, non un popup di errore (microfono finto)
 node scripts/banco-ui/zoom-foto.mjs              # una foto si guarda da vicino: rotellina, pizzicotto a due dita, doppio clic, tasti, il freno dello spostamento
+node scripts/banco-ui/scheda-commessa.mjs        # la scheda vista da un utente UFFICIO: niente titolo doppio, e le note si salvano davvero (si ripulisce da solo)
 ```
 
 ## ⚠️ Il dito vero, e perché conta

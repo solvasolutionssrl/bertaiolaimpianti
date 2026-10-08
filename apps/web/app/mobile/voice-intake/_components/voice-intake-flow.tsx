@@ -32,6 +32,7 @@ import {
 import { useBozzaDraft } from '../../../_lib/bozze/use-bozza-draft';
 import { useBozzaMedia } from '../../../_lib/bozze/use-bozza-media';
 import { useOnline } from '../../../_lib/use-online';
+import { anteprimaNomeCartella } from '@kommessa/api/nome-cartella';
 import type { BozzaPayload } from '../../../_lib/bozze/types';
 import {
   MediaAttachSection,
@@ -304,7 +305,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
     if (!d.descrizione?.trim()) {
       setState((s) => ({
         ...s,
-        error: 'Manca la descrizione cartella.',
+        error: 'Manca la descrizione del lavoro.',
       }));
       return;
     }
@@ -613,13 +614,16 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
                   : undefined
               }
             />
-            <SummaryRow label="Descrizione" value={state.data.descrizione} mono />
+            <SummaryRow label="Descrizione" value={state.data.descrizione} />
           </div>
 
           <div className="rounded-md border border-border bg-muted/30 p-3 text-xs">
             <p className="text-muted-foreground">Anteprima cartella:</p>
             <code className="mt-1 block break-all font-mono text-foreground">
-              /{anteprimaCartella(state.data.ragione_sociale ?? 'Cliente', state.data.descrizione ?? 'Commessa')}/
+              /{anteprimaNomeCartella({
+                cliente: state.data.ragione_sociale,
+                descrizione: state.data.descrizione,
+              })}
             </code>
           </div>
 
@@ -796,17 +800,3 @@ function SummaryRow({
   );
 }
 
-function anteprimaCartella(rag: string, desc: string): string {
-  const seg1 = sanitize(rag.trim().split(/\s+/).slice(-1)[0] ?? rag);
-  const seg2 = new Date().toISOString().slice(0, 10);
-  const seg3 = sanitize(desc);
-  return `${seg1 || 'Cliente'}_${seg2}_${seg3 || 'Commessa'}`;
-}
-
-function sanitize(input: string): string {
-  return input
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^A-Za-z0-9]+/g, '')
-    .slice(0, 30);
-}

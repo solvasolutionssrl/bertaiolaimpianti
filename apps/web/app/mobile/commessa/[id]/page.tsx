@@ -92,7 +92,11 @@ export default async function CommessaDetailPage({
 }) {
   const ctx = await guardMobile();
   const supabase = createServerSupabase();
-  const canEditDettagli = ctx.role === 'admin';
+  // Stessa regola del desktop e di `aggiornaDettagliCommessa`: i dettagli del
+  // lavoro li corregge chi la commessa la gestisce. Una regola diversa qui
+  // vorrebbe dire che la stessa persona può correggere la nota dal computer e
+  // non dal telefono.
+  const canEditDettagli = ctx.role === 'admin' || ctx.role === 'office';
   const canManageTecnici = ctx.role === 'admin' || ctx.role === 'office';
   const canEditCommessa = ctx.role === 'admin' || ctx.role === 'office';
   const eTecnico = ctx.role === 'tecnico';

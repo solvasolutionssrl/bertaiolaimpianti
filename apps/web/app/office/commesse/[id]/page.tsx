@@ -1,5 +1,5 @@
 import { Button, Card, CardContent } from '@kommessa/ui';
-import { HardHat, MapPin, Pencil, User2, Calendar, FileText } from 'lucide-react';
+import { HardHat, MapPin, Pencil, User2, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -23,10 +23,13 @@ const STATO_LABEL: Record<string, string> = {
 
 /**
  * Tab Commessa (landing) — hub operativo.
- *  1) Riepilogo: nome (descrizione editabile), stato, cliente, responsabile,
- *     cantiere, data + "Modifica completa" verso /modifica.
- *  2) Descrizione cantiere: titolo/descrizione editabile inline (matita).
- *  3) Dettagli del lavoro / cose da fare: nota del capo + TODO/Riunioni (ex tab Lavori).
+ *  1) Riepilogo: nome (editabile dalla matita accanto al titolo), stato,
+ *     cliente, responsabile, cantiere, data + "Modifica" verso /modifica.
+ *  2) Dettagli del lavoro / cose da fare: nota del capo + task/riunioni.
+ *
+ * ⚠️ Fra i due c'era una card «Descrizione cantiere» che stampava di nuovo il
+ * titolo — la stessa variabile, non un altro campo — e serviva solo a tenere
+ * la matita. Tolta l'08/10/2026: la matita è salita accanto al titolo.
  */
 export default async function CommessaTab({
   params,
@@ -56,11 +59,25 @@ export default async function CommessaTab({
                 </span>
                 <StatoChip stato={stato} />
               </div>
-              <h2 className="mt-1 break-words text-xl font-semibold leading-snug text-foreground">
-                {titolo ?? (
-                  <span className="italic text-muted-foreground">Senza descrizione</span>
-                )}
-              </h2>
+              {/* ⭐ La matita sta ACCANTO al titolo, non in una card sua.
+                  Fino al 08/10/2026 sotto questo riquadro ce n'era un secondo,
+                  «Descrizione cantiere», che mostrava la stessa identica
+                  stringa (è la stessa variabile) e serviva solo a ospitare
+                  questa matita: due volte la stessa frase a dieci pixel di
+                  distanza fa credere che siano due campi diversi. */}
+              <div className="mt-1 flex items-start gap-1.5">
+                <h2 className="min-w-0 break-words text-xl font-semibold leading-snug text-foreground">
+                  {titolo ?? (
+                    <span className="italic text-muted-foreground">Senza descrizione</span>
+                  )}
+                </h2>
+                <DescrizioneCantiereEdit
+                  commessaId={params.id}
+                  initial={titolo}
+                  canEdit={canEdit}
+                  triggerClassName="mt-1 shrink-0"
+                />
+              </div>
             </div>
             {canEdit ? (
               <Button asChild variant="outline" size="sm" className="gap-1.5">
@@ -98,32 +115,7 @@ export default async function CommessaTab({
         </CardContent>
       </Card>
 
-      {/* 2) Descrizione cantiere */}
-      <Card className="relative">
-        <CardContent className="px-4 py-3">
-          <div className="mb-1 flex items-center justify-between">
-            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-              Descrizione cantiere
-            </p>
-            <DescrizioneCantiereEdit
-              commessaId={params.id}
-              initial={titolo}
-              canEdit={canEdit}
-            />
-          </div>
-          {titolo ? (
-            <p className="text-sm leading-relaxed text-foreground/90">{titolo}</p>
-          ) : (
-            <p className="text-sm italic text-muted-foreground">
-              Nessuna descrizione. Usa la matita per aggiungere il nome/descrizione
-              della commessa (non rinomina la cartella).
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 3) Dettagli del lavoro / cose da fare */}
+      {/* 2) Dettagli del lavoro / cose da fare */}
       <Card className="relative border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/10">
         <CardContent className="px-4 py-3">
           <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

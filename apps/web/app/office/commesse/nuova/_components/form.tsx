@@ -36,7 +36,7 @@ import {
 } from '@kommessa/ui';
 
 import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
-import { camelCaseToWords } from '../../../../_lib/camel-to-words';
+import { anteprimaNomeCartella } from '@kommessa/api/nome-cartella';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
 import { useRicercaClienti } from '@/app/_components/cliente-picker';
@@ -606,11 +606,10 @@ export function NuovaCommessaForm({
     );
   }
 
-  const anteprima = anteprimaCartella(
-    state.cliente.ragione_sociale,
-    state.cliente.tipo,
-    state.descrizione,
-  );
+  const anteprima = anteprimaNomeCartella({
+    cliente: state.cliente.ragione_sociale,
+    descrizione: state.descrizione,
+  });
   const vociBSel = [...state.voci].filter((id) => !vociDefault.includes(id)).length;
   const totalVoci = vociDefault.length + vociBSel;
 
@@ -1054,7 +1053,7 @@ export function NuovaCommessaForm({
                     <CardTitle className="text-base">Descrizione</CardTitle>
                     <CardDescription>
                       <strong>Note</strong>: contesto libero in italiano (resta visibile come "Dettagli" della commessa).<br />
-                      <strong>Descrizione</strong>: 1-3 parole CamelCase usate nel nome cartella.
+                      <strong>Descrizione</strong>: il titolo del lavoro, in parole normali.
                     </CardDescription>
                   </div>
                 </div>
@@ -1079,12 +1078,12 @@ export function NuovaCommessaForm({
 
                 <div className="space-y-1.5">
                   <Label htmlFor="desc" className="flex items-center gap-1">
-                    Descrizione cartella (max 30, CamelCase)
+                    Descrizione del lavoro
                     <span aria-hidden="true" className="text-destructive">*</span>
                     <span className="sr-only">campo obbligatorio</span>
                   </Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Sintesi breve usata nel nome cartella su Nextcloud. Es. "SostituzioneCaldaia", "BagnoRifacimento".
+                    Il titolo del lavoro, come lo diresti a voce. Es. &quot;Sostituzione caldaia&quot;, &quot;Rifacimento bagno&quot;.
                   </p>
 
                   {/* CTA AI prominente: prima era un'icona "stellina" silenziosa
@@ -1114,7 +1113,8 @@ export function NuovaCommessaForm({
                   <Input
                     id="desc"
                     ref={descrizioneRef}
-                    maxLength={30}
+                    maxLength={60}
+                    placeholder="Es. Sostituzione caldaia"
                     aria-invalid={Boolean(fieldErrors.descrizione)}
                     aria-describedby={fieldErrors.descrizione ? 'desc-error' : undefined}
                     className={
@@ -1127,7 +1127,6 @@ export function NuovaCommessaForm({
                       clearFieldError('descrizione');
                       setState((s) => ({ ...s, descrizione: e.target.value }));
                     }}
-                    placeholder="SistemazioneBagno (oppure usa il bottone qui sopra)"
                   />
                   {fieldErrors.descrizione ? (
                     <p
@@ -1173,22 +1172,17 @@ export function NuovaCommessaForm({
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Versione "leggibile" sopra: la stessa descrizione CamelCase
-                    spezzata in parole. È quella che l'utente immagina di leggere
-                    in app. Sotto, in monospace, la versione tecnica che finisce
-                    nel nome cartella su Nextcloud. */}
-                {state.descrizione ? (
-                  <p className="mb-2 break-words text-sm font-medium leading-snug text-foreground">
-                    {camelCaseToWords(state.descrizione)}
-                  </p>
-                ) : null}
+                {/* ⭐ Nessuna riga "leggibile" qui sopra: la versione leggibile
+                    È il campo Descrizione, due righe più su. Qui resta solo la
+                    versione tecnica, cioè la cartella che nascerà davvero. */}
                 <code className="block break-all rounded-md bg-muted/60 p-3 font-mono text-xs leading-relaxed text-foreground">
-                  /{anteprima}/
+                  /{anteprima}
                 </code>
                 <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
                   La cartella nascerà su Nextcloud in <code className="font-mono">01_Richieste</code>.
-                  Il codice <code className="font-mono">BER-XXXX-XXX</code> viene assegnato al salvataggio
-                  (formato <em>BER-MM&shy;AA-progressivo annuale</em>) — qui è solo un placeholder.
+                  Il <code className="font-mono">&lt;codice&gt;</code> viene assegnato al salvataggio
+                  (sigla azienda, mese e anno, progressivo). Il nome della cartella non si
+                  cambia più: la descrizione sì.
                 </p>
               </CardContent>
             </Card>
@@ -1322,32 +1316,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function anteprimaCartella(
-  rag: string,
-  _tipo: 'persona_fisica' | 'azienda',
-  desc: string,
-): string {
-  // Formato reale (allineato a crea-commessa.ts):
-  //   <codiceInterno>_<segCliente>_<segDescrizione>
-  //   es. BER-0526-001_MarioRossi_SostituzioneCaldaia
-  // Il codice è generato dalla RPC al salvataggio: qui mostriamo un
-  // placeholder con anno corrente (BER-MMYY-XXX).
-  const oggi = new Date();
-  const yy = String(oggi.getFullYear() % 100).padStart(2, '0');
-  const mm = String(oggi.getMonth() + 1).padStart(2, '0');
-  const codicePlaceholder = `BER-${mm}${yy}-XXX`;
-  const segCliente = sanitizeClient(rag) || 'Cliente';
-  const segDesc = sanitizeClient(desc) || 'Commessa';
-  return `01_Richieste/${codicePlaceholder}_${segCliente}_${segDesc}`;
-}
-
-function sanitizeClient(input: string): string {
-  return input
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^A-Za-z0-9]+/g, '')
-    .slice(0, 30);
-}
 
 // ---------------------------------------------------------------------
 // Voice suggestion preview

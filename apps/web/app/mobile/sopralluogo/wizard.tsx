@@ -25,6 +25,7 @@ import {
   StatoBadge,
 } from '@kommessa/ui';
 
+import { anteprimaNomeCartella } from '@kommessa/api/nome-cartella';
 import { creaCommessa } from '../../_actions/crea-commessa';
 import {
   creaVoceCustom,
@@ -1163,10 +1164,11 @@ function Step5Nome({
       </p>
 
       <div className="space-y-2">
-        <Label htmlFor="desc">Descrizione (CamelCase, max 30 caratteri)</Label>
+        <Label htmlFor="desc">Descrizione del lavoro</Label>
         <Input
           id="desc"
-          maxLength={30}
+          maxLength={60}
+          placeholder="Es. Sostituzione caldaia"
           className="h-12 text-base"
           value={state.descrizioneFinale}
           onChange={(e) => setState((s) => ({ ...s, descrizioneFinale: e.target.value }))}
@@ -1211,7 +1213,10 @@ function Step5Nome({
         <p className="text-muted-foreground">
           Cartella Nextcloud:{' '}
           <code className="break-all">
-            /{anteprimaCartella(state.cliente.nome, state.cliente.tipo, state.descrizioneFinale)}/
+            /{anteprimaNomeCartella({
+              cliente: state.cliente.nome,
+              descrizione: state.descrizioneFinale,
+            })}
           </code>
         </p>
       </div>
@@ -1270,7 +1275,7 @@ function Step7Conferma({
       <ul className="space-y-1 rounded-md border bg-card p-3 text-sm">
         <li><strong>Cliente:</strong> {state.cliente.nome}</li>
         <li><strong>Voci:</strong> {state.vociSelezionate.size}</li>
-        <li><strong>Descrizione:</strong> <code className="text-xs">{state.descrizioneFinale}</code></li>
+        <li><strong>Descrizione:</strong> {state.descrizioneFinale}</li>
         {mediaCount > 0 ? (
           <li><strong>Foto/video:</strong> {mediaCount} file da caricare</li>
         ) : null}
@@ -1366,19 +1371,3 @@ function Step8Success({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function anteprimaCartella(rag: string, tipo: 'persona_fisica' | 'azienda', desc: string): string {
-  const seg1 = sanitize(
-    tipo === 'persona_fisica' ? rag.trim().split(/\s+/).slice(-1)[0] ?? rag : rag,
-  );
-  const seg2 = new Date().toISOString().slice(0, 10);
-  const seg3 = sanitize(desc);
-  return `${seg1 || 'Cliente'}_${seg2}_${seg3 || 'Commessa'}`;
-}
-
-function sanitize(input: string): string {
-  return input
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^A-Za-z0-9]+/g, '')
-    .slice(0, 30);
-}

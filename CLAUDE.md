@@ -891,6 +891,76 @@ correzioni:
 > emergere errori veri. Da fare all'inizio di una sessione tranquilla, non
 > prima di una funzione nuova.
 
+#### Il titolo e la cartella si separano (08/10/2026) — nessuna migration
+
+Segnalato da una persona dell'ufficio: «non riesco a modificare le note nella
+sezione Descrizione cantiere». Erano **due** difetti attaccati, e dietro il
+secondo c'era un campo che faceva due mestieri.
+
+- ⭐ **Un campo, due mestieri, e vinceva quello sbagliato.**
+  `commesse.descrizione_ai_finale` era insieme il **titolo mostrato** e il
+  **terzo segmento di `nome_cartella`**. Siccome una cartella non tollera gli
+  spazi, vinceva lei: l'AI proponeva direttamente `ImpiantiMeccaniciCasaLegno`,
+  quel valore finiva in tabella, e a schermo si leggeva **un nome di file al
+  posto di una frase**. Da ora la descrizione è una frase umana e il CamelCase
+  si **deriva** alla creazione — ⚠️ **senza una colonna nuova**: la versione
+  CamelCase ha già una casa definitiva, `nome_cartella`, che per regola ferrea
+  non si rinomina mai. Regole pure in `@kommessa/api/nome-cartella`
+  (17 asserzioni): ⚠️ una parola che ha **già** una maiuscola non si tocca
+  (`kW` resta `kW`, e chi scrive ancora `ImpiantiMeccanici` non viene
+  appiattito), e il taglio a 40 caratteri è **a parola intera** — il vecchio
+  `sanitize()` troncava a metà e `…RifacimentoImpiant` restava così per sempre.
+  ⚠️ **Le commesse esistenti NON si toccano**: il titolo resta attaccato, è una
+  scelta. Si correggono una per una dalla matita, che non rinomina la cartella.
+- ⚠️ **La doppia verità era già in produzione**: una commessa nata da una
+  richiesta al telefono ha sempre avuto il titolo **con gli spazi**
+  (`richiesta-bozza.ts` passa il titolo del todo) e una cartella
+  `Cambiocaldaia`, tutta minuscola. Due sapori a seconda di da dove entrava la
+  commessa; ora la regola è una.
+- ⚠️ **L'anteprima del percorso era scritta a mano in tre posti e due
+  mostravano un formato abbandonato**: `Cliente_2026-10-08_Lavoro`, con la data
+  che il formato vero non ha da mesi; la terza scriveva «BER» nel sorgente,
+  quindi era falsa per ogni altro cliente. ⭐ Ora l'anteprima **chiama la
+  stessa funzione del server**, e un test verifica che combacino. Il codice si
+  mostra come `<codice>` dichiarato invece di inventarne uno.
+- **Quattro prompt riscritti**: `/api/suggerisci-nome` (sistema + tre esempi) e
+  l'estrazione della dettatura (`api/voice/_lib/extract-prompt.ts`, sette
+  esempi) chiedevano **esplicitamente** CamelCase, max 30 caratteri. Ora
+  chiedono una frase italiana, max 60. ⚠️ La tabella delle voci dominanti era
+  **copiata** dentro il ripiego della dettatura — dieci voci invece di tredici,
+  sotto il commento «stessa logica di suggerisci-nome», vero il giorno in cui è
+  stato scritto: ora la importa.
+- ⭐ **Guadagno di contorno, misurabile**: cercare «impianti meccanici» non
+  trovava `ImpiantiMeccaniciCasaLegno` — la ricerca fa `ilike %…%`. I titoli
+  nuovi sono cercabili.
+- **Via la card «Descrizione cantiere»**: stampava di nuovo il titolo (è la
+  **stessa variabile**, non un altro campo) e serviva solo a ospitare una
+  matita. La matita è salita accanto al titolo. Due volte la stessa frase a
+  dieci pixel di distanza fa credere che siano due campi diversi — ed è
+  esattamente l'equivoco da cui è partita la segnalazione.
+- ⚠️ **E le note: un comando che prometteva e poi rifiutava.**
+  `aggiornaDettagliCommessa` ammetteva **solo `admin`** dal giorno in cui il
+  campo è nato, ma dal 18/06 la scheda desktop mostra la matita a
+  `admin || office` (la riprogettazione passò il `canEdit` della pagina a
+  entrambi gli editor). Quattro persone su sei in Bertaiola aprivano il
+  riquadro, scrivevano, premevano Salva e leggevano «Solo gli admin possono
+  modificare i dettagli». ⭐ **E il divieto non proteggeva niente**: lo stesso
+  campo l'ufficio lo scriveva da «Modifica» → editor completo, che passa da
+  `aggiornaCommessaCompleta` (admin + office). Non era un confine: era una
+  seconda risposta alla stessa domanda. Ora ufficio e amministratori, in
+  entrambe le superfici. ⚠️ Tolta anche la modalità «aggiungi in fondo» di
+  `DettagliEdit`: aveva titolo, descrizione e stato dedicati, e **nessun tasto
+  che la aprisse**, in nessuna delle due superfici.
+
+Banco: `scripts/banco-ui/scheda-commessa.mjs` (15 controlli, si accede come
+**ufficio** — col `demo@` di sempre, che è admin, il difetto non si sarebbe
+visto). ⚠️ Due modi in cui questo banco ha mentito prima di dire il vero: il
+primo controllo passava su una **pagina ancora vuota** (aspettava
+`readyState`, che è «completo» mentre si vede lo scheletro di `loading.tsx`), e
+l'anteprima della cartella si misurava **prima** che `useBozzaDraft` avesse
+finito di rimettere lo stato, quindi leggeva il campo svuotato e dava la colpa
+al codice.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

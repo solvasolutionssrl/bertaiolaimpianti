@@ -16,14 +16,26 @@ export type AggiornaDettagliResult =
   | { ok: false; error: string };
 
 /**
- * Aggiorna i "Dettagli" (campo `commesse.note_iniziali`) di una commessa.
+ * Aggiorna i "Dettagli" (campo `commesse.note_iniziali`) di una commessa: il
+ * contesto del lavoro scritto da chi l'ha aperta, che i tecnici leggono in
+ * cantiere.
  *
- * Solo `admin` e `owner` possono editare — il capo cantiere ha già scritto
- * la nota iniziale via voice intake, quindi tipicamente è un admin che
- * vuole correggere/aggiungere informazioni dopo.
+ * **Lo modificano ufficio e amministratori**, cioè chi la commessa la
+ * gestisce.
  *
- * L'utente può anche concatenare aggiunte separandole con doppio newline
- * (l'UI lo proporrà come "Aggiungi nota").
+ * ⚠️ Fino all'08/10/2026 qui passava **solo** `admin`, e il risultato era un
+ * comando che prometteva e poi rifiutava: la scheda desktop mostra la matita a
+ * `admin || office` dal 18/06, quindi quattro persone su sei in Bertaiola
+ * aprivano il riquadro, scrivevano, premevano Salva e leggevano in rosso
+ * «Solo gli admin possono modificare i dettagli».
+ *
+ * ⭐ E il divieto non proteggeva niente: **lo stesso campo** è sempre stato
+ * scrivibile dall'ufficio da «Modifica» → editor completo, che passa da
+ * `aggiornaCommessaCompleta` (admin + office). Non era un confine, era una
+ * seconda risposta alla stessa domanda.
+ *
+ * ⚠️ `owner` non compare più perché non esiste più: il ruolo è diventato
+ * irraggiungibile con la pulizia del 07/10 (`onboard-tenant` ritirata).
  */
 export async function aggiornaDettagliCommessa(
   input: unknown,
@@ -41,8 +53,11 @@ export async function aggiornaDettagliCommessa(
     return { ok: false, error: 'Sessione non valida' };
   }
 
-  if (ctx.role !== 'admin') {
-    return { ok: false, error: 'Solo gli admin possono modificare i dettagli' };
+  if (ctx.role !== 'admin' && ctx.role !== 'office') {
+    return {
+      ok: false,
+      error: 'Solo ufficio e amministratori possono modificare i dettagli',
+    };
   }
 
   const supabase = createServerSupabase();

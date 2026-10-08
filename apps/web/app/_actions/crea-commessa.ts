@@ -27,6 +27,7 @@ import {
   ensureStatusFolders,
 } from '../_lib/commessa-stato-folder';
 import { CAPACITA_META } from '@kommessa/api/capacita';
+import { componiNomeCartella } from '@kommessa/api/nome-cartella';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
 
 /**
@@ -67,34 +68,11 @@ import { possoAprireLavori } from '@/app/_lib/capacita-server';
 // ---------------------------------------------------------------------
 
 /**
- * NFD-normalizza, rimuove diacritici, scarta non-alphanum, taglia a 30.
- * Usato per i 3 segmenti di nome_cartella.
+ * ⭐ Come si compone `nome_cartella` sta in `@kommessa/api/nome-cartella`, non
+ * qui: la stessa regola serve a questo server e alle tre anteprime che
+ * mostrano il percorso prima di salvare. Erano quattro copie, e due di esse
+ * disegnavano un formato abbandonato.
  */
-function sanitize(input: string, max = 40): string {
-  return input
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^A-Za-z0-9]+/g, '')
-    .slice(0, max);
-}
-
-/**
- * Estrae il segmento "cliente" del nome cartella.
- * Persona fisica: Nome+Cognome (capitalized, sanitized) — evita collisioni
- *   tra omonimi sullo stesso cognome.
- * Azienda: ragione sociale intera sanitizzata.
- *
- * Esempi (post-sanitize):
- *   "Mario Rossi" persona_fisica → "MarioRossi"
- *   "Comune di Castagnole" azienda → "ComuneDiCastagnole"
- *   "Edilizia Tre S.r.l." azienda → "EdiliziaTreSrl"
- */
-function estraiSegmentoCliente(
-  ragioneSociale: string,
-  _tipo: 'persona_fisica' | 'azienda',
-): string {
-  return ragioneSociale.trim();
-}
 
 /** Oggi a Roma: il server gira in UTC e fra mezzanotte e le 2 sarebbe ancora ieri. */
 function dataIsoOggi(): string {
@@ -137,7 +115,6 @@ export async function creaCommessa(
   // 3) Risolvi/crea cliente
   let clienteId: string;
   let clienteRagione: string;
-  let clienteTipo: 'persona_fisica' | 'azienda';
 
   if (data.clienteId) {
     const { data: cli, error } = await supabase
@@ -150,7 +127,6 @@ export async function creaCommessa(
     if (!cli) return { ok: false, error: 'Cliente selezionato non trovato.' };
     clienteId = cli.id;
     clienteRagione = cli.ragione_sociale;
-    clienteTipo = cli.tipo as 'persona_fisica' | 'azienda';
   } else {
     const nuovo = data.clienteNew!;
     // Dedup: stessa ragione sociale + overlap email/telefono nello stesso tenant
@@ -176,7 +152,6 @@ export async function creaCommessa(
     if (match) {
       clienteId = match.id;
       clienteRagione = match.ragione_sociale;
-      clienteTipo = match.tipo as 'persona_fisica' | 'azienda';
     } else {
       const { data: inserted, error: insErr } = await supabase
         .from('clienti')
@@ -199,7 +174,6 @@ export async function creaCommessa(
       }
       clienteId = inserted.id;
       clienteRagione = inserted.ragione_sociale;
-      clienteTipo = inserted.tipo as 'persona_fisica' | 'azienda';
     }
   }
 
@@ -229,9 +203,16 @@ export async function creaCommessa(
   //    e la descrizione servono SOLO per leggibilità nel filesystem
   //    (Esplora Risorse Windows / Finder Mac / Nextcloud Files).
   //    Niente data nel nome: è già implicita nel codice (-MM AA-).
-  const segCliente = sanitize(estraiSegmentoCliente(clienteRagione, clienteTipo)) || 'Cliente';
-  const segDesc = sanitize(data.descrizioneFinale) || 'Commessa';
-  const baseName = `${codiceInterno}_${segCliente}_${segDesc}`;
+  //
+  //    ⭐ La descrizione arriva qui come FRASE UMANA («Impianti meccanici casa
+  //    legno») e il segmento CamelCase si deriva: è l'unico posto dove la
+  //    conversione avviene, e avviene una volta sola nella vita della
+  //    commessa, perché nome_cartella da qui in poi non si rinomina mai.
+  const baseName = componiNomeCartella({
+    codice: codiceInterno,
+    cliente: clienteRagione,
+    descrizione: data.descrizioneFinale,
+  });
 
   const nomeCartella = await trovaNomeCartellaLibero(supabase, ctx.tenantId, baseName);
   // Nuovo schema: la commessa nasce sempre dentro 01_Richieste; le 4 cartelle

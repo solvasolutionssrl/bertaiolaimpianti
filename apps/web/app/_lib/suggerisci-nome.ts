@@ -1,10 +1,17 @@
 /**
- * Helper locale per generare una proposta di descrizione/cartella
- * a partire da voci selezionate + cliente + note.
+ * Proposta di **descrizione** di una commessa a partire da voci di catalogo,
+ * cliente e note — senza chiamare nessun modello.
  *
- * Logica deterministica leggibile (no LLM): mapping voci → etichette
- * + euristica sulle note. Usata come fallback finché la Edge Function
- * `ai-name` non è disponibile (vedi /api/suggerisci-nome).
+ * Logica deterministica leggibile: le voci dominanti hanno un'etichetta, e in
+ * mancanza di voci si pescano le prime parole significative dalle note. È il
+ * ripiego di `/api/suggerisci-nome` quando OpenAI non è configurata, risponde
+ * male o non risponde affatto.
+ *
+ * ⭐ **Qui si scrivono frasi, non nomi di cartella.** Fino al 08/10/2026 questo
+ * file proponeva `InstallazioneCaldaia`, perché quel valore diventava insieme
+ * il titolo della commessa e il terzo segmento del nome cartella. Da quando i
+ * due mestieri sono separati (`@kommessa/api/nome-cartella`), il CamelCase lo
+ * deriva il server e qui resta la lingua italiana con gli spazi.
  *
  * Riferimenti:
  *  - Tassonomia_Lavori.md §2-3 (voci 1..38)
@@ -21,31 +28,44 @@ export interface SuggerisciResult {
   alternatives: string[];
 }
 
+/** Quanto può essere lunga una descrizione proposta (come `creaCommessa`). */
+const MAX_DESCRIZIONE = 60;
+
 /**
- * Voci "dominanti" mappate a etichette CamelCase brevi. L'ordine in
- * questa lista riflette la priorità: la prima trovata diventa la
- * proposta principale.
+ * Voci "dominanti" mappate a etichette brevi. L'ordine in questa lista
+ * riflette la priorità: la prima trovata diventa la proposta principale.
  */
 const ETICHETTE_DOMINANTI: ReadonlyArray<{ id: number; label: string }> = [
-  { id: 17, label: 'ImpiantoSolare' },
+  { id: 17, label: 'Impianto solare' },
   { id: 18, label: 'Fotovoltaico' },
-  { id: 19, label: 'InstallazioneCaldaia' },
-  { id: 15, label: 'ImpiantoGas' },
-  { id: 14, label: 'ImpiantoCondizionamento' },
-  { id: 13, label: 'SistemazioneBagno' },
-  { id: 31, label: 'MontaggioBagni' },
-  { id: 30, label: 'PavimentoRadiante' },
-  { id: 32, label: 'CentraleTermica' },
-  { id: 16, label: 'AspirazioneCentralizzata' },
-  { id: 11, label: 'ColonneSanitario' },
-  { id: 12, label: 'ColonneRiscaldamento' },
-  { id: 28, label: 'PiattoDoccia' },
+  { id: 19, label: 'Installazione caldaia' },
+  { id: 15, label: 'Impianto gas' },
+  { id: 14, label: 'Impianto di condizionamento' },
+  { id: 13, label: 'Sistemazione bagno' },
+  { id: 31, label: 'Montaggio bagni' },
+  { id: 30, label: 'Pavimento radiante' },
+  { id: 32, label: 'Centrale termica' },
+  { id: 16, label: 'Aspirazione centralizzata' },
+  { id: 11, label: 'Colonne sanitario' },
+  { id: 12, label: 'Colonne riscaldamento' },
+  { id: 28, label: 'Piatto doccia' },
 ];
 
 /**
- * Restituisce una proposta + lista di alternative.
- * Pulizia e CamelCase sono garantiti dall'output.
+ * L'etichetta della prima voce dominante fra quelle scelte, se c'è.
+ *
+ * ⚠️ Esportata perché il ripiego senza AI della **dettatura**
+ * (`api/voice/_lib/extract-prompt.ts`) aveva una copia a mano di questa
+ * tabella — dieci voci invece di tredici, col commento «stessa logica di
+ * suggerisci-nome» che era vero il giorno in cui è stato scritto. Due elenchi
+ * della stessa cosa divergono sempre, e qui divergevano già.
  */
+export function etichettaDominante(vociIds: readonly number[]): string | null {
+  const voci = new Set(vociIds);
+  return ETICHETTE_DOMINANTI.find((e) => voci.has(e.id))?.label ?? null;
+}
+
+/** Restituisce una proposta + lista di alternative. */
 export function suggerisciDescrizione(input: SuggerisciInput): SuggerisciResult {
   const voci = new Set(input.voci ?? []);
   const matching = ETICHETTE_DOMINANTI.filter((e) => voci.has(e.id));
@@ -59,26 +79,37 @@ export function suggerisciDescrizione(input: SuggerisciInput): SuggerisciResult 
     };
   }
 
-  // Fallback: prime parole significative dalle note (max 30 char)
+  // Ripiego: le prime parole significative dalle note.
   if (input.note && input.note.trim().length > 0) {
-    const camel = toCamelCase(input.note).slice(0, 30);
-    if (camel.length >= 3) {
-      return { proposta: camel, alternatives: ['NuovaCommessa'] };
+    const frase = primeParole(input.note);
+    if (frase.length >= 3) {
+      return { proposta: frase, alternatives: ['Nuova commessa'] };
     }
   }
 
-  return { proposta: 'NuovaCommessa', alternatives: [] };
+  return { proposta: 'Nuova commessa', alternatives: [] };
 }
 
-function toCamelCase(input: string): string {
-  return input
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/[^A-Za-z0-9 ]/g, ' ')
+/**
+ * Le prime parole di un testo, come frase leggibile: maiuscola iniziale e
+ * nient'altro toccato. ⚠️ Il taglio è **a parola intera** — una descrizione
+ * mozzata a metà parola finirebbe così nel nome della cartella, che non si
+ * rinomina più.
+ */
+function primeParole(testo: string, max = MAX_DESCRIZIONE): string {
+  const parole = testo
+    .replace(/\s+/g, ' ')
     .trim()
-    .split(/\s+/)
+    .split(' ')
     .filter(Boolean)
-    .slice(0, 4)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join('');
+    .slice(0, 6);
+
+  let fuori = '';
+  for (const parola of parole) {
+    const candidato = fuori ? `${fuori} ${parola}` : parola;
+    if (candidato.length > max) break;
+    fuori = candidato;
+  }
+  if (!fuori) fuori = (parole[0] ?? '').slice(0, max);
+  return fuori ? fuori.charAt(0).toUpperCase() + fuori.slice(1) : '';
 }

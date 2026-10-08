@@ -33,9 +33,14 @@ const inputSchema = z.object({
   note: z.string().optional(),
 });
 
+/**
+ * ⚠️ Il tetto e' 60 come `creaCommessa`, non 30 come quando questa rotta
+ * proponeva un nome di cartella: ora propone la **descrizione** della
+ * commessa, cioe' una frase che una persona legge.
+ */
 const outputSchema = z.object({
-  proposta: z.string().trim().min(1).max(30),
-  alternatives: z.array(z.string().trim().min(1).max(30)).max(5),
+  proposta: z.string().trim().min(1).max(60),
+  alternatives: z.array(z.string().trim().min(1).max(60)).max(5),
 });
 
 export const runtime = 'nodejs';
@@ -47,24 +52,24 @@ Voci selezionate: [19, 13, 31]
 Cliente: Rossi Mario
 Note: sostituzione caldaia + due bagni nuovi
 {
-  "proposta": "CaldaiaEDueBagni",
-  "alternatives": ["InstallazioneCaldaia", "SistemazioneBagno", "RifacimentoBagni"]
+  "proposta": "Caldaia e due bagni nuovi",
+  "alternatives": ["Sostituzione caldaia", "Rifacimento bagni", "Caldaia e sanitari"]
 }
 
 Voci selezionate: [18]
 Cliente: Bianchi Lucia
 Note: fotovoltaico 6 kW con accumulo
 {
-  "proposta": "Fotovoltaico6kW",
-  "alternatives": ["ImpiantoFotovoltaico", "FotovoltaicoAccumulo", "Fotovoltaico"]
+  "proposta": "Fotovoltaico 6 kW con accumulo",
+  "alternatives": ["Impianto fotovoltaico", "Fotovoltaico con accumulo", "Fotovoltaico"]
 }
 
 Voci selezionate: [30, 32]
 Cliente: Edilizia Tre Srl
 Note: duplex nuovo, pavimento radiante + centrale termica
 {
-  "proposta": "RadianteECentrale",
-  "alternatives": ["PavimentoRadiante", "CentraleTermica", "ImpiantoNuovo"]
+  "proposta": "Pavimento radiante e centrale termica",
+  "alternatives": ["Pavimento radiante", "Centrale termica", "Impianti duplex nuovo"]
 }`;
 
 export async function POST(req: Request) {
@@ -122,12 +127,14 @@ export async function POST(req: Request) {
     .join(', ');
 
   const system = [
-    'Sei un assistente che propone nomi cartella CamelCase per commesse termoidrauliche/elettriche.',
+    'Sei un assistente che propone la descrizione di una commessa termoidraulica/elettrica.',
     '',
     'REGOLE:',
     '- Output: JSON con `proposta` (1 stringa) e `alternatives` (array di esattamente 3 stringhe diverse).',
     '- Lingua italiana.',
-    '- Ogni nome: 1-4 parole CamelCase, max 30 caratteri totali, SOLO lettere/cifre (no spazi, no accenti, no slash, no trattini, no underscore).',
+    '- Ogni descrizione: una frase breve CON GLI SPAZI, 2-6 parole, max 60 caratteri.',
+    '- Maiuscola solo alla prima parola, come un titolo. Niente CamelCase, niente ParoleAttaccate.',
+    '- Niente slash, niente a capo, niente virgolette.',
     '- Sintetico, descrittivo, leggibile da un capo cantiere.',
     '- Non inventare cliente, non usare il nome del cliente nella proposta (verrà aggiunto come prefisso a parte).',
     '- Se le voci sono poche/generiche, ricorri a parole significative dalle note.',
@@ -174,21 +181,26 @@ export async function POST(req: Request) {
       return NextResponse.json(out, { status: 200 });
     }
 
-    // Sanitize finale: la regola CamelCase è hard, applichiamola anche
-    // sull'output LLM (best-effort; rimuove caratteri non alfanumerici
-    // che il modello potrebbe aver inserito malgrado le istruzioni).
-    const sanitize = (s: string): string =>
+    // Pulizia finale, best-effort: gli spazi RESTANO — è una frase, non un
+    // nome di cartella. Si tolgono solo le cose che in un titolo non ci
+    // stanno (a capo, slash, virgolette) e si comprimono gli spazi doppi.
+    // ⚠️ Accenti e punteggiatura NON si toccano: a toglierli ci pensa
+    // `segmentoDescrizione` quando deriva il nome cartella, e qui servono
+    // per scrivere «città» come si scrive.
+    const pulisci = (s: string): string =>
       s
-        .normalize('NFD')
-        .replace(/\p{Diacritic}/gu, '')
-        .replace(/[^A-Za-z0-9]/g, '')
-        .slice(0, 30);
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/["'`\\/|]+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 60)
+        .trim();
 
-    const proposta = sanitize(validated.data.proposta);
+    const proposta = pulisci(validated.data.proposta);
     const alternatives = Array.from(
       new Set(
         validated.data.alternatives
-          .map(sanitize)
+          .map(pulisci)
           .filter((a) => a.length >= 3 && a !== proposta),
       ),
     ).slice(0, 3);

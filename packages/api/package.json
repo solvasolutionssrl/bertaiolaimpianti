@@ -51,7 +51,8 @@
     "./indirizzo-scelto": "./src/indirizzo-scelto.ts",
     "./scadenza-password": "./src/scadenza-password.ts",
     "./assegnazione": "./src/assegnazione.ts",
-    "./zoom-foto": "./src/zoom-foto.ts"
+    "./zoom-foto": "./src/zoom-foto.ts",
+    "./nome-cartella": "./src/nome-cartella.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

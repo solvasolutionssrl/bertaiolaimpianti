@@ -371,12 +371,12 @@ export function VoiceReview({
             <div className="space-y-2 pt-1">
               <Input
                 value={descrizione.value}
-                maxLength={30}
-                className="h-11 font-mono text-base"
+                maxLength={60}
+                className="h-11 text-base"
                 onChange={(e) =>
                   setDescrizione({ status: 'editing', value: e.target.value })
                 }
-                aria-label="Descrizione cartella CamelCase"
+                aria-label="Descrizione del lavoro"
               />
               {descrAlternatives.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5 text-xs">

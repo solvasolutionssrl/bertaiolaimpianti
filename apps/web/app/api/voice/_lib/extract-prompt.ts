@@ -14,11 +14,13 @@
  *   "email"?: string,
  *   "indirizzo"?: string,
  *   "voci_ids"?: number[],
- *   "descrizione"?: string,    // CamelCase 1-4 parole, max 30 char
+ *   "descrizione"?: string,    // frase breve con gli spazi, max 60 char
  *   "note"?: string,           // estratto/riassunto della parte libera
  *   "tag_suggeriti"?: string[] // lowercase, max 5
  * }
  */
+
+import { etichettaDominante } from '../../../_lib/suggerisci-nome';
 
 export interface VoceCat {
   id: number;
@@ -37,7 +39,7 @@ L'audio è una nota vocale del capocantiere di un'azienda termoidraulica/elettri
 REGOLE INDEROGABILI:
 - Non inventare dati: se un campo non è chiaramente desumibile dal transcript, OMETTILO dall'output (NON usare null, NON usare stringhe vuote).
 - "voci_ids" deve contenere SOLO id presenti nel catalogo qui sotto.
-- "descrizione" è il nome cartella in CamelCase, 1-4 parole, max 30 caratteri, niente accenti/spazi/slash. Esempi: "SistemazioneBagno", "InstallazioneCaldaia", "ImpiantoSolareCompleto".
+- "descrizione" è il titolo del lavoro: una frase breve in italiano CON GLI SPAZI, 2-6 parole, max 60 caratteri, maiuscola solo alla prima parola, niente slash. Esempi: "Sistemazione bagno", "Installazione caldaia", "Impianto solare completo".
 - "tag_suggeriti" sono massimo 5 stringhe lowercase senza spazi (es. "urgente", "garanzia", "bonus_110").
 - "telefono" normalizzato a cifre + eventuale prefisso (es. "+39 333 1234567" o "0422 123456").
 - "email" lowercase, valida nella forma.
@@ -88,37 +90,37 @@ const FEW_SHOT = `ESEMPI:
 [1] Persona fisica:
 Transcript: "Allora sopralluogo da Rossi Mario via Roma 12 Treviso, mi ha chiesto di sostituire la caldaia e di rifargli due bagni completi, urgente perché parte a febbraio. Telefono 333 4567890."
 Output JSON:
-{"ragione_sociale":"Rossi Mario","tipo":"persona_fisica","telefono":"+39 333 4567890","indirizzo":"via Roma 12","citta":"Treviso","voci_ids":[19,13,31],"descrizione":"CaldaiaEDueBagni","note":"Sostituzione caldaia + rifacimento due bagni completi. Parte febbraio.","tag_suggeriti":["urgente"]}
+{"ragione_sociale":"Rossi Mario","tipo":"persona_fisica","telefono":"+39 333 4567890","indirizzo":"via Roma 12","citta":"Treviso","voci_ids":[19,13,31],"descrizione":"Caldaia e due bagni","note":"Sostituzione caldaia + rifacimento due bagni completi. Parte febbraio.","tag_suggeriti":["urgente"]}
 
 [2] Azienda con referente esplicito:
 Transcript: "Sopralluogo dalla ditta Edilizia Tre S.r.l. in via dell'Industria 8 Castelfranco Veneto, vogliono rifare l'impianto gas dello stabilimento. Riferimento Marco Bianchi al 0423 987654."
 Output JSON:
-{"ragione_sociale":"Edilizia Tre S.r.l.","tipo":"azienda","indirizzo":"via dell'Industria 8","citta":"Castelfranco Veneto","voci_ids":[15],"descrizione":"ImpiantoGasStabilimento","note":"Rifacimento impianto gas stabilimento.","tag_suggeriti":[],"referenti":[{"nome":"Marco Bianchi","ruolo":"referente","telefono":"0423 987654"}]}
+{"ragione_sociale":"Edilizia Tre S.r.l.","tipo":"azienda","indirizzo":"via dell'Industria 8","citta":"Castelfranco Veneto","voci_ids":[15],"descrizione":"Impianto gas stabilimento","note":"Rifacimento impianto gas stabilimento.","tag_suggeriti":[],"referenti":[{"nome":"Marco Bianchi","ruolo":"referente","telefono":"0423 987654"}]}
 
 [3] Ente pubblico → azienda:
 Transcript: "Sopralluogo al Comune di Castagnole, lavoro sull'impianto termico della scuola elementare."
 Output JSON:
-{"ragione_sociale":"Comune di Castagnole","tipo":"azienda","citta":"Castagnole","voci_ids":[15],"descrizione":"ImpiantoTermicoScuola","note":"Lavoro impianto termico scuola elementare."}
+{"ragione_sociale":"Comune di Castagnole","tipo":"azienda","citta":"Castagnole","voci_ids":[15],"descrizione":"Impianto termico scuola","note":"Lavoro impianto termico scuola elementare."}
 
 [4] Apertura colloquiale + indirizzo a metà frase (caso comune del capocantiere):
 Transcript: "Sono stato da Mario Pezzini in via Primo Maggio 27. Ho fatto un sopralluogo e c'era bisogno di installare una pompa di calore in camera da letto."
 Output JSON:
-{"ragione_sociale":"Mario Pezzini","tipo":"persona_fisica","indirizzo":"via Primo Maggio 27","voci_ids":[14],"descrizione":"PompaDiCalore","note":"Sopralluogo: installare pompa di calore in camera da letto."}
+{"ragione_sociale":"Mario Pezzini","tipo":"persona_fisica","indirizzo":"via Primo Maggio 27","voci_ids":[14],"descrizione":"Pompa di calore","note":"Sopralluogo: installare pompa di calore in camera da letto."}
 
 [5] Senza marker esplicito "cliente/sopralluogo":
 Transcript: "Ho fatto due ore da Bianchi in piazza Marconi 8 Verona, vuole rifare l'impianto fotovoltaico sul tetto."
 Output JSON:
-{"ragione_sociale":"Bianchi","tipo":"persona_fisica","indirizzo":"piazza Marconi 8","citta":"Verona","voci_ids":[18],"descrizione":"ImpiantoFotovoltaico","note":"Rifacimento impianto fotovoltaico sul tetto."}
+{"ragione_sociale":"Bianchi","tipo":"persona_fisica","indirizzo":"piazza Marconi 8","citta":"Verona","voci_ids":[18],"descrizione":"Impianto fotovoltaico","note":"Rifacimento impianto fotovoltaico sul tetto."}
 
 [6] CRUCIALE — nome NON pronunciato (solo "il cliente"), città con preposizione "a":
 Transcript: "Il cliente in via Primo Maggio 27 a Bussolengo vuole una pompa di calore installata in casa, uno split in camera da letto e uno in salotto."
 Output JSON — NOTARE: niente ragione_sociale (è solo "il cliente", non un nome vero):
-{"indirizzo":"via Primo Maggio 27","citta":"Bussolengo","voci_ids":[14],"descrizione":"PompaDiCaloreESplit","note":"Pompa di calore in casa, split in camera da letto e in salotto."}
+{"indirizzo":"via Primo Maggio 27","citta":"Bussolengo","voci_ids":[14],"descrizione":"Pompa di calore e split","note":"Pompa di calore in casa, split in camera da letto e in salotto."}
 
 [7] Referenti multipli (moglie + geometra):
 Transcript: "Da Rossi Mario via Verdi 10, c'è la moglie Anna al 333 1112233 che è quella di riferimento, e il geometra Luca Bianchi 348 5566778 segue i lavori. Vogliono rifare l'impianto sanitario."
 Output JSON:
-{"ragione_sociale":"Rossi Mario","tipo":"persona_fisica","indirizzo":"via Verdi 10","voci_ids":[13],"descrizione":"ImpiantoSanitario","note":"Rifacimento impianto sanitario.","referenti":[{"nome":"Anna Rossi","ruolo":"moglie","telefono":"333 1112233"},{"nome":"Luca Bianchi","ruolo":"geometra","telefono":"348 5566778"}]}
+{"ragione_sociale":"Rossi Mario","tipo":"persona_fisica","indirizzo":"via Verdi 10","voci_ids":[13],"descrizione":"Impianto sanitario","note":"Rifacimento impianto sanitario.","referenti":[{"nome":"Anna Rossi","ruolo":"moglie","telefono":"333 1112233"},{"nome":"Luca Bianchi","ruolo":"geometra","telefono":"348 5566778"}]}
 
 [8] Tecnico responsabile cantiere:
 Transcript: "Sopralluogo Edilizia Bianchi S.r.l. corso Italia 5 Padova, da contattare per le decisioni il responsabile cantiere Marco Verdi 339 4445566."
@@ -304,28 +306,11 @@ export function localExtract(transcript: string): LocalExtractResult {
     result.tag_suggeriti = [...tagsFound];
   }
 
-  // --- Descrizione: usa stessa logica di suggerisci-nome per le voci
-  //     più "dominanti", o fallback dalle note. ---
+  // --- Descrizione: la stessa tabella di `suggerisci-nome`, importata invece
+  //     che ricopiata (qui ne mancavano tre voci su tredici). ---
   if (result.voci_ids && result.voci_ids.length > 0) {
-    const DOMINANT = new Map<number, string>([
-      [17, 'ImpiantoSolare'],
-      [18, 'Fotovoltaico'],
-      [19, 'InstallazioneCaldaia'],
-      [15, 'ImpiantoGas'],
-      [14, 'ImpiantoCondizionamento'],
-      [13, 'SistemazioneBagno'],
-      [31, 'MontaggioBagni'],
-      [30, 'PavimentoRadiante'],
-      [32, 'CentraleTermica'],
-      [16, 'AspirazioneCentralizzata'],
-    ]);
-    for (const id of result.voci_ids) {
-      const label = DOMINANT.get(id);
-      if (label) {
-        result.descrizione = label;
-        break;
-      }
-    }
+    const label = etichettaDominante(result.voci_ids);
+    if (label) result.descrizione = label;
   }
 
   // --- Note: sintesi grezza (prima frase utile, max 280 char) ---
