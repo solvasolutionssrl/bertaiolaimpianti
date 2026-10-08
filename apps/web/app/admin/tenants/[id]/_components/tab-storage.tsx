@@ -4,7 +4,6 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   ChevronRight,
   CircleSlash,
@@ -1173,7 +1172,6 @@ function labelStato(stato: string, assegnata: boolean): string {
   )[stato] ?? stato;
 }
 
-void ArrowRight;
 
 function GuidaSetupNextcloud() {
   return (

@@ -280,15 +280,14 @@ export function CommesseListClient({ rows, responsabili }: Props) {
                         )}
                       </td>
                       <td className="px-4 py-2.5">
-                        <StatoBadge
-                          stato={c.stato}
-                          label={
-                            (c.stato === 'aperta' || c.stato === 'bozza') &&
-                            c.assegnata === false
-                              ? 'Non preso'
-                              : undefined
-                          }
-                        />
+                        {/* ⚠️ Qui lo stato diceva «Non preso» quando nessun
+                            tecnico era assegnato, accanto ad altre righe che
+                            dicevano «Non presa»: due parole a una lettera di
+                            distanza, nella stessa colonna, per dire quasi la
+                            stessa cosa. «Non presa» (lo stato `aperta`) vuol
+                            già dire «nessuno l'ha presa», e chi l'ha presa lo
+                            dice la colonna «Tecnici assegnati» qui accanto. */}
+                        <StatoBadge stato={c.stato} />
                       </td>
                       <td className="px-4 py-2.5">
                         <Squadra nomi={c.squadra ?? []} />

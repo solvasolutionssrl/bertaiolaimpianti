@@ -189,7 +189,7 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
             type="button"
             onClick={complete}
             disabled={pending}
-            aria-label="Completa TODO"
+            aria-label="Segna come fatto"
             className="-m-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground active:bg-emerald-500/10 active:text-emerald-600 disabled:opacity-50"
           >
             {pending ? (

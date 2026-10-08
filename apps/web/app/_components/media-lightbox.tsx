@@ -302,7 +302,7 @@ export function MediaLightbox({ items, initialIndex, open, onOpenChange }: Props
                 <FotoZoomabile
                   src={current.src}
                   alt={current.filename}
-                  onStatoZoom={setZoomARiposo}
+                  onPuoScorrere={setZoomARiposo}
                 />
               ) : isVideo ? (
                 <div className="h-full w-full">

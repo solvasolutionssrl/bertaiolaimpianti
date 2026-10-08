@@ -4,19 +4,13 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
-  Bell,
   Briefcase,
   Building2,
-  Clock,
-  HardHat,
-  LayoutDashboard,
   LogOut,
   Plus,
   Search,
   Settings,
   TicketCheck,
-  Users,
-  type LucideIcon,
 } from 'lucide-react';
 
 import { cn, type OfficeNavItem } from '@kommessa/ui';
@@ -114,8 +108,8 @@ const GROUP_ORDER: ResultGroupId[] = [
  * **Le voci «Vai a» si leggono dalla barra, non si riscrivono.**
  *
  * ⚠️ Erano un secondo elenco scritto a mano «che riflette la nav della
- * OfficeShell», e non la rifletteva: aveva **Tickets**, che nella barra non
- * c'e' per nessuno, e **non aveva** Task, Turni, Co-pilot, Kontabilita',
+ * OfficeShell», e non la rifletteva: **non aveva** Task, Turni, Co-pilot,
+ * Kontabilita',
  * Personalizzazioni, Gestionale, Sedi, Parco mezzi, Ore e costi, Report e
  * Registro modifiche. Nessuno ha sbagliato: la lista e' stata scritta una
  * volta, e tutto quello che e' arrivato dopo non lo sapeva.
@@ -150,7 +144,8 @@ function vociDaBarra(nav: OfficeNavItem[]): NavResult[] {
 /**
  * Pagine vere che **non stanno nella barra**, e che senza questo elenco non si
  * raggiungerebbero piu' da nessuna parte. Non e' un residuo: e' la lista,
- * corta e dichiarata, di cio' che si apre solo da qui.
+ * corta e dichiarata, di cio' che si apre solo da qui — Tickets compreso, che
+ * dalla barra e' uscito ma la sua pagina esiste ancora.
  */
 const FUORI_BARRA: NavResult[] = [
   {
@@ -235,7 +230,7 @@ function buildQuickActions(router: ReturnType<typeof useRouter>, onLogout: () =>
       kind: 'action',
       group: 'azioni',
       title: 'Nuovo ticket',
-      subtitle: 'Registra una nuova richiesta',
+      subtitle: 'Apri un ticket di assistenza',
       icon: Plus,
       richiede: 'commesse',
       run: () => router.push('/office/tickets/nuovo'),

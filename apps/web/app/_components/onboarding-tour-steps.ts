@@ -26,7 +26,7 @@ export const OFFICE_TOUR_STEPS: TourStep[] = [
     target: 'nav[aria-label="Navigazione laterale"]',
     title: 'La tua barra',
     description:
-      'Tre gruppi: in «Progetti» ci sono commesse, clienti e la lista di task e richieste; in «Personale» le ore; in «Altro» ricerca, avvisi e impostazioni.',
+      'Le voci sono raggruppate per famiglia: i lavori e i clienti da una parte, le persone dall’altra, e in fondo ricerca, avvisi e impostazioni.',
     placement: 'right',
   },
   {
@@ -46,11 +46,11 @@ export const OFFICE_TOUR_STEPS: TourStep[] = [
     placement: 'bottom',
   },
   {
-    id: 'office-tickets',
-    target: 'a[href="/office/tickets"]',
-    title: 'Le richieste cliente arrivano qui',
+    id: 'office-richieste',
+    target: 'a[href="/office/todo"]',
+    title: 'Le telefonate arrivano qui',
     description:
-      'Email, telefonate e segnalazioni dal portale diventano Ticket: assegnali, rispondi e trasformali in commesse quando serve.',
+      'Una telefonata diventa una richiesta: chi ha chiamato, cosa serve, dove andare. La giri a un tecnico, oppure la trasformi in commessa. Accanto, i task dei lavori già aperti.',
     placement: 'right',
   },
   {

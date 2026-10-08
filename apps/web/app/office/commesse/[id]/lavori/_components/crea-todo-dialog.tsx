@@ -76,7 +76,7 @@ export function CreaTodoDialog({
 
   const submit = async () => {
     if (titolo.trim().length === 0) {
-      await showAlert({ title: 'Manca il titolo', body: 'Inserisci un titolo per il TODO.' });
+      await showAlert({ title: 'Manca il titolo', body: 'Inserisci un titolo per il task.' });
       return;
     }
     setSubmitting(true);
@@ -103,7 +103,7 @@ export function CreaTodoDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editing ? 'Modifica TODO' : 'Nuovo TODO'}</DialogTitle>
+          <DialogTitle>{editing ? 'Modifica il task' : 'Nuovo task'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -187,7 +187,7 @@ export function CreaTodoDialog({
             ) : (
               <Save className="h-3.5 w-3.5" />
             )}
-            {editing ? 'Salva modifiche' : 'Crea TODO'}
+            {editing ? 'Salva modifiche' : 'Crea il task'}
           </Button>
         </DialogFooter>
       </DialogContent>

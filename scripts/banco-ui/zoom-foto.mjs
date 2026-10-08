@@ -174,14 +174,25 @@ try {
     await cdp.invia('Input.dispatchMouseEvent', { type: 'mouseReleased', x: c.x + 1760, y: c.y + 1760, button: 'left', clickCount: 1 });
     await attendi(350);
     const dopoTrascinare = await spostamentoDi(FOTO);
+    // ⚠️ Due controlli, non uno. Il solo «sta sotto 1760» passerebbe anche se
+    // il trascinamento non muovesse niente (zero e' minore di 1760): sembra
+    // misurare il freno e misura solo che non e' esploso.
+    esito(
+      Boolean(dopoTrascinare) &&
+        Boolean(primaDiTrascinare) &&
+        (dopoTrascinare.x !== primaDiTrascinare.x || dopoTrascinare.y !== primaDiTrascinare.y),
+      'il trascinamento muove davvero la foto',
+      dopoTrascinare && primaDiTrascinare
+        ? `da ${primaDiTrascinare.x},${primaDiTrascinare.y} a ${dopoTrascinare.x},${dopoTrascinare.y}`
+        : 'NON MISURABILE',
+    );
     esito(
       Boolean(dopoTrascinare) && Math.abs(dopoTrascinare.x) < 1760 && Math.abs(dopoTrascinare.y) < 1760,
-      '⭐ trascinando a strappo la foto non scappa fuori',
+      '⭐ e si ferma: a strappo non scappa fuori',
       dopoTrascinare
         ? `spostata di ${dopoTrascinare.x},${dopoTrascinare.y} px (chiesti 1760)`
         : 'NON MISURABILE',
     );
-    void primaDiTrascinare;
     // ⚠️ **Qui il banco si fermava a misurare una cosa che su questo tenant
     // non e' misurabile.** Il visore chiede il formato PIENO
     // (`/api/photo/<id>` senza `size=thumb`), e quella strada passa da

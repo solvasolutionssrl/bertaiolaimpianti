@@ -10,7 +10,8 @@ export type FeatureKey =
   | 'voci_catalogo'
   | 'preset_lavoro'
   | 'portale_clienti'
-  | 'turno_tecnici';
+  | 'turno_tecnici'
+  | 'scadenza_password';
 
 export interface FeatureDef {
   key: FeatureKey;
@@ -56,6 +57,20 @@ export const FEATURE_REGISTRY: FeatureDef[] = [
     defaultKommessaOnly: true,
     defaultSpenta: true,
     gestibileDaUfficio: true,
+  },
+  {
+    key: 'scadenza_password',
+    label: 'Password a scadenza',
+    descrizione:
+      'La password scade quattro volte l’anno (10 dicembre, marzo, giugno, settembre): dal primo del mese si avvisa, dal giorno della scadenza non si passa finché non si cambia.',
+    // ⚠️ **Nasce spenta, e non e' prudenza generica.** Le date le ha scelte un
+    // cliente; il muro lo prendono le persone. Acceso per tutti, il 10 dicembre
+    // trentacinque tecnici di un'altra azienda si troverebbero bloccati davanti
+    // a un QR in cantiere, per una regola che nessuno gli ha annunciato — e per
+    // chi timbra significa non poter lavorare. Si accende a chi la chiede, dopo
+    // che l'ha detto alla sua gente.
+    defaultKommessaOnly: false,
+    defaultSpenta: true,
   },
   {
     key: 'portale_clienti',

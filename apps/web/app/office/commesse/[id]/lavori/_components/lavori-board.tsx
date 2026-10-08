@@ -347,7 +347,7 @@ export function LavoriBoard({
   const onDelete = async (todo: TodoView) => {
     // askConfirm FUORI da startTransition (vedi nota su onDeleteRiunione).
     const ok = await askConfirm({
-      title: 'Eliminare il TODO?',
+      title: 'Eliminare il task?',
       description: `"${todo.titolo}"\n\nSi cancellano anche le note e gli allegati. Non si torna indietro.`,
       destructive: true,
       confirmLabel: 'Elimina',
@@ -395,7 +395,7 @@ export function LavoriBoard({
       {canWrite ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            {todosAperti.length} TODO aperti · {todosCompletati.length} completati ·{' '}
+            {todosAperti.length} task aperti · {todosCompletati.length} completati ·{' '}
             {riunioni.length} riunioni
           </p>
           <div className="flex gap-2">
@@ -414,7 +414,7 @@ export function LavoriBoard({
               }}
             >
               <Plus className="h-3.5 w-3.5" />
-              Nuovo TODO
+              Nuovo task
             </Button>
           </div>
         </div>
@@ -462,10 +462,10 @@ export function LavoriBoard({
         ) : (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/60 py-8 text-center">
             <CircleDot className="h-6 w-6 text-muted-foreground/50" />
-            <p className="text-sm font-medium text-foreground/70">Nessun TODO aperto</p>
+            <p className="text-sm font-medium text-foreground/70">Nessun task aperto</p>
             <p className="text-xs text-muted-foreground">
               {canWrite
-                ? 'Crea il primo TODO o avvia una riunione: il sistema può proporli automaticamente.'
+                ? 'Crea il primo task o avvia una riunione: il sistema può proporli automaticamente.'
                 : "Quando l'ufficio aprirà delle attività compariranno qui."}
             </p>
           </div>
@@ -488,7 +488,7 @@ export function LavoriBoard({
           [
             ['tutto', 'Tutto'],
             ['riunioni', 'Riunioni'],
-            ['todo', 'TODO'],
+            ['todo', 'Task'],
             ['stato', 'Stato'],
           ] as const
         ).map(([key, label]) => (
@@ -847,7 +847,7 @@ function TodoRow({
           type="button"
           onClick={onComplete}
           disabled={pending}
-          aria-label="Completa TODO"
+          aria-label="Segna come fatto"
           // Tap target ~44px (h-10 + padding) per touch-friendliness
           className="-m-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-50"
         >
@@ -866,7 +866,7 @@ function TodoRow({
               <Badge
                 variant="outline"
                 className="border-primary/30 bg-primary/5 text-[10px] uppercase text-primary"
-                title="TODO generato automaticamente dal report di una riunione"
+                title="Task generato automaticamente dal report di una riunione"
               >
                 <Sparkles className="mr-0.5 h-2.5 w-2.5" />
                 Da riunione

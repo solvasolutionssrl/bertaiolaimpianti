@@ -278,8 +278,13 @@ export function RichiestaDialog({
       <DialogContent className="grid-cols-[minmax(0,1fr)] overflow-x-hidden sm:max-w-lg">
         <DialogHeader className="min-w-0">
           <DialogTitle className="flex items-center gap-2">
-            <Phone className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-            {esistente ? 'Modifica richiesta' : 'Richiesta al telefono'}
+            {/* Ambra come la colonna da cui si apre: era l'unica superficie
+                «richiesta» colorata di blu, cioè come un lavoro. */}
+            <Phone
+              className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+              aria-hidden="true"
+            />
+            {esistente ? 'Modifica richiesta' : 'Nuova richiesta'}
           </DialogTitle>
         </DialogHeader>
 

@@ -101,17 +101,3 @@ export function descriviAssegnazione(
   }
   return righe;
 }
-
-/**
- * La stessa cosa in una riga sola, per gli elenchi densi (la board
- * d'ufficio): «Erica → Luca, Thomas». La freccia dice la catena, che e'
- * l'unica cosa che le due colonne di un elenco non riescono a dire.
- */
-export function assegnazioneInBreve(
-  a: Assegnazione,
-  genere: GenereLavoro = 'richiesta',
-): string {
-  const righe = descriviAssegnazione(a, genere);
-  if (righe.length === 1 && righe[0]?.vuoto) return etichettaNonAssegnato(genere);
-  return righe.map((r) => r.valore).join(' → ');
-}

@@ -630,7 +630,12 @@ export function Scelta({
 
   // La voce «nessuno» è un'opzione come le altre: così entra nella ricerca,
   // nella navigazione con le frecce e nel conteggio, senza casi particolari.
-  const VUOTO = ' nessuno';
+  // ⚠️ Scritto come **escape**, non come byte vero. Con il carattere nullo
+// dentro il sorgente il file risulta binario: `grep` lo salta in silenzio, e
+// 883 righe di un componente che vive in tutti i dialog diventano invisibili a
+// chiunque cerchi qualcosa nel repo — compreso un audit. Il valore a runtime è
+// identico.
+const VUOTO = '\u0000nessuno';
   const complete = React.useMemo<OpzioneScelta[]>(
     () =>
       etichettaNessuno
@@ -726,8 +731,10 @@ export interface SceltaMultiplaProps extends BaseProps {
  *
  * La tendina **resta aperta** mentre si spunta: chi assegna a tre persone non
  * vuole riaprirla tre volte. Si chiude con Esc, con un clic fuori o con
- * «Fatto». Nel tasto si vedono le prime due pastiglie e il resto diventa «+n»,
- * così la riga non cresce mai in altezza e non sposta quello che c'è sotto.
+ * «Fatto». Nel tasto si vedono le prime due pastiglie e il resto diventa «+n».
+ * ⚠️ Finché c'è spazio: sotto i ~250px le pastiglie vanno a capo e la riga
+ * cresce, spostando quello che ha sotto. Dove lo spazio è poco si passa
+ * `riassunto`, che dice **quanti** invece di **chi**.
  */
 export function SceltaMultipla({
   opzioni,

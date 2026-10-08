@@ -1,30 +1,17 @@
-import Link from 'next/link';
-import {
-  AlertCircle,
-  Calendar,
-  CheckCircle2,
-  CircleDot,
-  Clock,
-  Flame,
-  Phone,
-  Plus,
-  UserPlus,
-  User,
-} from 'lucide-react';
+import { AlertCircle, CircleDot, Clock, Flame, UserPlus } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { Badge, Card, CardContent, cn } from '@kommessa/ui';
+import { cn } from '@kommessa/ui';
 
-import { EmptyState } from '../../_components/empty-state';
 import { elencaAssegnabiliTenant } from '../../_actions/commessa-tecnici';
-import { TodoGlobaleBoard } from './_components/todo-globale-board';
+import { TodoGlobaleBoard, type Row } from './_components/todo-globale-board';
 import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 /** Una commessa come serve a chi la deve scegliere da una tendina. */
-type ComessaPicker = {
+type CommessaPicker = {
   id: string;
   codice_interno: string;
   nome_cartella: string | null;
@@ -40,15 +27,24 @@ export const dynamic = 'force-dynamic';
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
 
+/**
+ * ⚠️ `string | string[]`, perché è quello che Next consegna davvero:
+ * `?stato=a&stato=b` arriva come array. Dichiararlo `string` non lo impedisce,
+ * nasconde solo che va normalizzato.
+ */
 interface SearchParams {
-  stato?: string;
-  priorita?: string;
-  assegnato?: string;
-  commessa?: string;
-  q?: string;
+  stato?: string | string[];
+  priorita?: string | string[];
+  assegnato?: string | string[];
+  commessa?: string | string[];
+  q?: string | string[];
 }
 
 const STATI_DEFAULT: Stato[] = ['aperto', 'in_corso'];
+/** Cio' che l'indirizzo puo' chiedere: tutto il resto si ignora. */
+const STATI_AMMESSI = ['aperto', 'in_corso', 'completato', 'annullato'] as const;
+const PRIORITA_AMMESSE = ['urgente', 'alta', 'media', 'bassa'] as const;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Vista globale TODO cross-commessa.
@@ -72,19 +68,62 @@ export default async function TodoGlobalePage({
   const supabase = createServerSupabase();
 
   // ─── parse filtri ──────────────────────────────────────────────────
-  const statiFiltro: Stato[] = searchParams.stato
-    ? ([searchParams.stato] as Stato[])
-    : STATI_DEFAULT;
-  const prioritaFiltro = (searchParams.priorita as Priorita | undefined) ?? null;
-  const assegnatoFiltro = searchParams.assegnato ?? null;
-  const commessaFiltro = searchParams.commessa ?? null;
-  const qFiltro = (searchParams.q ?? '').trim();
+  //
+  // ⚠️ **Cio' che arriva dall'indirizzo non e' un dato, e' un'ipotesi.** Next
+  // consegna un `string | string[]`, e la persona (o un segnalibro vecchio, o
+  // un collegamento condiviso) puo' metterci quello che vuole. Infilato dritto
+  // in `.in()` su una colonna enum o in `.eq()` su una colonna uuid, un valore
+  // storto non torna «nessun risultato»: fa fallire la query. E da quando si
+  // legge a pagine, una query che fallisce **solleva**, quindi non e' piu' una
+  // board vuota — e' la pagina d'errore, guscio dell'ufficio compreso.
+  const uno = (v: string | string[] | undefined): string | null =>
+    (Array.isArray(v) ? v[0] : v) ?? null;
+
+  const statoChiesto = uno(searchParams.stato);
+  const statoFiltro: Stato | null =
+    statoChiesto && (STATI_AMMESSI as readonly string[]).includes(statoChiesto)
+      ? (statoChiesto as Stato)
+      : null;
+  const statiFiltro: Stato[] = statoFiltro ? [statoFiltro] : STATI_DEFAULT;
+
+  const prioritaChiesta = uno(searchParams.priorita);
+  const prioritaFiltro =
+    prioritaChiesta && (PRIORITA_AMMESSE as readonly string[]).includes(prioritaChiesta)
+      ? (prioritaChiesta as Priorita)
+      : null;
+
+  // `nessuno` e' una parola convenzionale; tutto il resto deve essere un uuid,
+  // o non e' un assegnatario.
+  const assegnatoChiesto = uno(searchParams.assegnato);
+  const assegnatoFiltro =
+    assegnatoChiesto === 'nessuno' || (assegnatoChiesto && UUID.test(assegnatoChiesto))
+      ? assegnatoChiesto
+      : null;
+
+  const commessaChiesta = uno(searchParams.commessa);
+  const commessaFiltro = commessaChiesta && UUID.test(commessaChiesta) ? commessaChiesta : null;
+
+  // ⚠️ **La virgola spezza `or=(...)`.** PostgREST divide il corpo di `or` sulle
+  // virgole di primo livello: cercando «Rossi, via Verdi» si ottengono quattro
+  // termini, due dei quali non sono filtri, e la richiesta torna 400. Lo stesso
+  // fanno le parentesi, le virgolette e la barra rovescia. Si tolgono: in una
+  // ricerca per sottostringa non servono a niente, e lasciarle dentro vuol dire
+  // una pagina d'errore invece di un elenco.
+  const qFiltro = (uno(searchParams.q) ?? '').replace(/[,()"\\*]/g, ' ').trim();
 
   // ─── query principale ──────────────────────────────────────────────
-  let q = supabase
-    .from('commessa_todo' as never)
-    .select(
-      `id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at,
+  //
+  // ⚠️ **Una query nuova per ogni pagina, non la stessa riusata.** Il
+  // costruttore di postgrest-js e' mutabile e `order()` **accoda**: riusando lo
+  // stesso oggetto, la seconda pagina chiederebbe
+  // `order=priorita,id,priorita,id` e la terza sei termini. Oggi non si vede
+  // (una pagina sola basta), e si vedrebbe esattamente il giorno in cui i dati
+  // crescono — cioe' il difetto che questa lettura a pagine doveva togliere.
+  const pagina = (da: number, a: number) => {
+    let q = supabase
+      .from('commessa_todo' as never)
+      .select(
+        `id, titolo, descrizione, stato, priorita, assegnato_a, scadenza_at,
        sort_order, metadata, created_at, completato_at, commessa_id,
        cliente_id, cliente_testo, contatto, indirizzo,
        richiedente:clienti!commessa_todo_cliente_id_fkey ( ragione_sociale ),
@@ -98,35 +137,49 @@ export default async function TodoGlobalePage({
          user_id,
          persona:users!commessa_todo_squadra_user_id_fkey ( id, display_name )
        )`,
-    )
-    .in('stato', statiFiltro);
+      )
+      .in('stato', statiFiltro);
 
-  if (prioritaFiltro) q = q.eq('priorita', prioritaFiltro);
-  if (assegnatoFiltro === 'nessuno') {
-    q = q.is('assegnato_a', null);
-  } else if (assegnatoFiltro) {
-    q = q.eq('assegnato_a', assegnatoFiltro);
-  }
-  if (commessaFiltro) q = q.eq('commessa_id', commessaFiltro);
-  if (qFiltro) {
-    q = q.or(
-      `titolo.ilike.%${qFiltro}%,descrizione.ilike.%${qFiltro}%`,
+    if (prioritaFiltro) q = q.eq('priorita', prioritaFiltro);
+    if (assegnatoFiltro === 'nessuno') {
+      q = q.is('assegnato_a', null);
+    } else if (assegnatoFiltro) {
+      q = q.eq('assegnato_a', assegnatoFiltro);
+    }
+    if (commessaFiltro) q = q.eq('commessa_id', commessaFiltro);
+    if (qFiltro) {
+      q = q.or(`titolo.ilike.%${qFiltro}%,descrizione.ilike.%${qFiltro}%`);
+    }
+    // Il terzo ordinamento chiude su una colonna unica: senza, fra una pagina e
+    // l'altra una riga puo' perdersi o ripetersi.
+    return q.order('priorita').order('id').range(da, a) as unknown as PromiseLike<
+      EsitoPagina<any>
+    >;
+  };
+
+  let todosRaw: any[];
+  try {
+    todosRaw = await leggiTutto<any>(pagina, { contesto: 'task e richieste' });
+  } catch (e) {
+    // Una lettura che non riesce non deve portarsi via tutta la pagina: si dice
+    // cosa è successo e si lascia in piedi il resto del guscio.
+    return (
+      <div className="w-full space-y-4">
+        <header className="border-b border-border pb-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            Lavori
+          </p>
+          <h1 className="mt-0.5 text-xl font-semibold tracking-tight">Task e Richieste</h1>
+        </header>
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6">
+          <p className="font-semibold text-destructive">Non riesco a leggere l’elenco</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {e instanceof Error ? e.message : String(e)}
+          </p>
+        </div>
+      </div>
     );
   }
-
-  // ⚠️ Qui c'era `.limit(300)`, cioe' lo stesso difetto delle 120 commesse sul
-  // telefono e delle 202 nel filtro: un tetto scelto a occhio che il giorno in
-  // cui i dati crescono fa sparire delle righe senza dire niente. Si legge a
-  // pagine. Il terzo `.order('id')` chiude l'ordinamento su una colonna unica:
-  // senza, fra una pagina e l'altra una riga puo' perdersi o ripetersi.
-  const todosRaw = await leggiTutto<any>(
-    (da, a) =>
-      q
-        .order('priorita')
-        .order('id')
-        .range(da, a) as unknown as PromiseLike<EsitoPagina<any>>,
-    { contesto: 'task e richieste' },
-  );
 
   // ─── liste per filtri (commesse attive + tecnici) ──────────────────
   const [commesseRighe, assegnabili] = await Promise.all([
@@ -135,7 +188,7 @@ export default async function TodoGlobalePage({
     // modulo — senza nessun segnale. E' lo stesso difetto dei clienti di
     // settembre: un tetto scelto a occhio diventa un dato invisibile appena i
     // dati crescono.
-    leggiTutto<ComessaPicker>(
+    leggiTutto<CommessaPicker>(
       (da, a) =>
         supabase
           .from('commesse')
@@ -155,43 +208,10 @@ export default async function TodoGlobalePage({
   ]);
 
   // ─── trasforma + ordina ────────────────────────────────────────────
-  type Row = {
-    id: string;
-    titolo: string;
-    descrizione: string | null;
-    stato: Stato;
-    priorita: Priorita;
-    assegnato_a: string | null;
-    assegnato_nome: string | null;
-    /**
-     * Chi ci va: mandati da chi l'ha in mano. Vuoto = nessuno, per ora.
-     * ⚠️ **Solo sulle richieste.** L'embed qui sotto legge comunque tutte le
-     * righe, ma la tabella non accetta cose da fare di commessa (policy
-     * `commessa_todo_squadra_write`): per quelle torna sempre vuoto.
-     */
-    squadra: Array<{ id: string; nome: string }>;
-    scadenza_at: string | null;
-    sort_order: number;
-    metadata: Record<string, unknown> | null;
-    /** null = richiesta: arrivata al telefono, non ancora un lavoro. */
-    commessa_id: string | null;
-    codice_interno: string | null;
-    cliente_nome: string | null;
-    /** Solo sulle richieste: come richiamare. */
-    contatto: string | null;
-    /** Solo sulle richieste: dove andare, se diverso da quello del cliente. */
-    indirizzo: string | null;
-    cliente_id: string | null;
-    /** Quando e' stata scritta, e da chi: su una richiesta, chi ha risposto. */
-    created_at: string;
-    autore_nome: string | null;
-    eRichiesta: boolean;
-    isScaduto: boolean;
-    fonteRiunione: boolean;
-  };
-
+  // Il tipo `Row` arriva da chi lo consuma (`TodoGlobaleBoard`): era scritto a
+  // mano anche qui, ventidue campi, e divergere era questione di tempo.
   const now = Date.now();
-  const todos: Row[] = ((todosRaw ?? []) as Array<any>).map((t) => {
+  const todos: Row[] = todosRaw.map((t) => {
     const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
     const cli = comm
       ? Array.isArray(comm.cliente)
@@ -324,7 +344,7 @@ export default async function TodoGlobalePage({
         assegnabili={assegnabili}
         commesseAttive={commesseAttive}
         filtri={{
-          stato: searchParams.stato ?? null,
+          stato: statoFiltro,
           priorita: prioritaFiltro,
           assegnato: assegnatoFiltro,
           commessa: commessaFiltro,
@@ -369,14 +389,3 @@ function KpiChip({
     </div>
   );
 }
-
-// suppress unused — usato sopra
-void Plus;
-void Calendar;
-void User;
-void CheckCircle2;
-void Badge;
-void Card;
-void CardContent;
-void EmptyState;
-void Link;

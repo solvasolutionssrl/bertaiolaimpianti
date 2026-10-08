@@ -12,7 +12,7 @@
  * conoscere al guscio il colore di ogni pagina che ci finisce dentro: è la
  * pagina a sapere di che colore è.
  */
-export function ScrimStatusBar({ tono }: { tono: 'richiesta' }) {
+export function ScrimStatusBar({ tono }: { tono: 'richiesta' | 'lavoro' }) {
   return (
     <div
       aria-hidden="true"

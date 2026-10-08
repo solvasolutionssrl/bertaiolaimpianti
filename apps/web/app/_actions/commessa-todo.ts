@@ -25,11 +25,11 @@ import { possoAprireLavori } from '@/app/_lib/capacita-server';
  *  - tecnico: read; può cambiare stato (complete / annulla / in_corso) e
  *    aggiungere note + allegati. Non può creare/eliminare/riassegnare.
  *
- * ⭐ **«In mano a» e «chi ci va» sono due cose diverse, e solo sulle
+ * ⭐ **«Responsabile» e «chi ci va» sono due cose diverse, e solo sulle
  * RICHIESTE.** Su una richiesta al telefono `assegnato_a` dice chi ne
  * risponde — la persona a cui l'ufficio l'ha affidata — e la tabella
  * `commessa_todo_squadra` dice chi ci mette le mani (`affidaSquadraTodo`). Il
- * caposquadra, che in Bertaiola è un `office`, resta in mano a e manda i
+ * caposquadra, che in Bertaiola è un `office`, resta responsabile e manda i
  * suoi: così si legge tutta la catena.
  *
  * ⚠️ **Dentro una commessa no.** Lì il lavoro ha già la sua squadra
@@ -108,6 +108,28 @@ const CreaInput = z.object({
    */
   indirizzo: z.string().trim().max(300).nullable().optional(),
 });
+
+/**
+ * Il cliente indicato è di **questo** spazio di lavoro?
+ *
+ * ⚠️ L'id arriva dal browser. La RLS impedisce di **leggere** un cliente di un
+ * altro cliente, quindi non si scopre niente — ma niente impedisce di
+ * **scriverlo** nella riga, e resta una chiave esterna che punta fuori. Lo
+ * stesso controllo lo fa già `affidaSquadraTodo` per le persone; qui mancava.
+ */
+async function clienteDelTenant(
+  supabase: ReturnType<typeof createServerSupabase>,
+  clienteId: string,
+  tenantId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('clienti')
+    .select('id')
+    .eq('id', clienteId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  return Boolean(data);
+}
 
 export async function creaTodo(
   input: unknown,
@@ -192,6 +214,13 @@ export async function creaTodo(
     contatto: parsed.data.contatto ?? null,
     indirizzo: parsed.data.indirizzo ?? null,
   };
+  if (
+    parsed.data.clienteId &&
+    !(await clienteDelTenant(supabase, parsed.data.clienteId, ctx.tenantId))
+  ) {
+    return { ok: false as const, error: 'Questo cliente non è del tuo spazio di lavoro.' };
+  }
+
   const { data, error } = await supabase
     .from('commessa_todo' as never)
     .insert(insertRow as never)
@@ -256,7 +285,7 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
   if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono modificare un TODO' };
+    return { ok: false, error: 'Solo admin e ufficio possono modificare un task' };
   }
 
   const supabase = createServerSupabase();
@@ -269,8 +298,15 @@ export async function aggiornaTodo(input: unknown): Promise<Result> {
     update.assegnato_a = parsed.data.assegnatoA;
   if (parsed.data.scadenzaAt !== undefined)
     update.scadenza_at = parsed.data.scadenzaAt;
-  if (parsed.data.clienteId !== undefined)
+  if (parsed.data.clienteId !== undefined) {
+    if (
+      parsed.data.clienteId &&
+      !(await clienteDelTenant(supabase, parsed.data.clienteId, ctx.tenantId))
+    ) {
+      return { ok: false as const, error: 'Questo cliente non è del tuo spazio di lavoro.' };
+    }
     update.cliente_id = parsed.data.clienteId;
+  }
   if (parsed.data.clienteTesto !== undefined)
     update.cliente_testo = parsed.data.clienteTesto;
   if (parsed.data.contatto !== undefined) update.contatto = parsed.data.contatto;
@@ -617,7 +653,7 @@ export async function eliminaTodo(input: unknown): Promise<Result> {
   const ctx = await safeCtx();
   if (!ctx) return { ok: false, error: 'Sessione non valida' };
   if (!FULL_ROLES.has(ctx.role)) {
-    return { ok: false, error: 'Solo admin/office possono eliminare un TODO' };
+    return { ok: false, error: 'Solo admin e ufficio possono eliminare un task' };
   }
 
   const supabase = createServerSupabase();
@@ -626,7 +662,7 @@ export async function eliminaTodo(input: unknown): Promise<Result> {
     .select('commessa_id, titolo')
     .eq('id', parsed.data.id)
     .maybeSingle();
-  if (!todo) return { ok: false, error: 'TODO non trovato' };
+  if (!todo) return { ok: false, error: 'Non lo trovo più: forse l’ha già eliminato qualcun altro' };
   const t = todo as { commessa_id: string; titolo: string };
 
   // Cleanup allegati su storage cloud PRIMA del delete cascade del TODO
@@ -678,7 +714,7 @@ export async function aggiungiNotaTodo(input: unknown): Promise<Result> {
     .select('id, commessa_id, tenant_id')
     .eq('id', parsed.data.todoId)
     .maybeSingle();
-  if (!todo) return { ok: false, error: 'TODO non trovato' };
+  if (!todo) return { ok: false, error: 'Non lo trovo più: forse l’ha già eliminato qualcun altro' };
   const t = todo as { commessa_id: string };
 
   const { error } = await supabase

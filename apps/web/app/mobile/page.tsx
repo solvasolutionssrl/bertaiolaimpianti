@@ -22,7 +22,7 @@ import { guardMobile } from './_lib/guard';
 import { tenantHasModule } from '../_lib/modules';
 import { getAppModeCached } from '../_lib/app-mode';
 import { titoloCase } from './_lib/display-case';
-import { SectionNumber, MetaLine, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
+import { SectionNumber, Stagger, CornerTicks, Hero, HeroMeta } from './_components/blueprint';
 import { BozzeDaCompletare } from '../_components/bozze-da-completare';
 import type { Priorita } from '@kommessa/api/priorita';
 import { possoAprireLavori } from '../_lib/capacita-server';
@@ -244,10 +244,23 @@ async function CampoOggi({
   // è il criterio con cui si ordina ciò che non ha una scadenza. Prima si
   // leggeva solo l'id e quell'informazione, che era già in tabella, si
   // buttava via.
-  const { data: assegnazioni } = await supabase
+  // ⚠️ L'errore si guarda. Senza, una lettura fallita lascia `assignedIds`
+  // vuoto, scatta il sentinella qui sotto e il tecnico legge «nessuna commessa
+  // assegnata» — cioe' lo stesso falso negativo che questa pagina e' stata
+  // riscritta per togliere, preso dall'altra parte.
+  const { data: assegnazioni, error: erroreAssegnazioni } = await supabase
     .from('commessa_tecnici')
     .select('commessa_id, assegnato_at')
     .eq('user_id', ctx.userId);
+
+  if (erroreAssegnazioni) {
+    return (
+      <ErrorState
+        title="Impossibile caricare i tuoi lavori"
+        detail={erroreAssegnazioni.message}
+      />
+    );
+  }
 
   const affidataIl = new Map<string, string | null>();
   for (const r of (assegnazioni ?? []) as Array<{ commessa_id: string; assegnato_at: string | null }>) {
@@ -378,8 +391,16 @@ async function CampoOggi({
       : Promise.resolve({ data: [], error: null }),
   ]);
 
-  if (commesseRes.error) {
-    return <ErrorState title="Impossibile caricare le commesse" detail={commesseRes.error.message} />;
+  // ⚠️ **Tutte e quattro, non solo la prima.** Le altre tre passavano per
+  // `?? []`: una lettura fallita diventava «niente da fare oggi», che e' la
+  // bugia piu' comoda che questa pagina possa dire a un tecnico. Meglio dirgli
+  // che non si e' riusciti a leggere.
+  const primoGuasto =
+    commesseRes.error ?? todosRes.error ?? richiesteRes.error ?? mandatiRes.error;
+  if (primoGuasto) {
+    return (
+      <ErrorState title="Impossibile caricare i tuoi lavori" detail={primoGuasto.message} />
+    );
   }
 
   // Modulo Kantiere (FPM): mostra l'accesso al rapportino giornaliero.

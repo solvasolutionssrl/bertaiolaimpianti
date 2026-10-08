@@ -420,7 +420,7 @@ export function CreaRiunioneDialog({
       const ok = await askConfirm({
         title: 'Chiudere senza salvare?',
         description: hasUnsavedAI
-          ? 'Il reportino AI generato e gli eventuali TODO proposti verranno persi.'
+          ? 'Il reportino AI generato e gli eventuali task proposti verranno persi.'
           : 'Perderai il contenuto inserito.',
         destructive: true,
         confirmLabel: 'Chiudi e perdi',
@@ -684,7 +684,7 @@ export function CreaRiunioneDialog({
             {todosConferma.length > 0 ? (
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">TODO proposti</Label>
+                  <Label className="text-xs text-muted-foreground">Task proposti</Label>
                   <span className="text-[10px] text-muted-foreground">
                     {todosConferma.filter((t) => t.selezionato).length}/{todosConferma.length} selezionati
                   </span>
@@ -752,7 +752,7 @@ export function CreaRiunioneDialog({
               </div>
             ) : (
               <p className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                Nessun TODO automatico estratto. Puoi crearne a mano dopo aver salvato la riunione.
+                Nessun task proposto. Puoi crearne a mano dopo aver salvato la riunione.
               </p>
             )}
           </div>
@@ -826,7 +826,7 @@ export function CreaRiunioneDialog({
                 )}
                 Salva riunione
                 {todosConferma.filter((t) => t.selezionato).length > 0
-                  ? ` + ${todosConferma.filter((t) => t.selezionato).length} TODO`
+                  ? ` + ${todosConferma.filter((t) => t.selezionato).length} task`
                   : ''}
               </Button>
             </>

@@ -625,8 +625,13 @@ telefono** → l'ufficio la elimina, e si ripulisce da solo),
 Otto punti dopo il secondo giro di prova del cliente. Migration
 `20261009090000`. Cio' che resta vero:
 
-- **La password scade quattro volte l'anno**, date fisse uguali per tutti: 10
-  dicembre, 10 marzo, 10 giugno, 10 settembre. Dal **primo del mese** si avvisa
+- **La password scade quattro volte l'anno**, date fisse: 10 dicembre, 10
+  marzo, 10 giugno, 10 settembre. ⚠️ **Si accende per cliente**
+  (`tenants.features.scadenza_password`, nasce **spenta**): le date le ha
+  scelte un'azienda, il muro lo prendono le persone, e accesa per tutti il 10
+  dicembre trentacinque tecnici di un altro cliente si troverebbero bloccati
+  davanti a un QR in cantiere per una regola che nessuno gli ha annunciato.
+  Accesa su BER e DEMOK l'08/10. Dal **primo del mese** si avvisa
   (riga fissa nel guscio + popup **una volta al giorno**, perche' il numero di
   giorni cambia ogni giorno); dal giorno della scadenza non si passa.
   ⭐ **Una regola sola**: la scadenza che riguarda una persona e' la prima data
@@ -716,10 +721,13 @@ Otto punti dopo il secondo giro di prova del cliente. Migration
   svuotare una colonna da un filtro che sta altrove: tolto. ⚠️ Il badge
   «Richiesta» sulla riga: tolto, lo dice la colonna. ⚠️ Si affiancano da `xl`:
   sotto, con i 220px dei filtri, la colonna stretta scenderebbe sotto i 300px e
-  le sue due tendine non ci starebbero. La tinta e' **ambra** come i badge che
-  le richieste hanno gia' su questa pagina: ⚠️ sul telefono l'intestazione usa
-  `--accent` (#F26B23), che e' un altro arancione — due arancioni per la stessa
-  cosa su due superfici, da unificare quando si decide quale.
+  le sue due tendine non ci starebbero. La tinta e' **ambra**, come la barretta che
+  le richieste hanno sulla scheda del telefono. ⚠️ Ma l'intestazione della
+  scheda, sempre sul telefono, usa `--accent` (#F26B23): **due arancioni per
+  la stessa cosa**, a 16 gradi di distanza. Censimento completo fatto l'08/10:
+  7 punti ambra, 12 punti `--accent`. Da unificare quando si decide quale —
+  `--accent` costerebbe meno (e' un token, segue il tema), l'ambra e' quella
+  che la memoria della densita' d'ufficio dichiara parte della tavolozza.
   Di contorno, sulla stessa pagina: aggiunto il `loading.tsx` che mancava (era
   `force-dynamic` senza), tolto il doppio margine (la pagina si stringeva di
   360px: ⭐ i margini li mette il guscio), via «TODO» dalle scritte, e l'empty
@@ -793,6 +801,95 @@ tinte calcolate — l'autore su ogni riga, e le parole nuove).
 ⚠️ Sul tenant dimostrativo il **formato pieno** di una foto non arriva: i file
 stanno solo su R2 e `/api/photo/<id>` senza `size=thumb` passa da Nextcloud. Il
 banco lo **dice** invece di misurare a vuoto.
+
+#### Audit dei due giorni (08/10/2026, migration `20261009140000`)
+
+Riletto tutto quello che era stato fatto fra il 07 e l'08, da quattro lati:
+igiene, sicurezza, solidita', coerenza. Cio' che ne resta, oltre alle
+correzioni:
+
+- ⚠️⚠️ **`users.created_at` era diventato un presidio e nessuno lo sapeva.**
+  Da quando la scadenza password lo usa come orologio di riserva, spostarlo in
+  avanti **spegne la scadenza per sempre** — e su `public.users` i grant sono
+  di tabella, quindi l'interessato lo poteva scrivere da solo dalla console del
+  browser. Una riga nel trigger. ⭐ E' la frase della migration del giorno
+  prima («un campo diventa un presidio nel momento in cui qualcuno lo legge»)
+  applicata a una tabella diversa: quando si comincia a **leggere** una
+  colonna, la lista di cio' che si protegge e' gia' vecchia.
+- ⚠️ **Un tecnico poteva spuntare a nome di un collega, a una data scelta.**
+  `commessa_todo_touch` scrive `completato_da := coalesce(NEW.completato_da,
+  auth.uid())` — il valore che arriva dal client **vince** — e gira dopo la
+  guardia. Ora la guardia accetta solo «com'era» oppure «io, adesso» (cinque
+  minuti di tolleranza). Stessa cosa per `created_by`, `created_at` e `id`.
+  Provato sul database vero in transazione annullata: rifiutato, rifiutato, e
+  la spunta normale continua a funzionare.
+- ⚠️ **Una virgola nella ricerca mandava la board sulla pagina d'errore.**
+  PostgREST spezza il corpo di `or=(...)` sulle virgole: cercando «Rossi, via
+  Verdi» la richiesta torna 400. Finche' l'errore si buttava via era una board
+  vuota; da quando si legge a pagine, `leggiTutto` **solleva**. Ora il testo si
+  ripulisce e la lettura ha il suo try/catch. Stessa cosa per i parametri
+  dell'indirizzo, che finivano grezzi in `.in()` su una colonna enum: un
+  segnalibro vecchio bastava a far cadere la pagina.
+- ⚠️ **Il costruttore di postgrest-js e' mutabile e `order()` accoda**:
+  riusando la stessa query per tutte le pagine, la seconda chiede
+  `order=priorita,id,priorita,id`. Una query **nuova per pagina**.
+- ⚠️ **Sul telefono tre letture su quattro ignoravano l'errore** e diventavano
+  «niente da fare oggi» — la bugia piu' comoda che quella pagina possa dire a
+  un tecnico. E una lettura fallita delle assegnazioni diventava «nessuna
+  commessa assegnata», cioe' il falso negativo che quella pagina era stata
+  riscritta per togliere, preso dall'altra parte.
+- ⚠️ **Un byte NUL dentro `_components/scelta.tsx`** (`const VUOTO =
+  '\u0000nessuno'`, scritto come byte vero) rendeva il file **binario** per
+  `grep`: 883 righe di un componente che vive in tutti i dialog erano
+  invisibili a ogni ricerca nel repo, compreso questo audit finche' non e'
+  saltato fuori per caso. Scritto come escape, il valore non cambia.
+- ⚠️ **`CardContent` nasce `p-6 pt-3 sm:p-7 sm:pt-4`**: un `p-0` da solo non
+  lo annulla sopra i 640px. Le due colonne perdevano 56px ciascuna.
+- ⚠️ **Il responsabile si deduceva dal nome, non dall'id**: se l'embed verso
+  `users` non risolveva, la riga diceva «Non assegnata» **e** non offriva la
+  tendina per assegnarla, perche' quella guarda `assegnato_a`. Una riga di
+  nessuno che nessuno poteva prendere.
+- ⭐ **Il tipo `Row` era scritto a mano due volte** (22 campi, 4 aggiunti in
+  entrambe nello stesso giro, con i commenti riscritti diversi). Ora lo esporta
+  il componente che lo consuma.
+- ⭐ **`motivo: 'provvisoria'` nasceva da `must_change_password`**, che e'
+  un'altra colonna da `password_provvisoria`: con un reset forzato da un
+  amministratore la pagina diceva «quella che ti hanno dato in ufficio la sanno
+  in due» a chi se l'era scelta da se'. Si chiama `cambio_obbligatorio`.
+- ⭐ **Nove `void X;` sotto il commento «usato sopra»**, che era falso: erano
+  nove import morti con il linter spento sopra. Zero soppressioni `void`
+  rimaste nel repo.
+- Di contorno: «TODO» tolto da tutte le scritte che un utente legge (restavano
+  nei messaggi d'errore della board, nella board di commessa e nel registro
+  modifiche); il giro guidato puntava a `/office/tickets`, che nella barra non
+  c'e' per nessuno, e raccontava che le telefonate diventano ticket; due
+  collegamenti passavano ancora `?tipo=richieste`, un filtro che non esiste
+  piu'; le credenziali dei tenant dimostrativi escono dal sorgente
+  (`BANCO_PASSWORD`) — ⚠️ **da ruotare**, perche' DEMOK e DEMOC vivono nello
+  stesso progetto Supabase della produzione.
+
+> ⚠️ **Il cancello della password protegge le PAGINE, non le azioni.** Sta nei
+> due gusci, in `/t/[token]` e nella pagina del cambio: non nel middleware, non
+> nelle rotte `/api`, non nelle server action, non su `/admin`. Una PWA gia'
+> aperta continua a funzionare e un'azione gira **prima** del render del layout
+> che poi rimanda. ⭐ **E' coerente con l'intento** — e' un promemoria che a un
+> certo punto diventa un muro, non un confine di sicurezza — ma va saputo: se
+> un domani si vuole «non si passa» davvero, il posto e' il middleware.
+>
+> ✅ **Chiuso l'08/10**: `clienti_tenant_scope` era `FOR ALL` col solo filtro
+> tenant, quindi **un tecnico poteva cancellare l'intera anagrafica clienti**
+> del suo spazio di lavoro da una chiamata diretta (195 schede su Bertaiola, un
+> comando). Spezzata in quattro policy per mestiere (migration
+> `20261009150000`): leggono tutti, creano tutti (serve al sopralluogo),
+> modificano e cancellano solo ufficio e admin — che e' cio' che le azioni
+> pretendevano gia'. Provato sul database vero: legge ✓, crea ✓, modifica ✗,
+> cancella ✗.
+>
+> ⚠️ **E i tipi generati di Supabase conoscono 40 tabelle su 81**: tutto il
+> resto viaggia con `as never` (1157 occorrenze), cioe' **senza controllo dei
+> tipi**. Rigenerarli e' un comando; toglierne i cast e' un giorno, e farebbe
+> emergere errori veri. Da fare all'inizio di una sessione tranquilla, non
+> prima di una funzione nuova.
 
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 

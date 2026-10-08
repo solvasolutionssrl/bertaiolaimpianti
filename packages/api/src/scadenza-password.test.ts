@@ -136,6 +136,22 @@ describe('statoScadenzaPassword: valida, in scadenza, scaduta', () => {
     expect(e.scadenza).toBe('2027-03-10');
   });
 
+  it('un orologio avanti non mura nessuno', () => {
+    // Se per qualche ragione la data in tabella e nel futuro (orologio di un
+    // server sbagliato, importazione storta), la risposta deve essere «niente
+    // da dire», non un muro: si prende il massimo fra i ripieghi, quindi la
+    // scadenza finisce lontana.
+    const e = statoScadenzaPassword({ oggi: '2026-10-08', scelta: '2027-05-01', nato: '2026-05-01' });
+    expect(e.stato).toBe('valida');
+    expect(e.giorniRimasti).toBeGreaterThan(0);
+  });
+
+  it('una data vuota non produce «fra NaN giorni»', () => {
+    const e = statoScadenzaPassword({ oggi: '2026-10-08', scelta: '', nato: '' });
+    expect(Number.isFinite(e.giorniRimasti)).toBe(true);
+    expect(e.scadenza).toBe('2026-12-10');
+  });
+
   it('un account nato appena prima della finestra viene avvisato, non murato', () => {
     const e = statoScadenzaPassword({ oggi: '2026-12-02', scelta: null, nato: '2026-11-28' });
     expect(e.stato).toBe('in_scadenza');

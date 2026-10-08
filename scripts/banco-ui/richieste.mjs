@@ -237,7 +237,7 @@ try {
       quante: righe.length,
       conManda: righe.filter(d =>
         [...d.querySelectorAll('button[aria-label]')]
-          .some(b => /^Manda qualcuno/i.test(b.getAttribute('aria-label') || ''))).length,
+          .some(b => /^Tecnici assegnati su/i.test(b.getAttribute('aria-label') || ''))).length,
       conTecnici: righe.filter(d =>
         [...d.querySelectorAll('[title]')]
           .some(e => /Tecnic[oi] assegnat/i.test(e.getAttribute('title') || ''))).length,
@@ -541,7 +541,7 @@ try {
     return b ? b.textContent.trim() : null;
   })()`);
   esito(vai === 'Apri la richiesta', '⭐ il tasto dice dove porta', vai ?? 'nessun tasto');
-  if (vai) {
+  if (vai === 'Apri la richiesta') {
     await clicVero(cdp, `[...document.querySelectorAll('button')].find(x => /apri la richiesta/i.test(x.textContent || ''))`, { attesaMs: 1800 });
     const dove = await valuta(cdp, `location.pathname`);
     esito(dove.startsWith('/mobile/richiesta/'), '⭐ e porta sulla richiesta, non su un elenco', dove);

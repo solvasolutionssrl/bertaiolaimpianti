@@ -30,6 +30,7 @@ import { BottomNavShell } from '@/app/mobile/_components/bottom-nav-shell';
 import { sonoCapoSquadra } from '@/app/mobile/kantiere/_lib/capo';
 import { possoAprireLavori } from '@/app/_lib/capacita-server';
 import { statoPassword } from '@/app/_lib/cambio-password';
+import { testoScadenza } from '@kommessa/api/scadenza-password';
 
 export const dynamic = 'force-dynamic';
 
@@ -274,11 +275,11 @@ export default async function TokenPage({
       <Schermo>
         <IconaQr />
         <h1 className="text-center text-lg font-semibold tracking-tight text-foreground">
-          {scaduta ? 'La tua password \u00e8 scaduta' : 'Scegli la tua password'}
+          {scaduta ? testoScadenza(statoPwd.scadenza).titolo : 'Scegli la tua password'}
         </h1>
         <p className="max-w-xs text-center text-sm text-muted-foreground">
           {scaduta
-            ? 'Ogni tre mesi serve una password nuova. Scegline una e torni subito a timbrare.'
+            ? `${testoScadenza(statoPwd.scadenza).corpo} Poi torni subito a timbrare.`
             : 'Prima di timbrare devi sostituire la password che ti hanno dato in ufficio con una che sai solo tu.'}
         </p>
         <Link

@@ -10,7 +10,6 @@ import {
   ZOOM_A_RIPOSO,
   distanzaFra,
   dopoDoppioTocco,
-  limitaScala,
   limitaSpostamento,
   misuraContenuta,
   puoScorrereFraLeFoto,
@@ -86,23 +85,38 @@ export function FotoZoomabile({
   src,
   alt,
   className,
-  onStatoZoom,
+  onPuoScorrere,
   conControlli = true,
 }: {
   src: string;
   alt: string;
   className?: string;
   /**
-   * Il genitore deve sapere se la foto è ingrandita: finché lo è, lo
+   * Il genitore deve sapere se la foto è a riposo: finché è ingrandita, lo
    * scorrimento laterale fra le foto non deve rubare il gesto.
+   *
+   * ⚠️ Si chiama come ciò che porta, non come l'argomento di cui parla: si
+   * chiamava `onStatoZoom` e consegnava un «si può scorrere», e chi la legava
+   * doveva leggere il corpo per capire il verso del booleano.
    */
-  onStatoZoom?: (puoScorrere: boolean) => void;
+  onPuoScorrere?: (puoScorrere: boolean) => void;
   conControlli?: boolean;
 }) {
   const rifRiquadro = React.useRef<HTMLDivElement>(null);
   const rifImg = React.useRef<HTMLImageElement>(null);
   const [stato, setStato] = React.useState<StatoZoom>(ZOOM_A_RIPOSO);
   const [naturale, setNaturale] = React.useState<Misura>({ larghezza: 0, altezza: 0 });
+  /**
+   * Lo stato, anche in un riferimento.
+   *
+   * ⚠️ Serve agli **ascoltatori nativi**: se l'effetto che li registra
+   * dipendesse da `stato`, durante un pizzicotto si toglierebbe e rimetterebbe
+   * un ascoltatore di `touchmove` a ogni fotogramma — e fra il togliere e il
+   * rimettere un evento si puo' perdere, cioe' il gesto fa uno scatto. Gli
+   * ascoltatori si registrano **una volta** e leggono di qui.
+   */
+  const rifStato = React.useRef<StatoZoom>(stato);
+  rifStato.current = stato;
 
   // I dita in corso. Una `Map` e non uno stato di React: cambia a ogni
   // movimento e non deve ridisegnare niente.
@@ -120,8 +134,8 @@ export function FotoZoomabile({
   }, [naturale]);
 
   React.useEffect(() => {
-    onStatoZoom?.(puoScorrereFraLeFoto(stato));
-  }, [stato, onStatoZoom]);
+    onPuoScorrere?.(puoScorrereFraLeFoto(stato));
+  }, [stato, onPuoScorrere]);
 
   // Foto nuova = si riparte da capo. Senza, si cambia immagine e ci si
   // ritrova sull'angolo in cui si era rimasti sulla precedente.
@@ -175,7 +189,7 @@ export function FotoZoomabile({
     // Il dito: si ferma qui solo quando lo stiamo usando noi, altrimenti il
     // genitore non potrebbe più cambiare foto scorrendo.
     const dito = (e: TouchEvent) => {
-      if (dita.current.size >= 2 || !puoScorrereFraLeFoto(stato)) {
+      if (dita.current.size >= 2 || !puoScorrereFraLeFoto(rifStato.current)) {
         e.preventDefault();
         e.stopPropagation();
       }
@@ -187,7 +201,7 @@ export function FotoZoomabile({
       el.removeEventListener('wheel', rotella);
       el.removeEventListener('touchmove', dito);
     };
-  }, [misure, stato]);
+  }, [misure]);
 
   const giuDito = (e: React.PointerEvent) => {
     dita.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -243,13 +257,18 @@ export function FotoZoomabile({
   };
 
   const suDito = (e: React.PointerEvent) => {
+    // ⚠️ Il puntatore catturato si rilascia: senza, un dito che esce dalla
+    // finestra mentre trascina lascia la cattura attiva e il riquadro continua
+    // a ricevere eventi che non gli appartengono piu'.
+    const el = e.currentTarget as HTMLElement;
+    if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
     dita.current.delete(e.pointerId);
     if (dita.current.size < 2) pizzico.current = null;
     if (dita.current.size === 0) trascino.current = null;
 
     // Doppio tocco: due volte vicino, in fretta. Vale anche col mouse.
-    const el = rifRiquadro.current;
-    if (!el) return;
+    const riquadro = rifRiquadro.current;
+    if (!riquadro) return;
     const ora = Date.now();
     const prec = ultimoTocco.current;
     if (
@@ -263,7 +282,7 @@ export function FotoZoomabile({
       setStato((p) =>
         dopoDoppioTocco({
           stato: p,
-          punto: dalCentro(el, e.clientX, e.clientY),
+          punto: dalCentro(riquadro, e.clientX, e.clientY),
           contenitore: m.contenitore,
           immagine: m.immagine,
         }),
@@ -409,12 +428,50 @@ export function VisoreFoto({
   didascalia?: string | null;
   onChiudi: () => void;
 }) {
+  const rifPannello = React.useRef<HTMLDivElement>(null);
+  const rifChiudi = React.useRef<HTMLButtonElement>(null);
+
+  /**
+   * ⚠️ **Il fuoco non deve uscire di qui.** Il visore copre tutto con un fondo
+   * nero quasi opaco, ma il contenuto sotto resta nell'ordine di tabulazione:
+   * con `Tab` si arriva su pulsanti **invisibili** — in un dialog dei media
+   * anche su un «Elimina» — e `Invio` li preme. Si vede nero e si sta
+   * agendo su un'altra cosa.
+   *
+   * Si fa a mano e non con una libreria: tre righe, e il fuoco torna dove era
+   * quando si chiude.
+   */
   React.useEffect(() => {
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onChiudi();
+    const prima = document.activeElement as HTMLElement | null;
+    rifChiudi.current?.focus({ preventScroll: true });
+
+    const tasti = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onChiudi();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const dentro = rifPannello.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+      );
+      if (!dentro || dentro.length === 0) return;
+      const primo = dentro[0]!;
+      const ultimo = dentro[dentro.length - 1]!;
+      const attivo = document.activeElement;
+      if (e.shiftKey && (attivo === primo || !rifPannello.current?.contains(attivo))) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && (attivo === ultimo || !rifPannello.current?.contains(attivo))) {
+        e.preventDefault();
+        primo.focus();
+      }
     };
-    window.addEventListener('keydown', esc);
-    return () => window.removeEventListener('keydown', esc);
+
+    window.addEventListener('keydown', tasti);
+    return () => {
+      window.removeEventListener('keydown', tasti);
+      prima?.focus?.({ preventScroll: true });
+    };
   }, [onChiudi]);
 
   if (typeof document === 'undefined') return null;
@@ -434,6 +491,7 @@ export function VisoreFoto({
       >
         <p className="min-w-0 flex-1 truncate text-xs text-white/70">{didascalia ?? alt}</p>
         <button
+          ref={rifChiudi}
           type="button"
           onClick={onChiudi}
           aria-label="Chiudi"

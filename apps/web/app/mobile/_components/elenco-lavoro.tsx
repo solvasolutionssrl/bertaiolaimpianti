@@ -385,18 +385,6 @@ function Blocco({
 
 // ─────────────────────────── Le schede ───────────────────────────
 
-function Scheda({
-  voce,
-  indice,
-  adesso,
-}: {
-  voce: VoceLavoro;
-  indice: number;
-  adesso: number;
-}) {
-  if (voce.tipo === 'commessa') return <SchedaCommessa voce={voce} indice={indice} />;
-  return <SchedaDaFare voce={voce} adesso={adesso} />;
-}
 
 function SchedaCommessa({
   voce,

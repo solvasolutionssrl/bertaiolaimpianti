@@ -42,7 +42,7 @@ const ROTTE = {
   kommessa: [
     ['/office', 'Dashboard'],
     ['/office/commesse', 'Commesse'],
-    ['/office/todo', 'Task'],
+    ['/office/todo', 'Task e Richieste'],
     ['/office/clienti', 'Clienti'],
     ['/office/turni', 'Turni'],
     ['/office/notifiche', 'Avvisi'],

@@ -11,6 +11,8 @@ import {
 } from '@kommessa/api/scadenza-password';
 
 import { getTenantContextCached } from './tenant-cache';
+import { getAppModeCached } from './app-mode';
+import { tenantFeatureEnabled } from './tenant-features';
 
 /**
  * «Questa persona deve ancora scegliere la sua password?»
@@ -35,10 +37,17 @@ export interface StatoPassword {
   scadenza: EsitoScadenza;
   /**
    * Perché è obbligato, quando lo è. Serve alla pagina del cambio: «la tua
-   * password è scaduta» e «stai usando quella dell'ufficio» sono due frasi
-   * diverse, e dire quella sbagliata fa sembrare l'app rotta.
+   * password è scaduta» e «devi sceglierne una tua» sono due frasi diverse, e
+   * dire quella sbagliata fa sembrare l'app rotta.
+   *
+   * ⚠️ Si chiama `cambio_obbligatorio` e **non** `provvisoria`: nasce da
+   * `must_change_password`, che è un'altra colonna da `password_provvisoria`.
+   * Coincidono quasi sempre, non sempre — un reset forzato da un
+   * amministratore alza la prima e non per forza la seconda — e col nome
+   * sbagliato la pagina diceva «quella che ti hanno dato in ufficio la sanno
+   * in due» a chi la password se l'era scelta da sé.
    */
-  motivo: 'nessuno' | 'provvisoria' | 'scaduta';
+  motivo: 'nessuno' | 'cambio_obbligatorio' | 'scaduta';
 }
 
 /**
@@ -65,7 +74,15 @@ export const statoPassword = cache(async (): Promise<StatoPassword> => {
       .eq('id', ctx.userId)
       .maybeSingle();
     if (error) {
-      console.warn('[cambio-password] lettura non riuscita, si lascia passare:', error.message);
+      // ⚠️ `error`, non `warn`: il fail-open e' voluto, ma se resta acceso a
+      // lungo (una colonna rinominata, un permesso tolto) la regola e' spenta
+      // per tutta l'azienda e non lo vede nessuno. Almeno si urla.
+      console.error('[cambio-password] lettura NON riuscita, si lascia passare:', error.message);
+      return fuoriServizio;
+    }
+    if (!data) {
+      // Un caso diverso, e vale la pena distinguerlo: la riga non c'e'.
+      console.error('[cambio-password] nessuna riga utente per', ctx.userId);
       return fuoriServizio;
     }
     const riga = data as {
@@ -80,11 +97,23 @@ export const statoPassword = cache(async (): Promise<StatoPassword> => {
     const giorno = (t: string | null | undefined): string | null =>
       t ? romeDay(new Date(t)) : null;
 
-    const scadenza = statoScadenzaPassword({
-      oggi: romeDay(new Date()),
-      scelta: giorno(riga?.password_changed_at),
-      nato: giorno(riga?.created_at),
-    });
+    // ⚠️ **La scadenza si accende per cliente.** Le date (10 dicembre, marzo,
+    // giugno, settembre) le ha scelte un'azienda; il muro lo prende chi lavora.
+    // Accesa per tutti, il 10 dicembre i tecnici di un altro cliente si
+    // troverebbero bloccati davanti a un QR in cantiere per una regola che
+    // nessuno gli ha annunciato. Si accende dal pannello, a chi la chiede.
+    const policyAttiva = await tenantFeatureEnabled(
+      'scadenza_password',
+      (await getAppModeCached()) !== 'kantiere',
+    );
+
+    const scadenza = policyAttiva
+      ? statoScadenzaPassword({
+          oggi: romeDay(new Date()),
+          scelta: giorno(riga?.password_changed_at),
+          nato: giorno(riga?.created_at),
+        })
+      : SCADENZA_FUORI_SERVIZIO;
 
     const perPolicy = deveCambiarePassword({ mustChangePassword: riga?.must_change_password });
     const scaduta = scadenza.stato === 'scaduta';
@@ -96,10 +125,10 @@ export const statoPassword = cache(async (): Promise<StatoPassword> => {
       obbligato: perPolicy || scaduta,
       provvisoria: mostraPromemoriaPassword({ passwordProvvisoria: riga?.password_provvisoria }),
       scadenza,
-      motivo: perPolicy ? 'provvisoria' : scaduta ? 'scaduta' : 'nessuno',
+      motivo: perPolicy ? 'cambio_obbligatorio' : scaduta ? 'scaduta' : 'nessuno',
     };
   } catch (e) {
-    console.warn('[cambio-password] lettura non riuscita, si lascia passare:', e);
+    console.error('[cambio-password] lettura NON riuscita, si lascia passare:', e);
     return fuoriServizio;
   }
 });

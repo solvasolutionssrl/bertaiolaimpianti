@@ -224,7 +224,7 @@ export async function computeAlerts(tenantId: string): Promise<AlertItem[]> {
   // atterrare: `/office/commesse/null/lavori` e' un link rotto. Si manda alla
   // lista delle richieste.
   const linkTodo = (commessaId: string | null): string =>
-    commessaId ? `/office/commesse/${commessaId}/lavori` : '/office/todo?tipo=richieste';
+    commessaId ? `/office/commesse/${commessaId}/lavori` : '/office/todo';
 
   // ─── todo_scaduti ──────────────────────────────────────────────────
   if (settings.todo_scaduti.enabled) {

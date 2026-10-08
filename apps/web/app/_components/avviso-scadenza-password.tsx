@@ -101,7 +101,15 @@ export function AvvisoScadenzaPassword({
   if (!aperto || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+    // ⚠️ Le due righe che servono a **qualunque** cosa viva su `document.body`:
+    // un dialog Radix aperto spegne i puntatori su tutto il body (e questo
+    // avviso compare da solo, un secondo dopo, anche sopra un dialog), e un
+    // portale non marcato viene letto da Radix come un clic «fuori».
+    <div
+      data-popover-portale=""
+      style={{ pointerEvents: 'auto' }}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+    >
       <button
         type="button"
         aria-label="Chiudi l’avviso"

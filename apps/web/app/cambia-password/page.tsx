@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { CalendarClock, ShieldCheck } from 'lucide-react';
 
 import { etichettaAccesso } from '@kommessa/api/identita';
-import { formattaGiorno, quandoScade } from '@kommessa/api/scadenza-password';
+import { formattaGiorno, quandoScade, testoScadenza } from '@kommessa/api/scadenza-password';
 
 import { getTenantContextCached } from '@/app/_lib/tenant-cache';
 import { casaPerRuolo, statoPassword } from '@/app/_lib/cambio-password';
@@ -38,14 +38,19 @@ export default async function CambiaPasswordPage() {
   const { obbligato, motivo, scadenza } = await statoPassword();
   const scaduta = motivo === 'scaduta';
 
+  // ⚠️ Il testo della scadenza viene da `testoScadenza`, non riscritto qui:
+  // è lo stesso che si legge nella riga fissa del guscio e nel popup, e tre
+  // varianti della stessa frase sono esattamente ciò che quel modulo esiste
+  // per impedire.
+  const detto = testoScadenza(scadenza);
   const titolo = scaduta
-    ? 'La tua password è scaduta'
+    ? detto.titolo
     : obbligato
       ? 'Scegli la tua password'
       : 'Cambia la password';
 
   const spiegazione = scaduta
-    ? 'Ogni tre mesi serve una password nuova. Scegline una e torni subito al lavoro: il nome utente non cambia.'
+    ? `${detto.corpo} Il nome utente non cambia.`
     : obbligato
       ? 'Quella che ti hanno dato in ufficio la sanno in due. Scegline una che sai solo tu: da adesso userai questa per entrare.'
       : 'Da adesso entrerai con quella nuova. Il nome utente non cambia.';

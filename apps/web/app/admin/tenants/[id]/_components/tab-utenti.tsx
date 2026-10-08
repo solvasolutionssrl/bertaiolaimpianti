@@ -381,7 +381,7 @@ export function TabUtenti({
                                 const ok = await askConfirm({
                                   title: `Eliminare ${u.display_name ?? u.email}?`,
                                   description:
-                                    'Operazione irreversibile. L\'utente verrà rimosso dal sistema di autenticazione e dalla tabella utenti. Lo storico (commesse, foto, TODO) resta ma con autore = "—". Da fare solo per utenti creati per errore o dipendenti usciti.',
+                                    'Operazione irreversibile. L\'utente verrà rimosso dal sistema di autenticazione e dalla tabella utenti. Lo storico (commesse, foto, task) resta ma con autore = "—". Da fare solo per utenti creati per errore o dipendenti usciti.',
                                   destructive: true,
                                   confirmLabel: 'Elimina definitivamente',
                                 });

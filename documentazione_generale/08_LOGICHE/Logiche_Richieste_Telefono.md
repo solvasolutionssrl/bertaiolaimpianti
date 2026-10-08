@@ -1,7 +1,7 @@
 # Logiche Richieste al telefono — dal post-it alla commessa
 
-**Versione**: 1.0
-**Stato**: ✅ in produzione dal 05/10/2026 (push `ef2da9f` + `c847a87`)
+**Versione**: 1.2
+**Stato**: ✅ in produzione dal 05/10/2026 · aggiornato 08/10/2026 (seconda mano, indirizzo, pagina sul telefono, board a due colonne)
 **Migration**: `20261005120000_richieste_al_telefono.sql` — ✅ applicata e verificata
 **Ambito**: mondo **commesse** (`app_mode ≠ kantiere`, quindi Bertaiola). FPM non ne è toccata.
 
@@ -73,8 +73,9 @@ commessa al momento della conversione. Al telefono si scrive quello che si ha:
 a volte è solo «signora Elena, caldaia Viessmann, richiama».
 
 Il resto riusa i campi che c'erano: `titolo` = cosa serve, `descrizione` =
-dettagli, `priorita` = urgenza, `assegnato_a` = chi se ne occupa, `scadenza_at`
-= entro quando. `metadata.fonte = 'telefono'` marca la provenienza (il campo
+dettagli, `priorita` = urgenza, `assegnato_a` = il Responsabile, `scadenza_at`
+= entro quando, `created_by` = **chi l'ha registrata** (si legge a schermo dal
+09/10; protetta dal trigger `commessa_todo_tecnico_guard`). `metadata.fonte = 'telefono'` marca la provenienza (il campo
 esisteva già con `'riunione:<id>' | 'manuale'`).
 
 Indice parziale `commessa_todo_richieste_idx` su `WHERE commessa_id IS NULL`:
@@ -195,19 +196,32 @@ assegnazione che non notifica non è finita.** Lo stesso vale ancora per
 
 ## 8. L'interfaccia
 
-### 8.1 Ufficio — `/office/todo`, «Task e richieste»
+### 8.1 Ufficio — `/office/todo`, «Task e Richieste»
 
-- Due pulsanti: **«Richiesta al telefono»** (pieno, è il gesto principale) e
-  «Task su una commessa» (bordato).
-- Filtri: gruppo **Tipo** (Tutto · Richieste da smistare · Task di commessa),
-  e «Da assegnare» nel gruppo Assegnato.
-- Le richieste stanno **in cima**: sono le uniche righe che aspettano una
-  decisione (va in sopralluogo? si butta?), il resto è lavoro già incanalato.
-- Riconoscibili senza leggere: barretta ambra a sinistra, badge «Richiesta»,
-  cliente in evidenza e contatto in mono.
-- Azioni di riga: tendina «Assegna a…» (se non assegnata), matita (modifica),
-  **«Crea commessa»**.
-- Contatori in alto: «Richieste», «Da assegnare», più quelli che c'erano.
+**Due colonne affiancate** (dal 07/10): **Task** a sinistra, 65% della
+larghezza, tinta blu; **Richieste** a destra, 35%, tinta ambra. Si affiancano
+da `xl` in su; sotto si impilano.
+
+⭐ Sono **due mucchi**, non un elenco ordinato: prima erano una lista sola con
+le richieste in cima *perché ordinate prima*, e nessuno poteva sapere se fosse
+una regola o un caso. Una richiesta è una telefonata che aspetta una decisione;
+un task è lavoro già deciso dentro un lavoro che esiste.
+
+- Il pulsante sta nell'**intestazione della sua colonna**: «**＋ ☎ Nuova
+  richiesta**» (pieno) e «**＋ Nuovo task**» (bordato).
+- ⚠️ **Il filtro «Tipo» non esiste più**: con due colonne sempre visibili
+  sarebbe lo stesso lavoro, e si potrebbe svuotare una colonna da un filtro
+  che sta altrove. Restano stato, priorità, assegnato (con la scorciatoia «Da
+  assegnare»), commessa, testo.
+- ⚠️ Il **badge «Richiesta»** sulla riga non c'è più: lo dice la colonna.
+- Azioni di riga: cerchietto per spuntare (**con conferma**), tendina
+  «Responsabile…» (se non assegnata), tendina «Tecnici assegnati…» (**solo
+  sulle richieste**), matita, «**Crea commessa**», cestino (**con conferma**).
+  Nella colonna stretta i comandi vanno su righe loro.
+- La riga dice anche **chi l'ha registrata**, a parole («da Barbara») e non con
+  un'icona.
+- Contatori in alto: Da assegnare, Aperti, In corso, Urgenti, Scaduti. Il conto
+  delle richieste lo porta l'intestazione della sua colonna.
 
 ### 8.2 Il modulo della telefonata
 
@@ -220,18 +234,34 @@ obbligatorio è il primo:
    quando diventa una commessa.»
 3. **Come richiamare**
 4. **Dettagli** (`Marca e modello, cosa succede, quando sono in casa…`)
-5. **Urgenza**: Quando capita / Normale / Presto / Urgente
-6. **Chi se ne occupa** — raggruppato per ruolo, con «Riceve una notifica sul
-   telefono»
+5. **Urgenza**: Urgente / Alta / Bassa
+6. **Responsabile** — raggruppato per ruolo: «Ne risponde lui e riceve una
+   notifica sul telefono. Può essere un caposquadra, che poi manda i suoi
+   tecnici.»
 7. **Entro il**
+8. **Tecnici assegnati** — uno o più: la vedono sul telefono e possono
+   spuntarla. Il Responsabile non cambia.
+
+E fra il 3 e il 4, **Dove bisogna andare** — «se diverso dall'indirizzo del
+cliente». È la cosa che a chi riceve la richiesta mancava del tutto.
+
+⭐ Il campo «Chi ha chiamato» non è più solo un nome: è lo stesso selettore del
+sopralluogo (`SceltaCliente`), e se il cliente non c'è **crea davvero la
+scheda**, con gli stessi sei campi del modulo «nuova commessa».
 
 Lo stesso modulo serve a modificare: è lì che si assegna se al telefono non si
 sapeva ancora a chi darla.
 
 ### 8.3 Telefono — home PWA
 
-La richiesta compare in «Cosa fare» con la barretta ambra e la scritta
-«Richiesta». **Non** porta a una commessa (non ce l'ha) e, se c'è un numero, il
+⚠️ **Dal 07/10 una richiesta ha una pagina sua**: `/mobile/richiesta/[id]`,
+intestazione arancione (`--accent`), con cliente, indirizzo col tasto mappa,
+contatto col tasto chiama, cosa è stato detto al telefono, Responsabile e
+Tecnici assegnati, le note e il tasto per chiuderla. Prima era l'unica cosa da
+fare senza un posto dove aprirsi.
+
+Nell'elenco la richiesta compare con la barretta ambra e la scritta
+«Richiesta», ha il cerchietto per spuntarla e, se c'è un numero, il
 tasto lo **chiama** (`tel:`): la prima cosa che serve a chi la riceve è
 richiamare la persona.
 

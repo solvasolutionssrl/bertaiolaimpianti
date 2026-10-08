@@ -1,3 +1,11 @@
+-- ⚠️⚠️ **QUESTO FILE NON SI RIESEGUE DA SOLO.**
+-- La policy `commessa_todo_squadra_write` che crea qui e' stata **sostituita**
+-- due volte: da `20261008130000` (che aggiunge «solo sulle richieste») e da
+-- `20261009140000` (che aggiunge «e solo persone di questo spazio di lavoro»).
+-- Ogni file preso da solo e' idempotente, ma rieseguendo QUESTO dopo gli altri
+-- si torna alla versione senza vincoli — cioe' si riapre in silenzio proprio
+-- cio' che i due dopo sono stati scritti per chiudere. Se serve rifare lo
+-- schema, si riapplicano in ordine.
 -- ============================================================
 -- Chi ha in mano una cosa da fare, e chi ci va
 -- ============================================================

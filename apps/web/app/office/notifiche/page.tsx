@@ -79,7 +79,7 @@ export default async function NotifichePage({
       <SectionHeader
         eyebrow="Comunicazioni"
         title="Avvisi e notifiche"
-        description="Allerte automatiche su commesse ferme, foto mancanti, TODO scaduti — più lo storico delle notifiche evento."
+        description="Allerte automatiche su commesse ferme, foto mancanti, Task scaduti — più lo storico delle notifiche evento."
         icon={<Bell />}
       />
 
@@ -250,5 +250,4 @@ function AlertRow({
 }
 
 // suppress unused
-void Info;
 void cn;

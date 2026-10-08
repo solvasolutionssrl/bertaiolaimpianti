@@ -34,7 +34,12 @@ const inputSchema = z.object({
   query: z.string().max(200),
 });
 
-export interface GeocodeSuggestion {
+// ⚠️ **Non esportata**: da un `route.ts` non la si puo' importare in un
+// componente senza tirarsi dietro il server, e infatti nessuno lo fa — il
+// client la riscrive a mano (`_components/address-autocomplete.tsx`). Tenere
+// l'`export` faceva credere che fosse una fonte condivisa, e quando e' stato
+// aggiunto `via` la stessa spiegazione e' finita copiata in due punti.
+interface GeocodeSuggestion {
   label: string;
   lat: number;
   lng: number;

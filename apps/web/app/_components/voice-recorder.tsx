@@ -55,21 +55,8 @@ type State =
   | { kind: 'finalizing' }
   | { kind: 'error'; message: string };
 
-/**
- * Durata minima di una registrazione utile (11/08/2026).
- *
- * Premendo due volte il microfono — cosa che capita di continuo con i guanti,
- * o quando non si è sicuri che abbia registrato — partiva una registrazione da
- * mezzo secondo che veniva comunque mandata a trascrivere: l'AI restituiva
- * frasi inventate a partire dal rumore, il flusso si impantanava e il tasto
- * restava inutilizzabile. Sotto questa soglia la registrazione si butta e
- * basta: nessuna chiamata all'AI, nessuna attesa, tasto subito ripremibile.
- *
- * ⚠️ La soglia e il suo messaggio stanno in `@/app/_lib/registrazione`: il
- * dialog delle riunioni ha un registratore proprio, e finche' il numero stava
- * scritto qui lui non lo conosceva.
- */
-
+// La soglia dei tre secondi e i due messaggi stanno in
+// `@/app/_lib/registrazione`: un posto solo per i due registratori.
 const PICK_MIME_TYPES = [
   'audio/webm;codecs=opus',
   'audio/webm',

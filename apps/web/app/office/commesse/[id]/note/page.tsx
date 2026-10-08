@@ -90,7 +90,7 @@ export default async function NoteTab({
       >
         <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
         <span className="flex-1">
-          Per <strong>TODO assegnabili</strong> e{' '}
+          Per <strong>task assegnabili</strong> e{' '}
           <strong>verbali di riunione</strong> con report AI, usa la tab
           <strong> Lavori</strong>.
         </span>

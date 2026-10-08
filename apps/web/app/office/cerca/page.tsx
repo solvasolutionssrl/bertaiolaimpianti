@@ -349,7 +349,7 @@ export default async function CercaPage({
       <SectionHeader
         eyebrow="Ricerca"
         title="Ricerca globale"
-        description="Trova commesse, clienti, ticket, file, TODO, riunioni — anche per tag."
+        description="Trova commesse, clienti, ticket, file, task, riunioni — anche per tag."
         icon={<Search />}
       />
 
@@ -359,7 +359,7 @@ export default async function CercaPage({
           <Input
             name="q"
             defaultValue={q}
-            placeholder="Cerca cliente, codice, indirizzo, descrizione, TODO, riunione…"
+            placeholder="Cerca cliente, codice, indirizzo, descrizione, task, riunione…"
             className="pl-9"
             autoFocus
           />
@@ -460,7 +460,7 @@ export default async function CercaPage({
 
           {todoRows.length > 0 ? (
             <Section
-              title={`TODO (${todoRows.length})`}
+              title={`Task (${todoRows.length})`}
               icon={<CircleDot className="h-4 w-4" />}
             >
               <div className="space-y-2">

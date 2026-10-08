@@ -63,7 +63,10 @@ export function cittaDopoScelta(opt: {
   scritta: string;
   dalProvider?: string | null;
 }): string {
+  // ⚠️ Si restituisce il valore **ripulito**, non quello grezzo: la gemella
+  // qui sopra lo fa, e due funzioni con la stessa forma e due contratti
+  // diversi nello stesso file sono una trappola per chi legge.
   const scritta = (opt.scritta ?? '').trim();
-  if (scritta) return opt.scritta;
-  return (opt.dalProvider ?? '').trim() || opt.scritta;
+  if (scritta) return scritta;
+  return (opt.dalProvider ?? '').trim();
 }

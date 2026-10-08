@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assegnazioneInBreve,
   descriviAssegnazione,
   etichettaNonAssegnato,
   etichettaTecnici,
@@ -62,25 +61,5 @@ describe('descriviAssegnazione: la riga vuota non si scrive', () => {
     const righe = descriviAssegnazione({ responsabile: null, tecnici: [] }, 'task');
     expect(righe[0]?.etichetta).toBe('Assegnato a');
     expect(righe[0]?.valore).toBe('Non assegnato');
-  });
-});
-
-describe('assegnazioneInBreve', () => {
-  it('mostra la catena con la freccia', () => {
-    expect(
-      assegnazioneInBreve({ responsabile: 'Erica', tecnici: ['Luca', 'Thomas'] }),
-    ).toBe('Erica → Luca, Thomas');
-  });
-
-  it('con un solo fatto non inventa una freccia', () => {
-    expect(assegnazioneInBreve({ responsabile: null, tecnici: ['Luca'] })).toBe('Luca');
-    expect(assegnazioneInBreve({ responsabile: 'Erica', tecnici: [] })).toBe('Erica');
-  });
-
-  it('con niente dice che non e assegnata', () => {
-    expect(assegnazioneInBreve({ responsabile: null, tecnici: [] })).toBe('Non assegnata');
-    expect(assegnazioneInBreve({ responsabile: null, tecnici: [] }, 'task')).toBe(
-      'Non assegnato',
-    );
   });
 });

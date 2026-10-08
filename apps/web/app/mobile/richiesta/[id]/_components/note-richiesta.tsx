@@ -117,6 +117,17 @@ export function NoteRichiesta({
 }
 
 function fmtQuando(iso: string): string {
+  try {
+    return formatta(iso);
+  } catch {
+    // `Intl.format` su una data non valida **solleva**, e qui siamo nel render
+    // di un componente client: la pagina intera finirebbe sull'errore per un
+    // timestamp storto.
+    return iso;
+  }
+}
+
+function formatta(iso: string): string {
   return new Intl.DateTimeFormat('it-IT', {
     timeZone: 'Europe/Rome',
     day: '2-digit',

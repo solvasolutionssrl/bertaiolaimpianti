@@ -16,14 +16,25 @@ import { connetti, valuta, finoA } from '../banco-upload/cdp.mjs';
 export const BASE = process.env.BANCO_BASE ?? 'http://localhost:3010';
 export const PORTA_CDP = Number(process.env.BANCO_CDP ?? 9333);
 
+/**
+ * ⚠️ **Password dal sorgente solo come ripiego.** I tenant DEMOK/DEMOC
+ * stanno nello **stesso progetto Supabase della produzione**: non sono account
+ * finti, sono account veri con dentro dati finti. Averne la password scritta
+ * in un file versionato vuol dire che chiunque legga il repo entra in quei due
+ * spazi di lavoro. Si prende da `BANCO_PASSWORD` quando c'e'; il valore qui
+ * sotto resta perche' il banco deve girare senza preparativi, ed e' da
+ * ruotare.
+ */
+const PW = process.env.BANCO_PASSWORD ?? 'Demo2026!';
+
 export const ACCESSI = {
   // Mondo commesse (Bertaiola-like): ha Commesse, Task, Clienti.
-  kommessa: { email: 'demo@demok.kommessa.local', password: 'Demo2026!' },
+  kommessa: { email: process.env.BANCO_EMAIL ?? 'demo@demok.kommessa.local', password: PW },
   // Mondo presenze (FPM-like): ha Cantieri, Presenze, Kontabilita'.
-  kantiere: { email: 'ufficio@democ.kommessa.local', password: 'Demo2026!' },
+  kantiere: { email: 'ufficio@democ.kommessa.local', password: PW },
   // Tecnico del mondo presenze: serve per le schermate dell'app che l'ufficio
   // non vede (le mie ore, i miei viaggi, le mie spese).
-  tecnico: { email: 'marco@democ.kommessa.local', password: 'Demo2026!' },
+  tecnico: { email: 'marco@democ.kommessa.local', password: PW },
 };
 
 const CHROME =

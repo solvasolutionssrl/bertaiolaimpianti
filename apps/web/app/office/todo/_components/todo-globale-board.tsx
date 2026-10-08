@@ -36,6 +36,8 @@ import { type Priorita } from '@kommessa/api/priorita';
 import { Scelta, SceltaMultipla } from '@/app/_components/scelta';
 import { etichettaRuolo } from '@kommessa/api/identita';
 import {
+  ETICHETTA_RESPONSABILE,
+  ETICHETTA_TECNICI_PIU,
   descriviAssegnazione,
   etichettaNonAssegnato,
   etichettaTecnici,
@@ -48,7 +50,18 @@ import {
 
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
-interface Row {
+/**
+ * Una riga dell'elenco.
+ *
+ * ⭐ **Esportata, e la pagina la importa.** Era scritta a mano due volte —
+ * qui e in `page.tsx` — ventidue campi, e in un solo giro ne sono stati
+ * aggiunti quattro **in entrambe**, con i commenti riscritti con parole
+ * diverse. Reggeva per combinazione (TypeScript confronta la forma, non il
+ * nome): il giorno che una delle due fosse cambiata da sola, il compilatore
+ * avrebbe protestato in un punto lontano, o — per un campo facoltativo —
+ * taciuto. Il contratto lo detta chi riceve.
+ */
+export interface Row {
   id: string;
   titolo: string;
   descrizione: string | null;
@@ -74,8 +87,9 @@ interface Row {
   /** Dove bisogna andare, se diverso dall'indirizzo del cliente. */
   indirizzo: string | null;
   cliente_id: string | null;
-  /** Chi l'ha scritta. Su una richiesta: chi ha risposto al telefono. */
+  /** Quando è stata scritta. */
   created_at: string;
+  /** Chi l'ha scritta. Su una richiesta: chi ha risposto al telefono. */
   autore_nome: string | null;
   eRichiesta: boolean;
   isScaduto: boolean;
@@ -247,17 +261,21 @@ export function TodoGlobaleBoard({
       router.refresh();
     });
 
-  const creaCommessaDaRichiesta = (row: Row) =>
+  // ⚠️ `chiediConferma` **fuori** da `start`, come in `onComplete`: dentro, la
+  // transizione puo' abortire la callback prima che la persona abbia risposto,
+  // e il tasto non fa niente. La regola e' scritta ottanta righe piu' su e qui
+  // era disattesa.
+  const creaCommessaDaRichiesta = async (row: Row) => {
+    const ok = await chiediConferma({
+      title: 'Creare la commessa?',
+      description:
+        `«${row.titolo}»\n\nSi apre il form di creazione già compilato con quello che sai. ` +
+        'Il codice interno e le cartelle su Nextcloud si creano solo quando confermi lì: ' +
+        'da qui non si fa ancora niente di definitivo.',
+      confirmLabel: 'Continua',
+    });
+    if (!ok) return;
     start(async () => {
-      const ok = await chiediConferma({
-        title: 'Creare la commessa?',
-        description:
-          `«${row.titolo}»\n\nSi apre il form di creazione già compilato con quello che sai. ` +
-          'Il codice interno e le cartelle su Nextcloud si creano solo quando confermi lì: ' +
-          'da qui non si fa ancora niente di definitivo.',
-        confirmLabel: 'Continua',
-      });
-      if (!ok) return;
       const res = await convertiRichiestaInBozza({ todoId: row.id });
       if (!res.ok) {
         await showAlert({ title: 'Non riesco a continuare', body: res.error });
@@ -265,6 +283,7 @@ export function TodoGlobaleBoard({
       }
       router.push(`/office/commesse/nuova?bozza=${res.data.bozzaId}`);
     });
+  };
 
   const activeFiltri =
     (filtri.stato ? 1 : 0) +
@@ -292,7 +311,8 @@ export function TodoGlobaleBoard({
       onManda={(userIds) => mandaDallaRiga(t.id, userIds)}
       onElimina={() => onElimina(t)}
       onCreaCommessa={() => creaCommessaDaRichiesta(t)}
-      onModifica={() =>
+      onModifica={() => {
+        setRichiestaOpen(false);
         setRichiestaInModifica({
           id: t.id,
           titolo: t.titolo,
@@ -305,8 +325,8 @@ export function TodoGlobaleBoard({
           clienteNome: t.cliente_nome,
           indirizzo: t.indirizzo,
           squadra: t.squadra.map((p) => p.id),
-        })
-      }
+        });
+      }}
     />
   );
 
@@ -516,8 +536,8 @@ export function TodoGlobaleBoard({
                     </button>
                   ) : canWrite ? (
                     <span>
-                      Si registrano col pulsante «Al telefono»: chi chiama, cosa serve, e a
-                      chi la passi.
+                      Si registrano col pulsante «Nuova richiesta»: chi chiama, cosa
+                      serve, e a chi la passi.
                     </span>
                   ) : null
                 }
@@ -545,7 +565,11 @@ export function TodoGlobaleBoard({
       ) : null}
 
       {richiestaInModifica ? (
+        // `key`: il modulo semina il suo stato dall'oggetto al montaggio.
+        // Senza, passando da una riga all'altra si porterebbe dietro i valori
+        // della precedente sotto l'id della nuova.
         <RichiestaDialog
+          key={richiestaInModifica.id}
           assegnabili={assegnabili}
           esistente={richiestaInModifica}
           onClose={() => setRichiestaInModifica(null)}
@@ -762,12 +786,12 @@ function TodoRow({
           onCambia={(v) => {
             if (v) onAssegna(v);
           }}
-          segnaposto="Assegna a…"
+          segnaposto={`${ETICHETTA_RESPONSABILE}…`}
           segnapostoRicerca="Cerca…"
           disabilitato={pending}
           larghezzaElenco="auto"
           className={compatta ? 'w-full' : 'max-w-[9rem]'}
-          aria-label={`Assegna «${row.titolo}» a una persona`}
+          aria-label={`${ETICHETTA_RESPONSABILE} di «${row.titolo}»`}
         />
       ) : null}
 
@@ -788,12 +812,12 @@ function TodoRow({
           // che li' andrebbero a capo o si ridurrebbero a una lettera. I nomi
           // stanno gia' due righe sopra, nella riga di chi ci va.
           riassunto={compatta}
-          segnaposto="Manda…"
+          segnaposto={`${ETICHETTA_TECNICI_PIU}…`}
           segnapostoRicerca="Cerca una persona…"
           disabilitato={pending}
           larghezzaElenco="auto"
           className={compatta ? 'w-full' : 'max-w-[11rem]'}
-          aria-label={`Manda qualcuno su «${row.titolo}»`}
+          aria-label={`${ETICHETTA_TECNICI_PIU} su «${row.titolo}»`}
         />
       ) : null}
     </>
@@ -959,10 +983,15 @@ function MetaRiga({
   currentUserId: string;
 }) {
   const nomeDi = (id: string, nome: string) => (id === currentUserId ? 'Tu' : nome);
-  const responsabile = row.assegnato_nome
+  // ⚠️ Si guarda **l'id**, non il nome. Se l'embed verso `users` non risolve
+  // (persona tolta dallo spazio di lavoro, lettura parziale) il nome e' vuoto
+  // ma l'assegnazione c'e': deducendola dal nome, la riga diceva «Non
+  // assegnata» **e** non offriva la tendina per assegnarla — perche' quella
+  // guarda `assegnato_a`. Una riga di nessuno che nessuno puo' prendere.
+  const responsabile = row.assegnato_a
     ? isMine
       ? 'Tu'
-      : row.assegnato_nome
+      : (row.assegnato_nome ?? '—')
     : null;
   const tecnici = row.squadra.map((p) => nomeDi(p.id, p.nome));
 

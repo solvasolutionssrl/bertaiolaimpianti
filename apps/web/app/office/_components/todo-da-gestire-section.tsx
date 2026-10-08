@@ -43,7 +43,7 @@ export async function TodoDaGestireSection() {
             </span>
             <p className="text-sm font-medium">Niente da gestire</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              Nessun TODO aperto sulle commesse. Tutto sotto controllo.
+              Nessun task aperto sulle commesse. Tutto sotto controllo.
             </p>
           </div>
         ) : (
@@ -129,7 +129,7 @@ function TodoMiniCard({ t, accent }: { t: TodoDaGestireRow; accent: string }) {
         // Una richiesta non ha una commessa dove atterrare: si va alla lista.
         t.commessa_id
           ? `/office/commesse/${t.commessa_id}/lavori`
-          : '/office/todo?tipo=richieste'
+          : '/office/todo'
       }
       className="group relative block overflow-hidden rounded-md border border-border bg-card p-2 shadow-soft transition-[transform,box-shadow,border-color] duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-soft-md"
     >
