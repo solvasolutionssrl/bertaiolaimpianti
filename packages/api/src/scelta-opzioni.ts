@@ -80,12 +80,26 @@ export function tokenDiRicerca(query: string): string[] {
   return normalizzaTesto(query).split(' ').filter(Boolean);
 }
 
-/** Vero se la voce contiene **tutte** le parole digitate, ovunque esse siano. */
-export function opzioneCorrisponde(o: OpzioneScelta, query: string): boolean {
+/**
+ * Vero se un testo contiene **tutte** le parole digitate, ovunque esse siano.
+ *
+ * ⭐ Esportata perché la stessa regola serve fuori dalle tendine: la ricerca
+ * della board «Task e Richieste» cerca per titolo **e per nome cliente**, e
+ * scrivere lì una seconda meccanica di ricerca vorrebbe dire due ricerche che
+ * si comportano diversamente sulla stessa parola accentata.
+ *
+ * ⚠️ `mucchio` va già normalizzato da chi chiama (`normalizzaTesto`): qui non
+ * si normalizza di nuovo, perché su un elenco lungo si pagherebbe a ogni riga.
+ */
+export function testoCorrisponde(mucchioNormalizzato: string, query: string): boolean {
   const token = tokenDiRicerca(query);
   if (token.length === 0) return true;
-  const hay = mucchio(o);
-  return token.every((t) => hay.includes(t));
+  return token.every((t) => mucchioNormalizzato.includes(t));
+}
+
+/** Vero se la voce contiene **tutte** le parole digitate, ovunque esse siano. */
+export function opzioneCorrisponde(o: OpzioneScelta, query: string): boolean {
+  return testoCorrisponde(mucchio(o), query);
 }
 
 /**

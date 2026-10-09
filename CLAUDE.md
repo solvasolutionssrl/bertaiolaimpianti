@@ -961,6 +961,52 @@ l'anteprima della cartella si misurava **prima** che `useBozzaDraft` avesse
 finito di rimettere lo stato, quindi leggeva il campo svuotato e dava la colpa
 al codice.
 
+#### La colonna stretta, la ricerca e chi l'ha creato (09/10/2026)
+
+Tre rifiniture sulla board «Task e Richieste», tutte misurate col banco.
+
+- **Una richiesta era alta 220px, un task 65.** Ora **134px** (−39%), con la
+  stessa informazione: la priorità torna sulla riga del titolo come **icona
+  colorata** invece di una pastiglia che si prendeva una riga intera (il titolo
+  occupa tutta la larghezza, quindi la mandava a capo da sola — nuovo token
+  `testo` in `@kommessa/api/priorita`), e i comandi stanno in **una riga sola
+  che va a capo solo se serve** invece di tre (tendine impilate, tasti,
+  cestino: 80px sotto ogni riga, anche su quelle già smistate).
+  ⚠️ `flex-wrap` resta obbligatorio: senza, a 250px «Crea commessa» finiva
+  **sopra** il cestino. ⭐ La soglia del banco è **2,2×** un task e non la
+  parità: una richiesta porta comandi che un task non ha, e nella colonna larga
+  quei comandi stanno **accanto** al titolo invece che sotto — chiedere la
+  parità vorrebbe dire nascondere qualcosa.
+  ⚠️ Nella tendina stretta si usa `ETICHETTA_TECNICI_BREVE` del vocabolario,
+  non una parola scritta a mano nella pagina: un test verifica che la forma
+  breve sia **l'inizio** di quella lunga, così non possono divergere.
+- ⭐ **La ricerca guarda quello che la riga mostra, nome cliente compreso** —
+  era la cosa che l'ufficio cercava e l'unica che non si poteva cercare. Il
+  cliente **non è una colonna** di `commessa_todo`: su una richiesta sta in
+  anagrafica o nel testo della telefonata, su un task sul cliente della
+  commessa. Filtrarlo lato server avrebbe voluto dire due letture in più e
+  centinaia di UUID in un `in.(…)` che cresce a ogni pagina; si filtra in
+  memoria con la **stessa meccanica a token delle tendine**
+  (`testoCorrisponde`, ora esportata da `@kommessa/api/scelta-opzioni`), e il
+  costo non cambia perché senza ricerca la pagina legge già tutte le righe
+  aperte per i conteggi in alto.
+  ⚠️ **Non rimettere un `or=(…)` col testo digitato**: PostgREST lo spezza
+  sulle virgole e «Rossi, via Verdi» diventa una pagina d'errore. Ora quel
+  rischio non c'è più perché il testo non arriva al database.
+- ⭐ **«Creato da», una frase sola.** Si diceva in tre modi su tre schermate —
+  «da Barbara» nella board, «Registrata da» sulla scheda di una richiesta,
+  «Creata da» dentro una commessa. Ora `ETICHETTA_CREATO_DA` in
+  `@kommessa/api/assegnazione`, uguale ovunque anche sul femminile: è
+  un'etichetta fissa come «Creato il», non un participio che concorda.
+
+⚠️⚠️ **Un banco che scrive nella casella sbagliata passa lo stesso.** Il
+controllo della ricerca cercava `input[placeholder*="Cerca"]` e prendeva la
+**ricerca globale del guscio** («Cerca commesse, clienti…»): la board non si
+filtrava e il controllo positivo era verde su una cosa mai provata. L'ha
+smascherato il **controllo negativo** («una parola che non esiste non trova
+niente»), che è rimasto rosso. ⭐ Ogni controllo di un filtro vuole il suo
+negativo, o non sta misurando il filtro.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

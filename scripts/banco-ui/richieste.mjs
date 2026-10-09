@@ -209,11 +209,85 @@ try {
     // ⭐ Chi ha risposto al telefono. Il campo c'era in tabella su tutte le
     // righe e non si vedeva da nessuna parte fuori dalla scheda di una
     // commessa.
+    // ⚠️ «Creato da» e non «Registrata da»: dal 09/10/2026 la frase e' una
+    // sola in tutta l'app (`ETICHETTA_CREATO_DA`), perche' la stessa cosa si
+    // diceva in tre modi diversi su tre schermate.
     esito(
-      /Registrata da /i.test(tutti),
-      '⭐ la riga dice chi l\u2019ha registrata',
+      /Creato da /i.test(tutti),
+      '⭐ la riga dice chi l\u2019ha creata',
       (tutti.match(/Registrata da [^|·]{0,30}/i) ?? [''])[0],
     );
+  }
+
+  // ══ 2-search. ⭐ si cerca anche per NOME CLIENTE ═══════════════════════
+  //
+  // ⚠️ Era la cosa che l'ufficio cercava e l'unica che non si poteva cercare:
+  // il filtro guardava solo titolo e descrizione, e il cliente non e' una
+  // colonna di `commessa_todo`. Si prova con una parola che sta SOLO nel nome
+  // del cliente, altrimenti il controllo passerebbe grazie al titolo.
+  console.log('\n  \x1b[1mLa ricerca\x1b[0m');
+  {
+    const soloNelCliente = 'Cliente';
+    // ⚠️ **Non `input[placeholder*="Cerca"]`**: in cima al guscio c'è la
+    // ricerca globale dell'ufficio («Cerca commesse, clienti…»), che quel
+    // selettore prende per prima. Il banco ci ha scritto dentro, la board non
+    // si è filtrata, e il controllo positivo è passato lo stesso — verde su
+    // una cosa mai provata. L'ha smascherato il controllo negativo qui sotto.
+    const casella = `[...document.querySelectorAll('input')].find(i => /titolo/i.test(i.getAttribute('placeholder') || ''))`;
+    const ciSta = await valuta(cdp, `!!${casella}`);
+    if (!ciSta) {
+      esito(false, 'c\u2019\u00e8 una casella di ricerca da provare', 'NON TROVATA');
+    } else {
+      const segnaposto = await valuta(cdp, `${casella}.getAttribute('placeholder')`);
+      esito(
+        /cliente/i.test(segnaposto || ''),
+        'la casella dice che si puo\u2019 cercare il cliente',
+        `«${segnaposto}»`,
+      );
+      await clicVero(cdp, casella);
+      await valuta(cdp, `(() => {
+        const i = ${casella};
+        const proto = Object.getPrototypeOf(i);
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, ${JSON.stringify('Cliente')});
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`);
+      // Il campo manda l'aggiornamento dopo una pausa, poi la pagina si ricarica.
+      await attendi(2600);
+      await finoA(cdp, `document.readyState === 'complete'`, { timeoutMs: 20_000 }).catch(() => {});
+      await attendi(900);
+      const trovata = await valuta(cdp, `Boolean(${rigaCon(TITOLO)})`);
+      esito(trovata, '⭐ cercando il nome del cliente la richiesta si trova', soloNelCliente);
+
+      // E una parola che non c'e' da nessuna parte non deve trovare niente:
+      // senza questo, un filtro rotto che mostra tutto passerebbe il controllo
+      // qui sopra.
+      await valuta(cdp, `(() => {
+        const i = ${casella};
+        const proto = Object.getPrototypeOf(i);
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, 'zzxqwklm');
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`);
+      await attendi(2600);
+      await finoA(cdp, `document.readyState === 'complete'`, { timeoutMs: 20_000 }).catch(() => {});
+      await attendi(900);
+      const sparita = await valuta(cdp, `!${rigaCon(TITOLO)}`);
+      esito(sparita, 'e una parola che non esiste non trova niente', 'zzxqwklm');
+
+      // Si rimette la board com'era, o i controlli dopo cercherebbero dentro
+      // un elenco filtrato.
+      await valuta(cdp, `(() => {
+        const i = ${casella};
+        const proto = Object.getPrototypeOf(i);
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, '');
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+        return true;
+      })()`);
+      await attendi(2600);
+      await finoA(cdp, `document.readyState === 'complete'`, { timeoutMs: 20_000 }).catch(() => {});
+      await attendi(900);
+    }
   }
 
   // ══ 2-bis. ⭐ sui task di commessa la catena doppia NON c'è ════════════
@@ -345,6 +419,15 @@ try {
       righe: righe.length,
       fuori,
       altezzaRiga: prima ? Math.round(prima.getBoundingClientRect().height) : null,
+      // ⚠️ Il confronto con la colonna larga, non un numero assoluto: «alta»
+      // vuol dire «alta rispetto a un task», ed e' quello che si vede
+      // guardando le due colonne una accanto all'altra.
+      altezzaTask: (() => {
+        const t = ${colonna('Task')};
+        if (!t) return null;
+        const rt = [...t.querySelectorAll('div')].filter(d => d.className && String(d.className).includes('hover:bg-background/60'));
+        return rt[0] ? Math.round(rt[0].getBoundingClientRect().height) : null;
+      })(),
       titoloLargo: titolo ? Math.round(titolo.getBoundingClientRect().width) : null,
       // ⚠️ Non si cerca nel testo di tutta la riga: li' «Bianchi» e «da» si
       // attaccano (textContent non mette spazi fra elementi vicini) e il
@@ -353,7 +436,7 @@ try {
       autore: (() => {
         if (!prima) return null;
         const e = [...prima.querySelectorAll('[title]')]
-          .find(x => /^(Registrata|Creato) da /.test(x.getAttribute('title') || ''));
+          .find(x => /^Creato da /.test(x.getAttribute('title') || ''));
         if (!e) return null;
         return { testo: (e.textContent || '').trim(), icone: e.querySelectorAll('svg').length };
       })(),
@@ -374,9 +457,30 @@ try {
       'e la riga non diventa una colonna di comandi',
       `${stretta.altezzaRiga}px`,
     );
+    // ⭐ Il confronto con la colonna larga, non un numero assoluto: «alta»
+    // vuol dire «alta rispetto a un task».
+    //
+    // ⚠️ **La soglia non e' 1×, ed e' una scelta.** Una richiesta porta una
+    // riga di comandi che un task non ha (a chi la do, chi ci mando, apri una
+    // commessa), e nella colonna larga quei comandi stanno **accanto** al
+    // titolo invece che sotto. Chiedere la parita' vorrebbe dire nascondere
+    // qualcosa. Il bordo e' 2,2×: misurato 2,06× con il nome d'autore piu'
+    // lungo del tenant demo. Era 3,4× (220px) prima del 09/10/2026.
+    if (stretta.altezzaTask) {
+      const rapporto = stretta.altezzaRiga / stretta.altezzaTask;
+      esito(
+        rapporto <= 2.2,
+        '⭐ e non e\u2019 molto piu\u2019 alta di un task',
+        `richiesta ${stretta.altezzaRiga}px · task ${stretta.altezzaTask}px · ${rapporto.toFixed(2)}×`,
+      );
+    } else {
+      esito(false, 'non trovo una riga di Task da confrontare', 'NON MISURABILE');
+    }
     esito(
-      Boolean(stretta.autore) && /^da \S/.test(stretta.autore.testo) && stretta.autore.icone === 0,
-      '⭐ chi l\u2019ha scritta si legge a parole, non da un\u2019icona',
+      Boolean(stretta.autore) &&
+        /^Creato da \S/.test(stretta.autore.testo) &&
+        stretta.autore.icone === 0,
+      '⭐ chi l\u2019ha scritta si legge «Creato da», a parole',
       stretta.autore
         ? `«${stretta.autore.testo}», ${stretta.autore.icone} icone`
         : 'autore non trovato',

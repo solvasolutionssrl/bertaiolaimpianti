@@ -4,6 +4,7 @@ import { Calendar, MapPin, Phone, User, Users } from 'lucide-react';
 import { createServerSupabase } from '@kommessa/api/server';
 import { normalizzaPriorita, type Priorita } from '@kommessa/api/priorita';
 import {
+  ETICHETTA_CREATO_DA,
   ETICHETTA_RESPONSABILE,
   descriviAssegnazione,
   type RigaAssegnazione,
@@ -390,7 +391,7 @@ export default async function RichiestaMobilePage({
               {/* Chi ha preso la telefonata. Il nome c'era gia' qui, ma
                   appiccicato alla data senza dire che cosa fosse. */}
               <dt className="text-muted-foreground">
-                {r.created_by ? 'Registrata da' : 'Registrata'}
+                {r.created_by ? ETICHETTA_CREATO_DA : 'Creato il'}
               </dt>
               <dd className="min-w-0 truncate text-muted-foreground">
                 {r.created_by ? `${nomeDi(r.created_by)} · ` : ''}

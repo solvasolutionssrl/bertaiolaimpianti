@@ -37,6 +37,30 @@ export const ETICHETTA_RESPONSABILE = 'Responsabile';
 export const ETICHETTA_TECNICO_UNO = 'Tecnico assegnato';
 export const ETICHETTA_TECNICI_PIU = 'Tecnici assegnati';
 
+/**
+ * La forma breve, per un comando troppo stretto perche' il nome per esteso ci
+ * stia: una tendina larga 140px in una colonna al 35%.
+ *
+ * ⭐ **Sta qui, non scritta a mano nella pagina.** E' la stessa parola detta
+ * in meno spazio, non un'altra parola: il nome per esteso resta nell'etichetta
+ * di accessibilita' e nel suggerimento, e un test verifica che la forma breve
+ * sia davvero l'inizio di quella lunga — se un giorno una delle due cambia
+ * senza l'altra, si rompe qui e non a schermo.
+ */
+export const ETICHETTA_TECNICI_BREVE = 'Tecnici';
+
+/**
+ * **Chi l'ha scritta.** Una domanda diversa da «chi ne risponde» e da «chi ci
+ * va», ma della stessa famiglia, quindi la parola sta qui con le altre.
+ *
+ * ⚠️ **Una frase sola, anche sul femminile.** Si diceva in tre modi — «da
+ * Barbara» nella board, «Registrata da» sulla scheda di una richiesta,
+ * «Creata da» dentro una commessa — e tre modi di dire la stessa cosa sono
+ * tre cose da imparare. Luca ha chiesto proprio «Creato da»: è un'etichetta
+ * fissa, come «Creato il», non un participio che concorda con la riga.
+ */
+export const ETICHETTA_CREATO_DA = 'Creato da';
+
 /** «Tecnico assegnato» con uno, «Tecnici assegnati» con nessuno o piu' di uno. */
 export function etichettaTecnici(quanti: number): string {
   return quanti === 1 ? ETICHETTA_TECNICO_UNO : ETICHETTA_TECNICI_PIU;

@@ -32,11 +32,13 @@ import { convertiRichiestaInBozza } from '../../../_actions/richieste';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import { CreaTodoGlobaleDialog } from './crea-todo-globale-dialog';
 import { RichiestaDialog, type RichiestaEsistente } from './richiesta-dialog';
-import { type Priorita } from '@kommessa/api/priorita';
+import { metaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { Scelta, SceltaMultipla } from '@/app/_components/scelta';
 import { etichettaRuolo } from '@kommessa/api/identita';
 import {
+  ETICHETTA_CREATO_DA,
   ETICHETTA_RESPONSABILE,
+  ETICHETTA_TECNICI_BREVE,
   ETICHETTA_TECNICI_PIU,
   descriviAssegnazione,
   etichettaNonAssegnato,
@@ -442,7 +444,7 @@ export function TodoGlobaleBoard({
             type="text"
             value={qDraft}
             onChange={(e) => setQDraft(e.target.value)}
-            placeholder="Cerca fra task e richieste…"
+            placeholder="Cerca per titolo, cliente, codice…"
             className="pl-9"
           />
         </div>
@@ -790,7 +792,7 @@ function TodoRow({
           segnapostoRicerca="Cerca…"
           disabilitato={pending}
           larghezzaElenco="auto"
-          className={compatta ? 'w-full' : 'max-w-[9rem]'}
+          className={compatta ? 'min-w-[7rem] flex-1' : 'max-w-[9rem]'}
           aria-label={`${ETICHETTA_RESPONSABILE} di «${row.titolo}»`}
         />
       ) : null}
@@ -812,11 +814,14 @@ function TodoRow({
           // che li' andrebbero a capo o si ridurrebbero a una lettera. I nomi
           // stanno gia' due righe sopra, nella riga di chi ci va.
           riassunto={compatta}
-          segnaposto={`${ETICHETTA_TECNICI_PIU}…`}
+          // ⭐ In colonna stretta la forma breve del vocabolario, non una
+          // parola inventata qui: il nome per esteso resta nell'etichetta di
+          // accessibilità e nell'intestazione della tendina.
+          segnaposto={`${compatta ? ETICHETTA_TECNICI_BREVE : ETICHETTA_TECNICI_PIU}…`}
           segnapostoRicerca="Cerca una persona…"
           disabilitato={pending}
           larghezzaElenco="auto"
-          className={compatta ? 'w-full' : 'max-w-[11rem]'}
+          className={compatta ? 'min-w-[6rem] flex-1' : 'max-w-[11rem]'}
           aria-label={`${ETICHETTA_TECNICI_PIU} su «${row.titolo}»`}
         />
       ) : null}
@@ -843,7 +848,17 @@ function TodoRow({
                 esce dalla sua scatola e finisce sopra il cestino. Larghezza
                 naturale, e se un giorno non ci stesse e' la riga ad andare a
                 capo. */}
-            <Button size="sm" variant="outline" onClick={onCreaCommessa} disabled={pending}>
+            {/* ⚠️ In colonna stretta il tasto scende all'altezza dei suoi
+                vicini (matita e cestino, 32px): i 40px di `size="sm"` sono la
+                misura delle azioni di pagina e di barra, non di un comando
+                dentro una riga d'elenco. */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onCreaCommessa}
+              disabled={pending}
+              className={compatta ? 'h-8 min-h-8 px-2 text-[11px]' : undefined}
+            >
               Crea commessa
             </Button>
           </>
@@ -872,8 +887,16 @@ function TodoRow({
   ) : null;
 
   return (
-    <div className={cn('px-4 py-3 transition-colors hover:bg-background/60')}>
-      <div className="flex items-start gap-3">
+    <div
+      className={cn(
+        'transition-colors hover:bg-background/60',
+        // ⚠️ La colonna stretta non e' la colonna larga con meno posto: e' una
+        // riga che si legge dall'alto in basso invece che da sinistra a
+        // destra, e ogni pixel verticale si paga su ogni riga dell'elenco.
+        compatta ? 'px-3 py-2' : 'px-4 py-3',
+      )}
+    >
+      <div className={cn('flex items-start', compatta ? 'gap-2' : 'gap-3')}>
         {!completed ? (
           <button
             type="button"
@@ -884,12 +907,17 @@ function TodoRow({
                 ? `Segna come fatta la richiesta «${row.titolo}»`
                 : `Segna come fatto il task «${row.titolo}»`
             }
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-50"
+            className={cn(
+              'flex shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 disabled:opacity-50',
+              compatta ? 'h-8 w-8' : 'h-9 w-9',
+            )}
           >
             <Circle className="h-4 w-4" />
           </button>
         ) : (
-          <CheckCircle2 className="mt-2.5 h-4 w-4 shrink-0 text-emerald-600" />
+          <CheckCircle2
+            className={cn('h-4 w-4 shrink-0 text-emerald-600', compatta ? 'mt-2' : 'mt-2.5')}
+          />
         )}
 
         <Contenitore commessaId={row.commessa_id}>
@@ -906,9 +934,23 @@ function TodoRow({
                 completed && 'text-muted-foreground line-through',
               )}
             >
+              {/* ⚠️ In colonna stretta la priorità è un'**icona dentro la riga
+                  del titolo**, non una pastiglia su una riga sua: la pastiglia
+                  costava una riga intera a ogni scheda (il titolo prende tutta
+                  la larghezza, quindi la mandava a capo da sola). La parola
+                  resta nel suggerimento, e il colore la dice a colpo d'occhio
+                  come prima. */}
+              {compatta ? (
+                <span
+                  title={`Priorità: ${metaPriorita(row.priorita).etichetta}`}
+                  className={cn('mr-1 inline-flex align-[-2px]', metaPriorita(row.priorita).testo)}
+                >
+                  <IconaPriorita priorita={row.priorita} className="h-3.5 w-3.5" />
+                </span>
+              ) : null}
               {row.titolo}
             </p>
-            <PrioritaChip priorita={row.priorita} corta={compatta} />
+            {!compatta ? <PrioritaChip priorita={row.priorita} /> : null}
             {row.stato === 'in_corso' ? (
               <Badge variant="outline" className="text-[10px] uppercase">
                 In corso
@@ -927,7 +969,12 @@ function TodoRow({
               </Badge>
             ) : null}
           </div>
-          <MetaRiga row={row} isMine={isMine} currentUserId={currentUserId} />
+          <MetaRiga
+            row={row}
+            isMine={isMine}
+            currentUserId={currentUserId}
+            compatta={compatta}
+          />
         </Contenitore>
 
         {!compatta ? (
@@ -947,15 +994,19 @@ function TodoRow({
           quelli, matita, «Crea commessa» e cestino non stanno piu' su una riga
           e si sfilacciano su tre. Qui lo spazio vale piu' dell'allineamento. */}
       {compatta ? (
-        <div className="mt-2 space-y-1.5">
-          <div className="flex flex-col gap-1.5">{selettori}</div>
-          {/* ⚠️ `flex-wrap` e i tasti che si restringono: senza, a 250px
-              «Crea commessa» finiva **sopra** il cestino. Al peggio si va a
-              capo, che e' brutto; sovrapporsi e' rotto. */}
-          <div className="flex flex-wrap items-center justify-between gap-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">{tasti}</div>
-            {cestino}
-          </div>
+        /* ⚠️ **Una riga sola che va a capo solo quando serve.** Erano tre:
+           tendine impilate (36px l'una), poi i tasti, poi il cestino — 80px di
+           comandi sotto ogni richiesta, anche su quelle già smistate che non
+           hanno niente da comandare. Qui tutto sta in una riga che si spezza da
+           sé: una richiesta già assegnata ha una tendina sola e ci sta tutto,
+           una da smistare ne ha due e va a capo una volta.
+           ⚠️ `flex-wrap` resta obbligatorio: senza, a 250px «Crea commessa»
+           finiva **sopra** il cestino. Andare a capo è brutto, sovrapporsi è
+           rotto. E il cestino resta all'estremo opposto da chi agisce. */
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {selettori}
+          {tasti}
+          <span className="ml-auto">{cestino}</span>
         </div>
       ) : null}
     </div>
@@ -977,10 +1028,12 @@ function MetaRiga({
   row,
   isMine,
   currentUserId,
+  compatta,
 }: {
   row: Row;
   isMine: boolean;
   currentUserId: string;
+  compatta: boolean;
 }) {
   const nomeDi = (id: string, nome: string) => (id === currentUserId ? 'Tu' : nome);
   // ⚠️ Si guarda **l'id**, non il nome. Se l'embed verso `users` non risolve
@@ -1002,7 +1055,12 @@ function MetaRiga({
   const perEsteso = righe.map((r) => `${r.etichetta}: ${r.valore}`).join(' · ');
 
   return (
-    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+    <div
+      className={cn(
+        'mt-0.5 flex min-w-0 flex-wrap items-center gap-y-0.5 text-[11px] text-muted-foreground',
+        compatta ? 'gap-x-2' : 'gap-x-3',
+      )}
+    >
       {row.codice_interno ? <span className="font-mono">{row.codice_interno}</span> : null}
       {row.cliente_nome ? (
         <span
@@ -1061,9 +1119,9 @@ function MetaRiga({
       {row.autore_nome ? (
         <span
           className="opacity-80"
-          title={`${row.eRichiesta ? 'Registrata' : 'Creato'} da ${row.autore_nome} il ${fmtDataBreve(row.created_at)}`}
+          title={`${ETICHETTA_CREATO_DA} ${row.autore_nome} il ${fmtDataBreve(row.created_at)}`}
         >
-          da {row.autore_nome}
+          {ETICHETTA_CREATO_DA} {row.autore_nome}
         </span>
       ) : null}
     </div>

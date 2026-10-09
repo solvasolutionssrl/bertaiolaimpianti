@@ -8,6 +8,7 @@ import { elencaAssegnabiliTenant } from '../../_actions/commessa-tecnici';
 import { TodoGlobaleBoard, type Row } from './_components/todo-globale-board';
 import { confrontaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
+import { normalizzaTesto, testoCorrisponde } from '@kommessa/api/scelta-opzioni';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
 
 /** Una commessa come serve a chi la deve scegliere da una tendina. */
@@ -103,13 +104,26 @@ export default async function TodoGlobalePage({
   const commessaChiesta = uno(searchParams.commessa);
   const commessaFiltro = commessaChiesta && UUID.test(commessaChiesta) ? commessaChiesta : null;
 
-  // ⚠️ **La virgola spezza `or=(...)`.** PostgREST divide il corpo di `or` sulle
-  // virgole di primo livello: cercando «Rossi, via Verdi» si ottengono quattro
-  // termini, due dei quali non sono filtri, e la richiesta torna 400. Lo stesso
-  // fanno le parentesi, le virgolette e la barra rovescia. Si tolgono: in una
-  // ricerca per sottostringa non servono a niente, e lasciarle dentro vuol dire
-  // una pagina d'errore invece di un elenco.
-  const qFiltro = (uno(searchParams.q) ?? '').replace(/[,()"\\*]/g, ' ').trim();
+  // ⭐ **La ricerca non passa più dal database, e non è una scorciatoia.**
+  // Si cerca anche per **nome cliente**, e il cliente non è una colonna di
+  // `commessa_todo`: su una richiesta sta in anagrafica (`cliente_id`) oppure
+  // nel testo di come è stato detto al telefono, su un task sta sul cliente
+  // della commessa. Per filtrarlo lato server servirebbero due letture in più
+  // per raccogliere gli id e poi infilarli in un `in.(…)` — centinaia di UUID
+  // nell'indirizzo, che per giunta cresce a ogni pagina.
+  //
+  // Qui si cerca su **ciò che si vede a schermo**, con la stessa meccanica a
+  // token delle tendine (`@kommessa/api/scelta-opzioni`): accenti piegati,
+  // tutte le parole devono comparire, in qualunque campo. E il costo non
+  // cambia: senza ricerca questa pagina legge già tutte le righe aperte,
+  // perché i conteggi in alto si fanno su tutte.
+  //
+  // ⚠️ **Non rimettere un `or=(…)` con dentro il testo digitato.** PostgREST
+  // spezza il corpo di `or` sulle virgole di primo livello: «Rossi, via Verdi»
+  // diventa quattro termini, due dei quali non sono filtri, e la richiesta
+  // torna 400 — che da quando si legge a pagine vuol dire pagina d'errore, non
+  // elenco vuoto.
+  const qFiltro = (uno(searchParams.q) ?? '').trim();
 
   // ─── query principale ──────────────────────────────────────────────
   //
@@ -147,9 +161,6 @@ export default async function TodoGlobalePage({
       q = q.eq('assegnato_a', assegnatoFiltro);
     }
     if (commessaFiltro) q = q.eq('commessa_id', commessaFiltro);
-    if (qFiltro) {
-      q = q.or(`titolo.ilike.%${qFiltro}%,descrizione.ilike.%${qFiltro}%`);
-    }
     // Il terzo ordinamento chiude su una colonna unica: senza, fra una pagina e
     // l'altra una riga puo' perdersi o ripetersi.
     return q.order('priorita').order('id').range(da, a) as unknown as PromiseLike<
@@ -211,7 +222,7 @@ export default async function TodoGlobalePage({
   // Il tipo `Row` arriva da chi lo consuma (`TodoGlobaleBoard`): era scritto a
   // mano anche qui, ventidue campi, e divergere era questione di tempo.
   const now = Date.now();
-  const todos: Row[] = todosRaw.map((t) => {
+  const tutte: Row[] = todosRaw.map((t) => {
     const comm = Array.isArray(t.commessa) ? t.commessa[0] : t.commessa;
     const cli = comm
       ? Array.isArray(comm.cliente)
@@ -264,6 +275,32 @@ export default async function TodoGlobalePage({
       fonteRiunione: typeof fonte === 'string' && fonte.startsWith('riunione:'),
     };
   });
+
+  // ⭐ **La ricerca guarda quello che la riga mostra**, nome del cliente
+  // compreso: era la cosa che l'ufficio cercava e l'unica che non si poteva
+  // cercare. Il cliente qui è già risolto con la sua catena di ripieghi
+  // (anagrafica → come è stato detto al telefono → cliente della commessa),
+  // quindi si cerca esattamente la parola che si legge.
+  const todos = qFiltro
+    ? tutte.filter((t) =>
+        testoCorrisponde(
+          normalizzaTesto(
+            [
+              t.titolo,
+              t.descrizione,
+              t.cliente_nome,
+              t.codice_interno,
+              t.contatto,
+              t.indirizzo,
+              t.autore_nome,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          ),
+          qFiltro,
+        ),
+      )
+    : tutte;
 
   // ⚠️ Non si ordina piu' per «prima le richieste»: adesso stanno in una
   // colonna loro, e dentro ciascuna colonna conta solo l'urgenza.

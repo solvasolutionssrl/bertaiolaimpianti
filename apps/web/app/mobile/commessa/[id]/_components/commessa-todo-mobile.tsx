@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { Badge, cn } from '@kommessa/ui';
+import { ETICHETTA_CREATO_DA } from '@kommessa/api/assegnazione';
 
 import {
   aggiungiNotaTodo,
@@ -265,8 +266,8 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
               dell'ufficio, dove si smista, sta invece nella riga. */}
           <p className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
             {todo.created_by_nome
-              ? `Creata da ${todo.created_by_nome} · ${fmtDataBreve(todo.created_at)}`
-              : `Creata il ${fmtDataBreve(todo.created_at)}`}
+              ? `${ETICHETTA_CREATO_DA} ${todo.created_by_nome} · ${fmtDataBreve(todo.created_at)}`
+              : `Creato il ${fmtDataBreve(todo.created_at)}`}
           </p>
           {todo.descrizione ? (
             <p className="whitespace-pre-wrap text-xs leading-relaxed">

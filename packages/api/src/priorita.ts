@@ -76,6 +76,11 @@ export interface MetaPriorita {
   chip: string;
   /** Classe del pallino pieno, per le liste a colonne. */
   punto: string;
+  /**
+   * Solo il colore del testo (e quindi di un'icona), senza sfondo né bordo:
+   * per le righe così strette che una pastiglia costerebbe una riga intera.
+   */
+  testo: string;
   /** Anello di evidenza, usato solo dove la riga è grande (board Lavori). */
   anello: string;
   icona: NomeIconaPriorita;
@@ -95,6 +100,7 @@ export const PRIORITA_META: Record<Priorita, MetaPriorita> = {
     parola: 'Urgente',
     chip: 'bg-red-500/15 text-red-700 border-red-500/40 dark:text-red-400',
     punto: 'bg-red-500',
+    testo: 'text-red-600 dark:text-red-400',
     anello: 'ring-red-500/30',
     icona: 'Flame',
   },
@@ -105,6 +111,7 @@ export const PRIORITA_META: Record<Priorita, MetaPriorita> = {
     parola: 'Alta',
     chip: 'bg-amber-500/15 text-amber-700 border-amber-500/40 dark:text-amber-400',
     punto: 'bg-amber-500',
+    testo: 'text-amber-600 dark:text-amber-400',
     anello: 'ring-amber-500/30',
     icona: 'AlertCircle',
   },
@@ -115,6 +122,7 @@ export const PRIORITA_META: Record<Priorita, MetaPriorita> = {
     parola: 'Bassa',
     chip: 'bg-muted text-muted-foreground border-border',
     punto: 'bg-slate-400',
+    testo: 'text-muted-foreground',
     anello: '',
     icona: 'Circle',
   },

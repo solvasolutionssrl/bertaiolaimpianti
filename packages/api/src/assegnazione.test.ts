@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ETICHETTA_TECNICI_BREVE,
+  ETICHETTA_TECNICI_PIU,
   descriviAssegnazione,
   etichettaNonAssegnato,
   etichettaTecnici,
@@ -61,5 +63,15 @@ describe('descriviAssegnazione: la riga vuota non si scrive', () => {
     const righe = descriviAssegnazione({ responsabile: null, tecnici: [] }, 'task');
     expect(righe[0]?.etichetta).toBe('Assegnato a');
     expect(righe[0]?.valore).toBe('Non assegnato');
+  });
+});
+
+describe('la forma breve non e un altra parola', () => {
+  it('e l inizio di quella lunga, non un sinonimo', () => {
+    expect(ETICHETTA_TECNICI_PIU.startsWith(ETICHETTA_TECNICI_BREVE)).toBe(true);
+  });
+
+  it('ed e davvero piu corta, o non servirebbe', () => {
+    expect(ETICHETTA_TECNICI_BREVE.length).toBeLessThan(ETICHETTA_TECNICI_PIU.length);
   });
 });

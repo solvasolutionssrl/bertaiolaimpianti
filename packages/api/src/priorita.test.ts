@@ -162,3 +162,18 @@ describe('metaPriorita', () => {
     expect(m.etichetta).toBe('3 - Bassa');
   });
 });
+
+describe('ogni livello ha un colore anche senza pastiglia', () => {
+  it('nessun `testo` vuoto: senza, l icona della riga stretta sarebbe grigia per tutti', () => {
+    // ⚠️ Si itera sui META, e si legge `m.testo` direttamente. Passando
+    // l'oggetto a `metaPriorita()` — che normalizza QUALUNQUE cosa — tornava
+    // tre volte il livello predefinito: il controllo era verde e non misurava
+    // niente.
+    expect(PRIORITA_IN_ORDINE).toHaveLength(3);
+    for (const m of PRIORITA_IN_ORDINE) {
+      expect(m.testo.length).toBeGreaterThan(0);
+    }
+    const distinti = new Set(PRIORITA_IN_ORDINE.map((m) => m.testo));
+    expect(distinti.size).toBe(3);
+  });
+});
