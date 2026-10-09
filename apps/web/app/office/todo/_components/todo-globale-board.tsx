@@ -785,9 +785,10 @@ function TodoRow({
           solo su una riga senza nessuno (`!row.assegnato_a`): assegnata una
           richiesta alla persona sbagliata, dalla board non si poteva più
           correggere — il comando spariva proprio nel momento in cui serviva.
-          Chi è assegnato si legge nella riga qui sopra; questa resta per
-          cambiarlo, e per questo dice cosa **fa** invece di ripetere il nome
-          (`comando`).
+          Chi è assegnato si legge nella riga qui sopra **e dentro la tendina
+          stessa**: un comando che non dice il suo stato costringe ad aprirlo
+          per conoscerlo, e finché resta chiuso sembra che non sia assegnato a
+          nessuno.
           ⭐ Su un task il nome del campo non serve, serve il gesto: di
           assegnazioni ce n'è una sola. Su una richiesta ce ne sono due, e
           allora la prima tiene il nome per non confondersi con la seconda. */}
@@ -795,7 +796,6 @@ function TodoRow({
         <Scelta
           opzioni={opzioniPersone}
           valore={row.assegnato_a}
-          comando
           onCambia={(v) => {
             if (v) onAssegna(v);
           }}
@@ -824,11 +824,13 @@ function TodoRow({
           // In colonna stretta: «2 scelti» invece delle pastiglie coi nomi,
           // che li' andrebbero a capo o si ridurrebbero a una lettera. I nomi
           // stanno gia' due righe sopra, nella riga di chi ci va.
-          comando
-          // ⭐ Il **gesto**, non il nome del campo: questa tendina si tocca per
-          // girare la richiesta a chi ci va, e chi ci va è già scritto nella
-          // riga sopra. Il nome per esteso resta nell'etichetta di
-          // accessibilità e nell'intestazione della tendina.
+          // ⭐ Il **gesto** finché non c'è nessuno, e **il nome** appena
+          // qualcuno c'è: una tendina che continua a dire «Assegna a…» mentre
+          // una persona è assegnata sembra dire che non lo sia, e costringe ad
+          // aprirla per sapere come stanno le cose.
+          // ⚠️ `riassunto`: un nome solo per esteso, e da due in su il conto.
+          // Le pastiglie con la crocetta, in 140px, si riducono a una lettera.
+          riassunto={compatta}
           segnaposto={`${ETICHETTA_ASSEGNA_A}…`}
           segnapostoRicerca="Cerca una persona…"
           disabilitato={pending}

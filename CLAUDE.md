@@ -981,10 +981,16 @@ Tre rifiniture sulla board «Task e Richieste», tutte misurate col banco.
   (`ETICHETTA_ASSEGNA_A`): su un task l'assegnazione è una sola, quindi non
   serve nominarla — serve farla; su una richiesta restano due passaggi, e il
   primo tiene il nome («Responsabile…») proprio per non confondersi col
-  secondo. Nuova prop `comando` su `Scelta`/`SceltaMultipla`: il tasto mostra
-  sempre l'etichetta dell'azione perché la scelta corrente si legge già due
-  righe sopra, mentre `valore` resta quello vero e l'elenco continua a segnare
-  la spunta. Con lei `riassunto` è rimasta senza chiamanti ed è stata tolta.
+  secondo.
+  ⚠️⚠️ **Ma il comando deve dire il suo stato.** Per un giorno il tasto ha
+  mostrato sempre l'etichetta dell'azione (prop `comando`, poi ritirata) per
+  non ripetere un nome già scritto due righe sopra: a vederla in uso, una
+  tendina che dice «Assegna a…» mentre una persona **è** assegnata sembra dire
+  che non lo sia, e chi guarda è costretto ad aprirla per sapere come stanno le
+  cose. ⭐ **Ripetere un nome costa meno che nasconderlo.** Ora il tasto dice
+  il gesto finché non c'è nessuno e il **nome** appena qualcuno c'è
+  (`riassunto` sulla scelta multipla: un nome per esteso, da due in su il
+  conto).
 - ⚠️ **Assegnata non voleva dire chiusa a chiave, e invece lo era.** La tendina
   di chi ne risponde compariva solo sulle righe senza nessuno
   (`!row.assegnato_a`): assegnata una richiesta alla persona sbagliata, dalla

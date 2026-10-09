@@ -230,12 +230,21 @@ try {
       '⭐ con un responsabile gia\u2019 scelto la tendina resta, per cambiarlo',
       (tendine ?? []).map(t => `«${t.scritta}»`).join(' · ') || 'NESSUNA TENDINA',
     );
-    // E dice cosa FA, non ripete il nome che si legge una riga sopra.
-    const comandoGesto = (tendine ?? []).find(t => /Tecnici assegnati/i.test(t.aria));
+    // ⭐ **E le tendine dicono CHI c'e', non «Assegna a…».** Per un giorno
+    // hanno mostrato sempre l'etichetta dell'azione, per non ripetere un nome
+    // gia' scritto sopra: a vederla in uso sembrava che non fosse assegnata a
+    // nessuno, e si era costretti ad aprirle per sapere come stavano le cose.
+    const chiRisponde = (tendine ?? []).find(t => /Responsabile/i.test(t.aria));
     esito(
-      Boolean(comandoGesto) && /^Assegna a/i.test(comandoGesto.scritta),
-      '⭐ e il secondo comando si legge «Assegna a…»',
-      comandoGesto ? `«${comandoGesto.scritta}»` : 'NON TROVATO',
+      Boolean(chiRisponde) && /Chiara/i.test(chiRisponde.scritta),
+      '⭐ la tendina dice CHI ne risponde, non «Responsabile…»',
+      chiRisponde ? `«${chiRisponde.scritta}»` : 'NON TROVATA',
+    );
+    const chiCiVa = (tendine ?? []).find(t => /Tecnici assegnati/i.test(t.aria));
+    esito(
+      Boolean(chiCiVa) && new RegExp(TECNICO_NOME, 'i').test(chiCiVa.scritta),
+      '⭐ e l\u2019altra dice CHI ci va, col nome per esteso',
+      chiCiVa ? `«${chiCiVa.scritta}»` : 'NON TROVATA',
     );
 
     // ⭐ Chi ha risposto al telefono. Il campo c'era in tabella su tutte le
