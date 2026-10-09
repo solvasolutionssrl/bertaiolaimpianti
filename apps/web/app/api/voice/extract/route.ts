@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { tagliaAParolaIntera } from '@kommessa/api/testo';
 
 import { isKantiereOnly } from '@/app/_lib/app-mode';
 
@@ -20,6 +21,7 @@ import {
   isAiUnavailable,
   OpenAiError,
 } from '../../../_lib/openai';
+import { MAX_DESCRIZIONE_COMMESSA } from '../../../_actions/crea-commessa.schemas';
 import { segnalaAiNonDisponibile } from '../../../_lib/ai-alert';
 import { MSG_AI_NON_DISPONIBILE, CODE_AI_NON_DISPONIBILE } from '../../../_lib/ai-messages';
 import { CONTESTO_DETTATURA, vocabolarioTenant } from '../_lib/vocabolario';
@@ -58,7 +60,23 @@ const OUTPUT_SCHEMA = z.object({
   indirizzo: z.string().trim().min(3).max(300).optional().catch(undefined),
   citta: z.string().trim().min(1).max(120).optional().catch(undefined),
   voci_ids: z.array(z.number().int().positive()).max(20).optional().catch(undefined),
-  descrizione: z.string().trim().min(1).max(200).optional().catch(undefined),
+  /**
+   * ⚠️ **Si taglia a 60 QUI**, dove la risposta dell'AI diventa dato, non più
+   * avanti. `creaCommessa` accetta al massimo `MAX_DESCRIZIONE_COMMESSA`
+   * perché quel testo diventa il segmento della cartella su Nextcloud: una
+   * descrizione più lunga faceva fallire la creazione **alla fine di tutto il
+   * lavoro**, con il messaggio di zod in inglese sotto il tasto. Il rischio
+   * era latente da sempre; chiedendo al modello frasi da 60 invece di nomi da
+   * 30 è diventato probabile. Il testo per intero resta comunque in `note`.
+   */
+  descrizione: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .transform((t) => tagliaAParolaIntera(t, MAX_DESCRIZIONE_COMMESSA))
+    .optional()
+    .catch(undefined),
   note: z.string().trim().min(1).max(2000).optional().catch(undefined),
   tag_suggeriti: z.array(z.string().trim().min(1).max(40)).max(5).optional().catch(undefined),
   // Ondata 4: referenti del cliente. Estratti quando il dettato dice

@@ -9,6 +9,7 @@ import {
   CommesseListClient,
   type CommessaRow,
 } from './_components/commesse-list-client';
+import { testoPerFiltroOr } from '@kommessa/api/testo';
 
 export const metadata = { title: 'Commesse' };
 export const dynamic = 'force-dynamic';
@@ -76,9 +77,12 @@ export default async function CommessePage({
         .lte('data_apertura', `${y}-12-31`);
     }
   }
-  if (searchParams.q) {
+  // ⚠️ Ripulito prima dell'interpolazione: una virgola spezza il corpo di
+  // `or=(…)` e la richiesta torna 400, cioè un elenco vuoto senza spiegazione.
+  const qCercato = testoPerFiltroOr(searchParams.q);
+  if (qCercato) {
     query = query.or(
-      `codice_interno.ilike.%${searchParams.q}%,nome_cartella.ilike.%${searchParams.q}%`,
+      `codice_interno.ilike.%${qCercato}%,nome_cartella.ilike.%${qCercato}%`,
     );
   }
 

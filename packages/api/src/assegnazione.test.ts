@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ETICHETTA_ASSEGNA_A,
+  ETICHETTA_CREATO_DA,
+  ETICHETTA_RESPONSABILE,
+  ETICHETTA_TECNICO_UNO,
+  ETICHETTA_TECNICI_PIU,
   descriviAssegnazione,
   etichettaNonAssegnato,
   etichettaTecnici,
@@ -66,11 +70,32 @@ describe('descriviAssegnazione: la riga vuota non si scrive', () => {
 });
 
 describe('il comando si dice con un verbo', () => {
-  it('«Assegna a» e un gesto, non il nome di un campo', () => {
-    // Il test vale piu' di quanto sembri: la tentazione e' riusare qui
-    // l'etichetta del campo, e un comando chiamato col nome di un campo
-    // sembra dire «questo e' vuoto» anche quando vuoto non e'.
-    expect(ETICHETTA_ASSEGNA_A).toMatch(/^[A-Z][a-z]+ /);
+  // ⚠️ La prima versione di questo test chiedeva `/^[A-Z][a-z]+ /` e «non
+  // finisce con i puntini»: ci passavano anche «Tecnici assegnati» e
+  // «Responsabile di», cioe' **esattamente** i valori contro cui diceva di
+  // difendere. Un test che non puo' bocciare la regressione che descrive e'
+  // peggio di nessun test: dice che la cosa e' coperta.
+  it('non e nessuna delle etichette dei campi', () => {
+    for (const nome of [
+      ETICHETTA_RESPONSABILE,
+      ETICHETTA_TECNICO_UNO,
+      ETICHETTA_TECNICI_PIU,
+      ETICHETTA_CREATO_DA,
+    ]) {
+      expect(ETICHETTA_ASSEGNA_A).not.toBe(nome);
+    }
+  });
+
+  it('e un verbo all imperativo seguito dalla preposizione', () => {
+    const [verbo, preposizione, ...resto] = ETICHETTA_ASSEGNA_A.split(' ');
+    expect(verbo).toBe('Assegna');
+    expect(preposizione).toBe('a');
+    expect(resto).toHaveLength(0);
+  });
+
+  it('i puntini di sospensione li mette chi lo mostra, non il vocabolario', () => {
+    // Cosi' la stessa parola serve sia al segnaposto («Assegna a…») sia a un
+    // nome accessibile che non deve finire con tre puntini.
     expect(ETICHETTA_ASSEGNA_A.endsWith('…')).toBe(false);
   });
 });

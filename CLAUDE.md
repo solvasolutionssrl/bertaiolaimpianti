@@ -783,16 +783,19 @@ Quattro cose viste usandola, e due sono difetti introdotti il giorno prima.
   sola col cestino all'estremo opposto. ⚠️ Due tentativi hanno peggiorato le
   cose prima di questo: `flex-nowrap` sul tasto della scelta multipla riduceva
   le pastiglie a «× U ×», e `flex-1` su «Crea commessa» **non lo tronca** —
-  l'etichetta esce dalla scatola e finisce sopra il cestino. ⭐ Nuova prop
-  `riassunto` su `SceltaMultipla`: in poco spazio si dice **quanti** invece di
-  **chi** («2 scelti»), perche' i nomi sono gia' scritti due righe sopra.
+  l'etichetta esce dalla scatola e finisce sopra il cestino. ⭐ Prop `riassunto` su
+  `SceltaMultipla`: in poco spazio **un nome per esteso**, e da due in su il
+  conto («2 persone»). ⚠️ Diceva «2 scelti» anche con una persona sola: il
+  caso normale e' una persona, ed e' l'unica cosa che si vuole sapere senza
+  aprire.
 - **Il tasto delle richieste ha il «+» oltre alla cornetta** e si chiama «Nuova
   richiesta»: la cornetta da sola diceva di cosa si tratta, non che da li' si
   **crea**.
 - ⚠️ **L'autore non si dice con una matita.** La matita vuol dire «modifica»:
-  in una riga fitta un disegno da indovinare non informa, fa fermare. Ora due
-  parole — «da Barbara» — in fondo alla riga, che e' la cosa meno urgente:
-  prima il lavoro, poi chi l'ha scritto.
+  in una riga fitta un disegno da indovinare non informa, fa fermare. Ora si
+  legge a parole in fondo alla riga, che e' la cosa meno urgente: prima il
+  lavoro, poi chi l'ha scritto. ⚠️ Le parole sono **«Creato da»** dal 09/10
+  (`ETICHETTA_CREATO_DA`), uguali in tutte e quattro le superfici.
 
 Banchi: `scripts/banco-ui/zoom-foto.mjs` (14 controlli: rotellina, pizzicotto a
 due dita vere via CDP, doppio clic, tasti, il freno dello spostamento) e
@@ -1023,6 +1026,81 @@ filtrava e il controllo positivo era verde su una cosa mai provata. L'ha
 smascherato il **controllo negativo** («una parola che non esiste non trova
 niente»), che è rimasto rosso. ⭐ Ogni controllo di un filtro vuole il suo
 negativo, o non sta misurando il filtro.
+
+#### Audit del 09/10/2026 (migration `20261009160000`)
+
+Riletto tutto quello che era stato fatto fra il 08 e il 09 da tre lati: igiene,
+sicurezza, solidita'. Cio' che resta, oltre alle correzioni:
+
+- ⚠️⚠️ **Un tecnico poteva cancellare tutte le commesse dello spazio di
+  lavoro.** `commesse_tenant_scope` era permissiva `FOR ALL` col solo filtro
+  del cliente — la **stessa forma** di `clienti_tenant_scope` chiusa il giorno
+  prima. Provato come tecnico vero in transazione annullata: modifica una
+  commessa ✓, archivia tutte ✓, cancella le voci di tutte (220 righe) ✓,
+  cancella tutte le commesse (20 righe) ✓. Su Bertaiola «tutte» sono oltre
+  duecento, con dentro la storia del lavoro e i codici progressivi che non si
+  riusano. Ora: leggono e **creano** tutti (⚠️ serve: un tecnico con
+  `capo_squadra` apre lavori nuovi), modificano ufficio e amministratori,
+  **cancella nessuno** — non esiste un'azione che cancelli una commessa, quindi
+  la `delete` non ha policy e passa solo dalla service role. Stesso trattamento
+  per `commessa_voci`, che e' append-only perche' alle voci corrispondono
+  cartelle fisiche. Riprovato dopo: legge 20, modifica 0, cancella 0; l'ufficio
+  modifica ✓ e un tecnico crea commessa + voci ✓.
+  ⭐ **Il censimento dice che ne restano sette**: `file_refs`,
+  `file_annotations`, `commessa_tags`, `preset`, `interventi`, `tickets`,
+  `ticket_messages` hanno la stessa forma. Li' un tecnico **scrive davvero**
+  (carica foto, annota, apre interventi), quindi separare «le proprie» da
+  «quelle di tutti» vuole una lettura dei percorsi di caricamento, non una
+  policy scritta di fretta. Query del censimento in coda alla migration.
+- ⚠️ **L'AI poteva proporre 200 caratteri, la creazione ne accetta 60.** Il
+  rischio era latente da sempre; chiedendo al modello **frasi** da 60 invece di
+  nomi da 30 e' diventato probabile, e il modo in cui si manifestava era il
+  peggiore: la dettatura moriva **alla fine di tutto il lavoro**, col messaggio
+  di zod in inglese sotto il tasto. Ora `MAX_DESCRIZIONE_COMMESSA` sta in
+  `@kommessa/api/nome-cartella` (accanto alla regola del nome cartella, perche'
+  e' lo stesso fatto) e lo leggono gli otto punti che prima avevano un `60` o
+  un `30` scritto a mano; `/api/voice/extract` **taglia a parola intera**
+  (`@kommessa/api/testo`) dove la risposta del modello diventa dato.
+- ⚠️ **«Salvato» su zero righe.** `aggiornaDettagliCommessa` faceva
+  `.update().eq('id')` senza riprendersi la riga: con un id di un altro spazio
+  di lavoro la RLS filtra, PostgREST non considera errore un aggiornamento a
+  vuoto, e la funzione rispondeva `ok` **scrivendo pure una riga di registro**
+  per una modifica mai avvenuta. Ora si chiede indietro l'id.
+- ⚠️ **`titoloCase` spezzava le frasi.** Rendeva leggibile un titolo che era un
+  nome di cartella; da quando i titoli sono frasi, «Fotovoltaico 6 kW con
+  accumulo» diventava «Fotovoltaico 6 K W con Accumulo» sul telefono. Ora il
+  CamelCase si spezza **solo su un testo senza spazi**, e una parola con la
+  maiuscola interna (`kW`, `iGuzzini`) resta identica — la riga diceva
+  «preserva le maiuscole» e poi chiamava `upFirst`, che la prima gliela
+  cambiava.
+- ⚠️ **Chi e' stato disattivato spariva dalla tendina ma non dalla riga.**
+  `elencaAssegnabiliTenant` restituisce solo le persone attive: una richiesta
+  affidata a chi non lavora piu' qui diceva «Responsabile: Mario» nella riga e
+  «Responsabile…» nella tendina sotto. Ora la voce viene aggiunta in testa,
+  marcata «Non piu' in squadra».
+- ⭐ **Il nome accessibile deve cominciare con quello che si legge.** Le due
+  tendine mostravano «Assegna a…» e dichiaravano «Responsabile di…»: chi usa un
+  lettore di schermo sentiva una parola e chi guardava ne leggeva un'altra.
+- Di contorno: la quarta superficie che componeva l'autore a mano
+  (`lavori-board`) usa il vocabolario; `testoPerFiltroOr` condiviso applicato a
+  ricerca globale, elenco commesse, ⌘K e `admin/tenants` (una virgola battuta
+  li' spezzava il filtro e la ricerca tornava **vuota in silenzio**); tre
+  costanti esportate da `nome-cartella` che nessuno importava sono diventate
+  interne; `SummaryRow.mono` senza chiamanti e' stata tolta; il contratto di
+  `componiNomeCartella` ora dichiara che **il codice e' l'unico pezzo non
+  sanificato** e deve arrivare dal server.
+- ⚠️⚠️ **Un test che non puo' bocciare la regressione che descrive.** Quello su
+  `ETICHETTA_ASSEGNA_A` chiedeva «comincia con una maiuscola e non finisce coi
+  puntini»: ci passavano anche «Tecnici assegnati» e «Responsabile di», cioe'
+  esattamente i valori contro cui diceva di difendere. Riscritto e **visto
+  fallire** sostituendo la costante.
+
+> ⚠️ **Resta aperto, dichiarato**: la Edge Function `create-commessa` costruisce
+> ancora `Cliente_2026-10-09_Lavoro`, il formato abbandonato, con una sua copia
+> della sanificazione tagliata a 30. E' la **quinta** copia della regola del
+> nome cartella, ha un `serve()` attivo e `convert-ticket` la importa, ma il
+> percorso Freshdesk e' abbandonato dal 16/09. Da ricondurre a
+> `componiNomeCartella` **oppure** da ritirare insieme alle tre gia' in lista.
 
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 

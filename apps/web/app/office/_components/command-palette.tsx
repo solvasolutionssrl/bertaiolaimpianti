@@ -16,6 +16,7 @@ import {
 import { cn, type OfficeNavItem } from '@kommessa/ui';
 import { VOCI_IMPOSTAZIONI } from '../impostazioni/_components/settings-tabs';
 import { createBrowserSupabase } from '@kommessa/api/client';
+import { testoPerFiltroOr } from '@kommessa/api/testo';
 
 /**
  * Tipi risultato — discriminated union per tenere stretto il payload
@@ -343,7 +344,11 @@ export function CommandPalette({
     const controller = new AbortController();
     setLoading(true);
     const supabase = createBrowserSupabase();
-    const pattern = `%${q}%`;
+    // ⚠️ Ripulito prima di finire nei tre `or=(…)` qui sotto: una virgola
+    // battuta nella ⌘K spezzava il filtro, la richiesta tornava 400 e il
+    // `.catch(() => {})` in coda la faceva sparire — nessun suggerimento, e
+    // nessun modo di capire perché.
+    const pattern = `%${testoPerFiltroOr(q)}%`;
 
     Promise.all([
       supabase

@@ -16,16 +16,23 @@
  *
  * 1. **La descrizione non si tronca.** Diventerebbe il `nome_cartella` su
  *    Nextcloud, che non si può più rinominare: meglio nessuna descrizione (e il
- *    form la chiede) che «SostituzioneCaldaiaViessman» tagliato a metà parola.
+ *    form la chiede) che una descrizione tagliata di netto a metà parola.
  * 2. **Niente si perde.** Tutto ciò che è stato battuto al telefono finisce in
  *    `noteIniziali`, comprese le cose che non hanno un campo dove andare (il
  *    numero per richiamare, quando il cliente è già in anagrafica).
  *
  * Puro e deterministico.
  */
+import { MAX_DESCRIZIONE_COMMESSA } from './nome-cartella';
 
-/** Lo schema di `creaCommessa` accetta al massimo 60 caratteri. */
-export const DESCRIZIONE_MAX = 60;
+/**
+ * Lo stesso tetto che accetta `creaCommessa`, importato e non ricopiato.
+ *
+ * ⚠️ Qui c'era un `60` con il commento «lo schema di `creaCommessa` accetta al
+ * massimo 60»: vero quando è stato scritto, e invisibile il giorno in cui
+ * quello cambia. Il nome vecchio resta esportato perché lo usano i test.
+ */
+export const DESCRIZIONE_MAX = MAX_DESCRIZIONE_COMMESSA;
 
 /** La richiesta, nei soli campi che servono alla conversione. */
 export interface RichiestaDaConvertire {

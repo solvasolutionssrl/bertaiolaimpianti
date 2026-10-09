@@ -64,13 +64,23 @@ export async function aggiornaDettagliCommessa(
   const trimmed = testo.trim();
   const valore: string | null = trimmed.length === 0 ? null : trimmed;
 
-  const { error: updErr } = await supabase
+  // ⚠️ **Si chiede indietro la riga.** PostgREST non considera un errore un
+  // aggiornamento che non ha toccato niente: con un id di un altro spazio di
+  // lavoro (la RLS filtra, giustamente) `updErr` resta `null`, questa funzione
+  // rispondeva «fatto», e qui sotto si scriveva pure una riga di registro per
+  // una modifica mai avvenuta. L'utente leggeva «salvato» su un testo perso.
+  const { data: toccata, error: updErr } = await supabase
     .from('commesse')
     .update({ note_iniziali: valore })
-    .eq('id', commessaId);
+    .eq('id', commessaId)
+    .select('id')
+    .maybeSingle();
 
   if (updErr) {
     return { ok: false, error: `Update fallito: ${updErr.message}` };
+  }
+  if (!toccata) {
+    return { ok: false, error: 'Commessa non trovata' };
   }
 
   // Audit

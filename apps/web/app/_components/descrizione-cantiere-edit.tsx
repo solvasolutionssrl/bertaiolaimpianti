@@ -26,9 +26,16 @@ interface Props {
 }
 
 /**
- * Editor inline della "Descrizione cantiere" = nome/titolo mostrato della
- * commessa (campo descrizione_ai_finale). NON rinomina la cartella Nextcloud
- * (nome_cartella resta congelato). Usa aggiornaCommessaCompleta.
+ * Editor inline del **titolo mostrato** di una commessa
+ * (`descrizione_ai_finale`), dalla matita accanto al titolo.
+ *
+ * ⚠️ NON rinomina la cartella su Nextcloud: `nome_cartella` è congelato alla
+ * nascita, e dal 08/10/2026 il CamelCase si deriva una volta sola da qui
+ * (`@kommessa/api/nome-cartella`).
+ *
+ * ⚠️ Si chiamava «Descrizione cantiere», come la card che lo conteneva: quella
+ * card è stata tolta — ripeteva il titolo che ha dieci pixel sopra — e il
+ * nome è rimasto solo qui, dove nessun'altra superficie lo usava più.
  */
 export function DescrizioneCantiereEdit({
   commessaId,
@@ -77,8 +84,8 @@ export function DescrizioneCantiereEdit({
           'rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground',
           triggerClassName,
         )}
-        title="Modifica la descrizione (nome mostrato della commessa)"
-        aria-label="Modifica descrizione cantiere"
+        title="Modifica la descrizione (il titolo mostrato della commessa)"
+        aria-label="Modifica la descrizione del lavoro"
       >
         <PencilLine className="h-3.5 w-3.5" aria-hidden="true" />
       </button>
@@ -86,7 +93,7 @@ export function DescrizioneCantiereEdit({
       <Dialog open={open} onOpenChange={(n) => (saving ? null : setOpen(n))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Descrizione cantiere</DialogTitle>
+            <DialogTitle>Descrizione del lavoro</DialogTitle>
             <DialogDescription>
               È il nome mostrato della commessa. Il nome della cartella su
               Nextcloud resta invariato.

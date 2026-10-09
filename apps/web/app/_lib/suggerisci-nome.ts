@@ -17,6 +17,10 @@
  *  - Tassonomia_Lavori.md §2-3 (voci 1..38)
  *  - Flusso_Operativo.md §2 step 5 (capo edita la descrizione)
  */
+import { tagliaAParolaIntera } from '@kommessa/api/testo';
+
+import { MAX_DESCRIZIONE_COMMESSA } from '../_actions/crea-commessa.schemas';
+
 export interface SuggerisciInput {
   voci?: number[];
   cliente?: string;
@@ -27,9 +31,6 @@ export interface SuggerisciResult {
   proposta: string;
   alternatives: string[];
 }
-
-/** Quanto può essere lunga una descrizione proposta (come `creaCommessa`). */
-const MAX_DESCRIZIONE = 60;
 
 /**
  * Voci "dominanti" mappate a etichette brevi. L'ordine in questa lista
@@ -92,24 +93,16 @@ export function suggerisciDescrizione(input: SuggerisciInput): SuggerisciResult 
 
 /**
  * Le prime parole di un testo, come frase leggibile: maiuscola iniziale e
- * nient'altro toccato. ⚠️ Il taglio è **a parola intera** — una descrizione
- * mozzata a metà parola finirebbe così nel nome della cartella, che non si
- * rinomina più.
+ * nient'altro toccato.
+ *
+ * ⚠️ Il taglio è **a parola intera** (`tagliaAParolaIntera`, condiviso): una
+ * descrizione mozzata a metà parola finirebbe così nel nome della cartella su
+ * Nextcloud, che non si rinomina più. Il tetto è lo stesso che accetta
+ * `creaCommessa`, letto da lì e non riscritto qui.
  */
-function primeParole(testo: string, max = MAX_DESCRIZIONE): string {
-  const parole = testo
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 6);
-
-  let fuori = '';
-  for (const parola of parole) {
-    const candidato = fuori ? `${fuori} ${parola}` : parola;
-    if (candidato.length > max) break;
-    fuori = candidato;
-  }
-  if (!fuori) fuori = (parole[0] ?? '').slice(0, max);
+function primeParole(testo: string, max = MAX_DESCRIZIONE_COMMESSA): string {
+  // Al massimo sei parole: oltre non è più un titolo, è una frase.
+  const primeSei = testo.replace(/\s+/g, ' ').trim().split(' ').slice(0, 6).join(' ');
+  const fuori = tagliaAParolaIntera(primeSei, max);
   return fuori ? fuori.charAt(0).toUpperCase() + fuori.slice(1) : '';
 }

@@ -52,7 +52,8 @@
     "./scadenza-password": "./src/scadenza-password.ts",
     "./assegnazione": "./src/assegnazione.ts",
     "./zoom-foto": "./src/zoom-foto.ts",
-    "./nome-cartella": "./src/nome-cartella.ts"
+    "./nome-cartella": "./src/nome-cartella.ts",
+    "./testo": "./src/testo.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

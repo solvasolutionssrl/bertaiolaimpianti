@@ -55,6 +55,7 @@ import {
 } from '@kommessa/api/priorita';
 import { PrioritaChip } from '@/app/_components/priorita-ui';
 import { MiniaturaMedia } from '@/app/_components/miniatura-media';
+import { ETICHETTA_CREATO_DA } from '@kommessa/api/assegnazione';
 
 type StatoTodo = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
@@ -899,9 +900,14 @@ function TodoRow({
                 <Calendar className="h-3 w-3" /> Scade {fmtDataBreve(todo.scadenza_at)}
               </span>
             ) : null}
+            {/* ⚠️ La frase viene dal vocabolario: era la quarta superficie a
+                comporla a mano, e diceva «Creato … da …» con la data in mezzo
+                mentre le altre tre dicono «Creato da …». */}
             <span className="flex items-center gap-0.5">
-              <Clock className="h-3 w-3" /> Creato {fmtDataBreve(todo.created_at)}
-              {todo.created_by_nome ? ` da ${todo.created_by_nome}` : ''}
+              <Clock className="h-3 w-3" />
+              {todo.created_by_nome
+                ? `${ETICHETTA_CREATO_DA} ${todo.created_by_nome} · ${fmtDataBreve(todo.created_at)}`
+                : `Creato il ${fmtDataBreve(todo.created_at)}`}
             </span>
             {notes.length > 0 ? (
               <span className="flex items-center gap-0.5">

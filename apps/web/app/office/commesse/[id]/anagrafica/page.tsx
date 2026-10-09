@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * Tab Anagrafica — il "fascicolo cliente": solo dati realmente anagrafici
- * (cliente, contatti/referenti, tag). Descrizione cantiere, dettagli lavoro e
+ * (cliente, contatti/referenti, tag). Titolo, dettagli lavoro e
  * dati tecnici di commessa vivono nella tab Commessa / sidebar.
  */
 export default async function AnagraficaTab({

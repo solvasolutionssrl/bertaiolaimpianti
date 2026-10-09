@@ -776,11 +776,9 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
 function SummaryRow({
   label,
   value,
-  mono,
 }: {
   label: string;
   value?: string;
-  mono?: boolean;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0">
@@ -790,7 +788,6 @@ function SummaryRow({
       <span
         className={[
           'text-right text-sm',
-          mono ? 'font-mono' : '',
           value ? 'text-foreground' : 'italic text-muted-foreground',
         ].join(' ')}
       >

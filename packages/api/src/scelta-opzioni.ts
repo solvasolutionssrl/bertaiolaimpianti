@@ -88,8 +88,11 @@ export function tokenDiRicerca(query: string): string[] {
  * scrivere lì una seconda meccanica di ricerca vorrebbe dire due ricerche che
  * si comportano diversamente sulla stessa parola accentata.
  *
- * ⚠️ `mucchio` va già normalizzato da chi chiama (`normalizzaTesto`): qui non
- * si normalizza di nuovo, perché su un elenco lungo si pagherebbe a ogni riga.
+ * ⚠️ **Il testo in cui cercare va normalizzato da chi chiama**
+ * (`normalizzaTesto`): qui non si normalizza, altrimenti una voce già
+ * preparata verrebbe ripiegata due volte. Chi ha un mucchio da costruire riga
+ * per riga lo normalizza riga per riga — non è un risparmio, è dove sta la
+ * responsabilità.
  */
 export function testoCorrisponde(mucchioNormalizzato: string, query: string): boolean {
   const token = tokenDiRicerca(query);

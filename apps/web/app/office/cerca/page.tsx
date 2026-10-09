@@ -23,6 +23,7 @@ import { SectionHeader } from '../../_components/section-header';
 import { TagChip } from '../../_components/tag-editor';
 import { fmtData } from '../_lib/format';
 import { elencaTagTenant } from '../../_actions/commessa-tag';
+import { testoPerFiltroOr } from '@kommessa/api/testo';
 
 export const metadata = { title: 'Ricerca' };
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,15 @@ export default async function CercaPage({
   // Cerca solo fra commesse, clienti, ticket, file e riunioni: per i tenant
   // puro-Kantiere la pagina non ha niente da mostrare (come /office/tickets).
   if ((await getAppModeCached()) === 'kantiere') redirect('/office/kantiere');
-  const q = (searchParams.q ?? '').trim();
+  // ⚠️ Ripulito **prima** di finire in un `or=(…)`: una virgola spezza il
+  // filtro e la ricerca torna 400, che qui diventa «nessun risultato» in
+  // silenzio — chi cerca conclude che il dato non c'è.
+  //
+  // ⭐ E si ripulisce **una volta sola, qui**: `q` è anche quello che resta
+  // scritto nella casella e quello che si evidenzia nei risultati. Così la
+  // casella mostra ciò che è stato cercato davvero, invece di una frase che
+  // non è mai arrivata al database.
+  const q = testoPerFiltroOr(searchParams.q);
   const tagFilter = (searchParams.tag ?? '').trim().toLowerCase();
   const supabase = createServerSupabase();
 

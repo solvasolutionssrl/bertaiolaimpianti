@@ -26,6 +26,7 @@ import {
 } from '@kommessa/ui';
 
 import { anteprimaNomeCartella } from '@kommessa/api/nome-cartella';
+import { MAX_DESCRIZIONE_COMMESSA } from '../../_actions/crea-commessa.schemas';
 import { creaCommessa } from '../../_actions/crea-commessa';
 import {
   creaVoceCustom,
@@ -1167,7 +1168,7 @@ function Step5Nome({
         <Label htmlFor="desc">Descrizione del lavoro</Label>
         <Input
           id="desc"
-          maxLength={60}
+          maxLength={MAX_DESCRIZIONE_COMMESSA}
           placeholder="Es. Sostituzione caldaia"
           className="h-12 text-base"
           value={state.descrizioneFinale}

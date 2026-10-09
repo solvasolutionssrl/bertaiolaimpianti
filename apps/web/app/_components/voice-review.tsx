@@ -20,6 +20,7 @@ import {
 import { Button, Input, Label, cn } from '@kommessa/ui';
 import { ContactPickerButton } from './contact-picker-button';
 import { SceltaCliente, type ValoreCliente } from './scelta-cliente';
+import { MAX_DESCRIZIONE_COMMESSA } from '../_actions/crea-commessa.schemas';
 import {
   creaVoceCustom,
   vociSimili,
@@ -371,7 +372,7 @@ export function VoiceReview({
             <div className="space-y-2 pt-1">
               <Input
                 value={descrizione.value}
-                maxLength={60}
+                maxLength={MAX_DESCRIZIONE_COMMESSA}
                 className="h-11 text-base"
                 onChange={(e) =>
                   setDescrizione({ status: 'editing', value: e.target.value })

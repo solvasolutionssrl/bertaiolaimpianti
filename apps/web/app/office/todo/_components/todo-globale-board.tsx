@@ -53,6 +53,19 @@ import {
 type Stato = 'aperto' | 'in_corso' | 'completato' | 'annullato';
 
 /**
+ * Come si chiama la prima tendina di una riga.
+ *
+ * ⭐ Su una **richiesta** ci sono due passaggi (chi ne risponde, a chi lo si
+ * gira) e il primo tiene il nome per non confondersi col secondo; su un
+ * **task** l'assegnazione è una sola, quindi non serve nominarla — serve
+ * farla. Una funzione sola perché la stessa parola va a schermo **e** nel
+ * nome che sente chi usa un lettore di schermo.
+ */
+function etichettaPrimaTendina(eRichiesta: boolean): string {
+  return eRichiesta ? ETICHETTA_RESPONSABILE : ETICHETTA_ASSEGNA_A;
+}
+
+/**
  * Una riga dell'elenco.
  *
  * ⭐ **Esportata, e la pagina la importa.** Era scritta a mano due volte —
@@ -767,11 +780,27 @@ function TodoRow({
 }) {
   const completed = row.stato === 'completato' || row.stato === 'annullato';
 
-  const opzioniPersone = assegnabili.map((u) => ({
-    valore: u.id,
-    etichetta: u.display_name ?? u.id.slice(0, 8),
-    gruppo: etichettaRuolo(u.role, 'plurale'),
-  }));
+  const opzioniPersone = React.useMemo(() => {
+    const vive = assegnabili.map((u) => ({
+      valore: u.id,
+      etichetta: u.display_name ?? u.id.slice(0, 8),
+      gruppo: etichettaRuolo(u.role, 'plurale'),
+    }));
+    // ⚠️ **Chi è stato disattivato esce dall'elenco, ma la riga è ancora sua.**
+    // `elencaAssegnabiliTenant` restituisce solo le persone attive: senza
+    // questa voce, una richiesta affidata a chi non lavora più qui mostrava
+    // «Responsabile: Mario» nella riga dei dati e «Responsabile…» nella
+    // tendina dieci pixel sotto — di nuovo due risposte alla stessa domanda,
+    // ed è quella che fa riaprire la tendina per controllare.
+    if (row.assegnato_a && !vive.some((o) => o.valore === row.assegnato_a)) {
+      vive.unshift({
+        valore: row.assegnato_a,
+        etichetta: row.assegnato_nome ?? 'Persona non più attiva',
+        gruppo: 'Non più in squadra',
+      });
+    }
+    return vive;
+  }, [assegnabili, row.assegnato_a, row.assegnato_nome]);
 
   // ⚠️ **I comandi sono due famiglie, non una.** Le tendine sono larghe e
   // vogliono una riga loro quando la colonna è stretta; i tasti sono piccoli e
@@ -799,12 +828,17 @@ function TodoRow({
           onCambia={(v) => {
             if (v) onAssegna(v);
           }}
-          segnaposto={`${row.eRichiesta ? ETICHETTA_RESPONSABILE : ETICHETTA_ASSEGNA_A}…`}
+          segnaposto={`${etichettaPrimaTendina(row.eRichiesta)}…`}
           segnapostoRicerca="Cerca…"
           disabilitato={pending}
           larghezzaElenco="auto"
           className={compatta ? 'min-w-[7rem] flex-1' : 'max-w-[9rem]'}
-          aria-label={`${ETICHETTA_RESPONSABILE} di «${row.titolo}»`}
+          // ⚠️ Il nome per chi ascolta deve **cominciare con quello che si
+          // legge**: con «Assegna a…» a schermo e «Responsabile di…» nel nome
+          // accessibile, chi usa un lettore di schermo sente una parola e chi
+          // guarda ne legge un'altra, e un comando vocale sul testo visibile
+          // non trova niente.
+          aria-label={`${etichettaPrimaTendina(row.eRichiesta)} di «${row.titolo}»`}
         />
       ) : null}
 
@@ -821,9 +855,9 @@ function TodoRow({
           opzioni={opzioniPersone}
           valori={row.squadra.map((p) => p.id)}
           onCambia={onManda}
-          // In colonna stretta: «2 scelti» invece delle pastiglie coi nomi,
-          // che li' andrebbero a capo o si ridurrebbero a una lettera. I nomi
-          // stanno gia' due righe sopra, nella riga di chi ci va.
+          // In colonna stretta: **un nome per esteso**, e da due in su il
+          // conto («2 persone»). Le pastiglie coi nomi, in 140px, andrebbero a
+          // capo o si ridurrebbero a una lettera più la crocetta.
           // ⭐ Il **gesto** finché non c'è nessuno, e **il nome** appena
           // qualcuno c'è: una tendina che continua a dire «Assegna a…» mentre
           // una persona è assegnata sembra dire che non lo sia, e costringe ad
@@ -836,7 +870,7 @@ function TodoRow({
           disabilitato={pending}
           larghezzaElenco="auto"
           className={compatta ? 'min-w-[6rem] flex-1' : 'max-w-[11rem]'}
-          aria-label={`${ETICHETTA_TECNICI_PIU} su «${row.titolo}»`}
+          aria-label={`${ETICHETTA_ASSEGNA_A}: ${ETICHETTA_TECNICI_PIU} su «${row.titolo}»`}
         />
       ) : null}
     </>

@@ -7,6 +7,13 @@
  */
 
 import { z } from 'zod';
+import { MAX_DESCRIZIONE_COMMESSA } from '@kommessa/api/nome-cartella';
+
+// ⭐ Il tetto della descrizione nasce accanto alla regola del nome cartella,
+// perche' alla nascita quel testo DIVENTA il segmento della cartella. Qui si
+// ri-esporta soltanto, cosi' chi lavora sul modulo di creazione lo trova dove
+// se lo aspetta senza che esistano due numeri.
+export { MAX_DESCRIZIONE_COMMESSA } from '@kommessa/api/nome-cartella';
 
 export const clienteNewSchema = z.object({
   ragione_sociale: z.string().min(1),
@@ -28,6 +35,8 @@ export const referenteInputSchema = z.object({
   email: z.string().trim().max(200).optional().nullable(),
 });
 
+
+
 export const creaCommessaServerInputSchema = z
   .object({
     clienteId: z.string().uuid().optional(),
@@ -35,7 +44,7 @@ export const creaCommessaServerInputSchema = z
     // Range esteso a 32767 per accogliere la voce 39 e le custom-tenant 1000+
     // (vedi migration 20260528004100_voci_catalogo_tenant_custom.sql).
     voci: z.array(z.number().int().min(1).max(32767)).default([]),
-    descrizioneFinale: z.string().min(1).max(60),
+    descrizioneFinale: z.string().min(1).max(MAX_DESCRIZIONE_COMMESSA),
     note: z.string().optional().nullable(),
     /**
      * Trascrizione completa della prima nota dettata dal capo (voice intake).

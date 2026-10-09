@@ -35,7 +35,10 @@ import {
   DialogFooter,
 } from '@kommessa/ui';
 
-import type { CreaCommessaServerData } from '../../../../_actions/crea-commessa.schemas';
+import {
+  MAX_DESCRIZIONE_COMMESSA,
+  type CreaCommessaServerData,
+} from '../../../../_actions/crea-commessa.schemas';
 import { anteprimaNomeCartella } from '@kommessa/api/nome-cartella';
 import { VoiceRecorder } from '../../../../_components/voice-recorder';
 import { MediaAttachSection, type MediaFile } from './media-attach-section';
@@ -1113,7 +1116,7 @@ export function NuovaCommessaForm({
                   <Input
                     id="desc"
                     ref={descrizioneRef}
-                    maxLength={60}
+                    maxLength={MAX_DESCRIZIONE_COMMESSA}
                     placeholder="Es. Sostituzione caldaia"
                     aria-invalid={Boolean(fieldErrors.descrizione)}
                     aria-describedby={fieldErrors.descrizione ? 'desc-error' : undefined}

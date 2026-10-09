@@ -123,7 +123,7 @@ try {
   }
 
   // ── 3. la matita del titolo c'è, ed è raggiungibile dal dito ──
-  const matitaTitolo = `document.querySelector('button[aria-label="Modifica descrizione cantiere"]')`;
+  const matitaTitolo = `document.querySelector('button[aria-label="Modifica la descrizione del lavoro"]')`;
   const ciSta = await valuta(cdp, `!!${matitaTitolo}`);
   esito(ciSta, 'la matita del titolo è sulla scheda (ufficio la vede)');
   if (ciSta) {

@@ -7,6 +7,7 @@ import { TenantStatusBadge } from '../_components/tenant-status-badge';
 import { SectionHeader } from '../../_components/section-header';
 import { TenantsSearch } from './_components/tenants-search';
 import { TenantRowActions } from './_components/tenant-row-actions';
+import { testoPerFiltroOr } from '@kommessa/api/testo';
 
 export const metadata = { title: 'Platform · Tenants' };
 export const dynamic = 'force-dynamic';
@@ -30,9 +31,15 @@ export default async function TenantsListPage({ searchParams }: Props) {
     )
     .order('nome');
 
-  if (q) {
+  // ⚠️ Ripulito prima dell'interpolazione. Qui conta più che altrove: questa
+  // pagina legge con la **service role**, che scavalca la RLS, e `tenants`
+  // contiene `storage_config` e `r2_config`. È dietro `requirePlatformAdmin`,
+  // quindi oggi non è raggiungibile da altri — ma è il posto dove un filtro
+  // costa meno di tutti.
+  const qPulito = testoPerFiltroOr(q);
+  if (qPulito) {
     // ilike OR su nome e slug
-    query = query.or(`nome.ilike.%${q}%,slug.ilike.%${q}%`);
+    query = query.or(`nome.ilike.%${qPulito}%,slug.ilike.%${qPulito}%`);
   }
 
   const [tenantsRes, usageRes, plansRes] = await Promise.all([

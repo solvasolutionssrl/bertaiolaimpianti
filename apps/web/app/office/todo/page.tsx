@@ -115,8 +115,10 @@ export default async function TodoGlobalePage({
   // Qui si cerca su **ciò che si vede a schermo**, con la stessa meccanica a
   // token delle tendine (`@kommessa/api/scelta-opzioni`): accenti piegati,
   // tutte le parole devono comparire, in qualunque campo. E il costo non
-  // cambia: senza ricerca questa pagina legge già tutte le righe aperte,
-  // perché i conteggi in alto si fanno su tutte.
+  // cambia: anche senza ricerca questa pagina legge **tutte** le righe aperte,
+  // perché le due colonne le mostrano tutte. (I conteggi in alto si fanno
+  // invece sul risultato filtrato, ed è voluto: cercando, i numeri devono
+  // parlare di quello che si sta guardando.)
   //
   // ⚠️ **Non rimettere un `or=(…)` con dentro il testo digitato.** PostgREST
   // spezza il corpo di `or` sulle virgole di primo livello: «Rossi, via Verdi»

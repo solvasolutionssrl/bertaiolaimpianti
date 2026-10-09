@@ -256,7 +256,10 @@ try {
     esito(
       /Creato da /i.test(tutti),
       '⭐ la riga dice chi l\u2019ha creata',
-      (tutti.match(/Registrata da [^|·]{0,30}/i) ?? [''])[0],
+      // ⚠️ Il diagnostico deve cercare la **stessa** parola dell'asserzione:
+      // cercava ancora «Registrata da» e, quando il controllo falliva,
+      // stampava stringa vuota — un banco rosso che non sa dire perché.
+      (tutti.match(/Creato da [^|·]{0,30}/i) ?? ['NESSUN AUTORE NEI SUGGERIMENTI'])[0],
     );
   }
 
@@ -289,7 +292,7 @@ try {
       await valuta(cdp, `(() => {
         const i = ${casella};
         const proto = Object.getPrototypeOf(i);
-        Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, ${JSON.stringify('Cliente')});
+        Object.getOwnPropertyDescriptor(proto, 'value').set.call(i, ${JSON.stringify(soloNelCliente)});
         i.dispatchEvent(new Event('input', { bubbles: true }));
         return true;
       })()`);

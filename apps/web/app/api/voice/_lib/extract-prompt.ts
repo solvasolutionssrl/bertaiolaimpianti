@@ -20,6 +20,8 @@
  * }
  */
 
+import { MAX_DESCRIZIONE_COMMESSA } from '@kommessa/api/nome-cartella';
+
 import { etichettaDominante } from '../../../_lib/suggerisci-nome';
 
 export interface VoceCat {
@@ -39,7 +41,7 @@ L'audio è una nota vocale del capocantiere di un'azienda termoidraulica/elettri
 REGOLE INDEROGABILI:
 - Non inventare dati: se un campo non è chiaramente desumibile dal transcript, OMETTILO dall'output (NON usare null, NON usare stringhe vuote).
 - "voci_ids" deve contenere SOLO id presenti nel catalogo qui sotto.
-- "descrizione" è il titolo del lavoro: una frase breve in italiano CON GLI SPAZI, 2-6 parole, max 60 caratteri, maiuscola solo alla prima parola, niente slash. Esempi: "Sistemazione bagno", "Installazione caldaia", "Impianto solare completo".
+- "descrizione" è il titolo del lavoro: una frase breve in italiano CON GLI SPAZI, 2-6 parole, max ${MAX_DESCRIZIONE_COMMESSA} caratteri, maiuscola solo alla prima parola, niente slash. Esempi: "Sistemazione bagno", "Installazione caldaia", "Impianto solare completo".
 - "tag_suggeriti" sono massimo 5 stringhe lowercase senza spazi (es. "urgente", "garanzia", "bonus_110").
 - "telefono" normalizzato a cifre + eventuale prefisso (es. "+39 333 1234567" o "0422 123456").
 - "email" lowercase, valida nella forma.

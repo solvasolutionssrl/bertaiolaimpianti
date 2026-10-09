@@ -30,12 +30,31 @@
 /** Quanto puo' essere lungo un segmento del nome cartella. */
 export const MAX_SEGMENTO = 40;
 
-/** Cosa si scrive quando non c'e' niente da scrivere. */
-export const SEGMENTO_CLIENTE_VUOTO = 'Cliente';
-export const SEGMENTO_DESCRIZIONE_VUOTA = 'Commessa';
+/**
+ * Quanto puo' essere lunga la **descrizione di una commessa alla nascita**.
+ *
+ * ⭐ Sta qui, accanto alla regola del nome cartella, perche' e' lo stesso
+ * fatto: alla nascita quel testo diventa anche il terzo segmento della
+ * cartella su Nextcloud, che non si rinomina mai. Lo leggono lo schema di
+ * `creaCommessa`, i tre moduli che lo fanno scrivere, il suggeritore AI, la
+ * rotta che normalizza la dettatura e la bozza di una richiesta: erano otto
+ * `60` scritti a mano, e il giorno in cui uno si muove da solo la commessa si
+ * rifiuta di nascere alla fine di tutto il lavoro, con un messaggio di zod in
+ * inglese sotto il tasto.
+ *
+ * ⚠️ Dopo la nascita il tetto e' 120 (`aggiornaCommessaCompleta`) ed e'
+ * voluto: li' la cartella e' gia' congelata e il titolo e' solo un titolo.
+ */
+export const MAX_DESCRIZIONE_COMMESSA = 60;
+
+// Cosa si scrive quando non c'e' niente da scrivere. Non esportate: fuori da
+// qui nessuno le legge, e una costante esportata che nessuno importa e' una
+// scelta che qualcuno credera' di poter fare.
+const SEGMENTO_CLIENTE_VUOTO = 'Cliente';
+const SEGMENTO_DESCRIZIONE_VUOTA = 'Commessa';
 
 /** La cartella di stato in cui ogni commessa nasce (`_lib/commessa-stato-folder`). */
-export const CARTELLA_ALLA_NASCITA = '01_Richieste';
+const CARTELLA_ALLA_NASCITA = '01_Richieste';
 
 /** Toglie accenti e tutto cio' che non e' lettera o cifra. */
 function soloLettereECifre(testo: string): string {
@@ -120,7 +139,14 @@ export function segmentoCliente(ragioneSociale: string | null | undefined): stri
 }
 
 export interface PezziNomeCartella {
-  /** Il codice interno assegnato al salvataggio (`BER-1026-007`). */
+  /**
+   * Il codice interno assegnato al salvataggio (`BER-1026-007`).
+   *
+   * ⚠️ **E' l'unico pezzo che non viene sanificato**, perche' lo genera la
+   * funzione `genera_codice_commessa` del database e passarlo per l'elenco
+   * delle lettere ammesse ne toglierebbe i trattini. Chi chiama deve passare
+   * un valore **generato dal server**: mai testo che arriva da fuori.
+   */
   codice: string;
   /** Ragione sociale del cliente, come sta in anagrafica. */
   cliente: string | null | undefined;

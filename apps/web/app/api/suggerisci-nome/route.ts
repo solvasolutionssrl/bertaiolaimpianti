@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
+import { tagliaAParolaIntera } from '@kommessa/api/testo';
+
+import { MAX_DESCRIZIONE_COMMESSA } from '../../_actions/crea-commessa.schemas';
 import { suggerisciDescrizione } from '../../_lib/suggerisci-nome';
 import {
   chatCompletion,
@@ -39,8 +42,8 @@ const inputSchema = z.object({
  * commessa, cioe' una frase che una persona legge.
  */
 const outputSchema = z.object({
-  proposta: z.string().trim().min(1).max(60),
-  alternatives: z.array(z.string().trim().min(1).max(60)).max(5),
+  proposta: z.string().trim().min(1).max(MAX_DESCRIZIONE_COMMESSA),
+  alternatives: z.array(z.string().trim().min(1).max(MAX_DESCRIZIONE_COMMESSA)).max(5),
 });
 
 export const runtime = 'nodejs';
@@ -132,7 +135,7 @@ export async function POST(req: Request) {
     'REGOLE:',
     '- Output: JSON con `proposta` (1 stringa) e `alternatives` (array di esattamente 3 stringhe diverse).',
     '- Lingua italiana.',
-    '- Ogni descrizione: una frase breve CON GLI SPAZI, 2-6 parole, max 60 caratteri.',
+    `- Ogni descrizione: una frase breve CON GLI SPAZI, 2-6 parole, max ${MAX_DESCRIZIONE_COMMESSA} caratteri.`,
     '- Maiuscola solo alla prima parola, come un titolo. Niente CamelCase, niente ParoleAttaccate.',
     '- Niente slash, niente a capo, niente virgolette.',
     '- Sintetico, descrittivo, leggibile da un capo cantiere.',
@@ -188,13 +191,12 @@ export async function POST(req: Request) {
     // `segmentoDescrizione` quando deriva il nome cartella, e qui servono
     // per scrivere «città» come si scrive.
     const pulisci = (s: string): string =>
-      s
-        .replace(/[\r\n\t]+/g, ' ')
-        .replace(/["'`\\/|]+/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 60)
-        .trim();
+      tagliaAParolaIntera(
+        s
+          .replace(/[\r\n\t]+/g, ' ')
+          .replace(/["'`\\/|]+/g, ''),
+        MAX_DESCRIZIONE_COMMESSA,
+      );
 
     const proposta = pulisci(validated.data.proposta);
     const alternatives = Array.from(
