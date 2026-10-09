@@ -610,6 +610,20 @@ export interface SceltaProps extends BaseProps {
   onCambia: (valore: string | null) => void;
   /** Voce «nessuno» in cima. Assente = la scelta è obbligatoria. */
   etichettaNessuno?: string;
+  /**
+   * Il tasto dice sempre cosa **fa**, non cosa è stato scelto.
+   *
+   * Serve dove la scelta corrente è già scritta a pochi pixel di distanza — la
+   * riga di una richiesta dice «Responsabile: Nicola Olivieri» e la tendina
+   * sotto serve solo a cambiarlo. Senza questo, lo stesso nome compare due
+   * volte in due righe consecutive, e in una colonna stretta il secondo si
+   * tronca pure.
+   *
+   * ⚠️ `valore` resta quello vero: l'elenco continua a segnare la scelta
+   * corrente con la spunta, e le frecce ci si posizionano sopra. Cambia solo
+   * cosa si legge sul tasto.
+   */
+  comando?: boolean;
 }
 
 export function Scelta({
@@ -620,6 +634,7 @@ export function Scelta({
   segnapostoRicerca = 'Cerca…',
   nessunRisultato = 'Nessun risultato.',
   etichettaNessuno,
+  comando = false,
   disabilitato,
   className,
   larghezzaElenco = 'tasto',
@@ -675,12 +690,14 @@ const VUOTO = '\u0000nessuno';
         idElenco={idElenco}
         aperto={t.aperto}
         disabilitato={disabilitato}
-        vuoto={!scelta}
+        vuoto={!scelta || comando}
         onClick={() => (t.aperto ? t.chiudi() : t.setAperto(true))}
         onKeyDown={tastiera}
         {...aria}
       >
-        <span className="truncate">{scelta ? scelta.etichetta : segnaposto}</span>
+        <span className="truncate">
+          {scelta && !comando ? scelta.etichetta : segnaposto}
+        </span>
       </TastoTendina>
 
       {t.aperto ? (
@@ -713,17 +730,16 @@ export interface SceltaMultiplaProps extends BaseProps {
   /** Massimo di voci scegliibili. Oltre, le altre si spengono. */
   massimo?: number;
   /**
-   * In poco spazio: nel tasto si dice **quanti** invece di **chi**.
+   * Come `comando` su `Scelta`: il tasto dice sempre cosa **fa**, perché chi è
+   * già stato scelto si legge accanto. Le spunte nell'elenco restano, e i nomi
+   * per esteso stanno nel suggerimento.
    *
-   * ⚠️ Non e' una preferenza estetica. Le pastiglie coi nomi vanno a capo
-   * quando il tasto e' stretto, e la riga cresce spostando quello che ha
-   * sotto; e stringerle fino a farcele stare le riduce a una lettera piu' la
-   * crocetta — cioe' a niente, con in piu' il rischio di togliere la persona
-   * sbagliata. Dove si usa (la colonna stretta delle richieste) i nomi sono
-   * gia' scritti due righe sopra: qui serve sapere che ce ne sono due e
-   * potersi aprire.
+   * ⚠️ Qui c'era anche `riassunto`, che nel tasto diceva «2 scelti» invece dei
+   * nomi: serviva alla colonna stretta delle richieste, che dal 09/10/2026 usa
+   * `comando`. Rimasta senza chiamanti, è stata tolta — una prop che nessuno
+   * passa è una scelta che qualcuno credera' di poter fare.
    */
-  riassunto?: boolean;
+  comando?: boolean;
 }
 
 /**
@@ -734,7 +750,7 @@ export interface SceltaMultiplaProps extends BaseProps {
  * «Fatto». Nel tasto si vedono le prime due pastiglie e il resto diventa «+n».
  * ⚠️ Finché c'è spazio: sotto i ~250px le pastiglie vanno a capo e la riga
  * cresce, spostando quello che ha sotto. Dove lo spazio è poco si passa
- * `riassunto`, che dice **quanti** invece di **chi**.
+ * `comando`, e il tasto resta della sua altezza qualunque cosa si scelga.
  */
 export function SceltaMultipla({
   opzioni,
@@ -744,7 +760,7 @@ export function SceltaMultipla({
   segnapostoRicerca = 'Cerca…',
   nessunRisultato = 'Nessun risultato.',
   massimo,
-  riassunto = false,
+  comando = false,
   disabilitato,
   className,
   larghezzaElenco = 'tasto',
@@ -798,16 +814,17 @@ export function SceltaMultipla({
         idElenco={idElenco}
         aperto={t.aperto}
         disabilitato={disabilitato}
-        vuoto={scelte.length === 0}
+        vuoto={scelte.length === 0 || comando}
         onClick={() => (t.aperto ? t.chiudi() : t.setAperto(true))}
         onKeyDown={tastiera}
         {...aria}
       >
-        {scelte.length === 0 ? (
-          <span className="truncate">{segnaposto}</span>
-        ) : riassunto ? (
-          <span className="truncate" title={scelte.map((o) => o.etichetta).join(', ')}>
-            {scelte.length === 1 ? scelte[0]!.etichetta : `${scelte.length} scelti`}
+        {scelte.length === 0 || comando ? (
+          <span
+            className="truncate"
+            title={scelte.length > 0 ? scelte.map((o) => o.etichetta).join(', ') : undefined}
+          >
+            {segnaposto}
           </span>
         ) : (
           <>

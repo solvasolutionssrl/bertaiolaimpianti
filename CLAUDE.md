@@ -977,9 +977,20 @@ Tre rifiniture sulla board «Task e Richieste», tutte misurate col banco.
   parità: una richiesta porta comandi che un task non ha, e nella colonna larga
   quei comandi stanno **accanto** al titolo invece che sotto — chiedere la
   parità vorrebbe dire nascondere qualcosa.
-  ⚠️ Nella tendina stretta si usa `ETICHETTA_TECNICI_BREVE` del vocabolario,
-  non una parola scritta a mano nella pagina: un test verifica che la forma
-  breve sia **l'inizio** di quella lunga, così non possono divergere.
+  ⚠️ **Il comando dice cosa fa, non come si chiama il campo**
+  (`ETICHETTA_ASSEGNA_A`): su un task l'assegnazione è una sola, quindi non
+  serve nominarla — serve farla; su una richiesta restano due passaggi, e il
+  primo tiene il nome («Responsabile…») proprio per non confondersi col
+  secondo. Nuova prop `comando` su `Scelta`/`SceltaMultipla`: il tasto mostra
+  sempre l'etichetta dell'azione perché la scelta corrente si legge già due
+  righe sopra, mentre `valore` resta quello vero e l'elenco continua a segnare
+  la spunta. Con lei `riassunto` è rimasta senza chiamanti ed è stata tolta.
+- ⚠️ **Assegnata non voleva dire chiusa a chiave, e invece lo era.** La tendina
+  di chi ne risponde compariva solo sulle righe senza nessuno
+  (`!row.assegnato_a`): assegnata una richiesta alla persona sbagliata, dalla
+  board non la si poteva più correggere — il comando spariva nel momento esatto
+  in cui serviva. Ora c'è sempre, e la riga costa ~38px in più (134 → **172px**):
+  è il prezzo dichiarato di poter cambiare idea.
 - ⭐ **La ricerca guarda quello che la riga mostra, nome cliente compreso** —
   era la cosa che l'ufficio cercava e l'unica che non si poteva cercare. Il
   cliente **non è una colonna** di `commessa_todo`: su una richiesta sta in

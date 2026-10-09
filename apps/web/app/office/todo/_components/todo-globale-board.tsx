@@ -36,9 +36,9 @@ import { metaPriorita, type Priorita } from '@kommessa/api/priorita';
 import { Scelta, SceltaMultipla } from '@/app/_components/scelta';
 import { etichettaRuolo } from '@kommessa/api/identita';
 import {
+  ETICHETTA_ASSEGNA_A,
   ETICHETTA_CREATO_DA,
   ETICHETTA_RESPONSABILE,
-  ETICHETTA_TECNICI_BREVE,
   ETICHETTA_TECNICI_PIU,
   descriviAssegnazione,
   etichettaNonAssegnato,
@@ -779,16 +779,27 @@ function TodoRow({
   // una pila sfilacciata alta 138px — più di una riga intera.
   const selettori = (
     <>
-      {/* Non assegnato: si assegna da qui, senza aprire niente. È il gesto
-          che l'ufficio ripete a raffica smaltendo il mucchio. */}
-      {canWrite && !completed && !row.assegnato_a ? (
+      {/* Si assegna da qui, senza aprire niente: è il gesto che l'ufficio
+          ripete a raffica smaltendo il mucchio.
+          ⚠️ **C'è anche quando qualcuno è già assegnato.** Prima compariva
+          solo su una riga senza nessuno (`!row.assegnato_a`): assegnata una
+          richiesta alla persona sbagliata, dalla board non si poteva più
+          correggere — il comando spariva proprio nel momento in cui serviva.
+          Chi è assegnato si legge nella riga qui sopra; questa resta per
+          cambiarlo, e per questo dice cosa **fa** invece di ripetere il nome
+          (`comando`).
+          ⭐ Su un task il nome del campo non serve, serve il gesto: di
+          assegnazioni ce n'è una sola. Su una richiesta ce ne sono due, e
+          allora la prima tiene il nome per non confondersi con la seconda. */}
+      {canWrite && !completed ? (
         <Scelta
           opzioni={opzioniPersone}
-          valore={null}
+          valore={row.assegnato_a}
+          comando
           onCambia={(v) => {
             if (v) onAssegna(v);
           }}
-          segnaposto={`${ETICHETTA_RESPONSABILE}…`}
+          segnaposto={`${row.eRichiesta ? ETICHETTA_RESPONSABILE : ETICHETTA_ASSEGNA_A}…`}
           segnapostoRicerca="Cerca…"
           disabilitato={pending}
           larghezzaElenco="auto"
@@ -813,11 +824,12 @@ function TodoRow({
           // In colonna stretta: «2 scelti» invece delle pastiglie coi nomi,
           // che li' andrebbero a capo o si ridurrebbero a una lettera. I nomi
           // stanno gia' due righe sopra, nella riga di chi ci va.
-          riassunto={compatta}
-          // ⭐ In colonna stretta la forma breve del vocabolario, non una
-          // parola inventata qui: il nome per esteso resta nell'etichetta di
+          comando
+          // ⭐ Il **gesto**, non il nome del campo: questa tendina si tocca per
+          // girare la richiesta a chi ci va, e chi ci va è già scritto nella
+          // riga sopra. Il nome per esteso resta nell'etichetta di
           // accessibilità e nell'intestazione della tendina.
-          segnaposto={`${compatta ? ETICHETTA_TECNICI_BREVE : ETICHETTA_TECNICI_PIU}…`}
+          segnaposto={`${ETICHETTA_ASSEGNA_A}…`}
           segnapostoRicerca="Cerca una persona…"
           disabilitato={pending}
           larghezzaElenco="auto"

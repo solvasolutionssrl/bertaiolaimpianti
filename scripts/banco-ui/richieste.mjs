@@ -206,6 +206,38 @@ try {
       '⭐ e NON scrive «nessuno» accanto a un nome',
       /nessuno/i.test(riga) ? riga.slice(0, 80) : 'nessuna riga vuota',
     );
+    // ⚠️ **Assegnata non vuol dire chiusa a chiave.** La tendina di chi ne
+    // risponde compariva solo sulle righe senza nessuno: assegnata la
+    // richiesta alla persona sbagliata, dalla board non si poteva piu'
+    // correggere — il comando spariva proprio quando serviva. Qui la riga ha
+    // gia' un responsabile, quindi se la tendina c'e' e' la prova.
+    const tendine = await valuta(cdp, `(() => {
+      const d = ${rigaCon(TITOLO)};
+      if (!d) return null;
+      const b = [...d.querySelectorAll('button[aria-haspopup=listbox]')];
+      return b.map(x => ({
+        aria: x.getAttribute('aria-label') || '',
+        // ATTENZIONE: la classe degli spazi si scrive con la barra doppia.
+        // Questa stringa e' un template literal di Node: una barra singola
+        // davanti alla s e' una sequenza di escape e diventa una «s», quindi
+        // il banco misurava «Re pon abile» e dava la colpa alla pagina.
+        scritta: (x.textContent || '').replace(/[ \\t\\n\\r]+/g, ' ').trim(),
+      }));
+    })()`);
+    const haResponsabile = (tendine ?? []).some(t => /Responsabile/i.test(t.aria));
+    esito(
+      haResponsabile,
+      '⭐ con un responsabile gia\u2019 scelto la tendina resta, per cambiarlo',
+      (tendine ?? []).map(t => `«${t.scritta}»`).join(' · ') || 'NESSUNA TENDINA',
+    );
+    // E dice cosa FA, non ripete il nome che si legge una riga sopra.
+    const comandoGesto = (tendine ?? []).find(t => /Tecnici assegnati/i.test(t.aria));
+    esito(
+      Boolean(comandoGesto) && /^Assegna a/i.test(comandoGesto.scritta),
+      '⭐ e il secondo comando si legge «Assegna a…»',
+      comandoGesto ? `«${comandoGesto.scritta}»` : 'NON TROVATO',
+    );
+
     // ⭐ Chi ha risposto al telefono. Il campo c'era in tabella su tutte le
     // righe e non si vedeva da nessuna parte fuori dalla scheda di una
     // commessa.

@@ -38,16 +38,17 @@ export const ETICHETTA_TECNICO_UNO = 'Tecnico assegnato';
 export const ETICHETTA_TECNICI_PIU = 'Tecnici assegnati';
 
 /**
- * La forma breve, per un comando troppo stretto perche' il nome per esteso ci
- * stia: una tendina larga 140px in una colonna al 35%.
+ * **Quello che il comando fa**, dove la tendina non e' un campo da compilare
+ * ma un gesto da ripetere a raffica.
  *
- * ⭐ **Sta qui, non scritta a mano nella pagina.** E' la stessa parola detta
- * in meno spazio, non un'altra parola: il nome per esteso resta nell'etichetta
- * di accessibilita' e nel suggerimento, e un test verifica che la forma breve
- * sia davvero l'inizio di quella lunga — se un giorno una delle due cambia
- * senza l'altra, si rompe qui e non a schermo.
+ * ⭐ Un nome («Responsabile», «Tecnici assegnati») dice *che cos'e'* il campo
+ * ed e' giusto dove quel campo si legge; un verbo dice *cosa succede* se lo
+ * tocchi, ed e' giusto sul comando. Su una cosa da fare dentro una commessa
+ * c'e' una assegnazione sola, quindi non serve nominarla: serve farla. Su una
+ * richiesta restano due passaggi — chi ne risponde, e a chi lo si gira — e li'
+ * il primo tiene il nome e il secondo diventa il gesto.
  */
-export const ETICHETTA_TECNICI_BREVE = 'Tecnici';
+export const ETICHETTA_ASSEGNA_A = 'Assegna a';
 
 /**
  * **Chi l'ha scritta.** Una domanda diversa da «chi ne risponde» e da «chi ci

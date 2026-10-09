@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  ETICHETTA_TECNICI_BREVE,
-  ETICHETTA_TECNICI_PIU,
+  ETICHETTA_ASSEGNA_A,
   descriviAssegnazione,
   etichettaNonAssegnato,
   etichettaTecnici,
@@ -66,12 +65,12 @@ describe('descriviAssegnazione: la riga vuota non si scrive', () => {
   });
 });
 
-describe('la forma breve non e un altra parola', () => {
-  it('e l inizio di quella lunga, non un sinonimo', () => {
-    expect(ETICHETTA_TECNICI_PIU.startsWith(ETICHETTA_TECNICI_BREVE)).toBe(true);
-  });
-
-  it('ed e davvero piu corta, o non servirebbe', () => {
-    expect(ETICHETTA_TECNICI_BREVE.length).toBeLessThan(ETICHETTA_TECNICI_PIU.length);
+describe('il comando si dice con un verbo', () => {
+  it('«Assegna a» e un gesto, non il nome di un campo', () => {
+    // Il test vale piu' di quanto sembri: la tentazione e' riusare qui
+    // l'etichetta del campo, e un comando chiamato col nome di un campo
+    // sembra dire «questo e' vuoto» anche quando vuoto non e'.
+    expect(ETICHETTA_ASSEGNA_A).toMatch(/^[A-Z][a-z]+ /);
+    expect(ETICHETTA_ASSEGNA_A.endsWith('…')).toBe(false);
   });
 });
