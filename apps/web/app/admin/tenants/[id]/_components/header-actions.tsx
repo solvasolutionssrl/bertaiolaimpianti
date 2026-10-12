@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Ban, ExternalLink, MoreVertical, RotateCcw, Trash2 } from 'lucide-react';
+import { Ban, Eye, MoreVertical, RotateCcw, Trash2 } from 'lucide-react';
 import {
   Button,
   DropdownMenu,
@@ -15,8 +15,8 @@ import {
   sospendiTenant,
   riattivaTenant,
   eliminaTenant,
-  impersonate,
 } from '../../../_actions/tenants';
+import { SceltaImpersonazione } from '../../../_components/scegli-impersonazione';
 import { useConfirm, useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
@@ -31,22 +31,20 @@ export function TenantDetailHeaderActions({ tenantId, slug, nome, sospeso }: Pro
   const askConfirm = useConfirm();
   const showAlert = useAlert();
   const [pending, start] = React.useTransition();
+  const [scegliChi, setScegliChi] = React.useState(false);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* ⭐ «Entra come…» e non «Apri come tenant»: prima questo tasto pescava
+          un amministratore qualsiasi e non si poteva sapere chi. Ora chiede. */}
       <Button
         variant="outline"
         size="sm"
-        onClick={() =>
-          start(async () => {
-            // impersonate è un redirect — non torna
-            await impersonate(tenantId);
-          })
-        }
+        onClick={() => setScegliChi(true)}
         disabled={pending}
       >
-        <ExternalLink className="h-3.5 w-3.5" />
-        Apri come tenant
+        <Eye className="h-3.5 w-3.5" />
+        Entra come…
       </Button>
 
       <DropdownMenu>
@@ -109,6 +107,12 @@ export function TenantDetailHeaderActions({ tenantId, slug, nome, sospeso }: Pro
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <SceltaImpersonazione
+        tenantId={tenantId}
+        tenantNome={nome}
+        aperto={scegliChi}
+        onChiudi={() => setScegliChi(false)}
+      />
     </div>
   );
 }

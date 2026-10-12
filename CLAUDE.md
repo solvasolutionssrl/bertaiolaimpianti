@@ -1102,6 +1102,102 @@ sicurezza, solidita'. Cio' che resta, oltre alle correzioni:
 > percorso Freshdesk e' abbandonato dal 16/09. Da ricondurre a
 > `componiNomeCartella` **oppure** da ritirare insieme alle tre gia' in lista.
 
+
+### Entrare come una persona di un cliente (12/10/2026) — nessuna migration
+
+Segnalato: «l'impersonificazione funziona solo con Owner Bertaiola, e a volte
+la perdo». Erano **due cose diverse**, e il registro le ha dette entrambe:
+**56 `impersonate_start` e 8 `impersonate_end`** — 48 impersonazioni su 56
+(86%) non sono mai rientrate dalla porta — con **tutti e 56 i bersagli
+`admin`**: mai un ufficio, mai un tecnico, cioè mai i due mestieri per cui
+l'assistenza serve.
+
+- ⭐ **I ruoli non sono una cosa del singolo cliente**, quindi la scelta non si
+  scrive «per Bertaiola». Sono l'enum `app_role`, uguale per tutti: al 12/10
+  Bertaiola ha 2 amministratori, 4 ufficio, 15 tecnici; FPM 1, 3 e 31. Valori
+  vivi: `admin`, `office`, `tecnico` (+ `cliente`, chiuso dal 16/09);
+  `owner` e `capo` restano nell'enum ma sono morti da marzo. Il nucleo
+  indipendente dal cliente sta in `@kommessa/api/impersonazione` (22
+  asserzioni, **viste fallire**): chi si può impersonare, come si chiama a
+  schermo, in che ordine si raggruppa. ⚠️ `motivoNonImpersonabile` la usano
+  **la tendina e il server**: due regole separate vorrebbero dire una tendina
+  che offre una voce e un server che la rifiuta.
+- ⭐ **Si sceglie sempre una persona, e il ruolo è il filtro che te la fa
+  trovare.** Avevo proposto anche tre scorciatoie «entra come
+  amministratore/ufficio/tecnico»: su FPM 31 utenti su 35 sono tecnici, quindi
+  «entra come tecnico» dovrebbe pescarne uno a caso — che è **esattamente** il
+  difetto da chiudere. ⭐ *Un comando che sceglie al posto tuo quando la scelta
+  conta non è una scorciatoia: è lo stesso difetto con un nome gentile.*
+  Tolta `impersonate(tenantId)`, che faceva `role='admin'` con `.limit(1)`
+  **senza ordinamento** (Bertaiola ha due amministratori: chi diventavi era un
+  caso). Un selettore solo — `admin/_components/scegli-impersonazione.tsx` —
+  per i due punti d'ingresso. ⚠️ Lo stato di apertura sta **fuori**: un menu
+  Radix si smonta al click e se lo porterebbe via.
+- ⚠️⚠️ **Una GET non chiude una sessione.** Il rientro era
+  `/api/admin/rientro`, una GET che terminava l'impersonazione; il guard di
+  `/admin` ci rimandava chiunque avesse il cookie. Quindi bastava il **tasto
+  «indietro»** — che ripassa dalla pagina `/admin/tenants/...` da cui si era
+  partiti — per ritrovarsi fuori dal cliente **senza che nessuno chiedesse
+  niente**. Ora c'è `/impersonazione`, una pagina che dice cosa stai guardando
+  e offre le due strade; l'uscita è una Server Action, cioè una POST.
+  ⚠️ Sta **fuori** dai gusci `/office` e `/mobile`: dentro prenderebbe i loro
+  cancelli e un tecnico impersonato ci rimbalzerebbe prima di leggere la
+  domanda.
+- ⚠️⚠️ **Il ritorno non si appoggia più solo al refresh token messo da parte.**
+  Mentre si impersona, la sessione del super admin non la rinfresca nessuno e
+  Supabase la può invalidare: allora `refreshSession` falliva e il codice
+  faceva `signOut` + login. Succedeva: **1 degli 8 rientri registrati ha
+  `restore_ok: false`.** Ora, se il refresh non va, la sessione si
+  **rigenera** come quella della persona impersonata (magic-link verificato
+  lato server), dopo aver riletto **nel database** che quell'utente è ancora
+  super admin — l'autorizzazione la dà la riga, non il cookie. Un posto solo
+  per i due versi: `scambiaSessione`. Il registro ora dice anche *come*
+  (`come: 'ripresa' | 'rigenerata' | 'fallita'`), e `restore_ok` resta col
+  significato di sempre perché il registro si legge anche indietro nel tempo.
+- ⚠️⚠️ **Il cancello della password acchiappava chi impersona.** È un
+  promemoria rivolto a una persona; un super admin che la guarda non è quella
+  persona, e `/cambia-password` lo chiudeva in una pagina **senza barra e
+  senza via di ritorno**, con davanti un modulo che avrebbe cambiato la
+  password **di qualcun altro**. Oggi in Bertaiola nessuno è obbligato, ma
+  `scadenza_password` è accesa: **dal 10 dicembre ci finiva ogni
+  impersonazione di quel cliente.** Ora `statoPassword()` lascia passare chi ha
+  il cookie firmato.
+- ⭐ **Una verità sola su chi stai guardando.** Il nome viveva anche in
+  `impersonating_label`, un cookie visibile al browser con una scadenza
+  propria: dopo quattro ore spariva e la barra ripiegava sul nome del cliente
+  mentre l'impersonazione era ancora in corso. Ora nome, mestiere e cliente
+  stanno **dentro il cookie firmato** e la frase la compone
+  `etichettaImpersonazione`, la stessa per la barra e per il bivio. La barra
+  dice **«Stai guardando l'app come Chiara Bianchi · ufficio · Rossi Impianti
+  (DEMO)»**: il mestiere non è decorativo — sapere il nome senza il mestiere
+  non dice se quello che vedi è quello che vede un tecnico.
+- ⚠️ **Dove si atterra lo decide il mestiere, non l'impersonazione.**
+  `casaPerRuolo` è salita in `@kommessa/api/identita` accanto a
+  `etichettaRuolo` (è un fatto sul ruolo, e ora due posti molto diversi fanno
+  la stessa domanda); da `/office` e `/mobile` il middleware porta ciascuno nel
+  mondo del suo cliente. Prima si andava sempre su `/office`: per un tecnico un
+  rimbalzo in più e per un istante la schermata sbagliata.
+- ⚠️ **Il rinnovo del cookie non può stare nel middleware**, che sarebbe il
+  posto giusto: gira sul runtime edge, dove `node:crypto` non esiste e quella
+  firma non si può né leggere né rifare. Resta la barra, ogni 15 minuti.
+  Durata invariata a 4h: è il cookie che permette di riottenere una sessione da
+  super admin, non si allarga per comodità.
+
+> ⚠️ **`isSuperadminActor()` resta vero mentre si impersona, ed è una scelta.**
+> I comandi da super admin (il ripristino di una versione di commessa) restano
+> visibili anche mentre fai finta di essere un tecnico: la simulazione mente un
+> po', in cambio chi risponde di un'azione pericolosa è sempre identificato.
+
+Banco: `scripts/banco-ui/impersonazione.mjs`. ⚠️ **Serve un accesso da super
+admin e non sta nel sorgente** (quelle credenziali aprono *tutti* i clienti,
+produzione compresa): si passa da `BANCO_SUPER_EMAIL` / `BANCO_SUPER_PASSWORD`,
+e senza quelle il banco **dice «NON MISURATO» e si ferma** invece di misurare a
+vuoto. Il lato lettura è stato comunque provato componendo il cookie firmato
+(14 controlli) e il cancello della password alzando e rimettendo il flag su un
+utente dimostrativo (5): la barra dice nome·mestiere·cliente, un giro in
+console **non** chiude più l'impersonazione, un cookie inventato non accende
+niente, chi impersona passa il cancello e la persona vera resta murata.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

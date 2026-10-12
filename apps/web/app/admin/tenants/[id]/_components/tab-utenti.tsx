@@ -50,8 +50,10 @@ import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import {
   BYTE_TEMPORANEA,
   componiPasswordTemporanea,
+  etichettaRuolo,
   proponiUsername,
 } from '@kommessa/api/identita';
+import { motivoNonImpersonabile, nomeLeggibile } from '@kommessa/api/impersonazione';
 
 interface UtenteRow {
   id: string;
@@ -65,6 +67,8 @@ interface UtenteRow {
   /** Se e' ancora sulla password consegnata dall'ufficio. */
   must_change_password?: boolean | null;
   password_provvisoria?: boolean | null;
+  /** Un super admin non si impersona: sarebbe un'ombra dentro un'ombra. */
+  is_platform_admin?: boolean | null;
 }
 
 const ROLES = ['admin', 'office', 'tecnico'] as const;
@@ -270,32 +274,58 @@ export function TabUtenti({
                     </td>
                     <td className="px-2 py-2 text-right">
                       <div className="inline-flex gap-1">
-                        {u.attivo ? (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            title={`Impersona ${u.display_name ?? u.email} (JWT shadow)`}
-                            onClick={async () => {
-                              if (
-                                !(await askConfirm({
-                                  title: `Entrare come ${u.display_name ?? u.email}?`,
-                                  description: 'Tutte le azioni saranno tracciate in audit a tuo nome.',
-                                }))
-                              )
-                                return;
-                              start(async () => {
-                                const res = await impersonateUser({
-                                  tenantId,
-                                  targetUserId: u.id,
-                                });
-                                if (res && 'ok' in res && !res.ok) await showAlert({ title: 'Errore', body: res.error });
+                        {/* ⭐ Il tasto c'e' anche per chi NON si puo'
+                            impersonare, spento e col motivo: «non c'e'» e «non
+                            si puo'» sono due risposte diverse, e sparire fa
+                            cercare a vuoto una riga che si vede. Il motivo lo
+                            dice la stessa regola che usa il server. */}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          aria-label={`Entra come ${nomeLeggibile({ nome: u.display_name, login: u.email })}`}
+                          title={
+                            motivoNonImpersonabile({
+                              id: u.id,
+                              nome: u.display_name,
+                              login: u.email,
+                              ruolo: u.role,
+                              attivo: u.attivo,
+                              piattaforma: u.is_platform_admin === true,
+                            }) ??
+                            `Entra come ${nomeLeggibile({ nome: u.display_name, login: u.email })} (${etichettaRuolo(u.role)})`
+                          }
+                          disabled={
+                            pending ||
+                            motivoNonImpersonabile({
+                              id: u.id,
+                              nome: u.display_name,
+                              login: u.email,
+                              ruolo: u.role,
+                              attivo: u.attivo,
+                              piattaforma: u.is_platform_admin === true,
+                            }) !== null
+                          }
+                          onClick={async () => {
+                            if (
+                              !(await askConfirm({
+                                title: `Entrare come ${nomeLeggibile({ nome: u.display_name, login: u.email })}?`,
+                                description: `Vedrai l'app come ${etichettaRuolo(u.role).toLowerCase()}, con i suoi dati. Tutto quello che fai resta registrato a tuo nome.`,
+                                confirmLabel: 'Entra',
+                              }))
+                            )
+                              return;
+                            start(async () => {
+                              const res = await impersonateUser({
+                                tenantId,
+                                targetUserId: u.id,
                               });
-                            }}
-                          >
-                            <UserCheck className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : null}
+                              if (res && 'ok' in res && !res.ok) await showAlert({ title: 'Errore', body: res.error });
+                            });
+                          }}
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                        </Button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button

@@ -16,7 +16,18 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SHADOW_COOKIE = 'shadow_admin';
 
-/** Durata massima di un'impersonation: cookie e firma scadono insieme. */
+/**
+ * Durata massima di un'impersonation: cookie e firma scadono insieme.
+ *
+ * ⚠️ **Non si allarga alla leggera.** Questo cookie è ciò che permette di
+ * riottenere una sessione di super admin: più vive, più a lungo un portatile
+ * incustodito la può riprendere. Quattro ore è una mattinata di assistenza, e
+ * `rinnovaShadow` lo proroga finché la barra è a schermo.
+ *
+ * ⚠️ **Il rinnovo non può stare nel middleware**, che sarebbe il posto giusto
+ * (gira a ogni richiesta): il middleware di Next gira sul runtime edge, dove
+ * `node:crypto` non esiste e questa firma non si può né leggere né rifare.
+ */
 export const SHADOW_DURATA_S = 60 * 60 * 4;
 
 export interface ShadowAdmin {
@@ -25,6 +36,18 @@ export interface ShadowAdmin {
   admin_user_id: string;
   target_email?: string;
   target_user_id?: string | null;
+  /**
+   * Nome e mestiere di chi si sta impersonando, più il cliente.
+   *
+   * ⭐ **Stanno qui dentro e non in un cookie a parte.** Fino al 12/10/2026
+   * l'etichetta della barra viveva in `impersonating_label`, un cookie
+   * visibile al browser con una scadenza propria: due verità sulla stessa
+   * domanda, che dopo quattro ore si contraddicevano (il nome spariva e la
+   * barra ripiegava sul nome del cliente, mentre l'impersonation era ancora
+   * in corso). Il valore è firmato, quindi nessuno lo può ritoccare.
+   */
+  target_nome?: string | null;
+  target_ruolo?: string | null;
   tenant_label?: string;
   started_at: string;
   /** Scadenza, millisecondi dall'epoch. */

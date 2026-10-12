@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
+import { etichettaImpersonazione } from '@kommessa/api/impersonazione';
 import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { PromemoriaPassword } from '../_components/promemoria-password';
 import { getTenantContextCached as getTenantContext } from '../_lib/tenant-cache';
@@ -67,12 +68,9 @@ export default async function MobileLayout({
   // Impersonation: la barra qui non c'era proprio, e un tenant Kantiere si gira
   // quasi tutto da mobile. Stessa lettura dell'ufficio: vale solo un cookie
   // firmato dal server e non scaduto.
-  const cookieJar = cookies();
-  const impersonando = leggiShadow(cookieJar.get(SHADOW_COOKIE)?.value) !== null;
-  const etichettaImpersonation =
-    cookieJar.get('impersonating_label')?.value ??
-    cookieJar.get('impersonating_tenant_label')?.value ??
-    'un altro utente';
+  // ⭐ Una verità sola: la frase esce dal cookie firmato (vedi il guscio
+  // dell'ufficio), non da un secondo cookie con una scadenza sua.
+  const shadow = leggiShadow(cookies().get(SHADOW_COOKIE)?.value);
 
   // Esperienza mobile per-tenant. Default 'kommessa' = comportamento storico
   // (shell gestione/campo per ruolo): per i tenant esistenti — incluso
@@ -174,7 +172,16 @@ export default async function MobileLayout({
             barra esisteva solo sotto /office. Sta dentro <main>, sopra il
             contenuto: scorre con la pagina ma si ritrova risalendo, e non
             interferisce con la barra in basso ne' con le aree di sicurezza. */}
-        {impersonando ? <ImpersonationBanner tenantLabel={etichettaImpersonation} /> : null}
+        {shadow ? (
+          <ImpersonationBanner
+            chi={etichettaImpersonazione({
+              nome: shadow.target_nome,
+              login: shadow.target_email,
+              ruolo: shadow.target_ruolo,
+              cliente: shadow.tenant_label,
+            })}
+          />
+        ) : null}
         <PromemoriaPassword />
         <LimitiUploadProvider limiti={limitiUpload}>{children}</LimitiUploadProvider>
       </main>

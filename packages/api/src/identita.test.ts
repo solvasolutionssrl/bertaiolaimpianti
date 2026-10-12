@@ -14,6 +14,7 @@ import {
   eAliasLocale,
   RUOLI_VIVI,
   etichettaAccesso,
+  casaPerRuolo,
   etichettaRuolo,
   normalizzaUsername,
   statoPasswordAllaNascita,
@@ -331,5 +332,23 @@ describe('statoPasswordAllaNascita', () => {
         if (r.must_change_password) expect(r.password_provvisoria).toBe(true);
       }
     }
+  });
+});
+
+describe('casaPerRuolo', () => {
+  it('ufficio e amministratori vivono nel guscio dell’ufficio', () => {
+    expect(casaPerRuolo('admin')).toBe('/office');
+    expect(casaPerRuolo('office')).toBe('/office');
+  });
+
+  it('i tecnici nel guscio del telefono', () => {
+    expect(casaPerRuolo('tecnico')).toBe('/mobile');
+  });
+
+  it('un ruolo che non conosciamo finisce sul telefono, non sull’ufficio', () => {
+    // ⚠️ Il ripiego conta: sbagliando verso l'ufficio, un ruolo ristretto
+    // vedrebbe per un istante la gestione prima di essere rimbalzato.
+    expect(casaPerRuolo('qualcosaltro')).toBe('/mobile');
+    expect(casaPerRuolo('')).toBe('/mobile');
   });
 });

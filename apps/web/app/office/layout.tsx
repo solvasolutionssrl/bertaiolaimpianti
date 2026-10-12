@@ -14,6 +14,7 @@ import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
 import { leggiFunzioniPersonalizzate } from '../_lib/personalizzazioni';
 import { OfficeShellClient } from './_components/office-shell-client';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
+import { etichettaImpersonazione } from '@kommessa/api/impersonazione';
 import { ImpersonationBanner } from '../_components/impersonation-banner';
 import { PromemoriaPassword } from '../_components/promemoria-password';
 import { PlatformAdminPill } from './_components/platform-admin-pill';
@@ -170,17 +171,12 @@ export default async function OfficeLayout({
   const meta = (supabaseUserRes.data.user?.app_metadata ?? {}) as Record<string, unknown>;
   const isPlatformAdmin = meta.platform_admin === true || meta.platform_admin === 'true';
 
-  const cookieJar = cookies();
-  // Nuovo formato (JWT shadow): cookie `shadow_admin` (httpOnly) presente +
-  // `impersonating_label` (visibile al banner client).
-  // Legacy v1 (solo cookie tenant): impersonating_tenant_id.
-  const hasShadow = leggiShadow(cookieJar.get(SHADOW_COOKIE)?.value) !== null;
-  const legacyTenantId = cookieJar.get('impersonating_tenant_id')?.value ?? null;
-  const impersonatingLabel =
-    cookieJar.get('impersonating_label')?.value ??
-    cookieJar.get('impersonating_tenant_label')?.value ??
-    null;
-  const isImpersonating = hasShadow || !!legacyTenantId;
+  // ⭐ **Chi si sta impersonando lo dice il cookie firmato, e basta lui.** Il
+  // nome viveva anche in `impersonating_label`, un cookie visibile al browser
+  // con una scadenza sua: due verità sulla stessa domanda, che dopo quattro ore
+  // si contraddicevano. Ora la frase si compone da ciò che è firmato.
+  const shadow = leggiShadow(cookies().get(SHADOW_COOKIE)?.value);
+  const isImpersonating = shadow !== null;
 
   return (
     <>
@@ -189,8 +185,15 @@ export default async function OfficeLayout({
       <OfficeShellClient
         banner={
           <>
-            {isImpersonating ? (
-              <ImpersonationBanner tenantLabel={impersonatingLabel ?? tenant.name} />
+            {shadow ? (
+              <ImpersonationBanner
+                chi={etichettaImpersonazione({
+                  nome: shadow.target_nome,
+                  login: shadow.target_email,
+                  ruolo: shadow.target_ruolo,
+                  cliente: shadow.tenant_label ?? tenant.name,
+                })}
+              />
             ) : null}
             <PromemoriaPassword />
           </>

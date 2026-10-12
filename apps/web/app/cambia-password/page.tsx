@@ -5,7 +5,8 @@ import { etichettaAccesso } from '@kommessa/api/identita';
 import { formattaGiorno, quandoScade, testoScadenza } from '@kommessa/api/scadenza-password';
 
 import { getTenantContextCached } from '@/app/_lib/tenant-cache';
-import { casaPerRuolo, statoPassword } from '@/app/_lib/cambio-password';
+import { statoPassword } from '@/app/_lib/cambio-password';
+import { casaPerRuolo } from '@kommessa/api/identita';
 import { CambiaPasswordForm } from './_components/cambia-password-form';
 
 export const dynamic = 'force-dynamic';

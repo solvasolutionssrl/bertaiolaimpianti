@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 import { endImpersonation, rinnovaShadow } from '../admin/_actions/tenants';
@@ -20,9 +19,14 @@ const RINNOVO_MS = 15 * 60 * 1000;
  * ⚠️ Nell'ufficio va passata alla shell come prop `banner`, non renderizzata
  * accanto ad essa: la shell e' alta una viewport e non scorre, quindi una barra
  * sorella allunga il documento e sparisce al primo scroll senza piu' tornare.
+ *
+ * ⭐ **Dice chi e con quale mestiere.** La frase la compone
+ * `etichettaImpersonazione`, la stessa che usa la pagina del bivio: sapere di
+ * essere «Erica Zantedeschi» senza sapere che è *ufficio* non dice se quello
+ * che hai davanti è quello che vede un tecnico — ed è esattamente la domanda
+ * per cui si impersona.
  */
-export function ImpersonationBanner({ tenantLabel }: { tenantLabel: string }) {
-  const router = useRouter();
+export function ImpersonationBanner({ chi }: { chi: string }) {
   const [pending, start] = React.useTransition();
 
   // L'identita' admin vive in un cookie con scadenza propria, mentre i cookie di
@@ -43,8 +47,7 @@ export function ImpersonationBanner({ tenantLabel }: { tenantLabel: string }) {
     >
       <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
       <p className="min-w-0 text-sm font-semibold tracking-tight">
-        Modalità impersonation · stai visualizzando{' '}
-        <span className="font-mono">{tenantLabel}</span>
+        Stai guardando l&apos;app come <span className="font-mono">{chi}</span>
       </p>
       <Button
         variant="ghost"
@@ -53,9 +56,9 @@ export function ImpersonationBanner({ tenantLabel }: { tenantLabel: string }) {
         disabled={pending}
         onClick={() =>
           start(async () => {
-            // endImpersonation è una Server Action e fa redirect → /admin
+            // endImpersonation è una Server Action e fa redirect → /admin:
+            // sotto questa riga non si arriva.
             await endImpersonation();
-            router.refresh();
           })
         }
       >

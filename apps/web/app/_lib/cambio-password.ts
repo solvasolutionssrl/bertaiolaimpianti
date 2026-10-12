@@ -1,5 +1,6 @@
 import 'server-only';
 import { cache } from 'react';
+import { cookies } from 'next/headers';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { deveCambiarePassword, mostraPromemoriaPassword } from '@kommessa/api/identita';
@@ -10,6 +11,7 @@ import {
   type EsitoScadenza,
 } from '@kommessa/api/scadenza-password';
 
+import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { getTenantContextCached } from './tenant-cache';
 import { getAppModeCached } from './app-mode';
 import { tenantFeatureEnabled } from './tenant-features';
@@ -66,6 +68,18 @@ export const statoPassword = cache(async (): Promise<StatoPassword> => {
   };
   const ctx = await getTenantContextCached();
   if (!ctx) return fuoriServizio;
+
+  // ⚠️⚠️ **Chi impersona non passa da questo cancello, ed è voluto.**
+  // Il cancello è un promemoria rivolto a una persona: «scegli una password
+  // tua». Un super admin che guarda l'app come lei non è quella persona, e
+  // mandarlo su `/cambia-password` fa due danni insieme — lo chiude in una
+  // pagina senza barra di impersonation e senza via di ritorno, e gli mette
+  // davanti un modulo che cambierebbe la password **di qualcun altro**.
+  //
+  // Oggi in Bertaiola nessuno è obbligato, ma `scadenza_password` è accesa:
+  // dal 10 dicembre ci finirebbe ogni impersonazione di quel cliente.
+  if (leggiShadow(cookies().get(SHADOW_COOKIE)?.value)) return fuoriServizio;
+
   try {
     const supabase = createServerSupabase();
     const { data, error } = await supabase
@@ -137,8 +151,3 @@ export const statoPassword = cache(async (): Promise<StatoPassword> => {
 export const devoCambiarePassword = cache(async (): Promise<boolean> => {
   return (await statoPassword()).obbligato;
 });
-
-/** Dove mandare una persona appena ha scelto la sua password. */
-export function casaPerRuolo(role: string): string {
-  return role === 'admin' || role === 'office' ? '/office' : '/mobile';
-}

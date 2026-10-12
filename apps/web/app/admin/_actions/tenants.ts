@@ -14,6 +14,11 @@ import { chiaviValide } from '@/app/_lib/personalizzazioni-registry';
 import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { nomeModelloPlausibile } from '@kommessa/api/trascrizione';
+import { casaPerRuolo } from '@kommessa/api/identita';
+import {
+  motivoNonImpersonabile,
+  type PersonaImpersonabile,
+} from '@kommessa/api/impersonazione';
 
 /**
  * Server Actions per gestione tenant cross-tenant (solo platform admin).
@@ -458,28 +463,103 @@ export async function testaConnessioneStorage(
 }
 
 // ---------------------------------------------------------------------
-// IMPERSONATE — JWT shadow vero
+// IMPERSONAZIONE — entrare come una persona di un cliente
 // ---------------------------------------------------------------------
 
 /**
- * Impersonation JWT-shadow: il platform admin "diventa" tecnicamente un
- * utente del tenant, con un vero JWT firmato dal target. RLS, Realtime,
- * Storage e Edge Functions vedono il target — non c'è più discrepanza
- * tra cookie e token come nella v1.
+ * Le persone di un cliente fra cui scegliere chi impersonare.
+ *
+ * ⭐ **Si carica quando serve, non col render della pagina.** La stessa
+ * tendina si apre dall'elenco dei clienti (che non ha gli utenti in mano) e
+ * dalla scheda di un cliente (che li ha): un'azione sola evita di avere due
+ * strade che leggono gli stessi dati in due modi e che un domani divergono.
+ *
+ * ⚠️ Chi non si può impersonare torna comunque, con `attivo`/`piattaforma`:
+ * la regola di cosa farne sta in `@kommessa/api/impersonazione`, uguale qui e
+ * nella tendina, così non si offre una voce che il server poi rifiuta.
+ */
+export async function elencaImpersonabili(tenantId: string): Promise<{
+  ok: true;
+  persone: PersonaImpersonabile[];
+  attoreUserId: string;
+} | { ok: false; error: string }> {
+  const ctx = await requirePlatformAdmin();
+  if (!z.string().uuid().safeParse(tenantId).success) {
+    return { ok: false, error: 'Cliente non valido' };
+  }
+  const svc = createServiceSupabase();
+  const { data, error } = await svc
+    .from('users')
+    .select('id, display_name, role, attivo, is_platform_admin')
+    .eq('tenant_id', tenantId);
+  if (error) return { ok: false, error: `Lettura utenti fallita: ${error.message}` };
+
+  const righe = (data ?? []) as {
+    id: string;
+    display_name: string | null;
+    role: string;
+    attivo: boolean;
+    is_platform_admin: boolean | null;
+  }[];
+
+  // ⚠️ L'indirizzo di accesso **non** sta in `public.users`: sta in
+  // `auth.users`, e si legge solo con la service role. Serve perche' chi fa
+  // assistenza ha in mano il nome utente con cui la persona entra, non il nome
+  // che abbiamo scritto in anagrafica.
+  const login = new Map<string, string | null>();
+  for (let pagina = 1; pagina <= 10; pagina++) {
+    const res = await svc.auth.admin.listUsers({ page: pagina, perPage: 200 });
+    if (res.error) break;
+    for (const u of res.data.users) login.set(u.id, u.email ?? null);
+    if (res.data.users.length < 200) break;
+  }
+
+  return {
+    ok: true,
+    attoreUserId: ctx.userId,
+    persone: righe.map((r) => ({
+      id: r.id,
+      nome: r.display_name,
+      login: login.get(r.id) ?? null,
+      ruolo: r.role,
+      attivo: r.attivo,
+      piattaforma: r.is_platform_admin === true,
+    })),
+  };
+}
+
+/**
+ * Entra nell'applicazione **come** una persona di un cliente, con un vero JWT
+ * suo: RLS, Realtime, Storage e Edge Functions vedono lei, non noi.
  *
  * Flusso:
- *   1. Salva la sessione admin corrente in cookie `shadow_admin` (refresh_token)
- *   2. Genera magic-link via Auth Admin API per l'utente target
- *   3. `verifyOtp` server-side → scrive nuovi cookie `sb-*-auth-token` (target)
- *   4. Audit event con actor=admin, on_behalf_of=target
- *   5. Redirect a /office (l'utente è ora il target a tutti gli effetti)
+ *   1. mette da parte la sessione del super admin nel cookie firmato
+ *      `shadow_admin` (refresh token + identita' + chi si sta impersonando)
+ *   2. genera un magic-link con la Auth Admin API per la persona scelta
+ *   3. `verifyOtp` lato server → riscrive i cookie `sb-*-auth-token`
+ *   4. registro con attore = super admin, per conto di = la persona
+ *   5. atterra dove vive quel mestiere
  *
- * `endImpersonation` legge `shadow_admin`, chiama `refreshSession` con quel
- * refresh_token → ripristina i cookie admin.
+ * ⚠️ **La persona si sceglie, sempre.** Fino al 12/10/2026 esisteva anche una
+ * `impersonate(tenantId)` che pescava `role='admin'` con `.limit(1)` **senza
+ * ordinamento**: su Bertaiola, che ha due amministratori, chi diventavi era un
+ * caso. Ed era l'unica strada visibile, tanto che in tre mesi 56 impersonazioni
+ * su 56 sono finite su un amministratore — mai un ufficio, mai un tecnico,
+ * cioe' mai i due mestieri per cui l'assistenza serve davvero.
+ * ⭐ Un comando che sceglie al posto tuo quando la scelta conta non e' una
+ * scorciatoia: e' lo stesso difetto con un nome gentile.
+ *
+ * ⚠️ **Dove si atterra lo decide il mestiere, non questa funzione.**
+ * `casaPerRuolo` manda ufficio e amministratori al guscio dell'ufficio e i
+ * tecnici a quello del telefono; da li' il middleware porta ciascuno nel mondo
+ * del suo cliente (un amministratore FPM su `/office/kantiere`, un tecnico FPM
+ * su `/mobile/kantiere/cantieri`). Mandare tutti su `/office` come prima
+ * voleva dire, per un tecnico, un rimbalzo in piu' e per un attimo la
+ * schermata sbagliata.
  */
 export async function impersonateUser(opts: {
   tenantId: string;
-  targetUserId?: string; // se omesso, prende l'owner del tenant
+  targetUserId: string;
 }) {
   const ctx = await requirePlatformAdmin();
   const { cookies } = await import('next/headers');
@@ -488,51 +568,61 @@ export async function impersonateUser(opts: {
 
   const svc = createServiceSupabase();
 
-  // 1. Risolve tenant + target user
+  // 1. Cliente e persona
   const { data: tenant } = await svc
     .from('tenants')
     .select('id, slug, nome')
     .eq('id', opts.tenantId)
     .maybeSingle();
-  if (!tenant) return { ok: false as const, error: 'Tenant non trovato' };
+  if (!tenant) return { ok: false as const, error: 'Cliente non trovato' };
 
-  let targetUserId = opts.targetUserId ?? null;
-  if (!targetUserId) {
-    const { data: owner } = await svc
-      .from('users')
-      .select('id')
-      .eq('tenant_id', tenant.id)
-      .eq('role', 'admin')
-      .eq('attivo', true)
-      .limit(1)
-      .maybeSingle();
-    targetUserId = owner?.id ?? null;
-  }
-  if (!targetUserId) {
-    return { ok: false as const, error: 'Nessun owner attivo nel tenant' };
+  const { data: riga } = await svc
+    .from('users')
+    .select('id, display_name, role, attivo, is_platform_admin, tenant_id')
+    .eq('id', opts.targetUserId)
+    .maybeSingle();
+  const persona = riga as {
+    id: string;
+    display_name: string | null;
+    role: string;
+    attivo: boolean;
+    is_platform_admin: boolean | null;
+    tenant_id: string | null;
+  } | null;
+  if (!persona) return { ok: false as const, error: 'Persona non trovata' };
+  // ⚠️ Il cliente lo dice la riga, non chi chiama: senza questo controllo si
+  // potrebbe entrare come una persona di un altro cliente passando due id che
+  // non c'entrano fra loro.
+  if (persona.tenant_id !== tenant.id) {
+    return { ok: false as const, error: 'Quella persona non è di questo cliente' };
   }
 
-  // Email del target (serve per generateLink)
-  const targetAuthRes = await svc.auth.admin.getUserById(targetUserId);
+  const targetAuthRes = await svc.auth.admin.getUserById(persona.id);
   const targetEmail = targetAuthRes.data.user?.email ?? null;
-  const targetMeta = (targetAuthRes.data.user?.user_metadata ?? {}) as Record<
-    string,
-    unknown
-  >;
-  const targetName = (targetMeta.display_name as string | undefined) ?? targetEmail;
-  if (!targetEmail) {
-    return { ok: false as const, error: 'Target user senza email' };
-  }
+  if (!targetEmail) return { ok: false as const, error: 'Quella persona non ha un accesso' };
 
-  // 2. Salva sessione admin corrente come shadow (refresh_token basta)
+  // La stessa regola della tendina: quello che l'elenco mostra spento, qui si
+  // rifiuta con la stessa frase.
+  const motivo = motivoNonImpersonabile(
+    {
+      id: persona.id,
+      nome: persona.display_name,
+      login: targetEmail,
+      ruolo: persona.role,
+      attivo: persona.attivo,
+      piattaforma: persona.is_platform_admin === true,
+    },
+    ctx.userId,
+  );
+  if (motivo) return { ok: false as const, error: motivo };
+
+  // 2. Sessione del super admin messa da parte, firmata dal server.
   const ssrAdmin = createServerSupabase();
   const { data: adminSession } = await ssrAdmin.auth.getSession();
   if (!adminSession.session?.refresh_token) {
     return { ok: false as const, error: 'Sessione admin non leggibile' };
   }
 
-  // Firmato dal server: chi lo legge (fine impersonation, azioni riservate al
-  // super admin) verifica firma e scadenza.
   cookieStore.set({
     name: SHADOW_COOKIE,
     value: firmaShadow({
@@ -540,8 +630,10 @@ export async function impersonateUser(opts: {
       admin_email: ctx.email,
       admin_user_id: ctx.userId,
       target_email: targetEmail,
-      target_user_id: targetUserId,
-      tenant_label: `${tenant.nome} (${tenant.slug})`,
+      target_user_id: persona.id,
+      target_nome: persona.display_name,
+      target_ruolo: persona.role,
+      tenant_label: tenant.nome,
       started_at: new Date().toISOString(),
       scade_at: Date.now() + SHADOW_DURATA_S * 1000,
     }),
@@ -549,72 +641,73 @@ export async function impersonateUser(opts: {
     sameSite: 'lax',
     path: '/',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: SHADOW_DURATA_S, // 4h max
+    maxAge: SHADOW_DURATA_S,
   });
 
-  // 3. Genera magic-link e verifica server-side → swap dei cookie sb-*
-  const linkRes = await svc.auth.admin.generateLink({
-    type: 'magiclink',
-    email: targetEmail,
-  });
-  if (linkRes.error || !linkRes.data?.properties?.hashed_token) {
-    return {
-      ok: false as const,
-      error: `generateLink fallito: ${linkRes.error?.message ?? 'no hashed_token'}`,
-    };
-  }
-  const hashedToken = linkRes.data.properties.hashed_token;
-
-  // Usa il client SSR (stessa cookie adapter) per verificare l'OTP:
-  // verifyOtp scrive automaticamente i nuovi cookie sb-*-auth-token via adapter
-  const ssrSwap = createServerSupabase();
-  const verifyRes = await ssrSwap.auth.verifyOtp({
-    type: 'magiclink',
-    token_hash: hashedToken,
-  });
-  if (verifyRes.error || !verifyRes.data.session) {
-    return {
-      ok: false as const,
-      error: `verifyOtp fallito: ${verifyRes.error?.message ?? 'no session'}`,
-    };
+  // 3. Magic-link verificato lato server → scambio dei cookie `sb-*`
+  const scambio = await scambiaSessione(targetEmail);
+  if (!scambio.ok) {
+    // Niente e' cambiato per chi guarda: si toglie il cookie appena messo,
+    // altrimenti resterebbe una barra di impersonation senza impersonation.
+    cookieStore.delete(SHADOW_COOKIE);
+    return { ok: false as const, error: scambio.error };
   }
 
-  // Label visibile (non-httpOnly) per il banner client
-  cookieStore.set({
-    name: 'impersonating_label',
-    value: `${targetName} · ${tenant.nome}`,
-    httpOnly: false,
-    sameSite: 'lax',
-    path: '/',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 4,
-  });
-
-  // 4. Audit (con service-role, prima del redirect)
+  // 4. Registro (service-role, prima del rimando)
   await auditPlatform({
     actorUserId: ctx.userId,
     actorEmail: ctx.email,
     tenantId: tenant.id,
     entityType: 'user',
-    entityId: targetUserId,
+    entityId: persona.id,
     action: 'impersonate_start',
     metadata: {
       target_email: targetEmail,
-      target_user_id: targetUserId,
+      target_user_id: persona.id,
+      target_ruolo: persona.role,
       mode: 'jwt_shadow',
     },
   });
 
-  redirect('/office');
+  redirect(casaPerRuolo(persona.role));
 }
 
 /**
- * Legacy: vecchia API che impersonava solo per tenant (cookie + banner).
- * Mantiene la stessa firma usata da `header-actions.tsx`. Ora delega al
- * vero JWT shadow puntando all'owner.
+ * Scrive nei cookie una sessione vera di `email`, con un magic-link verificato
+ * lato server.
+ *
+ * ⭐ Un posto solo per i due versi: lo usa l'andata (diventare la persona) e il
+ * ritorno quando il refresh token del super admin non vale piu'. Scritto due
+ * volte, un domani una delle due resterebbe indietro.
+ *
+ * ⚠️ `verifyOtp` dal client SSR **non e' una formalita'**: e' lui che riscrive
+ * i cookie `sb-*-auth-token` passando dall'adapter. Verificare l'OTP con un
+ * client qualunque darebbe una sessione in memoria e nessun cookie.
  */
-export async function impersonate(tenantId: string) {
-  return impersonateUser({ tenantId });
+async function scambiaSessione(
+  email: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { createServerSupabase } = await import('@kommessa/api/server');
+  const svc = createServiceSupabase();
+
+  const linkRes = await svc.auth.admin.generateLink({ type: 'magiclink', email });
+  const hashedToken = linkRes.data?.properties?.hashed_token;
+  if (linkRes.error || !hashedToken) {
+    return {
+      ok: false,
+      error: `Accesso non generato: ${linkRes.error?.message ?? 'nessun token'}`,
+    };
+  }
+
+  const ssr = createServerSupabase();
+  const verifyRes = await ssr.auth.verifyOtp({ type: 'magiclink', token_hash: hashedToken });
+  if (verifyRes.error || !verifyRes.data.session) {
+    return {
+      ok: false,
+      error: `Accesso rifiutato: ${verifyRes.error?.message ?? 'nessuna sessione'}`,
+    };
+  }
+  return { ok: true };
 }
 
 /**
@@ -653,6 +746,23 @@ export async function rinnovaShadow(): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+/**
+ * Torna a essere il super admin.
+ *
+ * ⚠️⚠️ **Il ritorno non si appoggia solo al refresh token messo da parte.**
+ * Mentre si impersona, la sessione del super admin non la rinfresca nessuno:
+ * Supabase la può invalidare (rotazione, limiti di sessione), e allora
+ * `refreshSession` fallisce. Prima qui c'era un `signOut` e un rimando al
+ * login: misurato sul registro vero, su 8 rientri registrati **1 è finito
+ * così** — fuori dall'applicazione, a dover ribattere le credenziali, con
+ * davanti un errore che non spiega niente.
+ *
+ * Ora, se il refresh non va, la sessione del super admin si **rigenera** come
+ * si genera quella della persona impersonata (magic-link verificato lato
+ * server), dopo aver riletto nel database che quell'utente **è ancora** super
+ * admin. Non è un potere in più: il cookie è firmato dal server, httpOnly e
+ * scade; e l'autorizzazione la dà la riga nel database, non il cookie.
+ */
 export async function endImpersonation() {
   const { cookies } = await import('next/headers');
   const { createServerSupabase } = await import('@kommessa/api/server');
@@ -660,37 +770,47 @@ export async function endImpersonation() {
 
   const shadowRaw = cookieStore.get(SHADOW_COOKIE)?.value;
   if (!shadowRaw) {
-    // Nessuno shadow → niente da ripristinare. Solo cleanup banner + go home.
-    cookieStore.delete('impersonating_tenant_id');
-    cookieStore.delete('impersonating_tenant_label');
-    cookieStore.delete('impersonating_label');
+    // Nessuno shadow → niente da ripristinare. Solo pulizia e si torna a casa.
+    pulisciCookieImpersonazione(cookieStore);
     redirect('/admin');
   }
 
   const shadow = leggiShadow(shadowRaw);
   if (!shadow) {
     // Scaduto, rovinato o non firmato dal server: niente sessione da
-    // ripristinare e niente audit a nome di un super admin non verificato.
-    // Si esce dalla sessione impersonata e si rientra dal login.
-    cookieStore.delete(SHADOW_COOKIE);
-    cookieStore.delete('impersonating_label');
-    cookieStore.delete('impersonating_tenant_id');
-    cookieStore.delete('impersonating_tenant_label');
+    // ripristinare e niente registro a nome di un super admin non verificato.
+    pulisciCookieImpersonazione(cookieStore);
     await createServerSupabase().auth.signOut();
     redirect('/login?reason=shadow_expired');
   }
 
-  // Ripristina sessione admin: refreshSession con il refresh_token salvato.
-  // L'adapter SSR riscriverà i cookie sb-*-auth-token con la sessione admin.
+  // Primo tentativo, il più economico: riprendere la sessione di prima.
   const ssr = createServerSupabase();
-  const refreshRes = await ssr.auth.refreshSession({
-    refresh_token: shadow.refresh_token,
-  });
+  const refreshRes = await ssr.auth.refreshSession({ refresh_token: shadow.refresh_token });
+  let come: 'ripresa' | 'rigenerata' | 'fallita' = refreshRes.error ? 'fallita' : 'ripresa';
 
-  // Audit cross-tenant (service-role bypassa RLS — l'admin potrebbe non
-  // avere più una sessione utile a leggere `tenants` ai fini policy).
-  const svc = createServiceSupabase();
-  await svc.from('audit_events').insert({
+  if (come === 'fallita') {
+    // Secondo tentativo: si rigenera. L'autorizzazione la dà il database.
+    const svc = createServiceSupabase();
+    const { data } = await svc
+      .from('users')
+      .select('is_platform_admin')
+      .eq('id', shadow.admin_user_id)
+      .maybeSingle();
+    const ancoraSuperAdmin =
+      (data as { is_platform_admin?: boolean } | null)?.is_platform_admin === true;
+    if (ancoraSuperAdmin) {
+      const auth = await svc.auth.admin.getUserById(shadow.admin_user_id);
+      const email = auth.data.user?.email ?? null;
+      if (email) {
+        const scambio = await scambiaSessione(email);
+        if (scambio.ok) come = 'rigenerata';
+      }
+    }
+  }
+
+  const svcAudit = createServiceSupabase();
+  await svcAudit.from('audit_events').insert({
     tenant_id: null,
     actor_user_id: shadow.admin_user_id,
     actor_role: 'admin', // placeholder enum
@@ -701,24 +821,33 @@ export async function endImpersonation() {
       platform: true,
       actor_email: shadow.admin_email,
       mode: 'jwt_shadow',
-      restore_ok: !refreshRes.error,
+      // ⚠️ Si tiene `restore_ok` col significato di sempre, perche' il
+      // registro si legge anche indietro nel tempo; `come` dice *in che modo*.
+      restore_ok: come !== 'fallita',
+      come,
     } as Record<string, unknown>,
   } as never);
 
-  cookieStore.delete(SHADOW_COOKIE);
-  cookieStore.delete('impersonating_label');
-  // legacy cleanup, se presenti
-  cookieStore.delete('impersonating_tenant_id');
-  cookieStore.delete('impersonating_tenant_label');
+  pulisciCookieImpersonazione(cookieStore);
 
-  if (refreshRes.error) {
-    // refresh fallito (token scaduto): forzo logout pulito
+  if (come === 'fallita') {
     await ssr.auth.signOut();
     redirect('/login?reason=shadow_expired');
   }
 
   redirect('/admin');
 }
+
+/** Il cookie firmato più i due dell'impersonation v1, se qualcuno li ha ancora. */
+function pulisciCookieImpersonazione(cookieStore: {
+  delete: (nome: string) => void;
+}): void {
+  cookieStore.delete(SHADOW_COOKIE);
+  cookieStore.delete('impersonating_label');
+  cookieStore.delete('impersonating_tenant_id');
+  cookieStore.delete('impersonating_tenant_label');
+}
+
 
 // ---------------------------------------------------------------------
 // Modello trascrizione audio per tenant

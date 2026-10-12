@@ -66,11 +66,17 @@ export async function requirePlatformAdmin(): Promise<PlatformAdminContext> {
   if (check.kind === 'admin') return check.ctx;
   if (check.kind === 'tenant_user') {
     // Chi sta impersonando ha il JWT del tenant, quindi finirebbe rimbalzato
-    // dentro al tenant proprio mentre cerca di tornare alla console: era l'unico
-    // modo di uscirne fare logout. Con un cookie di impersonation ancora valido,
-    // `/admin` diventa la via di ritorno. Il ripristino della sessione scrive
-    // cookie, che un Server Component non puo' fare: passa da una route.
-    if (leggiShadow(cookies().get(SHADOW_COOKIE)?.value)) redirect('/api/admin/rientro');
+    // dentro al tenant proprio mentre cerca di tornare alla console: era
+    // l'unico modo di uscirne fare logout. Con un cookie di impersonation
+    // ancora valido, `/admin` porta alla pagina che **chiede** cosa fare.
+    //
+    // ⚠️⚠️ **Qui non si chiude l'impersonation, si chiede.** Fino al
+    // 12/10/2026 questo rimando puntava a `/api/admin/rientro`, una GET che
+    // terminava la sessione: quindi bastava il **tasto «indietro»** del
+    // browser — che ripassa dalla pagina `/admin/tenants/...` da cui si era
+    // partiti — per ritrovarsi fuori dal cliente senza aver chiesto niente.
+    // ⭐ Una GET non cambia lo stato: la cambia una POST, cioè un tasto.
+    if (leggiShadow(cookies().get(SHADOW_COOKIE)?.value)) redirect('/impersonazione');
     redirect('/office');
   }
   redirect('/login?next=/admin');

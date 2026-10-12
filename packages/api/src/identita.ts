@@ -358,5 +358,24 @@ export function etichettaRuolo(
   return e[forma];
 }
 
+/**
+ * Il guscio dove vive un mestiere: ufficio da computer, telefono in cantiere.
+ *
+ * ⭐ Sta nel vocabolario dei mestieri perche' e' un fatto sul ruolo, e due
+ * posti molto diversi fanno la stessa domanda: la pagina del cambio password
+ * («dove ti rimando appena l'hai scelta?») e l'impersonazione («dove atterra
+ * chi entra come questa persona?»).
+ *
+ * ⚠️ **Dice il guscio, non la pagina.** In che punto del guscio si finisce
+ * dipende dal mondo del cliente e lo decidono i rimandi del middleware: un
+ * amministratore di un cliente del mondo presenze da `/office` va a
+ * `/office/kantiere`, un suo tecnico da `/mobile` va a
+ * `/mobile/kantiere/cantieri`. Scrivere qui quelle destinazioni vorrebbe dire
+ * una seconda mappa da tenere allineata alla prima.
+ */
+export function casaPerRuolo(ruolo: string): string {
+  return ruolo === 'admin' || ruolo === 'office' ? '/office' : '/mobile';
+}
+
 /** I ruoli vivi, in ordine di ampiezza. I dismessi (`owner`, `capo`) non ci sono. */
 export const RUOLI_VIVI = ['admin', 'office', 'tecnico', 'cliente'] as const;

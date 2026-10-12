@@ -19,8 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@kommessa/ui';
-import { sospendiTenant, riattivaTenant, impersonate } from '../../_actions/tenants';
-import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { sospendiTenant, riattivaTenant } from '../../_actions/tenants';
+import { SceltaImpersonazione } from '../../_components/scegli-impersonazione';
+import { useAlert } from '@/app/_components/confirm-provider';
 
 interface Props {
   tenantId: string;
@@ -42,8 +43,8 @@ interface Props {
 export function TenantRowActions({ tenantId, tenantNome, slug, sospeso }: Props) {
   const router = useRouter();
   const showAlert = useAlert();
-  const askConfirm = useConfirm();
   const [pending, start] = React.useTransition();
+  const [scegliChi, setScegliChi] = React.useState(false);
 
   return (
     <div className="flex items-center justify-end gap-1">
@@ -70,32 +71,11 @@ export function TenantRowActions({ tenantId, tenantNome, slug, sospeso }: Props)
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">
           {!sospeso ? (
-            <DropdownMenuItem
-              onSelect={async () => {
-                const ok = await askConfirm({
-                  title: `Impersonare "${tenantNome}"?`,
-                  description:
-                    'Entrerai in /office come admin di questo tenant. Tutte le tue azioni vengono tracciate in audit con flag platform=true. Esci con il banner in alto a destra.',
-                  confirmLabel: 'Impersona',
-                });
-                if (!ok) return;
-                start(async () => {
-                  try {
-                    const res = await impersonate(tenantId);
-                    if (res && 'ok' in res && !res.ok)
-                      await showAlert({ title: 'Errore', body: res.error });
-                  } catch (e) {
-                    const msg =
-                      e instanceof Error && !e.message.includes('NEXT_REDIRECT')
-                        ? e.message
-                        : null;
-                    if (msg) await showAlert({ title: 'Errore', body: msg });
-                  }
-                });
-              }}
-            >
+            /* ⚠️ Il menu apre il dialog, non lo contiene: un menu Radix si
+               smonta al click e si porterebbe via lo stato. */
+            <DropdownMenuItem onSelect={() => setScegliChi(true)}>
               <UserCheck className="h-3.5 w-3.5" />
-              Impersona tenant
+              Entra come…
             </DropdownMenuItem>
           ) : null}
           {sospeso ? (
@@ -139,6 +119,12 @@ export function TenantRowActions({ tenantId, tenantNome, slug, sospeso }: Props)
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <SceltaImpersonazione
+        tenantId={tenantId}
+        tenantNome={tenantNome}
+        aperto={scegliChi}
+        onChiudi={() => setScegliChi(false)}
+      />
     </div>
   );
 }
