@@ -28,6 +28,11 @@ import { TabFunzioni } from './_components/tab-funzioni';
 import { TabRouting } from './_components/tab-routing';
 import { TabUpload } from './_components/tab-upload';
 import { TabIntegrazione } from './_components/tab-integrazione';
+import { TabTimbro } from './_components/tab-timbro';
+import { TabRegole } from './_components/tab-regole';
+import { impostazioniDaConfig } from '@/app/_lib/kantiere-config';
+import { fotoTimbro, giornateTimbroRecenti } from '../../_lib/timbro/foto';
+import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { fotoCollegamenti } from '../../_lib/integrazione/foto';
 import { leggiConfigIntegrazione } from '../../_lib/integrazione/config';
 import { googleRoutingDisponibile } from '@/app/_lib/routing';
@@ -74,6 +79,8 @@ const TAB_VALIDI = [
   'funzioni',
   'routing',
   'integrazione',
+  'timbro',
+  'regole',
   'branding',
   'note',
   'audit',
@@ -229,6 +236,54 @@ export default async function TenantDetailPage({
     ultimoUso: t.last_used_at,
   }));
 
+  // ===== Timbro: la timbratrice, gestita come un'integrazione =====
+  const [fotoTimbroRows, statoTimbro, giornateTimbro] = await Promise.all([
+    fotoTimbro(params.id),
+    leggiStatoTimbro(params.id),
+    giornateTimbroRecenti(params.id),
+  ]);
+  const collegamentoTimbro = fotoTimbroRows[0] ?? null;
+
+  // ===== Regole: il censimento, con i numeri sulle persone =====
+  const { data: personeRaw } = await supabase
+    .from('dipendenti' as never)
+    .select('modalita_lavoro, a_turni, costo_orario')
+    .eq('tenant_id', params.id)
+    .eq('stato_attivo', true);
+  const persone = (personeRaw ?? []) as { modalita_lavoro: string | null; a_turni: boolean | null; costo_orario: number | null }[];
+  const capiSquadra = utenti.filter(
+    (u: any) => u.permissions && typeof u.permissions === 'object' && (u.permissions as Record<string, unknown>)['capo_squadra'] === true,
+  ).length;
+  const datiRegole = {
+    tenantId: tenant.id,
+    tenantNome: tenant.nome,
+    kantiereAttivo,
+    impostazioni: impostazioniDaConfig(kantiereConfig),
+    appMode: (tenant.app_mode === 'kantiere' || tenant.app_mode === 'full' ? tenant.app_mode : 'kommessa') as 'kommessa' | 'kantiere' | 'full',
+    codiceAzienda: tenant.codice_azienda ?? null,
+    moduli: {
+      kantiere: kantiereAttivo,
+      dipendenti: dipendentiAttivo,
+      integrazione: rigaIntegrazione?.attivo === true,
+      personalizzazioni: personalizzazioniAttivo,
+    },
+    dipendentiConfig: {
+      pianificazione: dipendentiConfig['pianificazione_attiva'] !== false,
+      ferie: dipendentiConfig['ferie_attiva'] !== false,
+    },
+    features: (tenant.features ?? {}) as Record<string, boolean | undefined>,
+    timbro: { stato: statoTimbro.stato, dal: statoTimbro.dal },
+    persone: {
+      totale: persone.length,
+      ufficio: persone.filter((p) => p.modalita_lavoro === 'ufficio').length,
+      esterno: persone.filter((p) => p.modalita_lavoro !== 'ufficio').length,
+      aTurni: persone.filter((p) => p.a_turni === true).length,
+      conCosto: persone.filter((p) => p.costo_orario != null).length,
+      capiSquadra,
+    },
+  };
+  const webhookUrlTimbro = `${(process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.kommessa.it').replace(/\/$/, '')}/api/webhooks/timbro?t=${params.id}`;
+
   const appModeTenant: 'kommessa' | 'kantiere' | 'full' =
     tenant.app_mode === 'kantiere' || tenant.app_mode === 'full' ? tenant.app_mode : 'kommessa';
   const kommessaWorld = appModeTenant !== 'kantiere';
@@ -330,6 +385,8 @@ export default async function TenantDetailPage({
           <TabsTrigger value="funzioni">Funzioni</TabsTrigger>
           {kantiereAttivo ? <TabsTrigger value="routing">Viaggio</TabsTrigger> : null}
           <TabsTrigger value="integrazione">Integrazione</TabsTrigger>
+          <TabsTrigger value="timbro">Timbro</TabsTrigger>
+          {kantiereAttivo ? <TabsTrigger value="regole">Regole</TabsTrigger> : null}
           <TabsTrigger value="branding">Branding</TabsTrigger>
           <TabsTrigger value="note">Note interne</TabsTrigger>
           <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -523,6 +580,41 @@ export default async function TenantDetailPage({
             }}
           />
         </TabsContent>
+
+        {/* ===== Timbro (timbratrice: lettura dei timbri, webhook, persone) ===== */}
+        <TabsContent value="timbro">
+          <TabTimbro
+            dati={{
+              tenantId: tenant.id,
+              tenantNome: tenant.nome,
+              stato: statoTimbro,
+              diagnosi: collegamentoTimbro?.diagnosi ?? { stato: 'mai_visto', motivi: ['Collegamento mai configurato.'] },
+              foto: collegamentoTimbro?.foto ?? {
+                stato: 'spento',
+                conToken: false,
+                dal: null,
+                ultimoGiroAt: null,
+                ultimoGiroEsito: null,
+                ultimoGiroMessaggio: null,
+                ultimoTimbroAt: null,
+                orfani: 0,
+                senzaOra: 0,
+              },
+              timbri24h: collegamentoTimbro?.timbri24h ?? 0,
+              giornate: collegamentoTimbro?.giornate ?? { daRipartire: 0, daVerificare: 0, coperte: 0, aperte: 0 },
+              recenti: giornateTimbro,
+              webhookUrl: webhookUrlTimbro,
+              kantiereAttivo,
+            }}
+          />
+        </TabsContent>
+
+        {/* ===== Regole: il censimento delle regolette del mondo presenze ===== */}
+        {kantiereAttivo ? (
+          <TabsContent value="regole">
+            <TabRegole dati={datiRegole} />
+          </TabsContent>
+        ) : null}
 
         {/* ===== Branding ===== */}
         <TabsContent value="branding">

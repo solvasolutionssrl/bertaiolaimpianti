@@ -5,10 +5,18 @@ import { PenLine, Clock, CalendarClock } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { ModificaGiornataDialog } from './modifica-giornata-dialog';
-import { RegistraGiornataDialog } from './registra-giornata-dialog';
+import { RegistraGiornataDialog, type ScatolaDialog } from './registra-giornata-dialog';
 import type { PickerCantiere } from '../../_components/cantiere-picker';
+import { TimbriTerminale } from '@/app/office/kantiere/_components/timbri-terminale';
+import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 
 // ── tipi ────────────────────────────────────────────────────────────────────
+
+const fmtHMmin = (min: number) => `${Math.floor(Math.max(0, min) / 60)}:${String(Math.max(0, min) % 60).padStart(2, '0')}`;
+const fmtGiornoBreveIt = (giorno: string) =>
+  new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }).format(
+    new Date(`${giorno}T12:00:00Z`),
+  );
 
 type RigaRapportino = {
   id: string;
@@ -50,6 +58,10 @@ interface OreClientProps {
   stepViaggio: number;
   /** Modalità di lavoro «ufficio»: «Registra giornata» gira il flag al contrario. */
   inUfficio: boolean;
+  /** La giornata di oggi vista dal terminale (Timbro), se la persona ha timbrato. */
+  timbroOggi?: TimbroGiornataVista | null;
+  /** La giornata timbrata piu' vecchia ancora da ripartire (oggi compresa). */
+  timbroDaFare?: TimbroGiornataVista | null;
 }
 
 // ── tipi riga editabile ───────────────────────────────────────────────────
@@ -106,6 +118,8 @@ export function OreClient({
   passoMinuti,
   stepViaggio,
   inUfficio,
+  timbroOggi = null,
+  timbroDaFare = null,
 }: OreClientProps) {
   // Vista di sola lettura: le ore si scrivono da timbrature, Registra giornata e
   // Modifica giornata, non da qui.
@@ -114,6 +128,21 @@ export function OreClient({
 
   // registra giornata senza timbrature (caso 4)
   const [registraOpen, setRegistraOpen] = useState(false);
+  // riempire la scatola: la giornata timbrata al terminale, da ripartire
+  const [scatolaOpen, setScatolaOpen] = useState(false);
+  const scatola: ScatolaDialog | null =
+    timbroDaFare && timbroDaFare.inizioIso && timbroDaFare.fineIso
+      ? {
+          giorno: timbroDaFare.giorno,
+          inizioIso: timbroDaFare.inizioIso,
+          fineIso: timbroDaFare.fineIso,
+          nettoMin: timbroDaFare.nettoMin,
+          pausaTimbrataMin: timbroDaFare.pausaTimbrataMin,
+          inizioFisico: timbroDaFare.inizioFisico,
+          fineFisica: timbroDaFare.fineFisica,
+          primoCantiere: timbroDaFare.primoCantiere,
+        }
+      : null;
   // dialog panoramica/correzione della giornata di oggi (pencil sul totale)
   const [panoramicaOpen, setPanoramicaOpen] = useState(false);
 
@@ -149,8 +178,10 @@ export function OreClient({
   // giornata senza timbrature (es. QR non scansionato) resta «Registra
   // giornata», l'unico inserimento a mano: dal 14/09/2026 registra anche il
   // viaggio e la vecchia «Ore su un cantiere, con viaggio» è stata tolta.
+  // Con un timbro del terminale oggi la giornata non e' «senza timbrature»: si
+  // ripartisce, non si registra da zero.
   const puoiRegistrare =
-    isEditabile && cantieriDisponibili.length > 0 && registraGiornataAttivo && !turnoInCorso;
+    isEditabile && cantieriDisponibili.length > 0 && registraGiornataAttivo && !turnoInCorso && !timbroOggi;
   // Giornata passata ancora in bozza = "da verificare": il giorno è rimasto
   // aperto o le ore sono oltre soglia, quindi è in carico all'ufficio. Per il
   // tecnico è solo un'informazione, non un'azione. (Oggi è normale che sia
@@ -235,6 +266,44 @@ export function OreClient({
         </button>
       ) : null}
 
+      {/* ── La giornata timbrata al terminale ── */}
+      {timbroOggi || timbroDaFare ? (
+        <section className="space-y-2.5 rounded-2xl border border-sky-200 bg-sky-50/50 p-3.5 shadow-soft">
+          <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-800">
+            {timbroDaFare && timbroDaFare.giorno !== oggiRome ? `Timbrato il ${fmtGiornoBreveIt(timbroDaFare.giorno)}` : 'Timbrato oggi'}
+          </p>
+          <TimbriTerminale timbri={(timbroDaFare ?? timbroOggi)!.timbri} />
+          <p className="text-xs leading-relaxed text-sky-900">
+            {(() => {
+              const g = timbroDaFare ?? timbroOggi!;
+              if (g.stato === 'presenza_aperta') return 'Sei dentro: la giornata si chiude al terminale.';
+              if (g.stato === 'coperta') return 'Le ore di questa giornata sono già sui cantieri.';
+              if (g.stato === 'da_verificare') return `Qualcosa non torna, lo guarda l’ufficio. ${g.motivo ?? ''}`.trim();
+              return `${fmtHMmin(g.nettoMin)} di presenza${g.pausaTimbrataMin > 0 ? ` (pausa ${fmtHMmin(g.pausaTimbrataMin)} timbrata)` : ''}: dì su quali commesse hai lavorato.`;
+            })()}
+          </p>
+          {scatola ? (
+            <button
+              type="button"
+              onClick={() => setScatolaOpen(true)}
+              className="flex w-full items-center gap-3 rounded-xl border border-sky-300 bg-white px-3 py-3 text-left transition-colors hover:bg-sky-100/60 active:scale-[0.99]"
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+                <CalendarClock className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-foreground">
+                  Inserisci le commesse sulle quali hai lavorato{scatola.giorno === oggiRome ? ' oggi' : ''}
+                </span>
+                <span className="block text-xs leading-snug text-muted-foreground">
+                  {ETICHETTA_STATO_TIMBRO[(timbroDaFare ?? timbroOggi)!.stato]} · {fmtHMmin(scatola.nettoMin)} da ripartire
+                </span>
+              </span>
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* ── Nessuna timbratura: registra la giornata ── */}
       {puoiRegistrare && (
         <section className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
@@ -279,6 +348,22 @@ export function OreClient({
           <p className="text-sm text-muted-foreground">{note}</p>
         </section>
       )}
+
+      {/* La scatola timbrata: stesso dialog, estremi dai timbri. */}
+      {scatola ? (
+        <RegistraGiornataDialog
+          open={scatolaOpen}
+          onClose={() => setScatolaOpen(false)}
+          passoMinuti={passoMinuti}
+          stepViaggio={stepViaggio}
+          sedi={sediDisponibili}
+          sediPerCantiere={sediPerCantiere}
+          mezzi={mezziDisponibili}
+          ultimoMezzoId={ultimoMezzoId}
+          inUfficio={inUfficio}
+          scatola={scatola}
+        />
+      ) : null}
 
       {/* Caso 4: registra una giornata senza timbrature (più cantieri). */}
       <RegistraGiornataDialog

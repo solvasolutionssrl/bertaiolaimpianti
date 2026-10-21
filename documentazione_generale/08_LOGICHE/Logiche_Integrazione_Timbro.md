@@ -1,9 +1,9 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 1.0
-**Stato**: contratto chiuso · due pezzi costruiti · l'import non è ancora scritto
+**Versione**: 2.0
+**Stato**: costruita e collaudata sul tenant demo (22/10/2026) · in produzione **spenta** finché il super admin non la accende
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
-**Data**: 21/10/2026
+**Data**: 21–22/10/2026
 **Cliente**: FPM Impianti (`FPMIMP`, mondo presenze). Bertaiola non è toccata.
 
 ---
@@ -13,13 +13,18 @@
 | | |
 |---|---|
 | ✅ **Contratto con Timbro** | chiuso e in produzione dal loro lato |
-| ✅ **`timbri_grezzi`** | tabella creata e applicata (migration `20261021120000`). **Vuota, e nessuno la legge o la scrive** |
-| ✅ **`@kommessa/api/timbri-sequenza`** | da eventi a ingressi/uscite. 21 asserzioni, 4 mutazioni viste fallire. **Nessun chiamante** |
-| ❌ **L'import** | non scritto |
-| ❌ **Il momento in cui si riempie la scatola** | non scritto |
-| ❌ **L'avviso al tecnico** | non scritto |
+| ✅ **`timbri_grezzi`** | registro e parcheggio (migration `20261021120000`, + `genere`/`dispositivo` dalla `20261022090000`) |
+| ✅ **`@kommessa/api/timbri-sequenza`** | da eventi a direzioni. 21 asserzioni |
+| ✅ **`@kommessa/api/timbro-giornata`** | lo stato della giornata e il riempimento della scatola. 22 asserzioni, 2 mutazioni viste fallire |
+| ✅ **L'import** | `_lib/timbro/import.ts`: riconciliazione a cursore ogni 2 minuti (pg_cron `timbro-import`) + webhook `/api/webhooks/timbro` |
+| ✅ **Il terzo momento** | `ripartisciGiornataTimbro` in `_actions/kantiere-timbra.ts`, sullo **stesso scrittore** di «Registra giornata» (`scriviGiornataRipartita`) |
+| ✅ **Telefono** | la card «Inserisci le commesse sulle quali hai lavorato oggi» nella tab Ore, il banner nella home, lo stesso dialog di «Registra giornata» in modalità scatola |
+| ✅ **Ufficio** | «Presenze e ore»: pannello «giornate timbrate da sistemare», righe per chi ha timbrato e non ripartito, passaggi al terminale nel dettaglio, dialog da scrivania |
+| ✅ **Super admin** | tab **Timbro** per cliente (stato, token, data di partenza, webhook, abbinamento persone, giornate recenti), semaforo in `/admin/integrazioni`, tab **Regole** |
+| ✅ **Promemoria** | avviso `ore_da_inserire` la sera e la mattina dopo (pg_cron `promemoria-ore`), orari per cliente |
+| ⏸ **In produzione** | nessun cliente acceso: FPM si accende dal tab Timbro, in **osservazione** prima, poi **attivo** |
 
-> ⚠️ **Oggi nulla cambia per chi timbra.** I due pezzi fatti sono inerti: una tabella vuota e una funzione pura senza chiamanti. FPM continua a timbrare da QR e app esattamente come prima.
+> ⚠️ **Oggi per chi timbra non cambia niente finché il collegamento è spento.** Acceso in «osservazione» legge e mostra all'ufficio; solo «attivo» chiede qualcosa ai tecnici.
 
 ---
 
@@ -133,16 +138,50 @@ Tre regole, tutte con un test che le difende e una mutazione vista fallire.
 
 ---
 
-## 7. Cosa resta da costruire
+## 7. Com'è fatto (22/10/2026)
 
-1. **L'import**: webhook (`punch.created`, `punch.voided`) per la prontezza, **più** un giro di riconciliazione con `updated_since` per la certezza — ripartendo dal massimo `updated_at` visto **meno 60 secondi**, con upsert sulla chiave unica. ⭐ Il webhook da solo non basta: se tace non sai se non è successo niente o se il tubo è rotto.
-2. **La materializzazione all'attribuzione**: dal registro a `timbrature`, **solo** quando il tecnico (o l'ufficio) dice su quali cantieri. Servono i due valori nuovi nei CHECK di `origine` e `modalita`.
-3. **Il terzo momento**: la superficie dove il tecnico riempie la scatola, su `calcolaSegmentiSplit`, con il contenitore che arriva dal registro.
-4. **L'avviso** «metti i dettagli di oggi». ⚠️ Quattro passi obbligati, e il primo è il mittente: senza la voce in `AVVISI` (`@kommessa/api/avvisi`) l'avviso **non viene nemmeno registrato in app**.
-5. **La vista per l'ufficio**: chi non ha riempito la scatola.
-6. **L'osservabilità**: riusare `integrazione_esecuzioni` + `valutaCollegamento()` + `/admin/integrazioni`, che danno gratis il diario dei giri, l'allarme sul silenzio e la **modalità simulazione**.
+### 7.1 Il collegamento: `integrazione_timbro`
 
-⭐ **La simulazione è il regalo più grosso**: FPM timbra già da QR e app. Si può far girare l'import in simulazione per giorni — leggere, calcolare, **non scrivere** — e confrontare quello che Timbro dice con quello che l'app ha registrato sulle stesse persone negli stessi giorni. È una validazione contro un sistema vivo, prima di toccare niente.
+Una riga per cliente, **solo service role** (RLS accesa, nessuna policy, `revoke all` da `anon` e `authenticated`): `stato` (`spento` · `osservazione` · `attivo`), `token`, `url_base`, `dal` (data di partenza, sull'ora del passaggio), `webhook_id`/`webhook_secret`, `cursore_updated_at`, l'ultimo giro e l'ultimo timbro. Si governa dal tab **Timbro** di `/admin/tenants/[id]`. Il token si **prova prima di salvarlo** e non si rilegge mai: il tab dice solo «salvato».
+
+### 7.2 L'import
+
+`importaTimbri(cfg, avvio)`: `GET /punches?updated_since=<cursore − 60 s>&from=<dal>`, pagine da 500, upsert su `(tenant, sorgente, esterno_id)`. Traduzioni: `badge_tap` → `tipo NULL` (da dedurre), `entry` → direzione dichiarata; `ntp`/`server` → orologio `fisso`; `voided` → `stato annullato`; `employee_external_id` deve essere l'`id` di un **nostro** dipendente, altrimenti la riga resta orfana con il badge. Il cursore avanza **solo** se il giro è andato a buon fine. Diario in `integrazione_esecuzioni` con `sistema = 'timbro'` (⚠️ le query di salute di ERGO ora filtrano `sistema <> 'timbro'`). Un giro a vuoto ogni due minuti non si scrive nel diario; un errore sì, sempre.
+
+Il **webhook** (`POST /api/webhooks/timbro?t=<tenantId>`, firma `X-Timbro-Signature` HMAC-SHA256 a tempo costante, 5 minuti di finestra) **non scrive niente da solo**: fa partire la stessa riconciliazione. Un solo percorso di scrittura.
+
+### 7.3 Lo stato della giornata (`statoGiornataTimbro`)
+
+| stato | quando | chi lo vede |
+|---|---|---|
+| `nessun_timbro` | nessun passaggio al terminale | — |
+| `presenza_aperta` | ingresso senza uscita | tecnico («sei dentro»), ufficio se è un giorno passato |
+| `da_ripartire` | timbri chiusi e niente di attribuito | tecnico (card), ufficio (pannello), promemoria |
+| `da_chiudere` | turno aperto dall'app e un timbro dopo: **il timbro lo chiude**, il primo cantiere è obbligato | idem |
+| `coperta` | presenza ≤ ore attribuite + viaggio + 15 min | nessuno: niente da fare |
+| `da_verificare` | direzione dichiarata incoerente, uscita mancante con l'app chiusa, minuti di presenza non attribuiti | ufficio |
+
+⭐ **«Si apre dall'app e si chiude al terminale»** funziona innestando l'avvio del turno nella sequenza dei timbri come direzione dichiarata, **solo se** a quell'ora i timbri dicono «fuori». Se un badge aveva già aperto la presenza (badge in sede, poi avvio turno in cantiere), l'avvio è un'attribuzione, non una contraddizione.
+
+⭐ **Ore attribuite oltre la presenza non sono una scatola vuota**: una stima di strada più lunga del buco vero non va al tecnico, la giudica la soglia di verifica delle giornate.
+
+### 7.4 Riempire la scatola (`riempiScatola`)
+
+Il contenitore è una **lista di intervalli** (i timbri), non un solo `[ingresso, uscita]`: la pausa timbrata alle 12:31 resta alle 12:31. Il lavoro si versa negli intervalli in ordine; un cambio di cantiere è un'uscita e un ingresso sull'orologio vero; la strada fra cantieri è un buco; **andata e ritorno dalla sede stanno DENTRO il contenitore** quando l'estremo è un passaggio fisico (si era in sede). Una pausa non timbrata, dichiarata, si scava al centro dell'intervallo più lungo. L'ultimo cantiere assorbe il resto, come nello split di fine turno.
+
+Le righe scritte in `timbrature` hanno `origine = 'timbro'`, `modalita = 'timbratrice'` (CHECK allargati dalla migration `20261022090000`); la cronologia le chiama «Dai timbri del terminale», l'ufficio legge «Timbrata · terminale».
+
+**Collaudato sul tenant demo** (`scripts/banco-ui/timbro.mjs`, `timbro-chiudere.mjs`): quattro timbri 08:27 · 12:30 · 13:30 · 18:00 → quattro timbrature con quegli orari esatti, pausa dove timbrata, giornata auto-approvata a 8:33; turno dall'app alle 09:00 + stessi timbri → l'ingresso dell'app resta, uscita finale alle 17:25 (18:00 meno 35 minuti di rientro), tratta di ritorno legata, 445 + 35 = 480 minuti.
+
+### 7.5 Il default «in sede»
+
+Con l'ingresso fisico il flag di ogni cantiere gira come per chi lavora in ufficio: il lavoro nasce **dalla sede** e la spunta dice «uscito in cantiere». Spuntandola il sistema calcola strada e tempo dalla sede predefinita (dove sta il terminale) e li mette dentro la presenza. Dall'ufficio lo stesso, senza «chi guidava» (passeggero).
+
+### 7.6 Il promemoria
+
+`/api/cron/promemoria-ore` ogni quarto d'ora: per i clienti con Timbro **attivo** e il modulo Kantiere, nella finestra della **sera** (giornata di oggi) o della **mattina** (ieri e prima, fino a 7 giorni), avvisa chi è `da_ripartire`/`da_chiudere`. Orari in `tenant_modules.config.promemoria_ore` (Impostazioni Kantiere → Approvazione giornate; predefiniti 18:00 e 08:00). Mittente unico `avvisa()`, avviso `ore_da_inserire`; un avviso per giornata per finestra.
+
+⚠️ **Le push arrivano solo a chi ha attivato le notifiche su quel telefono.** Al 21/10 c'era **una** sottoscrizione su quattro clienti. Per questo nella PWA c'è ora il banner «Attiva le notifiche su questo telefono». Su iPhone serve l'app **aggiunta alla schermata Home** (iOS ≥ 16.4); su Samsung le notifiche dei siti possono essere spente dalle impostazioni di sistema dell'app browser.
 
 ---
 

@@ -15,7 +15,7 @@ import {
 import { Button, Input, Label, cn } from '@kommessa/ui';
 import { formattaOreGiornata } from '@kommessa/api/kantiere-ore';
 import { quoteGiornata } from '@kommessa/api/kantiere-quote';
-import type { AnomalieKantiere, ImpostazioniKantiere } from '@/app/_lib/kantiere-config';
+import type { AnomalieKantiere, ImpostazioniKantiere, PromemoriaOre } from '@/app/_lib/kantiere-config';
 import { salvaImpostazioniKantiere } from '../../../_actions/kantiere-impostazioni';
 import { useConfirm } from '@/app/_components/confirm-provider';
 
@@ -42,6 +42,7 @@ interface Valori {
   anomaliaTurnoOreMax: number;
   anomalie: AnomalieKantiere;
   kontabilitaAttiva: boolean;
+  promemoriaOre: PromemoriaOre;
 }
 
 function valoriDa(imp: ImpostazioniKantiere): Valori {
@@ -62,6 +63,7 @@ function valoriDa(imp: ImpostazioniKantiere): Valori {
     anomaliaTurnoOreMax: imp.anomaliaTurnoOreMax,
     anomalie: imp.anomalie,
     kontabilitaAttiva: imp.kontabilitaAttiva,
+    promemoriaOre: imp.promemoriaOre,
   };
 }
 
@@ -762,6 +764,48 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                     {hmMin(orarioMin)}): le giornate ordinarie complete resteranno da verificare.
                   </p>
                 ) : null}
+              </div>
+            </div>
+          )}
+
+          {sezione === 'approvazione' && (
+            <div className="mt-6 space-y-4 border-t border-border pt-5">
+              <SezioneHeader
+                icon={Clock}
+                title="Promemoria ore"
+                description="Per chi timbra al terminale e non ha ancora detto su quali commesse ha lavorato. Vale solo con la timbratrice collegata."
+              />
+              <Campo
+                id="promemoria-attivo"
+                etichetta="Promemoria sul telefono"
+                predefinito="attivo"
+                descrizione="Attivo: la sera arriva un avviso a chi ha timbrato e non ha ripartito la giornata, e la mattina dopo un altro se ancora manca. Chi lo spegne dalle proprie notifiche non lo riceve."
+              >
+                <Interruttore
+                  id="promemoria-attivo"
+                  attivo={valori.promemoriaOre.attivo}
+                  onChange={(b) => imposta('promemoriaOre', { ...valori.promemoriaOre, attivo: b })}
+                />
+              </Campo>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Campo id="promemoria-sera" etichetta="Orario della sera" predefinito="18:00" descrizione="Per la giornata di oggi.">
+                  <Input
+                    id="promemoria-sera"
+                    type="time"
+                    value={valori.promemoriaOre.sera}
+                    onChange={(e) => imposta('promemoriaOre', { ...valori.promemoriaOre, sera: e.target.value || '18:00' })}
+                    className="h-9 w-32"
+                  />
+                </Campo>
+                <Campo id="promemoria-mattina" etichetta="Orario della mattina" predefinito="08:00" descrizione="Per le giornate precedenti ancora da ripartire.">
+                  <Input
+                    id="promemoria-mattina"
+                    type="time"
+                    value={valori.promemoriaOre.mattina}
+                    onChange={(e) => imposta('promemoriaOre', { ...valori.promemoriaOre, mattina: e.target.value || '08:00' })}
+                    className="h-9 w-32"
+                  />
+                </Campo>
               </div>
             </div>
           )}

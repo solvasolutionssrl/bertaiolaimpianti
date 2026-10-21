@@ -29,6 +29,9 @@ import {
   useTotaleGiornata,
 } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
+import { TimbriTerminale } from '../../_components/timbri-terminale';
+import { RipartisciTimbroDialog } from '../../_components/ripartisci-timbro-dialog';
+import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
 import {
   CorreggiGiornataDialog,
@@ -110,6 +113,12 @@ export type RapportiniRiga = {
   affidabilita?: Affidabilita;
   /** Modifiche vere arrivate quando la giornata era già approvata. */
   modificheDopoApprovazione?: number;
+  /**
+   * La giornata vista dai timbri del terminale, se ce ne sono. Una riga con
+   * `id` che comincia per `timbro:` non ha ancora un rapportino: e' la
+   * presenza timbrata in attesa di essere ripartita.
+   */
+  timbro?: TimbroGiornataVista;
 };
 
 export type FiltriRapportini = {
@@ -142,6 +151,8 @@ interface Props {
   commesse: CommessaPickerItem[];
   cantieri: CantierePickerItem[];
   giorniAperti: GiornataAperta[];
+  /** Le giornate timbrate al terminale nel periodo, per il pannello «da ripartire». */
+  timbroGiornate?: TimbroGiornataVista[];
   /** Giorno corrente in Europe/Rome (YYYY-MM-DD): separa "oggi" dallo storico. */
   oggi: string;
   /** Soglia (ore) anomalia turno, per-tenant (`anomalia_turno_ore_max`). Default 10. */
@@ -271,6 +282,21 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
 
       {/* Timeline timbrature + viaggio */}
       <div className="space-y-3">
+        {riga.timbro ? (
+          <div>
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Passaggi al terminale
+            </p>
+            <TimbriTerminale timbri={riga.timbro.timbri} />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Presenza {minToColon(riga.timbro.nettoMin)}
+              {riga.timbro.pausaTimbrataMin > 0 ? ` · pausa timbrata ${minToColon(riga.timbro.pausaTimbrataMin)}` : ''}
+              {' · '}
+              {ETICHETTA_STATO_TIMBRO[riga.timbro.stato]}
+              {riga.timbro.motivo ? ` — ${riga.timbro.motivo}` : ''}
+            </p>
+          </div>
+        ) : null}
         <div>
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Timbrature del giorno
@@ -348,12 +374,21 @@ function OggiRow({
           <CantierePills labels={labels} />
         </td>
         <td className="px-2.5 py-1.5 align-top" colSpan={2}>
-          <GiornataFlow
-            timbrature={riga.timbrature}
-            oreViaggio={riga.totale.viaggio}
-            kmViaggio={riga.viaggioKm ?? 0}
-            minutiLavoro={Math.round((riga.totale.ord + riga.totale.straord) * 60)}
-          />
+          {riga.timbro && riga.timbrature.length === 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <TimbriTerminale timbri={riga.timbro.timbri} />
+              <span className="rounded-full border border-sky-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                {ETICHETTA_STATO_TIMBRO[riga.timbro.stato]}
+              </span>
+            </div>
+          ) : (
+            <GiornataFlow
+              timbrature={riga.timbrature}
+              oreViaggio={riga.totale.viaggio}
+              kmViaggio={riga.viaggioKm ?? 0}
+              minutiLavoro={Math.round((riga.totale.ord + riga.totale.straord) * 60)}
+            />
+          )}
         </td>
         <td className="px-2 py-1.5 text-right align-top">
           <span className="tabular-nums text-sm font-semibold text-foreground">{minToColon(minuti)}</span>
@@ -377,12 +412,23 @@ export function RapportiniClient({
   commesse,
   cantieri,
   giorniAperti,
+  timbroGiornate = [],
   oggi,
   sogliaOre = 10,
   sogliaPausaOre = 5,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
+  const [ripartisciFor, setRipartisciFor] = React.useState<TimbroGiornataVista | null>(null);
+  // Le giornate timbrate che chiedono una mano: da ripartire, da chiudere, o
+  // che non tornano. Quelle di oggi ancora aperte no: stanno lavorando.
+  const timbroDaFare = timbroGiornate.filter(
+    (g) =>
+      g.stato === 'da_ripartire' ||
+      g.stato === 'da_chiudere' ||
+      g.stato === 'da_verificare' ||
+      (g.stato === 'presenza_aperta' && g.giorno < oggi),
+  );
 
   // Filtri locali controllati
   const [from, setFrom] = React.useState(filtri.from);
@@ -553,6 +599,7 @@ export function RapportiniClient({
   // Giornata "fantasma": il guscio bozza creato aprendo il rapportino senza mai
   // timbrare (0 timbrature e 0 ore). Non è una presenza → non va mostrata.
   const èVuota = (r: RapportiniRiga) =>
+    !r.timbro &&
     r.timbrature.length === 0 &&
     r.totale.ord === 0 &&
     r.totale.straord === 0 &&
@@ -712,7 +759,54 @@ export function RapportiniClient({
   return (
     <div className="space-y-3">
       {/* Promemoria: giornate rimaste aperte da chiudere */}
+      {timbroDaFare.length > 0 ? (
+        <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs font-semibold text-sky-900">
+              Giornate timbrate al terminale da sistemare · {timbroDaFare.length}
+            </p>
+            <p className="text-[11px] text-sky-800/80">
+              La presenza c’è, le ore non sono ancora sui cantieri: finché non si ripartisce non entrano nei conti.
+            </p>
+          </div>
+          <ul className="mt-1.5 divide-y divide-sky-200/60">
+            {timbroDaFare.map((g) => (
+              <li key={g.chiave} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 text-xs">
+                <span className="w-[8.5rem] shrink-0 font-medium text-foreground">{g.dipendenteNome}</span>
+                <span className="w-24 shrink-0 tabular-nums text-muted-foreground">{fmtGiornoLungo(g.giorno)}</span>
+                <TimbriTerminale timbri={g.timbri} compatto />
+                <span className="ml-auto inline-flex items-center gap-2">
+                  <span
+                    className={[
+                      'rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                      g.stato === 'da_verificare' || g.stato === 'presenza_aperta'
+                        ? 'border-amber-300 bg-amber-50 text-amber-800'
+                        : 'border-sky-300 bg-white text-sky-800',
+                    ].join(' ')}
+                    title={g.motivo ?? undefined}
+                  >
+                    {ETICHETTA_STATO_TIMBRO[g.stato]}
+                  </span>
+                  {g.stato === 'da_ripartire' || g.stato === 'da_chiudere' ? (
+                    <Button size="sm" variant="outline" className="h-7" onClick={() => setRipartisciFor(g)}>
+                      Ripartisci
+                    </Button>
+                  ) : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <GiornateApertePanel giorni={giorniAperti} />
+      <RipartisciTimbroDialog
+        open={ripartisciFor != null}
+        onOpenChange={(o) => {
+          if (!o) setRipartisciFor(null);
+        }}
+        giornata={ripartisciFor}
+        cantieri={cantieri}
+      />
 
       {/* Anomalie: giornate passate non finalizzate. Prominente in cima. */}
       {nAnomalie > 0 ? (
@@ -889,7 +983,20 @@ export function RapportiniClient({
                                   ) : null}
                                 </td>
                                 <td className="px-2.5 py-1.5 align-top">
-                                  {riga.daVerificare ? (
+                                  {riga.timbro && riga.id.startsWith('timbro:') ? (
+                                    <span
+                                      title={riga.timbro.motivo ?? undefined}
+                                      className={[
+                                        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                                        riga.timbro.stato === 'da_verificare' || riga.timbro.stato === 'presenza_aperta'
+                                          ? 'border-amber-300 bg-amber-50 text-amber-800'
+                                          : 'border-sky-300 bg-sky-50 text-sky-800',
+                                      ].join(' ')}
+                                    >
+                                      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                                      {ETICHETTA_STATO_TIMBRO[riga.timbro.stato]}
+                                    </span>
+                                  ) : riga.daVerificare ? (
                                     <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
                                       <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                                       {motivo}
@@ -913,6 +1020,13 @@ export function RapportiniClient({
                                   )}
                                 </td>
                                 <td className="px-2 py-1.5 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                                  {riga.timbro && riga.id.startsWith('timbro:') ? (
+                                    riga.timbro.stato === 'da_ripartire' || riga.timbro.stato === 'da_chiudere' ? (
+                                      <Button size="sm" variant="outline" className="h-7" onClick={() => setRipartisciFor(riga.timbro!)}>
+                                        Ripartisci
+                                      </Button>
+                                    ) : null
+                                  ) : (
                                   <div className="flex items-center justify-end gap-0.5">
                                     <Button
                                       variant="ghost"
@@ -936,6 +1050,7 @@ export function RapportiniClient({
                                       <History className="h-3.5 w-3.5" aria-hidden="true" />
                                     </Button>
                                   </div>
+                                  )}
                                 </td>
                               </tr>
 

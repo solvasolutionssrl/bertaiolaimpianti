@@ -59,6 +59,7 @@ export const NOTIFICA_META: Record<string, NotificaMeta> = {
   pianificazione_pubblicata: { label: 'Pianificazione pubblicata', Icon: CalendarClock },
   permesso_richiesto: { label: 'Richiesta di permesso', Icon: Clock3 },
   permesso_esito: { label: 'Esito della richiesta', Icon: Clock3 },
+  ore_da_inserire: { label: 'Ore da inserire', Icon: CalendarClock },
 };
 
 /** L'etichetta e l'icona di un avviso, con il ripiego già applicato. */

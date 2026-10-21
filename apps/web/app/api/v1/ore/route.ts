@@ -6,6 +6,7 @@ import { risolviCommessa, type MondoTenant } from '@kommessa/api/integrazione-ma
 
 import {
   autenticaApi,
+  daCursore,
   erroreApi,
   impagina,
   leggiParametri,
@@ -51,6 +52,7 @@ export const maxDuration = 30;
 
 interface RigaDb {
   id: string;
+  rapportino_id: string;
   cantiere_id: string | null;
   commessa_id: string | null;
   ore_ordinarie: unknown;
@@ -99,39 +101,34 @@ export async function GET(request: NextRequest) {
   const mondo = (((tRaw as unknown as { app_mode: string } | null)?.app_mode ??
     'kantiere') as MondoTenant);
 
-  // Si ordina e si pagina su `rapportini.updated_at`: e' il momento in cui la
-  // giornata e' stata toccata l'ultima volta, quindi quello che serve a chi
-  // vuole solo le novita'. Le righe non hanno un `updated_at` proprio, ma
-  // cambiano sempre insieme al rapportino che le contiene.
+  // ⚠️ Si ordina e si pagina su colonne di PRIMO livello: `(rapportino_id, id)`.
+  //
+  // Fino al 22/10/2026 questa rotta credeva di ordinare per
+  // `rapportini.updated_at` con `.order(..., { referencedTable })`: PostgREST
+  // pero' con quello ordina l'embed DENTRO ogni riga — un oggetto solo, quindi
+  // niente — e le righe arrivavano ordinate per `id` e basta. Il cursore
+  // `(updated_at, id)` filtrava su una chiave che non era l'ordine vero:
+  // misurato, paginando a 5 restituiva 21 righe su 358 con 8 doppioni.
+  //
+  // La chiave e' ora `(rapportino_id, id)`: entrambe sulla tabella delle righe,
+  // stabile, e il cursore e' opaco per chi legge (l'agente lo rimanda e basta).
+  // `modificatoDopo` resta il filtro «solo le novita'» su `rapportini.updated_at`:
+  // e' un filtro, non un ordine, e come filtro funziona.
   let q = service
     .from('rapportino_righe' as never)
     .select(
-      'id, cantiere_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio,' +
+      'id, rapportino_id, cantiere_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio,' +
         ' minuti_lavoro, minuti_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti, note,' +
         ' rapportino:rapportini!inner(id, data, stato, note, approvato_at, inviato_at, updated_at, dipendente_id,' +
         ' dipendente:dipendenti(id, nome, cognome, mansione, codice_interno, stato_attivo))',
     )
     .eq('rapportino.tenant_id', ctx.tenantId)
-    .order('updated_at', { referencedTable: 'rapportini', ascending: true })
+    .order('rapportino_id', { ascending: true })
     .order('id', { ascending: true })
     .limit(p.limite + 1);
 
   if (p.modificatoDopo) q = q.gt('rapportino.updated_at', p.modificatoDopo);
-  // ⚠️⚠️ DIFETTO NOTO, misurato il 21/10/2026 — da sistemare a parte.
-  // Questa rotta **non e' ordinata come crede**: PostgREST non ordina le righe
-  // padre per una colonna dell'embed, e quel `.order(..., { referencedTable })`
-  // qui sopra ordina l'embed DENTRO ogni riga — che e' un oggetto solo, quindi
-  // non fa niente. Le righe arrivano ordinate per `id` e basta: verificato
-  // chiedendo 12 righe e guardando i `modificatoAl`, che sono sparsi.
-  // Conseguenza: il cursore `(rapportino.updated_at, id)` filtra su una chiave
-  // che non e' l'ordine vero, quindi **paginando si perdono righe**.
-  // Oggi e' latente: FPM ha 358 righe e l'agente legge con `limite` grande,
-  // quindi stanno in una pagina sola. Diventa attivo oltre le 999.
-  // La correzione vuole cambiare la CHIAVE di ordinamento a colonne di primo
-  // livello (es. `rapportino_id, id`) — un cambio di contratto sulla rotta da
-  // cui passano le paghe, da fare con calma e con la sua prova. Qui resta la
-  // riga di sempre: meglio il difetto conosciuto di una correzione frettolosa.
-  if (p.cursore) q = q.gt('rapportino.updated_at', p.cursore.t);
+  q = daCursore(q, 'rapportino_id', p.cursore);
   if (p.dal) q = q.gte('rapportino.data', p.dal);
   if (p.al) q = q.lte('rapportino.data', p.al);
 
@@ -237,6 +234,8 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  const pag = impagina(dati, p.limite, (r) => ({ t: r.modificatoAl, i: r.id }));
+  // La chiave del cursore e' l'ordine vero della query, non un campo del payload.
+  const chiave = new Map(righe.map((r) => [r.id, r.rapportino_id]));
+  const pag = impagina(dati, p.limite, (r) => ({ t: chiave.get(r.id) ?? '', i: r.id }));
   return rispostaElenco(pag.dati, pag.paginazione);
 }

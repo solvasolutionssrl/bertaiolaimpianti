@@ -17,6 +17,10 @@ import {
 import { CantieriBrowser, type CantiereItem } from './_components/cantieri-browser';
 import type { PickerCantiere } from '../_components/cantiere-picker';
 import { LiveRefresh } from '@/app/_components/live-refresh';
+import Link from 'next/link';
+import { CalendarClock } from 'lucide-react';
+import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
+import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
 
 export const metadata: Metadata = {
   title: 'Cantieri',
@@ -79,6 +83,20 @@ export default async function CantieriMobilePage() {
     ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, turno.cantiereId)
     : null;
 
+  // Una giornata timbrata al terminale e non ancora ripartita: la casa del
+  // tecnico la dice, e porta dove si sistema (la tab Ore).
+  let daRipartire: { giorno: string; oggi: boolean } | null = null;
+  if (me) {
+    const st = await leggiStatoTimbro(ctx.tenantId);
+    if (st.stato === 'attivo' || (st.stato === 'osservazione' && ctx.role !== 'tecnico')) {
+      const { daFare } = await giornateTimbroPersona(supabase, ctx.tenantId, me.id);
+      if (daFare) {
+        const oggi = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
+        daRipartire = { giorno: daFare.giorno, oggi: daFare.giorno === oggi };
+      }
+    }
+  }
+
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
       <header className="pt-2">
@@ -106,6 +124,27 @@ export default async function CantieriMobilePage() {
           <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
         </div>
       </header>
+
+      {daRipartire ? (
+        <Link
+          href="/mobile/kantiere/ore"
+          className="flex items-center gap-3 rounded-2xl border border-sky-300 bg-sky-50 px-3.5 py-3 text-left shadow-soft active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-700">
+            <CalendarClock className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-foreground">
+              Inserisci le commesse sulle quali hai lavorato{daRipartire.oggi ? ' oggi' : ''}
+            </span>
+            <span className="block text-xs leading-snug text-muted-foreground">
+              {daRipartire.oggi
+                ? 'Hai timbrato al terminale: manca solo dire dove.'
+                : `La giornata del ${new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'long' }).format(new Date(`${daRipartire.giorno}T12:00:00Z`))} aspetta le commesse.`}
+            </span>
+          </span>
+        </Link>
+      ) : null}
 
       {inUfficio ? (
         <>

@@ -10,7 +10,7 @@ export interface TimbraturaInput {
   commessaTitolo?: string | null;
   /** true se è un evento di pausa pranzo (uscita = inizio pausa, ingresso = ripresa). */
   pausa?: boolean | null;
-  /** Origine della riga: 'qr' | 'cronometro' (timbrata) | 'manuale' (inserita a mano). */
+  /** Origine della riga: 'qr' | 'cronometro' | 'timbro' (timbrata) | 'manuale' (inserita a mano). */
   origine?: string | null;
   /** Quando la riga è stata inserita (ISO). */
   createdAt?: string | null;
@@ -90,8 +90,17 @@ type OrigineMeta = { origine?: string | null; createdAt?: string | null; creatoN
 function OrigineLine({ meta }: { meta?: OrigineMeta }) {
   if (!meta || !meta.origine) return null;
   const o = meta.origine;
-  const manuale = o !== 'qr' && o !== 'cronometro';
-  const label = o === 'qr' ? 'Timbrata · QR' : o === 'cronometro' ? 'Timbrata · app' : 'Inserita a mano';
+  // 'timbro' = giornata delimitata dai timbri del terminale e ripartita dalla
+  // persona: e' una timbratura vera, non un inserimento a mano.
+  const manuale = o !== 'qr' && o !== 'cronometro' && o !== 'timbro';
+  const label =
+    o === 'qr'
+      ? 'Timbrata · QR'
+      : o === 'cronometro'
+        ? 'Timbrata · app'
+        : o === 'timbro'
+          ? 'Timbrata · terminale'
+          : 'Inserita a mano';
   const quando = manuale && meta.createdAt ? fmtDataOra(meta.createdAt) : null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">

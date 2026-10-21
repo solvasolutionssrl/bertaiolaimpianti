@@ -40,9 +40,15 @@ describe('vocabolario allineato al database', () => {
     new URL('../../../supabase/migrations/20260914090000_cronologia_giornata.sql', import.meta.url),
     'utf8',
   );
+  // Il CHECK di `timbrature.modalita` e' stato riscritto per intero dalla
+  // migration della timbratrice (22/10/2026): e' lei l'ultima parola.
+  const sqlModalita = readFileSync(
+    new URL('../../../supabase/migrations/20261022090000_integrazione_timbro.sql', import.meta.url),
+    'utf8',
+  );
 
   it('ogni modalità del codice è ammessa dal CHECK di timbrature', () => {
-    for (const m of MODALITA_TIMBRATURA) expect(sql).toContain(`'${m}'`);
+    for (const m of MODALITA_TIMBRATURA) expect(sqlModalita).toContain(`'${m}'`);
   });
 
   it('ogni azione del codice è ammessa dal CHECK di rapportino_versioni', () => {

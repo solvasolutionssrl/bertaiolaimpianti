@@ -34,6 +34,9 @@ import { stimaConCache } from '@/app/_lib/routing/stima-cache';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 import { caricaTurnoAzioniContesto } from '@/app/mobile/kantiere/_lib/turno-azioni-contesto';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
+import { leggiGiornataTimbro } from '@/app/_lib/timbro/giornate';
+import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
+import { riempiScatola } from '@kommessa/api/timbro-giornata';
 import {
   ViaggioSchema,
   validaViaggio,
@@ -1494,39 +1497,217 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     .lt('ts', toIso);
   if ((count ?? 0) !== 0) return { ok: false, error: 'GIORNATA_NON_VUOTA' };
 
-  // Cantieri del tenant, e ancora aperti.
-  const ids = [...new Set(parsed.data.split.map((s) => s.cantiereId))];
-  const cc = await cantieriScrivibili(supabase, ids, ctx.tenantId);
+  const primoCantiere = parsed.data.split[0]!.cantiereId;
+  return scriviGiornataRipartita({
+    supabase,
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    dipendenteId: me.id,
+    giorno: oggi,
+    split: parsed.data.split,
+    percorso: parsed.data.percorso ?? null,
+    origine: 'manuale',
+    modalita: 'giornata_dichiarata',
+    cantieriForzati: false,
+    ingressoEsistente: null,
+    estremiDentro: false,
+    autoEstremi: false,
+    // Sintesi segmenti (calc.eventi ESCLUDE l'ingresso iniziale → lo prependo).
+    generaEventi: (viaggioPrima) => {
+      const calc = calcolaSegmentiSplit({
+        ingressoMs: Date.parse(inizioIso),
+        uscitaMs: Date.parse(fineIso),
+        pausaMin,
+        segmenti: parsed.data.split,
+        viaggioPrima,
+      });
+      if (!calc.ok) return calc;
+      return {
+        ok: true,
+        eventi: [
+          { cantiereId: primoCantiere, tipo: 'ingresso', pausa: false, ms: Date.parse(inizioIso) },
+          ...calc.eventi,
+        ],
+      };
+    },
+  });
+}
+
+// ── 6) la giornata timbrata al terminale: riempire la scatola ─────────────
+// I timbri di Timbro formano il contenitore (`timbri_grezzi`); qui il tecnico
+// — o l'ufficio per lui — dice su quali cantieri, e `timbrature` nasce gia'
+// attribuita. Stesso scrittore di «Registra giornata»: cambia solo da dove
+// arrivano gli estremi e le pause (dai timbri, non dalla persona).
+
+const RipartisciTimbroSchema = z.object({
+  /** AAAA-MM-GG, ora italiana. */
+  giorno: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** Solo per l'ufficio: la persona per cui si ripartisce. Assente = chi chiama. */
+  dipendenteId: z.string().uuid().optional(),
+  /** Una pausa non timbrata, dichiarata: si scava dentro il contenitore. */
+  pausaMin: z.number().int().min(0).max(600).optional(),
+  split: z
+    .array(
+      z.object({
+        cantiereId: z.string().uuid(),
+        minuti: z.number().int().nonnegative(),
+        daSede: z.boolean().optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+  percorso: PercorsoGiornataSchema.optional(),
+});
+
+/** Quanti giorni indietro un tecnico puo' ripartire da solo. Oltre, l'ufficio. */
+const GIORNI_RIPARTIZIONE_TECNICO = 31;
+
+export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> {
+  const parsed = RipartisciTimbroSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+  const supabase = createServerSupabase();
+
+  const ufficio = ctx.role === 'admin' || ctx.role === 'office';
+  let dipendenteId: string;
+  if (parsed.data.dipendenteId && parsed.data.dipendenteId !== (await dipendenteDi(supabase, ctx.tenantId, ctx.userId))?.id) {
+    if (!ufficio) return { ok: false, error: 'NON_AUTORIZZATO' };
+    dipendenteId = parsed.data.dipendenteId;
+  } else {
+    const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+    if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+    dipendenteId = me.id;
+  }
+
+  // Il collegamento deve essere acceso: per un tecnico «attivo», per l'ufficio
+  // basta «osservazione» (e' il modo di provare il flusso prima di aprirlo).
+  const statoTimbro = await leggiStatoTimbro(ctx.tenantId);
+  if (statoTimbro.stato === 'spento') return { ok: false, error: 'TIMBRO_OFF' };
+  if (statoTimbro.stato !== 'attivo' && !ufficio) return { ok: false, error: 'TIMBRO_OFF' };
+
+  const giorno = parsed.data.giorno;
+  const oggi = romeDay(new Date());
+  if (giorno > oggi) return { ok: false, error: 'ORA_NON_VALIDA' };
+  if (!ufficio) {
+    const limite = new Date(Date.now() - GIORNI_RIPARTIZIONE_TECNICO * 86_400_000);
+    if (giorno < romeDay(limite)) return { ok: false, error: 'GIORNO_TROPPO_VECCHIO' };
+  }
+
+  // Lo stato della giornata si rilegge QUI, dai dati: il client propone, il
+  // server decide. Vale solo per «da ripartire» e «da chiudere».
+  const g = await leggiGiornataTimbro(supabase, ctx.tenantId, dipendenteId, giorno);
+  if (!g || !g.scatola || (g.stato !== 'da_ripartire' && g.stato !== 'da_chiudere')) {
+    return { ok: false, error: 'SCATOLA_NON_DISPONIBILE' };
+  }
+  const scatola = g.scatola;
+  const pausaDichiarataMin = parsed.data.pausaMin ?? 0;
+  const primoCantiere = parsed.data.split[0]!.cantiereId;
+  if (scatola.ingressoEsistente && scatola.ingressoEsistente.cantiereId !== primoCantiere) {
+    return { ok: false, error: 'SPLIT_PRIMO_CANTIERE' };
+  }
+
+  return scriviGiornataRipartita({
+    supabase,
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    dipendenteId,
+    giorno,
+    split: parsed.data.split,
+    percorso: parsed.data.percorso ?? null,
+    origine: 'timbro',
+    modalita: 'timbratrice',
+    // E' la chiusura di una giornata gia' lavorata: un cantiere chiuso nel
+    // frattempo non puo' lasciare la persona senza modo di dire dov'era.
+    cantieriForzati: true,
+    ingressoEsistente: scatola.ingressoEsistente
+      ? {
+          id: scatola.ingressoEsistente.id,
+          cantiereId: scatola.ingressoEsistente.cantiereId,
+          ts: new Date(scatola.ingressoEsistente.ms).toISOString(),
+        }
+      : null,
+    // Chi ha passato il badge in sede ha fatto la strada DENTRO la presenza.
+    estremiDentro: scatola.inizioFisico || scatola.fineFisica,
+    autoEstremi: true,
+    generaEventi: (viaggioPrima, andataMin, ritornoMin) =>
+      riempiScatola({
+        intervalli: scatola.intervalli,
+        segmenti: parsed.data.split,
+        viaggioPrima,
+        andataMin: scatola.inizioFisico ? andataMin : 0,
+        ritornoMin: scatola.fineFisica ? ritornoMin : 0,
+        pausaDichiarataMin,
+      }),
+  });
+}
+
+// ── Lo scrittore unico di una giornata ripartita ──────────────────────────
+
+type EventoGiornata = { cantiereId: string; tipo: 'ingresso' | 'uscita'; pausa: boolean; ms: number };
+
+interface GiornataRipartitaInput {
+  supabase: ReturnType<typeof createServerSupabase>;
+  tenantId: string;
+  userId: string;
+  dipendenteId: string;
+  giorno: string;
+  split: { cantiereId: string; minuti: number; daSede?: boolean }[];
+  percorso: z.infer<typeof PercorsoGiornataSchema> | null;
+  origine: 'manuale' | 'timbro';
+  modalita: 'giornata_dichiarata' | 'timbratrice';
+  /** I cantieri chiusi nel frattempo non bloccano (chiusura di una giornata gia' lavorata). */
+  cantieriForzati: boolean;
+  /** Il primo ingresso esiste gia' (turno aperto dall'app): non si riscrive. */
+  ingressoEsistente: { id: string; cantiereId: string; ts: string } | null;
+  /** Andata e ritorno stanno DENTRO gli estremi (badge in sede) e si passano a `generaEventi`. */
+  estremiDentro: boolean;
+  /** Senza un percorso dichiarato, andata e ritorno si propongono dalla sede predefinita. */
+  autoEstremi: boolean;
+  /**
+   * Gli eventi completi della giornata, primo ingresso compreso, dati i minuti
+   * di strada prima di ogni segmento e agli estremi.
+   */
+  generaEventi: (
+    viaggioPrima: number[],
+    andataMin: number,
+    ritornoMin: number,
+  ) => { ok: true; eventi: EventoGiornata[] } | { ok: false; error: string };
+}
+
+async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Result> {
+  const { supabase, tenantId, userId, dipendenteId, giorno } = p;
+
+  // Cantieri del tenant, e ancora aperti (o forzati, se si chiude una giornata).
+  const ids = [...new Set(p.split.map((s) => s.cantiereId))];
+  const cc = await cantieriScrivibili(supabase, ids, tenantId, { forzato: p.cantieriForzati });
   if (!cc.ok) return { ok: false, error: cc.error };
+
+  // Prima prova dei conti, senza strada: se non tornano, inutile stimare.
+  const prova = p.generaEventi([], 0, 0);
+  if (!prova.ok) {
+    return { ok: false, error: prova.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
+  }
 
   // «Lavoro dalla sede sul progetto»: sui cantieri segnati si lavora nella sede
   // predefinita. Le ore restano del cantiere; le tratte partono e arrivano lì.
-  const conSede = parsed.data.split.some((s) => s.daSede);
-  const sedeLavoroId = conSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
+  const conSede = p.split.some((s) => s.daSede);
+  const sedePredefinita = conSede || p.autoEstremi ? await sedePredefinitaId(supabase, tenantId) : null;
+  const sedeLavoroId = conSede ? sedePredefinita : null;
   if (conSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
-  const inSede = new Set(parsed.data.split.filter((s) => s.daSede).map((s) => s.cantiereId));
+  const inSede = new Set(p.split.filter((s) => s.daSede).map((s) => s.cantiereId));
   /** Il luogo in cui si lavora su un cantiere della giornata: la sede o il cantiere. */
   const luogo = (cantiereId: string) => (sedeLavoroId && inSede.has(cantiereId) ? sedeLavoroId : cantiereId);
   const sedeDi = (cantiereId: string) => (sedeLavoroId && inSede.has(cantiereId) ? sedeLavoroId : null);
 
-  // Sintesi segmenti (calc.eventi ESCLUDE l'ingresso iniziale → lo prependo).
-  const calc = calcolaSegmentiSplit({
-    ingressoMs: Date.parse(inizioIso),
-    uscitaMs: Date.parse(fineIso),
-    pausaMin,
-    segmenti: parsed.data.split,
-  });
-  if (!calc.ok) {
-    return { ok: false, error: calc.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
-  }
-
-  const primoCantiere = parsed.data.split[0]!.cantiereId;
+  const primoCantiere = p.split[0]!.cantiereId;
   // L'ultimo cantiere vero è quello dell'uscita finale: un cantiere rimasto a
   // zero minuti in fondo non viene scritto.
-  const ultimoCantiere = calc.eventi[calc.eventi.length - 1]?.cantiereId ?? primoCantiere;
+  const ultimoCantiere = prova.eventi[prova.eventi.length - 1]?.cantiereId ?? primoCantiere;
 
   // ── Percorso: si valida tutto PRIMA di scrivere ─────────────────────────────
-  const percorso = parsed.data.percorso ?? null;
+  const percorso = p.percorso;
   const autista = percorso?.autista ?? false;
   const mezzoId = autista ? (percorso?.mezzoId ?? null) : null;
   // Chi guidava si dice per tratta; il valore della giornata resta per le
@@ -1537,8 +1718,40 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     return { autista: guidava, mezzoId: guidava ? mezzo : null };
   };
   const conGuida = (t: TrattaGiornata): ViaggioInput => ({ ...t, ...guidaTratta(t) });
-  const andata = percorso?.andata ? conGuida(percorso.andata) : null;
-  const ritorno = percorso?.ritorno ? conGuida(percorso.ritorno) : null;
+  const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, tenantId);
+
+  /**
+   * Andata e ritorno proposti dal sistema: dalla sede predefinita al primo
+   * cantiere e dall'ultimo alla sede, da passeggero, con la stima del tenant.
+   * Solo se il percorso non li dice e il cantiere non e' «dalla sede».
+   */
+  const estremoAuto = async (da: string, a: string): Promise<ViaggioInput | null> => {
+    if (!sedePredefinita) return null;
+    const stime = await stimeFraLuoghi(supabase, tenantId, [[da, a]]);
+    const st = stime.get(`${da}>${a}`);
+    if (!st) return null;
+    return {
+      sedeId: sedePredefinita,
+      durataStimataMin: Math.round(st.minuti),
+      durataConfermataMin: arrotondaA(Math.round(st.minuti), stepViaggio),
+      distanzaKm: st.km ?? null,
+      autista: false,
+      mezzoId: null,
+    };
+  };
+
+  let andata: ViaggioInput | null = percorso?.andata ? conGuida(percorso.andata) : null;
+  let ritorno: ViaggioInput | null = percorso?.ritorno ? conGuida(percorso.ritorno) : null;
+  // Con un turno gia' aperto dall'app l'andata l'ha gia' scritta l'avvio del turno.
+  if (p.ingressoEsistente) andata = null;
+  if (p.autoEstremi && sedePredefinita) {
+    if (!andata && !p.ingressoEsistente && percorso?.andata === undefined && !inSede.has(primoCantiere)) {
+      andata = await estremoAuto(sedePredefinita, primoCantiere);
+    }
+    if (!ritorno && percorso?.ritorno === undefined && !inSede.has(ultimoCantiere)) {
+      ritorno = await estremoAuto(ultimoCantiere, sedePredefinita);
+    }
+  }
   if (andata) {
     const v = await validaViaggio(supabase, andata, primoCantiere);
     if (!v.ok) return { ok: false, error: v.error };
@@ -1548,8 +1761,8 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     if (!v.ok) return { ok: false, error: v.error };
   }
   const intermedie = tratteIntermedie(
-    trasferimentiDaSegmenti(parsed.data.split),
-    Object.fromEntries((percorso?.passaggi ?? []).map((p) => [chiaveCoppia(p), passaggioDaVia(p.via)])),
+    trasferimentiDaSegmenti(p.split),
+    Object.fromEntries((percorso?.passaggi ?? []).map((x) => [chiaveCoppia(x), passaggioDaVia(x.via)])),
   );
   for (const t of intermedie) {
     if (t.tipo !== 'via_sede') continue;
@@ -1561,7 +1774,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   }
   // Chi guidava su ogni tratta fra cantieri; i mezzi di andata e ritorno li
   // controlla già validaViaggio, questi si controllano qui.
-  const guidePassaggi = new Map((percorso?.passaggi ?? []).map((p) => [chiaveCoppia(p), guidaTratta(p)]));
+  const guidePassaggi = new Map((percorso?.passaggi ?? []).map((x) => [chiaveCoppia(x), guidaTratta(x)]));
   const guidaCoppia = (c: { da: string; a: string }) => guidePassaggi.get(chiaveCoppia(c)) ?? guidaTratta();
   const mezziTratte = [
     ...new Set(intermedie.map((t) => guidaCoppia(t).mezzoId).filter((x): x is string => !!x)),
@@ -1579,7 +1792,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   // (stesse stime e stesso arrotondamento della pagina, dalla cache condivisa).
   const stimeTratte = await stimeFraLuoghi(
     supabase,
-    ctx.tenantId,
+    tenantId,
     intermedie
       .flatMap((t): [string, string][] =>
         t.tipo === 'diretta'
@@ -1593,7 +1806,6 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
       )
       .filter(([da, a]) => da !== a),
   );
-  const { viaggioMin: stepViaggio } = await leggiArrotondamenti(supabase, ctx.tenantId);
   const minutiStima = (da: string, a: string) => {
     if (da === a) return 0;
     const st = stimeTratte.get(`${da}>${a}`);
@@ -1601,9 +1813,9 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   };
   // Tempo delle tratte fra cantieri corretto a mano: vince sulla stima.
   const correzioniTratte = new Map<string, { durataConfermataMin: number; giustificazione?: string }>();
-  for (const p of percorso?.passaggi ?? []) {
-    if (p.durataConfermataMin != null) {
-      correzioniTratte.set(chiaveCoppia(p), { durataConfermataMin: p.durataConfermataMin, giustificazione: p.giustificazione });
+  for (const x of percorso?.passaggi ?? []) {
+    if (x.durataConfermataMin != null) {
+      correzioniTratte.set(chiaveCoppia(x), { durataConfermataMin: x.durataConfermataMin, giustificazione: x.giustificazione });
     }
   }
   const correzioneCoppia = (c: { da: string; a: string }) => {
@@ -1611,7 +1823,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     return x ? { minuti: x.durataConfermataMin, giustificazione: x.giustificazione?.trim() || undefined } : {};
   };
   const { prima: viaggioPrima } = viaggioFraCantieri(
-    parsed.data.split.map((s) => s.cantiereId),
+    p.split.map((s) => s.cantiereId),
     intermedie,
     (pezzo) =>
       pezzo.tipo === 'fra_cantieri'
@@ -1651,44 +1863,37 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     }
   }
 
-  const calcConStrada = calcolaSegmentiSplit({
-    ingressoMs: Date.parse(inizioIso),
-    uscitaMs: Date.parse(fineIso),
-    pausaMin,
-    segmenti: parsed.data.split,
+  const calcConStrada = p.generaEventi(
     viaggioPrima,
-  });
+    p.estremiDentro && andata ? andata.durataConfermataMin : 0,
+    p.estremiDentro && ritorno ? ritorno.durataConfermataMin : 0,
+  );
   if (!calcConStrada.ok) {
     return { ok: false, error: calcConStrada.error === 'SOMMA_NON_TORNA' ? 'SPLIT_SOMMA' : 'SPLIT_NETTO' };
   }
+  const tuttiEventi = calcConStrada.eventi;
+  if (tuttiEventi.length === 0) return { ok: false, error: 'SPLIT_NETTO' };
 
   // ── Timbrature ──────────────────────────────────────────────────────────────
   const base = {
-    tenant_id: ctx.tenantId,
-    dipendente_id: me.id,
+    tenant_id: tenantId,
+    dipendente_id: dipendenteId,
     commessa_id: null as string | null,
-    origine: 'manuale',
-    modalita: 'giornata_dichiarata',
-    creato_da: ctx.userId,
+    origine: p.origine,
+    modalita: p.modalita,
+    creato_da: userId,
   };
-  const rows = [
-    {
-      ...base,
-      cantiere_id: primoCantiere,
-      sede_lavoro_id: sedeDi(primoCantiere),
-      tipo: 'ingresso',
-      pausa: false,
-      ts: inizioIso,
-    },
-    ...calcConStrada.eventi.map((e) => ({
-      ...base,
-      cantiere_id: e.cantiereId,
-      sede_lavoro_id: sedeDi(e.cantiereId),
-      tipo: e.tipo,
-      pausa: e.pausa,
-      ts: new Date(e.ms).toISOString(),
-    })),
-  ];
+  // Con un ingresso gia' in tabella il primo evento non si riscrive.
+  const daScrivere = p.ingressoEsistente ? tuttiEventi.slice(1) : tuttiEventi;
+  if (p.ingressoEsistente && tuttiEventi[0]?.tipo !== 'ingresso') return { ok: false, error: 'SPLIT_NETTO' };
+  const rows = daScrivere.map((e) => ({
+    ...base,
+    cantiere_id: e.cantiereId,
+    sede_lavoro_id: sedeDi(e.cantiereId),
+    tipo: e.tipo,
+    pausa: e.pausa,
+    ts: new Date(e.ms).toISOString(),
+  }));
   const { data: inserite, error } = await supabase
     .from('timbrature' as never)
     .insert(rows as never)
@@ -1696,16 +1901,20 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   if (error) return { ok: false, error: error.message };
 
   // In ordine di orario; a parità (cambio di cantiere senza pausa) prima l'uscita.
-  const eventi = (
-    (inserite as
-      | { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null }[]
-      | null) ?? []
-  )
-    .map((e) => ({ id: e.id, tipo: e.tipo, ts: e.ts, pausa: !!e.pausa, cantiereId: e.cantiere_id ?? '' }))
-    .sort(
-      (x, y) =>
-        Date.parse(x.ts) - Date.parse(y.ts) || (x.tipo === y.tipo ? 0 : x.tipo === 'uscita' ? -1 : 1),
-    );
+  const eventi = [
+    ...(p.ingressoEsistente
+      ? [{ id: p.ingressoEsistente.id, tipo: 'ingresso' as const, ts: p.ingressoEsistente.ts, pausa: false, cantiereId: p.ingressoEsistente.cantiereId }]
+      : []),
+    ...(
+      (inserite as
+        | { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null }[]
+        | null) ?? []
+    ).map((e) => ({ id: e.id, tipo: e.tipo, ts: e.ts, pausa: !!e.pausa, cantiereId: e.cantiere_id ?? '' })),
+  ].sort(
+    (x, y) =>
+      Date.parse(x.ts) - Date.parse(y.ts) || (x.tipo === y.tipo ? 0 : x.tipo === 'uscita' ? -1 : 1),
+  );
+  const idInserite = eventi.filter((e) => e.id !== p.ingressoEsistente?.id).map((e) => e.id);
 
   // ── Andata e ritorno: sulla prima entrata e sull'ultima uscita ──────────────
   // Sono il viaggio della giornata: si scrivono insieme e, se non entrano, la
@@ -1713,7 +1922,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   // se ne vanno con loro) e l'utente riprova.
   const primoIngresso = eventi.find((e) => e.tipo === 'ingresso');
   const ultimaUscita = [...eventi].reverse().find((e) => e.tipo === 'uscita' && !e.pausa);
-  const comune = { tenantId: ctx.tenantId, dipendenteId: me.id };
+  const comune = { tenantId, dipendenteId };
   const righeViaggio: Record<string, unknown>[] = [];
   if (andata && primoIngresso) {
     righeViaggio.push(
@@ -1744,13 +1953,9 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
       .from('timbratura_viaggio' as never)
       .insert(righeViaggio as never);
     if (eViaggio) {
-      await supabase
-        .from('timbrature' as never)
-        .delete()
-        .in(
-          'id',
-          eventi.map((e) => e.id),
-        );
+      if (idInserite.length > 0) {
+        await supabase.from('timbrature' as never).delete().in('id', idInserite);
+      }
       return { ok: false, error: 'VIAGGIO_NON_SALVATO' };
     }
   }
@@ -1759,7 +1964,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   // Dirette: km + tempo sempre registrati, conteggio lato tenant gated dal toggle.
   await registraTrasferimentiCantiere(supabase, {
     ...comune,
-    data: oggi,
+    data: giorno,
     pairs: intermedie.flatMap((t) =>
       t.tipo === 'diretta' && luogo(t.da) !== luogo(t.a)
         ? [{ da: t.da, a: t.a, ...guidaCoppia(t), ...correzioneCoppia(t) }]
@@ -1795,9 +2000,10 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   });
 
   try {
-    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, oggi);
+    await ricomputaRapportinoAuto(supabase, tenantId, dipendenteId, giorno);
   } catch {
     // best-effort
   }
-  return { ok: true, tipo: 'uscita', pausa: false, ts: fineIso };
+  const fine = eventi[eventi.length - 1]!;
+  return { ok: true, tipo: 'uscita', pausa: false, ts: fine.ts };
 }

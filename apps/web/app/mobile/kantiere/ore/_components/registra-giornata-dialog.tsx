@@ -44,7 +44,11 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 import { CantiereSearchSheet, type PickerCantiere } from '../../_components/cantiere-picker';
-import { registraGiornataDaZero, elencoCantieriTurno } from '@/app/_actions/kantiere-timbra';
+import {
+  registraGiornataDaZero,
+  ripartisciGiornataTimbro,
+  elencoCantieriTurno,
+} from '@/app/_actions/kantiere-timbra';
 import {
   BarraGiornata,
   CardEstremo,
@@ -75,6 +79,16 @@ function isoOggi(hhmm: string): string {
 
 function messaggioErrore(code: string): string {
   switch (code) {
+    case 'SCATOLA_NON_DISPONIBILE':
+      return 'La giornata timbrata è cambiata nel frattempo: ricarica la pagina e riprova.';
+    case 'TIMBRO_OFF':
+      return 'La timbratrice non è attiva per questa azienda.';
+    case 'GIORNO_TROPPO_VECCHIO':
+      return 'È passato troppo tempo: per questa giornata chiedi all’ufficio.';
+    case 'SPLIT_PRIMO_CANTIERE':
+      return 'Il primo cantiere deve essere quello su cui avevi aperto il turno.';
+    case 'NON_AUTORIZZATO':
+      return 'Non puoi ripartire le ore di un’altra persona.';
     case 'GIORNATA_NON_VUOTA':
       return 'Hai già delle timbrature di oggi: qui si registra solo una giornata senza timbrature.';
     case 'ORA_NON_VALIDA':
@@ -236,11 +250,11 @@ function TimeField({
 }
 
 /** La fine del lavoro: si legge come un campo, ma la calcola la pagina. */
-function FineCalcolata({ ora }: { ora: string | null }) {
+function FineCalcolata({ ora, etichetta }: { ora: string | null; etichetta?: string }) {
   return (
     <div className="min-w-0 space-y-0.5">
       <span className="text-muted-foreground block font-mono text-[9px] uppercase tracking-[0.14em]">
-        Fine lavoro · calcolata
+        {etichetta ?? 'Fine lavoro · calcolata'}
       </span>
       <div
         aria-label="Fine lavoro calcolata"
@@ -259,6 +273,32 @@ export interface SedeOpzione {
   tipo: string;
   isDefault: boolean;
 }
+
+/**
+ * La giornata delimitata dai timbri del terminale: gli estremi sono fatti e
+ * non si toccano, le pause timbrate sono già fuori dal netto. Chi riempie dice
+ * solo su quali cantieri. Vedi `@kommessa/api/timbro-giornata`.
+ */
+export interface ScatolaDialog {
+  giorno: string;
+  inizioIso: string;
+  fineIso: string;
+  /** Presenza netta delle pause timbrate, da ripartire. */
+  nettoMin: number;
+  pausaTimbrataMin: number;
+  inizioFisico: boolean;
+  fineFisica: boolean;
+  /** Il turno aperto dall'app che il timbro chiude: primo cantiere obbligato. */
+  primoCantiere: { id: string; nome: string; codice: string | null } | null;
+}
+
+const hmRome = (iso: string) =>
+  new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
 
 /** `daSede` = «Lavoro dalla sede sul progetto»: ore del cantiere, luogo la sede predefinita. */
 type RigaCantiere = {
@@ -330,6 +370,7 @@ export function RegistraGiornataDialog({
   mezzi,
   ultimoMezzoId,
   inUfficio = false,
+  scatola = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -343,6 +384,8 @@ export function RegistraGiornataDialog({
   ultimoMezzoId: string | null;
   /** Modalità di lavoro «ufficio» (scheda dipendente): il flag va al contrario. */
   inUfficio?: boolean;
+  /** La giornata timbrata al terminale da ripartire: estremi fissi, salvataggio su `ripartisciGiornataTimbro`. */
+  scatola?: ScatolaDialog | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -388,6 +431,39 @@ export function RegistraGiornataDialog({
     if (open) setFatto(false);
   }, [open]);
 
+  // Con una scatola timbrata gli estremi arrivano dai timbri: si impostano a
+  // ogni apertura, insieme al primo cantiere se il turno era aperto dall'app.
+  // Una pausa timbrata e' gia' fuori dal netto: non se ne propone un'altra.
+  useEffect(() => {
+    if (!open || !scatola) return;
+    setInizio(hmRome(scatola.inizioIso));
+    setPausaMin(scatola.pausaTimbrataMin > 0 ? 0 : scatola.nettoMin > 5 * 60 ? 60 : 0);
+    setRighe(
+      scatola.primoCantiere
+        ? [
+            {
+              cantiereId: scatola.primoCantiere.id,
+              nome: scatola.primoCantiere.nome,
+              codice: scatola.primoCantiere.codice,
+              minuti: 0,
+              daSede: false,
+            },
+          ]
+        : [],
+    );
+    setErrore(null);
+    // Solo all'apertura: la scatola non cambia finche' il dialog e' aperto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  /**
+   * Il caso normale e' «in sede» e il flag segna l'uscita: per chi lavora in
+   * ufficio, e per chi ha passato il badge al terminale (era li').
+   */
+  const invertito = inUfficio || (scatola?.inizioFisico ?? false);
+  const etichettaFlag = inUfficio ? 'Lavoro presso il cliente' : scatola ? 'Uscito in cantiere' : 'Lavoro dalla sede sul progetto';
+  const etichettaFlagCorta = inUfficio ? 'Dal cliente' : scatola ? 'In cantiere' : 'In sede';
+
   const assegnato = righe.reduce((a, r) => a + r.minuti, 0);
   const disponibili = (cantieri ?? []).filter((c) => !righe.some((r) => r.cantiereId === c.id));
 
@@ -418,8 +494,11 @@ export function RegistraGiornataDialog({
   // «Partenza» e «Rientro», cioè con la domanda che qui è l'eccezione. Per chi
   // lavora fuori serve almeno una riga, come è sempre stato.
   const tuttoInSede =
-    sedeDefault != null && (inUfficio || righe.length > 0) && righe.every((r) => r.daSede);
-  const mostraPartenza = !tuttoInSede && sediAndata.length > 0;
+    sedeDefault != null && (invertito || righe.length > 0) && righe.every((r) => r.daSede);
+  // Con un turno aperto dall'app l'andata l'ha gia' scritta l'avvio del turno:
+  // qui non si chiede, e il server comunque la ignora.
+  const andataGiaScritta = !!scatola?.primoCantiere;
+  const mostraPartenza = !tuttoInSede && sediAndata.length > 0 && !andataGiaScritta;
   const mostraRientro = !tuttoInSede && sediRitorno.length > 0;
 
   /**
@@ -448,9 +527,10 @@ export function RegistraGiornataDialog({
   const luogoDi = (cantiereId: string): Luogo =>
     luogoCantiere.get(cantiereId) ?? { tipo: 'cantiere', id: cantiereId };
   const andataSenzaViaggio =
-    luogoAndata?.tipo === 'sede' &&
-    primo != null &&
-    stessoPosto(inSede(luogoAndata.sedeId), luogoDi(primo));
+    andataGiaScritta ||
+    (luogoAndata?.tipo === 'sede' &&
+      primo != null &&
+      stessoPosto(inSede(luogoAndata.sedeId), luogoDi(primo)));
   const ritornoSenzaViaggio =
     luogoRitorno?.tipo === 'sede' &&
     ultimo != null &&
@@ -597,20 +677,31 @@ export function RegistraGiornataDialog({
   const [hhInizio, mmInizio] = inizio.split(':').map((x) => parseInt(x, 10));
   const inizioMin = (hhInizio ?? 0) * 60 + (mmInizio ?? 0);
   const durataMin = assegnato + pausaMin + trasferimentiMin;
-  const fine = spostaOrario(inizio, durataMin);
-  const oltreMezzanotte = assegnato > 0 && inizioMin + durataMin >= 24 * 60;
+  const fine = scatola ? hmRome(scatola.fineIso) : spostaOrario(inizio, durataMin);
+  const oltreMezzanotte = !scatola && assegnato > 0 && inizioMin + durataMin >= 24 * 60;
 
   // ── barra dei tempi ──────────────────────────────────────────────────────────
   const andataMin = minutiTratta(teAndata);
   const ritornoMin = minutiTratta(teRitorno);
   const viaggioTotaleMin = andataMin + ritornoMin + trasferimentiMin;
+  // Con la scatola il netto e' un fatto: presenza timbrata meno la pausa
+  // dichiarata, le tratte, e la strada agli estremi quando sta dentro
+  // (badge in sede). Senza scatola e' la somma di cio' che si dichiara.
+  const daAssegnare = scatola
+    ? scatola.nettoMin -
+      pausaMin -
+      trasferimentiMin -
+      (scatola.inizioFisico ? andataMin : 0) -
+      (scatola.fineFisica ? ritornoMin : 0)
+    : assegnato;
+  const restoScatola = scatola ? daAssegnare - assegnato : 0;
   const segmenti = segmentiBarraGiornata({
     andataMin,
     ritornoMin,
     minutiCantieri: righe.map((r) => r.minuti),
     trasferimentiMin: fraCantieri.prima,
     pausaMin,
-    nettoMin: assegnato,
+    nettoMin: daAssegnare,
   });
   const viaggioNoto =
     luogoAndata != null &&
@@ -865,9 +956,10 @@ export function RegistraGiornataDialog({
               nome,
               codice: codiceCantiereMostrato(c),
               minuti: 0,
-              // In modalità ufficio il caso normale è lavorare dalla sede: il
-              // lavoro nasce così, e il flag serve a dire quando si è usciti.
-              daSede: inUfficio && sedeDefault != null,
+              // In modalità ufficio (o con il badge passato in sede) il caso
+              // normale è lavorare dalla sede: il lavoro nasce così, e il flag
+              // serve a dire quando si è usciti.
+              daSede: invertito && sedeDefault != null,
             },
           ],
     );
@@ -877,7 +969,12 @@ export function RegistraGiornataDialog({
   async function salva() {
     setErrore(null);
     if (righe.length === 0) return setErrore('Aggiungi almeno un cantiere.');
-    if (righe.some((r) => r.minuti <= 0)) return setErrore('Ogni cantiere deve avere delle ore.');
+    // Con la scatola l'ultimo cantiere prende il resto: puo' partire da zero.
+    const senzaOre = scatola ? righe.slice(0, -1) : righe;
+    if (senzaOre.some((r) => r.minuti <= 0)) return setErrore('Ogni cantiere deve avere delle ore.');
+    if (scatola && restoScatola < 0) {
+      return setErrore(`Le ore dei cantieri superano la presenza timbrata di ${fmtHM(-restoScatola)}.`);
+    }
     // La fine dipende dalle tratte: prima si aspettano le stime.
     if (teAndata.inArrivo || teRitorno.inArrivo || fraCantieri.inArrivo) {
       return setErrore('Calcolo dei tempi di viaggio in corso: riprova tra un istante.');
@@ -927,17 +1024,18 @@ export function RegistraGiornataDialog({
       };
     };
 
+    // Con la scatola l'ultimo cantiere assorbe quello che resta.
+    const righeInvio = scatola
+      ? righe.map((r, i) => (i === righe.length - 1 ? { ...r, minuti: Math.max(0, r.minuti + restoScatola) } : r))
+      : righe;
+
     startTransition(async () => {
-      const res = await registraGiornataDaZero({
-        inizioIso: isoOggi(inizio),
-        fineIso: isoOggi(fine),
-        pausaMin,
-        split: righe.map((r) => ({
-          cantiereId: r.cantiereId,
-          minuti: r.minuti,
-          daSede: r.daSede || undefined,
-        })),
-        percorso: {
+      const split = righeInvio.map((r) => ({
+        cantiereId: r.cantiereId,
+        minuti: r.minuti,
+        daSede: r.daSede || undefined,
+      }));
+      const percorsoPayload = {
           andata: trattaPayload(teAndata, chiaveAndata, 'andata'),
           ritorno: trattaPayload(teRitorno, chiaveRitorno, 'ritorno'),
           passaggi: intermedie.map((t) => ({
@@ -956,8 +1054,21 @@ export function RegistraGiornataDialog({
                 : {};
             })(),
           })),
-        },
-      });
+      };
+      const res = scatola
+        ? await ripartisciGiornataTimbro({
+            giorno: scatola.giorno,
+            pausaMin,
+            split,
+            percorso: percorsoPayload,
+          })
+        : await registraGiornataDaZero({
+            inizioIso: isoOggi(inizio),
+            fineIso: isoOggi(fine),
+            pausaMin,
+            split,
+            percorso: percorsoPayload,
+          });
       if (res.ok) {
         // Conferma "premium": mostra l'effetto di successo, poi chiudi e ricarica.
         setFoglio(false);
@@ -982,6 +1093,15 @@ export function RegistraGiornataDialog({
     day: 'numeric',
     month: 'long',
   }).format(new Date());
+  const giornoOggi = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
+  const giornoEsteso = scatola
+    ? new Intl.DateTimeFormat('it-IT', {
+        timeZone: 'Europe/Rome',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+      }).format(new Date(`${scatola.giorno}T12:00:00Z`))
+    : oggiEsteso;
 
   /**
    * Il percorso, uguale nella pagina e nel foglio. `compatto` = nel foglio: i
@@ -1071,9 +1191,9 @@ export function RegistraGiornataDialog({
             {/* Si segna l'eccezione, non la regola: fuori è «in sede», in
                 ufficio è l'uscita dal cliente. Senza sede predefinita non c'è
                 nessuna eccezione da segnare: la casella non esiste nemmeno. */}
-            {(inUfficio ? sedeDefault != null && !r.daSede : r.daSede) ? (
+            {(invertito ? sedeDefault != null && !r.daSede : r.daSede) ? (
               <span className="text-primary shrink-0 text-[10px] font-semibold uppercase tracking-wide">
-                {inUfficio ? 'Dal cliente' : 'In sede'}
+                {etichettaFlagCorta}
               </span>
             ) : null}
             <span className="text-muted-foreground shrink-0 font-mono text-xs font-semibold tabular-nums">
@@ -1095,6 +1215,11 @@ export function RegistraGiornataDialog({
                   </p>
                 ) : null}
               </div>
+              {scatola?.primoCantiere && i === 0 ? (
+                <span className="text-muted-foreground shrink-0 pt-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                  Turno aperto
+                </span>
+              ) : (
               <button
                 type="button"
                 onClick={() => {
@@ -1107,9 +1232,12 @@ export function RegistraGiornataDialog({
               >
                 <X className="h-4 w-4" />
               </button>
+              )}
             </div>
             <div className="mt-1.5 flex items-center justify-between gap-2">
-              <span className="text-muted-foreground text-xs font-medium">Ore lavorate</span>
+              <span className="text-muted-foreground text-xs font-medium">
+                {scatola && i === righe.length - 1 && righe.length > 1 ? 'Ore lavorate (il resto va qui)' : 'Ore lavorate'}
+              </span>
               <StepperMin
                 minuti={r.minuti}
                 passo={passoMinuti}
@@ -1123,13 +1251,13 @@ export function RegistraGiornataDialog({
               <label className="mt-1.5 flex cursor-pointer select-none items-center gap-2">
                 <input
                   type="checkbox"
-                  checked={inUfficio ? !r.daSede : r.daSede}
+                  checked={invertito ? !r.daSede : r.daSede}
                   disabled={pending}
                   onChange={(e) =>
                     setRighe((prev) =>
                       prev.map((x, j) =>
                         j === i
-                          ? { ...x, daSede: inUfficio ? !e.target.checked : e.target.checked }
+                          ? { ...x, daSede: invertito ? !e.target.checked : e.target.checked }
                           : x,
                       ),
                     )
@@ -1137,7 +1265,7 @@ export function RegistraGiornataDialog({
                   className="border-input accent-primary h-4 w-4 rounded"
                 />
                 <span className="text-muted-foreground text-xs">
-                  {inUfficio ? 'Lavoro presso il cliente' : 'Lavoro dalla sede sul progetto'}
+                  {etichettaFlag}
                 </span>
               </label>
             ) : null}
@@ -1152,7 +1280,7 @@ export function RegistraGiornataDialog({
       // era. I dati non cambiano: il percorso si manda da `intermedie`.
       const fra = intermedie[i];
       const senzaTratta =
-        inUfficio && fra != null && stessoPosto(luogoDi(fra.da), luogoDi(fra.a));
+        invertito && fra != null && stessoPosto(luogoDi(fra.da), luogoDi(fra.a));
       if (tratta && !senzaTratta) {
         tappe.push({
           key: `tratta:${tratta.chiave}`,
@@ -1240,7 +1368,7 @@ export function RegistraGiornataDialog({
 
   const conPartenza = andataMin > 0;
   const conRientro = ritornoMin > 0;
-  const fineMostrata = assegnato > 0 ? fine : null;
+  const fineMostrata = scatola || assegnato > 0 ? fine : null;
 
   return (
     <Portal>
@@ -1248,7 +1376,7 @@ export function RegistraGiornataDialog({
         className="bg-background fixed inset-0 z-[80] flex flex-col overflow-hidden"
         role="dialog"
         aria-modal="true"
-        aria-label="Registra giornata"
+        aria-label={scatola ? 'Ripartisci la giornata' : 'Registra giornata'}
       >
         <div className="relative flex min-h-0 flex-1 flex-col">
           <header className="border-border flex shrink-0 items-center gap-2 border-b px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
@@ -1262,10 +1390,17 @@ export function RegistraGiornataDialog({
             </button>
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold leading-tight tracking-tight">
-                Registra giornata
+                {scatola
+                  ? scatola.giorno === giornoOggi
+                    ? 'Inserisci le commesse sulle quali hai lavorato oggi'
+                    : 'Inserisci le commesse sulle quali hai lavorato'
+                  : 'Registra giornata'}
               </h2>
               <p className="text-muted-foreground truncate text-[11px] leading-tight first-letter:uppercase">
-                {oggiEsteso} · senza timbrature
+                {scatola
+                  ? `${giornoEsteso} · timbrato ${inizio} → ${fine}` +
+                    (scatola.pausaTimbrataMin > 0 ? ` · pausa ${fmtHM(scatola.pausaTimbrataMin)}` : '')
+                  : `${oggiEsteso} · senza timbrature`}
               </p>
             </div>
           </header>
@@ -1291,7 +1426,9 @@ export function RegistraGiornataDialog({
                 </span>
               </span>
               <div className="animate-fade-up space-y-1">
-                <p className="text-foreground text-lg font-semibold">Giornata registrata</p>
+                <p className="text-foreground text-lg font-semibold">
+                  {scatola ? 'Ore salvate' : 'Giornata registrata'}
+                </p>
                 <p className="text-muted-foreground text-sm tabular-nums">
                   Lavoro {fmtHM(assegnato)}
                   {viaggioTotaleMin > 0 ? ` · Viaggio ${fmtHM(viaggioTotaleMin)}` : ''}
@@ -1316,6 +1453,11 @@ export function RegistraGiornataDialog({
                     <span className="text-primary font-mono text-base font-bold tabular-nums">
                       {fmtHM(assegnato)}
                     </span>
+                    {scatola ? (
+                      <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
+                        / {fmtHM(Math.max(0, daAssegnare))}
+                      </span>
+                    ) : null}
                   </span>
                 </div>
 
@@ -1323,18 +1465,40 @@ export function RegistraGiornataDialog({
                     time nativo iOS non allarga la traccia). */}
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
                   <TimeField
-                    label="Inizio lavoro"
+                    label={scatola ? 'Timbrato alle' : 'Inizio lavoro'}
                     value={inizio}
                     onChange={setInizio}
-                    disabled={pending}
+                    disabled={pending || !!scatola}
                   />
-                  <FineCalcolata ora={fineMostrata} />
+                  <FineCalcolata ora={fineMostrata} etichetta={scatola ? 'Timbrato alle' : undefined} />
                 </div>
                 <p
                   className="text-muted-foreground -mt-0.5 line-clamp-2 h-[2.75em] text-[11px] leading-snug"
                   aria-live="polite"
                 >
-                  {fineMostrata ? (
+                  {scatola ? (
+                    <>
+                      Presenza timbrata {fmtHM(scatola.nettoMin)}
+                      {pausaMin > 0 ? (
+                        <>
+                          {' '}
+                          − <span className="text-amber-700">{fmtHM(pausaMin)} di pausa</span>
+                        </>
+                      ) : null}
+                      {viaggioTotaleMin > 0 ? (
+                        <>
+                          {' '}
+                          − <span className="text-sky-700">{fmtHM(viaggioTotaleMin)} di strada</span>
+                        </>
+                      ) : null}
+                      {' = '}
+                      <span className="text-foreground font-semibold tabular-nums">
+                        {fmtHM(Math.max(0, daAssegnare))}
+                      </span>{' '}
+                      da ripartire
+                      {restoScatola > 0 && righe.length > 0 ? ` · ${fmtHM(restoScatola)} vanno sull’ultimo cantiere` : ''}
+                    </>
+                  ) : fineMostrata ? (
                     <>
                       <span className="tabular-nums">{inizio}</span> + {fmtHM(assegnato)} di lavoro
                       {pausaMin > 0 ? (
@@ -1449,16 +1613,20 @@ export function RegistraGiornataDialog({
               viaggioMin={viaggioTotaleMin}
               viaggioNoto={viaggioNoto}
               sinistra={
-                conPartenza
-                  ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) }
-                  : { etichetta: 'Inizio', ora: inizio }
+                scatola
+                  ? { etichetta: 'Timbrato', ora: inizio }
+                  : conPartenza
+                    ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) }
+                    : { etichetta: 'Inizio', ora: inizio }
               }
               destra={
-                !fineMostrata
-                  ? { etichetta: 'Fine', ora: '--:--' }
-                  : conRientro
-                    ? { etichetta: 'Rientro', ora: spostaOrario(fineMostrata, ritornoMin) }
-                    : { etichetta: 'Fine', ora: fineMostrata }
+                scatola
+                  ? { etichetta: 'Timbrato', ora: fine }
+                  : !fineMostrata
+                    ? { etichetta: 'Fine', ora: '--:--' }
+                    : conRientro
+                      ? { etichetta: 'Rientro', ora: spostaOrario(fineMostrata, ritornoMin) }
+                      : { etichetta: 'Fine', ora: fineMostrata }
               }
             />
             {errore ? (
@@ -1480,7 +1648,7 @@ export function RegistraGiornataDialog({
               ) : (
                 <CheckCircle2 className="h-[18px] w-[18px]" aria-hidden="true" />
               )}
-              Registra giornata
+              {scatola ? 'Salva le ore' : 'Registra giornata'}
             </button>
           </div>
         ) : null}

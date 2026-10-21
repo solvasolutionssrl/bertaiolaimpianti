@@ -1289,69 +1289,89 @@ vocabolario e una rotta che la legga.
 > `sistema`: con due integrazioni sullo stesso tenant i contatori si
 > sommerebbero.
 
-### Timbratrice Timbro ↔ Kommessa: il contratto e il contenitore (21/10/2026, migration `20261021120000`)
+### Timbratrice Timbro ↔ Kommessa: il contratto, il contenitore, la scatola (21–22/10/2026, migration `20261021120000` + `20261022090000`)
 
-Integrazione **per FPM**: Timbro (prodotto Solva a sé) e l'app di Kommessa
-diventano **due bocche interscambiabili dello stesso orologio** — si apre dall'app
-e si chiude al terminale, o il contrario. I timbri formano il **contenitore**
-della giornata; poi il tecnico dal telefono **riempie la scatola** per commessa.
+Integrazione **per FPM** (spenta finché il super admin non la accende): Timbro
+(prodotto Solva a sé) e l'app di Kommessa sono **due bocche interscambiabili
+dello stesso orologio**. I timbri formano il **contenitore** della giornata;
+poi il tecnico dal telefono (o l'ufficio dalla scrivania) **riempie la
+scatola** per commessa.
 
-📘 **Tutto il dettaglio**: `documentazione_generale/08_LOGICHE/Logiche_Integrazione_Timbro.md`.
+📘 **Tutto il dettaglio**: `documentazione_generale/08_LOGICHE/Logiche_Integrazione_Timbro.md` (v2.0, §7 «Com'è fatto»).
 
-> ⚠️ **Oggi non cambia niente per chi timbra.** I due pezzi costruiti sono
-> inerti — una tabella vuota e una funzione pura senza chiamanti. L'import non
-> è scritto.
-
-- ⭐ **Timbro espone eventi, non direzioni.** Ogni timbratura porta `kind`:
-  `badge_tap` (badge al terminale, **misurato**) o `entry` (inserita a mano).
-  `direction` resta nel payload ma è una **loro deduzione** e si ignora.
-  ⚠️ Il perché: con due bocche **nessuno dei due sistemi vede la sequenza
-  intera**, quindi nessuno può dedurre la direzione da solo — il terminale in
-  automatico timbra l'opposto dell'ultima direzione *che conosce*, e se il turno
-  si è aperto dall'app segnerebbe un'entrata invece dell'uscita. ⭐ Questa scelta
-  ha fatto cadere da sé tutto il verso in uscita: **niente chiamate verso host
-  esterni**, che in questo repo non esistono (zero `fetch` fuori, a parte OpenAI)
-  e sarebbero state la prima.
-- **`timbri_grezzi`**: il registro degli eventi, che è anche il **parcheggio**.
-  ⭐ Esiste perché `timbrature` ha `num_nonnulls(commessa_id, cantiere_id) = 1`
-  — ogni timbro dice anche *dove* — e un tocco di badge non lo sa. Così
-  `timbrature` **non si tocca**. Scioglie anche: l'idempotenza (`unique (tenant_id,
-  sorgente, esterno_id)`, che su `timbrature` **non esiste**), gli annullamenti
-  (un cambio di `stato`, non la cancellazione di una riga magari già approvata),
-  i badge non ancora assegnati, i timbri senza orario. ⚠️ RLS accesa, **nessuna
-  policy di scrittura** (solo service role), `anon` non ha nemmeno il privilegio
-  di lettura.
-- ⚠️⚠️ **Il contenitore è VIRTUALE: `timbrature` nasce solo all'attribuzione.**
-  La strada «timbri subito sulla sede, lo split li sposta» è stata **scartata**
-  per un fatto misurato: `/api/v1/ore` **non filtra per stato**, restituisce
-  anche le giornate in bozza, e decidere se portarle fuori **è dell'agente** —
-  cioè la decisione vive dentro ERGO, fuori dal nostro controllo. Con le ore già
-  scritte, l'agente di FPM le avrebbe esportate **attribuite alla sede**, e ERGO
-  è append-only. ⭐ **Nessuno stato nostro può fermare un export: l'unico
-  presidio sicuro è che le ore non esistano ancora.** Un'impossibilità
-  strutturale batte una regola — una regola la si può cambiare un domani senza
-  accorgersi di aver riaperto la fuga.
-- **La regola della sequenza**: `@kommessa/api/timbri-sequenza` (21 asserzioni,
-  4 mutazioni **viste fallire**). ⭐ **Si ricalcola la giornata, non si
-  appende**: un evento che arriva in ritardo *in mezzo* ribalta la direzione di
-  tutto ciò che viene dopo. ⭐ Fra due tocchi ravvicinati **vince l'orologio
-  fisso, non il telefono** (finestra 2 min; ⚠️ il dedupe esistente copre 25
-  secondi, pensato per il doppio tocco su un bottone, e non basta a coprire il
-  ritardo di un evento esterno). ⚠️ Due direzioni **dichiarate e opposte non si
-  fondono mai**: sono due fatti. ⚠️ Una dichiarazione che contraddice la
-  sequenza non si sovrascrive, **si segnala**.
-- ⚠️ **Le due porte per riempire la scatola sono entrambe chiuse**: lo split di
-  fine turno vuole **esattamente 1** timbro nella giornata (`giornataPulita`),
-  «Registra giornata» ne vuole **0**. Con il terminale di mezzo non si è né
-  nell'uno né nell'altro caso: il terzo momento **va costruito**, non riciclato.
-- ⚠️ Resta aperto: `origine` e `modalita` di `timbrature` non hanno un valore
-  per un terminale esterno (serviranno due CHECK allargati) · il token di Timbro
-  è **un segreto** e va verificato chi legge `tenant_modules.config` prima di
-  metterlo lì · `sistema` è **uno per tenant** e FPM ha già `ergo`, quindi il
-  suo posto giusto è il **token**, e le query di salute di `foto.ts` filtrano
-  solo per `tenant_id` · serve una **data di partenza** per l'import (i timbri di
-  collaudo di Timbro sono stati annullati alla fonte, ⭐ *un presidio nei dati
-  batte un presidio nel codice*, ma la data resta come seconda rete).
+- ⭐ **Timbro espone eventi, non direzioni**: la direzione la deduce chi tiene
+  il registro (`@kommessa/api/timbri-sequenza`). Niente chiamate in uscita
+  verso Timbro se non per leggere: nessun token di Kommessa va a loro.
+- ⭐⭐ **Il contenitore è VIRTUALE**: `timbri_grezzi` tiene i passaggi,
+  `timbrature` nasce **solo all'attribuzione** (`origine='timbro'`,
+  `modalita='timbratrice'`). Perché `/api/v1/ore` non filtra per stato e ERGO
+  è append-only: **l'unico presidio è che le ore non esistano ancora.**
+- ⚠️⚠️ **Il token sta in `integrazione_timbro`** (RLS senza policy, `revoke
+  all` da anon/authenticated), **mai** in `tenant_modules.config`: lì lo
+  leggerebbe ogni dipendente del cliente. Il tab Timbro lo prova prima di
+  salvarlo e non lo rilegge mai.
+- **L'import** (`_lib/timbro/import.ts`): riconciliazione a cursore ogni 2
+  minuti (`pg_cron` → `/api/cron/timbro-import`), `updated_since = cursore −
+  60 s`, upsert sulla chiave unica, cursore che avanza solo a giro riuscito.
+  Il webhook `/api/webhooks/timbro?t=<tenantId>` (HMAC a tempo costante) **non
+  scrive**: fa partire lo stesso giro. ⚠️ I giri vanno in
+  `integrazione_esecuzioni` con `sistema='timbro'`: le query di salute di
+  ERGO (`admin/_lib/integrazione/foto.ts`) filtrano `sistema <> 'timbro'`.
+- **Lo stato della giornata** è puro (`@kommessa/api/timbro-giornata`,
+  `statoGiornataTimbro`): `da_ripartire` · `da_chiudere` (turno aperto
+  dall'app e un timbro dopo: **il timbro lo chiude**, primo cantiere
+  obbligato) · `coperta` · `presenza_aperta` · `da_verificare`. ⭐ «Si apre
+  dall'app e si chiude al terminale» funziona innestando l'avvio del turno
+  nella sequenza come direzione dichiarata, solo se a quell'ora i timbri
+  dicono «fuori». ⭐ Ore attribuite **oltre** la presenza non sono una scatola
+  vuota: le giudica la soglia di verifica, non il tecnico.
+- **Riempire la scatola** (`riempiScatola`): il contenitore è una **lista di
+  intervalli**, non un `[ingresso, uscita]`: la pausa timbrata alle 12:31 resta
+  alle 12:31 (per questo non si riusa `calcolaSegmentiSplit`, che la mette
+  dove le pare). Andata e ritorno dalla sede stanno **dentro** il contenitore
+  quando l'estremo è un passaggio fisico. ⚠️ **Uno scrittore solo**:
+  `scriviGiornataRipartita` in `_actions/kantiere-timbra.ts`, estratto da
+  «Registra giornata» e riusato da `ripartisciGiornataTimbro`; `registraGiornataDaZero`
+  è rimasta **identica nel comportamento** (stesso motore, stessa pausa al centro).
+- **Il default «in sede»** con l'ingresso fisico: il flag del cantiere gira
+  come per chi lavora in ufficio (`invertito` nel dialog), «Uscito in cantiere»
+  fa calcolare strada e tempo dalla sede predefinita. Il dialog di «Registra
+  giornata» è **lo stesso** (`scatola` prop): titolo «Inserisci le commesse
+  sulle quali hai lavorato oggi», estremi fissi dai timbri, `Salva le ore`.
+- **Ufficio**: «Presenze e ore» mostra il pannello «giornate timbrate da
+  sistemare», righe sintetiche (`id` che comincia per `timbro:`) per chi ha
+  timbrato e non ripartito, i passaggi al terminale nel dettaglio
+  (`TimbriTerminale`), e il dialog `RipartisciTimbroDialog` da scrivania.
+  `OrigineLine` dice «Timbrata · terminale»; la cronologia «Dai timbri del
+  terminale».
+- **Super admin**: tab **Timbro** (stato spento/osservazione/attivo, data di
+  partenza, token, webhook, «Leggi ora», abbinamento persone Timbro ↔ nostre
+  via `external_id` con suggerimento per matricola o nome, giornate recenti),
+  semaforo in `/admin/integrazioni` (`@kommessa/api/timbro-salute`, pura), e
+  tab **Regole**: il censimento di tutte le regolette del mondo presenze con
+  scritto **chi ha la chiave** (ufficio / super admin / scheda persona / nel
+  codice). ⭐ Una regola «nel codice» diventa un'impostazione solo quando una
+  riga di codice la legge.
+- **Promemoria «inserisci le ore»**: avviso `ore_da_inserire` (in
+  `@kommessa/api/avvisi`, quindi governabile dalla persona) mandato da
+  `/api/cron/promemoria-ore` ogni quarto d'ora nella finestra della sera
+  (oggi) e della mattina (ieri e prima). Orari per cliente in
+  `config.promemoria_ore` (Impostazioni Kantiere → Approvazione giornate).
+- ⚠️⚠️ **Le push non arrivavano perché nessuno le aveva attivate**: al 21/10
+  **una** sottoscrizione su quattro clienti, e la pagina che chiede il permesso
+  sta due livelli sotto il profilo. Ora il banner «Attiva le notifiche su
+  questo telefono» (`mobile/_components/attiva-notifiche-banner.tsx`) compare
+  finché non c'è una sottoscrizione. Su iPhone serve l'app **aggiunta alla
+  Home** (iOS ≥ 16.4); su Samsung le notifiche dei siti possono essere spente
+  nelle impostazioni di sistema del browser.
+- ⚠️ **`/api/v1/ore` è ordinata davvero** (22/10): chiave `(rapportino_id, id)`,
+  entrambe di primo livello, con `daCursore`. Prima ordinava per `id` e il
+  cursore filtrava su una colonna dell'embed che PostgREST **non** usa per
+  ordinare i padri (misurato: 21 righe su 358 paginando a 5). Il cursore è
+  opaco per l'agente, che lo rimanda e basta.
+- Banchi: `scripts/banco-ui/timbro.mjs` (giornata solo-badge) e
+  `timbro-chiudere.mjs` (turno dall'app chiuso al terminale): scrivono sul
+  tenant demo, si ripulisce a mano.
 
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 

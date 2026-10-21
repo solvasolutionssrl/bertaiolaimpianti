@@ -32,6 +32,7 @@ export const MODALITA_TIMBRATURA = [
   'pausa_dichiarata',
   'pausa_chiusa_sistema',
   'ufficio',
+  'timbratrice',
 ] as const;
 export type ModalitaTimbratura = (typeof MODALITA_TIMBRATURA)[number];
 
@@ -58,6 +59,7 @@ export const MODALITA_ETICHETTA: Record<ModalitaTimbratura, string> = {
   pausa_dichiarata: 'Dichiarata alla chiusura',
   pausa_chiusa_sistema: 'Chiusa in automatico',
   ufficio: 'Inserita dall’ufficio',
+  timbratrice: 'Dai timbri del terminale',
 };
 
 /** Chi ha fatto l'azione, per colore e raggruppamento nell'interfaccia. */
@@ -233,6 +235,7 @@ export function modalitaDi(
 
   if (t.autoChiusa) return ric('pausa_chiusa_sistema');
   if (t.origine === 'capo') return ric('capo');
+  if (t.origine === 'timbro') return ric('timbratrice');
   if (t.creatoDa && contesto.userIdPersona && t.creatoDa !== contesto.userIdPersona) {
     return ric('ufficio');
   }
@@ -445,7 +448,13 @@ export function costruisciCronologia(input: InputCronologia): EventoCronologia[]
   const eventi: EventoCronologia[] = [];
   const timb = [...input.timbrature].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
   const giornataConTimbratureVere = timb.some(
-    (t) => t.modalita === 'qr' || t.modalita === 'app' || t.origine === 'qr' || t.origine === 'cronometro',
+    (t) =>
+      t.modalita === 'qr' ||
+      t.modalita === 'app' ||
+      t.modalita === 'timbratrice' ||
+      t.origine === 'qr' ||
+      t.origine === 'cronometro' ||
+      t.origine === 'timbro',
   );
   const tsPerTimbratura = new Map(timb.map((t) => [t.id, t.ts]));
 
@@ -762,7 +771,13 @@ export function affidabilitaGiornata(input: {
   userIdPersona: string | null;
 }): Affidabilita {
   const giornataConTimbratureVere = input.timbrature.some(
-    (t) => t.modalita === 'qr' || t.modalita === 'app' || t.origine === 'qr' || t.origine === 'cronometro',
+    (t) =>
+      t.modalita === 'qr' ||
+      t.modalita === 'app' ||
+      t.modalita === 'timbratrice' ||
+      t.origine === 'qr' ||
+      t.origine === 'cronometro' ||
+      t.origine === 'timbro',
   );
   const modalita = input.timbrature.map(
     (t) =>

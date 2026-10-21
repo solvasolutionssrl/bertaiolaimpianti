@@ -2,8 +2,9 @@ import { createServiceSupabase } from '@kommessa/api/service';
 
 import { requirePlatformAdmin } from '../_lib/guard';
 import { fotoCollegamenti } from '../_lib/integrazione/foto';
+import { fotoTimbro } from '../_lib/timbro/foto';
 import { IntegrazioniClient } from './_components/integrazioni-client';
-import type { EsecuzioneRow, RigaCollegamento, ScritturaRow } from './_components/tipi';
+import type { EsecuzioneRow, RigaCollegamento, RigaTimbro, ScritturaRow } from './_components/tipi';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,7 +56,7 @@ export default async function IntegrazioniPage() {
   await requirePlatformAdmin();
   const service = createServiceSupabase();
 
-  const [collegamenti, tenantsRes, scrittureRes, esecuzioniRes] = await Promise.all([
+  const [collegamenti, tenantsRes, scrittureRes, esecuzioniRes, timbroRows] = await Promise.all([
     fotoCollegamenti(),
     service.from('tenants').select('id, nome'),
     service
@@ -72,7 +73,22 @@ export default async function IntegrazioniPage() {
       )
       .order('avviata_at', { ascending: false })
       .limit(LIMITE_ESECUZIONI),
+    fotoTimbro(),
   ]);
+
+  const timbro: RigaTimbro[] = timbroRows.map((t) => ({
+    tenantId: t.tenantId,
+    tenant: t.tenant,
+    stato: t.diagnosi.stato,
+    statoCollegamento: t.stato.stato,
+    motivi: t.diagnosi.motivi,
+    ultimoGiroAt: t.stato.ultimoGiroAt,
+    ultimoTimbroAt: t.stato.ultimoTimbroAt,
+    timbri24h: t.timbri24h,
+    daRipartire: t.giornate.daRipartire,
+    daVerificare: t.giornate.daVerificare,
+    orfani: t.foto.orfani,
+  }));
 
   const nomeTenant = new Map(
     ((tenantsRes.data ?? []) as unknown as { id: string; nome: string }[]).map((t) => [
@@ -139,5 +155,5 @@ export default async function IntegrazioniPage() {
     conclusaAt: e.conclusa_at,
   }));
 
-  return <IntegrazioniClient righe={righe} scritture={scritture} giri={giri} />;
+  return <IntegrazioniClient righe={righe} scritture={scritture} giri={giri} timbro={timbro} />;
 }

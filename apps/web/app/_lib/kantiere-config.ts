@@ -62,6 +62,31 @@ export interface ImpostazioniKantiere {
   anomalie: AnomalieKantiere;
   /** `kontabilita_attiva`: spese di cantiere. Predefinito sì. */
   kontabilitaAttiva: boolean;
+  /**
+   * `promemoria_ore`: l'avviso «inserisci le ore» a chi ha timbrato al
+   * terminale e non ha ancora ripartito. Due orari (HH:MM, ora italiana): la
+   * sera per oggi, la mattina dopo per ieri. Predefiniti 18:00 e 08:00, acceso.
+   */
+  promemoriaOre: PromemoriaOre;
+}
+
+export interface PromemoriaOre {
+  attivo: boolean;
+  sera: string;
+  mattina: string;
+}
+
+const ORA_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+export const PROMEMORIA_ORE_PREDEFINITO: PromemoriaOre = { attivo: true, sera: '18:00', mattina: '08:00' };
+
+export function promemoriaOreDaConfig(v: unknown): PromemoriaOre {
+  const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+  const ora = (x: unknown, def: string) => (typeof x === 'string' && ORA_HHMM.test(x) ? x : def);
+  return {
+    attivo: o['attivo'] !== false,
+    sera: ora(o['sera'], PROMEMORIA_ORE_PREDEFINITO.sera),
+    mattina: ora(o['mattina'], PROMEMORIA_ORE_PREDEFINITO.mattina),
+  };
 }
 
 export const PASSI_MINUTI_STEPPER = [5, 10, 15, 30] as const;
@@ -119,6 +144,7 @@ export function impostazioniDaConfig(config: Record<string, unknown>): Impostazi
       ore_eccessive: an['ore_eccessive'] !== false,
     },
     kontabilitaAttiva: config['kontabilita_attiva'] !== false,
+    promemoriaOre: promemoriaOreDaConfig(config['promemoria_ore']),
   };
 }
 

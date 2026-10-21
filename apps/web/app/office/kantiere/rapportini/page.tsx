@@ -15,6 +15,9 @@ import {
   leggiPolicyRapportini,
   leggiSogliaPausaPranzoOre,
 } from '@/app/_lib/kantiere-config';
+import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
+import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
+import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 
@@ -607,6 +610,57 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     };
   });
 
+  // ── Le giornate viste dai timbri del terminale (Timbro) ───────────────────
+  // Solo se il collegamento esiste: per gli altri clienti non costa una lettura.
+  const statoTimbro = await leggiStatoTimbro(ctx.tenantId);
+  let timbroGiornate: TimbroGiornataVista[] = [];
+  if (statoTimbro.stato !== 'spento') {
+    const nomeCantiere = (id: string) => {
+      const n = cantieriNomeMap.get(id);
+      return n ? { nome: n, codice: null } : null;
+    };
+    const letta = await leggiGiornateTimbro(supabase, ctx.tenantId, {
+      dalGiorno: from,
+      alGiorno: to,
+      dipendenteId: dipendenteFilter || undefined,
+    });
+    for (const g of letta.values()) {
+      timbroGiornate.push(
+        vistaDaGiornata(g, dipendentiMap.get(g.dipendenteId) ?? g.dipendenteId, nomeCantiere),
+      );
+    }
+    timbroGiornate.sort((a, b) => b.giorno.localeCompare(a.giorno) || a.dipendenteNome.localeCompare(b.dipendenteNome));
+    // Si attaccano alle giornate che hanno gia' un rapportino; quelle senza
+    // diventano righe a se': la presenza c'e', le ore sui cantieri no.
+    const perChiave = new Map(timbroGiornate.map((g) => [g.chiave, g]));
+    for (const r of righe) {
+      const g = perChiave.get(`${r.dipendenteId}:${r.data}`);
+      if (g) {
+        r.timbro = g;
+        perChiave.delete(g.chiave);
+      }
+    }
+    if (!cantiereFilter && !statoFilter) {
+      for (const g of perChiave.values()) {
+        righe.push({
+          id: `timbro:${g.chiave}`,
+          dipendenteId: g.dipendenteId,
+          dipendenteNome: g.dipendenteNome,
+          data: g.giorno,
+          stato: 'bozza',
+          inviatoAt: null,
+          note: null,
+          totale: { ord: 0, straord: 0, viaggio: 0, lavoro: 0, ordinarie: 0, viaggioEccedente: 0 },
+          nRighe: 0,
+          righe: [],
+          timbrature: [],
+          timbro: g,
+        });
+      }
+      righe.sort((a, b) => b.data.localeCompare(a.data) || a.dipendenteNome.localeCompare(b.dipendenteNome));
+    }
+  }
+
   // Carica tutti i dipendenti attivi per il filtro e per il dialog "Registra ore"
   const { data: tuttiDipendenti } = (await supabase
     .from('dipendenti' as never)
@@ -695,6 +749,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         commesse={commessePicker}
         cantieri={cantieriPicker}
         giorniAperti={giorniAperti}
+        timbroGiornate={timbroGiornate}
         oggi={oggiRome}
         sogliaOre={sogliaAnomaliaTurnoOre}
         sogliaPausaOre={sogliaPausaOre}

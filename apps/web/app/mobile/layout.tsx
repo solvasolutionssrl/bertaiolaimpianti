@@ -25,6 +25,7 @@ import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
 import NuovaVersione from './_components/nuova-versione';
+import { AttivaNotificheBanner } from './_components/attiva-notifiche-banner';
 import { AppleSplashLinks } from '../_components/apple-splash-links';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
@@ -172,6 +173,10 @@ export default async function MobileLayout({
             barra esisteva solo sotto /office. Sta dentro <main>, sopra il
             contenuto: scorre con la pagina ma si ritrova risalendo, e non
             interferisce con la barra in basso ne' con le aree di sicurezza. */}
+        {/* Le notifiche sul telefono partono solo dopo un si' dato dentro un
+            tocco: la pagina che lo chiede sta nel profilo, dove nessuno va da
+            solo. Una riga, chiudibile, su ogni telefono che non le ha. */}
+        {ctx ? <AttivaNotificheBanner /> : null}
         {shadow ? (
           <ImpersonationBanner
             chi={etichettaImpersonazione({

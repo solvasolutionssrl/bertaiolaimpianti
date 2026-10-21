@@ -9,7 +9,7 @@ import {
   SemaforoCollegamento,
   etichettaStato,
 } from '../../_components/semaforo-collegamento';
-import type { EsecuzioneRow, RigaCollegamento, ScritturaRow } from './tipi';
+import type { EsecuzioneRow, RigaCollegamento, RigaTimbro, ScritturaRow } from './tipi';
 
 const fmt = new Intl.DateTimeFormat('it-IT', {
   timeZone: 'Europe/Rome',
@@ -94,10 +94,12 @@ export function IntegrazioniClient({
   righe,
   scritture,
   giri,
+  timbro = [],
 }: {
   righe: RigaCollegamento[];
   scritture: ScritturaRow[];
   giri: EsecuzioneRow[];
+  timbro?: RigaTimbro[];
 }) {
   const [tab, setTab] = React.useState<Tab>('stato');
   const [soloErrori, setSoloErrori] = React.useState(false);
@@ -255,6 +257,90 @@ export function IntegrazioniClient({
                         {et}
                       </p>
                       <p className="truncate text-sm font-semibold tabular-nums">{v}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === 'stato' && timbro.length > 0 ? (
+        <div className="space-y-3">
+          <h2 className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Timbratrici
+          </h2>
+          {timbro.map((r) => (
+            <Card
+              key={`timbro:${r.tenantId}`}
+              className={cn(
+                r.stato === 'guasto' && 'border-red-500/40',
+                r.stato === 'attenzione' && 'border-amber-500/40',
+              )}
+            >
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <SemaforoCollegamento stato={r.stato} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate font-semibold">{r.tenant}</p>
+                        <Badge variant="outline" className="text-[10px]">
+                          timbro
+                        </Badge>
+                        {r.statoCollegamento === 'spento' ? (
+                          <Badge className="bg-slate-200 text-[10px] font-normal text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <PowerOff className="mr-1 h-3 w-3" aria-hidden="true" />
+                            spento
+                          </Badge>
+                        ) : null}
+                        {r.statoCollegamento === 'osservazione' ? (
+                          <Badge className="bg-sky-100 text-[10px] font-normal text-sky-800 dark:bg-sky-950 dark:text-sky-300">
+                            <FlaskConical className="mr-1 h-3 w-3" aria-hidden="true" />
+                            osservazione
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <ul className="mt-1 space-y-0.5">
+                        {r.motivi.map((m) => (
+                          <li key={m} className="text-xs text-muted-foreground">
+                            {m}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/admin/tenants/${r.tenantId}?tab=timbro`}
+                    className="inline-flex shrink-0 items-center gap-0.5 text-xs text-primary hover:underline"
+                  >
+                    {etichettaStato(r.stato) === 'Regolare' ? 'Gestisci' : 'Vai a sistemare'}
+                    <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Link>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-6">
+                  {(
+                    [
+                      ['Ultimo giro', quando(r.ultimoGiroAt), ''],
+                      ['Ultimo timbro', quando(r.ultimoTimbroAt), ''],
+                      ['Timbri 24h', String(r.timbri24h), ''],
+                      ['Da ripartire', String(r.daRipartire), r.daRipartire > 0 ? 'ambra' : ''],
+                      ['Da verificare', String(r.daVerificare), r.daVerificare > 0 ? 'ambra' : ''],
+                      ['Senza persona', String(r.orfani), r.orfani > 0 ? 'ambra' : ''],
+                    ] as [string, string, string][]
+                  ).map(([et, v, tono]) => (
+                    <div key={et} className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{et}</p>
+                      <p
+                        className={cn(
+                          'truncate text-sm font-semibold tabular-nums',
+                          tono === 'ambra' && 'text-amber-700',
+                          tono === 'rosso' && 'text-red-700',
+                        )}
+                      >
+                        {v}
+                      </p>
                     </div>
                   ))}
                 </div>

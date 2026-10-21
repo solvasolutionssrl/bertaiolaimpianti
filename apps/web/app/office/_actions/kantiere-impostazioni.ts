@@ -54,6 +54,14 @@ const schema = z.object({
   anomalie: anomalieSchema.optional(),
   // Kontabilità
   kontabilitaAttiva: z.boolean().optional(),
+  // Promemoria ore (giornate timbrate al terminale)
+  promemoriaOre: z
+    .object({
+      attivo: z.boolean(),
+      sera: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+      mattina: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    })
+    .optional(),
 });
 
 /** Chiavi che nessun codice legge più: si tolgono al primo salvataggio. */
@@ -106,6 +114,7 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   imposta('anomalia_turno_ore_max', d.anomaliaTurnoOreMax);
   imposta('anomalie', d.anomalie);
   imposta('kontabilita_attiva', d.kontabilitaAttiva);
+  imposta('promemoria_ore', d.promemoriaOre);
   for (const chiave of CHIAVI_DISMESSE) delete newConfig[chiave];
 
   const { error: updateError } = await supabase

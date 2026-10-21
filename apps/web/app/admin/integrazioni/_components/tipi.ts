@@ -67,3 +67,18 @@ export interface EsecuzioneRow {
   avviataAt: string;
   conclusaAt: string | null;
 }
+
+/** Una timbratrice collegata: un cliente, come sta. Il giudizio arriva da `valutaTimbro`. */
+export interface RigaTimbro {
+  tenantId: string;
+  tenant: string;
+  stato: StatoCollegamento;
+  statoCollegamento: 'spento' | 'osservazione' | 'attivo';
+  motivi: string[];
+  ultimoGiroAt: string | null;
+  ultimoTimbroAt: string | null;
+  timbri24h: number;
+  daRipartire: number;
+  daVerificare: number;
+  orfani: number;
+}

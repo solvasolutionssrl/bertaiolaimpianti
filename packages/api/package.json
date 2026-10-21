@@ -13,6 +13,8 @@
     "./modules": "./src/modules.ts",
     "./scope-api": "./src/scope-api.ts",
     "./timbri-sequenza": "./src/timbri-sequenza.ts",
+    "./timbro-giornata": "./src/timbro-giornata.ts",
+    "./timbro-salute": "./src/timbro-salute.ts",
     "./kantiere": "./src/kantiere.ts",
     "./stato-lavoro": "./src/stato-lavoro.ts",
     "./kantiere-qr": "./src/kantiere-qr.ts",

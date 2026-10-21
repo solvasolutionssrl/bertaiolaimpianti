@@ -43,7 +43,7 @@ export interface MetaAvviso {
 }
 
 /**
- * I cinque avvisi che qualcuno manda davvero.
+ * I sei avvisi che qualcuno manda davvero.
  *
  * Per aggiungerne uno: prima la riga di codice che lo manda, poi la voce qui.
  * Mai il contrario.
@@ -84,6 +84,15 @@ export const AVVISI: readonly MetaAvviso[] = [
     // una cosa che non puoi fare è solo un telefono che squilla.
     quando: 'Quando qualcuno chiede ferie o un permesso e tocca a te decidere.',
     ruoli: ['admin', 'office'],
+    pushPredefinita: true,
+  },
+  {
+    codice: 'ore_da_inserire',
+    etichetta: 'Ore da inserire',
+    // Mandato dal promemoria delle ore (`/api/cron/promemoria-ore`): la
+    // giornata timbrata al terminale non e' ancora stata ripartita.
+    quando: 'La sera, e la mattina dopo, se hai timbrato ma non hai ancora detto su quali commesse hai lavorato.',
+    ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
   },
 ] as const;

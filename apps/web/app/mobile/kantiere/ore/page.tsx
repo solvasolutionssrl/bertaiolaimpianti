@@ -15,6 +15,9 @@ import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
+import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
+import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
+import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 
 export const metadata: Metadata = {
   title: 'Le mie ore di oggi',
@@ -173,6 +176,28 @@ export default async function MobileOrePage() {
   const inUfficio = modalita === 'ufficio';
   const storico = storicoRes.ok ? storicoRes.giorni : [];
 
+  // La giornata vista dal terminale (Timbro): oggi, e la piu' vecchia ancora
+  // da ripartire. Solo se il collegamento e' acceso per i tecnici.
+  let timbroOggi: TimbroGiornataVista | null = null;
+  let timbroDaFare: TimbroGiornataVista | null = null;
+  if (dipendenteId) {
+    const st = await leggiStatoTimbro(ctx.tenantId);
+    const apertoAMe = st.stato === 'attivo' || (st.stato === 'osservazione' && ctx.role !== 'tecnico');
+    if (apertoAMe) {
+      const nomeCantiere = (id: string) => {
+        const c = cantieriDisponibili.find((x) => x.id === id);
+        return c ? { nome: c.nome ?? 'Cantiere', codice: c.codice ?? null } : null;
+      };
+      const { oggi, daFare } = await giornateTimbroPersona(supabase, ctx.tenantId, dipendenteId);
+      timbroOggi = oggi ? vistaDaGiornata(oggi, '', nomeCantiere) : null;
+      timbroDaFare = daFare ? vistaDaGiornata(daFare, '', nomeCantiere) : null;
+    }
+  }
+  // Con un turno aperto dall'app che il terminale ha gia' chiuso, la card del
+  // turno direbbe «Fine turno» a chi e' gia' uscito: la giornata si chiude
+  // ripartendo le ore, e la card non si mostra.
+  const turnoChiusoDalTimbro = timbroDaFare?.stato === 'da_chiudere';
+
   // Se c'è un turno aperto, la stessa card azioni della home/scheda cantiere
   // (pausa pranzo + fine turno), con header tappabile verso il cantiere.
   const azioni = turno
@@ -195,7 +220,7 @@ export default async function MobileOrePage() {
         </div>
       </header>
 
-      {turno && azioni ? (
+      {turno && azioni && !turnoChiusoDalTimbro ? (
         <TurnoAzioniCantiere
           cantiereId={turno.cantiereId}
           cantiereNome={turno.cantiereNome}
@@ -229,6 +254,8 @@ export default async function MobileOrePage() {
         passoMinuti={impTurno.passoMinuti}
         stepViaggio={arrotondamenti.viaggioMin}
         inUfficio={inUfficio}
+        timbroOggi={timbroOggi}
+        timbroDaFare={timbroDaFare}
       />
 
       <StoricoOre giorni={storico} passo={impTurno.passoMinuti} />

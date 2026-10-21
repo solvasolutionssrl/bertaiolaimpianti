@@ -131,16 +131,21 @@ export async function fotoCollegamenti(
           .eq('esito', 'errore')
           .order('registrato_at', { ascending: false })
           .limit(1),
+        // ⚠️ `sistema`: dal 22/10/2026 anche la timbratrice scrive i suoi giri
+        // qui (sistema 'timbro'). Senza il filtro, il semaforo del gestionale
+        // si prenderebbe i giri di un altro collegamento.
         service
           .from('integrazione_esecuzioni' as never)
           .select('avviata_at')
           .eq('tenant_id', m.tenant_id)
+          .neq('sistema', 'timbro')
           .order('avviata_at', { ascending: false })
           .limit(1),
         service
           .from('integrazione_esecuzioni' as never)
           .select('id', { count: 'exact', head: true })
           .eq('tenant_id', m.tenant_id)
+          .neq('sistema', 'timbro')
           .is('conclusa_at', null)
           .lt('avviata_at', new Date(adesso - GIRO_APERTO_DA_ORE * 3_600_000).toISOString()),
         // `last_used_at` e' il segnale piu' onesto: dice che l'agente ha
@@ -179,6 +184,7 @@ export async function fotoCollegamenti(
           .from('integrazione_esecuzioni' as never)
           .select('conclusa_at, dettaglio')
           .eq('tenant_id', m.tenant_id)
+          .neq('sistema', 'timbro')
           .eq('direzione', 'lettura')
           .not('conclusa_at', 'is', null)
           .order('conclusa_at', { ascending: false })
