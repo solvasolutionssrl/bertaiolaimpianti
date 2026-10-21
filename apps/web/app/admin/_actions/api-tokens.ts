@@ -6,6 +6,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 
 import { requirePlatformAdmin } from '../_lib/guard';
 import { generaTokenInChiaro, hashToken } from '../../_lib/api-token';
+import { scopeValido, vocePerScope, type ScopeApi } from '@kommessa/api/scope-api';
 
 /**
  * Gestione dei token personali per il comando iOS "Carica su Kommessa".
@@ -20,23 +21,19 @@ export interface RisultatoCreazione {
 }
 
 /**
- * A cosa serve il token. Sono mondi separati e non si mescolano: un token per
- * l'integrazione non deve poter caricare foto, e viceversa.
- * - `upload`       : comando iOS "Carica su Kommessa" (un telefono, una persona).
- * - `integrazione` : agente di sincronizzazione col gestionale del cliente
- *                    (una macchina dentro la loro rete). Apre solo `/api/v1/*`,
- *                    e solo finche' il modulo integrazione resta acceso per
- *                    quel cliente: spegnerlo chiude il rubinetto senza revocare
- *                    niente.
+ * A cosa serve il token: l'elenco, le etichette e le regole stanno in
+ * `@kommessa/api/scope-api`, insieme a chi li verifica. Qui c'era una copia
+ * dell'elenco (`ScopeTokenAdmin`) e in `_lib/api-token.ts` ce n'era un'altra:
+ * il primo scope aggiunto da una parte e non dall'altra sarebbe diventato un
+ * permesso emettibile che nessuno riconosce.
  */
-export type ScopeTokenAdmin = 'upload' | 'integrazione';
 
 export async function creaApiToken(input: {
   tenantId: string;
   /** Solo per i token `upload`: un agente non agisce per conto di nessuno. */
   userId?: string | null;
   label: string;
-  scope?: ScopeTokenAdmin;
+  scope?: ScopeApi;
 }): Promise<RisultatoCreazione> {
   const admin = await requirePlatformAdmin();
 
@@ -44,13 +41,20 @@ export async function creaApiToken(input: {
   if (!label) return { ok: false, error: 'Serve un’etichetta.' };
   if (!input.tenantId) return { ok: false, error: 'Serve un’azienda.' };
 
-  const scope: ScopeTokenAdmin = input.scope === 'integrazione' ? 'integrazione' : 'upload';
+  // ⚠️ Uno scope sconosciuto si RIFIUTA, non si corregge: ripiegare su
+  // 'upload' vorrebbe dire emettere un token con permessi diversi da quelli
+  // chiesti, e chi l'ha chiesto non se ne accorgerebbe.
+  if (input.scope !== undefined && !scopeValido(input.scope)) {
+    return { ok: false, error: 'Permesso non riconosciuto.' };
+  }
+  const scope: ScopeApi = input.scope ?? 'upload';
+  const voce = vocePerScope(scope);
 
   // Un token `upload` E' una persona: i file caricati risultano suoi e l'audit
-  // deve poter dire chi ha fatto cosa. Un token di integrazione no — chi chiama
-  // e' una macchina, e attribuirla a un dipendente sarebbe un dato falso.
-  const userId = scope === 'integrazione' ? null : (input.userId ?? null);
-  if (scope === 'upload' && !userId) {
+  // deve poter dire chi ha fatto cosa. Gli altri no — chi chiama e' una
+  // macchina, e attribuirla a un dipendente sarebbe un dato falso.
+  const userId = voce?.vuolePersona ? (input.userId ?? null) : null;
+  if (voce?.vuolePersona && !userId) {
     return { ok: false, error: 'Serve la persona a cui intestare il token.' };
   }
 

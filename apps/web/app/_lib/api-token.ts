@@ -5,6 +5,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 
 import { createServiceSupabase } from '@kommessa/api/service';
+import { soddisfa, type ScopeApi } from '@kommessa/api/scope-api';
 
 /**
  * Token personali per integrazioni esterne (comando iOS "Carica su Kommessa").
@@ -29,14 +30,12 @@ export function hashToken(inChiaro: string): string {
 }
 
 /**
- * Permessi concedibili a un token.
- * - `upload`       : comando iOS "Carica su Kommessa" (elenco commesse + invio file).
- * - `integrazione` : agente di sync verso il gestionale di un cliente. Apre SOLO
- *                    l'API pubblica `/api/v1/*`, e solo se il modulo
- *                    `integrazione` e' acceso per quel cliente — nessun accesso
- *                    ai media, alle commesse o al resto dell'app.
+ * I permessi concedibili a un token vivono in **un** posto:
+ * `@kommessa/api/scope-api`. Qui c'era una copia dell'elenco, e il pannello di
+ * emissione ne aveva una seconda: due elenchi della stessa cosa in due file
+ * che nessuno modifica insieme.
  */
-export type ScopeToken = 'upload' | 'integrazione';
+export type { ScopeApi };
 
 export interface ContestoToken {
   tokenId: string;
@@ -96,11 +95,11 @@ export async function autenticaToken(
 ): Promise<(ContestoToken & { userId: string }) | null>;
 export async function autenticaToken(
   request: Request,
-  scopeRichiesto: ScopeToken,
+  scopeRichiesto: ScopeApi,
 ): Promise<ContestoToken | null>;
 export async function autenticaToken(
   request: Request,
-  scopeRichiesto: ScopeToken,
+  scopeRichiesto: ScopeApi,
 ): Promise<ContestoToken | null> {
   const inChiaro = leggiHeader(request);
   if (!inChiaro || !inChiaro.startsWith(PREFISSO)) return null;
@@ -132,8 +131,12 @@ export async function autenticaToken(
   const b = Buffer.from(hashToken(inChiaro), 'hex');
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
+  // ⚠️ Non e' un'appartenenza semplice: `soddisfa` conosce la gerarchia (chi
+  // puo' leggere i costi puo' leggere anche senza, il gestionale puo' tutto in
+  // lettura), e la conosce da una tabella scritta a mano — non dal prefisso dei
+  // nomi, che aprirebbe permessi per sbaglio.
   const scopes = riga.scopes ?? [];
-  if (!scopes.includes(scopeRichiesto)) return null;
+  if (!soddisfa(scopes, scopeRichiesto)) return null;
 
   // Un token `upload` senza persona non e' utilizzabile: i file finirebbero
   // senza proprietario e l'audit senza autore. Il vincolo in tabella lo impedisce,

@@ -14,6 +14,18 @@ const BaseSchema = z.object({
   cognome: z.string().min(1).max(80),
   mansione: z.string().max(120).optional().nullable(),
   codice_interno: z.string().max(60).optional().nullable(),
+  /**
+   * Data di nascita, `AAAA-MM-GG`. La chiede la timbratrice per fare gli
+   * auguri all'ingresso. Il `refine` serve perche' la sola forma non basta:
+   * `2026-02-30` passa il controllo dei numeri e poi la rifiuta Postgres, con
+   * un messaggio in inglese che l'utente non puo' correggere.
+   */
+  data_nascita: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'La data di nascita va scritta come AAAA-MM-GG')
+    .refine((s) => !Number.isNaN(Date.parse(s)), 'Data di nascita non valida')
+    .optional()
+    .nullable(),
   user_id: z.string().uuid().optional().nullable(),
   stato_attivo: z.boolean().optional(),
   a_turni: z.boolean().optional(),
@@ -81,6 +93,7 @@ export async function creaDipendente(input: unknown): Promise<Result> {
       cognome: parsed.data.cognome,
       mansione: parsed.data.mansione ?? null,
       codice_interno: codice,
+      data_nascita: parsed.data.data_nascita ?? null,
       user_id: parsed.data.user_id ?? null,
       stato_attivo: parsed.data.stato_attivo ?? true,
       a_turni: parsed.data.a_turni ?? false,
@@ -104,6 +117,7 @@ export async function creaDipendente(input: unknown): Promise<Result> {
       cognome: parsed.data.cognome,
       codice_interno: codice,
       mansione: parsed.data.mansione ?? null,
+      data_nascita: parsed.data.data_nascita ?? null,
       costo_orario: parsed.data.costo_orario ?? null,
     },
   });
@@ -130,6 +144,12 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
       // Il costo orario si scrive solo se arriva: il modulo dell'elenco Dipendenti
       // non lo ha, e salvare da lì lo azzerava.
       ...(parsed.data.costo_orario !== undefined ? { costo_orario: parsed.data.costo_orario } : {}),
+      // Stessa cautela del costo orario, e qui serve davvero: la scheda della
+      // singola persona chiama questa azione senza il campo, e uno `?? null`
+      // cancellerebbe la data di nascita a ogni salvataggio da li'.
+      ...(parsed.data.data_nascita !== undefined
+        ? { data_nascita: parsed.data.data_nascita }
+        : {}),
       note: parsed.data.note ?? null,
     } as never)
     .eq('id', parsed.data.id);
@@ -154,6 +174,9 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
       modalita_lavoro: parsed.data.modalita_lavoro,
       ...(parsed.data.costo_orario !== undefined
         ? { costo_orario: parsed.data.costo_orario }
+        : {}),
+      ...(parsed.data.data_nascita !== undefined
+        ? { data_nascita: parsed.data.data_nascita }
         : {}),
     },
   });

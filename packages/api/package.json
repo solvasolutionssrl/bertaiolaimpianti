@@ -11,6 +11,7 @@
     "./types": "./src/types/index.ts",
     "./tenant": "./src/tenant.ts",
     "./modules": "./src/modules.ts",
+    "./scope-api": "./src/scope-api.ts",
     "./kantiere": "./src/kantiere.ts",
     "./stato-lavoro": "./src/stato-lavoro.ts",
     "./kantiere-qr": "./src/kantiere-qr.ts",

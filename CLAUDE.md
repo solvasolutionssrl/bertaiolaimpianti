@@ -1198,6 +1198,97 @@ utente dimostrativo (5): la barra dice nome·mestiere·cliente, un giro in
 console **non** chiude più l'impersonazione, un cookie inventato non accende
 niente, chi impersona passa il cancello e la persona vera resta murata.
 
+### Compleanno dei dipendenti e permessi di lettura dell'API (21/10/2026, migration `20261021090000`)
+
+La timbratrice **Timbro** (prodotto a sé, multi-tenant) fa gli auguri quando la
+persona passa il badge all'ingresso: le serve leggere l'anagrafica del
+personale. Da qui due lavori legati.
+
+#### La data di nascita
+
+`dipendenti.data_nascita date`, nullable, esposta da `GET /api/v1/dipendenti`
+come `dataNascita` (`AAAA-MM-GG`). Si compila in **Personale → Dipendenti** e si
+vede nella colonna **Nascita** dell'elenco, che serve anche a vedere **chi
+manca**.
+
+- ⚠️ **È la prima colonna anagrafica di legge** su `dipendenti`: finora la
+  tabella teneva solo ciò che serve ad attribuire ore e costi (niente codice
+  fiscale, niente indirizzo, niente documenti). L'aggiunta è voluta e ha uno
+  scopo dichiarato; chi ne aggiungerà altre sappia che la linea è stata
+  attraversata qui di proposito, non per abitudine.
+- ⚠️ **In aggiornamento si scrive solo se arriva** (`...(x !== undefined ? …)`),
+  come già fa `costo_orario`: **la scheda della singola persona chiama la stessa
+  azione senza quel campo**, e uno `?? null` cancellerebbe la data a ogni
+  salvataggio da lì. Verificato cercando i chiamanti **prima** di scrivere.
+- ⚠️ **La data si formatta spezzando la stringa, non con `new Date()`**:
+  `new Date('1985-03-14')` è mezzanotte UTC e in un fuso a ovest diventa il 13.
+  Qui non c'è nessun istante da convertire, solo tre numeri da riordinare.
+- La colonna si chiama `data_nascita` e non `compleanno`: il compleanno è
+  l'uso, la data è il fatto, e un nome che descrive l'uso invecchia male.
+- ⚠️ Su `dipendenti` i privilegi sono di **tabella**: la colonna nasce
+  leggibile da ogni utente autenticato del tenant. Per una data di nascita fra
+  colleghi è una scelta accettata — **ma resta aperto** lo stesso rilievo sul
+  `costo_orario`, che con quella RLS ogni tecnico può leggere.
+
+#### I permessi dell'API: un vocabolario solo, due profili di lettura
+
+`@kommessa/api/scope-api` (18 asserzioni, **3 mutazioni viste fallire**).
+L'elenco degli scope esisteva in **due copie** — `ScopeToken` in
+`_lib/api-token.ts` (chi verifica) e `ScopeTokenAdmin` in
+`admin/_actions/api-tokens.ts` (chi emette) — in due file che nessuno modifica
+insieme: il primo scope aggiunto da una parte e non dall'altra sarebbe
+diventato un permesso emettibile che nessuno riconosce.
+
+Scope nuovi: **`leggi:dipendenti`** (senza costo orario) e
+**`leggi:dipendenti:costi`**. ⭐ **Nessuna migration**: `api_tokens.scopes` è un
+`text[]` **senza vincolo**, quindi l'elenco di ciò che esiste sta nel codice —
+come per i modelli di trascrizione. Aggiungerne uno vuole una voce nel
+vocabolario e una rotta che la legga.
+
+- ⚠️⚠️ **La gerarchia è scritta a mano, non dedotta dal prefisso.**
+  `leggi:dipendenti:costi` comincia come `leggi:dipendenti`, ma ricavarlo dalla
+  stringa vorrebbe dire che un domani `leggi:dipendenti:qualsiasialtracosa`
+  concede il primo per sbaglio — e **un permesso nato per errore non dà nessun
+  segnale: funziona**. C'è un test che lo difende.
+- ⚠️ **`integrazione` non concede `upload`, né viceversa**: era una scelta nei
+  commenti, ora è una riga che un test può bocciare.
+- ⭐⭐ **Il modulo Integrazione lo pretende il TOKEN, non la rotta.** Se
+  dipendesse dalla rotta, un token del gestionale su una rotta di sola lettura
+  scavalcherebbe l'interruttore del modulo. Così spegnere il modulo **continua
+  a fermare l'agente ERGO** (provato: 403 `modulo_spento`), mentre un token di
+  sola lettura non lo pretende — quello lo emette il super admin uno per uno, e
+  si toglie revocandolo.
+- ⚠️ **`sistema` resta nullo per i token di sola lettura**, ed è voluto: da lui
+  dipendono le mappature verso il gestionale, cioè gli identificativi di **un
+  altro sistema**. Una timbratrice non deve vedere i codici di ERGO.
+- ⚠️ **I campi non concessi si OMETTONO, non si mandano a `null`**: un
+  `costoOrario: null` dice «non lo sappiamo», che è falso, e chi lo mette in
+  cache registra costi a zero. E **non si leggono nemmeno dal database**: la
+  select cambia con il profilo. Profilo base **11 campi**, completo **17**.
+- ⚠️ **Uno scope sconosciuto si rifiuta**, non si corregge: ripiegare su
+  `upload` emetterebbe un token con permessi diversi da quelli chiesti, e chi
+  l'ha chiesto non se ne accorgerebbe.
+- Il **pannello** (`/admin/token-app`) legge il vocabolario: voci della
+  tendina, spiegazione, esempio di nome e se serve una persona. Uno scope nuovo
+  compare da sé.
+
+> **Per dare accesso a un applicativo esterno**: `/admin/token-app` → azienda →
+> permesso → etichetta. Il token si vede **una volta sola**. Nessun modulo da
+> accendere per i permessi di sola lettura.
+>
+> ⚠️ **Restano fuori, dichiarati**: `/api/v1/info` è riservata a
+> `integrazione` (espone `sistema` e `modalita`, cioè la configurazione del
+> gestionale; a chi legge basta il `contratto` che ogni risposta porta già); non
+> esiste **nessun registro delle chiamate** (solo `api_tokens.last_used_at`, al
+> massimo una volta al minuto), e con più integratori su più aziende diventerà
+> una domanda a cui saper rispondere; e **`sistema` viene ancora dalla
+> configurazione del tenant, non dal token** — finché un integratore legge
+> soltanto non serve, ma due integratori che *scrivono* sullo stesso cliente
+> archivierebbero le mappature sotto lo stesso nome. ⚠️ Le query di salute in
+> `admin/_lib/integrazione/foto.ts` filtrano solo per `tenant_id` e non per
+> `sistema`: con due integrazioni sullo stesso tenant i contatori si
+> sommerebbero.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

@@ -2,7 +2,12 @@ import 'server-only';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 
-import { autenticaToken, type ScopeToken } from '../../../_lib/api-token';
+import {
+  richiedeModuloIntegrazione,
+  type ScopeApi,
+} from '@kommessa/api/scope-api';
+
+import { autenticaToken } from '../../../_lib/api-token';
 
 /**
  * Fondamenta dell'**API pubblica di Kommessa** (`/api/v1`).
@@ -47,6 +52,12 @@ export const CONTRATTO = 2;
 export interface ContestoApi {
   tenantId: string;
   tokenId: string;
+  /**
+   * I permessi del token. Le rotte li leggono per decidere **quanto** dare:
+   * l'anagrafica del personale esce senza costo orario per chi ha solo la
+   * lettura semplice. Vedi `profiloDipendenti` in `@kommessa/api/scope-api`.
+   */
+  scopes: readonly string[];
   /** Gestionale del tenant, se ne ha uno configurato. */
   sistema: string | null;
   /**
@@ -99,7 +110,7 @@ export type EsitoGuard =
  */
 export async function autenticaApi(
   request: Request,
-  scope: ScopeToken = 'integrazione',
+  scope: ScopeApi = 'integrazione',
 ): Promise<EsitoGuard> {
   const token = await autenticaToken(request, scope);
   if (!token) {
@@ -113,50 +124,67 @@ export async function autenticaApi(
     };
   }
 
-  const service = createServiceSupabase();
-  const { data, error } = await service
-    .from('tenant_modules' as never)
-    .select('attivo, config')
-    .eq('tenant_id', token.tenantId)
-    .eq('module_code', 'integrazione')
-    .maybeSingle();
+  // ⭐ Il modulo Integrazione lo pretende il TOKEN, non la rotta. Un token del
+  // gestionale deve restare fermabile spegnendo il modulo, come e' sempre
+  // stato: se la richiesta dipendesse dalla rotta, lo stesso token su una
+  // rotta di sola lettura scavalcherebbe quell'interruttore. Un token di sola
+  // lettura invece non lo pretende — lo emette il super admin uno per uno, e
+  // l'autorizzazione e' il token stesso: si toglie revocandolo.
+  const vuoleModulo = richiedeModuloIntegrazione(token.scopes);
+  let config: Record<string, unknown> = {};
 
-  if (error) {
-    return {
-      ok: false,
-      risposta: erroreApi(
-        503,
-        'configurazione_non_leggibile',
-        'Non riesco a leggere la configurazione. Riprova più tardi.',
-      ),
-    };
+  if (vuoleModulo) {
+    const service = createServiceSupabase();
+    const { data, error } = await service
+      .from('tenant_modules' as never)
+      .select('attivo, config')
+      .eq('tenant_id', token.tenantId)
+      .eq('module_code', 'integrazione')
+      .maybeSingle();
+
+    if (error) {
+      return {
+        ok: false,
+        risposta: erroreApi(
+          503,
+          'configurazione_non_leggibile',
+          'Non riesco a leggere la configurazione. Riprova più tardi.',
+        ),
+      };
+    }
+
+    const riga = data as unknown as {
+      attivo: boolean;
+      config: Record<string, unknown> | null;
+    } | null;
+
+    // Il modulo spento non e' un errore del chiamante ma una scelta
+    // dell'ufficio: va detto in chiaro, altrimenti si insegue un guasto che non
+    // c'e'.
+    if (!riga?.attivo) {
+      return {
+        ok: false,
+        risposta: erroreApi(
+          403,
+          'modulo_spento',
+          'Il modulo di integrazione non è attivo per questo cliente.',
+        ),
+      };
+    }
+
+    config = riga.config ?? {};
   }
 
-  const riga = data as unknown as {
-    attivo: boolean;
-    config: Record<string, unknown> | null;
-  } | null;
-
-  // Il modulo spento non e' un errore del chiamante ma una scelta
-  // dell'ufficio: va detto in chiaro, altrimenti si insegue un guasto che non
-  // c'e'.
-  if (!riga?.attivo) {
-    return {
-      ok: false,
-      risposta: erroreApi(
-        403,
-        'modulo_spento',
-        'Il modulo di integrazione non è attivo per questo cliente.',
-      ),
-    };
-  }
-
-  const config = riga.config ?? {};
   return {
     ok: true,
     ctx: {
       tenantId: token.tenantId,
       tokenId: token.tokenId,
+      scopes: token.scopes,
+      // ⚠️ `sistema` resta nullo per i token di sola lettura, ed e' voluto: da
+      // lui dipendono le mappature verso il gestionale, cioe' gli
+      // identificativi di UN ALTRO sistema. Una timbratrice non deve vedere i
+      // codici di ERGO.
       sistema: typeof config.sistema === 'string' ? config.sistema : null,
       // Il valore prudente e' il predefinito: se la configurazione e' assente
       // o storta, non si scrive niente da nessuna parte.

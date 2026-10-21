@@ -19,6 +19,7 @@ export interface DipendenteRow {
   cognome: string;
   mansione: string | null;
   codice_interno: string | null;
+  data_nascita: string | null;
   user_id: string | null;
   stato_attivo: boolean;
   a_turni: boolean;
@@ -55,9 +56,17 @@ export default async function DipendentiPage() {
   // Chi timbra vede anche turni, modalita' dell'app e tesserino; chi non
   // timbra no, perche' sarebbero scelte senza effetto.
   const mondoPresenze = await tenantHasModule('kantiere');
+  // `data_nascita` sta QUI nella select, a differenza di `modalita_lavoro`
+  // (vedi la nota piu' sotto), e non e' un'incoerenza: la sua migration
+  // (20261021090000) e' stata applicata al cloud PRIMA che questo codice
+  // esistesse, quindi la colonna c'e' sempre. La regola resta quella: una
+  // colonna entra nella select solo quando e' certo che il database l'abbia.
   const { data: dipendenti } = await supabase
     .from('dipendenti' as never)
-    .select('id, nome, cognome, mansione, codice_interno, user_id, stato_attivo, a_turni, note')
+    .select(
+      'id, nome, cognome, mansione, codice_interno, data_nascita,' +
+        ' user_id, stato_attivo, a_turni, note',
+    )
     .order('cognome');
   const { data: utenti } = await supabase
     .from('users')
@@ -73,7 +82,7 @@ export default async function DipendentiPage() {
   // qui sopra farebbe cadere l'intero elenco finché non è stata applicata.
   const modalita = await leggiModalitaLavoro(supabase, ctx.tenantId);
   const elenco: DipendenteRow[] = (
-    (dipendenti ?? []) as Omit<DipendenteRow, 'modalitaLavoro'>[]
+    (dipendenti ?? []) as unknown as Omit<DipendenteRow, 'modalitaLavoro'>[]
   ).map((d) => ({ ...d, modalitaLavoro: modalita.get(d.id) ?? MODALITA_PREDEFINITA }));
   const { sistema, nuovi, ignorati } = puoDecidere
     ? await nuoviDalGestionale(supabase, ctx.tenantId, 'dipendente')

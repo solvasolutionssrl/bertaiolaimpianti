@@ -88,6 +88,7 @@ interface FormState {
   cognome: string;
   mansione: string;
   codice_interno: string;
+  data_nascita: string;
   user_id: string;
   stato_attivo: boolean;
   a_turni: boolean;
@@ -107,6 +108,7 @@ const EMPTY_FORM: FormState = {
   cognome: '',
   mansione: '',
   codice_interno: '',
+  data_nascita: '',
   user_id: '',
   stato_attivo: true,
   a_turni: false,
@@ -127,6 +129,7 @@ function formFromRow(d: DipendenteRow): FormState {
     cognome: d.cognome,
     mansione: d.mansione ?? '',
     codice_interno: d.codice_interno ?? '',
+    data_nascita: d.data_nascita ?? '',
     user_id: d.user_id ?? '',
     stato_attivo: d.stato_attivo,
     a_turni: d.a_turni,
@@ -135,6 +138,18 @@ function formFromRow(d: DipendenteRow): FormState {
     _originalUserId: d.user_id,
     accountMode: d.user_id ? 'existing' : 'none',
   };
+}
+
+/**
+ * Una data senza ora si formatta spezzando la stringa, non con `new Date()`:
+ * `new Date('1985-03-14')` e' mezzanotte UTC, e in un fuso a ovest di Greenwich
+ * diventa il 13 marzo. Qui non c'e' nessun istante da convertire, solo tre
+ * numeri da riordinare.
+ */
+function dataItaliana(iso: string | null): string {
+  if (!iso) return 'n.d.';
+  const [anno, mese, giorno] = iso.slice(0, 10).split('-');
+  return anno && mese && giorno ? `${giorno}/${mese}/${anno}` : 'n.d.';
 }
 
 /** username suggerito: "nome.cognome" senza accenti/spazi/simboli. */
@@ -393,6 +408,7 @@ export function DipendentiClient({
         cognome: form.cognome,
         mansione: form.mansione || null,
         codice_interno: form.codice_interno || null,
+        data_nascita: form.data_nascita || null,
         user_id: userId,
         stato_attivo: form.stato_attivo,
         a_turni: form.a_turni,
@@ -562,6 +578,7 @@ export function DipendentiClient({
                     <th className="px-3 py-2 font-medium">Nominativo</th>
                     <th className="px-3 py-2 font-medium">Mansione</th>
                     <th className="px-3 py-2 font-medium">Codice</th>
+                    <th className="px-3 py-2 font-medium">Nascita</th>
                     <th className="px-3 py-2 font-medium">Accesso</th>
                     <th className="px-3 py-2 font-medium">Ruolo</th>
                     {mondoPresenze ? (
@@ -606,6 +623,9 @@ export function DipendentiClient({
                         <td className="px-3 py-2 text-muted-foreground">{d.mansione ?? 'n.d.'}</td>
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                           {d.codice_interno ?? 'n.d.'}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {dataItaliana(d.data_nascita)}
                         </td>
                         <td className="px-3 py-2">
                           <Badge variant={d.user_id ? 'default' : 'outline'}>
@@ -841,6 +861,22 @@ export function DipendentiClient({
                     Lascia vuoto per assegnazione automatica
                   </p>
                 )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="data_nascita">Data di nascita</Label>
+                <Input
+                  id="data_nascita"
+                  name="data_nascita"
+                  type="date"
+                  value={form.data_nascita}
+                  onChange={handleChange}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Serve agli auguri che la timbratrice fa all&apos;ingresso.
+                </p>
               </div>
             </div>
 

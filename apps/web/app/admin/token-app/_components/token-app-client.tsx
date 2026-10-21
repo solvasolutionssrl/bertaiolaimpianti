@@ -12,11 +12,9 @@ import {
   cn,
 } from '@kommessa/ui';
 
-import {
-  creaApiToken,
-  revocaApiToken,
-  type ScopeTokenAdmin,
-} from '../../_actions/api-tokens';
+import { SCOPE_API, vocePerScope, type ScopeApi } from '@kommessa/api/scope-api';
+
+import { creaApiToken, revocaApiToken } from '../../_actions/api-tokens';
 
 export interface TokenRow {
   id: string;
@@ -63,7 +61,11 @@ export function TokenAppClient({
   const [tenantId, setTenantId] = React.useState(tenants[0]?.id ?? '');
   const [userId, setUserId] = React.useState('');
   const [label, setLabel] = React.useState('');
-  const [scope, setScope] = React.useState<ScopeTokenAdmin>('upload');
+  const [scope, setScope] = React.useState<ScopeApi>('upload');
+  // Tutto quello che il pannello dice su un permesso viene dal vocabolario:
+  // etichetta, spiegazione, esempio di nome e se serve una persona.
+  const voce = vocePerScope(scope);
+  const vuolePersona = voce?.vuolePersona ?? false;
   const [pending, start] = React.useTransition();
   const [errore, setErrore] = React.useState<string | null>(null);
   const [appenaCreato, setAppenaCreato] = React.useState<string | null>(null);
@@ -164,7 +166,7 @@ export function TokenAppClient({
             </div>
             {/* Un agente non agisce per conto di nessuno: chiedere una persona
                 significherebbe attribuirle ore e documenti che non ha inserito. */}
-            {scope === 'integrazione' ? (
+            {!vuolePersona ? (
               <div className="space-y-1.5">
                 <Label>Persona</Label>
                 <div className="flex h-10 items-center rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground">
@@ -195,9 +197,7 @@ export function TokenAppClient({
                 id="tk-label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder={
-                  scope === 'integrazione' ? 'Agente di sincronizzazione' : 'iPhone di Luca'
-                }
+                placeholder={voce?.segnaposto ?? ''}
               />
             </div>
             <div className="space-y-1.5">
@@ -205,21 +205,21 @@ export function TokenAppClient({
               <select
                 id="tk-scope"
                 value={scope}
-                onChange={(e) => setScope(e.target.value as ScopeTokenAdmin)}
+                onChange={(e) => setScope(e.target.value as ScopeApi)}
                 className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
               >
-                <option value="upload">Caricare foto dal telefono</option>
-                <option value="integrazione">Sincronizzare col gestionale</option>
+                {SCOPE_API.map((v) => (
+                  <option key={v.scope} value={v.scope}>
+                    {v.etichetta}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
-          {/* I due mondi non si toccano: dirlo qui evita di consegnare a una VM
-              un token che sa anche caricare foto. */}
-          <p className="text-xs text-muted-foreground">
-            {scope === 'integrazione'
-              ? 'Apre solo le rotte di sincronizzazione. Non dà accesso a foto, commesse o al resto dell’app.'
-              : 'Serve al comando iOS “Carica su Kommessa”: elenco commesse e invio file.'}
-          </p>
+          {/* I mondi non si toccano: dirlo qui evita di consegnare a una
+              macchina un token che sa anche caricare foto. La frase viene dal
+              vocabolario, così è la stessa che legge chi verifica. */}
+          <p className="text-xs text-muted-foreground">{voce?.descrizione ?? ''}</p>
           {errore ? (
             <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {errore}
@@ -232,7 +232,7 @@ export function TokenAppClient({
               pending ||
               !tenantId ||
               !label.trim() ||
-              (scope === 'upload' && !userId)
+              (vuolePersona && !userId)
             }
           >
             {pending ? (
