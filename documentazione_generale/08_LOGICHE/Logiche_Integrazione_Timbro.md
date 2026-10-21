@@ -150,7 +150,9 @@ Tre regole, tutte con un test che le difende e una mutazione vista fallire.
 
 ⚠️⚠️ **Una data di partenza è obbligatoria.** Su Timbro c'erano 15 timbrature di collaudo (installazione del 1, 2, 5 ottobre e prove dei badge il 21). Erano orfane: appena i badge vengono assegnati **si attaccano a delle persone**. Catena completa del danno: timbro di collaudo → timbratura → rapportino → auto-approvato → l'agente ERGO legge le nostre ore e **le scrive su ERGO**, che è append-only. ⭐ Luca ha fatto annullare quelle 15 da Timbro — **un presidio nei dati batte un presidio nel codice** — ma la data di partenza resta come seconda rete.
 
-⚠️ **Il token di Timbro è un segreto.** Prima di metterlo in `tenant_modules.config` va verificato chi può leggere quella colonna: le credenziali di Nextcloud e R2 stanno su `tenants` con i privilegi **per colonna** proprio per questo. **Da verificare, non ancora fatto.**
+⚠️⚠️ **Il token di Timbro NON va in `tenant_modules.config`** — verificato il 21/10, non dedotto. Su quella tabella la policy è `tenant_id = current_tenant_id()` e `authenticated` ha il privilegio di `SELECT`: **ogni utente del cliente** — a FPM sono trenta persone — potrebbe leggersi quel campo con una chiamata diretta dal browser. Metterci un token di un'API esterna vuol dire regalarlo all'azienda intera.
+
+⭐ Il posto giusto è quello già usato per le credenziali di Nextcloud e R2: una colonna su `tenants` **non concessa** in lettura ad `anon`/`authenticated` (privilegi **per colonna**, migration `20260627010000`) e raggiungibile solo dal service role. ⚠️ E lì vale la nota di manutenzione di quella migration: una colonna nuova non segreta va concessa a mano, una segreta **non si concede e basta**.
 
 ⚠️ **Un solo `sistema` per tenant.** `tenant_modules.config.sistema` è un valore solo e FPM ha già `ergo`: le mappature di Timbro finirebbero archiviate sotto quel nome, e le query di salute (`admin/_lib/integrazione/foto.ts`) filtrano **solo per `tenant_id`, non per `sistema`** — con due integrazioni i contatori si sommerebbero. ⭐ Il posto giusto per `sistema` è **il token**, che è emesso per integratore e quindi sa già chi chiama.
 
