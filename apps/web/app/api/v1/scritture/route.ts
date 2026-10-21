@@ -7,6 +7,7 @@ import {
   type ContestoApi,
   autenticaApi,
   erroreApi,
+  daCursore,
   impagina,
   leggiParametri,
   rispostaElenco,
@@ -240,7 +241,7 @@ export async function GET(request: NextRequest) {
   if (ctx.sistema) q = q.eq('sistema', ctx.sistema);
   if (risorsa && (RISORSE as readonly string[]).includes(risorsa)) q = q.eq('risorsa', risorsa);
   if (p.modificatoDopo) q = q.gt('registrato_at', p.modificatoDopo);
-  if (p.cursore) q = q.gt('registrato_at', p.cursore.t);
+  q = daCursore(q, 'registrato_at', p.cursore);
 
   const { data, error } = await q;
   if (error) return erroreApi(503, 'lettura_fallita', 'Non riesco a leggere il registro.');

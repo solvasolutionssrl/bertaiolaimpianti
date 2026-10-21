@@ -241,6 +241,41 @@ export function leggiCursore(raw: string | null): Cursore | null {
   }
 }
 
+/**
+ * Applica il cursore a una query: sulla **coppia** `(colonna, id)`, non sulla
+ * sola colonna.
+ *
+ * ⚠️⚠️ Perche' esiste. Il commento su `scriviCursore` descriveva gia' la
+ * regola giusta — «serve la coppia, non il solo timestamp» — ma tutte e sei le
+ * rotte a elenco facevano `gt(colonna, t)` e basta. Con righe che condividono
+ * l'istante, e **capita di continuo** perche' in Postgres `now()` e' costante
+ * dentro una transazione, quelle dopo la prima pagina venivano **saltate in
+ * silenzio**: chi legge non vede nessun errore, vede solo meno righe.
+ * Misurato il 21/10/2026 su FPM: 32 dipendenti su 37 con lo stesso
+ * `updated_at` (un aggiornamento in blocco) e 19 cantieri su 770 (la
+ * promozione notturna dal gestionale).
+ *
+ * ⭐ Un'intenzione scritta in un commento e non verificata da un test e' solo
+ * una bella frase: ora la regola sta in **un posto solo**, e una rotta nuova
+ * che non la usa si vede.
+ *
+ * ⚠️ I valori vanno fra virgolette: un timestamp contiene `:` e `+`, e senza
+ * virgolette PostgREST li interpreta. Le virgolette dentro il valore si
+ * tolgono — un timestamp e un uuid non ne hanno, ma un filtro che si spezza su
+ * un carattere inatteso e' il modo in cui questa API ha gia' fatto cadere una
+ * pagina una volta.
+ */
+export function daCursore<Q extends { or: (filtro: string) => Q }>(
+  q: Q,
+  colonna: string,
+  c: Cursore | null,
+): Q {
+  if (!c) return q;
+  const t = c.t.replace(/"/g, '');
+  const i = c.i.replace(/"/g, '');
+  return q.or(`${colonna}.gt."${t}",and(${colonna}.eq."${t}",id.gt."${i}")`);
+}
+
 export interface ParametriElenco {
   limite: number;
   cursore: Cursore | null;

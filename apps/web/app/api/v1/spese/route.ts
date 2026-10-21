@@ -10,6 +10,7 @@ import {
 import {
   autenticaApi,
   erroreApi,
+  daCursore,
   impagina,
   leggiParametri,
   rispostaElenco,
@@ -110,7 +111,7 @@ export async function GET(request: NextRequest) {
     .limit(p.limite + 1);
 
   if (p.modificatoDopo) q = q.gt('updated_at', p.modificatoDopo);
-  if (p.cursore) q = q.gt('updated_at', p.cursore.t);
+  q = daCursore(q, 'updated_at', p.cursore);
   // Il giorno di competenza e' quello dello scontrino; se manca, quello in cui
   // e' stata registrata.
   if (p.dal) q = q.or(`data_scontrino.gte.${p.dal},and(data_scontrino.is.null,created_at.gte.${p.dal})`);

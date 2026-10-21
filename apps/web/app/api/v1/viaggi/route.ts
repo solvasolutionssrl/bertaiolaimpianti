@@ -5,6 +5,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import {
   autenticaApi,
   erroreApi,
+  daCursore,
   impagina,
   leggiParametri,
   rispostaElenco,
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
     .limit(p.limite + 1);
 
   if (p.modificatoDopo) q = q.gt('created_at', p.modificatoDopo);
-  if (p.cursore) q = q.gt('created_at', p.cursore.t);
+  q = daCursore(q, 'created_at', p.cursore);
   if (p.dal) q = q.gte('data', p.dal);
   if (p.al) q = q.lte('data', p.al);
 

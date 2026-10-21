@@ -5,6 +5,7 @@ import { createServiceSupabase } from '@kommessa/api/service';
 import {
   autenticaApi,
   erroreApi,
+  daCursore,
   impagina,
   leggiParametri,
   rispostaElenco,
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
     .limit(p.limite + 1);
 
   if (p.modificatoDopo) q = q.gt('updated_at', p.modificatoDopo);
-  if (p.cursore) q = q.gt('updated_at', p.cursore.t);
+  q = daCursore(q, 'updated_at', p.cursore);
 
   const { data, error } = await q;
   if (error) return erroreApi(503, 'lettura_fallita', 'Non riesco a leggere i dipendenti.');
