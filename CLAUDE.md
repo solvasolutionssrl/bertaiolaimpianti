@@ -1289,6 +1289,70 @@ vocabolario e una rotta che la legga.
 > `sistema`: con due integrazioni sullo stesso tenant i contatori si
 > sommerebbero.
 
+### Timbratrice Timbro ↔ Kommessa: il contratto e il contenitore (21/10/2026, migration `20261021120000`)
+
+Integrazione **per FPM**: Timbro (prodotto Solva a sé) e l'app di Kommessa
+diventano **due bocche interscambiabili dello stesso orologio** — si apre dall'app
+e si chiude al terminale, o il contrario. I timbri formano il **contenitore**
+della giornata; poi il tecnico dal telefono **riempie la scatola** per commessa.
+
+📘 **Tutto il dettaglio**: `documentazione_generale/08_LOGICHE/Logiche_Integrazione_Timbro.md`.
+
+> ⚠️ **Oggi non cambia niente per chi timbra.** I due pezzi costruiti sono
+> inerti — una tabella vuota e una funzione pura senza chiamanti. L'import non
+> è scritto.
+
+- ⭐ **Timbro espone eventi, non direzioni.** Ogni timbratura porta `kind`:
+  `badge_tap` (badge al terminale, **misurato**) o `entry` (inserita a mano).
+  `direction` resta nel payload ma è una **loro deduzione** e si ignora.
+  ⚠️ Il perché: con due bocche **nessuno dei due sistemi vede la sequenza
+  intera**, quindi nessuno può dedurre la direzione da solo — il terminale in
+  automatico timbra l'opposto dell'ultima direzione *che conosce*, e se il turno
+  si è aperto dall'app segnerebbe un'entrata invece dell'uscita. ⭐ Questa scelta
+  ha fatto cadere da sé tutto il verso in uscita: **niente chiamate verso host
+  esterni**, che in questo repo non esistono (zero `fetch` fuori, a parte OpenAI)
+  e sarebbero state la prima.
+- **`timbri_grezzi`**: il registro degli eventi, che è anche il **parcheggio**.
+  ⭐ Esiste perché `timbrature` ha `num_nonnulls(commessa_id, cantiere_id) = 1`
+  — ogni timbro dice anche *dove* — e un tocco di badge non lo sa. Così
+  `timbrature` **non si tocca**. Scioglie anche: l'idempotenza (`unique (tenant_id,
+  sorgente, esterno_id)`, che su `timbrature` **non esiste**), gli annullamenti
+  (un cambio di `stato`, non la cancellazione di una riga magari già approvata),
+  i badge non ancora assegnati, i timbri senza orario. ⚠️ RLS accesa, **nessuna
+  policy di scrittura** (solo service role), `anon` non ha nemmeno il privilegio
+  di lettura.
+- ⚠️⚠️ **Il contenitore è VIRTUALE: `timbrature` nasce solo all'attribuzione.**
+  La strada «timbri subito sulla sede, lo split li sposta» è stata **scartata**
+  per un fatto misurato: `/api/v1/ore` **non filtra per stato**, restituisce
+  anche le giornate in bozza, e decidere se portarle fuori **è dell'agente** —
+  cioè la decisione vive dentro ERGO, fuori dal nostro controllo. Con le ore già
+  scritte, l'agente di FPM le avrebbe esportate **attribuite alla sede**, e ERGO
+  è append-only. ⭐ **Nessuno stato nostro può fermare un export: l'unico
+  presidio sicuro è che le ore non esistano ancora.** Un'impossibilità
+  strutturale batte una regola — una regola la si può cambiare un domani senza
+  accorgersi di aver riaperto la fuga.
+- **La regola della sequenza**: `@kommessa/api/timbri-sequenza` (21 asserzioni,
+  4 mutazioni **viste fallire**). ⭐ **Si ricalcola la giornata, non si
+  appende**: un evento che arriva in ritardo *in mezzo* ribalta la direzione di
+  tutto ciò che viene dopo. ⭐ Fra due tocchi ravvicinati **vince l'orologio
+  fisso, non il telefono** (finestra 2 min; ⚠️ il dedupe esistente copre 25
+  secondi, pensato per il doppio tocco su un bottone, e non basta a coprire il
+  ritardo di un evento esterno). ⚠️ Due direzioni **dichiarate e opposte non si
+  fondono mai**: sono due fatti. ⚠️ Una dichiarazione che contraddice la
+  sequenza non si sovrascrive, **si segnala**.
+- ⚠️ **Le due porte per riempire la scatola sono entrambe chiuse**: lo split di
+  fine turno vuole **esattamente 1** timbro nella giornata (`giornataPulita`),
+  «Registra giornata» ne vuole **0**. Con il terminale di mezzo non si è né
+  nell'uno né nell'altro caso: il terzo momento **va costruito**, non riciclato.
+- ⚠️ Resta aperto: `origine` e `modalita` di `timbrature` non hanno un valore
+  per un terminale esterno (serviranno due CHECK allargati) · il token di Timbro
+  è **un segreto** e va verificato chi legge `tenant_modules.config` prima di
+  metterlo lì · `sistema` è **uno per tenant** e FPM ha già `ergo`, quindi il
+  suo posto giusto è il **token**, e le query di salute di `foto.ts` filtrano
+  solo per `tenant_id` · serve una **data di partenza** per l'import (i timbri di
+  collaudo di Timbro sono stati annullati alla fonte, ⭐ *un presidio nei dati
+  batte un presidio nel codice*, ma la data resta come seconda rete).
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.
