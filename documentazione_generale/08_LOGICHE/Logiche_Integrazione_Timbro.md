@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.0
+**Versione**: 2.1
 **Stato**: costruita e collaudata sul tenant demo (22/10/2026) · in produzione **spenta** finché il super admin non la accende
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–22/10/2026
@@ -176,6 +176,14 @@ Le righe scritte in `timbrature` hanno `origine = 'timbro'`, `modalita = 'timbra
 ### 7.5 Il default «in sede»
 
 Con l'ingresso fisico il flag di ogni cantiere gira come per chi lavora in ufficio: il lavoro nasce **dalla sede** e la spunta dice «uscito in cantiere». Spuntandola il sistema calcola strada e tempo dalla sede predefinita (dove sta il terminale) e li mette dentro la presenza. Dall'ufficio lo stesso, senza «chi guidava» (passeggero).
+
+### 7.6 bis La presenza in sede senza cantiere, e la scrivania (22/10, pomeriggio)
+
+Il registro non è solo del terminale. Chi inizia la giornata **«in sede» senza un progetto** — da PC con «Inizia giornata» — non sceglie un cantiere: la presenza si segna in `timbri_grezzi` con `sorgente='app'` e `dispositivo='pc'`, come un badge, e la giornata diventa una scatola da riempire alla fine. Niente entra in `timbrature` finché non si attribuisce: il gestionale vuole le ore per commessa, e così non può uscire niente di non attribuito. ⚠️ Un'impostazione «cantiere di sede scelto al posto tuo» è stata costruita e **tolta lo stesso giorno** (revert): la scelta è stata non rispondere al posto della persona, ma rimandare la domanda a fine giornata.
+
+Da qui tre regole: il registro **si legge sempre**, con o senza Timbro (il collegamento decide cosa entra, non chi legge); le righe scritte dalla ripartizione dicono da dove vengono (`timbro/timbratrice` se c'è almeno un badge, altrimenti `cronometro/app`); dopo un'uscita il registro non sa se è pausa o fine, quindi la giornata è «da ripartire» e si offre «Riprendi».
+
+**La scrivania**: nell'header dell'ufficio la pillola «La mia giornata» (stato del turno e da dove è partito, pausa, ripresa, chiusura, avvio, registrazione, scatola) e il dialog **«Compila giornata»** (2/3 si compila, 1/3 «come verrà scritta», con gli stessi motori puri del server), in quattro modi: la mia giornata, quella di un altro (`registraGiornataPerDipendente`, `modalita='ufficio'`), la scatola, la chiusura. Banchi: `giornata-scrivania.mjs`, `presenza-sede.mjs`.
 
 ### 7.6 Il promemoria
 
