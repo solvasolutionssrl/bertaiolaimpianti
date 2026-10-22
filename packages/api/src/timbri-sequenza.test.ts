@@ -144,6 +144,15 @@ describe('timbri-sequenza — i doppioni', () => {
     expect(tipi(r)).toEqual(['ingresso', 'uscita']);
   });
 
+  it('⚠️ il predefinito è UN minuto: 91 secondi sono due gesti (caso vero del 22/10)', () => {
+    const r = risolviSequenza([tocco('a', T(10) + 26 * 60_000 + 12_000), tocco('b', T(10) + 27 * 60_000 + 43_000)]);
+    expect(FINESTRA_DOPPIONE_MIN).toBe(1);
+    expect(r.timbri).toHaveLength(2);
+    expect(r.scartati).toEqual([]);
+    // Dentro il minuto resta un doppione.
+    expect(risolviSequenza([tocco('a', T(10)), tocco('b', T(10) + 59_000)]).timbri).toHaveLength(1);
+  });
+
   it('la finestra si può stringere o allargare', () => {
     const eventi = [tocco('a', T(18)), tocco('b', T(18) + 90_000)];
     expect(risolviSequenza(eventi, { finestraDoppioneMin: 1 }).timbri).toHaveLength(2);

@@ -110,7 +110,7 @@ Tre regole, tutte con un test che le difende e una mutazione vista fallire.
 
 ⭐ **Si ricalcola la giornata, non si appende.** La funzione prende **tutti** gli eventi del giorno e li risolve da zero. È l'unico modo che regge quando un evento arriva fuori ordine — e capita: un giro di riconciliazione porta roba di mezz'ora prima, una correzione porta roba di ieri. ⚠️ **Un evento che arriva in ritardo *in mezzo* ribalta la direzione di tutto quello che viene dopo**: appendere vorrebbe dire che l'ordine di arrivo decide la direzione. È anche l'atteggiamento di `ricomputaRapportinoAuto`, che le ore le **ri-deriva sempre**.
 
-⭐ **Fra due tocchi ravvicinati vince l'orologio fisso, non il telefono.** Finestra di 2 minuti (`FINESTRA_DOPPIONE_MIN`). ⚠️ Il dedupe che Kommessa ha oggi copre **25 secondi**, pensato per il doppio tocco su un bottone: non basta a coprire il ritardo con cui un evento esterno arriva. Traduzione da `time_source`: `ntp`/`server` → `fisso`; l'app → `telefono`.
+⭐ **Fra due tocchi ravvicinati vince l'orologio fisso, non il telefono.** Finestra di **1 minuto** (`FINESTRA_DOPPIONE_MIN`; era 2, stretta il 22/10 perché un'uscita e un rientro a 91 secondi di distanza sono due fatti). ⚠️ Il dedupe che Kommessa ha oggi copre **25 secondi**, pensato per il doppio tocco su un bottone: non basta a coprire il ritardo con cui un evento esterno arriva. Traduzione da `time_source`: `ntp`/`server` → `fisso`; l'app → `telefono`.
 
 ⚠️ **Due direzioni dichiarate e opposte non si fondono mai**, nemmeno a un secondo di distanza: sono due fatti, e fonderli ne cancellerebbe uno.
 

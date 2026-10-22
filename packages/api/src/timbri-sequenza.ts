@@ -80,8 +80,13 @@ export interface SequenzaRisolta {
  * per un solo gesto. Il dedupe applicativo che Kommessa ha oggi copre 25
  * secondi, pensato per il doppio tocco su un bottone: non basta a coprire il
  * ritardo con cui un evento esterno arriva.
+ *
+ * Era 2 minuti; portata a 1 il 22/10/2026 su un caso vero: un badge alle
+ * 10:26 e uno alle 10:27 (91 secondi) erano un'uscita e un rientro, non un
+ * doppione. Un minuto copre ancora il ritardo fra le due bocche e lascia
+ * valere chi esce e rientra subito.
  */
-export const FINESTRA_DOPPIONE_MIN = 2;
+export const FINESTRA_DOPPIONE_MIN = 1;
 
 /** Lo stesso gesto, visto da due parti? */
 function stessoGesto(a: EventoTimbro, b: EventoTimbro): boolean {
