@@ -44,7 +44,14 @@ function messaggioErrore(code: string): string {
   }
 }
 
-export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: PickerCantiere[] }) {
+export function IniziaGiornataUfficio({
+  cantieri: cantieriProp,
+  cantierePredefinitoId = null,
+}: {
+  cantieri?: PickerCantiere[];
+  /** Il lavoro interno di sede (impostazione dell'ufficio): parte gia' scelto. */
+  cantierePredefinitoId?: string | null;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(cantieriProp ?? null);
@@ -55,7 +62,7 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
 
   const apri = useCallback(async () => {
     setErrore(null);
-    setSelectedId(null);
+    setSelectedId(cantierePredefinitoId);
     setOpen(true);
     if (cantieri == null) {
       setLoading(true);

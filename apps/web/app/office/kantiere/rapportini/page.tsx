@@ -721,6 +721,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       sogliaPausaPranzoOre: impKantiere.sogliaPausaPranzoOre,
       splitAttivo: impKantiere.splitFineTurnoAttivo,
       tolleranzaChiusuraMin: impKantiere.tolleranzaChiusuraMin,
+      cantiereSedeId: impKantiere.cantiereSedeId,
     },
   };
 

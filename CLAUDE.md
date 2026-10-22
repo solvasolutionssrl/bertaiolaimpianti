@@ -1421,6 +1421,12 @@ quello che il telefono fa in «Registra giornata» e nella scatola timbrata.
 - ⚠️ `next.config.mjs` ha `removeConsole` (tiene solo `error` e `warn`): un
   `console.log` per capire cosa fa un layout **non stampa niente**, nemmeno in
   sviluppo. Mezz'ora persa a cercare un bug che non c'era.
+- **Il lavoro interno di sede** (`config.cantiere_sede_id`, Impostazioni
+  Kantiere → Turni): chi inizia «in sede» senza un progetto se lo trova gia'
+  scelto, da PC e dal telefono. ⚠️ Il cantiere serve comunque: le ore stanno
+  sempre su un lavoro e **ERGO le vuole per commessa** — FPM ha gia' la
+  commessa «SEDE» (CAN-00200, external 996), ed e' quella impostata. Non si
+  salta la scelta: si risponde al posto della persona.
 - Banco: `scripts/banco-ui/giornata-scrivania.mjs` (pillola, avvio, pausa,
   ripresa, chiusura con anteprima, compila per un altro). Vuole una scheda
   dipendente in modalita' ufficio sull'account ufficio di DEMOC.
