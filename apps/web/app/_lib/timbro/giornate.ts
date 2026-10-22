@@ -40,10 +40,13 @@ export interface GiornataTimbroLetta extends GiornataTimbro {
   dipendenteId: string;
   giorno: string;
   timbri: TimbroVisto[];
+  /** Da quali bocche sono arrivati gli eventi: `timbro` (terminale) e/o `app` (presenza segnata dall'app o dal PC). */
+  sorgenti: string[];
 }
 
 interface RigaGrezza {
   id: string;
+  sorgente: string;
   dipendente_id: string | null;
   ts: string | null;
   orologio: string;
@@ -80,9 +83,10 @@ export async function leggiGiornateTimbro(
     (da, a) => {
       let q = supabase
         .from('timbri_grezzi' as never)
-        .select('id, dipendente_id, ts, orologio, tipo, genere, dispositivo')
+        .select('id, sorgente, dipendente_id, ts, orologio, tipo, genere, dispositivo')
         .eq('tenant_id', tenantId)
-        .eq('sorgente', 'timbro')
+        // Tutte le bocche: il terminale e la presenza segnata dall'app o dal
+        // PC senza un cantiere. Il registro e' uno.
         .eq('stato', 'valido')
         .not('dipendente_id', 'is', null)
         .gte('ts', fromIso)
@@ -197,7 +201,7 @@ export async function leggiGiornateTimbro(
         };
       })
       .sort((a, b) => a.ts.localeCompare(b.ts));
-    out.set(k, { ...g, dipendenteId, giorno, timbri });
+    out.set(k, { ...g, dipendenteId, giorno, timbri, sorgenti: [...new Set(righe.map((r) => r.sorgente))] });
   }
   return out;
 }

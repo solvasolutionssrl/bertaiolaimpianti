@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarClock, ChevronDown, Coffee, Fingerprint, Loader2, MapPin, Play, Smartphone, Square, QrCode } from 'lucide-react';
 import { Button, cn } from '@kommessa/ui';
 
-import { avviaTurnoMio, pausaPranzoMia, riprendiTurnoMio } from '@/app/_actions/kantiere-timbra';
+import { avviaTurnoMio, pausaPranzoMia, riprendiTurnoMio, segnaPresenzaInSede } from '@/app/_actions/kantiere-timbra';
 import { Scelta } from '@/app/_components/scelta';
 import { CompilaGiornataDialog, type ModoCompila } from '../kantiere/_components/compila-giornata-dialog';
 import type { MiaGiornata as MiaGiornataDati } from '../_lib/mia-giornata';
@@ -50,6 +50,11 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
   const t = dati.turno;
   const scatola = dati.timbro && (dati.timbro.stato === 'da_ripartire' || dati.timbro.stato === 'da_chiudere') ? dati.timbro : null;
   const presenzaAperta = dati.timbro?.stato === 'presenza_aperta' && !t;
+  // La presenza nel registro e' di oggi e l'ultimo segno e' un'uscita: si puo' riprendere.
+  const ultimoSegno = dati.timbro?.giorno === dati.giorno ? (dati.timbro.timbri.filter((x) => !x.scartato).pop() ?? null) : null;
+  const puoRiprendere = !t && ultimoSegno?.tipo === 'uscita';
+  const presenza = (azione: 'inizio' | 'pausa' | 'ripresa' | 'fine') => azione_(() => segnaPresenzaInSede({ azione }));
+  const azione_ = (fn: () => Promise<{ ok: boolean; error?: string }>) => azione(fn);
 
   const azione = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
     setErrore(null);
@@ -75,11 +80,11 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
   } else if (scatola) {
     Icona = Fingerprint;
     colore = 'border-sky-300 bg-sky-50 text-sky-800';
-    testo = `Timbrato · ${hm(scatola.nettoMin)} da ripartire`;
+    testo = `${scatola.dalTerminale ? 'Timbrato' : 'In sede'} · ${hm(scatola.nettoMin)} da ripartire`;
   } else if (presenzaAperta) {
     Icona = Fingerprint;
     colore = 'border-emerald-300 bg-emerald-50 text-emerald-800';
-    testo = `In sede · badge ${dati.timbro?.inizioIso ? fmtOra.format(new Date(dati.timbro.inizioIso)) : ''}`;
+    testo = `In sede · dalle ${dati.timbro?.inizioIso ? fmtOra.format(new Date(dati.timbro.inizioIso)) : ''}`;
   } else if (dati.lavoratiOggiMin > 0) {
     testo = `Oggi ${hm(dati.lavoratiOggiMin)} di lavoro`;
   }
@@ -145,15 +150,35 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
           ) : scatola ? (
             <div className="mt-2 space-y-2">
               <p className="text-sm">
-                Badge {scatola.inizioIso ? fmtOra.format(new Date(scatola.inizioIso)) : ''} → {scatola.fineIso ? fmtOra.format(new Date(scatola.fineIso)) : ''}
+                {scatola.dalTerminale ? 'Badge' : 'In sede'} {scatola.inizioIso ? fmtOra.format(new Date(scatola.inizioIso)) : ''} → {scatola.fineIso ? fmtOra.format(new Date(scatola.fineIso)) : ''}
                 <span className="block text-xs text-muted-foreground">{hm(scatola.nettoMin)} di presenza{scatola.giorno !== dati.giorno ? ` · ${scatola.giorno}` : ''}: dì su quali commesse hai lavorato.</span>
               </p>
-              <Button size="sm" className="w-full" onClick={() => { setAperto(false); setModo({ tipo: 'scatola', vista: scatola }); }}>
-                <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Inserisci le commesse
-              </Button>
+              <div className={cn('grid gap-2', puoRiprendere ? 'grid-cols-2' : 'grid-cols-1')}>
+                {puoRiprendere ? (
+                  <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('ripresa')}>
+                    <Play className="mr-1.5 h-3.5 w-3.5" /> Riprendi
+                  </Button>
+                ) : null}
+                <Button size="sm" onClick={() => { setAperto(false); setModo({ tipo: 'scatola', vista: scatola }); }}>
+                  <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Inserisci le commesse
+                </Button>
+              </div>
             </div>
           ) : presenzaAperta ? (
-            <p className="mt-2 text-sm text-muted-foreground">Hai passato il badge in entrata. La giornata si chiude al terminale, poi la ripartisci da qui.</p>
+            <div className="mt-2 space-y-2">
+              <p className="text-sm">
+                In sede dalle {dati.timbro?.inizioIso ? fmtOra.format(new Date(dati.timbro.inizioIso)) : ''}
+                <span className="block text-xs text-muted-foreground">Senza cantiere: le ore le assegni alla fine, quando chiudi.</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('pausa')}>
+                  <Coffee className="mr-1.5 h-3.5 w-3.5" /> Pausa
+                </Button>
+                <Button size="sm" disabled={pending} onClick={() => presenza('fine')}>
+                  <Square className="mr-1.5 h-3.5 w-3.5" /> Fine giornata
+                </Button>
+              </div>
+            </div>
           ) : (
             <div className="mt-2 space-y-2">
               {dati.lavoratiOggiMin > 0 ? <p className="text-sm text-muted-foreground">Oggi {hm(dati.lavoratiOggiMin)} di lavoro già registrate.</p> : <p className="text-sm text-muted-foreground">Nessun turno aperto.</p>}
@@ -200,9 +225,18 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
   }, [open]);
 
   function avvia() {
-    if (!cantiereId) return setErrore('Scegli il cantiere.');
+    if (!cantiereId && !inSede) return setErrore('Scegli il cantiere, o segna «In sede».');
     setErrore(null);
     startTransition(async () => {
+      // In sede senza un progetto: si segna solo la presenza, le ore si
+      // assegnano ai cantieri alla fine della giornata.
+      if (!cantiereId) {
+        const r0 = await segnaPresenzaInSede({ azione: 'inizio' });
+        if (!r0.ok) return setErrore(`Non avviato: ${r0.error}`);
+        onClose();
+        router.refresh();
+        return;
+      }
       let viaggio: { sedeId: string; durataStimataMin: number | null; durataConfermataMin: number; distanzaKm: number | null; autista: boolean; mezzoId: string | null } | undefined;
       const sedePartenza = inSede ? null : partenza !== 'casa' ? partenza : null;
       if (sedePartenza) {
@@ -228,8 +262,11 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
           <p className="text-xs text-muted-foreground">Su cosa lavori, e da dove parti.</p>
         </div>
         <div className="space-y-1 text-xs">
-          <span className="font-medium text-muted-foreground">Cantiere</span>
-          <Scelta opzioni={dati.cantieri.map((c) => ({ valore: c.id, etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome }))} valore={cantiereId} onCambia={(v) => setCantiereId(v)} segnaposto="Cantiere…" disabilitato={pending} />
+          <span className="font-medium text-muted-foreground">Cantiere{inSede ? ' · facoltativo' : ''}</span>
+          <Scelta opzioni={dati.cantieri.map((c) => ({ valore: c.id, etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome }))} valore={cantiereId} onCambia={(v) => setCantiereId(v)} segnaposto={inSede ? 'Nessuno: lo dici a fine giornata' : 'Cantiere…'} disabilitato={pending} etichettaNessuno={inSede ? 'Nessuno: lo dici a fine giornata' : undefined} />
+          {inSede && !cantiereId ? (
+            <span className="block text-muted-foreground">Parte la presenza in sede; le ore le assegni ai cantieri quando chiudi.</span>
+          ) : null}
         </div>
         {sedeDefault ? (
           <div role="radiogroup" aria-label="Dove" className="inline-flex overflow-hidden rounded-md border border-border text-xs">

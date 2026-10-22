@@ -15,7 +15,6 @@ import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
-import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
 import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 
@@ -181,9 +180,9 @@ export default async function MobileOrePage() {
   let timbroOggi: TimbroGiornataVista | null = null;
   let timbroDaFare: TimbroGiornataVista | null = null;
   if (dipendenteId) {
-    const st = await leggiStatoTimbro(ctx.tenantId);
-    const apertoAMe = st.stato === 'attivo' || (st.stato === 'osservazione' && ctx.role !== 'tecnico');
-    if (apertoAMe) {
+    // Il registro si legge sempre: badge del terminale e presenza segnata
+    // dall'app o dal PC senza cantiere.
+    {
       const nomeCantiere = (id: string) => {
         const c = cantieriDisponibili.find((x) => x.id === id);
         return c ? { nome: c.nome ?? 'Cantiere', codice: c.codice ?? null } : null;

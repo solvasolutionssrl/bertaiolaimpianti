@@ -1421,7 +1421,18 @@ quello che il telefono fa in «Registra giornata» e nella scatola timbrata.
 - ⚠️ `next.config.mjs` ha `removeConsole` (tiene solo `error` e `warn`): un
   `console.log` per capire cosa fa un layout **non stampa niente**, nemmeno in
   sviluppo. Mezz'ora persa a cercare un bug che non c'era.
-- Banco: `scripts/banco-ui/giornata-scrivania.mjs` (pillola, avvio, pausa,
+- **La presenza in sede senza cantiere** (`segnaPresenzaInSede`): chi inizia
+  «in sede» senza un progetto **non sceglie il cantiere**: la presenza va nel
+  **registro** (`timbri_grezzi`, sorgente `app`, dispositivo `pc`), come un
+  badge, e la giornata diventa una scatola da riempire alla fine con lo stesso
+  flusso del terminale. ⭐ Niente in `timbrature` finche' non si attribuisce:
+  il gestionale vuole le ore per commessa, e cosi' non puo' uscire niente di
+  non attribuito. ⚠️ Il registro si legge **sempre**, con o senza Timbro: il
+  collegamento decide cosa entra, non chi legge. Le righe scritte dalla
+  ripartizione dicono da dove vengono: `timbro/timbratrice` se c'e' almeno un
+  badge, altrimenti `cronometro/app`. ⚠️ Dopo un'uscita il registro non sa se
+  e' pausa o fine: la pillola dice «da ripartire» e offre «Riprendi».
+- Banco: `scripts/banco-ui/giornata-scrivania.mjs` e `presenza-sede.mjs` (pillola, avvio, pausa,
   ripresa, chiusura con anteprima, compila per un altro). Vuole una scheda
   dipendente in modalita' ufficio sull'account ufficio di DEMOC.
 

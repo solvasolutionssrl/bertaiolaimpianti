@@ -35,7 +35,6 @@ import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-
 import { caricaTurnoAzioniContesto } from '@/app/mobile/kantiere/_lib/turno-azioni-contesto';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import { leggiGiornataTimbro } from '@/app/_lib/timbro/giornate';
-import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { riempiScatola } from '@kommessa/api/timbro-giornata';
 import {
   ViaggioSchema,
@@ -1659,11 +1658,8 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
     dipendenteId = me.id;
   }
 
-  // Il collegamento deve essere acceso: per un tecnico «attivo», per l'ufficio
-  // basta «osservazione» (e' il modo di provare il flusso prima di aprirlo).
-  const statoTimbro = await leggiStatoTimbro(ctx.tenantId);
-  if (statoTimbro.stato === 'spento') return { ok: false, error: 'TIMBRO_OFF' };
-  if (statoTimbro.stato !== 'attivo' && !ufficio) return { ok: false, error: 'TIMBRO_OFF' };
+  // Nessun interruttore qui: se nel registro c'e' una scatola, la si riempie.
+  // Il collegamento con Timbro decide cosa ENTRA nel registro, non chi lo legge.
 
   const giorno = parsed.data.giorno;
   const oggi = romeDay(new Date());
@@ -1685,6 +1681,9 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
   if (scatola.ingressoEsistente && scatola.ingressoEsistente.cantiereId !== primoCantiere) {
     return { ok: false, error: 'SPLIT_PRIMO_CANTIERE' };
   }
+  // Le righe scritte dicono da dove vengono: dal terminale se almeno un
+  // evento e' un badge, altrimenti dall'app (la presenza segnata senza cantiere).
+  const dalTerminale = g.sorgenti.includes('timbro');
 
   return scriviGiornataRipartita({
     supabase,
@@ -1694,8 +1693,8 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
     giorno,
     split: parsed.data.split,
     percorso: parsed.data.percorso ?? null,
-    origine: 'timbro',
-    modalita: 'timbratrice',
+    origine: dalTerminale ? 'timbro' : 'cronometro',
+    modalita: dalTerminale ? 'timbratrice' : 'app',
     // E' la chiusura di una giornata gia' lavorata: un cantiere chiuso nel
     // frattempo non puo' lasciare la persona senza modo di dire dov'era.
     cantieriForzati: true,
@@ -1721,6 +1720,69 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
   });
 }
 
+// ── 7) la presenza in sede, senza cantiere ────────────────────────────────
+// Chi inizia la giornata «in sede» senza un progetto in mente non deve
+// scegliere un cantiere: le ore si attribuiscono alla fine. Si scrive quindi
+// nel REGISTRO (`timbri_grezzi`, sorgente `app`), come un badge: la giornata
+// diventa una scatola e si riempie dopo, con lo stesso flusso del terminale.
+// ⭐ Nessuna riga in `timbrature` finche' non si attribuisce: niente puo'
+// uscire verso il gestionale prima che la persona abbia detto dove.
+
+const PresenzaSchema = z.object({
+  azione: z.enum(['inizio', 'pausa', 'ripresa', 'fine']),
+});
+
+/** Due segni uguali a meno di cosi' sono un doppio clic. */
+const PRESENZA_DOPPIO_MS = 60_000;
+
+export async function segnaPresenzaInSede(input: unknown): Promise<Result> {
+  const parsed = PresenzaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const tipo: 'ingresso' | 'uscita' = parsed.data.azione === 'inizio' || parsed.data.azione === 'ripresa' ? 'ingresso' : 'uscita';
+  const adesso = new Date();
+  const giorno = romeDay(adesso);
+
+  // Lo stato lo dice il registro, non il tasto premuto.
+  const g = await leggiGiornataTimbro(supabase, ctx.tenantId, me.id, giorno);
+  const ultimo = g?.timbri.filter((t) => !t.scartato).pop() ?? null;
+  if (ultimo && Date.parse(ultimo.ts) > adesso.getTime() - PRESENZA_DOPPIO_MS && ultimo.tipo === tipo) {
+    return { ok: true, tipo, pausa: parsed.data.azione === 'pausa' || parsed.data.azione === 'ripresa', ts: ultimo.ts };
+  }
+  const dentro = !!g?.presenza?.aperta;
+  if (tipo === 'ingresso' && dentro) return { ok: false, error: 'TURNO_GIA_APERTO' };
+  if (tipo === 'uscita' && !dentro) return { ok: false, error: 'NESSUN_TURNO_APERTO' };
+  // Un turno aperto dall'app su un cantiere si chiude da li', non da qui.
+  const turnoCantiere = await turnoApertoQualsiasi(supabase, me.id);
+  if (tipo === 'ingresso' && turnoCantiere) return { ok: false, error: 'TURNO_GIA_APERTO' };
+
+  // Il registro lo scrive solo la service role: e' un fatto, non un dato
+  // dell'utente. L'identita' dell'evento e' nostra.
+  const service = createServiceSupabase();
+  const { error } = await service.from('timbri_grezzi' as never).insert({
+    tenant_id: ctx.tenantId,
+    sorgente: 'app',
+    esterno_id: crypto.randomUUID(),
+    dipendente_id: me.id,
+    badge: null,
+    ts: adesso.toISOString(),
+    orologio: 'telefono',
+    tipo,
+    stato: 'valido',
+    genere: null,
+    dispositivo: 'pc',
+    grezzo: { azione: parsed.data.azione, user_id: ctx.userId },
+  } as never);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, tipo, pausa: parsed.data.azione === 'pausa' || parsed.data.azione === 'ripresa', ts: adesso.toISOString() };
+}
+
 // ── Lo scrittore unico di una giornata ripartita ──────────────────────────
 
 type EventoGiornata = { cantiereId: string; tipo: 'ingresso' | 'uscita'; pausa: boolean; ms: number };
@@ -1733,8 +1795,8 @@ interface GiornataRipartitaInput {
   giorno: string;
   split: { cantiereId: string; minuti: number; daSede?: boolean }[];
   percorso: z.infer<typeof PercorsoGiornataSchema> | null;
-  origine: 'manuale' | 'timbro';
-  modalita: 'giornata_dichiarata' | 'timbratrice' | 'ufficio';
+  origine: 'manuale' | 'timbro' | 'cronometro';
+  modalita: 'giornata_dichiarata' | 'timbratrice' | 'ufficio' | 'app';
   /** I cantieri chiusi nel frattempo non bloccano (chiusura di una giornata gia' lavorata). */
   cantieriForzati: boolean;
   /** Il primo ingresso esiste gia' (turno aperto dall'app): non si riscrive. */

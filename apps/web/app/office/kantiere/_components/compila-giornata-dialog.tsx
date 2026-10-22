@@ -323,7 +323,7 @@ export function CompilaGiornataDialog({
     modo.tipo === 'registra' ? 'Registra la mia giornata' : modo.tipo === 'registra_altro' ? `Compila la giornata di ${modo.dipendenteNome}` : modo.tipo === 'scatola' ? (modo.dipendenteNome ? `Ripartisci la giornata di ${modo.dipendenteNome}` : 'Inserisci le commesse sulle quali hai lavorato') : 'Chiudi il turno';
   const sottotitolo =
     modo.tipo === 'scatola'
-      ? `${fmtGiorno.format(new Date(`${modo.vista.giorno}T12:00:00Z`))} · ${modo.vista.primoCantiere ? `turno dall’app ${inizio}, badge in sede ${modo.vista.fineIso ? hmRome(modo.vista.fineIso) : ''}` : `badge in sede ${inizio} → ${modo.vista.fineIso ? hmRome(modo.vista.fineIso) : ''}`}${modo.vista.pausaTimbrataMin > 0 ? ` · pausa timbrata ${hm(modo.vista.pausaTimbrataMin)}` : ''}`
+      ? `${fmtGiorno.format(new Date(`${modo.vista.giorno}T12:00:00Z`))} · ${modo.vista.primoCantiere ? `turno dall’app ${inizio}, ${modo.vista.dalTerminale ? 'badge' : 'uscita'} in sede ${modo.vista.fineIso ? hmRome(modo.vista.fineIso) : ''}` : `${modo.vista.dalTerminale ? 'badge' : 'presenza'} in sede ${inizio} → ${modo.vista.fineIso ? hmRome(modo.vista.fineIso) : ''}`}${modo.vista.pausaTimbrataMin > 0 ? ` · pausa ${hm(modo.vista.pausaTimbrataMin)}` : ''}`
       : modo.tipo === 'chiusura'
         ? `${modo.turno.cantiereNome} · dalle ${inizio} · chiusura adesso, ${hmRome(new Date(fineMs).toISOString())}`
         : `${fmtGiorno.format(new Date(`${giorno}T12:00:00Z`))} · senza timbrature`;
@@ -352,7 +352,7 @@ export function CompilaGiornataDialog({
 
             <section className="flex flex-wrap items-end gap-4">
               <label className="w-28 space-y-1 text-xs">
-                <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? 'Badge alle' : 'Inizio'}</span>
+                <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? (modo.vista.dalTerminale ? 'Badge alle' : 'In sede dalle') : 'Inizio'}</span>
                 <input
                   type="time"
                   value={inizio}
@@ -362,7 +362,7 @@ export function CompilaGiornataDialog({
                 />
               </label>
               <div className="w-28 space-y-1 text-xs">
-                <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? 'Badge alle' : modo.tipo === 'chiusura' ? 'Chiusura' : 'Fine · calcolata'}</span>
+                <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? (modo.vista.dalTerminale ? 'Badge alle' : 'Uscita alle') : modo.tipo === 'chiusura' ? 'Chiusura' : 'Fine · calcolata'}</span>
                 <div className="flex h-10 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
                   {vive.length > 0 || modo.tipo !== 'registra' ? hmRome(new Date(fineMs).toISOString()) : '--:--'}
                 </div>

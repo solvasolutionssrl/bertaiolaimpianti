@@ -182,8 +182,11 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
   }
 
   let timbro: TimbroGiornataVista | null = null;
-  const apertoAMe = statoTimbro.stato === 'attivo' || (statoTimbro.stato === 'osservazione' && role !== 'tecnico');
-  if (apertoAMe) {
+  // Il registro si legge sempre: contiene i badge del terminale (se collegato)
+  // e la presenza segnata dall'app o dal PC senza cantiere.
+  void statoTimbro;
+  void role;
+  {
     const { oggi, daFare } = await giornateTimbroPersona(supabase, tenantId, dipendenteId);
     const scelta = daFare ?? oggi;
     if (scelta) {

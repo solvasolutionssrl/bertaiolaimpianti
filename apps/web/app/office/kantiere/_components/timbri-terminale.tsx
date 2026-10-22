@@ -29,7 +29,7 @@ export function TimbriTerminale({ timbri, compatto = false }: { timbri: TimbroVi
               : 'Uscita') +
           (t.dedotto && !t.scartato ? ' · direzione dedotta dalla sequenza' : '') +
           (t.genere === 'badge' ? ' · badge al terminale' : t.genere === 'manuale' ? ' · inserito a mano su Timbro' : '') +
-          (t.dispositivo ? ` · terminale ${t.dispositivo}` : '');
+          (t.dispositivo === 'pc' ? ' · segnato dal PC' : t.dispositivo ? ` · terminale ${t.dispositivo}` : '');
         return (
           <span
             key={t.id}

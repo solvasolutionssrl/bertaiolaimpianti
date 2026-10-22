@@ -19,7 +19,6 @@ import type { PickerCantiere } from '../_components/cantiere-picker';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import Link from 'next/link';
 import { CalendarClock } from 'lucide-react';
-import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
 
 export const metadata: Metadata = {
@@ -87,8 +86,7 @@ export default async function CantieriMobilePage() {
   // tecnico la dice, e porta dove si sistema (la tab Ore).
   let daRipartire: { giorno: string; oggi: boolean } | null = null;
   if (me) {
-    const st = await leggiStatoTimbro(ctx.tenantId);
-    if (st.stato === 'attivo' || (st.stato === 'osservazione' && ctx.role !== 'tecnico')) {
+    {
       const { daFare } = await giornateTimbroPersona(supabase, ctx.tenantId, me.id);
       if (daFare) {
         const oggi = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());

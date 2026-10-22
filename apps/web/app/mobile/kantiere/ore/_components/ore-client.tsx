@@ -141,6 +141,7 @@ export function OreClient({
           inizioFisico: timbroDaFare.inizioFisico,
           fineFisica: timbroDaFare.fineFisica,
           primoCantiere: timbroDaFare.primoCantiere,
+          dalTerminale: timbroDaFare.dalTerminale,
         }
       : null;
   // dialog panoramica/correzione della giornata di oggi (pencil sul totale)
@@ -270,7 +271,7 @@ export function OreClient({
       {timbroOggi || timbroDaFare ? (
         <section className="space-y-2.5 rounded-2xl border border-sky-200 bg-sky-50/50 p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-800">
-            {timbroDaFare && timbroDaFare.giorno !== oggiRome ? `Timbrato il ${fmtGiornoBreveIt(timbroDaFare.giorno)}` : 'Timbrato oggi'}
+            {(() => { const g = timbroDaFare ?? timbroOggi!; const v = g.dalTerminale ? 'Timbrato' : 'In sede'; return g.giorno !== oggiRome ? `${v} il ${fmtGiornoBreveIt(g.giorno)}` : `${v} oggi`; })()}
           </p>
           <TimbriTerminale timbri={(timbroDaFare ?? timbroOggi)!.timbri} />
           <p className="text-xs leading-relaxed text-sky-900">

@@ -16,7 +16,6 @@ import {
   leggiSogliaPausaPranzoOre,
   leggiImpostazioniKantiere,
 } from '@/app/_lib/kantiere-config';
-import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
 import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
@@ -613,9 +612,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
 
   // ── Le giornate viste dai timbri del terminale (Timbro) ───────────────────
   // Solo se il collegamento esiste: per gli altri clienti non costa una lettura.
-  const statoTimbro = await leggiStatoTimbro(ctx.tenantId);
   let timbroGiornate: TimbroGiornataVista[] = [];
-  if (statoTimbro.stato !== 'spento') {
+  {
     const nomeCantiere = (id: string) => {
       const n = cantieriNomeMap.get(id);
       return n ? { nome: n, codice: null } : null;

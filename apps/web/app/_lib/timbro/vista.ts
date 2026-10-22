@@ -27,6 +27,8 @@ export interface TimbroGiornataVista {
   intervalli: { inizioIso: string; fineIso: string }[];
   /** Come lavora la persona (scheda dipendente): decide il default «in sede» / «in cantiere». */
   modalitaLavoro: 'ufficio' | 'esterno';
+  /** Almeno un evento viene dal terminale; altrimenti e' una presenza segnata dall'app o dal PC. */
+  dalTerminale: boolean;
 }
 
 export const ETICHETTA_STATO_TIMBRO: Record<StatoGiornataTimbro, string> = {
@@ -71,5 +73,6 @@ export function vistaDaGiornata(
       fineIso: new Date(i.fineMs).toISOString(),
     })),
     modalitaLavoro,
+    dalTerminale: g.sorgenti.includes('timbro'),
   };
 }

@@ -290,6 +290,8 @@ export interface ScatolaDialog {
   fineFisica: boolean;
   /** Il turno aperto dall'app che il timbro chiude: primo cantiere obbligato. */
   primoCantiere: { id: string; nome: string; codice: string | null } | null;
+  /** Almeno un badge del terminale; altrimenti e' una presenza segnata dall'app. */
+  dalTerminale?: boolean;
 }
 
 const hmRome = (iso: string) =>
@@ -1413,8 +1415,8 @@ export function RegistraGiornataDialog({
                 {scatola
                   ? `${giornoEsteso} · ` +
                     (scatola.primoCantiere
-                      ? `turno dall’app ${inizio}, badge in sede ${fine}`
-                      : `badge in sede ${inizio} → ${fine}`) +
+                      ? `turno dall’app ${inizio}, ${scatola.dalTerminale === false ? 'uscita' : 'badge'} in sede ${fine}`
+                      : `${scatola.dalTerminale === false ? 'presenza' : 'badge'} in sede ${inizio} → ${fine}`) +
                     (scatola.pausaTimbrataMin > 0 ? ` · pausa ${fmtHM(scatola.pausaTimbrataMin)}` : '')
                   : `${oggiEsteso} · senza timbrature`}
               </p>

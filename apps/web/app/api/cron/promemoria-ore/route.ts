@@ -5,7 +5,6 @@ import { romeDay } from '@kommessa/api/rome-time';
 
 import { bearerValido } from '@/app/_lib/segreto';
 import { promemoriaOreDaConfig } from '@/app/_lib/kantiere-config';
-import { leggiTutteConfigTimbro } from '@/app/_lib/timbro/config';
 import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
 import { avvisa, type Avviso } from '@/app/_actions/_lib/avvisa';
 
@@ -51,17 +50,17 @@ async function run(request: NextRequest) {
   const adessoMin = minutiDelGiorno(oraRome);
 
   const esiti: Array<{ tenantId: string; finestra: string; destinatari: number; avvisati: number }> = [];
-  const configs = (await leggiTutteConfigTimbro()).filter((c) => c.stato === 'attivo');
+  // Tutti i clienti con il modulo presenze: il registro contiene i badge del
+  // terminale (dove c'e') e la presenza segnata dall'app senza cantiere.
+  const { data: moduliRaw } = await service
+    .from('tenant_modules' as never)
+    .select('tenant_id, config, attivo')
+    .eq('module_code', 'kantiere')
+    .eq('attivo', true);
+  const moduli = (moduliRaw ?? []) as { tenant_id: string; config: Record<string, unknown> | null; attivo: boolean }[];
 
-  for (const cfg of configs) {
-    const { data: modRaw } = await service
-      .from('tenant_modules' as never)
-      .select('config, attivo')
-      .eq('tenant_id', cfg.tenantId)
-      .eq('module_code', 'kantiere')
-      .maybeSingle();
-    const mod = modRaw as { config: Record<string, unknown> | null; attivo: boolean } | null;
-    if (!mod?.attivo) continue;
+  for (const mod of moduli) {
+    const cfg = { tenantId: mod.tenant_id };
     const pr = promemoriaOreDaConfig(mod.config?.['promemoria_ore']);
     if (!pr.attivo) continue;
 
