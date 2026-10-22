@@ -622,7 +622,11 @@ export function OfficeShellClient({
     await spegniSottoscrizionePush();
     await registraEventoAccesso('logout');
     const supabase = createBrowserSupabase();
-    await supabase.auth.signOut();
+    // ⚠️ Solo QUESTO dispositivo. Senza `scope`, Supabase chiude tutte le
+      // sessioni della persona: uscire dal telefono buttava fuori anche il PC
+      // (misurato il 22/10 con due telefoni). Chi vuole chiudere ovunque lo
+      // fa dal pannello, non da un tasto «Esci».
+      await supabase.auth.signOut({ scope: 'local' });
     router.replace('/login');
     router.refresh();
   }, [router]);

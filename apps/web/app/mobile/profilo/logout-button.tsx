@@ -45,7 +45,11 @@ export function LogoutButton() {
       await spegniSottoscrizionePush();
       await registraEventoAccesso('logout');
       const supabase = createBrowserSupabase();
-      await supabase.auth.signOut();
+      // ⚠️ Solo QUESTO dispositivo. Senza `scope`, Supabase chiude tutte le
+      // sessioni della persona: uscire dal telefono buttava fuori anche il PC
+      // (misurato il 22/10 con due telefoni). Chi vuole chiudere ovunque lo
+      // fa dal pannello, non da un tasto «Esci».
+      await supabase.auth.signOut({ scope: 'local' });
       // `/mobile/login` non esiste: la pagina di accesso è a `/login` (come
       // portal/office/admin). `replace` così la sessione chiusa non resta nella
       // history (il back non riporterebbe a una pagina ormai non autenticata).
