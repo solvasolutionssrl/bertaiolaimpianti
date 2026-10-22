@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2 } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -61,7 +61,7 @@ export function RipartisciTimbroDialog({
     setRighe(
       giornata.primoCantiere
         ? [{ cantiereId: giornata.primoCantiere.id, minuti: 0, inSede: false }]
-        : [{ cantiereId: '', minuti: 0, inSede: giornata.inizioFisico }],
+        : [{ cantiereId: '', minuti: 0, inSede: giornata.modalitaLavoro === 'ufficio' }],
     );
   }, [open, giornata]);
 
@@ -124,7 +124,7 @@ export function RipartisciTimbroDialog({
           <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span>
-                Timbrato{' '}
+                {giornata.primoCantiere ? 'Turno dall’app, poi badge in sede' : 'Badge in sede'}{' '}
                 <span className="font-semibold tabular-nums text-foreground">
                   {giornata.inizioIso ? fmtOra.format(new Date(giornata.inizioIso)) : '--:--'} →{' '}
                   {giornata.fineIso ? fmtOra.format(new Date(giornata.fineIso)) : '--:--'}
@@ -175,17 +175,26 @@ export function RipartisciTimbroDialog({
                       disabilitato={pending}
                     />
                   )}
-                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      className="h-3.5 w-3.5 accent-primary"
-                      checked={!r.inSede}
-                      disabled={pending}
-                      onChange={(e) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, inSede: !e.target.checked } : x)))}
-                    />
-                    <Building2 className="h-3 w-3" aria-hidden="true" />
-                    uscito
-                  </label>
+                  <div role="radiogroup" aria-label="Dove" className="inline-flex overflow-hidden rounded-md border border-border text-[11px]">
+                    {(
+                      [
+                        [true, 'In sede'],
+                        [false, 'In cantiere'],
+                      ] as [boolean, string][]
+                    ).map(([valore, etichetta]) => (
+                      <button
+                        key={etichetta}
+                        type="button"
+                        role="radio"
+                        aria-checked={r.inSede === valore}
+                        disabled={pending}
+                        onClick={() => setRighe((p) => p.map((x, j) => (j === i ? { ...x, inSede: valore } : x)))}
+                        className={r.inSede === valore ? 'bg-primary px-2 py-1 font-semibold text-white' : 'bg-background px-2 py-1 text-muted-foreground'}
+                      >
+                        {etichetta}
+                      </button>
+                    ))}
+                  </div>
                   <input
                     type="number"
                     min={0}
@@ -217,15 +226,15 @@ export function RipartisciTimbroDialog({
               variant="outline"
               size="sm"
               disabled={pending || righe.length >= 12}
-              onClick={() => setRighe((p) => [...p, { cantiereId: '', minuti: 0, inSede: giornata.inizioFisico }])}
+              onClick={() => setRighe((p) => [...p, { cantiereId: '', minuti: 0, inSede: giornata.modalitaLavoro === 'ufficio' }])}
             >
               <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
               Aggiungi cantiere
             </Button>
             <p className="text-[11px] text-muted-foreground">
-              Minuti di lavoro per cantiere. «Uscito» = la persona è andata in cantiere: la strada dalla sede
-              si calcola da sola e sta dentro la presenza. Senza la spunta le ore sono del cantiere ma la
-              persona era in sede.
+              Minuti di lavoro per cantiere. «In cantiere» = la persona ci è andata: la strada dalla sede si
+              calcola da sola e sta dentro la presenza timbrata. «In sede» = ore del cantiere, ma la persona
+              era in sede. Il default segue la scheda della persona (ufficio o esterno).
             </p>
           </div>
 

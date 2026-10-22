@@ -69,12 +69,11 @@ try {
   await pausa(700);
   const s3 = await valuta(cdp, `(() => { ${AIUTI}
     const d = dialogo();
-    const lab = [...d.querySelectorAll('label')].find((l) => /Uscito in cantiere|Lavoro presso il cliente|Lavoro dalla sede/.test(l.textContent));
-    const box = lab?.querySelector('input[type=checkbox]');
-    return { etichetta: lab ? t(lab.textContent) : null, spuntato: box ? box.checked : null, inSede: /tutto il giorno in sede/i.test(t(d.innerText)), resto: /8:33 vanno sull’ultimo cantiere/.test(t(d.innerText)) };
+    const scelto = [...d.querySelectorAll('[role=radio][aria-checked="true"]')].map((b) => t(b.textContent));
+    return { etichetta: scelto.join(','), spuntato: scelto.includes('In sede'), inSede: /tutto il giorno in sede/i.test(t(d.innerText)), resto: /8:33 vanno sull’ultimo cantiere/.test(t(d.innerText)) };
   })()`);
-  // Il tecnico demo e' in modalita' ufficio: l'etichetta e' quella dell'ufficio.
-  esito(s3.spuntato === false, 'riga cantiere: il flag «uscito» e’ spento (in sede per default)', s3.etichetta ?? '');
+  // Il tecnico demo e' in modalita' ufficio: il default e' «In sede».
+  esito(s3.spuntato === true, 'riga cantiere: «In sede» scelto per default (persona in modalità ufficio)', s3.etichetta ?? '');
   esito(s3.inSede, 'percorso: «tutto il giorno in sede», nessun viaggio chiesto');
   esito(s3.resto, 'il resto delle ore va sull’ultimo cantiere');
   await foto(cdp, 'timbro-03-cantiere');

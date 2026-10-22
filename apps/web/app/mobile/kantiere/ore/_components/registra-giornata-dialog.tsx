@@ -460,9 +460,12 @@ export function RegistraGiornataDialog({
    * Il caso normale e' «in sede» e il flag segna l'uscita: per chi lavora in
    * ufficio, e per chi ha passato il badge al terminale (era li').
    */
-  const invertito = inUfficio || (scatola?.inizioFisico ?? false);
-  const etichettaFlag = inUfficio ? 'Lavoro presso il cliente' : scatola ? 'Uscito in cantiere' : 'Lavoro dalla sede sul progetto';
-  const etichettaFlagCorta = inUfficio ? 'Dal cliente' : scatola ? 'In cantiere' : 'In sede';
+  // ⚠️ Il badge NON inverte piu' il flag (22/10): dice che la persona era in
+  // sede agli estremi, non dove ha lavorato in mezzo. Il default lo da' la
+  // scheda della persona; il luogo di ogni lavoro si sceglie a vista, con le
+  // due opzioni sempre davanti («In sede» / «In cantiere»), cosi' non c'e'
+  // un'etichetta da leggere al contrario.
+  const invertito = inUfficio;
 
   const assegnato = righe.reduce((a, r) => a + r.minuti, 0);
   const disponibili = (cantieri ?? []).filter((c) => !righe.some((r) => r.cantiereId === c.id));
@@ -959,7 +962,7 @@ export function RegistraGiornataDialog({
               // In modalità ufficio (o con il badge passato in sede) il caso
               // normale è lavorare dalla sede: il lavoro nasce così, e il flag
               // serve a dire quando si è usciti.
-              daSede: invertito && sedeDefault != null,
+              daSede: inUfficio && sedeDefault != null,
             },
           ],
     );
@@ -1188,12 +1191,11 @@ export function RegistraGiornataDialog({
             <span className="text-foreground min-w-0 flex-1 truncate text-[13px] font-semibold">
               {r.nome}
             </span>
-            {/* Si segna l'eccezione, non la regola: fuori è «in sede», in
-                ufficio è l'uscita dal cliente. Senza sede predefinita non c'è
-                nessuna eccezione da segnare: la casella non esiste nemmeno. */}
-            {(invertito ? sedeDefault != null && !r.daSede : r.daSede) ? (
+            {/* Dove si e' lavorato, sempre scritto: una riga senza luogo si
+                legge come «non so». Senza sede predefinita c'e' solo il cantiere. */}
+            {sedeDefault ? (
               <span className="text-primary shrink-0 text-[10px] font-semibold uppercase tracking-wide">
-                {etichettaFlagCorta}
+                {r.daSede ? 'In sede' : 'In cantiere'}
               </span>
             ) : null}
             <span className="text-muted-foreground shrink-0 font-mono text-xs font-semibold tabular-nums">
@@ -1248,26 +1250,37 @@ export function RegistraGiornataDialog({
               />
             </div>
             {sedeDefault ? (
-              <label className="mt-1.5 flex cursor-pointer select-none items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={invertito ? !r.daSede : r.daSede}
-                  disabled={pending}
-                  onChange={(e) =>
-                    setRighe((prev) =>
-                      prev.map((x, j) =>
-                        j === i
-                          ? { ...x, daSede: invertito ? !e.target.checked : e.target.checked }
-                          : x,
-                      ),
-                    )
-                  }
-                  className="border-input accent-primary h-4 w-4 rounded"
-                />
-                <span className="text-muted-foreground text-xs">
-                  {etichettaFlag}
-                </span>
-              </label>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <span className="text-muted-foreground text-xs font-medium">Dove</span>
+                <div
+                  role="radiogroup"
+                  aria-label={`Dove hai lavorato su ${r.nome}`}
+                  className="border-border inline-flex overflow-hidden rounded-lg border text-xs"
+                >
+                  {(
+                    [
+                      [true, 'In sede'],
+                      [false, 'In cantiere'],
+                    ] as [boolean, string][]
+                  ).map(([valore, etichetta]) => (
+                    <button
+                      key={etichetta}
+                      type="button"
+                      role="radio"
+                      aria-checked={r.daSede === valore}
+                      disabled={pending}
+                      onClick={() => setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, daSede: valore } : x)))}
+                      className={
+                        r.daSede === valore
+                          ? 'bg-primary px-2.5 py-1 font-semibold text-white'
+                          : 'text-muted-foreground bg-card px-2.5 py-1'
+                      }
+                    >
+                      {etichetta}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : null}
           </section>
         ),
@@ -1398,7 +1411,10 @@ export function RegistraGiornataDialog({
               </h2>
               <p className="text-muted-foreground truncate text-[11px] leading-tight first-letter:uppercase">
                 {scatola
-                  ? `${giornoEsteso} · timbrato ${inizio} → ${fine}` +
+                  ? `${giornoEsteso} · ` +
+                    (scatola.primoCantiere
+                      ? `turno dall’app ${inizio}, badge in sede ${fine}`
+                      : `badge in sede ${inizio} → ${fine}`) +
                     (scatola.pausaTimbrataMin > 0 ? ` · pausa ${fmtHM(scatola.pausaTimbrataMin)}` : '')
                   : `${oggiEsteso} · senza timbrature`}
               </p>

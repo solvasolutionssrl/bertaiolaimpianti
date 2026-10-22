@@ -627,20 +627,24 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     // Chi ha timbrato ma non ha ancora una giornata non sta in `dipendentiMap`
     // (costruita dai rapportini): il nome si legge a parte, o a schermo
     // comparirebbe l'id.
-    const senzaNome = [...letta.values()].map((g) => g.dipendenteId).filter((id) => !dipendentiMap.has(id));
-    if (senzaNome.length > 0) {
+    const idTimbro = [...new Set([...letta.values()].map((g) => g.dipendenteId))];
+    const modalitaDi = new Map<string, 'ufficio' | 'esterno'>();
+    if (idTimbro.length > 0) {
       const { data } = (await supabase
         .from('dipendenti' as never)
-        .select('id, nome, cognome, user_id')
-        .in('id', [...new Set(senzaNome)])) as { data: (DipendenteRow & { user_id: string | null })[] | null };
+        .select('id, nome, cognome, user_id, modalita_lavoro')
+        .in('id', idTimbro)) as {
+        data: (DipendenteRow & { user_id: string | null; modalita_lavoro: string | null })[] | null;
+      };
       for (const d of data ?? []) {
-        dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
-        utenteDelDipendente.set(d.id, d.user_id);
+        if (!dipendentiMap.has(d.id)) dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
+        if (!utenteDelDipendente.has(d.id)) utenteDelDipendente.set(d.id, d.user_id);
+        modalitaDi.set(d.id, d.modalita_lavoro === 'ufficio' ? 'ufficio' : 'esterno');
       }
     }
     for (const g of letta.values()) {
       timbroGiornate.push(
-        vistaDaGiornata(g, dipendentiMap.get(g.dipendenteId) ?? g.dipendenteId, nomeCantiere),
+        vistaDaGiornata(g, dipendentiMap.get(g.dipendenteId) ?? g.dipendenteId, nomeCantiere, modalitaDi.get(g.dipendenteId)),
       );
     }
     timbroGiornate.sort((a, b) => b.giorno.localeCompare(a.giorno) || a.dipendenteNome.localeCompare(b.dipendenteNome));

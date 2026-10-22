@@ -23,6 +23,8 @@ export interface TimbroGiornataVista {
   fineFisica: boolean;
   primoCantiere: { id: string; nome: string; codice: string | null } | null;
   timbri: TimbroVisto[];
+  /** Come lavora la persona (scheda dipendente): decide il default «in sede» / «in cantiere». */
+  modalitaLavoro: 'ufficio' | 'esterno';
 }
 
 export const ETICHETTA_STATO_TIMBRO: Record<StatoGiornataTimbro, string> = {
@@ -38,6 +40,7 @@ export function vistaDaGiornata(
   g: GiornataTimbroLetta,
   dipendenteNome: string,
   nomeCantiere: (id: string) => { nome: string; codice: string | null } | null,
+  modalitaLavoro: 'ufficio' | 'esterno' = 'esterno',
 ): TimbroGiornataVista {
   const s = g.scatola;
   const pc = s?.ingressoEsistente ? nomeCantiere(s.ingressoEsistente.cantiereId) : null;
@@ -61,5 +64,6 @@ export function vistaDaGiornata(
       ? { id: s.ingressoEsistente.cantiereId, nome: pc?.nome ?? 'Cantiere', codice: pc?.codice ?? null }
       : null,
     timbri: g.timbri,
+    modalitaLavoro,
   };
 }
