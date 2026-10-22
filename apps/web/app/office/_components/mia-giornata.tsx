@@ -122,7 +122,7 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
       </button>
 
       {aperto ? (
-        <div role="menu" className="absolute right-0 top-11 z-50 w-80 rounded-xl border border-border bg-card p-3 shadow-lg">
+        <div role="menu" className="absolute right-0 top-11 z-50 w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-lg">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">La mia giornata</p>
           {t ? (
             <div className="mt-2 space-y-2">
@@ -153,7 +153,9 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
                 {scatola.dalTerminale ? 'Badge' : 'In sede'} {scatola.inizioIso ? fmtOra.format(new Date(scatola.inizioIso)) : ''} → {scatola.fineIso ? fmtOra.format(new Date(scatola.fineIso)) : ''}
                 <span className="block text-xs text-muted-foreground">{hm(scatola.nettoMin)} di presenza{scatola.giorno !== dati.giorno ? ` · ${scatola.giorno}` : ''}: dì su quali commesse hai lavorato.</span>
               </p>
-              <div className={cn('grid gap-2', puoRiprendere ? 'grid-cols-2' : 'grid-cols-1')}>
+              {/* «Riprendi» prende la sua larghezza, il tasto lungo tutto il resto:
+                  a due colonne uguali «Inserisci le commesse» usciva dal bordo. */}
+              <div className={cn('grid gap-2', puoRiprendere ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1')}>
                 {puoRiprendere ? (
                   <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('ripresa')}>
                     <Play className="mr-1.5 h-3.5 w-3.5" /> Riprendi

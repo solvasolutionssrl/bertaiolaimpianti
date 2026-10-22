@@ -47,6 +47,9 @@ try {
   await apriMenu(cdp);
   const m = await valuta(cdp, `document.querySelector('[role=menu]').innerText.replace(/\\s+/g,' ')`);
   esito(/Riprendi/.test(m) && /Inserisci le commesse/.test(m), 'menu: Riprendi e Inserisci le commesse', m.slice(0, 160));
+  // Il testo di un tasto non deve uscire dal tasto, ne' il tasto dal menu.
+  const sborda = await valuta(cdp, `(() => { const menu = document.querySelector('[role=menu]'); const mr = menu.getBoundingClientRect(); return [...menu.querySelectorAll('button')].filter((b) => b.scrollWidth > b.clientWidth + 1 || b.getBoundingClientRect().right > mr.right + 1).map((b) => b.textContent.trim()); })()`);
+  esito(sborda.length === 0, 'menu: nessun tasto tagliato', sborda.join(', ') || 'tutti dentro');
   await clicVero(cdp, bottone('^Riprendi'));
   await attendiPillola(cdp, 'In sede · dalle');
   esito(true, 'header: ripreso');
