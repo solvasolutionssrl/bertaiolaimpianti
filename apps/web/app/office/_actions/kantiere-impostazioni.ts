@@ -54,8 +54,6 @@ const schema = z.object({
   anomalie: anomalieSchema.optional(),
   // Kontabilità
   kontabilitaAttiva: z.boolean().optional(),
-  // Lavoro interno di sede
-  cantiereSedeId: z.string().uuid().nullable().optional(),
   // Promemoria ore (giornate timbrate al terminale)
   promemoriaOre: z
     .object({
@@ -117,20 +115,6 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   imposta('anomalie', d.anomalie);
   imposta('kontabilita_attiva', d.kontabilitaAttiva);
   imposta('promemoria_ore', d.promemoriaOre);
-  if (d.cantiereSedeId !== undefined) {
-    // Deve essere un cantiere del cliente: un id di un altro spazio di lavoro
-    // non si salva nemmeno per sbaglio.
-    if (d.cantiereSedeId) {
-      const { data: c } = await supabase
-        .from('cantieri' as never)
-        .select('id')
-        .eq('id', d.cantiereSedeId)
-        .eq('tenant_id', ctx.tenantId)
-        .maybeSingle();
-      if (!c) return { ok: false, error: 'Il cantiere di sede non è di questo cliente.' };
-    }
-    newConfig['cantiere_sede_id'] = d.cantiereSedeId;
-  }
   for (const chiave of CHIAVI_DISMESSE) delete newConfig[chiave];
 
   const { error: updateError } = await supabase

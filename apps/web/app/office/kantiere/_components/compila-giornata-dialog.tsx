@@ -47,7 +47,7 @@ export interface DatiCompila {
   mezzi: { id: string; targa: string; modello: string | null }[];
   ultimoMezzoId: string | null;
   modalitaLavoro: 'ufficio' | 'esterno';
-  impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number; cantiereSedeId?: string | null };
+  impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number };
 }
 
 type Riga = { cantiereId: string; minuti: number; inSede: boolean };
@@ -94,9 +94,6 @@ export function CompilaGiornataDialog({
 
   const sedeDefault = dati.sedi.find((s) => s.isDefault) ?? null;
   const inUfficio = dati.modalitaLavoro === 'ufficio';
-  // Il lavoro interno di sede: proposto sulla prima riga di chi e' in sede.
-  const sedeCantiere = dati.impostazioni.cantiereSedeId ?? '';
-  const rigaInSede = (): Riga => ({ cantiereId: inUfficio && sedeDefault ? sedeCantiere : '', minuti: 0, inSede: inUfficio && !!sedeDefault });
   const giorno =
     modo?.tipo === 'registra_altro' ? modo.giorno : modo?.tipo === 'scatola' ? modo.vista.giorno : oggiRome();
 
@@ -113,7 +110,7 @@ export function CompilaGiornataDialog({
       setRighe(
         modo.vista.primoCantiere
           ? [{ cantiereId: modo.vista.primoCantiere.id, minuti: 0, inSede: false }]
-          : [rigaInSede()],
+          : [{ cantiereId: '', minuti: 0, inSede: inUfficio }],
       );
       setPartenza(sede);
       setRientro(sede);
@@ -126,7 +123,7 @@ export function CompilaGiornataDialog({
     } else {
       setInizio('08:00');
       setPausaMin(60);
-      setRighe([rigaInSede()]);
+      setRighe([{ cantiereId: '', minuti: 0, inSede: inUfficio }]);
       setPartenza(sede);
       setRientro(sede);
     }

@@ -158,7 +158,7 @@ interface Props {
     sedi: { id: string; nome: string; tipo: string; isDefault: boolean }[];
     sediPerCantiere: Record<string, string[]>;
     mezzi: { id: string; targa: string; modello: string | null }[];
-    impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number; cantiereSedeId?: string | null };
+    impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number };
   };
   /** Giorno corrente in Europe/Rome (YYYY-MM-DD): separa "oggi" dallo storico. */
   oggi: string;

@@ -54,14 +54,11 @@ export function HomeUfficio({
   turno,
   azioni,
   cantieri,
-  cantierePredefinitoId = null,
 }: {
   nome?: string | null;
   turno: TurnoApertoUfficio | null;
   azioni: ContestoUfficio | null;
   cantieri?: PickerCantiere[];
-  /** Il lavoro interno di sede, gia' scelto all'avvio. */
-  cantierePredefinitoId?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -96,7 +93,7 @@ export function HomeUfficio({
               Giornata non ancora iniziata
             </p>
           </div>
-          <IniziaGiornataUfficio cantieri={cantieri} cantierePredefinitoId={cantierePredefinitoId} />
+          <IniziaGiornataUfficio cantieri={cantieri} />
         </>
       )}
 

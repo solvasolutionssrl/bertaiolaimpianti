@@ -5,7 +5,7 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { STATI_CANTIERE_VIVI } from '@kommessa/api/stato-lavoro';
 
 import { guardMobile } from '../../_lib/guard';
-import { leggiImpostazioniKantiere, leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
+import { leggiImpostazioniTurno } from '@/app/_lib/kantiere-config';
 import { modalitaLavoroDi } from '@/app/_lib/dipendenti-modalita';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
@@ -71,7 +71,6 @@ export default async function CantieriMobilePage() {
   // (QR attivo). Admin/office vedono sempre tutto. (Sostituisce il gate weekend
   // con un'impostazione ufficio.)
   const { avvioLibero } = await leggiImpostazioniTurno(supabase, ctx.tenantId);
-  const { cantiereSedeId } = await leggiImpostazioniKantiere(supabase, ctx.tenantId);
   let cantieri = cantieriTutti;
   if (!vedeTuttiICantieri(ctx.role) && !avvioLibero) {
     const visibili = await cantieriVisibiliTecnicoIds(ctx.tenantId);
@@ -154,7 +153,6 @@ export default async function CantieriMobilePage() {
             turno={turno}
             azioni={azioni}
             cantieri={cantieri as unknown as PickerCantiere[]}
-            cantierePredefinitoId={cantiereSedeId}
           />
           {/* Senza cantieri l'etichetta sarebbe un titolo sopra il vuoto. */}
           {cantieri.length > 0 ? (

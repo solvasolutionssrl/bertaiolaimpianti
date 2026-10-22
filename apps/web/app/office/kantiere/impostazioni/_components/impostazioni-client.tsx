@@ -18,13 +18,10 @@ import { quoteGiornata } from '@kommessa/api/kantiere-quote';
 import type { AnomalieKantiere, ImpostazioniKantiere, PromemoriaOre } from '@/app/_lib/kantiere-config';
 import { salvaImpostazioniKantiere } from '../../../_actions/kantiere-impostazioni';
 import { useConfirm } from '@/app/_components/confirm-provider';
-import { Scelta } from '@/app/_components/scelta';
 
 interface Props {
   impostazioni: ImpostazioniKantiere;
   codiceAzienda: string | null;
-  /** I cantieri vivi, per scegliere il lavoro interno di sede. */
-  cantieri?: { id: string; nome: string }[];
 }
 
 /** I valori del modulo, come li invia il salvataggio. Le ore sono decimali. */
@@ -46,7 +43,6 @@ interface Valori {
   anomalie: AnomalieKantiere;
   kontabilitaAttiva: boolean;
   promemoriaOre: PromemoriaOre;
-  cantiereSedeId: string | null;
 }
 
 function valoriDa(imp: ImpostazioniKantiere): Valori {
@@ -68,7 +64,6 @@ function valoriDa(imp: ImpostazioniKantiere): Valori {
     anomalie: imp.anomalie,
     kontabilitaAttiva: imp.kontabilitaAttiva,
     promemoriaOre: imp.promemoriaOre,
-    cantiereSedeId: imp.cantiereSedeId,
   };
 }
 
@@ -301,7 +296,7 @@ function EsempioQuote({ orarioMin }: { orarioMin: number }) {
 
 // ── pagina ──────────────────────────────────────────────────────────────────
 
-export function ImpostazioniClient({ impostazioni, codiceAzienda, cantieri }: Props) {
+export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
   const askConfirm = useConfirm();
   const [sezione, setSezione] = React.useState<SezioneId>('ore');
   const [valori, setValori] = React.useState<Valori>(() => valoriDa(impostazioni));
@@ -550,22 +545,6 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda, cantieri }: Pr
                   descrizione="Attivo: alla chiusura del turno dall’app le ore della giornata si possono ripartire su più cantieri. Disponibile quando la giornata ha un solo ingresso."
                 >
                   <Interruttore id="split-attivo" attivo={valori.splitFineTurnoAttivo} onChange={(b) => imposta('splitFineTurnoAttivo', b)} />
-                </Campo>
-                <Campo
-                  id="cantiere-sede"
-                  etichetta="Lavoro interno di sede"
-                  predefinito="nessuno"
-                  descrizione="Il cantiere su cui finiscono le ore di chi lavora in sede senza un progetto (amministrazione, magazzino). Chi inizia la giornata «in sede» se lo trova già scelto. Le ore stanno sempre su un lavoro: il gestionale le vuole per commessa."
-                >
-                  <div className="w-72">
-                    <Scelta
-                      opzioni={(cantieri ?? []).map((c) => ({ valore: c.id, etichetta: c.nome }))}
-                      valore={valori.cantiereSedeId}
-                      onCambia={(v) => imposta('cantiereSedeId', v ?? null)}
-                      segnaposto="Nessuno: si sceglie ogni volta"
-                      etichettaNessuno="Nessuno: si sceglie ogni volta"
-                    />
-                  </div>
                 </Campo>
                 <Campo
                   id="registra-giornata"

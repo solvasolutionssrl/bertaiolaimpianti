@@ -191,21 +191,13 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
   const sedeDefault = dati.sedi.find((s) => s.isDefault) ?? null;
   const sediAmmesse = dati.sedi.filter((s) => s.isDefault || (cantiereId && (dati.sediPerCantiere[cantiereId] ?? []).includes(s.id)));
 
-  const sedeCantiere = dati.impostazioni.cantiereSedeId;
   React.useEffect(() => {
     if (!open) return;
     setErrore(null);
-    const partoInSede = dati.modalitaLavoro === 'ufficio' && !!sedeDefault;
-    setInSede(partoInSede);
-    // «In sede» senza un progetto in mente: il lavoro interno di sede e' gia'
-    // scelto, cosi' la giornata parte in un tocco. Si puo' cambiare.
-    setCantiereId(partoInSede && sedeCantiere ? sedeCantiere : null);
+    setCantiereId(null);
+    setInSede(dati.modalitaLavoro === 'ufficio' && !!sedeDefault);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
-  const scegliInSede = (v: boolean) => {
-    setInSede(v);
-    if (v && !cantiereId && sedeCantiere) setCantiereId(sedeCantiere);
-  };
 
   function avvia() {
     if (!cantiereId) return setErrore('Scegli il cantiere.');
@@ -242,7 +234,7 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
         {sedeDefault ? (
           <div role="radiogroup" aria-label="Dove" className="inline-flex overflow-hidden rounded-md border border-border text-xs">
             {([[true, `In sede · ${sedeDefault.nome}`], [false, 'In cantiere']] as [boolean, string][]).map(([v, et]) => (
-              <button key={et} type="button" role="radio" aria-checked={inSede === v} disabled={pending} onClick={() => scegliInSede(v)} className={inSede === v ? 'bg-primary px-3 py-1.5 font-semibold text-white' : 'bg-background px-3 py-1.5 text-muted-foreground'}>{et}</button>
+              <button key={et} type="button" role="radio" aria-checked={inSede === v} disabled={pending} onClick={() => setInSede(v)} className={inSede === v ? 'bg-primary px-3 py-1.5 font-semibold text-white' : 'bg-background px-3 py-1.5 text-muted-foreground'}>{et}</button>
             ))}
           </div>
         ) : null}

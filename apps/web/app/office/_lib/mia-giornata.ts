@@ -67,8 +67,6 @@ export interface MiaGiornata {
     splitAttivo: boolean;
     registraGiornataAttivo: boolean;
     tolleranzaChiusuraMin: number;
-    /** Il lavoro interno di sede, proposto a chi inizia «in sede». */
-    cantiereSedeId: string | null;
   };
 }
 
@@ -228,7 +226,6 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
       splitAttivo: imp.splitFineTurnoAttivo,
       registraGiornataAttivo: imp.registraGiornataAttivo,
       tolleranzaChiusuraMin: imp.tolleranzaChiusuraMin,
-      cantiereSedeId: imp.cantiereSedeId,
     },
   };
 }

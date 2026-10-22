@@ -63,13 +63,6 @@ export interface ImpostazioniKantiere {
   /** `kontabilita_attiva`: spese di cantiere. Predefinito sì. */
   kontabilitaAttiva: boolean;
   /**
-   * `cantiere_sede_id`: il lavoro «interno di sede» (amministrazione, magazzino):
-   * proposto da solo a chi inizia la giornata «in sede» senza un progetto.
-   * Le ore in Kommessa stanno sempre su un lavoro, e il gestionale le vuole
-   * per commessa: questa e' la commessa di sede. null = si sceglie a mano.
-   */
-  cantiereSedeId: string | null;
-  /**
    * `promemoria_ore`: l'avviso «inserisci le ore» a chi ha timbrato al
    * terminale e non ha ancora ripartito. Due orari (HH:MM, ora italiana): la
    * sera per oggi, la mattina dopo per ieri. Predefiniti 18:00 e 08:00, acceso.
@@ -152,10 +145,6 @@ export function impostazioniDaConfig(config: Record<string, unknown>): Impostazi
     },
     kontabilitaAttiva: config['kontabilita_attiva'] !== false,
     promemoriaOre: promemoriaOreDaConfig(config['promemoria_ore']),
-    cantiereSedeId:
-      typeof config['cantiere_sede_id'] === 'string' && /^[0-9a-f-]{36}$/i.test(config['cantiere_sede_id'])
-        ? config['cantiere_sede_id']
-        : null,
   };
 }
 
