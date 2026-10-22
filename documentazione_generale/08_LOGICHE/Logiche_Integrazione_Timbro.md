@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.1
+**Versione**: 2.2
 **Stato**: costruita e collaudata sul tenant demo (22/10/2026) · in produzione **spenta** finché il super admin non la accende
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–22/10/2026
@@ -184,6 +184,8 @@ Il registro non è solo del terminale. Chi inizia la giornata **«in sede» senz
 Da qui tre regole: il registro **si legge sempre**, con o senza Timbro (il collegamento decide cosa entra, non chi legge); le righe scritte dalla ripartizione dicono da dove vengono (`timbro/timbratrice` se c'è almeno un badge, altrimenti `cronometro/app`); dopo un'uscita il registro non sa se è pausa o fine, quindi la giornata è «da ripartire» e si offre «Riprendi».
 
 **La scrivania**: nell'header dell'ufficio la pillola «La mia giornata» (stato del turno e da dove è partito, pausa, ripresa, chiusura, avvio, registrazione, scatola) e il dialog **«Compila giornata»** (2/3 si compila, 1/3 «come verrà scritta», con gli stessi motori puri del server), in quattro modi: la mia giornata, quella di un altro (`registraGiornataPerDipendente`, `modalita='ufficio'`), la scatola, la chiusura. Banchi: `giornata-scrivania.mjs`, `presenza-sede.mjs`.
+
+**Il telefono** fa lo stesso: i due fogli di avvio («Inizia giornata» di chi lavora in sede, «Inizia turno» di chi sta in cantiere) hanno in fondo **«Inizia senza cantiere»** (`dispositivo='telefono'`), e la card della presenza nella home offre pausa, ripresa, fine e «Inserisci le commesse». ⚠️ La card agisce solo su una presenza segnata dall'app o dal PC: una presenza aperta con il **badge** si chiude al terminale, altrimenti al passaggio successivo il registro troverebbe un'uscita in più e la sequenza riaprirebbe la presenza. Banco: `presenza-sede-mobile.mjs`.
 
 ### 7.6 Il promemoria
 

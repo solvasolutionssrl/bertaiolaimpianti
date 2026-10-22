@@ -21,6 +21,7 @@ import {
   type PickerCantiere,
 } from './cantiere-picker';
 import { PartenzaViaggioSheet } from './partenza-viaggio-sheet';
+import { IniziaSenzaCantiere } from './presenza-sede';
 
 function messaggioErrore(code: string): string {
   switch (code) {
@@ -222,6 +223,11 @@ export function IniziaTurnoButton({
                 )}
               </button>
             )}
+            {/* Oggi in sede, senza un cantiere da dire adesso: la presenza va
+                nel registro e le ore si assegnano alla fine, come dal PC. */}
+            {!loading && !selezionato ? (
+              <IniziaSenzaCantiere onDone={chiudi} onErrore={setErrore} />
+            ) : null}
           </div>
         }
       />

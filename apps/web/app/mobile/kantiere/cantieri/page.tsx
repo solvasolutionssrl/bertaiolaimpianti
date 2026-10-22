@@ -20,6 +20,7 @@ import { LiveRefresh } from '@/app/_components/live-refresh';
 import Link from 'next/link';
 import { CalendarClock } from 'lucide-react';
 import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
+import { PresenzaSedeCard, type PresenzaSedeVista } from '../_components/presenza-sede';
 
 export const metadata: Metadata = {
   title: 'Cantieri',
@@ -84,14 +85,27 @@ export default async function CantieriMobilePage() {
 
   // Una giornata timbrata al terminale e non ancora ripartita: la casa del
   // tecnico la dice, e porta dove si sistema (la tab Ore).
-  let daRipartire: { giorno: string; oggi: boolean } | null = null;
+  let daRipartire: { giorno: string; oggi: boolean; dalTerminale: boolean } | null = null;
+  // La presenza in sede di oggi (registro): aperta, o chiusa e da ripartire.
+  // Senza un turno su un cantiere e' la giornata della persona, e la card la
+  // mostra con pausa, ripresa e fine.
+  let presenza: PresenzaSedeVista | null = null;
   if (me) {
-    {
-      const { daFare } = await giornateTimbroPersona(supabase, ctx.tenantId, me.id);
-      if (daFare) {
-        const oggi = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
-        daRipartire = { giorno: daFare.giorno, oggi: daFare.giorno === oggi };
-      }
+    const { oggi, daFare } = await giornateTimbroPersona(supabase, ctx.tenantId, me.id);
+    if (daFare) {
+      const oggiRome = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
+      daRipartire = { giorno: daFare.giorno, oggi: daFare.giorno === oggiRome, dalTerminale: daFare.sorgenti.includes('timbro') };
+    }
+    if (oggi && !turno && (oggi.stato === 'presenza_aperta' || oggi.stato === 'da_ripartire')) {
+      const primo = oggi.timbri.find((t) => !t.scartato)?.ts ?? null;
+      const ultimoInt = oggi.presenza?.intervalli[oggi.presenza.intervalli.length - 1] ?? null;
+      presenza = {
+        inizioIso: primo,
+        fineIso: !oggi.presenza?.aperta && ultimoInt ? new Date(ultimoInt.fineMs).toISOString() : null,
+        aperta: !!oggi.presenza?.aperta,
+        nettoMin: oggi.scatola?.nettoMin ?? oggi.presenza?.minutiNetti ?? 0,
+        dalTerminale: oggi.sorgenti.includes('timbro'),
+      };
     }
   }
 
@@ -123,7 +137,9 @@ export default async function CantieriMobilePage() {
         </div>
       </header>
 
-      {daRipartire ? (
+      {/* La card della presenza chiusa porta gia' a «Inserisci le commesse»:
+          la striscia sopra si tiene per le giornate passate e per il badge. */}
+      {daRipartire && !(presenza && !presenza.aperta && daRipartire.oggi) ? (
         <Link
           href="/mobile/kantiere/ore"
           className="flex items-center gap-3 rounded-2xl border border-sky-300 bg-sky-50 px-3.5 py-3 text-left shadow-soft active:scale-[0.99]"
@@ -137,7 +153,9 @@ export default async function CantieriMobilePage() {
             </span>
             <span className="block text-xs leading-snug text-muted-foreground">
               {daRipartire.oggi
-                ? 'Hai timbrato al terminale: manca solo dire dove.'
+                ? daRipartire.dalTerminale
+                  ? 'Hai timbrato al terminale: manca solo dire dove.'
+                  : 'Hai segnato la presenza: manca solo dire dove.'
                 : `La giornata del ${new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'long' }).format(new Date(`${daRipartire.giorno}T12:00:00Z`))} aspetta le commesse.`}
             </span>
           </span>
@@ -151,6 +169,7 @@ export default async function CantieriMobilePage() {
             turno={turno}
             azioni={azioni}
             cantieri={cantieri as unknown as PickerCantiere[]}
+            presenza={presenza}
           />
           {/* Senza cantieri l'etichetta sarebbe un titolo sopra il vuoto. */}
           {cantieri.length > 0 ? (
@@ -160,6 +179,10 @@ export default async function CantieriMobilePage() {
           ) : null}
         </>
       ) : null}
+
+      {/* Per chi sta in cantiere la card della presenza sta qui, sopra
+          l'elenco: la home in sede la mostra gia' dentro di se'. */}
+      {!inUfficio && presenza ? <PresenzaSedeCard presenza={presenza} /> : null}
 
       <CantieriBrowser
         cantieri={cantieri}
@@ -171,7 +194,7 @@ export default async function CantieriMobilePage() {
         azioni={inUfficio ? null : azioni}
         // Stesso motivo per l'avvio: due tasti che iniziano la giornata in due
         // modi diversi confonderebbero.
-        puoAvviareTurno={puoAvviareTurno && !inUfficio}
+        puoAvviareTurno={puoAvviareTurno && !inUfficio && !presenza?.aperta}
       />
     </div>
   );

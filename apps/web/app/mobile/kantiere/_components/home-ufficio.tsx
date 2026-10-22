@@ -8,6 +8,7 @@ import type {
 } from '@/app/_components/viaggio-ritorno-dialog';
 import { IniziaGiornataUfficio } from './inizia-giornata-ufficio';
 import { TurnoAzioniUfficio } from './turno-azioni-ufficio';
+import { PresenzaSedeCard, type PresenzaSedeVista } from './presenza-sede';
 import type { PickerCantiere } from './cantiere-picker';
 
 /**
@@ -54,11 +55,14 @@ export function HomeUfficio({
   turno,
   azioni,
   cantieri,
+  presenza,
 }: {
   nome?: string | null;
   turno: TurnoApertoUfficio | null;
   azioni: ContestoUfficio | null;
   cantieri?: PickerCantiere[];
+  /** La presenza in sede senza cantiere di oggi (registro), se c'e'. */
+  presenza?: PresenzaSedeVista | null;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -83,6 +87,8 @@ export function HomeUfficio({
           sedeLavoro={azioni.sedeLavoro}
           sogliaPausaPranzoOre={azioni.sogliaPausaPranzoOre}
         />
+      ) : presenza ? (
+        <PresenzaSedeCard presenza={presenza} />
       ) : (
         <>
           <div className="rounded-2xl border border-border bg-card p-5 shadow-soft">

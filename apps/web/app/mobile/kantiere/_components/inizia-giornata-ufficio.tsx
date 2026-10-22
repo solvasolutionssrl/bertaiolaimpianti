@@ -8,6 +8,7 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { codiceCantiereMostrato } from '@/app/_lib/cantiere-categoria';
 import { avviaTurnoMio, elencoCantieriTurno } from '@/app/_actions/kantiere-timbra';
 import { CantiereSearchSheet, type PickerCantiere } from './cantiere-picker';
+import { IniziaSenzaCantiere } from './presenza-sede';
 
 /**
  * «Inizia giornata» per chi lavora in sede.
@@ -21,6 +22,10 @@ import { CantiereSearchSheet, type PickerCantiere } from './cantiere-picker';
  * esisteva gia': le ore restano del lavoro scelto, il luogo e' la sede
  * predefinita. Se poi un viaggio c'e' stato davvero, si dichiara alla
  * chiusura — vedi `TurnoAzioniUfficio`.
+ *
+ * Il cantiere e' facoltativo: chi non lo sceglie parte lo stesso, come dal
+ * PC, e la presenza va nel registro (`IniziaSenzaCantiere`). Le ore si
+ * assegnano alla fine.
  */
 
 function messaggioErrore(code: string): string {
@@ -98,7 +103,7 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
         </span>
         <span className="min-w-0">
           <span className="block text-base font-semibold text-sky-900">Inizia giornata</span>
-          <span className="block text-xs text-sky-800/80">Scegli su cosa lavori</span>
+          <span className="block text-xs text-sky-800/80">Scegli su cosa lavori, o parti senza</span>
         </span>
       </button>
 
@@ -147,6 +152,9 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
                 )}
               </button>
             )}
+            {!loading && !selezionato ? (
+              <IniziaSenzaCantiere onDone={() => setOpen(false)} onErrore={setErrore} />
+            ) : null}
           </div>
         }
       />

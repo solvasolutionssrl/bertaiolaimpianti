@@ -1730,6 +1730,8 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
 
 const PresenzaSchema = z.object({
   azione: z.enum(['inizio', 'pausa', 'ripresa', 'fine']),
+  /** Da dove e' stato premuto il tasto: si legge nel dettaglio della giornata. */
+  dispositivo: z.enum(['pc', 'telefono']).optional(),
 });
 
 /** Due segni uguali a meno di cosi' sono un doppio clic. */
@@ -1776,7 +1778,7 @@ export async function segnaPresenzaInSede(input: unknown): Promise<Result> {
     tipo,
     stato: 'valido',
     genere: null,
-    dispositivo: 'pc',
+    dispositivo: parsed.data.dispositivo ?? 'pc',
     grezzo: { azione: parsed.data.azione, user_id: ctx.userId },
   } as never);
   if (error) return { ok: false, error: error.message };

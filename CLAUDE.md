@@ -1432,6 +1432,13 @@ quello che il telefono fa in «Registra giornata» e nella scatola timbrata.
   ripartizione dicono da dove vengono: `timbro/timbratrice` se c'e' almeno un
   badge, altrimenti `cronometro/app`. ⚠️ Dopo un'uscita il registro non sa se
   e' pausa o fine: la pillola dice «da ripartire» e offre «Riprendi».
+  **Anche dal telefono** (22/10 pomeriggio): i due fogli di avvio («Inizia
+  giornata» di chi sta in sede e «Inizia turno» di chi sta in cantiere) hanno
+  in fondo «Inizia senza cantiere» (`mobile/kantiere/_components/presenza-sede.tsx`,
+  `dispositivo='telefono'`), e la card `PresenzaSedeCard` nella home mostra
+  pausa, ripresa, fine e «Inserisci le commesse». ⚠️ La card agisce solo su una
+  presenza segnata dall'app o dal PC: con il badge si chiude al terminale, o
+  il registro si ritrova un'uscita in piu'. Banco `presenza-sede-mobile.mjs`.
 - Banco: `scripts/banco-ui/giornata-scrivania.mjs` e `presenza-sede.mjs` (pillola, avvio, pausa,
   ripresa, chiusura con anteprima, compila per un altro). Vuole una scheda
   dipendente in modalita' ufficio sull'account ufficio di DEMOC.
