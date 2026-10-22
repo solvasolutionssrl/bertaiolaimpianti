@@ -1533,6 +1533,84 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   });
 }
 
+// ── 5b) la giornata di un'altra persona, scritta dall'ufficio ─────────────
+// Chi non ha ne' badge ne' app: l'ufficio compila orari, pausa, cantieri e
+// percorso da scrivania, per qualunque giorno fino a oggi. Stesso scrittore e
+// stesso motore di «Registra giornata»; cambia chi firma (`modalita='ufficio'`).
+
+const RegistraPerDipendenteSchema = RegistraGiornataSchema.extend({
+  dipendenteId: z.string().uuid(),
+  giorno: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export async function registraGiornataPerDipendente(input: unknown): Promise<Result> {
+  const parsed = RegistraPerDipendenteSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+  if (ctx.role !== 'admin' && ctx.role !== 'office') return { ok: false, error: 'NON_AUTORIZZATO' };
+  const supabase = createServerSupabase();
+
+  const { data: dip } = await supabase
+    .from('dipendenti' as never)
+    .select('id')
+    .eq('id', parsed.data.dipendenteId)
+    .eq('tenant_id', ctx.tenantId)
+    .maybeSingle();
+  if (!dip) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  const { inizioIso, fineIso, giorno } = parsed.data;
+  const pausaMin = parsed.data.pausaMin ?? 0;
+  if (giorno > romeDay(new Date())) return { ok: false, error: 'ORA_NON_VALIDA' };
+  if (romeDay(new Date(inizioIso)) !== giorno || romeDay(new Date(fineIso)) !== giorno) {
+    return { ok: false, error: 'ORA_NON_VALIDA' };
+  }
+  if (Date.parse(fineIso) <= Date.parse(inizioIso)) return { ok: false, error: 'ORA_NON_VALIDA' };
+
+  const { fromIso, toIso } = romeDayBoundsUtc(giorno);
+  const { count } = await supabase
+    .from('timbrature' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', parsed.data.dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  if ((count ?? 0) !== 0) return { ok: false, error: 'GIORNATA_NON_VUOTA' };
+
+  const primoCantiere = parsed.data.split[0]!.cantiereId;
+  return scriviGiornataRipartita({
+    supabase,
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    dipendenteId: parsed.data.dipendenteId,
+    giorno,
+    split: parsed.data.split,
+    percorso: parsed.data.percorso ?? null,
+    origine: 'manuale',
+    modalita: 'ufficio',
+    // L'ufficio scrive a posteriori: un cantiere chiuso nel frattempo non blocca.
+    cantieriForzati: true,
+    ingressoEsistente: null,
+    estremiDentro: false,
+    autoEstremi: false,
+    generaEventi: (viaggioPrima) => {
+      const calc = calcolaSegmentiSplit({
+        ingressoMs: Date.parse(inizioIso),
+        uscitaMs: Date.parse(fineIso),
+        pausaMin,
+        segmenti: parsed.data.split,
+        viaggioPrima,
+      });
+      if (!calc.ok) return calc;
+      return {
+        ok: true,
+        eventi: [{ cantiereId: primoCantiere, tipo: 'ingresso', pausa: false, ms: Date.parse(inizioIso) }, ...calc.eventi],
+      };
+    },
+  });
+}
+
 // ── 6) la giornata timbrata al terminale: riempire la scatola ─────────────
 // I timbri di Timbro formano il contenitore (`timbri_grezzi`); qui il tecnico
 // — o l'ufficio per lui — dice su quali cantieri, e `timbrature` nasce gia'
@@ -1656,7 +1734,7 @@ interface GiornataRipartitaInput {
   split: { cantiereId: string; minuti: number; daSede?: boolean }[];
   percorso: z.infer<typeof PercorsoGiornataSchema> | null;
   origine: 'manuale' | 'timbro';
-  modalita: 'giornata_dichiarata' | 'timbratrice';
+  modalita: 'giornata_dichiarata' | 'timbratrice' | 'ufficio';
   /** I cantieri chiusi nel frattempo non bloccano (chiusura di una giornata gia' lavorata). */
   cantieriForzati: boolean;
   /** Il primo ingresso esiste gia' (turno aperto dall'app): non si riscrive. */

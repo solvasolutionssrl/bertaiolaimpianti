@@ -23,6 +23,8 @@ export interface TimbroGiornataVista {
   fineFisica: boolean;
   primoCantiere: { id: string; nome: string; codice: string | null } | null;
   timbri: TimbroVisto[];
+  /** Gli intervalli di presenza da riempire (ISO), per l'anteprima esatta. */
+  intervalli: { inizioIso: string; fineIso: string }[];
   /** Come lavora la persona (scheda dipendente): decide il default «in sede» / «in cantiere». */
   modalitaLavoro: 'ufficio' | 'esterno';
 }
@@ -64,6 +66,10 @@ export function vistaDaGiornata(
       ? { id: s.ingressoEsistente.cantiereId, nome: pc?.nome ?? 'Cantiere', codice: pc?.codice ?? null }
       : null,
     timbri: g.timbri,
+    intervalli: (s?.intervalli ?? g.presenza?.intervalli ?? []).map((i) => ({
+      inizioIso: new Date(i.inizioMs).toISOString(),
+      fineIso: new Date(i.fineMs).toISOString(),
+    })),
     modalitaLavoro,
   };
 }

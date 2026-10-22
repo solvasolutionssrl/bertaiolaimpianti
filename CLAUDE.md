@@ -1373,6 +1373,58 @@ scatola** per commessa.
   `timbro-chiudere.mjs` (turno dall'app chiuso al terminale): scrivono sul
   tenant demo, si ripulisce a mano.
 
+### «La mia giornata» da scrivania e «Compila giornata» (22/10/2026) — nessuna migration
+
+Chi gestisce le presenze da PC spesso timbra anche per se', e fino a ieri
+doveva prendere il telefono. Ora l'header dell'ufficio ha una **pillola** con
+lo stato della giornata e le scorciatoie, e un dialog da scrivania che fa
+quello che il telefono fa in «Registra giornata» e nella scatola timbrata.
+
+- **Lettura unica** `office/_lib/mia-giornata.ts` (`leggiMiaGiornata`): il
+  turno aperto e **da dove e' partito** (app, QR, terminale, ufficio), la
+  giornata timbrata al terminale, i minuti gia' attribuiti, cantieri vivi,
+  sedi, mezzi, impostazioni. Chi non ha una scheda dipendente non vede niente
+  (Bertaiola invariata). Slot `headerExtra` in `OfficeShell` (packages/ui) →
+  `OfficeShellClient` → `office/layout.tsx`.
+- **La pillola** (`office/_components/mia-giornata.tsx`): «Nessun turno» ·
+  «In turno · cantiere · HH:MM» (pallino che pulsa) · «In pausa» · «Timbrato ·
+  X da ripartire» · «In sede · badge HH:MM». Il menu offre: Inizia giornata
+  (cantiere, in sede / in cantiere, partenza, chi guidava), Pausa pranzo,
+  Riprendi, Chiudi il turno, Registra giornata, Inserisci le commesse. ⚠️ In
+  pausa «Chiudi» e' spento: la regola del server (`RIPRENDI_PRIMA`) si vede
+  prima di sbatterci.
+- **Un dialog, quattro modi**
+  (`office/kantiere/_components/compila-giornata-dialog.tsx`): `registra`
+  (la mia giornata di oggi), `registra_altro` (l'ufficio per un'altra persona,
+  un giorno qualsiasi — azione nuova `registraGiornataPerDipendente`,
+  `modalita='ufficio'`, stesso scrittore `scriviGiornataRipartita`),
+  `scatola` (la giornata timbrata, mia o di un altro), `chiusura` (chiudo
+  adesso il turno, dividendo fra cantieri solo se la giornata e' pulita).
+  **Sinistra 2/3 si compila, destra 1/3 «Come verra' scritta»**: orari veri di
+  ogni cantiere, pause, tratte, totali — gli stessi motori puri del server
+  (`calcolaSegmentiSplit`, `riempiScatola`), quindi l'anteprima e' la
+  verita', non una stima. ⚠️ La chiusura secca (una riga sola) non passa dal
+  calcolo della divisione: un turno di un minuto si chiude lo stesso.
+- **«In sede» / «In cantiere» sempre a vista**, sul telefono e da scrivania,
+  con il default dalla scheda della persona (ufficio → in sede, esterno → in
+  cantiere). ⚠️ Il badge **non** inverte piu' il flag: dice che la persona
+  era in sede agli estremi, non dove ha lavorato in mezzo. ⚠️ Con un turno
+  aperto dall'app l'andata non si richiede: l'ha scritta l'avvio del turno.
+- In «Presenze e ore» il tasto principale e' **«Compila giornata»** (chi e
+  quando, poi il dialog grande); «Registra ore» resta come scorciatoia per
+  le sole ore nude. Il pannello delle giornate timbrate e le righe «da
+  ripartire» aprono lo stesso dialog. ⚠️ `ripartisci-timbro-dialog.tsx` e'
+  stato tolto: era la seconda verita'.
+- ⚠️ `sede_lavoro_id` sta sull'ingresso di **apertura**: la ripresa dopo la
+  pausa non la ripete. Chi deduce «in sede» da un ingresso qualunque sbaglia
+  dopo la prima pausa (trovato dal banco).
+- ⚠️ `next.config.mjs` ha `removeConsole` (tiene solo `error` e `warn`): un
+  `console.log` per capire cosa fa un layout **non stampa niente**, nemmeno in
+  sviluppo. Mezz'ora persa a cercare un bug che non c'era.
+- Banco: `scripts/banco-ui/giornata-scrivania.mjs` (pillola, avvio, pausa,
+  ripresa, chiusura con anteprima, compila per un altro). Vuole una scheda
+  dipendente in modalita' ufficio sull'account ufficio di DEMOC.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

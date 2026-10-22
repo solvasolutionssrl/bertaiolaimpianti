@@ -14,6 +14,7 @@ import { chiaveTarget, oreDaMin } from '@/app/_actions/_lib/ricomputa-rapportino
 import {
   leggiPolicyRapportini,
   leggiSogliaPausaPranzoOre,
+  leggiImpostazioniKantiere,
 } from '@/app/_lib/kantiere-config';
 import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
@@ -682,15 +683,46 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   // Carica tutti i dipendenti attivi per il filtro e per il dialog "Registra ore"
   const { data: tuttiDipendenti } = (await supabase
     .from('dipendenti' as never)
-    .select('id, nome, cognome')
+    .select('id, nome, cognome, modalita_lavoro')
     .eq('tenant_id', ctx.tenantId)
     .eq('stato_attivo', true)
-    .order('cognome')) as { data: DipendenteRow[] | null };
+    .order('cognome')) as { data: (DipendenteRow & { modalita_lavoro: string | null })[] | null };
 
   const dipendentiFilter: DipendenteItem[] = (tuttiDipendenti ?? []).map((d) => ({
     id: d.id,
     nome: `${d.nome} ${d.cognome}`.trim(),
+    modalita: d.modalita_lavoro === 'ufficio' ? 'ufficio' : 'esterno',
   }));
+
+  // «Compila giornata» da scrivania (orari, pausa, cantieri, viaggio) per
+  // un'altra persona: le sedi, i mezzi e le impostazioni del dialog.
+  const [sediRes, assocRes, mezziRes, impKantiere] = await Promise.all([
+    supabase.from('sedi' as never).select('id, nome, tipo, is_default').eq('tenant_id', ctx.tenantId).eq('attivo', true),
+    supabase.from('cantiere_sede' as never).select('cantiere_id, sede_id').eq('tenant_id', ctx.tenantId),
+    supabase.from('mezzi' as never).select('id, targa, modello').eq('tenant_id', ctx.tenantId).eq('attivo', true).order('targa'),
+    leggiImpostazioniKantiere(supabase, ctx.tenantId),
+  ]);
+  const sediPerCantiere: Record<string, string[]> = {};
+  for (const r of (assocRes.data as { cantiere_id: string; sede_id: string }[] | null) ?? []) {
+    (sediPerCantiere[r.cantiere_id] ??= []).push(r.sede_id);
+  }
+  const compila = {
+    sedi: ((sediRes.data as { id: string; nome: string; tipo: string; is_default: boolean }[] | null) ?? []).map((x) => ({
+      id: x.id,
+      nome: x.nome,
+      tipo: x.tipo,
+      isDefault: x.is_default,
+    })),
+    sediPerCantiere,
+    mezzi: (mezziRes.data as { id: string; targa: string; modello: string | null }[] | null) ?? [],
+    impostazioni: {
+      passoMinuti: impKantiere.passoMinutiStepper,
+      stepViaggio: impKantiere.arrotondamentoViaggioMin,
+      sogliaPausaPranzoOre: impKantiere.sogliaPausaPranzoOre,
+      splitAttivo: impKantiere.splitFineTurnoAttivo,
+      tolleranzaChiusuraMin: impKantiere.tolleranzaChiusuraMin,
+    },
+  };
 
   // Carica commesse attive (non archiviate) per il dialog "Registra ore"
   const { data: commesseRaw } = (await supabase
@@ -768,6 +800,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         cantieri={cantieriPicker}
         giorniAperti={giorniAperti}
         timbroGiornate={timbroGiornate}
+        compila={compila}
         oggi={oggiRome}
         sogliaOre={sogliaAnomaliaTurnoOre}
         sogliaPausaOre={sogliaPausaOre}

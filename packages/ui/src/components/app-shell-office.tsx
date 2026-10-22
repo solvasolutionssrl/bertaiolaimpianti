@@ -88,6 +88,8 @@ export interface OfficeShellProps {
    * Sta DENTRO la shell di proposito: vedi il commento sul contenitore.
    */
   banner?: React.ReactNode;
+  /** Un pezzo in piu' nell'header, prima degli avvisi (oggi: «la mia giornata»). */
+  headerExtra?: React.ReactNode;
   defaultSidebarOpen?: boolean;
   version?: string;
   className?: string;
@@ -167,6 +169,7 @@ function OfficeShell({
   linkComponent: LinkComp,
   children,
   banner,
+  headerExtra,
   defaultSidebarOpen = true,
   version,
   className,
@@ -566,6 +569,8 @@ function OfficeShell({
               ⌘K
             </kbd>
           </div>
+
+          {headerExtra}
 
           <Button
             variant="ghost"

@@ -64,6 +64,8 @@ interface Props {
   mondoRicerca?: MondoRicerca;
   /** Barra di servizio sopra l'header (impersonation): va dentro la shell. */
   banner?: React.ReactNode;
+  /** Nell'header, prima degli avvisi: «la mia giornata» di chi timbra anche da PC. */
+  headerExtra?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -591,6 +593,7 @@ export function OfficeShellClient({
   appMode,
   mondoRicerca,
   banner,
+  headerExtra,
   children,
 }: Props) {
   const router = useRouter();
@@ -650,6 +653,7 @@ export function OfficeShellClient({
         onNotificationsClick={() => router.push('/office/notifiche')}
         linkComponent={NextLinkAdapter}
         banner={banner}
+        headerExtra={headerExtra}
       >
         {children}
       </OfficeShell>

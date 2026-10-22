@@ -13,6 +13,8 @@ import { getLimitiUploadCached } from '../_lib/limiti-upload-server';
 import { LimitiUploadProvider } from '../_components/limiti-upload-provider';
 import { leggiFunzioniPersonalizzate } from '../_lib/personalizzazioni';
 import { OfficeShellClient } from './_components/office-shell-client';
+import { leggiMiaGiornata } from './_lib/mia-giornata';
+import { MiaGiornata } from './_components/mia-giornata';
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
 import { etichettaImpersonazione } from '@kommessa/api/impersonazione';
 import { ImpersonationBanner } from '../_components/impersonation-banner';
@@ -178,11 +180,16 @@ export default async function OfficeLayout({
   const shadow = leggiShadow(cookies().get(SHADOW_COOKIE)?.value);
   const isImpersonating = shadow !== null;
 
+  // «La mia giornata»: per chi ha una scheda dipendente nel mondo presenze. Chi
+  // non ce l'ha (l'ufficio puro, Bertaiola) non vede niente di diverso.
+  const miaGiornata = hasKantiere ? await leggiMiaGiornata(ctx.tenantId, ctx.userId, ctx.role) : null;
+
   return (
     <>
       {/* La barra entra DENTRO la shell: fuori allungherebbe il documento oltre
           la finestra e sparirebbe al primo scroll, senza più tornare. */}
       <OfficeShellClient
+        headerExtra={miaGiornata ? <MiaGiornata dati={miaGiornata} /> : null}
         banner={
           <>
             {shadow ? (

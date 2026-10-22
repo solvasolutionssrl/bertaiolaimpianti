@@ -30,7 +30,7 @@ import {
 } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
 import { TimbriTerminale } from '../../_components/timbri-terminale';
-import { RipartisciTimbroDialog } from '../../_components/ripartisci-timbro-dialog';
+import { CompilaGiornataDialog, type ModoCompila } from '../../_components/compila-giornata-dialog';
 import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
 import {
@@ -130,7 +130,7 @@ export type FiltriRapportini = {
   cantiere: string;
 };
 
-export type DipendenteItem = { id: string; nome: string };
+export type DipendenteItem = { id: string; nome: string; modalita?: 'ufficio' | 'esterno' };
 export type CommessaPickerItem = { id: string; titolo: string };
 /** `stato` serve solo a segnare i chiusi e a chiedere conferma prima di scrivere. */
 export type CantierePickerItem = { id: string; nome: string; stato?: string | null };
@@ -153,6 +153,13 @@ interface Props {
   giorniAperti: GiornataAperta[];
   /** Le giornate timbrate al terminale nel periodo, per il pannello «da ripartire». */
   timbroGiornate?: TimbroGiornataVista[];
+  /** Sedi, mezzi e impostazioni per «Compila giornata» da scrivania. */
+  compila?: {
+    sedi: { id: string; nome: string; tipo: string; isDefault: boolean }[];
+    sediPerCantiere: Record<string, string[]>;
+    mezzi: { id: string; targa: string; modello: string | null }[];
+    impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number };
+  };
   /** Giorno corrente in Europe/Rome (YYYY-MM-DD): separa "oggi" dallo storico. */
   oggi: string;
   /** Soglia (ore) anomalia turno, per-tenant (`anomalia_turno_ore_max`). Default 10. */
@@ -413,13 +420,28 @@ export function RapportiniClient({
   cantieri,
   giorniAperti,
   timbroGiornate = [],
+  compila,
   oggi,
   sogliaOre = 10,
   sogliaPausaOre = 5,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = React.useTransition();
-  const [ripartisciFor, setRipartisciFor] = React.useState<TimbroGiornataVista | null>(null);
+  // «Compila giornata» da scrivania: la scatola timbrata di una persona, o la
+  // giornata di chi non ha ne' badge ne' app. Un dialog solo, due modi.
+  const [modoCompila, setModoCompila] = React.useState<ModoCompila | null>(null);
+  const [scegliCompila, setScegliCompila] = React.useState<{ dipendenteId: string; giorno: string } | null>(null);
+  const setRipartisciFor = (g: TimbroGiornataVista | null) =>
+    setModoCompila(g ? { tipo: 'scatola', vista: g, dipendenteId: g.dipendenteId, dipendenteNome: g.dipendenteNome } : null);
+  const datiCompila = (dipendenteId: string | null) => ({
+    cantieri: cantieri.map((c) => ({ id: c.id, nome: c.nome, codice: null, cliente: null })),
+    sedi: compila?.sedi ?? [],
+    sediPerCantiere: compila?.sediPerCantiere ?? {},
+    mezzi: compila?.mezzi ?? [],
+    ultimoMezzoId: null,
+    modalitaLavoro: (dipendenti.find((d) => d.id === dipendenteId)?.modalita ?? 'esterno') as 'ufficio' | 'esterno',
+    impostazioni: compila?.impostazioni ?? { passoMinuti: 15, stepViaggio: 5, sogliaPausaPranzoOre: 5, splitAttivo: true, tolleranzaChiusuraMin: 5 },
+  });
   // Le giornate timbrate che chiedono una mano: da ripartire, da chiudere, o
   // che non tornano. Quelle di oggi ancora aperte no: stanno lavorando.
   const timbroDaFare = timbroGiornate.filter(
@@ -740,8 +762,11 @@ export function RapportiniClient({
             )}
             Ricalcola dalle timbrature
           </Button>
-          <Button variant="default" size="sm" onClick={openRegistra}>
+          <Button variant="default" size="sm" onClick={() => setScegliCompila({ dipendenteId: dipendenti[0]?.id ?? '', giorno: oggi })}>
             <PlusCircle className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            Compila giornata
+          </Button>
+          <Button variant="outline" size="sm" onClick={openRegistra} title="Solo ore per cantiere, senza orari né viaggio">
             Registra ore
           </Button>
           <Button asChild variant="outline" size="sm">
@@ -799,14 +824,70 @@ export function RapportiniClient({
         </div>
       ) : null}
       <GiornateApertePanel giorni={giorniAperti} />
-      <RipartisciTimbroDialog
-        open={ripartisciFor != null}
+      <CompilaGiornataDialog
+        open={modoCompila != null}
         onOpenChange={(o) => {
-          if (!o) setRipartisciFor(null);
+          if (!o) setModoCompila(null);
         }}
-        giornata={ripartisciFor}
-        cantieri={cantieri}
+        modo={modoCompila}
+        dati={datiCompila(
+          modoCompila?.tipo === 'scatola' ? (modoCompila.dipendenteId ?? null) : modoCompila?.tipo === 'registra_altro' ? modoCompila.dipendenteId : null,
+        )}
       />
+      {/* Chi compilare, e quando: poi il dialog grande. */}
+      <Dialog open={scegliCompila != null} onOpenChange={(o) => { if (!o) setScegliCompila(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Compila giornata</DialogTitle>
+          </DialogHeader>
+          {scegliCompila ? (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Dipendente</label>
+                <select
+                  value={scegliCompila.dipendenteId}
+                  onChange={(e) => setScegliCompila({ ...scegliCompila, dipendenteId: e.target.value })}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">Seleziona…</option>
+                  {dipendenti.map((d) => (
+                    <option key={d.id} value={d.id}>{d.nome}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Giorno</label>
+                <input
+                  type="date"
+                  max={oggi}
+                  value={scegliCompila.giorno}
+                  onChange={(e) => setScegliCompila({ ...scegliCompila, giorno: e.target.value })}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Orari, pausa, cantieri e viaggio di una giornata senza timbrature: per chi non ha né badge né app.
+                Per una giornata già timbrata si usa «Modifica giornata».
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setScegliCompila(null)}>Annulla</Button>
+                <Button
+                  size="sm"
+                  disabled={!scegliCompila.dipendenteId || !scegliCompila.giorno}
+                  onClick={() => {
+                    const d = dipendenti.find((x) => x.id === scegliCompila.dipendenteId);
+                    if (!d) return;
+                    setModoCompila({ tipo: 'registra_altro', dipendenteId: d.id, dipendenteNome: d.nome, giorno: scegliCompila.giorno });
+                    setScegliCompila(null);
+                  }}
+                >
+                  Avanti
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       {/* Anomalie: giornate passate non finalizzate. Prominente in cima. */}
       {nAnomalie > 0 ? (
