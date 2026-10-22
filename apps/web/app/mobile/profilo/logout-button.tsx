@@ -9,6 +9,7 @@ import { Button, cn } from '@kommessa/ui';
 
 import { useConfirm } from '../../_components/confirm-provider';
 import { registraEventoAccesso } from '@/app/_actions/auth-events';
+import { spegniSottoscrizionePush } from '@/app/_lib/push-client';
 
 /**
  * Sezione "Sessione" collassata in fondo al profilo.
@@ -40,6 +41,8 @@ export function LogoutButton() {
     if (!ok) return;
 
     startTransition(async () => {
+      // Chi esce non riceve piu' niente su questo telefono.
+      await spegniSottoscrizionePush();
       await registraEventoAccesso('logout');
       const supabase = createBrowserSupabase();
       await supabase.auth.signOut();

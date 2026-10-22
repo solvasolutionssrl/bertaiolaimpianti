@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { OfficeShell, DEFAULT_OFFICE_NAV, type OfficeNavItem } from '@kommessa/ui';
 import { createBrowserSupabase } from '@kommessa/api/client';
 import { registraEventoAccesso } from '@/app/_actions/auth-events';
+import { spegniSottoscrizionePush } from '@/app/_lib/push-client';
 import {
   BarChart3,
   Bell,
@@ -617,6 +618,8 @@ export function OfficeShellClient({
   const [paletteOpen, setPaletteOpen] = React.useState(false);
 
   const handleLogout = React.useCallback(async () => {
+    // Chi esce non riceve piu' niente su questo dispositivo.
+    await spegniSottoscrizionePush();
     await registraEventoAccesso('logout');
     const supabase = createBrowserSupabase();
     await supabase.auth.signOut();

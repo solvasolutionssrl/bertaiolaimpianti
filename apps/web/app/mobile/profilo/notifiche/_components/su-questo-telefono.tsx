@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Bell, BellOff, BellRing, Loader2 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
-import { sincronizzaSottoscrizionePush } from '@/app/mobile/_lib/push-sync';
+import { sincronizzaSottoscrizionePush } from '@/app/_lib/push-client';
 
 const VAPID_PUBBLICA = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 

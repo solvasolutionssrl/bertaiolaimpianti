@@ -30,3 +30,24 @@ export async function sincronizzaSottoscrizionePush(): Promise<EsitoSync> {
     return 'errore';
   }
 }
+
+/**
+ * Al logout: questo telefono non e' piu' di nessuno.
+ *
+ * Si toglie la riga sul server PRIMA di chiudere la sessione (dopo, la
+ * chiamata non sarebbe autorizzata) e poi si cancella la sottoscrizione dal
+ * browser, cosi' chi entra dopo riparte da «spento» e la riattiva a suo nome.
+ * Best-effort: un intoppo qui non deve impedire di uscire.
+ */
+export async function spegniSottoscrizionePush(): Promise<void> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, { method: 'DELETE' }).catch(() => null);
+    await sub.unsubscribe().catch(() => false);
+  } catch {
+    // ignorato: si esce comunque
+  }
+}

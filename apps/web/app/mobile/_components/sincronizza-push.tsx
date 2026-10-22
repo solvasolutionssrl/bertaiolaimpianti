@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-import { sincronizzaSottoscrizionePush } from '../_lib/push-sync';
+import { sincronizzaSottoscrizionePush } from '@/app/_lib/push-client';
 
 const CHIAVE = 'kommessa.push.sync';
 
