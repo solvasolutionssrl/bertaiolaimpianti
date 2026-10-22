@@ -89,6 +89,12 @@ export async function inviaPushAUtente(
             keys: { p256dh: s.p256dh as string, auth: s.auth as string },
           },
           body,
+          // ⚠️ Senza `urgency: 'high'` Android tiene la push nella coda del
+          // risparmio energetico finche' l'app non si sveglia da sola: misurato
+          // il 22/10 su un Samsung, l'avviso e' comparso solo aprendo l'app.
+          // «high» sveglia il telefono. TTL di mezza giornata: un promemoria
+          // delle 18 consegnato il giorno dopo non serve a nessuno.
+          { TTL: 12 * 3600, urgency: 'high' },
         );
         sent++;
         await supabase
