@@ -48,7 +48,7 @@ try {
     const inizio = d.querySelector('input[type=time]');
     return {
       titolo: /Inserisci le commesse sulle quali hai lavorato oggi/.test(testo),
-      timbrato: /timbrato 08:27 → 18:00/.test(testo) && /pausa 1:00/.test(testo),
+      timbrato: /badge in sede 08:27 → 18:00/.test(testo) && /pausa 1:00/.test(testo),
       inizioFisso: inizio ? inizio.value === '08:27' && inizio.disabled : null,
       fineTimbrata: /18:00/.test(testo),
       daRipartire: /8:33/.test(testo),
@@ -56,7 +56,7 @@ try {
     };
   })()`);
   esito(s2.titolo, 'dialog: titolo nuovo');
-  esito(s2.timbrato, 'dialog: sottotitolo «timbrato 08:27 → 18:00 · pausa 1:00»');
+  esito(s2.timbrato, 'dialog: sottotitolo «badge in sede 08:27 → 18:00 · pausa 1:00»');
   esito(s2.inizioFisso === true, 'dialog: inizio fisso a 08:27, non modificabile');
   esito(s2.daRipartire, 'dialog: 8:33 da ripartire');
   esito(s2.tasto, 'dialog: tasto «Salva le ore»');
