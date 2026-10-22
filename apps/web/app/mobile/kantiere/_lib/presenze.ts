@@ -3,6 +3,7 @@ import { appaiaTimbrature, statoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 
 import type { DettaglioPresenza, StatoPresenza } from './presenze-types';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 /**
  * Helper presenze "live" per la PWA Kantiere (office/admin).
@@ -25,11 +26,8 @@ export type EventoOggi = {
 };
 
 function fmtOra(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 function oreLabel(min: number): string {

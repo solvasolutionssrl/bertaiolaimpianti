@@ -7,6 +7,7 @@ import { MapPin, Play, Square, Timer } from 'lucide-react';
 import { Button, Card, CardContent } from '@kommessa/ui';
 
 import { iniziaTurno, terminaTurno } from '../../_actions/turno';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 export interface ApertoCommessa {
   id: string;
@@ -223,11 +224,7 @@ function TurnoApertoCard({
         <p className="text-xs text-muted-foreground">
           Avviato alle{' '}
           <span className="font-mono tabular-nums">
-            {new Date(aperto.start_at).toLocaleTimeString('it-IT', {
-              timeZone: 'Europe/Rome',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+            {oraMostrata(aperto.start_at)}
           </span>
         </p>
 
@@ -307,11 +304,8 @@ export function InterventiOggiList({ items }: { items: InterventoRecente[] }) {
 }
 
 function formatHM(iso: string) {
-  return new Date(iso).toLocaleTimeString('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(iso);
 }
 
 function formatDurataMin(m: number) {

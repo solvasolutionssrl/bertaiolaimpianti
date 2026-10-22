@@ -20,6 +20,7 @@ import {
 } from '@/app/_components/viaggio-ritorno-dialog';
 import type { PickerCantiere } from './cantiere-picker';
 import { CambiaCantiereButton } from './cambia-cantiere';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 export interface TurnoAzioniCantiereProps {
   cantiereId: string;
@@ -62,11 +63,8 @@ export interface TurnoAzioniCantiereProps {
 }
 
 function ora(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 function formatTrascorso(ms: number): string {

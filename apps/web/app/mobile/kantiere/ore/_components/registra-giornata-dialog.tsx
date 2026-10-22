@@ -142,16 +142,20 @@ function StepperMin({
   passo,
   disabled,
   onChange,
+  max,
 }: {
   minuti: number;
   passo: number;
   disabled?: boolean;
   onChange: (m: number) => void;
+  /** Il tetto: con una scatola timbrata, quanto resta della presenza (compresa questa riga). Il «+» si ferma li'. */
+  max?: number;
 }) {
   const h = Math.floor(minuti / 60);
   const m = minuti % 60;
+  const tetto = max === undefined ? 23 * 60 + 59 : Math.max(0, max);
   const set = (nh: number, nm: number) =>
-    onChange(Math.max(0, Math.min(23 * 60 + 59, nh * 60 + nm)));
+    onChange(Math.max(0, Math.min(tetto, nh * 60 + nm)));
   const inputCls =
     'w-8 rounded border border-border bg-background px-0.5 py-1 text-center font-mono text-sm font-semibold tabular-nums focus:border-primary focus:outline-none disabled:opacity-50';
   const btnCls =
@@ -193,8 +197,8 @@ function StepperMin({
       <span className="text-muted-foreground text-[11px] font-semibold">min</span>
       <button
         type="button"
-        disabled={disabled}
-        onClick={() => onChange(minuti + passo)}
+        disabled={disabled || minuti >= tetto}
+        onClick={() => onChange(Math.min(tetto, minuti + passo))}
         className={btnCls}
         aria-label={`Più ${passo} minuti`}
       >
@@ -1246,6 +1250,8 @@ export function RegistraGiornataDialog({
                 minuti={r.minuti}
                 passo={passoMinuti}
                 disabled={pending}
+                // La somma non supera la presenza: il «+» si ferma su quello che resta.
+                max={scatola ? Math.max(0, r.minuti + restoScatola) : undefined}
                 onChange={(m) =>
                   setRighe((prev) => prev.map((x, j) => (j === i ? { ...x, minuti: m } : x)))
                 }

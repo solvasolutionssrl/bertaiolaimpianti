@@ -3,12 +3,8 @@
 import { Fingerprint, LogIn, LogOut, Monitor, PencilLine, Smartphone } from 'lucide-react';
 
 import type { TimbroVisto } from '@/app/_lib/timbro/giornate';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
-const fmtOra = new Intl.DateTimeFormat('it-IT', {
-  timeZone: 'Europe/Rome',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 
 /**
  * Da quale bocca viene un passaggio del registro: il badge al terminale, la
@@ -74,7 +70,7 @@ export function TimbriTerminale({ timbri, compatto = false }: { timbri: TimbroVi
           >
             <bocca.Icona className="h-3 w-3 shrink-0 opacity-70" aria-hidden="true" />
             {!t.scartato && t.tipo ? <Dir className="h-3 w-3 shrink-0" aria-hidden="true" /> : null}
-            <span className="font-medium">{fmtOra.format(new Date(t.ts))}</span>
+            <span className="font-medium">{oraMostrata(t.ts)}</span>
             {!compatto && !t.scartato && t.tipo ? (
               <span className="text-[10px] opacity-80">{t.tipo === 'ingresso' ? 'in' : 'out'} · {bocca.parola}</span>
             ) : null}

@@ -12,6 +12,7 @@ import {
   type ViaggioRitornoSede,
 } from '@/app/_components/viaggio-ritorno-dialog';
 import type { CantiereSquadra, MembroStato, StatoMembro } from '../../_lib/capo';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 /** Contesto viaggio (sedi + sede di default) per un singolo cantiere. */
 export interface ViaggioContestoCantiere {
@@ -20,11 +21,8 @@ export interface ViaggioContestoCantiere {
 }
 
 function ora(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 /**

@@ -23,6 +23,7 @@ import { modalitaLavoroDi } from '@/app/_lib/dipendenti-modalita';
 import { TurnoAzioniCantiere } from './_components/turno-azioni-cantiere';
 import { IniziaTurnoButton } from './_components/inizia-turno';
 import { HomeUfficio } from './_components/home-ufficio';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 export const metadata: Metadata = {
   title: 'Kantiere',
@@ -40,11 +41,8 @@ function formatDataOggi(): string {
 }
 
 function formatOra(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 export default async function KantiereHomePage() {

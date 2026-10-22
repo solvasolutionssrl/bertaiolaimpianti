@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Building2, CalendarClock, Coffee, Loader2, LogOut, Play } from 'lucide-react';
 
 import { segnaPresenzaInSede } from '@/app/_actions/kantiere-timbra';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 /**
  * La presenza in sede senza cantiere, dal telefono.
@@ -39,7 +40,6 @@ export function messaggioPresenza(code: string): string {
   }
 }
 
-const fmtOra = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
 const hm = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
 
 /** Il tasto «Inizia senza cantiere», per i fogli di avvio. */
@@ -97,8 +97,8 @@ export function PresenzaSedeCard({ presenza }: { presenza: PresenzaSedeVista }) 
       else setErrore(messaggioPresenza(r.error));
     });
   };
-  const inizio = presenza.inizioIso ? fmtOra.format(new Date(presenza.inizioIso)) : '';
-  const fine = presenza.fineIso ? fmtOra.format(new Date(presenza.fineIso)) : '';
+  const inizio = presenza.inizioIso ? oraMostrata(presenza.inizioIso) : '';
+  const fine = presenza.fineIso ? oraMostrata(presenza.fineIso) : '';
 
   return (
     <section

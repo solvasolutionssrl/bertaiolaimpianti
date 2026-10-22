@@ -9,6 +9,7 @@ import { avviaTurnoMio, pausaPranzoMia, riprendiTurnoMio, segnaPresenzaInSede } 
 import { Scelta } from '@/app/_components/scelta';
 import { CompilaGiornataDialog, type ModoCompila } from '../kantiere/_components/compila-giornata-dialog';
 import type { MiaGiornata as MiaGiornataDati } from '../_lib/mia-giornata';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 /**
  * «La mia giornata» nell'header dell'ufficio: per chi gestisce le presenze
@@ -18,7 +19,6 @@ import type { MiaGiornata as MiaGiornataDati } from '../_lib/mia-giornata';
  * presenze, riadattati alla scrivania.
  */
 
-const fmtOra = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
 const hm = (min: number) => `${Math.floor(Math.max(0, min) / 60)}:${String(Math.max(0, min) % 60).padStart(2, '0')}`;
 
 const COME: Record<string, { testo: string; Icona: React.ComponentType<{ className?: string }> }> = {
@@ -76,7 +76,7 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
     const c = COME[t.come] ?? COME.altro!;
     Icona = c.Icona;
     colore = t.inPausa ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-emerald-300 bg-emerald-50 text-emerald-800';
-    testo = `${t.inPausa ? 'In pausa' : 'In turno'} · ${t.cantiereNome} · ${fmtOra.format(new Date(t.inizioTs))}`;
+    testo = `${t.inPausa ? 'In pausa' : 'In turno'} · ${t.cantiereNome} · ${oraMostrata(t.inizioTs)}`;
   } else if (scatola) {
     Icona = Fingerprint;
     colore = 'border-sky-300 bg-sky-50 text-sky-800';
@@ -84,7 +84,7 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
   } else if (presenzaAperta) {
     Icona = Fingerprint;
     colore = 'border-emerald-300 bg-emerald-50 text-emerald-800';
-    testo = `In sede · dalle ${dati.timbro?.inizioIso ? fmtOra.format(new Date(dati.timbro.inizioIso)) : ''}`;
+    testo = `In sede · dalle ${dati.timbro?.inizioIso ? oraMostrata(dati.timbro.inizioIso) : ''}`;
   } else if (dati.lavoratiOggiMin > 0) {
     testo = `Oggi ${hm(dati.lavoratiOggiMin)} di lavoro`;
   }
@@ -128,8 +128,8 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
             <div className="mt-2 space-y-2">
               <p className="text-sm">
                 <span className="font-semibold">{t.cantiereNome}</span>
-                <span className="text-muted-foreground"> · dalle {fmtOra.format(new Date(t.inizioTs))} {COME[t.come]?.testo ?? ''}{t.inSede ? ' · in sede' : ''}</span>
-                {t.inPausa && t.inizioPausaTs ? <span className="block text-xs text-amber-700">In pausa dalle {fmtOra.format(new Date(t.inizioPausaTs))}</span> : null}
+                <span className="text-muted-foreground"> · dalle {oraMostrata(t.inizioTs)} {COME[t.come]?.testo ?? ''}{t.inSede ? ' · in sede' : ''}</span>
+                {t.inPausa && t.inizioPausaTs ? <span className="block text-xs text-amber-700">In pausa dalle {oraMostrata(t.inizioPausaTs)}</span> : null}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {t.inPausa ? (
@@ -150,7 +150,7 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
           ) : scatola ? (
             <div className="mt-2 space-y-2">
               <p className="text-sm">
-                {scatola.dalTerminale ? 'Badge' : 'In sede'} {scatola.inizioIso ? fmtOra.format(new Date(scatola.inizioIso)) : ''} → {scatola.fineIso ? fmtOra.format(new Date(scatola.fineIso)) : ''}
+                {scatola.dalTerminale ? 'Badge' : 'In sede'} {scatola.inizioIso ? oraMostrata(scatola.inizioIso) : ''} → {scatola.fineIso ? oraMostrata(scatola.fineIso) : ''}
                 <span className="block text-xs text-muted-foreground">{hm(scatola.nettoMin)} di presenza{scatola.giorno !== dati.giorno ? ` · ${scatola.giorno}` : ''}: dì su quali commesse hai lavorato.</span>
               </p>
               {/* «Riprendi» prende la sua larghezza, il tasto lungo tutto il resto:
@@ -169,7 +169,7 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
           ) : presenzaAperta ? (
             <div className="mt-2 space-y-2">
               <p className="text-sm">
-                In sede dalle {dati.timbro?.inizioIso ? fmtOra.format(new Date(dati.timbro.inizioIso)) : ''}
+                In sede dalle {dati.timbro?.inizioIso ? oraMostrata(dati.timbro.inizioIso) : ''}
                 <span className="block text-xs text-muted-foreground">Senza cantiere: le ore le assegni alla fine, quando chiudi.</span>
               </p>
               <div className="grid grid-cols-2 gap-2">

@@ -5,13 +5,11 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle } from 'lucide-react';
 import { fmtData } from '@/app/office/_lib/format';
 import { chiudiGiornata, type GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 function fmtOra(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 function messaggio(code: string): string {

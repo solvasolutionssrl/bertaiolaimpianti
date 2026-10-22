@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Car, Coffee } from 'lucide-react';
 import { appaiaTimbrature } from '@kommessa/api/kantiere-ore';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 export interface TimbraturaInput {
   tipo: string;
@@ -54,11 +55,8 @@ function fmtMinColon(min: number): string {
 }
 
 function fmtOra(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 function fmtMinuti(min: number): string {

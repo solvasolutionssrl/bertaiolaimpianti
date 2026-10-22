@@ -9,6 +9,7 @@ import { timbra, type AzioneTimbra } from '@/app/_actions/kantiere-timbra';
 import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 import { etichettaPausa } from '@kommessa/api/kantiere-pausa';
 import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
 
@@ -86,11 +87,8 @@ function formatKm(km: number | null): string {
 }
 
 function formatOra(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 function formatDurata(min: number): string {

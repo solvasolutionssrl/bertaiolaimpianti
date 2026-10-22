@@ -413,7 +413,8 @@ export function CompilaGiornataDialog({
                       </div>
                     ) : <span />}
                     <div className="flex h-10 items-center gap-1">
-                      <input type="number" min={0} step={dati.impostazioni.passoMinuti} value={r.minuti} disabled={pending} onChange={(e) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, minuti: Math.max(0, parseInt(e.target.value || '0', 10)) } : x)))} className="h-10 w-24 rounded-md border border-input bg-background px-2 text-right text-sm tabular-nums" aria-label="Minuti" />
+                      {/* Con un contenitore (scatola, chiusura) la somma non supera la presenza. */}
+                      <input type="number" min={0} max={modo.tipo === 'scatola' || modo.tipo === 'chiusura' ? Math.max(0, r.minuti + resto) : undefined} step={dati.impostazioni.passoMinuti} value={r.minuti} disabled={pending} onChange={(e) => { const tetto = modo.tipo === 'scatola' || modo.tipo === 'chiusura' ? Math.max(0, r.minuti + resto) : Infinity; setRighe((p) => p.map((x, j) => (j === i ? { ...x, minuti: Math.min(tetto, Math.max(0, parseInt(e.target.value || '0', 10))) } : x))); }} className="h-10 w-24 rounded-md border border-input bg-background px-2 text-right text-sm tabular-nums" aria-label="Minuti" />
                       <span className="w-7 text-[11px] text-muted-foreground">min</span>
                     </div>
                     <Button variant="ghost" size="sm" className="h-10 w-10 p-0" disabled={pending || bloccata || righe.length === 1} onClick={() => setRighe((p) => p.filter((_, j) => j !== i))} aria-label="Togli">

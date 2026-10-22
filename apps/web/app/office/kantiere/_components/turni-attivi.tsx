@@ -3,13 +3,11 @@
 import * as React from 'react';
 import { Truck, MapPin, Radio, Utensils } from 'lucide-react';
 import { turniAttivi, type GruppoTurni } from '@/app/office/_actions/kantiere-turni-attivi';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 function oraInizio(ts: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(ts));
+  // A video ai 5 minuti; il dato resta esatto.
+  return oraMostrata(ts);
 }
 
 function trascorso(ts: string, now: number): string {

@@ -31,6 +31,7 @@ import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrat
 import { NuovaSpesa } from '../spese/_components/nuova-spesa';
 import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
 import { leggiGiornateTimbro, chiaveGiornata } from '@/app/_lib/timbro/giornate';
+import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 /** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
 type Pagina<T> = PromiseLike<EsitoPagina<T>>;
@@ -335,7 +336,7 @@ export default async function CruscottoKantierePage({
         nome: dipMap.get(dipId) ?? 'Dipendente',
         stato,
         oreLabel: soloDentro
-          ? `dalle ${new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(primoTs))}`
+          ? `dalle ${oraMostrata(primoTs)}`
           : oreLabelMin(minuti),
         cantNome: cantId ? cantMap.get(cantId) ?? null : null,
         timbrature: timbPerDip.get(dipId) ?? [],
