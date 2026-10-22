@@ -80,6 +80,9 @@ type CantiereRow = {
   id: string;
   nome: string;
   codice: string | null;
+  /** Per la ricerca nel filtro: il codice del gestionale e il cliente. */
+  codice_commessa?: string | null;
+  cliente_nome?: string | null;
   /** Serve al menu «Registra ore» per segnare i chiusi e chiedere conferma. */
   stato?: string | null;
 };
@@ -754,7 +757,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     (da, a) =>
       supabase
         .from('cantieri' as never)
-        .select('id, nome, codice, stato')
+        .select('id, nome, codice, codice_commessa, cliente_nome, stato')
         .eq('tenant_id', ctx.tenantId)
         .order('nome')
         .order('id')
@@ -766,6 +769,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     id: k.id,
     nome: k.nome || k.codice || k.id,
     stato: k.stato ?? null,
+    codice: k.codice_commessa || k.codice || null,
+    cliente: k.cliente_nome ?? null,
   }));
 
   // Giornate passate rimaste aperte (uscita mancante) → promemoria ufficio.

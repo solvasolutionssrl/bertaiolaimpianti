@@ -51,3 +51,95 @@ export async function spegniSottoscrizionePush(): Promise<void> {
     // ignorato: si esce comunque
   }
 }
+
+// ── Attivare, e sapere a che punto si e' ───────────────────────────────────
+
+const VAPID_PUBBLICA = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
+
+function byteDaBase64Url(base64: string): Uint8Array<ArrayBuffer> {
+  const riempimento = '='.repeat((4 - (base64.length % 4)) % 4);
+  const normale = (base64 + riempimento).replace(/-/g, '+').replace(/_/g, '/');
+  const grezzo = atob(normale);
+  const out = new Uint8Array(new ArrayBuffer(grezzo.length));
+  for (let i = 0; i < grezzo.length; i += 1) out[i] = grezzo.charCodeAt(i);
+  return out;
+}
+
+/**
+ * Dove sta questo telefono rispetto alle notifiche.
+ *  - `serve_home`: iPhone/iPad fuori dall'app installata — Safari non puo'
+ *    ricevere push, serve «Aggiungi alla schermata Home» (iOS ≥ 16.4);
+ *  - `nonsupportato`: il browser non ha le push;
+ *  - `negato`: il permesso e' stato rifiutato, si riapre dalle impostazioni;
+ *  - `acceso`: c'e' una sottoscrizione nel browser;
+ *  - `spento`: si puo' attivare con un tocco.
+ */
+export type StatoPush = 'serve_home' | 'nonsupportato' | 'negato' | 'acceso' | 'spento';
+
+export async function statoNotifichePush(): Promise<StatoPush> {
+  if (typeof window === 'undefined') return 'nonsupportato';
+  const ua = navigator.userAgent;
+  const apple = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const installata =
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (apple && !installata) return 'serve_home';
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+    return 'nonsupportato';
+  }
+  if (Notification.permission === 'denied') return 'negato';
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    return sub ? 'acceso' : 'spento';
+  } catch {
+    return 'spento';
+  }
+}
+
+export type EsitoAttivazione =
+  | { esito: 'acceso' }
+  | { esito: 'negato' | 'spento' | 'nonsupportato' }
+  | { esito: 'guasto'; messaggio: string };
+
+/**
+ * Chiede il permesso e registra il telefono per chi e' dentro adesso.
+ * ⚠️ Va chiamata DENTRO un tocco: dopo un giro di rete il permesso non si
+ * puo' piu' chiedere. La richiesta e' la prima cosa che fa.
+ */
+export async function attivaNotifichePush(): Promise<EsitoAttivazione> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') {
+    return { esito: 'nonsupportato' };
+  }
+  if (!VAPID_PUBBLICA || VAPID_PUBBLICA === 'placeholder') {
+    return { esito: 'guasto', messaggio: 'Le notifiche non sono configurate sul server. Avvisa chi gestisce l’app.' };
+  }
+  let permesso: NotificationPermission;
+  try {
+    permesso = await Notification.requestPermission();
+  } catch {
+    return { esito: 'guasto', messaggio: 'Il telefono non ha risposto alla richiesta di permesso.' };
+  }
+  if (permesso !== 'granted') return { esito: permesso === 'denied' ? 'negato' : 'spento' };
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    // Una sottoscrizione precedente si riusa: chiederla al server e' anche il
+    // modo di assegnarla a chi e' dentro adesso.
+    const sub =
+      (await reg.pushManager.getSubscription()) ??
+      (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: byteDaBase64Url(VAPID_PUBBLICA) }));
+    const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+    const res = await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys, userAgent: navigator.userAgent }),
+    });
+    if (!res.ok) {
+      const e = (await res.json().catch(() => ({}))) as { error?: string };
+      return { esito: 'guasto', messaggio: e.error ?? 'Il server non ha accettato la registrazione.' };
+    }
+    return { esito: 'acceso' };
+  } catch (e) {
+    return { esito: 'guasto', messaggio: e instanceof Error ? e.message : 'Non è stato possibile attivarle.' };
+  }
+}

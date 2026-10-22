@@ -3,27 +3,7 @@
 import * as React from 'react';
 import { Bell, BellOff, BellRing, Loader2 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
-import { sincronizzaSottoscrizionePush } from '@/app/_lib/push-client';
-
-const VAPID_PUBBLICA = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
-
-/**
- * La chiave VAPID viaggia in base64 per URL; `subscribe` vuole dei byte.
- *
- * ⚠️ Il tipo di ritorno è dichiarato `Uint8Array<ArrayBuffer>` e non
- * `Uint8Array`: nelle librerie di tipi recenti quest'ultimo copre anche un
- * buffer condiviso, che `applicationServerKey` non accetta. Senza
- * l'annotazione non compila, e con un `as never` compilerebbe nascondendo
- * l'unica cosa che qui conta — che quei byte siano una copia normale.
- */
-function byteDaBase64Url(base64: string): Uint8Array<ArrayBuffer> {
-  const riempimento = '='.repeat((4 - (base64.length % 4)) % 4);
-  const normale = (base64 + riempimento).replace(/-/g, '+').replace(/_/g, '/');
-  const grezzo = atob(normale);
-  const out = new Uint8Array(new ArrayBuffer(grezzo.length));
-  for (let i = 0; i < grezzo.length; i += 1) out[i] = grezzo.charCodeAt(i);
-  return out;
-}
+import { attivaNotifichePush, sincronizzaSottoscrizionePush } from '@/app/_lib/push-client';
 
 type Stato = 'leggo' | 'spento' | 'accendo' | 'acceso' | 'negato' | 'nonsupportato' | 'guasto';
 
@@ -87,57 +67,16 @@ export function SuQuestoTelefono() {
 
   async function accendi() {
     setNota(null);
-    if (!VAPID_PUBBLICA || VAPID_PUBBLICA === 'placeholder') {
-      setStato('guasto');
-      setNota('Le notifiche non sono configurate sul server. Avvisa chi gestisce l’app.');
-      return;
-    }
-    // ⚠️ Prima cosa, dentro il tocco: dopo un giro di rete il permesso non si
-    // può più chiedere.
-    let permesso: NotificationPermission;
-    try {
-      permesso = await Notification.requestPermission();
-    } catch {
-      setStato('guasto');
-      setNota('Il telefono non ha risposto alla richiesta di permesso.');
-      return;
-    }
-    if (permesso !== 'granted') {
-      setStato(permesso === 'denied' ? 'negato' : 'spento');
-      return;
-    }
-
     setStato('accendo');
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      // Se una sottoscrizione c'è già (installazione precedente) si riusa:
-      // `subscribe` su una esistente con la stessa chiave la restituisce, ma
-      // chiederla è anche il modo di riallinearla col server.
-      const sub =
-        (await reg.pushManager.getSubscription()) ??
-        (await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: byteDaBase64Url(VAPID_PUBBLICA),
-        }));
-      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-      const res = await fetch('/api/push/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          endpoint: json.endpoint,
-          keys: json.keys,
-          userAgent: navigator.userAgent,
-        }),
-      });
-      if (!res.ok) {
-        const e = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(e.error ?? 'Il server non ha accettato la registrazione.');
-      }
+    const r = await attivaNotifichePush();
+    if (r.esito === 'acceso') {
       setStato('acceso');
       setNota('Fatto. Le notifiche arrivano su questo telefono.');
-    } catch (e) {
+    } else if (r.esito === 'guasto') {
       setStato('guasto');
-      setNota(e instanceof Error ? e.message : 'Non è stato possibile attivarle.');
+      setNota(r.messaggio);
+    } else {
+      setStato(r.esito);
     }
   }
 

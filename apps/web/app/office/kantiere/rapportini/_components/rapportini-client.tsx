@@ -9,6 +9,7 @@ import {
   PlusCircle,
   AlertTriangle,
   RotateCw,
+  Download,
   Check,
   Pencil,
   History,
@@ -39,6 +40,7 @@ import {
   type CorreggiTratta,
 } from '../../_components/correggi-giornata-dialog';
 import { LiveRefresh } from '@/app/_components/live-refresh';
+import { Scelta } from '@/app/_components/scelta';
 
 export type TimbraturaItem = {
   tipo: string;
@@ -133,7 +135,7 @@ export type FiltriRapportini = {
 export type DipendenteItem = { id: string; nome: string; modalita?: 'ufficio' | 'esterno' };
 export type CommessaPickerItem = { id: string; titolo: string };
 /** `stato` serve solo a segnare i chiusi e a chiedere conferma prima di scrivere. */
-export type CantierePickerItem = { id: string; nome: string; stato?: string | null };
+export type CantierePickerItem = { id: string; nome: string; stato?: string | null; codice?: string | null; cliente?: string | null };
 
 // Giorno corrente in formato YYYY-MM-DD (client-side, fuso locale) — per il dialog "Registra ore".
 function oggiLocale(): string {
@@ -667,6 +669,9 @@ export function RapportiniClient({
   }
 
   // Barra filtri — in cima alla card unica (giorni di oggi + storico).
+  // Una riga sola, tutto alto 40px come i tasti dell'ufficio: i filtri a
+  // sinistra, le azioni a destra. Sotto i 1280px va a capo fra i due gruppi.
+  const campo = 'h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
   const filtriBar = (
     <div className="border-b border-border p-2.5">
       <div className="flex flex-wrap items-end gap-2">
@@ -679,7 +684,7 @@ export function RapportiniClient({
               setFrom(e.target.value);
               applyFiltri({ from: e.target.value });
             }}
-            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className={campo}
           />
         </div>
         <div className="flex flex-col gap-0.5">
@@ -691,47 +696,49 @@ export function RapportiniClient({
               setTo(e.target.value);
               applyFiltri({ to: e.target.value });
             }}
-            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            className={campo}
           />
         </div>
-        <div className="flex flex-col gap-0.5">
+        <div className="flex w-40 flex-col gap-0.5">
           <label className="text-[11px] font-medium text-muted-foreground">Dipendente</label>
-          <select
-            value={dipendente}
-            onChange={(e) => {
-              setDipendente(e.target.value);
-              applyFiltri({ dipendente: e.target.value });
+          <Scelta
+            opzioni={dipendenti.map((d) => ({ valore: d.id, etichetta: d.nome }))}
+            valore={dipendente || null}
+            onCambia={(v) => {
+              setDipendente(v ?? '');
+              applyFiltri({ dipendente: v ?? '' });
             }}
-            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Tutti i dipendenti</option>
-            {dipendenti.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.nome}
-              </option>
-            ))}
-          </select>
+            etichettaNessuno="Tutti i dipendenti"
+            segnaposto="Tutti i dipendenti"
+            segnapostoRicerca="Cerca persona…"
+            className="h-10 [&>button]:h-10 [&>button]:min-h-0 [&>button]:py-0"
+            aria-label="Dipendente"
+          />
         </div>
-        <div className="flex flex-col gap-0.5">
+        <div className="flex w-56 flex-col gap-0.5">
           <label className="text-[11px] font-medium text-muted-foreground">Cantiere</label>
-          <select
-            value={cantiere}
-            onChange={(e) => {
-              setCantiere(e.target.value);
-              applyFiltri({ cantiere: e.target.value });
+          {/* Cercabile per nome, codice e cliente: su FPM i cantieri sono
+              centinaia, e un menu di sistema non si cerca. */}
+          <Scelta
+            opzioni={cantieri.map((k) => ({
+              valore: k.id,
+              etichetta: k.stato === 'chiuso' ? `${k.nome} · chiuso` : k.nome,
+              dettaglio: [k.codice, k.cliente].filter(Boolean).join(' · ') || undefined,
+            }))}
+            valore={cantiere || null}
+            onCambia={(v) => {
+              setCantiere(v ?? '');
+              applyFiltri({ cantiere: v ?? '' });
             }}
-            className="rounded-md border border-input bg-background px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="">Tutti i cantieri</option>
-            {cantieri.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.stato === 'chiuso' ? `${k.nome} · chiuso` : k.nome}
-              </option>
-            ))}
-          </select>
+            etichettaNessuno="Tutti i cantieri"
+            segnaposto="Tutti i cantieri"
+            segnapostoRicerca="Cerca cantiere, codice, cliente…"
+            className="h-10 [&>button]:h-10 [&>button]:min-h-0 [&>button]:py-0"
+            aria-label="Cantiere"
+          />
         </div>
         {nAnomalie > 0 ? (
-          <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground">
+          <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground">
             <input
               type="checkbox"
               checked={soloAnomalie}
@@ -756,14 +763,15 @@ export function RapportiniClient({
               })
             }
             disabled={isRicalcolo}
-            title="Riallinea le ore alle timbrature del periodo"
+            title="Ricalcola dalle timbrature del periodo"
+            aria-label="Ricalcola dalle timbrature"
+            className="w-10 px-0"
           >
             {isRicalcolo ? (
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" aria-hidden="true" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
-              <RotateCw className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              <RotateCw className="h-4 w-4" aria-hidden="true" />
             )}
-            Ricalcola dalle timbrature
           </Button>
           <Button variant="default" size="sm" onClick={() => setScegliCompila({ dipendenteId: dipendenti[0]?.id ?? '', giorno: oggi })}>
             <PlusCircle className="mr-1.5 h-4 w-4" aria-hidden="true" />
@@ -772,10 +780,14 @@ export function RapportiniClient({
           <Button variant="outline" size="sm" onClick={openRegistra} title="Solo ore per cantiere, senza orari né viaggio">
             Registra ore
           </Button>
-          <Button asChild variant="outline" size="sm">
-            <a href={exportHref}>Esporta CSV</a>
+          {/* Ricalcola ed Esporta sono tasti rari: solo l'icona, con il
+              nome al passaggio del mouse, cosi' la barra sta su una riga. */}
+          <Button asChild variant="outline" size="sm" className="w-10 px-0">
+            <a href={exportHref} title="Esporta CSV del periodo" aria-label="Esporta CSV">
+              <Download className="h-4 w-4" aria-hidden="true" />
+            </a>
           </Button>
-          <LiveRefresh intervalMs={60000} />
+          <LiveRefresh intervalMs={60000} className="h-10" />
         </div>
       </div>
       {ricalcoloMsg ? <p className="mt-2 text-[11px] text-muted-foreground">{ricalcoloMsg}</p> : null}

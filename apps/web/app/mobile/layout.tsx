@@ -26,7 +26,7 @@ import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 import SwRegistrar from './_components/sw-registrar';
 import { SincronizzaPush } from './_components/sincronizza-push';
 import NuovaVersione from './_components/nuova-versione';
-import { AttivaNotificheBanner } from './_components/attiva-notifiche-banner';
+import { AttivaNotificheSheet } from './_components/attiva-notifiche-sheet';
 import { AppleSplashLinks } from '../_components/apple-splash-links';
 import { PwaInstallPrompt } from './_components/pwa-install-prompt';
 import { BottomNavShell } from './_components/bottom-nav-shell';
@@ -181,7 +181,7 @@ export default async function MobileLayout({
         {/* Le notifiche sul telefono partono solo dopo un si' dato dentro un
             tocco: la pagina che lo chiede sta nel profilo, dove nessuno va da
             solo. Una riga, chiudibile, su ogni telefono che non le ha. */}
-        {ctx ? <AttivaNotificheBanner /> : null}
+        {ctx ? <AttivaNotificheSheet /> : null}
         {shadow ? (
           <ImpersonationBanner
             chi={etichettaImpersonazione({

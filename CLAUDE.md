@@ -1503,6 +1503,47 @@ QR in cantiere, app) e la chiude con un altro. E un'indicazione di metodo:
   `timbro-chiudere.mjs` ora **si seminano da soli** (Marco Rinaldi, DEMOC) e
   si ripuliscono.
 
+### Push che arrivano davvero, e il foglio che le chiede (22/10/2026 sera) — nessuna migration
+
+Prove vere con due telefoni (Samsung e iPhone) sull'account di una persona
+dell'ufficio FPM. Tre difetti, tutti nostri, e un pezzo di interfaccia.
+
+- ⚠️⚠️ **Le push partivano senza priorità** (`lib/push.ts`): su Android una
+  notifica «normale» resta nella coda del risparmio energetico finché l'app
+  non si sveglia — misurato: compariva solo aprendo l'app. Ora `urgency:
+  'high'` e `TTL` di 12 ore (un promemoria delle 18 consegnato domani non
+  serve). Con la priorità alta arriva a telefono bloccato **anche col
+  risparmio energetico acceso**.
+- ⚠️⚠️ **Il telefono è di chi ci è dentro adesso** (`_lib/push-client.ts`,
+  `api/push/subscribe`): il browser tiene UNA sottoscrizione per origine e non
+  sa chi è loggato; l'unique è `(user_id, endpoint)`, quindi lo stesso
+  telefono restava registrato a due persone e la pagina diceva «attive»
+  mentre gli avvisi andavano all'utente precedente. A ogni apertura dell'app
+  (`SincronizzaPush`, una volta per sessione) e nella pagina Notifiche la
+  sottoscrizione si rimanda al server, che la assegna a chi è dentro e la
+  **toglie agli altri** (service role: la RLS fa vedere solo le proprie).
+- **Il logout spegne**: prima di chiudere la sessione si toglie la riga sul
+  server e la sottoscrizione dal browser, nei due logout (telefono e ufficio).
+  Chi entra dopo riparte da «spento» e riattiva a suo nome: è il prezzo di non
+  far arrivare a nessuno gli avvisi di un altro.
+- **Il foglio «Attiva le notifiche»** (`mobile/_components/attiva-notifiche-sheet.tsx`)
+  sostituisce la riga sottile di prima: compare a **ogni apertura dell'app**
+  (una volta per sessione, «Non ora» lo mette via fino alla prossima) finché
+  il telefono non è registrato. Tre forme: il tasto grande con i tre motivi;
+  **iPhone fuori dall'app installata** → i due passi per la Home (Safari non
+  riceve push); **permesso negato** → dove riaprirlo. ⚠️ Su un Mac
+  l'emulazione mobile tiene `platform` MacIntel con il touch: per la
+  rilevazione è un iPad, e il banco imposta la piattaforma a mano.
+- Un badge al terminale **non manda nessuna push**: l'avviso è il promemoria
+  `ore_da_inserire` della sera (cron ai minuti 07/22/37/52, finestra di 15
+  minuti dall'orario del cliente; FPM senza orario proprio → 18:00 e 08:00).
+  Per provarlo si chiama `/api/cron/promemoria-ore?finestra=sera` con il
+  segreto, dopo aver tolto la riga in `notifiche` (dedupe di 20 ore).
+- «Presenze e ore»: barra dei filtri su una riga, tutto alto 40px, dipendente
+  e cantiere con la tendina cercabile (`Scelta`: nome, codice, cliente);
+  Ricalcola ed Esporta solo icona. Banchi: `notifiche-foglio.mjs`,
+  `filtri-presenze.mjs`.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.
