@@ -9,7 +9,6 @@ import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { riempiScatola } from '@kommessa/api/timbro-giornata';
 
 import { Scelta } from '@/app/_components/scelta';
-import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 import {
   registraGiornataDaZero,
   registraGiornataPerDipendente,
@@ -335,13 +334,14 @@ export function CompilaGiornataDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? onOpenChange(true) : chiudi(false))}>
-      <DialogContent className="max-w-5xl">
+      {/* La larghezza in stile: la classe base del dialog (640px) e' un valore arbitrario e vincerebbe sulle utility. */}
+      <DialogContent className="sm:max-w-none" style={{ maxWidth: 'min(74rem, calc(100vw - 2rem))' }}>
         <DialogHeader>
           <DialogTitle>{titolo}</DialogTitle>
           <DialogDescription className="first-letter:uppercase">{sottotitolo}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="grid gap-6 md:min-h-[26rem] md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           {/* ── sinistra: si compila ── */}
           <div className="space-y-4">
             {modo.tipo === 'scatola' ? (
@@ -350,31 +350,31 @@ export function CompilaGiornataDialog({
               </div>
             ) : null}
 
-            <section className="grid gap-3 sm:grid-cols-3">
-              <label className="space-y-1 text-xs">
+            <section className="flex flex-wrap items-end gap-4">
+              <label className="w-28 space-y-1 text-xs">
                 <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? 'Badge alle' : 'Inizio'}</span>
                 <input
                   type="time"
                   value={inizio}
                   disabled={pending || modo.tipo === 'scatola' || modo.tipo === 'chiusura'}
                   onChange={(e) => setInizio(e.target.value || '08:00')}
-                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums disabled:opacity-70"
+                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums disabled:opacity-70"
                 />
               </label>
-              <div className="space-y-1 text-xs">
+              <div className="w-28 space-y-1 text-xs">
                 <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? 'Badge alle' : modo.tipo === 'chiusura' ? 'Chiusura' : 'Fine · calcolata'}</span>
-                <div className="flex h-9 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
+                <div className="flex h-10 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
                   {vive.length > 0 || modo.tipo !== 'registra' ? hmRome(new Date(fineMs).toISOString()) : '--:--'}
                 </div>
               </div>
-              <div className="space-y-1 text-xs">
+              <div className="min-w-[16rem] flex-1 space-y-1 text-xs">
                 <span className="flex items-center gap-1 font-medium text-amber-700">
                   <Coffee className="h-3 w-3" aria-hidden="true" /> Pausa pranzo
                 </span>
                 {modo.tipo === 'scatola' && modo.vista.pausaTimbrataMin > 0 ? (
-                  <div className="flex h-9 items-center text-sm text-muted-foreground">timbrata · {hm(modo.vista.pausaTimbrataMin)}</div>
+                  <div className="flex h-10 items-center text-sm text-muted-foreground">timbrata · {hm(modo.vista.pausaTimbrataMin)}</div>
                 ) : (
-                  <SceltaPausaPranzo valore={pausaMin} onChange={setPausaMin} conNessuna disabled={pending} tono="tenue" />
+                  <PausaScrivania valore={pausaMin} onChange={setPausaMin} disabled={pending} />
                 )}
               </div>
             </section>
@@ -394,29 +394,29 @@ export function CompilaGiornataDialog({
               {righe.map((r, i) => {
                 const bloccata = (modo.tipo === 'scatola' && !!modo.vista.primoCantiere && i === 0) || (modo.tipo === 'chiusura' && i === 0);
                 return (
-                  <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2">
+                  <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3">
                     {bloccata ? (
-                      <span className="truncate text-sm">
-                        {nomeCantiere(r.cantiereId)} <span className="text-[10px] uppercase text-muted-foreground">turno aperto</span>
+                      <span className="flex h-10 items-center truncate rounded-md border border-border bg-muted/30 px-3 text-sm">
+                        {nomeCantiere(r.cantiereId)}&nbsp;<span className="text-[10px] uppercase text-muted-foreground">turno aperto</span>
                       </span>
                     ) : (
-                      <Scelta opzioni={opzioniCantieri} valore={r.cantiereId || null} onCambia={(v) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, cantiereId: v ?? '' } : x)))} segnaposto="Cantiere…" disabilitato={pending} />
+                      <Scelta opzioni={opzioniCantieri} valore={r.cantiereId || null} onCambia={(v) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, cantiereId: v ?? '' } : x)))} segnaposto="Cantiere…" disabilitato={pending} className="h-10 [&>button]:h-10 [&>button]:min-h-0 [&>button]:py-0" />
                     )}
                     {sedeDefault ? (
-                      <div role="radiogroup" aria-label="Dove" className="inline-flex overflow-hidden rounded-md border border-border text-[11px]">
+                      <div role="radiogroup" aria-label="Dove" className="inline-flex h-10 overflow-hidden rounded-md border border-border text-xs">
                         {([[true, 'In sede'], [false, 'In cantiere']] as [boolean, string][]).map(([v, et]) => (
-                          <button key={et} type="button" role="radio" aria-checked={r.inSede === v} disabled={pending || (modo.tipo === 'chiusura' && i === 0)} onClick={() => setRighe((p) => p.map((x, j) => (j === i ? { ...x, inSede: v } : x)))} className={r.inSede === v ? 'bg-primary px-2 py-1 font-semibold text-white' : 'bg-background px-2 py-1 text-muted-foreground'}>
+                          <button key={et} type="button" role="radio" aria-checked={r.inSede === v} disabled={pending || (modo.tipo === 'chiusura' && i === 0)} onClick={() => setRighe((p) => p.map((x, j) => (j === i ? { ...x, inSede: v } : x)))} className={cn('h-full px-3', r.inSede === v ? 'bg-primary font-semibold text-white' : 'bg-background text-muted-foreground')}>
                             {et}
                           </button>
                         ))}
                       </div>
                     ) : <span />}
-                    <div className="flex items-center gap-1">
-                      <input type="number" min={0} step={dati.impostazioni.passoMinuti} value={r.minuti} disabled={pending} onChange={(e) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, minuti: Math.max(0, parseInt(e.target.value || '0', 10)) } : x)))} className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right text-sm tabular-nums" aria-label="Minuti" />
-                      <span className="text-[10px] text-muted-foreground">min</span>
+                    <div className="flex h-10 items-center gap-1">
+                      <input type="number" min={0} step={dati.impostazioni.passoMinuti} value={r.minuti} disabled={pending} onChange={(e) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, minuti: Math.max(0, parseInt(e.target.value || '0', 10)) } : x)))} className="h-10 w-24 rounded-md border border-input bg-background px-2 text-right text-sm tabular-nums" aria-label="Minuti" />
+                      <span className="w-7 text-[11px] text-muted-foreground">min</span>
                     </div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={pending || bloccata || righe.length === 1} onClick={() => setRighe((p) => p.filter((_, j) => j !== i))} aria-label="Togli">
-                      <Trash2 className="h-3.5 w-3.5" />
+                    <Button variant="ghost" size="sm" className="h-10 w-10 p-0" disabled={pending || bloccata || righe.length === 1} onClick={() => setRighe((p) => p.filter((_, j) => j !== i))} aria-label="Togli">
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 );
@@ -477,18 +477,20 @@ export function CompilaGiornataDialog({
           </div>
 
           {/* ── destra: cosa verra' scritto ── */}
-          <aside className="rounded-lg border border-border bg-muted/30 p-3">
+          <aside className="md:border-l md:border-border md:pl-6">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Come verrà scritta</p>
             {righeAnteprima.length === 0 ? (
-              <p className="mt-2 text-xs text-muted-foreground">{anteprimaErrore ?? 'Scegli almeno un cantiere.'}</p>
+              <div className="mt-3 rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+                {anteprimaErrore ?? 'Qui compare la giornata come verrà scritta: orari di ogni cantiere, pause, tratte.'}
+              </div>
             ) : (
               <ol className="mt-2 space-y-1.5">
                 {righeAnteprima.map((r, i) => (
                   <li key={i} className={cn('flex items-start gap-2 rounded-md px-2 py-1 text-xs', r.tono === 'lavoro' && 'bg-card border border-border', r.tono === 'pausa' && 'bg-amber-50 text-amber-800', r.tono === 'viaggio' && 'bg-sky-50 text-sky-800')}>
-                    <span className="w-[6.5rem] shrink-0 font-mono tabular-nums">{r.ora}</span>
-                    <span className="min-w-0 flex items-center gap-1">
-                      {r.tono === 'lavoro' ? <MapPin className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" /> : r.tono === 'viaggio' ? <Car className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" /> : <Coffee className="h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />}
-                      <span className="truncate">{r.testo}</span>
+                    <span className="w-[5.75rem] shrink-0 font-mono tabular-nums">{r.ora}</span>
+                    <span className="flex min-w-0 items-start gap-1">
+                      {r.tono === 'lavoro' ? <MapPin className="mt-0.5 h-3 w-3 shrink-0 opacity-60" aria-hidden="true" /> : r.tono === 'viaggio' ? <Car className="mt-0.5 h-3 w-3 shrink-0 opacity-60" aria-hidden="true" /> : <Coffee className="mt-0.5 h-3 w-3 shrink-0 opacity-60" aria-hidden="true" />}
+                      <span className="break-words">{r.testo}</span>
                     </span>
                   </li>
                 ))}
@@ -515,6 +517,36 @@ export function CompilaGiornataDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** La pausa pranzo da scrivania: quattro scelte in fila e un campo libero, tutto alto uguale. */
+function PausaScrivania({ valore, onChange, disabled }: { valore: number; onChange: (m: number) => void; disabled?: boolean }) {
+  const rapide = [0, 30, 45, 60];
+  const libera = !rapide.includes(valore);
+  return (
+    <div className="flex h-10 items-center gap-2">
+      <div role="radiogroup" aria-label="Pausa pranzo" className="inline-flex h-10 overflow-hidden rounded-md border border-border text-xs">
+        {rapide.map((m) => (
+          <button key={m} type="button" role="radio" aria-checked={valore === m} disabled={disabled} onClick={() => onChange(m)} className={cn('h-full px-3', valore === m ? 'bg-amber-600 font-semibold text-white' : 'bg-background text-muted-foreground')}>
+            {m === 0 ? 'Nessuna' : m === 60 ? '1 h' : `${m} min`}
+          </button>
+        ))}
+      </div>
+      <input
+        type="number"
+        min={0}
+        max={240}
+        step={5}
+        placeholder="altra"
+        value={libera ? valore : ''}
+        disabled={disabled}
+        onChange={(e) => onChange(Math.max(0, Math.min(240, parseInt(e.target.value || '0', 10))))}
+        className="h-10 w-20 rounded-md border border-input bg-background px-2 text-right text-sm tabular-nums placeholder:italic"
+        aria-label="Altra durata in minuti"
+      />
+      <span className="text-[11px] text-muted-foreground">min</span>
+    </div>
   );
 }
 
