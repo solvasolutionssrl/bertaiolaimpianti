@@ -103,7 +103,9 @@ export async function leggiOraTimbro(input: { tenantId: string }): Promise<Esito
 const EVENTI_WEBHOOK = ['punch.created', 'punch.voided', 'punch.updated', 'badge.assigned'];
 
 function urlWebhook(tenantId: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.kommessa.it').replace(/\/$/, '');
+  // ⚠️ `.trim()`: la variabile su Vercel aveva un a capo in coda, e l'indirizzo
+  // registrato su Timbro e' uscito spezzato in due righe.
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.kommessa.it').trim().replace(/\/$/, '');
   return `${base}/api/webhooks/timbro?t=${tenantId}`;
 }
 

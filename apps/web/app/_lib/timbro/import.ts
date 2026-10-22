@@ -28,8 +28,10 @@ import { importAbilitato, leggiConfigTimbro, leggiTutteConfigTimbro, type Config
 export interface EsitoImport {
   tenantId: string;
   ok: boolean;
-  /** Eventi ricevuti da Timbro nel giro. */
+  /** Eventi ricevuti da Timbro nel giro (compresi quelli gia' visti nel minuto di margine). */
   letti: number;
+  /** Eventi davvero nuovi: con `updated_at` oltre il cursore. */
+  nuovi: number;
   /** Righe scritte o aggiornate in `timbri_grezzi`. */
   scritti: number;
   /** Eventi scartati perche' prima della data di partenza. */
@@ -72,6 +74,7 @@ export async function importaTimbri(
     tenantId: cfg.tenantId,
     ok: false,
     letti: 0,
+    nuovi: 0,
     scritti: 0,
     primaDellaPartenza: 0,
     orfani: 0,
@@ -111,6 +114,8 @@ export async function importaTimbri(
   let maxTimbro: string | null = null;
   for (const p of punches) {
     if (p.updated_at && (!maxUpdated || p.updated_at > maxUpdated)) maxUpdated = p.updated_at;
+    // Il minuto di margine rilegge sempre l'ultimo evento: non e' una novita'.
+    if (!cfg.cursoreUpdatedAt || (p.updated_at && p.updated_at > cfg.cursoreUpdatedAt)) esito.nuovi += 1;
     if (p.occurred_at && p.occurred_at.slice(0, 10) < cfg.dal) {
       esito.primaDellaPartenza += 1;
       continue;
@@ -157,9 +162,9 @@ export async function importaTimbri(
 
   esito.ok = true;
   esito.messaggio =
-    esito.letti === 0
-      ? 'Nessuna novità.'
-      : `${esito.letti} eventi letti, ${esito.scritti} scritti` +
+    esito.nuovi === 0
+      ? 'Nessuna novità.'
+      : `${esito.nuovi} eventi nuovi, ${esito.scritti} scritti` +
         (esito.orfani ? `, ${esito.orfani} senza persona` : '') +
         (esito.primaDellaPartenza ? `, ${esito.primaDellaPartenza} prima della partenza` : '') +
         '.';
@@ -195,7 +200,8 @@ async function registraGiro(
   // Il diario dei giri, nella stessa tabella degli altri collegamenti. Un
   // giro a vuoto ogni due minuti non si scrive — sarebbero 720 righe al
   // giorno per dire «niente» — ma un errore si', sempre.
-  if (esito.letti > 0 || !esito.ok || avvio !== 'schedulato') {
+  // ⚠️ «A vuoto» = nessun evento NUOVO: il minuto di margine rilegge sempre l'ultimo.
+  if (esito.nuovi > 0 || !esito.ok || avvio !== 'schedulato') {
     await service.from('integrazione_esecuzioni' as never).insert({
       tenant_id: cfg.tenantId,
       sistema: 'timbro',
@@ -204,7 +210,7 @@ async function registraGiro(
       avviata_at: avviataAt,
       conclusa_at: ora,
       esito: esito.ok ? 'ok' : 'errore',
-      letti: esito.letti,
+      letti: esito.nuovi,
       scritti: esito.scritti,
       errori: esito.ok ? 0 : 1,
       messaggio: esito.messaggio,
@@ -221,6 +227,7 @@ export async function importaTimbriTenant(tenantId: string, avvio: Avvio): Promi
       tenantId,
       ok: false,
       letti: 0,
+      nuovi: 0,
       scritti: 0,
       primaDellaPartenza: 0,
       orfani: 0,

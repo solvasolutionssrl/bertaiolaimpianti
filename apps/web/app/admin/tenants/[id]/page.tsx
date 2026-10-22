@@ -282,7 +282,7 @@ export default async function TenantDetailPage({
       capiSquadra,
     },
   };
-  const webhookUrlTimbro = `${(process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.kommessa.it').replace(/\/$/, '')}/api/webhooks/timbro?t=${params.id}`;
+  const webhookUrlTimbro = `${(process.env.NEXT_PUBLIC_APP_URL ?? 'https://www.kommessa.it').trim().replace(/\/$/, '')}/api/webhooks/timbro?t=${params.id}`;
 
   const appModeTenant: 'kommessa' | 'kantiere' | 'full' =
     tenant.app_mode === 'kantiere' || tenant.app_mode === 'full' ? tenant.app_mode : 'kommessa';

@@ -23,8 +23,8 @@ async function run(request: NextRequest) {
   return Response.json({
     ok: esiti.every((e) => e.ok),
     clienti: esiti.length,
-    letti: esiti.reduce((a, e) => a + e.letti, 0),
-    esiti: esiti.map((e) => ({ tenantId: e.tenantId, ok: e.ok, letti: e.letti, messaggio: e.messaggio })),
+    letti: esiti.reduce((a, e) => a + e.nuovi, 0),
+    esiti: esiti.map((e) => ({ tenantId: e.tenantId, ok: e.ok, nuovi: e.nuovi, messaggio: e.messaggio })),
   });
 }
 
