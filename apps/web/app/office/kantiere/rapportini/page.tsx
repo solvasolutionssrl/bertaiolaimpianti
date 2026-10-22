@@ -624,6 +624,20 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       alGiorno: to,
       dipendenteId: dipendenteFilter || undefined,
     });
+    // Chi ha timbrato ma non ha ancora una giornata non sta in `dipendentiMap`
+    // (costruita dai rapportini): il nome si legge a parte, o a schermo
+    // comparirebbe l'id.
+    const senzaNome = [...letta.values()].map((g) => g.dipendenteId).filter((id) => !dipendentiMap.has(id));
+    if (senzaNome.length > 0) {
+      const { data } = (await supabase
+        .from('dipendenti' as never)
+        .select('id, nome, cognome, user_id')
+        .in('id', [...new Set(senzaNome)])) as { data: (DipendenteRow & { user_id: string | null })[] | null };
+      for (const d of data ?? []) {
+        dipendentiMap.set(d.id, `${d.nome} ${d.cognome}`.trim());
+        utenteDelDipendente.set(d.id, d.user_id);
+      }
+    }
     for (const g of letta.values()) {
       timbroGiornate.push(
         vistaDaGiornata(g, dipendentiMap.get(g.dipendenteId) ?? g.dipendenteId, nomeCantiere),
