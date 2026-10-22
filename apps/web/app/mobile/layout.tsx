@@ -24,6 +24,7 @@ import {
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
+import { SincronizzaPush } from './_components/sincronizza-push';
 import NuovaVersione from './_components/nuova-versione';
 import { AttivaNotificheBanner } from './_components/attiva-notifiche-banner';
 import { AppleSplashLinks } from '../_components/apple-splash-links';
@@ -139,6 +140,7 @@ export default async function MobileLayout({
       {/* <link apple-touch-startup-image> → issati nell'<head> da Next */}
       <AppleSplashLinks />
       <SwRegistrar />
+      <SincronizzaPush />
       <NuovaVersione />
 
       {/* Scrim status bar: con status-bar iOS 'black-translucent' il contenuto va

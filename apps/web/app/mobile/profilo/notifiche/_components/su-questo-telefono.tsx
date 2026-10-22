@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Bell, BellOff, BellRing, Loader2 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
+import { sincronizzaSottoscrizionePush } from '@/app/mobile/_lib/push-sync';
 
 const VAPID_PUBBLICA = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
@@ -69,10 +70,19 @@ export function SuQuestoTelefono() {
       setStato('negato');
       return;
     }
-    navigator.serviceWorker.ready
-      .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setStato(sub ? 'acceso' : 'spento'))
-      .catch(() => setStato('guasto'));
+    // «Attive» vuol dire attive PER ME: la sottoscrizione del browser si
+    // rimanda al server, che la assegna a chi e' dentro adesso. Prima si
+    // leggeva solo il browser, e dopo un cambio di utente sullo stesso
+    // telefono la pagina diceva attive mentre gli avvisi andavano a un altro.
+    void sincronizzaSottoscrizionePush().then((esito) => {
+      if (esito === 'nessuna') setStato('spento');
+      else if (esito === 'ok') setStato('acceso');
+      else if (esito === 'nonsupportato') setStato('nonsupportato');
+      else {
+        setStato('guasto');
+        setNota('La sottoscrizione c’è ma il server non l’ha accettata: tocca «Spegni» e poi riattiva.');
+      }
+    });
   }, []);
 
   async function accendi() {

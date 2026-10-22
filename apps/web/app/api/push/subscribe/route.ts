@@ -3,8 +3,13 @@
  * Body: { endpoint, keys: { p256dh, auth }, userAgent? }
  *
  * Upsert della subscription per l'utente loggato (RLS gestisce isolamento).
- * Idempotente: la `endpoint` ha unique constraint, riusiamo la riga
- * esistente aggiornando user_id (es. se due utenti condividono il device).
+ * ⭐ Un telefono appartiene a chi ci e' dentro ADESSO: l'unique e' su
+ * (user_id, endpoint), quindi lo stesso telefono poteva restare registrato a
+ * due persone — chi lo usava prima continuava a ricevere gli avvisi di chi
+ * lo usa dopo (misurato il 22/10: l'iPhone di prova era ancora del super
+ * admin dopo il login di una persona dell'ufficio). Prima di registrare, lo
+ * stesso endpoint si toglie agli altri utenti, con la service role perche'
+ * la RLS fa vedere a ciascuno solo le proprie righe.
  *
  * DELETE /api/push/subscribe?endpoint=...
  * Cancella la subscription (chiamato dal client su unsubscribe).
@@ -13,6 +18,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
+import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
 
 export const runtime = 'nodejs';
@@ -39,6 +45,13 @@ export async function POST(req: Request) {
       );
     }
     const { endpoint, keys, userAgent } = parsed.data;
+
+    // Lo stesso telefono, se era di un altro utente, ora e' di questo.
+    await createServiceSupabase()
+      .from('push_subscriptions' as never)
+      .delete()
+      .eq('endpoint', endpoint)
+      .neq('user_id', ctx.userId);
 
     const supabase = createServerSupabase();
     const { error } = await supabase.from('push_subscriptions').upsert(
