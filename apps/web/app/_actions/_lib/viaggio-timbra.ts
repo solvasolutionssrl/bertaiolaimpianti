@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { createServerSupabase } from '@kommessa/api/server';
 import { SOGLIA_PAUSA_PRANZO_ORE, statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
+import { scriviTimbrature } from './timbrature-scrivi';
 
 /**
  * Helper condivisi per timbrature di VIAGGIO e PAUSA dichiarata, riusati da
@@ -89,19 +90,19 @@ export async function inserisciPausaDichiarata(
     commessa_id: opts.commessaId,
     cantiere_id: opts.cantiereId,
     pausa: true,
-    origine: 'manuale',
-    modalita: 'pausa_dichiarata',
+    origine: 'manuale' as const,
+    modalita: 'pausa_dichiarata' as const,
     creato_da: opts.creatoDa,
   };
   // Se la coppia non entra, chi chiama si ferma prima dell'uscita di fine: senza
   // pausa le ore risulterebbero più alte e la giornata potrebbe approvarsi da sola.
-  const { error } = await supabase.from('timbrature' as never).insert([
+  const scritte = await scriviTimbrature(supabase, [
     { ...base, tipo: 'uscita', ts: uscitaIso },
     { ...base, tipo: 'ingresso', ts: ingressoIso },
-  ] as never);
-  if (error) {
-    console.error('[viaggio-timbra] pausa dichiarata non registrata:', error.message);
-    return { ok: false, error: error.message };
+  ]);
+  if (!scritte.ok) {
+    console.error('[viaggio-timbra] pausa dichiarata non registrata:', scritte.error);
+    return { ok: false, error: scritte.error };
   }
   return { ok: true };
 }
@@ -158,7 +159,7 @@ export async function chiudiPausaScadutaSePresente(
     .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts))
     .pop();
 
-  const { error } = await supabase.from('timbrature' as never).insert({
+  const scritta = await scriviTimbrature(supabase, [{
     tenant_id: opts.tenantId,
     dipendente_id: opts.dipendenteId,
     commessa_id: start?.commessa_id ?? null,
@@ -170,9 +171,8 @@ export async function chiudiPausaScadutaSePresente(
     auto_chiusa: true,
     creato_da: null,
     ts: new Date(scadenzaMs).toISOString(),
-  } as never);
-  if (error) return false;
-  return true;
+  }]);
+  return scritta.ok;
 }
 
 /**

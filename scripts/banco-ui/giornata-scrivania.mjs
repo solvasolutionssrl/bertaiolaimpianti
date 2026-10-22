@@ -16,7 +16,8 @@ const testoPillola = async (cdp) => valuta(cdp, `(${PILLOLA})?.innerText.replace
 const apriMenu = async (cdp) => { await clicVero(cdp, PILLOLA); await finoA(cdp, `document.querySelector('[role=menu]')`, { cosa: 'menu' }); };
 const bottone = (re) => `[...document.querySelectorAll('[role=menu] button, [role=dialog] button')].find((b) => new RegExp(${JSON.stringify(re)}).test(b.textContent.trim()))`;
 const sceltaCantiere = async (cdp, nome) => {
-  await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button')].find((b) => /Cantiere…/.test(b.textContent))`);
+  // In sede il cantiere e' facoltativo: la tendina dice «Nessuno: lo dici a fine giornata».
+  await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button')].find((b) => /Cantiere…|Nessuno: lo dici/.test(b.textContent))`);
   await pausa(500);
   await clicVero(cdp, `[...document.querySelectorAll('[role=option], [data-popover-portale] button')].find((b) => new RegExp(${JSON.stringify(nome)}).test(b.textContent))`);
   await pausa(400);
@@ -81,10 +82,12 @@ try {
   await sceltaCantiere(cdp, 'Logistica');
   await valuta(cdp, `(() => { const inp = [...document.querySelectorAll('[role=dialog] input[aria-label="Minuti"]')].pop(); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(inp, '480'); inp.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
   await pausa(2500);
-  const k = await valuta(cdp, `(() => { const d = [...document.querySelectorAll('[role=dialog]')].find((x) => /Compila la giornata di/.test(x.textContent)); const t = d.innerText; return { fine: /Fine · calcolata/.test(t), anteprima: /Logistica/.test(t) && /Partenza/.test(t), inCantiere: d.querySelector('[role=radio][aria-checked="true"]')?.textContent.trim() }; })()`);
+  const k = await valuta(cdp, `(() => { const d = [...document.querySelectorAll('[role=dialog]')].find((x) => /Compila la giornata di/.test(x.textContent)); const t = d.innerText; return { fine: /Fine · calcolata/.test(t), anteprima: /Logistica/.test(t) && /Partenza/.test(t), inCantiere: d.querySelector('[role=radiogroup][aria-label="Dove"] [role=radio][aria-checked="true"]')?.textContent.trim() }; })()`);
   esito(k.inCantiere === 'In cantiere', 'compila altro: «In cantiere» per default (Fabbri è esterno)', k.inCantiere ?? '');
   esito(k.anteprima, 'compila altro: anteprima con cantiere e partenza');
   await foto(cdp, 'scrivania-03-compila');
+  // Le stime di strada arrivano in un paio di secondi: un dito vero non e' cosi' veloce.
+  await pausa(4000);
   await clicVero(cdp, bottone('^Salva la giornata$'));
   const chiuso = await finoA(cdp, `![...document.querySelectorAll('[role=dialog]')].some((x) => /Compila la giornata di/.test(x.textContent))`, { cosa: 'salvato', timeoutMs: 30000 }).then(() => true).catch(() => false);
   esito(chiuso, 'compila altro: salvato e dialog chiuso');

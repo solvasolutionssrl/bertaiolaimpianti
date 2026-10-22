@@ -29,7 +29,7 @@ import {
   useTotaleGiornata,
 } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
-import { TimbriTerminale } from '../../_components/timbri-terminale';
+import { TimbriTerminale, titoloPassaggi } from '../../_components/timbri-terminale';
 import { CompilaGiornataDialog, type ModoCompila } from '../../_components/compila-giornata-dialog';
 import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
@@ -292,7 +292,7 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
         {riga.timbro ? (
           <div>
             <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Passaggi al terminale
+              {titoloPassaggi(riga.timbro.timbri)}
             </p>
             <TimbriTerminale timbri={riga.timbro.timbri} />
             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -305,8 +305,11 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
           </div>
         ) : null}
         <div>
+          {/* Le timbrature sui cantieri: QR, app, capo o a mano. Ogni riga
+              dice la sua origine (OrigineLine); il registro del badge sta
+              nel blocco sopra, con le sue pillole. */}
           <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Timbrature del giorno
+            Timbrature sui cantieri
           </p>
           <TimbratureRiepilogo timbrature={riga.timbrature} />
         </div>

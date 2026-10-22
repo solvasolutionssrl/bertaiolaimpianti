@@ -10,6 +10,23 @@
 import { apriChrome, vaiA, accedi, esito, riepilogo, foto, clicVero } from './comune.mjs';
 import { valuta, finoA } from '../banco-upload/cdp.mjs';
 
+// ── Semina e pulizia: il banco si prepara i dati da solo (Marco Rinaldi, DEMOC). ──
+import { execSync } from 'node:child_process';
+const DIP = 'c1d00000-0000-4000-8000-000000000001';
+const TENANT = `(select tenant_id from dipendenti where id='${DIP}')`;
+const sql = (q) => execSync(`supabase db query --linked "${q.replace(/"/g, '\\"')}"`, { stdio: 'ignore' });
+const oggiAlle = (hhmm) => `((current_date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
+const badge = (hhmm) => sql(`insert into timbri_grezzi (tenant_id, sorgente, esterno_id, dipendente_id, badge, ts, orologio, tipo, stato, genere, dispositivo) values (${TENANT}, 'timbro', 'banco-'||gen_random_uuid(), '${DIP}', 'BANCO', ${oggiAlle(hhmm)}, 'fisso', null, 'valido', 'badge', 'banco')`);
+const pulisci = () => {
+  sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and (sorgente='app' or badge='BANCO')`);
+  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= ${oggiAlle('00:00')}`);
+  sql(`delete from rapportini where dipendente_id='${DIP}' and data=current_date`);
+};
+pulisci();
+sql(`insert into timbrature (tenant_id, dipendente_id, cantiere_id, commessa_id, tipo, pausa, origine, modalita, ts, creato_da) select ${TENANT}, '${DIP}', 'c0a70000-0000-4000-8000-000000000001', null, 'ingresso', false, 'manuale', 'app', ${oggiAlle('09:00')}, (select user_id from dipendenti where id='${DIP}')`);
+badge('18:00');
+
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── Ufficio: il pannello e il dialog da scrivania ────────────────────────────
@@ -24,10 +41,11 @@ const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
     esito(s.stato, 'ufficio: stato «Turno da chiudere»');
     esito(s.ripartisci, 'ufficio: tasto «Ripartisci»');
     await clicVero(cdp, `[...document.querySelectorAll('button')].find((b) => /^Ripartisci$/.test(b.textContent.trim()))`);
-    await finoA(cdp, `[...document.querySelectorAll('[role="dialog"]')].some((d) => /Ripartisci la giornata timbrata/.test(d.textContent))`, { cosa: 'dialog ufficio' });
-    const d = await valuta(cdp, `(() => { const d = [...document.querySelectorAll('[role="dialog"]')].find((x) => /Ripartisci la giornata timbrata/.test(x.textContent)); const t = d.innerText; return { turnoAperto: /turno aperto/i.test(t), timbrato: /09:00 → 18:00/.test(t), presenza: /Presenza 8:00/.test(t), pillole: d.querySelectorAll('span[title]').length }; })()`);
-    esito(d.turnoAperto, 'dialog ufficio: primo cantiere bloccato («turno aperto»)');
-    esito(d.timbrato, 'dialog ufficio: timbrato 09:00 → 18:00 (dall’apertura del turno)');
+    // Dal 22/10 il dialog e' «Compila giornata» (modo scatola), con il nome.
+    await finoA(cdp, `[...document.querySelectorAll('[role="dialog"]')].some((d) => /Ripartisci la giornata di Marco Rinaldi/.test(d.textContent))`, { cosa: 'dialog ufficio' });
+    const d = await valuta(cdp, `(() => { const d = [...document.querySelectorAll('[role="dialog"]')].find((x) => /Ripartisci la giornata di Marco Rinaldi/.test(x.textContent)); const t = d.innerText; return { turnoAperto: /turno dall.app 09:00/i.test(t), timbrato: /badge in sede 18:00/.test(t), presenza: /8:00/.test(t), pillole: d.querySelectorAll('span[title]').length }; })()`);
+    esito(d.turnoAperto, 'dialog ufficio: parte dal turno dell’app delle 09:00');
+    esito(d.timbrato, 'dialog ufficio: chiuso dal badge in sede alle 18:00');
     esito(d.presenza, 'dialog ufficio: presenza 8:00');
     await foto(cdp, 'timbro-chiudere-01-ufficio');
     await clicVero(cdp, `[...document.querySelectorAll('[role="dialog"] button')].find((b) => /^Annulla$/.test(b.textContent.trim()))`);
@@ -82,4 +100,5 @@ const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
     await chiudi();
   }
 }
+pulisci();
 process.exit(riepilogo() === 0 ? 0 : 1);

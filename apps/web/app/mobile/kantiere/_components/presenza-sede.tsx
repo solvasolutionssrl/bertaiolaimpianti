@@ -17,9 +17,9 @@ import { segnaPresenzaInSede } from '@/app/_actions/kantiere-timbra';
  *
  * Due pezzi: il tasto che fa partire la presenza (sta in fondo ai due fogli
  * di avvio, sotto la scelta del cantiere) e la card della presenza in corso
- * (pausa, ripresa, fine). ⚠️ La card agisce solo su una presenza segnata
- * dall'app o dal PC: una presenza aperta con il badge si chiude al terminale,
- * o il registro si ritrova un'uscita in piu' quando la persona passa il badge.
+ * (pausa, ripresa, fine). ⭐ Vale anche per una presenza aperta col BADGE:
+ * si apre con una bocca e si chiude con un'altra. Chi poi passa lo stesso il
+ * badge in uscita fa un secondo gesto, che il registro mostra all'ufficio.
  */
 
 export function messaggioPresenza(code: string): string {
@@ -111,11 +111,13 @@ export function PresenzaSedeCard({ presenza }: { presenza: PresenzaSedeVista }) 
       {presenza.aperta ? (
         <>
           <p className="mt-1 text-lg font-semibold text-sky-900">Dentro dalle {inizio}</p>
-          {presenza.dalTerminale ? (
-            <p className="mt-1 text-xs text-sky-900/80">La giornata si chiude al terminale, con il badge.</p>
-          ) : (
+          {
             <>
-              <p className="mt-1 text-xs text-sky-900/80">Senza cantiere: le ore le assegni alla fine, quando chiudi.</p>
+              <p className="mt-1 text-xs text-sky-900/80">
+                {presenza.dalTerminale
+                  ? 'Col badge. Puoi chiudere da qui o al terminale; le ore le assegni alla fine.'
+                  : 'Senza cantiere: le ore le assegni alla fine, quando chiudi.'}
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -135,7 +137,7 @@ export function PresenzaSedeCard({ presenza }: { presenza: PresenzaSedeVista }) 
                 </button>
               </div>
             </>
-          )}
+          }
         </>
       ) : (
         <>
@@ -144,19 +146,17 @@ export function PresenzaSedeCard({ presenza }: { presenza: PresenzaSedeVista }) 
           </p>
           <p className="mt-1 text-xs text-sky-900/80">{hm(presenza.nettoMin)} di presenza: dì su quali commesse hai lavorato.</p>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {!presenza.dalTerminale ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => azione('ripresa')}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-sky-300 bg-white px-3 py-3 text-sm font-semibold text-sky-900 active:scale-[0.99] disabled:opacity-50"
-              >
-                <Play className="h-4 w-4" aria-hidden="true" /> Riprendi
-              </button>
-            ) : null}
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => azione('ripresa')}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-sky-300 bg-white px-3 py-3 text-sm font-semibold text-sky-900 active:scale-[0.99] disabled:opacity-50"
+            >
+              <Play className="h-4 w-4" aria-hidden="true" /> Riprendi
+            </button>
             <Link
               href="/mobile/kantiere/ore"
-              className={`flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white active:scale-[0.99] ${presenza.dalTerminale ? 'col-span-2' : ''}`}
+              className="flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-3 py-3 text-sm font-semibold text-white active:scale-[0.99]"
             >
               <CalendarClock className="h-4 w-4" aria-hidden="true" /> Inserisci le commesse
             </Link>

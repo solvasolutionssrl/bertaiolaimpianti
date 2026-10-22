@@ -105,13 +105,84 @@ describe('statoGiornataTimbro', () => {
     expect(g.stato).toBe('coperta');
   });
 
-  it('ore attribuite che lasciano scoperta la presenza: da verificare, con i minuti', () => {
+  it('⭐ badge in sede, turno in cantiere, chiusura dall’app: cio’ che resta fuori dal turno e’ una scatola', () => {
+    // Badge alle 8, in cantiere dalle 10 alle 17 (col pranzo timbrato dentro),
+    // chiusa dall'app alle 18 (specchiata nel registro): restano 8→10 e 17→18.
+    const g = statoGiornataTimbro({
+      eventi: [tocco('a', T(8)), { id: 'fine', ms: T(18), tipo: 'uscita', orologio: 'telefono' }],
+      timbrature: [
+        timb('x', 'ingresso', T(10)),
+        timb('p1', 'uscita', T(12), 'A', true),
+        timb('p2', 'ingresso', T(13), 'A', true),
+        timb('y', 'uscita', T(17)),
+      ],
+    });
+    expect(g.stato).toBe('da_ripartire');
+    expect(g.scatola?.intervalli).toEqual([
+      { inizioMs: T(8), fineMs: T(10) },
+      { inizioMs: T(17), fineMs: T(18) },
+    ]);
+    expect(g.scatola?.nettoMin).toBe(180);
+    expect(g.scatola?.ingressoEsistente).toBeNull();
+  });
+
+  it('⭐ turno dall’app chiuso dal badge, poi ripartito: il badge resta un’uscita e la giornata e’ coperta', () => {
+    // Il registro ha SOLO il badge delle 18. Dopo la ripartizione il turno e'
+    // chiuso (9→17:40, strada di rientro 20 min): senza innesto il badge
+    // sarebbe un ingresso e la giornata «manca l'uscita».
+    const g = statoGiornataTimbro({
+      eventi: [tocco('b', T(18))],
+      timbrature: [timb('x', 'ingresso', T(9)), timb('y', 'uscita', T(17, 40))],
+      viaggioMin: 20,
+    });
+    expect(g.stato).toBe('coperta');
+    expect(g.presenza?.aperta).toBe(false);
+  });
+
+  it('due turni dall’app con un badge di uscita in mezzo: si innesta anche il secondo', () => {
+    const g = statoGiornataTimbro({
+      eventi: [tocco('out', T(12))],
+      timbrature: [
+        timb('a', 'ingresso', T(8)),
+        timb('b', 'uscita', T(11, 50)),
+        timb('c', 'ingresso', T(13)),
+      ],
+    });
+    // 8 in (innesto), 12 badge → uscita, 13 in (innesto): presenza aperta, turno aperto.
+    expect(g.stato).toBe('presenza_aperta');
+    expect(g.presenza?.intervalli).toEqual([{ inizioMs: T(8), fineMs: T(12) }]);
+  });
+
+  it('un turno chiuso dall’app e poi una presenza dichiarata: niente innesto, la presenza e’ aperta', () => {
+    const g = statoGiornataTimbro({
+      eventi: [{ id: 'p', ms: T(14, 37), tipo: 'ingresso', orologio: 'telefono' }],
+      timbrature: [timb('a', 'ingresso', T(14, 35)), timb('b', 'uscita', T(14, 36))],
+    });
+    expect(g.stato).toBe('presenza_aperta');
+    expect(g.presenza?.incoerente).toBe(false);
+  });
+
+  it('le pause e le strade fra i cantieri stanno dentro il turno: non sono presenza scoperta', () => {
+    const g = statoGiornataTimbro({
+      eventi: [tocco('a', T(8)), tocco('b', T(17))],
+      timbrature: [
+        timb('x', 'ingresso', T(8)),
+        timb('x2', 'uscita', T(12), 'A'),
+        timb('y', 'ingresso', T(12, 40), 'B'),
+        timb('y2', 'uscita', T(17), 'B'),
+      ],
+    });
+    expect(g.stato).toBe('coperta');
+  });
+
+  it('ore attribuite che lasciano scoperta la coda della presenza: da ripartire, non da verificare', () => {
     const g = statoGiornataTimbro({
       eventi: [tocco('a', T(8)), tocco('b', T(18))],
       timbrature: [timb('x', 'ingresso', T(8)), timb('y', 'uscita', T(15))],
     });
-    expect(g.stato).toBe('da_verificare');
-    expect(g.motivo).toContain('180 minuti');
+    expect(g.stato).toBe('da_ripartire');
+    expect(g.scatola?.intervalli).toEqual([{ inizioMs: T(15), fineMs: T(18) }]);
+    expect(g.scatola?.nettoMin).toBe(180);
   });
 
   it('una direzione dichiarata che contraddice la sequenza va all’ufficio', () => {

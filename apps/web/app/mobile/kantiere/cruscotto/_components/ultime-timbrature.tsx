@@ -8,6 +8,8 @@ import {
   type TimbraturaInput,
 } from '@/app/office/kantiere/_components/timbrature-riepilogo';
 import type { ViaggioTratta } from '@/app/office/kantiere/rapportini/_components/rapportini-client';
+import { TimbriTerminale, titoloPassaggi } from '@/app/office/kantiere/_components/timbri-terminale';
+import type { TimbroVisto } from '@/app/_lib/timbro/giornate';
 import type { StatoPresenza } from '../../_lib/presenze-types';
 
 export type PersonaGiorno = {
@@ -18,6 +20,8 @@ export type PersonaGiorno = {
   cantNome: string | null;
   timbrature: TimbraturaInput[];
   viaggi: ViaggioTratta[];
+  /** I passaggi del registro (badge, presenza dall'app o dal PC), se ce ne sono. */
+  timbri?: TimbroVisto[];
 };
 
 function minToColon(min: number): string {
@@ -81,7 +85,7 @@ export function PresenzeGiorno({ persone }: { persone: PersonaGiorno[] }) {
                 <span className="block truncate text-sm font-medium">{p.nome}</span>
                 <span className="block truncate text-[11px] text-muted-foreground">
                   {p.cantNome ? p.cantNome : 'Presenza'} · {p.oreLabel}
-                  {p.stato === 'lavoro' ? ' · in cantiere' : p.stato === 'pausa' ? ' · in pausa' : ''}
+                  {p.stato === 'lavoro' ? (p.cantNome ? ' · in cantiere' : ' · in sede') : p.stato === 'pausa' ? ' · in pausa' : ''}
                 </span>
               </span>
               <ChevronDown
@@ -93,7 +97,22 @@ export function PresenzeGiorno({ persone }: { persone: PersonaGiorno[] }) {
             </button>
             {isOpen ? (
               <div className="space-y-3 px-4 pb-3">
-                <TimbratureRiepilogo timbrature={p.timbrature} />
+                {p.timbri && p.timbri.length > 0 ? (
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {titoloPassaggi(p.timbri)}
+                    </p>
+                    <TimbriTerminale timbri={p.timbri} />
+                  </div>
+                ) : null}
+                {p.timbrature.length > 0 ? (
+                  <div>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Timbrature sui cantieri
+                    </p>
+                    <TimbratureRiepilogo timbrature={p.timbrature} />
+                  </div>
+                ) : null}
 
                 {p.viaggi.length > 0 ? (
                   <div>

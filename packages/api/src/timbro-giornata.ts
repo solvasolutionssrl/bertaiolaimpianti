@@ -200,14 +200,26 @@ export function statoGiornataTimbro(input: {
   // il tocco dopo diventa l'uscita. Se invece un tocco aveva gia' aperto la
   // presenza (badge in sede, poi avvio turno in cantiere), non si aggiunge
   // niente: non e' una contraddizione, e' un'attribuzione.
-  let eventiPresenza: readonly EventoTimbro[] = input.eventi;
-  if (turnoAperto) {
-    const prima = presenzaDaEventi(input.eventi.filter((e) => e.ms < turnoAperto.ms));
+  // ⭐ Vale per OGNI ingresso di turno (non di pausa), aperto o chiuso: una
+  // giornata «app alle 9, badge alle 18» resta la stessa giornata anche dopo
+  // che le ore sono state ripartite, e il badge delle 18 deve restare
+  // un'uscita. Si procede in ordine, e ogni innesto conta per i successivi:
+  // con un turno 8→12 e uno 13→aperto si innesta solo l'8 (alle 13 la
+  // presenza e' gia' dentro), a meno che fra i due ci sia stato un badge di
+  // uscita.
+  // ⚠️ Un turno CHIUSO si innesta solo se dopo di lui c'e' un tocco SENZA
+  // direzione da leggere (il badge): e' a quello che l'innesto serve. Un
+  // turno chiuso dall'app e poi una presenza dichiarata dall'app non hanno
+  // bisogno di niente, e innestarlo farebbe due ingressi dichiarati di fila.
+  const eventiPresenza: EventoTimbro[] = [...input.eventi];
+  for (const t of ordinate) {
+    if (t.tipo !== 'ingresso' || t.pausa) continue;
+    const aperto = turnoAperto !== null && t.id === turnoAperto.id;
+    const toccoDopo = input.eventi.some((e) => e.tipo === null && e.ms > t.ms);
+    if (!aperto && !toccoDopo) continue;
+    const prima = presenzaDaEventi(eventiPresenza.filter((e) => e.ms < t.ms));
     if (!prima.aperta) {
-      eventiPresenza = [
-        ...input.eventi,
-        { id: `app:${turnoAperto.id}`, ms: turnoAperto.ms, tipo: 'ingresso', orologio: 'telefono' },
-      ];
+      eventiPresenza.push({ id: `app:${t.id}`, ms: t.ms, tipo: 'ingresso', orologio: 'telefono' });
     }
   }
   const presenza = presenzaDaEventi(eventiPresenza);
@@ -277,18 +289,54 @@ export function statoGiornataTimbro(input: {
     });
   }
 
-  // Tutto chiuso dall'app. Se la presenza e' ancora aperta, manca il timbro di uscita.
+  // Tutto chiuso dall'app, e la presenza e' ancora aperta. Due casi: la
+  // presenza che CONTENEVA il turno non si e' chiusa (manca il badge di
+  // uscita: da verificare), oppure dopo il turno e' cominciata una presenza
+  // NUOVA (in sede, senza cantiere): quella e' solo aperta, si aspetta.
   if (presenza.aperta) {
+    const ultimaUscitaMs = [...ordinate].reverse().find((t) => t.tipo === 'uscita' && !t.pausa)?.ms ?? null;
+    const apertaDaMs = [...presenza.timbri].reverse().find((t) => t.tipo === 'ingresso')?.ms ?? null;
+    if (ultimaUscitaMs !== null && apertaDaMs !== null && apertaDaMs > ultimaUscitaMs) {
+      return con('presenza_aperta', null);
+    }
     return con('da_verificare', null, 'Le ore sono attribuite ma manca il timbro di uscita dal terminale.');
   }
-  // «Coperta» vuol dire: della presenza timbrata non resta niente da dire.
+  // ⭐ Si apre con una bocca e si chiude con un'altra: badge in sede la
+  // mattina, QR in cantiere, chiusura dall'app. Il turno copre la presenza
+  // dal suo primo ingresso alla sua ultima uscita vera, pause e strade fra i
+  // cantieri comprese (stanno DENTRO la giornata di lavoro). Cio' che della
+  // presenza resta FUORI da quell'arco — prima di partire, dopo essere
+  // tornati — e' una scatola da riempire, non un'anomalia.
   // Ore attribuite OLTRE la presenza non sono una scatola mezza vuota: sono
   // una stima di strada piu' lunga del buco vero, o un turno dell'app partito
   // prima del badge. Le giudica la soglia di verifica delle giornate, non qui.
-  const coperto = attribuitoMin + Math.max(0, Math.round(input.viaggioMin ?? 0));
-  const scarto = presenza.minutiNetti - coperto;
+  const arcoInizio = ordinate.find((t) => t.tipo === 'ingresso')?.ms ?? null;
+  const arcoFine = [...ordinate].reverse().find((t) => t.tipo === 'uscita' && !t.pausa)?.ms ?? null;
+  const scoperti: Intervallo[] = [];
+  for (const i of presenza.intervalli) {
+    if (arcoInizio === null || arcoFine === null) {
+      scoperti.push(i);
+      continue;
+    }
+    if (i.inizioMs < arcoInizio) scoperti.push({ inizioMs: i.inizioMs, fineMs: Math.min(i.fineMs, arcoInizio) });
+    if (i.fineMs > arcoFine) scoperti.push({ inizioMs: Math.max(i.inizioMs, arcoFine), fineMs: i.fineMs });
+  }
+  const scopertoMin = scoperti.reduce((a, i) => a + minuti(i.fineMs - i.inizioMs), 0);
+  // La strada agli estremi (andata dalla sede, ritorno) sta in quel buco: e'
+  // gia' registrata come viaggio, non va chiesta di nuovo.
+  const scarto = scopertoMin - Math.max(0, Math.round(input.viaggioMin ?? 0));
   if (scarto <= toll) return con('coperta', null);
-  return con('da_verificare', null, `Restano ${scarto} minuti di presenza non attribuiti a nessun cantiere.`);
+  return con('da_ripartire', {
+    intervalli: scoperti,
+    inizioMs: scoperti[0]!.inizioMs,
+    fineMs: scoperti[scoperti.length - 1]!.fineMs,
+    nettoMin: scopertoMin,
+    // I buchi fra i pezzi scoperti sono il turno, non una pausa.
+    pausaTimbrataMin: 0,
+    ingressoEsistente: null,
+    inizioFisico: true,
+    fineFisica: true,
+  });
 }
 
 // ── Riempire la scatola ─────────────────────────────────────────────────────

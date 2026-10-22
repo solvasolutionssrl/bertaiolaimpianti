@@ -277,7 +277,7 @@ export function OreClient({
           <p className="text-xs leading-relaxed text-sky-900">
             {(() => {
               const g = timbroDaFare ?? timbroOggi!;
-              if (g.stato === 'presenza_aperta') return g.dalTerminale ? 'Sei dentro: la giornata si chiude al terminale.' : 'Sei in sede: la giornata si chiude dalla home.';
+              if (g.stato === 'presenza_aperta') return g.dalTerminale ? 'Sei dentro col badge: chiudi al terminale o dalla home.' : 'Sei in sede: la giornata si chiude dalla home.';
               if (g.stato === 'coperta') return 'Le ore di questa giornata sono già sui cantieri.';
               if (g.stato === 'da_verificare') return `Qualcosa non torna, lo guarda l’ufficio. ${g.motivo ?? ''}`.trim();
               return `${fmtHMmin(g.nettoMin)} di presenza${g.pausaTimbrataMin > 0 ? ` (pausa ${fmtHMmin(g.pausaTimbrataMin)} timbrata)` : ''}: dì su quali commesse hai lavorato.`;

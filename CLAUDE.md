@@ -1443,6 +1443,66 @@ quello che il telefono fa in «Registra giornata» e nella scatola timbrata.
   ripresa, chiusura con anteprima, compila per un altro). Vuole una scheda
   dipendente in modalita' ufficio sull'account ufficio di DEMOC.
 
+### Tre bocche, uno scrittore: badge, QR e app si mischiano (22/10/2026 pomeriggio) — nessuna migration
+
+Richiesta di Luca: chiunque apre la giornata con un metodo (badge al terminale,
+QR in cantiere, app) e la chiude con un altro. E un'indicazione di metodo:
+«una sola tipologia di scrittura, triggerata da n metodi».
+
+- ⭐⭐ **`timbrature` ha UNO scrittore**: `_actions/_lib/timbrature-scrivi.ts`
+  (`scriviTimbrature`). Prima erano **quattordici `insert`** sparsi (QR, app,
+  capo, ufficio, divisione di fine turno, pausa dichiarata, chiusura
+  automatica, scatola, cambio cantiere): ogni regola nuova andava ricordata
+  in quattordici posti. Lo scrittore inserisce, restituisce gli id, e **se fra
+  le righe c'e' una fine turno** (uscita non di pausa) chiama
+  `specchiaChiusuraNelRegistro` (`_lib/presenza-registro.ts`): se la presenza
+  della persona e' aperta nel registro (badge o presenza dall'app), scrive
+  l'uscita anche li', alla stessa ora, con `dispositivo` e `origine`. ⚠️ Il
+  ricalcolo della giornata **non** sta nello scrittore: chi scrive sa quando
+  ricalcolare. ⚠️ Nuovi punti che scrivono timbrature passano di qui, o
+  l'invariante si perde di nuovo.
+- ⭐ **La lettura della giornata (`statoGiornataTimbro`) sa di piu'**:
+  (1) un turno dell'app si **innesta** nella sequenza del registro quando e'
+  aperto **oppure** quando dopo di lui c'e' un tocco senza direzione (il
+  badge) da leggere — ma non un turno chiuso dall'app seguito da una presenza
+  dichiarata, che farebbe due ingressi di fila; (2) con tutto chiuso, la parte
+  di presenza **fuori dall'arco del turno** (prima di partire, dopo il
+  rientro) e' una **scatola da ripartire**, non «da verificare»: pause e
+  strade fra i cantieri stanno dentro l'arco; (3) una presenza ancora aperta
+  dopo l'ultima uscita e' una presenza **nuova** (in sede), non un badge di
+  uscita mancante. Tutto puro, 27 test.
+- **Le bocche si vedono, ovunque**: `boccaDelTimbro` / `titoloPassaggi` in
+  `timbri-terminale.tsx` (badge → impronta, app → telefono, PC → monitor, a
+  mano → matita; pillola «11:49 in · badge», «14:50 out · app»). In «Presenze
+  e ore» il blocco si intitola dalla bocca («Badge al terminale», «Presenza
+  segnata dall'app») e le timbrature sui cantieri hanno il loro
+  (`OrigineLine`: «Timbrata · QR / app / badge / dal capo squadra», «Inserita
+  a mano»). Il **cruscotto** sul telefono legge anche il registro: chi ha solo
+  passato il badge e' una persona del giorno («Presenza · dalle 12:26 · in
+  sede»).
+- **Dal telefono si chiude anche una presenza aperta col badge**
+  (`PresenzaSedeCard`): «Col badge. Puoi chiudere da qui o al terminale». Chi
+  poi passa lo stesso il badge fa un secondo gesto che il registro mostra
+  all'ufficio.
+- ⭐ **L'app installata parte da `/avvio`** (`manifest.start_url`): un
+  puntatore «coarse» e' un telefono → `/mobile`, altrimenti → `/office`
+  (`app/avvio/page.tsx`, pubblica nel middleware). Chiude il caso dell'utente
+  ufficio FPM che si era installato la PWA sul PC e vedeva il telefono. ⚠️
+  `id` resta `/mobile`: cambiarlo farebbe nascere una seconda app sui
+  telefoni.
+- **Tasti a schermo**: `TastoComando` (packages/ui) dice «⌘K» su Mac e «Ctrl
+  K» altrove; frecce e invio nella palette sono icone Lucide, non glifi
+  (su Windows «⏎» usciva un quadratino).
+- ⚠️ **Il bundle di sviluppo invecchia sull'indice di `@kommessa/ui`**: un
+  export nuovo nel barrel risultava `undefined` nel componente che lo
+  importava («type is invalid») finche' non si e' pulito `.next`. Seconda
+  volta in un giorno.
+- Banchi: `bocche-incrociate.mjs` (badge → app; badge → turno → app, con lo
+  specchio e la scatola residua), `avvio.mjs`, `cruscotto-registro.mjs`,
+  `palette-tasti.mjs` (Chrome che si dichiara Windows). `timbro.mjs` e
+  `timbro-chiudere.mjs` ora **si seminano da soli** (Marco Rinaldi, DEMOC) e
+  si ripuliscono.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

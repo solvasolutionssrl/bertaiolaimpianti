@@ -92,15 +92,17 @@ function OrigineLine({ meta }: { meta?: OrigineMeta }) {
   const o = meta.origine;
   // 'timbro' = giornata delimitata dai timbri del terminale e ripartita dalla
   // persona: e' una timbratura vera, non un inserimento a mano.
-  const manuale = o !== 'qr' && o !== 'cronometro' && o !== 'timbro';
+  const manuale = o !== 'qr' && o !== 'cronometro' && o !== 'timbro' && o !== 'capo';
   const label =
     o === 'qr'
       ? 'Timbrata · QR'
       : o === 'cronometro'
         ? 'Timbrata · app'
-        : o === 'timbro'
-          ? 'Timbrata · terminale'
-          : 'Inserita a mano';
+        : o === 'capo'
+          ? 'Timbrata · dal capo squadra'
+          : o === 'timbro'
+            ? 'Timbrata · badge'
+            : 'Inserita a mano';
   const quando = manuale && meta.createdAt ? fmtDataOra(meta.createdAt) : null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">

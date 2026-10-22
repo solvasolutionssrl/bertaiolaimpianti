@@ -13,7 +13,9 @@ import { NextResponse, type NextRequest } from 'next/server';
  * comunque i cookie al sign-in, e le route protette (`/office/*`, `/mobile/*`,
  * `/portal/*` autenticato) passano sempre dal middleware.
  */
-const PUBLIC_PATHS = new Set<string>(['/', '/login']);
+// `/avvio`: la pagina da cui parte l'app installata, che decide solo telefono o
+// scrivania e rimanda. L'accesso lo chiede la destinazione.
+const PUBLIC_PATHS = new Set<string>(['/', '/login', '/avvio']);
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;

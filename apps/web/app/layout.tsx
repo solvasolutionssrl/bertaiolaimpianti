@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     // contenuto va a tutto schermo SOTTO Dynamic Island / notch. Lo sfondo
     // dell'app prosegue dietro l'isola (niente più barra bianca). L'inset in
     // alto è gestito centralmente nel layout mobile (padding + scrim blu).
-    // La PWA installata apre sempre /mobile (start_url), quindi vale lì.
+    // Sul telefono l'app installata finisce su /mobile (da /avvio), quindi vale lì.
     statusBarStyle: 'black-translucent',
     title: 'Kommessa',
   },

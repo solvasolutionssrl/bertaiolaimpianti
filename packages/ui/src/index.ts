@@ -35,6 +35,7 @@ export {
 export { Skeleton } from './components/skeleton';
 
 export { OfficeShell, DEFAULT_OFFICE_NAV } from './components/app-shell-office';
+export { TastoComando, useModificatoreComando } from './components/tasto-comando';
 export type {
   OfficeShellProps,
   OfficeNavItem,

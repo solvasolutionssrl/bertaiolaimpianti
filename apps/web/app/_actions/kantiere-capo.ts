@@ -16,6 +16,7 @@ import {
   inserisciPausaDichiarata,
   inizioSeEleggibilePausa,
 } from './_lib/viaggio-timbra';
+import { scriviTimbrature } from './_lib/timbrature-scrivi';
 
 /**
  * Azioni "gestione squadra" del caposquadra: timbra per i membri (e per sé)
@@ -145,26 +146,22 @@ async function applicaAzione(
     }
   }
 
-  const { data: inserita, error } = await supabase
-    .from('timbrature' as never)
-    .insert({
-      tenant_id: ctx.tenantId,
-      dipendente_id: dipendenteId,
-      cantiere_id: cantiereId,
-      commessa_id: null,
-      tipo,
-      pausa,
-      origine: self ? 'cronometro' : 'capo',
-      modalita: self ? 'app' : 'capo',
-      ts,
-      creato_da: ctx.userId,
-    } as never)
-    .select('id')
-    .single();
-  if (error) return { toccato: false, error: error.message };
+  const scritta = await scriviTimbrature(supabase, [{
+    tenant_id: ctx.tenantId,
+    dipendente_id: dipendenteId,
+    cantiere_id: cantiereId,
+    commessa_id: null,
+    tipo,
+    pausa,
+    origine: self ? 'cronometro' : 'capo',
+    modalita: self ? 'app' : 'capo',
+    ts,
+    creato_da: ctx.userId,
+  }]);
+  if (!scritta.ok) return { toccato: false, error: scritta.error };
 
   if (viaggio) {
-    const timbraturaId = (inserita as { id: string }).id;
+    const timbraturaId = scritta.righe[0]!.id;
     const res = await inserisciViaggioRow(supabase, {
       tenantId: ctx.tenantId,
       dipendenteId,

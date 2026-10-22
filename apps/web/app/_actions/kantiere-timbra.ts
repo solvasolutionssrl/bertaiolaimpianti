@@ -35,6 +35,7 @@ import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-
 import { caricaTurnoAzioniContesto } from '@/app/mobile/kantiere/_lib/turno-azioni-contesto';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import { leggiGiornataTimbro } from '@/app/_lib/timbro/giornate';
+import { scriviTimbrature } from './_lib/timbrature-scrivi';
 import { riempiScatola } from '@kommessa/api/timbro-giornata';
 import {
   ViaggioSchema,
@@ -301,29 +302,25 @@ export async function timbra(input: unknown): Promise<Result> {
     }
   }
 
-  const { data: inserita, error } = await supabase
-    .from('timbrature' as never)
-    .insert({
-      tenant_id: ctx.tenantId,
-      dipendente_id: bersaglioId,
-      commessa_id: target.tipo === 'commessa' ? target.id : null,
-      cantiere_id: target.tipo === 'cantiere' ? target.id : null,
-      tipo,
-      pausa,
-      origine: self ? 'qr' : 'capo',
-      modalita: self ? 'qr' : 'capo',
-      ts,
-      geo_lat: parsed.data.geo?.lat ?? null,
-      geo_lng: parsed.data.geo?.lng ?? null,
-      creato_da: ctx.userId,
-    } as never)
-    .select('id')
-    .single();
-  if (error) return { ok: false, error: error.message };
+  const scritta = await scriviTimbrature(supabase, [{
+    tenant_id: ctx.tenantId,
+    dipendente_id: bersaglioId,
+    commessa_id: target.tipo === 'commessa' ? target.id : null,
+    cantiere_id: target.tipo === 'cantiere' ? target.id : null,
+    tipo,
+    pausa,
+    origine: self ? 'qr' : 'capo',
+    modalita: self ? 'qr' : 'capo',
+    ts,
+    geo_lat: parsed.data.geo?.lat ?? null,
+    geo_lng: parsed.data.geo?.lng ?? null,
+    creato_da: ctx.userId,
+  }]);
+  if (!scritta.ok) return { ok: false, error: scritta.error };
 
   // Tratta di viaggio collegata (andata = ingresso, ritorno = uscita).
   if (viaggio) {
-    const timbraturaId = (inserita as { id: string }).id;
+    const timbraturaId = scritta.righe[0]!.id;
     const { error: errViaggio } = await supabase.from('timbratura_viaggio' as never).insert({
       tenant_id: ctx.tenantId,
       timbratura_id: timbraturaId,
@@ -383,6 +380,8 @@ const TerminaTurnoSchema = z.object({
     .optional(),
   /** Viaggio di RITORNO (chiusura da app): sede, stima, autista, mezzo, km. */
   viaggio: ViaggioSchema.optional(),
+  /** Da dove si chiude (telefono se assente): finisce nel registro se la presenza era aperta col badge. */
+  dispositivo: z.enum(['pc', 'telefono']).optional(),
   /**
    * Split "cosa hai fatto oggi": ore per cantiere (somma = netto). Presente
    * solo se il tecnico DIVIDE la giornata tra più cantieri alla chiusura. Il
@@ -457,6 +456,7 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
       pausaMin: parsed.data.pausaPranzoMin ?? 0,
       split,
       viaggio,
+      dispositivo: parsed.data.dispositivo ?? 'telefono',
     });
   }
 
@@ -480,9 +480,9 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
     }
   }
 
-  const { data: inserita, error } = await supabase
-    .from('timbrature' as never)
-    .insert({
+  const scritta = await scriviTimbrature(
+    supabase,
+    [{
       tenant_id: ctx.tenantId,
       dipendente_id: me.id,
       cantiere_id: parsed.data.cantiereId,
@@ -494,14 +494,14 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
       modalita: 'app',
       ts,
       creato_da: ctx.userId,
-    } as never)
-    .select('id')
-    .single();
-  if (error) return { ok: false, error: error.message };
+    }],
+    { dispositivo: parsed.data.dispositivo ?? 'telefono' },
+  );
+  if (!scritta.ok) return { ok: false, error: scritta.error };
 
   // Tratta di ritorno collegata. Compensazione: se fallisce, annulla l'uscita.
   if (viaggio) {
-    const timbraturaId = (inserita as { id: string }).id;
+    const timbraturaId = scritta.righe[0]!.id;
     const res = await inserisciViaggioRow(supabase, {
       tenantId: ctx.tenantId,
       dipendenteId: me.id,
@@ -540,6 +540,7 @@ async function terminaConSplit(
     pausaMin: number;
     split: { cantiereId: string; minuti: number }[];
     viaggio: ViaggioInput | null;
+    dispositivo: 'pc' | 'telefono';
   },
 ): Promise<Result> {
   // 1. Giornata pulita: un solo evento oggi (l'ingresso aperto). Niente split su
@@ -590,32 +591,27 @@ async function terminaConSplit(
     dipendente_id: dipendenteId,
     sede_lavoro_id: sedeLavoroId,
     commessa_id: null as string | null,
-    origine: 'manuale',
-    modalita: 'divisione_fine_turno',
+    origine: 'manuale' as const,
+    modalita: 'divisione_fine_turno' as const,
     creato_da: userId,
   };
   const eventi = calc.eventi;
   const last = eventi[eventi.length - 1]!;
-  const prima = eventi.slice(0, -1);
-  if (prima.length > 0) {
-    const { error } = await supabase.from('timbrature' as never).insert(
-      prima.map((e) => ({
-        ...base,
-        cantiere_id: e.cantiereId,
-        tipo: e.tipo,
-        pausa: e.pausa,
-        ts: new Date(e.ms).toISOString(),
-      })) as never,
-    );
-    if (error) return { ok: false, error: error.message };
-  }
   const uscitaIso = new Date(last.ms).toISOString();
-  const { data: lastRow, error: eLast } = await supabase
-    .from('timbrature' as never)
-    .insert({ ...base, cantiere_id: last.cantiereId, tipo: 'uscita', pausa: false, ts: uscitaIso } as never)
-    .select('id')
-    .single();
-  if (eLast) return { ok: false, error: eLast.message };
+  // Tutti gli eventi in un lotto solo: l'ultimo e' la fine turno.
+  const scritte = await scriviTimbrature(
+    supabase,
+    eventi.map((e, i) => ({
+      ...base,
+      cantiere_id: e.cantiereId,
+      tipo: i === eventi.length - 1 ? ('uscita' as const) : e.tipo,
+      pausa: i === eventi.length - 1 ? false : e.pausa,
+      ts: new Date(e.ms).toISOString(),
+    })),
+    { dispositivo: opts.dispositivo },
+  );
+  if (!scritte.ok) return { ok: false, error: scritte.error };
+  const lastRow = scritte.righe[scritte.righe.length - 1]!;
 
   // 6. Viaggio di ritorno sull'ultima uscita (best-effort: non annulla lo split).
   if (opts.viaggio) {
@@ -704,7 +700,7 @@ async function cambiaStatoTurnoMio(
     return { ok: true, tipo, pausa, ts: eventi[eventi.length - 1]!.ts };
   }
   const ts = new Date().toISOString();
-  const { error } = await supabase.from('timbrature' as never).insert({
+  const scritta = await scriviTimbrature(supabase, [{
     tenant_id: ctx.tenantId,
     dipendente_id: me.id,
     cantiere_id: parsed.data.cantiereId,
@@ -715,8 +711,8 @@ async function cambiaStatoTurnoMio(
     modalita: 'app',
     ts,
     creato_da: ctx.userId,
-  } as never);
-  if (error) return { ok: false, error: error.message };
+  }]);
+  if (!scritta.ok) return { ok: false, error: scritta.error };
 
   try {
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, romeDay(new Date(ts)));
@@ -1168,24 +1164,20 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
   }
 
   const ts = new Date().toISOString();
-  const { data: inserita, error } = await supabase
-    .from('timbrature' as never)
-    .insert({
-      tenant_id: ctx.tenantId,
-      dipendente_id: me.id,
-      cantiere_id: parsed.data.cantiereId,
-      sede_lavoro_id: sedeLavoroId,
-      commessa_id: null,
-      tipo: 'ingresso',
-      pausa: false,
-      origine: 'manuale',
-      modalita: 'app',
-      ts,
-      creato_da: ctx.userId,
-    } as never)
-    .select('id')
-    .single();
-  if (error) return { ok: false, error: error.message };
+  const scritta = await scriviTimbrature(supabase, [{
+    tenant_id: ctx.tenantId,
+    dipendente_id: me.id,
+    cantiere_id: parsed.data.cantiereId,
+    sede_lavoro_id: sedeLavoroId,
+    commessa_id: null,
+    tipo: 'ingresso',
+    pausa: false,
+    origine: 'manuale',
+    modalita: 'app',
+    ts,
+    creato_da: ctx.userId,
+  }]);
+  if (!scritta.ok) return { ok: false, error: scritta.error };
 
   // Tratta di andata collegata (sede → cantiere). BEST-EFFORT: l'avvio del turno
   // è la priorità e le ore si derivano dalle timbrature (non dal viaggio), quindi
@@ -1196,7 +1188,7 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
       tenantId: ctx.tenantId,
       dipendenteId: me.id,
       cantiereId: parsed.data.cantiereId,
-      timbraturaId: (inserita as { id: string }).id,
+      timbraturaId: scritta.righe[0]!.id,
       ts,
       tipo: 'ingresso',
       viaggio,
@@ -1303,35 +1295,22 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
     return { ok: false, error: 'ORA_NON_VALIDA' };
   }
 
-  // Chiude A.
-  const { error: errUscita } = await supabase.from('timbrature' as never).insert({
+  // Chiude A e apre B nello stesso lotto: un cambio di cantiere non e' una
+  // fine turno (l'ingresso successivo lo dice), quindi il registro non si tocca.
+  const base = {
     tenant_id: ctx.tenantId,
     dipendente_id: me.id,
-    cantiere_id: parsed.data.daCantiereId,
     commessa_id: null,
-    tipo: 'uscita',
     pausa: false,
-    origine: 'manuale',
-    modalita: 'app',
-    ts: uscitaTs,
+    origine: 'manuale' as const,
+    modalita: 'app' as const,
     creato_da: ctx.userId,
-  } as never);
-  if (errUscita) return { ok: false, error: errUscita.message };
-
-  // Apre B. Se fallisce, riapre A (compensazione) togliendo l'uscita.
-  const { error: errIngresso } = await supabase.from('timbrature' as never).insert({
-    tenant_id: ctx.tenantId,
-    dipendente_id: me.id,
-    cantiere_id: parsed.data.aCantiereId,
-    sede_lavoro_id: sedeA,
-    commessa_id: null,
-    tipo: 'ingresso',
-    pausa: false,
-    origine: 'manuale',
-    modalita: 'app',
-    ts: ingressoTs,
-    creato_da: ctx.userId,
-  } as never);
+  };
+  const scritte = await scriviTimbrature(supabase, [
+    { ...base, cantiere_id: parsed.data.daCantiereId, tipo: 'uscita', ts: uscitaTs },
+    { ...base, cantiere_id: parsed.data.aCantiereId, sede_lavoro_id: sedeA, tipo: 'ingresso', ts: ingressoTs },
+  ]);
+  const errIngresso = scritte.ok ? null : { message: scritte.error };
   if (errIngresso) {
     await supabase
       .from('timbrature' as never)
@@ -2036,22 +2015,16 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
     pausa: e.pausa,
     ts: new Date(e.ms).toISOString(),
   }));
-  const { data: inserite, error } = await supabase
-    .from('timbrature' as never)
-    .insert(rows as never)
-    .select('id, tipo, ts, pausa, cantiere_id');
-  if (error) return { ok: false, error: error.message };
+  const scritte = await scriviTimbrature(supabase, rows, { dispositivo: p.modalita === 'ufficio' ? 'pc' : undefined });
+  if (!scritte.ok) return { ok: false, error: scritte.error };
+  const inserite = scritte.righe;
 
   // In ordine di orario; a parità (cambio di cantiere senza pausa) prima l'uscita.
   const eventi = [
     ...(p.ingressoEsistente
       ? [{ id: p.ingressoEsistente.id, tipo: 'ingresso' as const, ts: p.ingressoEsistente.ts, pausa: false, cantiereId: p.ingressoEsistente.cantiereId }]
       : []),
-    ...(
-      (inserite as
-        | { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null }[]
-        | null) ?? []
-    ).map((e) => ({ id: e.id, tipo: e.tipo, ts: e.ts, pausa: !!e.pausa, cantiereId: e.cantiere_id ?? '' })),
+    ...inserite.map((e) => ({ id: e.id, tipo: e.tipo, ts: e.ts, pausa: !!e.pausa, cantiereId: e.cantiere_id ?? '' })),
   ].sort(
     (x, y) =>
       Date.parse(x.ts) - Date.parse(y.ts) || (x.tipo === y.tipo ? 0 : x.tipo === 'uscita' ? -1 : 1),

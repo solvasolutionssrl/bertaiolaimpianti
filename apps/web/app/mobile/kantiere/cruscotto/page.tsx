@@ -30,6 +30,7 @@ import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
 import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
 import { NuovaSpesa } from '../spese/_components/nuova-spesa';
 import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
+import { leggiGiornateTimbro, chiaveGiornata } from '@/app/_lib/timbro/giornate';
 
 /** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
 type Pagina<T> = PromiseLike<EsitoPagina<T>>;
@@ -306,10 +307,45 @@ export default async function CruscottoKantierePage({
     else if (stato === 'pausa') inPausa += 1;
     oreTotMin += appaiaTimbrature(eventi).minutiTotali;
   }
-  const personeGiorno = eventiPerDip.size;
   const cantieriAttivi = new Set(
     timbRows.filter((r) => r.tipo === 'ingresso' && r.cantiere_id).map((r) => r.cantiere_id),
   ).size;
+
+  // Il registro del giorno (badge al terminale, presenza dall'app o dal PC):
+  // chi ha solo passato il badge e' una presenza anche senza timbrature.
+  const registro = await leggiGiornateTimbro(supabase, ctx.tenantId, { dalGiorno: giorno, alGiorno: giorno }).catch(() => new Map());
+  const dipConRegistro = [...registro.values()].map((g) => g.dipendenteId);
+
+  // Una riga per persona che ha timbrato quel giorno, espandibile al dettaglio.
+  const persone: PersonaGiorno[] = [...new Set([...eventiPerDip.keys(), ...dipConRegistro])]
+    .map((dipId) => {
+      const eventi = eventiPerDip.get(dipId) ?? [];
+      const g = registro.get(chiaveGiornata(dipId, giorno));
+      const statoTimbrato = statoDaEventi(eventi);
+      // Senza timbrature sui cantieri lo stato lo dice il registro.
+      const stato = eventi.length > 0 ? statoTimbrato : g?.presenza?.aperta ? 'lavoro' : 'idle';
+      const cantId =
+        [...eventi].reverse().find((e) => e.cantiere_id)?.cantiere_id ?? null;
+      const minuti = eventi.length > 0 ? appaiaTimbrature(eventi).minutiTotali : g?.presenza?.minutiNetti ?? 0;
+      // Solo registro e ancora dentro: le ore non ci sono ancora, l'ora si'.
+      const primoTs = g?.timbri.find((t: { scartato: boolean }) => !t.scartato)?.ts;
+      const soloDentro = eventi.length === 0 && g?.presenza?.aperta && primoTs;
+      return {
+        dipId,
+        nome: dipMap.get(dipId) ?? 'Dipendente',
+        stato,
+        oreLabel: soloDentro
+          ? `dalle ${new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }).format(new Date(primoTs))}`
+          : oreLabelMin(minuti),
+        cantNome: cantId ? cantMap.get(cantId) ?? null : null,
+        timbrature: timbPerDip.get(dipId) ?? [],
+        viaggi: viaggiPerDip.get(dipId) ?? [],
+        timbri: g?.timbri ?? [],
+      };
+    })
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+  // Chi ha solo passato il badge e' una persona del giorno.
+  const personeGiorno = persone.length;
 
   const kpis: {
     label: string;
@@ -338,24 +374,6 @@ export default async function CruscottoKantierePage({
     { label: 'Ore', value: oreLabelMin(oreTotMin), icon: Clock, tone: 'sky', href: '#persone' },
   ];
 
-  // Una riga per persona che ha timbrato quel giorno, espandibile al dettaglio.
-  const persone: PersonaGiorno[] = [...eventiPerDip.keys()]
-    .map((dipId) => {
-      const eventi = eventiPerDip.get(dipId) ?? [];
-      const stato = statoDaEventi(eventi);
-      const cantId =
-        [...eventi].reverse().find((e) => e.cantiere_id)?.cantiere_id ?? null;
-      return {
-        dipId,
-        nome: dipMap.get(dipId) ?? 'Dipendente',
-        stato,
-        oreLabel: oreLabelMin(appaiaTimbrature(eventi).minutiTotali),
-        cantNome: cantId ? cantMap.get(cantId) ?? null : null,
-        timbrature: timbPerDip.get(dipId) ?? [],
-        viaggi: viaggiPerDip.get(dipId) ?? [],
-      };
-    })
-    .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const prevGiorno = addGiorni(giorno, -1);
   const nextGiorno = addGiorni(giorno, 1);
@@ -450,7 +468,7 @@ export default async function CruscottoKantierePage({
         </p>
         <PresenzeGiorno persone={persone} />
         <p className="pt-1 text-[11px] text-muted-foreground">
-          Tocca una persona per vedere timbrature, origine (timbrata / inserita a mano) e viaggio.
+          Tocca una persona per vedere badge e presenze, timbrature sui cantieri con la loro origine (QR, app, a mano) e viaggio.
         </p>
       </section>
 

@@ -19,6 +19,7 @@ import { aggiornaRigheGiornata } from '@/app/_actions/_lib/righe-giornata';
 import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 import { leggiTutto } from '@kommessa/api/pagine';
+import { scriviTimbrature } from '@/app/_actions/_lib/timbrature-scrivi';
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -431,19 +432,23 @@ export async function chiudiGiornata(input: unknown): Promise<Result> {
   // Com'era prima: dopo non c'è più modo di saperlo.
   const primaDellaChiusura = await statoGiornataPerData(supabase, ctx.tenantId, dipendenteId, giorno);
 
-  const inserts = Array.from(aperti.values()).map((a) => ({
-    tenant_id: ctx.tenantId,
-    dipendente_id: dipendenteId,
-    commessa_id: a.commessa_id,
-    cantiere_id: a.cantiere_id,
-    tipo: 'uscita',
-    origine: 'manuale',
-    modalita: 'ufficio',
-    ts: uscitaTs,
-    creato_da: ctx.userId,
-  }));
-  const { error: insErr } = await supabase.from('timbrature' as never).insert(inserts as never);
-  if (insErr) return { ok: false, error: insErr.message };
+  const scritte = await scriviTimbrature(
+    supabase,
+    Array.from(aperti.values()).map((a) => ({
+      tenant_id: ctx.tenantId,
+      dipendente_id: dipendenteId,
+      commessa_id: a.commessa_id,
+      cantiere_id: a.cantiere_id,
+      tipo: 'uscita' as const,
+      pausa: false,
+      origine: 'manuale' as const,
+      modalita: 'ufficio' as const,
+      ts: uscitaTs,
+      creato_da: ctx.userId,
+    })),
+    { dispositivo: 'pc' },
+  );
+  if (!scritte.ok) return { ok: false, error: scritte.error };
 
   // Ricalcola il rapportino (resta automatico se il tecnico non l'ha toccato).
   // Senza versione automatica: la scriviamo noi, con chi e cosa.
@@ -750,15 +755,15 @@ export async function aggiungiPausaGiornata(
     commessa_id: primoIngresso.commessa_id,
     cantiere_id: primoIngresso.cantiere_id,
     pausa: true,
-    origine: 'manuale',
-    modalita: 'ufficio',
+    origine: 'manuale' as const,
+    modalita: 'ufficio' as const,
     creato_da: ctx.userId,
   };
-  const { error: insErr } = await supabase.from('timbrature' as never).insert([
+  const scritte = await scriviTimbrature(supabase, [
     { ...base, tipo: 'uscita', ts: uscitaIso },
     { ...base, tipo: 'ingresso', ts: ingressoIso },
-  ] as never);
-  if (insErr) return { ok: false, error: insErr.message };
+  ]);
+  if (!scritte.ok) return { ok: false, error: scritte.error };
 
   // Ricalcola la giornata: ore lavorate ridotte → eventuale auto-approvazione.
   const rappPausa = await ricomputaRapportinoAuto(supabase, ctx.tenantId, dipendenteId, data, {

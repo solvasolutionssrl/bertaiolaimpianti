@@ -3,13 +3,28 @@
  *
  *   node scripts/banco-ui/timbro.mjs
  *
- * Presuppone quattro timbri finti gia' in `timbri_grezzi` per il tecnico demo
- * di DEMOC (vedi la sessione del 22/10/2026) e il collegamento `attivo`.
- * SCRIVE sul tenant demo: la ripartizione crea timbrature vere. Si ripulisce
- * a mano dopo (il banco stampa cosa ha lasciato).
+ * Semina da solo quattro badge finti per Marco Rinaldi (DEMOC): 08:00, 12:30,
+ * 13:00, 17:03 → presenza 8:33 con la pausa timbrata. SCRIVE sul tenant demo
+ * e si ripulisce alla fine.
  */
 import { apriChrome, vaiA, accedi, esito, riepilogo, foto, clicVero } from './comune.mjs';
 import { valuta, finoA } from '../banco-upload/cdp.mjs';
+
+// ── Semina e pulizia: il banco si prepara i dati da solo (Marco Rinaldi, DEMOC). ──
+import { execSync } from 'node:child_process';
+const DIP = 'c1d00000-0000-4000-8000-000000000001';
+const TENANT = `(select tenant_id from dipendenti where id='${DIP}')`;
+const sql = (q) => execSync(`supabase db query --linked "${q.replace(/"/g, '\\"')}"`, { stdio: 'ignore' });
+const oggiAlle = (hhmm) => `((current_date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
+const badge = (hhmm) => sql(`insert into timbri_grezzi (tenant_id, sorgente, esterno_id, dipendente_id, badge, ts, orologio, tipo, stato, genere, dispositivo) values (${TENANT}, 'timbro', 'banco-'||gen_random_uuid(), '${DIP}', 'BANCO', ${oggiAlle(hhmm)}, 'fisso', null, 'valido', 'badge', 'banco')`);
+const pulisci = () => {
+  sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and (sorgente='app' or badge='BANCO')`);
+  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= ${oggiAlle('00:00')}`);
+  sql(`delete from rapportini where dipendente_id='${DIP}' and data=current_date`);
+};
+pulisci();
+for (const h of ['08:00', '12:30', '13:00', '17:03']) badge(h);
 
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 const AIUTI = `
@@ -48,16 +63,16 @@ try {
     const inizio = d.querySelector('input[type=time]');
     return {
       titolo: /Inserisci le commesse sulle quali hai lavorato oggi/.test(testo),
-      timbrato: /badge in sede 08:27 → 18:00/.test(testo) && /pausa 1:00/.test(testo),
-      inizioFisso: inizio ? inizio.value === '08:27' && inizio.disabled : null,
-      fineTimbrata: /18:00/.test(testo),
+      timbrato: /badge in sede 08:00 → 17:03/.test(testo) && /pausa 0:30/.test(testo),
+      inizioFisso: inizio ? inizio.value === '08:00' && inizio.disabled : null,
+      fineTimbrata: /17:03/.test(testo),
       daRipartire: /8:33/.test(testo),
       tasto: [...d.querySelectorAll('button')].some((b) => /Salva le ore/.test(b.textContent)),
     };
   })()`);
   esito(s2.titolo, 'dialog: titolo nuovo');
-  esito(s2.timbrato, 'dialog: sottotitolo «badge in sede 08:27 → 18:00 · pausa 1:00»');
-  esito(s2.inizioFisso === true, 'dialog: inizio fisso a 08:27, non modificabile');
+  esito(s2.timbrato, 'dialog: sottotitolo «badge in sede 08:00 → 17:03 · pausa 0:30»');
+  esito(s2.inizioFisso === true, 'dialog: inizio fisso a 08:00, non modificabile');
   esito(s2.daRipartire, 'dialog: 8:33 da ripartire');
   esito(s2.tasto, 'dialog: tasto «Salva le ore»');
   await foto(cdp, 'timbro-02-dialog');
@@ -99,12 +114,13 @@ try {
   await pausa(1500);
   await clicVero(cdp, `[...document.querySelectorAll('tr')].find((r) => /Rinaldi/.test(r.textContent) && /In corso oggi|bg-emerald/.test(r.className + r.textContent))`).catch(() => null);
   await pausa(800);
-  const s5 = await valuta(cdp, `(() => { const testo = document.body.innerText; return { passaggi: /Passaggi al terminale/i.test(testo), terminale: /Timbrata · terminale/i.test(testo), pannello: /da sistemare/.test(testo) }; })()`);
-  esito(s5.passaggi, 'ufficio: il dettaglio mostra «Passaggi al terminale»');
-  esito(s5.terminale, 'ufficio: l’origine delle timbrature dice «Timbrata · terminale»');
+  const s5 = await valuta(cdp, `(() => { const testo = document.body.innerText; return { passaggi: /Badge al terminale/i.test(testo), terminale: /Timbrata · badge/i.test(testo), pannello: /da sistemare/.test(testo) }; })()`);
+  esito(s5.passaggi, 'ufficio: il dettaglio mostra «Badge al terminale»');
+  esito(s5.terminale, 'ufficio: l’origine delle timbrature dice «Timbrata · badge»');
   esito(!s5.pannello, 'ufficio: nessuna giornata «da sistemare» (e’ stata ripartita)');
   await foto(cdp, 'timbro-06-ufficio');
 } finally {
   await chiudi();
 }
+pulisci();
 process.exit(riepilogo() === 0 ? 0 : 1);

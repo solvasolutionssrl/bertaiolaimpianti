@@ -4,8 +4,11 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
+  ArrowDown,
+  ArrowUp,
   Briefcase,
   Building2,
+  CornerDownLeft,
   LogOut,
   Plus,
   Search,
@@ -13,7 +16,7 @@ import {
   TicketCheck,
 } from 'lucide-react';
 
-import { cn, type OfficeNavItem } from '@kommessa/ui';
+import { cn, TastoComando, type OfficeNavItem } from '@kommessa/ui';
 import { VOCI_IMPOSTAZIONI } from '../impostazioni/_components/settings-tabs';
 import { createBrowserSupabase } from '@kommessa/api/client';
 import { testoPerFiltroOr } from '@kommessa/api/testo';
@@ -632,12 +635,12 @@ export function CommandPalette({
           <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/40 px-4 py-2 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-3">
               <span className="inline-flex items-center gap-1">
-                <Kbd>↑</Kbd>
-                <Kbd>↓</Kbd>
+                <Kbd><ArrowUp className="h-3 w-3" aria-label="freccia su" /></Kbd>
+                <Kbd><ArrowDown className="h-3 w-3" aria-label="freccia giù" /></Kbd>
                 naviga
               </span>
               <span className="inline-flex items-center gap-1">
-                <Kbd>⏎</Kbd>
+                <Kbd><CornerDownLeft className="h-3 w-3" aria-label="invio" /></Kbd>
                 apri
               </span>
               <span className="inline-flex items-center gap-1">
@@ -646,7 +649,7 @@ export function CommandPalette({
               </span>
             </div>
             <span className="hidden font-mono text-[10px] uppercase tracking-[0.16em] md:inline">
-              Kommessa · ⌘K
+              Kommessa · <TastoComando />
             </span>
           </div>
         </DialogPrimitive.Content>
@@ -725,7 +728,7 @@ function PaletteRow({
           aria-hidden="true"
           className="ml-auto inline-flex items-center gap-1 rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-accent"
         >
-          ⏎
+          <CornerDownLeft className="h-3 w-3" />
         </span>
       ) : null}
     </button>

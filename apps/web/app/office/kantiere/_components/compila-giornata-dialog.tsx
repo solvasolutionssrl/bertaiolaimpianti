@@ -305,6 +305,7 @@ export function CompilaGiornataDialog({
         const ritornoViaggio = percorso.ritorno;
         res = await terminaTurnoMio({
           cantiereId: modo.turno.cantiereId,
+          dispositivo: 'pc',
           ...(pausaMin > 0 ? { pausaPranzoMin: pausaMin } : {}),
           ...(ritornoViaggio ? { viaggio: ritornoViaggio } : {}),
           ...(split.length >= 2 ? { split: split.map((s) => ({ cantiereId: s.cantiereId, minuti: s.minuti })) } : {}),

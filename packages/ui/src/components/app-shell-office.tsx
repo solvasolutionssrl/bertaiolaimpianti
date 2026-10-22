@@ -20,6 +20,7 @@ import {
 
 import { cn } from '../lib/cn';
 import { Button } from './button';
+import { TastoComando } from './tasto-comando';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -566,7 +567,7 @@ function OfficeShell({
               aria-hidden="true"
               className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 select-none items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-foreground md:inline-flex"
             >
-              ⌘K
+              <TastoComando />
             </kbd>
           </div>
 

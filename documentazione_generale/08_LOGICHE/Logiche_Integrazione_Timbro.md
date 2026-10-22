@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.2
+**Versione**: 2.3
 **Stato**: costruita e collaudata sul tenant demo (22/10/2026) · in produzione **spenta** finché il super admin non la accende
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–22/10/2026
@@ -186,6 +186,18 @@ Da qui tre regole: il registro **si legge sempre**, con o senza Timbro (il colle
 **La scrivania**: nell'header dell'ufficio la pillola «La mia giornata» (stato del turno e da dove è partito, pausa, ripresa, chiusura, avvio, registrazione, scatola) e il dialog **«Compila giornata»** (2/3 si compila, 1/3 «come verrà scritta», con gli stessi motori puri del server), in quattro modi: la mia giornata, quella di un altro (`registraGiornataPerDipendente`, `modalita='ufficio'`), la scatola, la chiusura. Banchi: `giornata-scrivania.mjs`, `presenza-sede.mjs`.
 
 **Il telefono** fa lo stesso: i due fogli di avvio («Inizia giornata» di chi lavora in sede, «Inizia turno» di chi sta in cantiere) hanno in fondo **«Inizia senza cantiere»** (`dispositivo='telefono'`), e la card della presenza nella home offre pausa, ripresa, fine e «Inserisci le commesse». ⚠️ La card agisce solo su una presenza segnata dall'app o dal PC: una presenza aperta con il **badge** si chiude al terminale, altrimenti al passaggio successivo il registro troverebbe un'uscita in più e la sequenza riaprirebbe la presenza. Banco: `presenza-sede-mobile.mjs`.
+
+### 7.6 ter Tre bocche che si mischiano, e uno scrittore solo (22/10, pomeriggio)
+
+Chiunque apre la giornata con un metodo e la chiude con un altro: badge la mattina e «Fine giornata» dall'app la sera; badge in sede, QR in cantiere, chiusura dall'app; turno dall'app e badge in uscita. Le regole che lo rendono vero:
+
+1. **`timbrature` ha uno scrittore solo** (`scriviTimbrature`). Quando scrive una fine turno e nel registro la presenza della persona è aperta, scrive l'uscita anche nel registro, alla stessa ora, con scritto da dove viene (`dispositivo`, `origine`). Lo specchio vale per ogni bocca che chiude un turno: app, QR, capo squadra, ufficio, scrivania. Non per le pause, non per gli ingressi.
+2. **La lettura innesta l'avvio dall'app** nella sequenza del registro quando il turno è aperto, oppure quando dopo c'è un badge da leggere (anche a turno già ripartito: il badge delle 18 resta un'uscita). Non innesta un turno chiuso dall'app seguito da una presenza dichiarata: sarebbero due ingressi di fila.
+3. **Ciò che resta fuori dall'arco del turno è una scatola.** Badge alle 8, in cantiere 10→17 col pranzo dentro, chiusura dall'app alle 18: da ripartire restano 8→10 e 17→18. Pause e strade fra i cantieri stanno dentro l'arco e non si chiedono; la strada agli estremi è già viaggio.
+4. **Una presenza aperta dopo l'ultima uscita è una presenza nuova**, non un badge mancante.
+5. **Le bocche si vedono**: impronta per il badge, telefono per l'app, monitor per il PC, matita per le righe messe a mano su Timbro; il titolo del blocco dice la bocca; le timbrature sui cantieri dicono QR, app, badge, capo squadra o a mano.
+
+⚠️ Chi passa il badge in uscita **dopo** aver chiuso dall'app fa un secondo gesto: il registro lo mostra all'ufficio come presenza riaperta. Non si deduplica oltre il minuto: sarebbe indovinare.
 
 ### 7.6 Il promemoria
 

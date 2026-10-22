@@ -20,7 +20,10 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'Kommessa',
     description:
       'Gestione commesse impiantistiche — sopralluogo, foto cantiere, checklist per tecnici e capi. Suite SOLVA.',
-    start_url: '/mobile',
+    // ⭐ Non `/mobile`: l'app installata su un computer deve aprire l'ufficio.
+    // `/avvio` guarda il puntatore e manda al telefono o alla scrivania; `id`
+    // resta `/mobile` per non far nascere una seconda app sui telefoni.
+    start_url: '/avvio',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
