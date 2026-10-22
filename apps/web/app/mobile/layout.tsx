@@ -161,7 +161,10 @@ export default async function MobileLayout({
           // Dynamic Island / notch (0 su browser e Android). Prima era gestito
           // dentro ogni Hero: ora è qui, così anche le pagine senza Hero (Kantiere)
           // non finiscono sotto l'isola.
-          paddingTop: 'env(safe-area-inset-top, 0px)',
+          // `--inset-top` (globals.css): l'inset, con un minimo di 12px dove
+          // vale zero (Android). Lo scrim sopra resta alto quanto l'inset vero:
+          // su Android la barra di stato e' del colore della pagina.
+          paddingTop: 'var(--inset-top)',
           // Safe-area-aware bottom padding per iPhone con home indicator
           // (e Dynamic Island). Garantisce che il contenuto non finisca
           // mai sotto il bottom-nav fisso.

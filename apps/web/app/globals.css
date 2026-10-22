@@ -4,6 +4,11 @@
 
 @layer base {
   :root {
+    /* Spazio sopra il contenuto del telefono: l'isola/notch su iPhone, e un
+       minimo di 12px dove l'inset e' zero (Android, browser), altrimenti il
+       titolo parte attaccato al bordo. Lo usano il guscio mobile e i tasti
+       fissi in alto (campanella, «+ Spesa»). */
+    --inset-top: max(env(safe-area-inset-top, 0px), 0.75rem);
     /* ===== Kommessa — Brand: Bertaiola (Blu + Arancio) =====
      * Dominante: blu profondo industriale (link, primary, sidebar attiva, focus)
      * Accento: arancio caldo (notifiche, highlight, hover lift, status "in corso")

@@ -24,7 +24,7 @@ export function NotificheBell({ unreadCount = 0 }: { unreadCount?: number }) {
         unreadCount > 0 ? `Notifiche, ${unreadCount} non lette` : 'Notifiche'
       }
       className="hide-on-sheet fixed right-3 z-30 inline-flex h-[34px] w-[34px] items-center justify-center rounded-full border border-border bg-background/90 text-foreground shadow-soft backdrop-blur transition-transform before:absolute before:-inset-[5px] before:content-[''] active:scale-95"
-      style={{ top: 'calc(env(safe-area-inset-top) + 6px)' }}
+      style={{ top: 'calc(var(--inset-top) + 6px)' }}
     >
       <Bell className="h-4 w-4" aria-hidden="true" />
       {unreadCount > 0 ? (
