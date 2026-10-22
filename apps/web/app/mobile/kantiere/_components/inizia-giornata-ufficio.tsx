@@ -71,7 +71,7 @@ export function IniziaGiornataUfficio({
       if (res.ok) setCantieri(res.cantieri);
       else setErrore(messaggioErrore(res.error));
     }
-  }, [cantieri]);
+  }, [cantieri, cantierePredefinitoId]);
 
   const selezionato = selectedId ? (cantieri ?? []).find((c) => c.id === selectedId) ?? null : null;
   const nomeSel = selezionato
