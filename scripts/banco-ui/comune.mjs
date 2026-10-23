@@ -141,7 +141,8 @@ export async function accedi(cdp, mondo = 'kommessa', { foglioNotifiche = false 
   // `[role=dialog]` troverebbe lui. Lo si mette via per la sessione, salvo per
   // il banco che lo misura (`foglioNotifiche: true`).
   if (!foglioNotifiche) {
-    await valuta(cdp, `(() => { try { sessionStorage.setItem('kommessa.notifiche.proposto', '1'); } catch {} return true; })()`);
+    // Lo stesso per il foglio «Aggiungi alla Home» (23/10): copriva i dialog nei banchi mobile.
+    await valuta(cdp, `(() => { try { sessionStorage.setItem('kommessa.notifiche.proposto', '1'); localStorage.setItem('pwa.installed', '1'); sessionStorage.setItem('pwa.session-dismissed', '1'); } catch {} return true; })()`);
   }
 }
 
