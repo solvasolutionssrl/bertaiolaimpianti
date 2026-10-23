@@ -24,16 +24,15 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    // ⚠️ Dal 23/10/2026 `default` (barra di stato OPACA, la pagina parte sotto).
-    // iOS 26.1+/27 disegna un effetto vetro sfocato per ~40 punti sotto la
-    // barra di stato dell'app installata, sopra i nostri tasti fissi in alto
-    // (campanella, «+ Spesa»); nessun meta o CSS lo spegne, e NEMMENO la barra
-    // opaca: provato su iOS 27.0.1, la sfocatura resta. La barra opaca serve a
-    // non avere contenuto dietro l'isola; il resto lo fa `--inset-top`
-    // (globals.css), che nell'app installata su iOS aggiunge 2,5rem di
-    // margine cosi' niente sta nella fascia sfocata. Il colore della barra lo
-    // da' `viewport.themeColor` (chiaro/scuro).
-    statusBarStyle: 'default',
+    // black-translucent: la status bar iOS e' un overlay trasparente e il
+    // contenuto va a tutto schermo SOTTO Dynamic Island / notch; l'inset in
+    // alto e' gestito nel layout mobile (padding + fascia blu fissa).
+    // ⚠️⚠️ iOS MEMORIZZA questo valore quando l'app viene aggiunta alla Home:
+    // cambiarlo qui non tocca le app gia' installate (il 23/10 un passaggio a
+    // `default` non e' mai entrato in vigore sul telefono di Luca). Non si
+    // cambia piu'. Per la sfocatura di iOS 26/27 sulla testata vedi
+    // `mobile/_components/anti-sfocatura-ios.tsx`.
+    statusBarStyle: 'black-translucent',
     title: 'Kommessa',
   },
   formatDetection: {

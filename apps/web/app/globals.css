@@ -55,16 +55,54 @@
     --brand-arancio: 22 92% 54%;
   }
   /* ⚠️ iOS 26.1+/27, app installata: il sistema disegna una sfocatura
-     progressiva («Liquid Glass») per ~40 punti SOTTO la barra di stato, sopra
-     qualunque cosa ci stia: nessun meta, CSS o barra opaca la spegne (provato
-     il 23/10/2026 con la barra `default`: la pagina parte sotto la barra e la
-     sfocatura resta). L'unica leva e' non mettere niente in quei 40 punti.
-     `-webkit-touch-callout` esiste solo su iOS: Android installato non paga
-     il margine. */
-  @media (display-mode: standalone) {
-    @supports (-webkit-touch-callout: none) {
-      :root {
-        --inset-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
+     («Liquid Glass») sopra la barra di stato e per ~40 punti sotto, sopra
+     qualunque cosa ci stia. Nessun meta la spegne, e lo stile della barra e'
+     comunque memorizzato all'installazione. WebKit pero' la SALTA quando trova
+     un elemento fisso che tocca il bordo alto (almeno 6px, almeno 80% della
+     larghezza): la striscia di 11px qui sotto, con `background-clip: text`,
+     esiste senza dipingere niente. Su iOS 27 serve in piu' far scorrere una
+     volta un pannello fisso fuori schermo (vedi `anti-sfocatura-ios.tsx`):
+     cambia lo stato di composizione e la sfocatura non torna. Ricetta
+     provata su dispositivo da FreshRSS (#9382) e simple-liturgy (#14),
+     ottobre 2026. `-webkit-touch-callout` esiste solo su iOS. */
+  @supports (-webkit-touch-callout: none) {
+    @media (display-mode: standalone) {
+      .ios-sfocatura-striscia {
+        position: fixed;
+        inset: 0 0 auto;
+        height: 11px;
+        background: hsl(var(--primary));
+        -webkit-background-clip: text;
+        background-clip: text;
+        pointer-events: none;
+        z-index: 2147483645;
+      }
+      .ios-sfocatura-cover {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483646;
+        background: rgba(255, 255, 255, 0.01);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .ios-sfocatura-cover.acceso {
+        opacity: 1;
+      }
+      .ios-sfocatura-pannello {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 90%;
+        z-index: 2147483647;
+        background: rgba(255, 255, 255, 0.01);
+        pointer-events: none;
+        transform: translateX(110%);
+        transition: transform 0.3s;
+      }
+      .ios-sfocatura-pannello.dentro {
+        transform: translateX(0);
       }
     }
   }

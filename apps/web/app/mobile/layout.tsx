@@ -24,6 +24,7 @@ import {
 import { risolviMobileShell, type AppMode } from '@kommessa/api/types';
 
 import SwRegistrar from './_components/sw-registrar';
+import { AntiSfocaturaIos } from './_components/anti-sfocatura-ios';
 import { SincronizzaPush } from './_components/sincronizza-push';
 import NuovaVersione from './_components/nuova-versione';
 import { AttivaNotificheSheet } from './_components/attiva-notifiche-sheet';
@@ -48,7 +49,7 @@ export const metadata: Metadata = {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
     // NB: `apple-mobile-web-app-status-bar-style` è impostato una sola volta nel
-    // root layout (appleWebApp.statusBarStyle = 'default', dal 23/10/2026). NON
+    // root layout (appleWebApp.statusBarStyle = 'black-translucent'). NON
     // ripeterlo qui: due meta con lo stesso nome creerebbero un duplicato e iOS
     // userebbe il primo (era il vecchio 'default' → barra bianca).
   },
@@ -139,6 +140,8 @@ export default async function MobileLayout({
     <div className="min-h-[100dvh] bg-canvas-mobile">
       {/* <link apple-touch-startup-image> → issati nell'<head> da Next */}
       <AppleSplashLinks />
+      {/* Prima di tutto: la striscia che tiene lontana la sfocatura di iOS 26/27. */}
+      <AntiSfocaturaIos />
       <SwRegistrar />
       <SincronizzaPush />
       <NuovaVersione />
