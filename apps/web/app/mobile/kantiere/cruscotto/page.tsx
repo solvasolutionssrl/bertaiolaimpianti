@@ -1,4 +1,5 @@
 import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -50,6 +51,7 @@ type TimbRow = {
   pausa: boolean | null;
   dipendente_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   origine: string | null;
   created_at: string | null;
   creato_da: string | null;
@@ -165,7 +167,7 @@ export default async function CruscottoKantierePage({
       (da, a) =>
         supabase
           .from('timbrature' as never)
-          .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, origine, created_at, creato_da, auto_chiusa')
+          .select('id, tipo, ts, pausa, dipendente_id, cantiere_id, sottocantiere_id, origine, created_at, creato_da, auto_chiusa')
           .eq('tenant_id', ctx.tenantId)
           .gte('ts', fromIso)
           .lt('ts', toIso)
@@ -212,6 +214,8 @@ export default async function CruscottoKantierePage({
   const creatoNomeMap = new Map<string, string>();
   // Ore e stati sugli orari arrotondati al passo del cliente (il dato resta esatto).
   const timbRows = arrotondaTimbrature(timbRowsEsatte, await leggiRegolaTimbri(supabase, ctx.tenantId));
+  // Le fasi delle timbrature del giorno: «Cantiere › Fase» nel dettaglio.
+  const fasi = await nomiSottocantieri(supabase, ctx.tenantId, timbRows.map((r) => r.sottocantiere_id));
   const creatoDaIds = [...new Set(timbRows.map((t) => t.creato_da).filter((id): id is string => id != null))];
   if (creatoDaIds.length > 0) {
     const { data } = (await supabase.from('users' as never).select('id, display_name').in('id', creatoDaIds)) as {
@@ -298,7 +302,7 @@ export default async function CruscottoKantierePage({
       tipo: r.tipo,
       ts: r.ts,
       pausa: r.pausa,
-      commessaTitolo: r.cantiere_id ? cantMap.get(r.cantiere_id) ?? null : null,
+      commessaTitolo: r.cantiere_id ? etichettaConFase(cantMap.get(r.cantiere_id) ?? '', r.sottocantiere_id, fasi) || null : null,
       origine: r.origine,
       createdAt: r.created_at,
       creatoNome: r.creato_da ? creatoNomeMap.get(r.creato_da) ?? null : null,
@@ -419,6 +423,8 @@ export default async function CruscottoKantierePage({
           inizioTs={mioTurno.inizioTs}
           inPausa={mioTurno.inPausa}
           inizioPausaTs={mioTurno.inizioPausaTs}
+          sottocantiereId={mioTurno.sottocantiereId ?? null}
+          sottocantiereNome={mioTurno.sottocantiereNome ?? null}
           pausaOggiFatta={mioTurnoAzioni.pausaOggiFatta}
           sedi={mioTurnoAzioni.sedi}
           mezzi={mioTurnoAzioni.mezzi}

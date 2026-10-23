@@ -178,6 +178,8 @@ export default async function KantiereHomePage() {
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
+          sottocantiereId={turno.sottocantiereId ?? null}
+          sottocantiereNome={turno.sottocantiereNome ?? null}
           pausaOggiFatta={azioni.pausaOggiFatta}
           sedi={azioni.sedi}
           mezzi={azioni.mezzi}

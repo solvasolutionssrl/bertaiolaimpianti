@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { Clock, QrCode } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -30,6 +31,7 @@ import type { PickerCantiere } from './cantiere-picker';
 export interface TurnoApertoUfficio {
   cantiereId: string;
   cantiereNome?: string | null;
+  sottocantiereNome?: string | null;
   inizioTs: string;
   inPausa: boolean;
   inizioPausaTs: string | null;
@@ -85,7 +87,7 @@ export function HomeUfficio({
       {turno && azioni ? (
         <TurnoAzioniUfficio
           cantiereId={turno.cantiereId}
-          cantiereNome={turno.cantiereNome ?? undefined}
+          cantiereNome={etichettaLuogo(turno.cantiereNome ?? 'Lavoro', turno.sottocantiereNome)}
           cantiereHref={`/mobile/kantiere/cantieri/${turno.cantiereId}`}
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}

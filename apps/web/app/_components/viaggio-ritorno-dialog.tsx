@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
@@ -45,7 +46,7 @@ export interface ViaggioRitornoConfirm {
   viaggio: ViaggioRitornoPayload | null;
   pausaPranzoMin?: number;
   /** Split "cosa hai fatto oggi": ore per cantiere (somma = netto). */
-  split?: { cantiereId: string; minuti: number }[];
+  split?: { cantiereId: string; sottocantiereId?: string | null; minuti: number }[];
 }
 
 /** Contesto per lo split "cosa hai fatto oggi" (solo giornata pulita, self). */
@@ -53,7 +54,7 @@ export interface SplitContesto {
   /** Chiusura (snapshot ISO) e inizio turno → netto = (chiusura-inizio)-pausa. */
   closeIso: string;
   inizioIso: string;
-  cantiereCorrente: { id: string; nome: string };
+  cantiereCorrente: { id: string; sottocantiereId?: string | null; nome: string };
   cantieri: PickerCantiere[];
   /** Tolleranza (min) sulla somma: se |restano| ≤ tolleranza si salva (l'ultimo
    *  cantiere assorbe il piccolo resto), così i minuti dispari non bloccano. */
@@ -214,6 +215,8 @@ function messaggioErrore(code: string): string {
     // Difensivo: chiudere un turno gia' aperto e' sempre permesso, anche su un
     // cantiere chiuso nel frattempo. Se il codice arriva qui, qualcosa e'
     // cambiato sotto i piedi e la pagina va ricaricata.
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
     case 'CANTIERE_CHIUSO':
       return 'Un cantiere della giornata è stato chiuso nel frattempo. Ricarica la pagina e riprova.';
     default:
@@ -254,7 +257,7 @@ export function ViaggioRitornoDialog({
 
   // Split "cosa hai fatto oggi" (solo se splitContesto presente).
   const [dividi, setDividi] = useState(false);
-  const [righeSplit, setRigheSplit] = useState<{ cantiereId: string; nome: string; minuti: number }[]>([]);
+  const [righeSplit, setRigheSplit] = useState<{ cantiereId: string; sottocantiereId: string | null; nome: string; minuti: number }[]>([]);
   const [pickerSplitOpen, setPickerSplitOpen] = useState(false);
 
   // Viaggio
@@ -364,6 +367,7 @@ export function ViaggioRitornoDialog({
       setRigheSplit([
         {
           cantiereId: splitContesto.cantiereCorrente.id,
+          sottocantiereId: splitContesto.cantiereCorrente.sottocantiereId ?? null,
           nome: splitContesto.cantiereCorrente.nome,
           minuti: 0,
         },
@@ -383,8 +387,10 @@ export function ViaggioRitornoDialog({
   // Tolleranza: entro N min si salva (l'ultimo cantiere assorbe il resto).
   const tolleranzaSplit = splitContesto?.tolleranzaMin ?? 0;
   const entroTolleranza = Math.abs(restanoSplit) <= tolleranzaSplit;
+  // Un cantiere gia' in elenco si ripropone solo se ha delle fasi (se ne puo'
+  // scegliere un'altra); un luogo gia' scelto non si aggiunge due volte.
   const cantieriSplitDisponibili = splitContesto
-    ? splitContesto.cantieri.filter((c) => !righeSplit.some((r) => r.cantiereId === c.id))
+    ? splitContesto.cantieri.filter((c) => (c.sottocantieri?.length ?? 0) > 0 || !righeSplit.some((r) => r.cantiereId === c.id))
     : [];
 
   function aggiornaRigaSplit(idx: number, minuti: number) {
@@ -395,13 +401,17 @@ export function ViaggioRitornoDialog({
     setRigheSplit((prev) => prev.filter((_, i) => i !== idx));
     setErrLocale(null);
   }
-  function aggiungiCantiereSplit(id: string) {
+  function aggiungiCantiereSplit(id: string, sottocantiereId?: string | null) {
     const c = splitContesto?.cantieri.find((x) => x.id === id);
     setPickerSplitOpen(false);
     if (!c) return;
-    const nome = titoloCase(c.nome ?? '') || c.codice_commessa || c.codice || 'Cantiere';
+    const fase = sottocantiereId ?? null;
+    const nomeFase = fase ? (c.sottocantieri?.find((f) => f.id === fase)?.nome ?? null) : null;
+    const nome = etichettaLuogo(titoloCase(c.nome ?? '') || c.codice_commessa || c.codice || 'Cantiere', nomeFase);
     setRigheSplit((prev) =>
-      prev.some((r) => r.cantiereId === id) ? prev : [...prev, { cantiereId: id, nome, minuti: 0 }],
+      prev.some((r) => r.cantiereId === id && r.sottocantiereId === fase)
+        ? prev
+        : [...prev, { cantiereId: id, sottocantiereId: fase, nome, minuti: 0 }],
     );
     setErrLocale(null);
   }
@@ -468,7 +478,7 @@ export function ViaggioRitornoDialog({
         pausaPranzoMin: pausaPrompt && pausaFatta ? pausaMin : undefined,
         split:
           splitContesto && dividi
-            ? righeSplit.map((r) => ({ cantiereId: r.cantiereId, minuti: r.minuti }))
+            ? righeSplit.map((r) => ({ cantiereId: r.cantiereId, sottocantiereId: r.sottocantiereId, minuti: r.minuti }))
             : undefined,
       });
       if (res.ok) onOpenChange(false);
@@ -742,7 +752,7 @@ export function ViaggioRitornoDialog({
               {dividi ? (
                 <div className="space-y-2 pt-0.5">
                   {righeSplit.map((r, i) => (
-                    <div key={r.cantiereId} className="flex items-center gap-2">
+                    <div key={valoreLuogo(r.cantiereId, r.sottocantiereId)} className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-sm text-foreground">{r.nome}</span>
                       <MinutiStepper
                         minuti={r.minuti}

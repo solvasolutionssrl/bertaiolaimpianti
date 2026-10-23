@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { fasiScegibili } from '@kommessa/api/sottocantieri';
 import Link from 'next/link';
-import { ChevronRight, Search, MapPin, User } from 'lucide-react';
+import { ChevronRight, Search, MapPin, User, Layers } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import {
@@ -26,6 +27,8 @@ export interface CantiereItem {
   categoria: string | null;
   indirizzo_da_verificare: boolean | null;
   stato: string;
+  /** Le fasi del cantiere (23/10/2026), se ce ne sono. */
+  sottocantieri?: { id: string; nome: string; codice: string | null; stato?: string | null }[];
 }
 
 const STATO_LABEL: Record<string, string> = {
@@ -85,6 +88,8 @@ export function CantieriBrowser({
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
+          sottocantiereId={turno.sottocantiereId ?? null}
+          sottocantiereNome={turno.sottocantiereNome ?? null}
           pausaOggiFatta={azioni.pausaOggiFatta}
           sedi={azioni.sedi}
           mezzi={azioni.mezzi}
@@ -167,6 +172,13 @@ export function CantieriBrowser({
                       </span>
                     ) : null}
                     <span>{STATO_LABEL[c.stato] ?? c.stato}</span>
+                    {fasiScegibili(c.sottocantieri).length > 0 ? (
+                      <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/30 bg-primary/5 px-1.5 py-px text-[10px] font-medium text-primary">
+                        <Layers className="h-2.5 w-2.5" aria-hidden="true" />
+                        {fasiScegibili(c.sottocantieri).length}{' '}
+                        {fasiScegibili(c.sottocantieri).length === 1 ? 'fase' : 'fasi'}
+                      </span>
+                    ) : null}
                   </span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1.5">

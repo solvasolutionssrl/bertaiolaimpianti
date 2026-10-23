@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { valoreLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import {
   Camera,
@@ -45,6 +46,8 @@ type NuovaSpesaProps = {
   cantieri?: PickerCantiere[];
   /** Cantiere del turno aperto → preselezionato (cambiabile). */
   turnoCantiereId?: string | null;
+  /** La fase del turno aperto, se c'e'. */
+  turnoSottocantiereId?: string | null;
   /** Nome del cantiere del turno (per il banner "stai lavorando su…"). */
   turnoCantiereNome?: string | null;
   /**
@@ -66,6 +69,7 @@ const NON_RIPROVABILE = new Set([400, 401, 403, 404, 413, 415]);
 export function NuovaSpesa({
   cantieri = [],
   turnoCantiereId = null,
+  turnoSottocantiereId = null,
   turnoCantiereNome = null,
   triggerVariant = 'default',
 }: NuovaSpesaProps = {}) {
@@ -74,6 +78,7 @@ export function NuovaSpesa({
   const [aperto, setAperto] = React.useState(false);
   const [fase, setFase] = React.useState<Fase>('cantiere');
   const [cantiereId, setCantiereId] = React.useState<string | null>(turnoCantiereId);
+  const [sottocantiereId, setSottocantiereId] = React.useState<string | null>(turnoSottocantiereId);
   // true → mostra la lista di ricerca (altrimenti banner turno + "Cambia").
   const [ricercaAperta, setRicercaAperta] = React.useState<boolean>(!turnoCantiereId);
   const [errMsg, setErrMsg] = React.useState<string | null>(null);
@@ -140,6 +145,7 @@ export function NuovaSpesa({
           const fd = new FormData();
           fd.append('foto', f);
           if (cantiereId) fd.append('cantiereId', cantiereId);
+          if (cantiereId && sottocantiereId) fd.append('sottocantiereId', sottocantiereId);
           const resp = await fetch('/api/kantiere/spese/upload', { method: 'POST', body: fd });
           if (resp.ok) {
             setFase('fatto');
@@ -163,7 +169,7 @@ export function NuovaSpesa({
       setErrMsg(lastErr ?? 'Invio non riuscito.');
       setFase('errore');
     },
-    [cantiereId, router],
+    [cantiereId, sottocantiereId, router],
   );
 
   const onFile = React.useCallback(
@@ -303,9 +309,12 @@ export function NuovaSpesa({
             <div className="min-h-0 flex-1">
               <CantiereSearchList
                 cantieri={cantieri}
-                selectedId={cantiereId}
+                selectedId={cantiereId ? valoreLuogo(cantiereId, sottocantiereId) : null}
                 autoFocus={!turnoCantiereId}
-                onPick={(id) => setCantiereId(id)}
+                onPick={(id, fase) => {
+                  setCantiereId(id);
+                  setSottocantiereId(fase ?? null);
+                }}
                 emptyLabel="Nessun cantiere disponibile."
               />
             </div>

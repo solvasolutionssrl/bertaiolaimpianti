@@ -16,6 +16,9 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 export interface TurnoAttivoMio {
   cantiereId: string;
   cantiereNome: string;
+  /** La fase (sottocantiere) su cui e' aperto il turno, se scelta (23/10/2026). */
+  sottocantiereId: string | null;
+  sottocantiereNome: string | null;
   /** ISO timestamp dell'inizio turno (primo ingresso ancora aperto). */
   inizioTs: string;
   /** true se il turno è aperto ma il dipendente è in pausa pranzo. */
@@ -26,6 +29,7 @@ export interface TurnoAttivoMio {
 
 type TimbRow = {
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   tipo: 'ingresso' | 'uscita';
   ts: string;
   pausa: boolean | null;
@@ -49,7 +53,7 @@ export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
   const since = new Date(Date.now() - 20 * 3600 * 1000).toISOString();
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('cantiere_id, tipo, ts, pausa')
+    .select('cantiere_id, sottocantiere_id, tipo, ts, pausa')
     .eq('tenant_id', ctx.tenantId)
     .eq('dipendente_id', dipId)
     .not('cantiere_id', 'is', null)
@@ -60,16 +64,19 @@ export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
 
   // Per ogni cantiere il turno resta aperto finché non arriva un'uscita di
   // FINE turno. L'uscita di pausa lo mantiene aperto (ma "in pausa").
-  type StatoCant = { inizioTs: string; inPausa: boolean; inizioPausaTs: string | null };
+  type StatoCant = { inizioTs: string; inPausa: boolean; inizioPausaTs: string | null; fase: string | null };
   const aperti = new Map<string, StatoCant>();
   for (const t of righe) {
     if (!t.cantiere_id) continue;
     const cur = aperti.get(t.cantiere_id);
     if (t.tipo === 'ingresso') {
-      if (!cur) aperti.set(t.cantiere_id, { inizioTs: t.ts, inPausa: false, inizioPausaTs: null });
+      if (!cur) aperti.set(t.cantiere_id, { inizioTs: t.ts, inPausa: false, inizioPausaTs: null, fase: t.sottocantiere_id ?? null });
       else {
         cur.inPausa = false; // ripresa dopo pausa
         cur.inizioPausaTs = null;
+        // Un cambio di fase sullo stesso cantiere e' un'uscita e un ingresso
+        // nuovo: l'ultimo ingresso dice la fase corrente.
+        if (!t.pausa) cur.fase = t.sottocantiere_id ?? null;
       }
     } else if (t.pausa) {
       if (cur) {
@@ -95,10 +102,21 @@ export async function mioTurnoAttivo(): Promise<TurnoAttivoMio | null> {
     .eq('id', best.cantId)
     .maybeSingle();
   const c = cantRow as { nome: string | null; codice: string | null } | null;
+  let sottocantiereNome: string | null = null;
+  if (best.s.fase) {
+    const { data: fRow } = await supabase
+      .from('sottocantieri' as never)
+      .select('nome')
+      .eq('id', best.s.fase)
+      .maybeSingle();
+    sottocantiereNome = (fRow as { nome: string } | null)?.nome ?? null;
+  }
 
   return {
     cantiereId: best.cantId,
     cantiereNome: titoloCase(c?.nome || c?.codice || 'Cantiere'),
+    sottocantiereId: best.s.fase,
+    sottocantiereNome,
     inizioTs: best.s.inizioTs,
     inPausa: best.s.inPausa,
     inizioPausaTs: best.s.inizioPausaTs,

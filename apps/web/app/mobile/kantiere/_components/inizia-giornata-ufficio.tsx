@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, useTransition } from 'react';
+import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Loader2, Play } from 'lucide-react';
 
@@ -34,6 +35,8 @@ function messaggioErrore(code: string): string {
       return 'Risulta una giornata già aperta: chiuderla prima di iniziarne un’altra.';
     case 'CANTIERE_NON_VALIDO':
       return 'Lavoro non valido. Riprova.';
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
     case 'CANTIERE_CHIUSO':
       return 'Questo lavoro è chiuso: non si timbra più. Se ci hai lavorato, dillo all’ufficio.';
     case 'SEDE_PREDEFINITA_MANCANTE':
@@ -55,12 +58,14 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(cantieriProp ?? null);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedFase, setSelectedFase] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const apri = useCallback(async () => {
     setErrore(null);
     setSelectedId(null);
+    setSelectedFase(null);
     setOpen(true);
     if (cantieri == null) {
       setLoading(true);
@@ -72,18 +77,20 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
   }, [cantieri]);
 
   const selezionato = selectedId ? (cantieri ?? []).find((c) => c.id === selectedId) ?? null : null;
+  const faseSel = selezionato?.sottocantieri?.find((f) => f.id === selectedFase) ?? null;
   const nomeSel = selezionato
-    ? titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'lavoro'
+    ? etichettaLuogo(titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'lavoro', faseSel?.nome)
     : '';
 
   function avvia() {
     if (!selectedId) return;
     setErrore(null);
     startTransition(async () => {
-      const res = await avviaTurnoMio({ cantiereId: selectedId, daSede: true });
+      const res = await avviaTurnoMio({ cantiereId: selectedId, sottocantiereId: selectedFase, daSede: true });
       if (res.ok) {
         setOpen(false);
         setSelectedId(null);
+    setSelectedFase(null);
         router.refresh();
       } else {
         setErrore(messaggioErrore(res.error));
@@ -111,9 +118,10 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
         open={open}
         title="Il lavoro di oggi"
         cantieri={cantieri ?? []}
-        selectedId={selectedId}
-        onPick={(id) => {
+        selectedId={selectedId ? valoreLuogo(selectedId, selectedFase) : null}
+        onPick={(id, fase) => {
           setSelectedId(id);
+          setSelectedFase(fase ?? null);
           setErrore(null);
         }}
         onClose={() => {

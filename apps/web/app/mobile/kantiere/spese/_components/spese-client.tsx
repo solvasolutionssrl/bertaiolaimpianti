@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { Receipt, ChevronRight, Loader2 } from 'lucide-react';
 
@@ -12,6 +13,8 @@ import { SpesaDettaglio } from './spesa-dettaglio';
 export type SpesaRiga = {
   id: string;
   cantiereId: string | null;
+  /** La fase del cantiere (23/10/2026), se scelta. */
+  sottocantiereId?: string | null;
   categoria: CategoriaSpesa;
   ragioneSociale: string | null;
   importoTotale: number | null;
@@ -111,6 +114,7 @@ function raggruppa(spese: SpesaRiga[], todayKey: string, yesterdayKey: string): 
 export function SpeseClient({
   spese,
   cantieriNomi,
+  fasiNomi = {},
   canEdit = false,
   cantieri = [],
   metodi = [],
@@ -119,6 +123,8 @@ export function SpeseClient({
 }: {
   spese: SpesaRiga[];
   cantieriNomi: Record<string, string>;
+  /** Nomi delle fasi (sottocantieri) citate dalle spese. */
+  fasiNomi?: Record<string, string>;
   /** admin/office → dettaglio modificabile; tecnico → sola lettura. */
   canEdit?: boolean;
   cantieri?: { id: string; nome: string }[];
@@ -163,7 +169,9 @@ export function SpeseClient({
           <ul className="space-y-2.5">
             {sez.items.map((s) => {
               const meta = CATEGORIA_META[s.categoria];
-              const cantiereNome = s.cantiereId ? cantieriNomi[s.cantiereId] : null;
+              const cantiereNome = s.cantiereId
+                ? etichettaLuogo(cantieriNomi[s.cantiereId] ?? '', s.sottocantiereId ? fasiNomi[s.sottocantiereId] : null) || null
+                : null;
               const data = formatData(s.dataScontrino ?? s.createdAt);
               const inElab = s.stato === 'in_elaborazione';
               return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
+import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
@@ -100,6 +101,8 @@ function messaggioErrore(code: string): string {
       return 'La registrazione giornata è disattivata dall’ufficio.';
     case 'CANTIERE_NON_VALIDO':
       return 'Un cantiere selezionato non è valido.';
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
     case 'CANTIERE_CHIUSO':
       return 'Uno dei cantieri selezionati è chiuso e non accetta ore. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'SEDE_NON_VALIDA':
@@ -293,7 +296,14 @@ export interface ScatolaDialog {
   inizioFisico: boolean;
   fineFisica: boolean;
   /** Il turno aperto dall'app che il timbro chiude: primo cantiere obbligato. */
-  primoCantiere: { id: string; nome: string; codice: string | null } | null;
+  primoCantiere: {
+    id: string;
+    nome: string;
+    codice: string | null;
+    /** La fase del turno aperto che la scatola continua (23/10/2026). */
+    sottocantiereId?: string | null;
+    sottocantiereNome?: string | null;
+  } | null;
   /** Almeno un badge del terminale; altrimenti e' una presenza segnata dall'app. */
   dalTerminale?: boolean;
 }
@@ -309,6 +319,8 @@ const hmRome = (iso: string) =>
 /** `daSede` = «Lavoro dalla sede sul progetto»: ore del cantiere, luogo la sede predefinita. */
 type RigaCantiere = {
   cantiereId: string;
+  /** La fase del cantiere (23/10/2026), se scelta. Le tratte e le sedi restano per cantiere. */
+  sottocantiereId: string | null;
   nome: string;
   codice: string | null;
   minuti: number;
@@ -449,7 +461,8 @@ export function RegistraGiornataDialog({
         ? [
             {
               cantiereId: scatola.primoCantiere.id,
-              nome: scatola.primoCantiere.nome,
+              sottocantiereId: scatola.primoCantiere.sottocantiereId ?? null,
+              nome: etichettaLuogo(scatola.primoCantiere.nome, scatola.primoCantiere.sottocantiereNome),
               codice: scatola.primoCantiere.codice,
               minuti: 0,
               daSede: false,
@@ -474,7 +487,9 @@ export function RegistraGiornataDialog({
   const invertito = inUfficio;
 
   const assegnato = righe.reduce((a, r) => a + r.minuti, 0);
-  const disponibili = (cantieri ?? []).filter((c) => !righe.some((r) => r.cantiereId === c.id));
+  // Un cantiere gia' in elenco si ripropone solo se ha delle fasi: se ne puo'
+  // scegliere un'altra. Un luogo gia' scelto non si aggiunge due volte.
+  const disponibili = (cantieri ?? []).filter((c) => (c.sottocantieri?.length ?? 0) > 0 || !righe.some((r) => r.cantiereId === c.id));
 
   // ── percorso ─────────────────────────────────────────────────────────────────
   // Regola sedi↔cantiere: la predefinita sempre, più quelle associate al cantiere.
@@ -950,18 +965,21 @@ export function RegistraGiornataDialog({
     }
   }
 
-  function aggiungi(id: string) {
+  function aggiungi(id: string, sottocantiereId?: string | null) {
     const c = (cantieri ?? []).find((x) => x.id === id);
     setPickerOpen(false);
     if (!c) return;
-    const nome = titoloCase(c.nome ?? '') || codiceCantiereMostrato(c) || 'Cantiere';
+    const fase = sottocantiereId ?? null;
+    const nomeFase = fase ? (c.sottocantieri?.find((f) => f.id === fase)?.nome ?? null) : null;
+    const nome = etichettaLuogo(titoloCase(c.nome ?? '') || codiceCantiereMostrato(c) || 'Cantiere', nomeFase);
     setRighe((prev) =>
-      prev.some((r) => r.cantiereId === id)
+      prev.some((r) => r.cantiereId === id && r.sottocantiereId === fase)
         ? prev
         : [
             ...prev,
             {
               cantiereId: id,
+              sottocantiereId: fase,
               nome,
               codice: codiceCantiereMostrato(c),
               minuti: 0,
@@ -1041,6 +1059,7 @@ export function RegistraGiornataDialog({
     startTransition(async () => {
       const split = righeInvio.map((r) => ({
         cantiereId: r.cantiereId,
+        sottocantiereId: r.sottocantiereId,
         minuti: r.minuti,
         daSede: r.daSede || undefined,
       }));
@@ -1187,7 +1206,7 @@ export function RegistraGiornataDialog({
     righe.forEach((r, i) => {
       const colore = coloreCantiere(i);
       tappe.push({
-        key: `cantiere:${r.cantiereId}`,
+        key: `cantiere:${valoreLuogo(r.cantiereId, r.sottocantiereId)}`,
         nodo: <NodoCantiere indice={i} />,
         nodoTop: compatto ? 8 : 7,
         contenuto: compatto ? (

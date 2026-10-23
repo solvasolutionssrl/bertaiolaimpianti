@@ -6,6 +6,7 @@ import {
   Users,
   User,
   AlertTriangle,
+  Layers,
 } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -120,6 +121,15 @@ export default async function CantiereMobileDetailPage({
   // (pausa pranzo / termina turno) in cima alla scheda.
   const turno = await mioTurnoAttivo();
   const turnoQui = turno && turno.cantiereId === c.id ? turno : null;
+
+  // Le fasi (sottocantieri) del cantiere, in sola lettura: si gestiscono dall'ufficio.
+  const { data: fasiRaw } = await supabase
+    .from('sottocantieri' as never)
+    .select('id, nome, codice, descrizione, stato')
+    .eq('cantiere_id', c.id)
+    .order('codice', { ascending: true })
+    .order('nome', { ascending: true });
+  const fasi = ((fasiRaw as { id: string; nome: string; codice: string | null; descrizione: string | null; stato: string }[] | null) ?? []);
 
   // Contesto viaggio+pausa per il termina turno IN-APP (sedi/mezzi/soglie +
   // se oggi ha già timbrato la pausa qui). Solo se il turno è aperto su questo
@@ -311,6 +321,8 @@ export default async function CantiereMobileDetailPage({
           inizioTs={turnoQui.inizioTs}
           inPausa={turnoQui.inPausa}
           inizioPausaTs={turnoQui.inizioPausaTs}
+          sottocantiereId={turnoQui.sottocantiereId ?? null}
+          sottocantiereNome={turnoQui.sottocantiereNome ?? null}
           pausaOggiFatta={azioni.pausaOggiFatta}
           sedi={azioni.sedi}
           mezzi={azioni.mezzi}
@@ -391,6 +403,37 @@ export default async function CantiereMobileDetailPage({
           </ul>
         )}
       </div>
+
+      {fasi.length > 0 ? (
+        <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Layers className="h-3.5 w-3.5" aria-hidden="true" />
+            Sottocantieri
+          </p>
+          <ul className="mt-2 divide-y divide-border">
+            {fasi.map((f) => (
+              <li key={f.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    {f.codice ? (
+                      <span className="shrink-0 font-mono text-[11px] font-semibold text-primary">{f.codice}</span>
+                    ) : null}
+                    <span className="min-w-0 truncate font-medium">{f.nome}</span>
+                  </span>
+                  {f.descrizione ? (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{f.descrizione}</span>
+                  ) : null}
+                </span>
+                {f.stato === 'chiuso' ? (
+                  <span className="shrink-0 rounded-sm border border-border bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    Chiuso
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {c.note ? (
         <div className="rounded-xl border border-border bg-card p-4 shadow-soft">

@@ -37,6 +37,9 @@ const AIUTI = `
 const { cdp, chiudi } = await apriChrome({ mobile: true });
 try {
   await accedi(cdp, 'tecnico');
+  // Il foglio «Aggiungi alla Home» compare dopo qualche navigazione e copre i
+  // dialog: per questo banco e' rumore.
+  await valuta(cdp, `(() => { try { localStorage.setItem('pwa.installed', '1'); sessionStorage.setItem('pwa.session-dismissed', '1'); } catch {} return true; })()`);
   await vaiA(cdp, '/mobile/kantiere/ore');
   await finoA(cdp, `document.body.innerText.includes('Inserisci le commesse')`, { cosa: 'card scatola', timeoutMs: 30000 }).catch(() => null);
   const s1 = await valuta(cdp, `(() => { ${AIUTI}
@@ -79,7 +82,10 @@ try {
   await foto(cdp, 'timbro-02-dialog');
 
   // Aggiungi un cantiere.
-  await clicVero(cdp, `[...document.querySelector('[role="dialog"][aria-label="Ripartisci la giornata"]').querySelectorAll('button')].find((b) => /Aggiungi (il )?cantiere/.test(b.textContent))`);
+  // L'elenco dei cantieri arriva dal server dopo l'apertura: il tasto compare quando c'e'.
+  await finoA(cdp, `!![...document.querySelector('[role="dialog"][aria-label="Ripartisci la giornata"]').querySelectorAll('button')].find((b) => /Aggiungi (il )?cantiere/.test(b.textContent))`, { cosa: 'tasto Aggiungi cantiere', timeoutMs: 30_000 });
+  const tocco = await clicVero(cdp, `[...document.querySelector('[role="dialog"][aria-label="Ripartisci la giornata"]').querySelectorAll('button')].find((b) => /Aggiungi (il )?cantiere/.test(b.textContent))`);
+  if (tocco && tocco.fatto === false) console.log('  · tocco su «Aggiungi cantiere»:', tocco.perche);
   await finoA(cdp, `[...document.querySelectorAll('[role="dialog"] h2')].some((h) => /Aggiungi cantiere/.test(h.textContent))`, { cosa: 'foglio cantieri' });
   await clicVero(cdp, `(() => { const sheet = [...document.querySelectorAll('[role="dialog"]')].find((d) => /Aggiungi cantiere/.test(d.querySelector('h2')?.textContent || '')); return [...sheet.querySelectorAll('button')].find((b) => /Aurora/.test(b.textContent)); })()`);
   await pausa(700);

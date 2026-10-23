@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
+import { conFasiScegibili } from '@/app/mobile/kantiere/_lib/cantieri-picker-data';
 import { redirect } from 'next/navigation';
 import { Clock } from 'lucide-react';
 
@@ -81,12 +83,12 @@ export default async function MobileOrePage() {
   // mano (ricerca per codice/cliente/nome/indirizzo → campi arricchiti).
   const { data: cantieriRaw } = await supabase
     .from('cantieri' as never)
-    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria')
+    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, sottocantieri(id, nome, codice, descrizione, stato)')
     .eq('tenant_id', ctx.tenantId)
     .in('stato', ['attivo', 'sospeso'])
     .order('nome', { ascending: true });
 
-  const cantieriDisponibili = ((cantieriRaw as Array<{
+  const cantieriDisponibili = conFasiScegibili(((cantieriRaw as Array<{
     id: string;
     codice: string | null;
     codice_commessa: string | null;
@@ -94,15 +96,17 @@ export default async function MobileOrePage() {
     cliente_nome: string | null;
     indirizzo: string | null;
     categoria: string | null;
+    sottocantieri?: PickerCantiere['sottocantieri'];
   }>) ?? []).map((c) => ({
     id: c.id,
     codice: c.codice,
     codice_commessa: c.codice_commessa,
+    sottocantieri: c.sottocantieri,
     nome: c.nome,
     cliente_nome: c.cliente_nome,
     indirizzo: c.indirizzo,
     categoria: c.categoria,
-  }));
+  })));
 
   // Sedi + associazioni + mezzi per il flusso viaggio dell'inserimento manuale.
   // Le sedi arrivano TUTTE (col flag is_default), ma il dialog mostra solo quelle
@@ -190,8 +194,10 @@ export default async function MobileOrePage() {
         return c ? { nome: c.nome ?? 'Cantiere', codice: c.codice ?? null } : null;
       };
       const { oggi, daFare } = await giornateTimbroPersona(supabase, ctx.tenantId, dipendenteId);
-      timbroOggi = oggi ? vistaDaGiornata(oggi, '', nomeCantiere) : null;
-      timbroDaFare = daFare ? vistaDaGiornata(daFare, '', nomeCantiere) : null;
+      const nomeFase = (id: string) =>
+        cantieriDisponibili.flatMap((c) => c.sottocantieri ?? []).find((f) => f.id === id)?.nome ?? null;
+      timbroOggi = oggi ? vistaDaGiornata(oggi, '', nomeCantiere, 'esterno', nomeFase) : null;
+      timbroDaFare = daFare ? vistaDaGiornata(daFare, '', nomeCantiere, 'esterno', nomeFase) : null;
     }
   }
   // Con un turno aperto dall'app che il terminale ha gia' chiuso, la card del
@@ -243,6 +249,8 @@ export default async function MobileOrePage() {
           inizioTs={turno.inizioTs}
           inPausa={turno.inPausa}
           inizioPausaTs={turno.inizioPausaTs}
+          sottocantiereId={turno.sottocantiereId ?? null}
+          sottocantiereNome={turno.sottocantiereNome ?? null}
           pausaOggiFatta={azioni.pausaOggiFatta}
           sedi={azioni.sedi}
           mezzi={azioni.mezzi}

@@ -22,6 +22,7 @@ type RigaRapportino = {
   id: string;
   commessa_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id?: string | null;
   target_label: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
@@ -71,6 +72,7 @@ type RigaEditable = {
   id: string | undefined;
   commessa_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id?: string | null;
   target_label: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
@@ -83,6 +85,7 @@ function rigaFromPayload(r: RigaRapportino): RigaEditable {
     id: r.id,
     commessa_id: r.commessa_id,
     cantiere_id: r.cantiere_id,
+    sottocantiere_id: r.sottocantiere_id ?? null,
     target_label: r.target_label,
     ore_ordinarie: r.ore_ordinarie,
     ore_straordinarie: r.ore_straordinarie,
@@ -168,7 +171,7 @@ export function OreClient({
   const cantieriOggi = righe
     .filter((r) => r.cantiere_id || r.commessa_id)
     .map((r) => ({
-      key: r.cantiere_id ?? r.commessa_id ?? r.target_label,
+      key: (r.cantiere_id ? `${r.cantiere_id}/${r.sottocantiere_id ?? ''}` : r.commessa_id) ?? r.target_label,
       label: r.target_label,
       lavoro: r.ore_ordinarie + r.ore_straordinarie,
       viaggio: r.ore_viaggio,

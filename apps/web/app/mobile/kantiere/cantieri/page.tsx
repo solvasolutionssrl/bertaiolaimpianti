@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { conFasiScegibili } from '@/app/mobile/kantiere/_lib/cantieri-picker-data';
 import { MapPin } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -36,7 +37,7 @@ export default async function CantieriMobilePage() {
     supabase
       .from('cantieri' as never)
       .select(
-        'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato',
+        'id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, indirizzo_da_verificare, stato, sottocantieri(id, nome, codice, descrizione, stato)',
       )
       .eq('tenant_id', ctx.tenantId)
       // I cantieri chiusi non compaiono in app: questo e' l'elenco di chi sta
@@ -168,7 +169,7 @@ export default async function CantieriMobilePage() {
             nome={me?.nome}
             turno={turno}
             azioni={azioni}
-            cantieri={cantieri as unknown as PickerCantiere[]}
+            cantieri={conFasiScegibili(cantieri as unknown as PickerCantiere[])}
             presenza={presenza}
           />
           {/* Senza cantieri l'etichetta sarebbe un titolo sopra il vuoto. */}

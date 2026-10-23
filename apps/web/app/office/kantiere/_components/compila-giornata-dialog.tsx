@@ -592,6 +592,7 @@ function messaggioErrore(code: string): string {
     case 'SEDE_PREDEFINITA_MANCANTE': return 'Manca la sede predefinita: impostala in Sedi.';
     case 'REGISTRA_OFF': return 'La registrazione della giornata è disattivata nelle impostazioni.';
     case 'CANTIERE_CHIUSO': return 'Uno dei cantieri è chiuso e non accetta ore.';
+    case 'FASE_RICHIESTA': return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
     case 'TIMBRO_OFF': return 'La timbratrice non è attiva per questa azienda.';
     case 'NON_AUTORIZZATO': return 'Non puoi compilare la giornata di un’altra persona.';
     default: return `Non salvato: ${code}`;

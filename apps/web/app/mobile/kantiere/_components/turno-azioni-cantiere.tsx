@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Utensils, Play, LogOut, Loader2, ChevronRight } from 'lucide-react';
@@ -54,6 +55,9 @@ export interface TurnoAzioniCantiereProps {
   passoMinuti?: number;
   /** Nome del cantiere: se presente, l'header diventa un link alla scheda. */
   cantiereNome?: string;
+  /** La fase su cui e' aperto il turno (23/10/2026). */
+  sottocantiereId?: string | null;
+  sottocantiereNome?: string | null;
   /** Href della scheda cantiere: rende l'header tappabile (home / tab Ore). */
   cantiereHref?: string;
   /** Card più grande e in evidenza (usata sulla home Kantiere). */
@@ -128,6 +132,8 @@ export function TurnoAzioniCantiere({
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
   sogliaAutoSpegnimentoPausaOre = 1.5,
   cantiereNome,
+  sottocantiereId = null,
+  sottocantiereNome = null,
   cantiereHref,
   prominente = false,
   compatto = false,
@@ -278,7 +284,7 @@ export function TurnoAzioniCantiere({
             <span
               className={`block truncate font-semibold leading-tight text-foreground ${prominente ? 'text-base' : 'text-sm'}`}
             >
-              {cantiereNome ?? 'Cantiere'}
+              {etichettaLuogo(cantiereNome ?? 'Cantiere', sottocantiereNome)}
             </span>
             <span className={`mt-0.5 block text-xs ${palette.sub}`}>
               {inPausa
@@ -327,7 +333,7 @@ export function TurnoAzioniCantiere({
                 Pausa
               </button>
             )}
-            {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} sedePredefinita={sedeDefaultId != null} compatto /> : null}
+            {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} sottocantiereId={sottocantiereId} sedePredefinita={sedeDefaultId != null} compatto /> : null}
             {!inPausa ? (
               <button
                 type="button"
@@ -369,7 +375,7 @@ export function TurnoAzioniCantiere({
         {/* Cambia cantiere: chiude il segmento corrente e ne apre uno nuovo
             (ore divise dai timestamp, km al cantiere di destinazione). Non in
             pausa: prima si riprende il turno. */}
-        {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} sedePredefinita={sedeDefaultId != null} /> : null}
+        {!inPausa ? <CambiaCantiereButton cantiereId={cantiereId} sottocantiereId={sottocantiereId} sedePredefinita={sedeDefaultId != null} /> : null}
 
         {/* La pausa pranzo dichiarata + il viaggio di ritorno vivono nel dialog
             "Termina turno". In pausa non si chiude: prima "Riprendi turno". */}
@@ -440,7 +446,11 @@ export function TurnoAzioniCantiere({
             ? ({
                 closeIso: tsScelto,
                 inizioIso: inizioTs,
-                cantiereCorrente: { id: cantiereId, nome: cantiereNome ?? 'Cantiere' },
+                cantiereCorrente: {
+                  id: cantiereId,
+                  sottocantiereId,
+                  nome: etichettaLuogo(cantiereNome ?? 'Cantiere', sottocantiereNome),
+                },
                 cantieri: splitCantieri ?? [],
                 tolleranzaMin: tolleranzaChiusuraMin,
                 passoMinuti,

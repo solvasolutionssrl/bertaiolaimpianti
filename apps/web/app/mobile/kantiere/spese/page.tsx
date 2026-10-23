@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { etichettaLuogo } from '@kommessa/api/sottocantieri';
+import { nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 import { notFound } from 'next/navigation';
 import { Receipt } from 'lucide-react';
 
@@ -61,12 +63,13 @@ export default async function SpeseMobilePage() {
 
   let spese: SpesaRiga[] = [];
   const cantieriNomi: Record<string, string> = {};
+  const fasiNomi: Record<string, string> = {};
 
   if (dipId) {
     const { data: rows } = await supabase
       .from('spese' as never)
       .select(
-        'id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone, stato',
+        'id, cantiere_id, sottocantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, metodo_pagamento, note, created_at, r2_thumb_key, r2_key, foto_mime, numero_persone, stato',
       )
       .eq('tenant_id', ctx.tenantId)
       .eq('dipendente_id', dipId)
@@ -76,6 +79,7 @@ export default async function SpeseMobilePage() {
         | {
             id: string;
             cantiere_id: string | null;
+            sottocantiere_id: string | null;
             categoria: string;
             ragione_sociale: string | null;
             importo_totale: number | null;
@@ -97,6 +101,7 @@ export default async function SpeseMobilePage() {
     spese = raw.map((r) => ({
       id: r.id,
       cantiereId: r.cantiere_id,
+      sottocantiereId: r.sottocantiere_id ?? null,
       categoria: r.categoria as CategoriaSpesa,
       ragioneSociale: r.ragione_sociale,
       importoTotale: r.importo_totale,
@@ -129,6 +134,9 @@ export default async function SpeseMobilePage() {
         | null) ?? []) {
         cantieriNomi[c.id] = c.nome ? titoloCase(c.nome) : c.codice || 'Cantiere';
       }
+    }
+    for (const f of (await nomiSottocantieri(supabase, ctx.tenantId, spese.map((s) => s.sottocantiereId))).values()) {
+      fasiNomi[f.id] = f.nome;
     }
   }
 
@@ -165,7 +173,8 @@ export default async function SpeseMobilePage() {
         <NuovaSpesa
           cantieri={cantieriPicker}
           turnoCantiereId={turno?.cantiereId ?? null}
-          turnoCantiereNome={turno?.cantiereNome ?? null}
+          turnoSottocantiereId={turno?.sottocantiereId ?? null}
+          turnoCantiereNome={etichettaLuogo(turno?.cantiereNome ?? '', turno?.sottocantiereNome) || null}
         />
       )}
 
@@ -173,6 +182,7 @@ export default async function SpeseMobilePage() {
         spese={spese}
         metodi={metodi}
         cantieriNomi={cantieriNomi}
+        fasiNomi={fasiNomi}
         canEdit={isManager}
         cantieri={cantieriOpts}
         todayKey={todayKey}

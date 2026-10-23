@@ -68,6 +68,9 @@ cdp.su('Runtime.consoleAPICalled', (p) => {
 
 try {
   await accedi(cdp, 'tecnico');
+  // Il foglio «Aggiungi alla Home» compare dopo qualche navigazione e copre i
+  // fogli: per questo banco e' rumore.
+  await valuta(cdp, `(() => { try { localStorage.setItem('pwa.installed', '1'); sessionStorage.setItem('pwa.session-dismissed', '1'); } catch {} return true; })()`);
   await vaiA(cdp, '/mobile/kantiere');
   await finoA(cdp, `[...document.querySelectorAll('button')].some((b) => /Inizia turno/.test(b.textContent))`, {
     cosa: 'tasto Inizia turno',
@@ -84,7 +87,9 @@ try {
       return true;
     })()`,
   );
-  await pausa(600);
+  // L'elenco arriva dal server dopo l'apertura del foglio: si aspetta la riga.
+  await finoA(cdp, `[...document.querySelectorAll('button')].some((b) => b.getClientRects().length > 0 && /Aurora/.test(b.textContent))`, { cosa: 'riga di Aurora', timeoutMs: 60_000 });
+  await pausa(300);
   esito(await clicca(cdp, 'Aurora'), 'si sceglie il cantiere');
   // Il tasto porta anche il nome del cantiere scelto: «Continua · …».
   esito(await clicca(cdp, '^Continua'), 'si passa a «Luogo di partenza»');

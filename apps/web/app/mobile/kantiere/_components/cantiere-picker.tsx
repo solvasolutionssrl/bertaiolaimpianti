@@ -1,8 +1,8 @@
 'use client';
 
-import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { luogoDaValore, type SottocantiereLite } from '@kommessa/api/sottocantieri';
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { Search, Check, X, MapPin } from 'lucide-react';
+import { Search, Check, X, MapPin, ChevronDown } from 'lucide-react';
 
 import { Portal } from '@/app/mobile/_components/portal';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
@@ -18,7 +18,10 @@ import {
  *
  *  - `CantiereSearchList` — casella di ricerca + lista filtrata (codice cliente,
  *    codice interno, nome, cliente, indirizzo). Card COMPATTE (2 righe, font
- *    piccolo) così ne stanno di più del solito. Presentazionale: `onPick(id)`.
+ *    piccolo) così ne stanno di più del solito. Presentazionale:
+ *    `onPick(id, sottocantiereId)`. Un cantiere con FASI (sottocantieri) ha a
+ *    destra un pallino con il numero e una freccia: la freccia apre le fasi
+ *    sotto, rientrate, e si puo' scegliere il cantiere intero o una fase.
  *  - `CantiereSearchSheet` — foglio full-screen in Portal (flussi standalone).
  *
  * REGOLE ANTI-OVERFLOW (il bug del "form gigante"): la lista scrolla SOLO in
@@ -45,16 +48,28 @@ export interface PickerCantiere {
  * comparire nel "pagliaio" (tutti i campi uniti). Così "fincantieri mon" trova
  * "Fincantieri Monfalcone" anche se le due parole stanno in campi diversi
  * (es. cliente + nome/indirizzo). `needle` è già trim+lowercase.
+ * Dal 23/10/2026 il pagliaio comprende anche nome e codice delle FASI
+ * (sottocantieri): cercando una fase si trova il suo cantiere.
  */
 function matchCantiere(c: PickerCantiere, needle: string): boolean {
   if (!needle) return true;
-  const hay = [c.nome, c.codice_commessa, c.codice, c.cliente_nome, c.indirizzo, c.categoria]
+  const hay = [c.nome, c.codice_commessa, c.codice, c.cliente_nome, c.indirizzo, c.categoria, ...(c.sottocantieri ?? []).flatMap((f) => [f.nome, f.codice])]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
   const tokens = needle.split(/\s+/).filter(Boolean);
   return tokens.every((t) => hay.includes(t));
 }
+
+/** Una fase corrisponde da sola alla ricerca: il cantiere si apre da se'. */
+function matchFase(f: SottocantiereLite, needle: string): boolean {
+  if (!needle) return false;
+  const hay = [f.nome, f.codice].filter(Boolean).join(' ').toLowerCase();
+  return needle.split(/\s+/).filter(Boolean).some((t) => hay.includes(t));
+}
+
+/** Che cosa viene scelto: un cantiere intero (`sottocantiereId` null) o una sua fase. */
+export type OnPickCantiere = (id: string, sottocantiereId?: string | null) => void;
 
 // ── lista di ricerca (condivisa) — card COMPATTE ─────────────────────────────
 
@@ -66,13 +81,16 @@ export function CantiereSearchList({
   emptyLabel = 'Nessun cantiere disponibile.',
 }: {
   cantieri: PickerCantiere[];
+  /** Il cantiere scelto, oppure `valoreLuogo(cantiereId, faseId)` se e' scelta una fase. */
   selectedId?: string | null;
-  onPick: (id: string) => void;
+  onPick: OnPickCantiere;
   autoFocus?: boolean;
   emptyLabel?: string;
 }) {
   const [q, setQ] = useState('');
+  const [aperti, setAperti] = useState<Set<string>>(() => new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const scelto = luogoDaValore(selectedId ?? null);
 
   useEffect(() => {
     if (autoFocus) {
@@ -81,10 +99,21 @@ export function CantiereSearchList({
     }
   }, [autoFocus]);
 
-  const filtrati = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return cantieri.filter((c) => matchCantiere(c, needle));
-  }, [q, cantieri]);
+  const needle = q.trim().toLowerCase();
+  const filtrati = useMemo(() => cantieri.filter((c) => matchCantiere(c, needle)), [needle, cantieri]);
+  // Il cantiere della fase scelta parte aperto, cosi' si vede la spunta.
+  useEffect(() => {
+    if (scelto?.sottocantiereId) setAperti((prev) => (prev.has(scelto.cantiereId) ? prev : new Set(prev).add(scelto.cantiereId)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scelto?.cantiereId, scelto?.sottocantiereId]);
+
+  const toggle = (id: string) =>
+    setAperti((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
@@ -118,50 +147,113 @@ export function CantiereSearchList({
           <ul className="space-y-1.5">
             {filtrati.map((c) => {
               const codice = codiceCantiereMostrato(c);
-              const attivo = selectedId === c.id;
+              const fasi = c.sottocantieri ?? [];
+              const haFasi = fasi.length > 0;
+              const attivoIntero = scelto?.cantiereId === c.id && !scelto.sottocantiereId;
+              const faseScelta = scelto?.cantiereId === c.id ? scelto.sottocantiereId : null;
+              // Aperto a mano, oppure dalla ricerca quando una fase corrisponde.
+              const aperto = haFasi && (aperti.has(c.id) || fasi.some((f) => matchFase(f, needle)));
               return (
                 <li key={c.id} className="min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => onPick(c.id)}
+                  <div
                     className={[
-                      'flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2.5 text-left transition-colors',
-                      attivo
+                      'flex w-full min-w-0 items-stretch rounded-lg border transition-colors',
+                      attivoIntero || faseScelta
                         ? 'border-primary bg-primary/5'
-                        : 'border-border bg-card active:bg-muted/50',
+                        : 'border-border bg-card',
                     ].join(' ')}
                   >
-                    <span className="min-w-0 flex-1 overflow-hidden">
-                      <span className="block truncate text-[13px] font-medium leading-tight text-foreground">
-                        {titoloCase(c.nome ?? '') || codice || 'Cantiere'}
-                      </span>
-                      <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
-                        {codice ? (
-                          <span className="shrink-0 font-mono font-semibold text-primary">{codice}</span>
-                        ) : null}
-                        {c.cliente_nome ? (
-                          <span className="min-w-0 truncate">
-                            {codice ? '· ' : ''}
-                            {titoloCase(c.cliente_nome)}
-                          </span>
-                        ) : null}
-                        {c.categoria ? (
-                          <span
-                            className={`shrink-0 rounded-full border px-1 py-px text-[9px] font-medium ${categoriaTono(c.categoria)}`}
-                          >
-                            {categoriaLabel(c.categoria)}
-                          </span>
-                        ) : null}
-                      </span>
-                      {c.indirizzo ? (
-                        <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-muted-foreground/90">
-                          <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
-                          <span className="min-w-0 truncate">{c.indirizzo}</span>
+                    <button
+                      type="button"
+                      onClick={() => onPick(c.id, null)}
+                      className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-l-lg px-3 py-2.5 text-left active:bg-muted/50"
+                    >
+                      <span className="min-w-0 flex-1 overflow-hidden">
+                        <span className="block truncate text-[13px] font-medium leading-tight text-foreground">
+                          {titoloCase(c.nome ?? '') || codice || 'Cantiere'}
                         </span>
-                      ) : null}
-                    </span>
-                    {attivo ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" /> : null}
-                  </button>
+                        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] leading-tight text-muted-foreground">
+                          {codice ? (
+                            <span className="shrink-0 font-mono font-semibold text-primary">{codice}</span>
+                          ) : null}
+                          {c.cliente_nome ? (
+                            <span className="min-w-0 truncate">
+                              {codice ? '· ' : ''}
+                              {titoloCase(c.cliente_nome)}
+                            </span>
+                          ) : null}
+                          {c.categoria ? (
+                            <span
+                              className={`shrink-0 rounded-full border px-1 py-px text-[9px] font-medium ${categoriaTono(c.categoria)}`}
+                            >
+                              {categoriaLabel(c.categoria)}
+                            </span>
+                          ) : null}
+                        </span>
+                        {c.indirizzo ? (
+                          <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-tight text-muted-foreground/90">
+                            <MapPin className="h-3 w-3 shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 truncate">{c.indirizzo}</span>
+                          </span>
+                        ) : null}
+                      </span>
+                      {attivoIntero ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" /> : null}
+                    </button>
+                    {haFasi ? (
+                      // Il pallino con il numero di fasi e la freccia: un tasto a parte,
+                      // largo 44px, cosi' aprire le fasi non sceglie il cantiere.
+                      <button
+                        type="button"
+                        onClick={() => toggle(c.id)}
+                        aria-expanded={aperto}
+                        aria-label={`${fasi.length} ${fasi.length === 1 ? 'fase' : 'fasi'}, ${aperto ? 'nascondi' : 'mostra'}`}
+                        data-fasi-toggle={c.id}
+                        className="flex w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded-r-lg border-l border-border/70 text-primary active:bg-muted/50"
+                      >
+                        <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary/10 px-1 font-mono text-[10px] font-bold leading-none tabular-nums text-primary">
+                          {fasi.length}
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 transition-transform ${aperto ? 'rotate-180' : ''}`}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    ) : null}
+                  </div>
+                  {aperto ? (
+                    <ul className="ml-4 mt-1 space-y-1 border-l-2 border-primary/20 pl-2" data-fasi-di={c.id}>
+                      {fasi.map((f) => {
+                        const attiva = faseScelta === f.id;
+                        return (
+                          <li key={f.id} className="min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => onPick(c.id, f.id)}
+                              className={[
+                                'flex w-full min-w-0 items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left transition-colors',
+                                attiva ? 'border-primary bg-primary/5' : 'border-border bg-card active:bg-muted/50',
+                              ].join(' ')}
+                            >
+                              <span className="min-w-0 flex-1 overflow-hidden">
+                                <span className="flex min-w-0 items-center gap-1.5 text-[13px] leading-tight text-foreground">
+                                  {f.codice ? (
+                                    <span className="shrink-0 font-mono text-[11px] font-semibold text-primary">{f.codice}</span>
+                                  ) : null}
+                                  <span className="min-w-0 truncate font-medium">{f.nome}</span>
+                                </span>
+                                {f.descrizione ? (
+                                  <span className="mt-0.5 block truncate text-[11px] leading-tight text-muted-foreground">
+                                    {f.descrizione}
+                                  </span>
+                                ) : null}
+                              </span>
+                              {attiva ? <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" /> : null}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
                 </li>
               );
             })}
@@ -187,7 +279,7 @@ export function CantiereSearchSheet({
   title?: string;
   cantieri: PickerCantiere[];
   selectedId?: string | null;
-  onPick: (id: string) => void;
+  onPick: OnPickCantiere;
   onClose: () => void;
   footer?: React.ReactNode;
 }) {

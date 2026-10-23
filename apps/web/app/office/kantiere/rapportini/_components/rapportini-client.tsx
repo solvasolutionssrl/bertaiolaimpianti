@@ -628,7 +628,9 @@ export function RapportiniClient({
         setRegError(
           res.error === 'CANTIERE_CHIUSO'
             ? 'Il cantiere è chiuso. Ripetere l’operazione: verrà richiesta una conferma.'
-            : res.error,
+            : res.error === 'FASE_RICHIESTA'
+              ? 'Questo cantiere ha delle fasi: indicare su quale si è lavorato.'
+              : res.error,
         );
         return;
       }

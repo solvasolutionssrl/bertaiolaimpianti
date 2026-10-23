@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition, useCallback } from 'react';
+import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftRight, Loader2 } from 'lucide-react';
 
@@ -22,6 +23,8 @@ function messaggioErrore(code: string): string {
       return 'Il cantiere selezionato è quello già in corso.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
     case 'CANTIERE_CHIUSO':
       return 'Quel cantiere è chiuso: non ci si può spostare. Se ci hai lavorato, dillo all’ufficio.';
     case 'ORA_NON_VALIDA':
@@ -41,10 +44,13 @@ function messaggioErrore(code: string): string {
  */
 export function CambiaCantiereButton({
   cantiereId,
+  sottocantiereId = null,
   sedePredefinita = false,
   compatto = false,
 }: {
   cantiereId: string;
+  /** La fase del turno aperto: sullo stesso cantiere si puo' passare a un'altra fase. */
+  sottocantiereId?: string | null;
   /** Il tenant ha una sede predefinita: si può scegliere «Lavoro dalla sede sul progetto». */
   sedePredefinita?: boolean;
   /** true = pulsante compatto verticale (per la card turno "compatta"). */
@@ -55,6 +61,7 @@ export function CambiaCantiereButton({
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedFase, setSelectedFase] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [aSede, setASede] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -68,7 +75,9 @@ export function CambiaCantiereButton({
       setLoading(true);
       const res = await elencoCantieriTurno();
       setLoading(false);
-      if (res.ok) setCantieri(res.cantieri.filter((c) => c.id !== cantiereId));
+      // Il cantiere corrente resta in elenco solo se ha delle fasi: si puo'
+      // cambiare fase senza cambiare cantiere.
+      if (res.ok) setCantieri(res.cantieri.filter((c) => c.id !== cantiereId || (c.sottocantieri?.length ?? 0) > 0));
       else setErrore(messaggioErrore(res.error));
     }
   }, [cantieri, cantiereId]);
@@ -76,12 +85,14 @@ export function CambiaCantiereButton({
   const chiudi = useCallback(() => {
     setOpen(false);
     setSelectedId(null);
+    setSelectedFase(null);
     setErrore(null);
   }, []);
 
   const selezionato = selectedId ? (cantieri ?? []).find((c) => c.id === selectedId) ?? null : null;
+  const faseSel = selezionato?.sottocantieri?.find((f) => f.id === selectedFase) ?? null;
   const nomeSel = selezionato
-    ? titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'cantiere'
+    ? etichettaLuogo(titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'cantiere', faseSel?.nome)
     : '';
 
   function conferma() {
@@ -91,6 +102,7 @@ export function CambiaCantiereButton({
       const res = await cambiaCantiereMio({
         daCantiereId: cantiereId,
         aCantiereId: selectedId,
+        aSottocantiereId: selectedFase,
         aSede: aSede || undefined,
       });
       if (res.ok) {
@@ -128,9 +140,15 @@ export function CambiaCantiereButton({
         open={open}
         title="Cambia cantiere"
         cantieri={cantieri ?? []}
-        selectedId={selectedId}
-        onPick={(id) => {
+        selectedId={selectedId ? valoreLuogo(selectedId, selectedFase) : null}
+        onPick={(id, fase) => {
+          // La fase in cui si e' gia': non e' un cambio.
+          if (id === cantiereId && (fase ?? null) === (sottocantiereId ?? null)) {
+            setErrore('È la fase su cui il turno è già aperto.');
+            return;
+          }
           setSelectedId(id);
+          setSelectedFase(fase ?? null);
           setErrore(null);
         }}
         onClose={chiudi}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition, useCallback } from 'react';
+import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { Play, Loader2, ArrowRight } from 'lucide-react';
 
@@ -29,6 +30,8 @@ function messaggioErrore(code: string): string {
       return 'Risulta un turno già aperto: chiuderlo oppure cambiare cantiere.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
     case 'CANTIERE_CHIUSO':
       return 'Il cantiere è chiuso e non accetta timbrature. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'SEDE_NON_VALIDA':
@@ -81,6 +84,7 @@ export function IniziaTurnoButton({
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(cantieriProp ?? null);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedFase, setSelectedFase] = useState<string | null>(null);
   const [opzioni, setOpzioni] = useState<OpzioniPartenza | null>(null);
   const [opzLoading, setOpzLoading] = useState(false);
   const [errore, setErrore] = useState<string | null>(null);
@@ -89,6 +93,7 @@ export function IniziaTurnoButton({
   const apri = useCallback(async () => {
     setErrore(null);
     setSelectedId(null);
+    setSelectedFase(null);
     setFase('cantiere');
     setOpzioni(null);
     setOpen(true);
@@ -105,14 +110,16 @@ export function IniziaTurnoButton({
     setOpen(false);
     setFase('cantiere');
     setSelectedId(null);
+    setSelectedFase(null);
     setOpzioni(null);
     setOpzLoading(false);
     setErrore(null);
   }, []);
 
   const selezionato = selectedId ? (cantieri ?? []).find((c) => c.id === selectedId) ?? null : null;
+  const faseSel = selezionato?.sottocantieri?.find((f) => f.id === selectedFase) ?? null;
   const nomeSel = selezionato
-    ? titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'cantiere'
+    ? etichettaLuogo(titoloCase(selezionato.nome ?? '') || codiceCantiereMostrato(selezionato) || 'cantiere', faseSel?.nome)
     : '';
 
   // Step 1 → 2: carica le sedi ammesse per il cantiere e mostra "da dove parti?".
@@ -141,6 +148,7 @@ export function IniziaTurnoButton({
     startTransition(async () => {
       const res = await avviaTurnoMio({
         cantiereId: selectedId,
+        sottocantiereId: selectedFase,
         viaggio: viaggio ?? undefined,
         daSede: opzioni.daSede || undefined,
       });
@@ -186,9 +194,10 @@ export function IniziaTurnoButton({
         open={open && fase === 'cantiere'}
         title="Inizia turno — scegli cantiere"
         cantieri={cantieri ?? []}
-        selectedId={selectedId}
-        onPick={(id) => {
+        selectedId={selectedId ? valoreLuogo(selectedId, selectedFase) : null}
+        onPick={(id, fase) => {
           setSelectedId(id);
+          setSelectedFase(fase ?? null);
           setErrore(null);
         }}
         onClose={chiudi}
