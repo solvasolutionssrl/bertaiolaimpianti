@@ -173,5 +173,24 @@ export function getRoutingProvider(opts?: { provider?: RoutingProviderChoice }):
     return createGoogleProvider(googleKey);
   }
   const orsKey = process.env.ORS_API_KEY?.trim();
-  return orsKey ? createOrsProvider(orsKey) : createOsrmProvider();
+  return orsKey ? conRipiego(createOrsProvider(orsKey), createOsrmProvider()) : createOsrmProvider();
+}
+
+/**
+ * Il primo che risponde. ⚠️ ORS rifiuta un punto che non sta entro 350 m da
+ * una strada che conosce («Could not find routable point», errore 2010): un
+ * cantiere geolocalizzato in mezzo ai campi restava «Senza stima» per sempre
+ * e il tecnico doveva scrivere il tempo a mano, mentre OSRM aggancia il punto
+ * alla strada piu' vicina e risponde. Trovato dal banco `registra-giornata`
+ * il 24/10/2026 sui cantieri del demo, ma vale per qualunque indirizzo vero
+ * fuori dall'abitato. Stesso profilo, stessa cache.
+ */
+function conRipiego(primo: RoutingProvider, secondo: RoutingProvider): RoutingProvider {
+  return {
+    profile: primo.profile,
+    trafficAware: primo.trafficAware,
+    async stima(origin, dest) {
+      return (await primo.stima(origin, dest)) ?? (await secondo.stima(origin, dest));
+    },
+  };
 }

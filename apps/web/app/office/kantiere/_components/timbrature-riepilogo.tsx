@@ -368,6 +368,12 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
     return <p className="text-xs text-muted-foreground">Nessuna timbratura registrata.</p>;
   }
 
+  // Il luogo di ogni segmento («Cantiere › Fase», 23/10/2026): si scrive solo
+  // quando la giornata ne ha piu' d'uno, altrimenti e' gia' in testa alla riga.
+  const luogoPerTs = new Map<string, string>();
+  for (const t of timbrature) if (t.commessaTitolo) luogoPerTs.set(t.ts, t.commessaTitolo);
+  const piuLuoghi = new Set(luogoPerTs.values()).size > 1;
+
   const liveMin = r.ingressoAperto && now != null ? (now - Date.parse(r.ingressoAperto)) / 60000 : 0;
   const totaleConLive = r.minutiTotali + (r.aperto ? liveMin : 0);
 
@@ -423,6 +429,11 @@ export function TimbratureRiepilogo({ timbrature }: { timbrature: TimbraturaInpu
                 {c.minuti != null ? fmtMinuti(c.minuti) : fmtMinuti(liveMin)}
               </span>
             </div>
+            {piuLuoghi && luogoPerTs.get(c.ingresso) ? (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={luogoPerTs.get(c.ingresso)}>
+                {luogoPerTs.get(c.ingresso)}
+              </p>
+            ) : null}
             <OrigineLine meta={meta.get(c.ingresso)} />
           </li>
         ))}

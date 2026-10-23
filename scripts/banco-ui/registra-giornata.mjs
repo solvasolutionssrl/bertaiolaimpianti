@@ -65,9 +65,18 @@ async function clicca(cdp, re, { dentro = 'document' } = {}) {
 }
 
 async function aggiungiCantiere(cdp, cerca) {
+  // Il tasto compare quando l'elenco dei cantieri e' arrivato dal server
+  // (`disponibili.length > 0`): si aspetta lui, non un tempo fisso.
+  await finoA(cdp, `(() => { ${AIUTI} return [...(pagina()?.querySelectorAll('button') ?? [])].some((b) => /^Aggiungi (il )?cantiere$/.test(t(b.textContent))); })()`, {
+    cosa: 'tasto Aggiungi cantiere',
+    timeoutMs: 40000,
+  });
   await clicca(cdp, '^Aggiungi (il )?cantiere$', { dentro: 'pagina()' });
+  // L'elenco dei cantieri arriva dal server alla prima apertura: con il server
+  // di sviluppo carico ci vuole piu' dei dieci secondi di default.
   await finoA(cdp, `[...document.querySelectorAll('[role="dialog"] h2')].some((h) => /Aggiungi cantiere/.test(h.textContent))`, {
     cosa: 'foglio cantieri',
+    timeoutMs: 40000,
   });
   await valuta(
     cdp,
@@ -238,22 +247,31 @@ try {
   await foto(cdp, 'rg-03-default-sede');
 
   // ── Tutto il giorno in sede: né partenza né rientro ───────────────────────
-  const spuntaSede = `(() => { ${AIUTI} const cb = [...pagina().querySelectorAll('label')].filter((l) => /Lavoro dalla sede sul progetto/.test(l.textContent)).map((l) => l.querySelector('input[type=checkbox]'))[0]; if (!cb) return null; cb.click(); return cb.checked; })()`;
-  esito((await valuta(cdp, spuntaSede)) === true, 'si indica il lavoro dalla sede tutto il giorno');
+  // Dal 15/09 il luogo si sceglie per cantiere con un radiogroup «In sede» /
+  // «In cantiere» (prima era una casella «Lavoro dalla sede sul progetto»).
+  const scegliLuogo = (dove) => `(() => { ${AIUTI} const g = pagina().querySelector('[role="radiogroup"][aria-label^="Luogo di lavoro per "]'); const r = g && [...g.querySelectorAll('[role="radio"]')].find((x) => t(x.textContent) === ${JSON.stringify(dove)}); if (!r) return null; r.click(); return true; })()`;
+  const inSede = `(() => { ${AIUTI} const g = pagina().querySelector('[role="radiogroup"][aria-label^="Luogo di lavoro per "]'); return !!g && [...g.querySelectorAll('[role="radio"]')].some((x) => t(x.textContent) === 'In sede' && x.getAttribute('aria-checked') === 'true'); })()`;
+  await valuta(cdp, scegliLuogo('In sede'));
+  await pausa(300);
+  esito((await valuta(cdp, inSede)) === true, 'si indica il lavoro dalla sede tutto il giorno');
   await pausa(700);
   esito(
     await valuta(cdp, `(() => { ${AIUTI} return !cardDi(pagina(), 'Partenza') && !cardDi(pagina(), 'Rientro') && /tutto il giorno in/.test(pagina().innerText) && !pagina().querySelector('button[data-guida]'); })()`),
     'tutto il giorno in sede: partenza, rientro e chi guidava non si chiedono',
   );
   await foto(cdp, 'rg-03b-tutto-in-sede');
-  esito((await valuta(cdp, spuntaSede)) === false, 'tolta la sede tornano partenza e rientro');
+  await valuta(cdp, scegliLuogo('In cantiere'));
+  await pausa(300);
+  esito((await valuta(cdp, inSede)) === false, 'tolta la sede tornano partenza e rientro');
   await pausa(700);
 
   // ── Due cantieri: la tratta chiede chi guidava ───────────────────────────
   esito(await aggiungiCantiere(cdp, 'Logistica'), 'aggiunge il secondo cantiere');
   await ore(cdp, 0, 4);
   await ore(cdp, 1, 4);
-  await pausa(3000);
+  // La stima della tratta arriva dalla rete: si aspetta che il conto la citi,
+  // non un numero fisso di secondi (su un server di sviluppo carico ne servono di piu').
+  await finoA(cdp, `(() => { ${AIUTI} return /di tratte/.test(t(pagina()?.querySelector('[aria-live="polite"]')?.textContent)); })()`, { cosa: 'stima della tratta', timeoutMs: 90000 }).catch(() => null);
   await scorri(cdp, 'fondo');
   m = await misura(cdp);
   const tratta = await valuta(
@@ -276,7 +294,7 @@ try {
 
   // Manca chi guidava: «Registra giornata» apre il foglio sul primo punto, la partenza.
   await clicca(cdp, '^Registra giornata$', { dentro: 'pagina()' });
-  await pausa(800);
+  await finoA(cdp, `(() => { ${AIUTI} return !!foglio(); })()`, { cosa: 'foglio «Il viaggio»', timeoutMs: 15000 }).catch(() => null);
   m = await misura(cdp);
   esito(!!m.foglio, 'senza «chi guidava» si apre il foglio «Il viaggio»');
   esito(!!m.foglio && !!m.piede && m.foglio.bottom <= m.piede.top + 1, 'il foglio si ferma sopra la barra dei tempi', JSON.stringify({ foglio: m.foglio, piede: m.piede }));
@@ -360,6 +378,8 @@ try {
     await valuta(cdp, `(() => { ${AIUTI} return /Passeggero/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
     'sul rientro si indica «Passeggero»',
   );
+  // Anche il rientro aspetta la sua stima dalla rete.
+  await finoA(cdp, `(() => { ${AIUTI} return /Rientro \\d\\d:\\d\\d/.test(t(pagina()?.innerText)); })()`, { cosa: 'stima del rientro', timeoutMs: 60000 }).catch(() => null);
   m = await misura(cdp);
   esito(/Rientro \d\d:\d\d/.test(m.testoPiede) && /Viaggio \d+:\d\d/.test(m.testoPiede), 'la barra mostra viaggio e rientro', m.testoPiede);
   await scorri(cdp, 'fondo');

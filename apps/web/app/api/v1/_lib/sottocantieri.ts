@@ -6,6 +6,8 @@
  * distingue «chiusa» da «sparita» solo se gliela mandiamo.
  */
 
+import { ordinaFasi } from '@kommessa/api/sottocantieri';
+
 export interface SottocantiereDb {
   id: string;
   nome: string;
@@ -18,11 +20,7 @@ export interface SottocantiereDb {
 
 /** Per codice (con i numeri in ordine naturale) e poi per nome. */
 export function fasiOrdinate<T extends SottocantiereDb>(fasi: readonly T[] | null | undefined): T[] {
-  return [...(fasi ?? [])].sort(
-    (a, b) =>
-      (a.codice ?? '').localeCompare(b.codice ?? '', 'it', { numeric: true }) ||
-      a.nome.localeCompare(b.nome, 'it'),
-  );
+  return ordinaFasi(fasi);
 }
 
 /** Il riferimento alla fase su una riga di ore o di spesa; `null` = cantiere intero. */

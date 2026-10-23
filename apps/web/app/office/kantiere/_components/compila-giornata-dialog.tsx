@@ -341,8 +341,8 @@ export function CompilaGiornataDialog({
   // Le fasi come figli: il valore di una fase e' `<cantiere>/<fase>`.
   const opzioniCantieri = dati.cantieri.map((c) => ({
     valore: c.id,
-    etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome,
-    dettaglio: c.codice ?? undefined,
+    etichetta: c.nome,
+    dettaglio: [c.codice, c.cliente].filter(Boolean).join(' · ') || undefined,
     ...(c.sottocantieri && c.sottocantieri.length > 0
       ? { figli: c.sottocantieri.map((f) => ({ valore: valoreLuogo(c.id, f.id), etichetta: f.codice ? `${f.codice} · ${f.nome}` : f.nome })) }
       : {}),

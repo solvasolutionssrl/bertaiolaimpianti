@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
-import { fasiScegibili } from '@kommessa/api/sottocantieri';
+import { fasiScegibili, ordinaFasi } from '@kommessa/api/sottocantieri';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 
 /**
@@ -27,9 +27,7 @@ export async function elencoCantieriPicker(tenantId: string): Promise<PickerCant
  */
 export function conFasiScegibili(cantieri: PickerCantiere[]): PickerCantiere[] {
   return cantieri.map((c) => {
-    const fasi = fasiScegibili(c.sottocantieri).sort((a, b) =>
-      (a.codice ?? '').localeCompare(b.codice ?? '', 'it', { numeric: true }) || a.nome.localeCompare(b.nome, 'it'),
-    );
+    const fasi = ordinaFasi(fasiScegibili(c.sottocantieri));
     return { ...c, sottocantieri: fasi.length > 0 ? fasi : undefined };
   });
 }

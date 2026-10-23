@@ -96,13 +96,21 @@ export function SpeseMioClient({ spese, cantieri, kontabilita }: { spese: SpesaM
               </div>
               <div>
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Ricevuta (foto o PDF)</p>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="block h-10 text-sm file:mr-3 file:h-10 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:text-sm"
-                  aria-label="File della ricevuta"
-                />
+                <div className="flex h-10 items-center gap-3">
+                  <label className="inline-flex h-10 cursor-pointer items-center rounded-md border border-input bg-background px-3 text-xs font-medium text-foreground shadow-sm hover:bg-muted/60">
+                    Scegli il file
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      className="sr-only"
+                      aria-label="File della ricevuta"
+                    />
+                  </label>
+                  <span className={cn('truncate text-sm', file ? 'text-foreground' : 'text-muted-foreground')}>
+                    {file ? file.name : 'Nessun file scelto'}
+                  </span>
+                </div>
               </div>
               <Button size="sm" type="submit" disabled={!file || stato === 'invio'}>
                 {stato === 'invio' ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Upload className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />}

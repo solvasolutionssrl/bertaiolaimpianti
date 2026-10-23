@@ -1176,7 +1176,11 @@ l'assistenza serve.
   `etichettaRuolo` (è un fatto sul ruolo, e ora due posti molto diversi fanno
   la stessa domanda); da `/office` e `/mobile` il middleware porta ciascuno nel
   mondo del suo cliente. Prima si andava sempre su `/office`: per un tecnico un
-  rimbalzo in più e per un istante la schermata sbagliata.
+  rimbalzo in più e per un istante la schermata sbagliata. ⚠️ **Dal 23/10/2026
+  conta anche il dispositivo**: `casaPerRuolo(ruolo, { telefono })` con
+  `telefonoDaUserAgent` — un tecnico guardato da un computer va in
+  `/office/mio`, dal telefono resta su `/mobile`. Vale per l'avvio
+  dell'impersonazione, il bivio `/impersonazione` e il cambio password.
 - ⚠️ **Il rinnovo del cookie non può stare nel middleware**, che sarebbe il
   posto giusto: gira sul runtime edge, dove `node:crypto` non esiste e quella
   firma non si può né leggere né rifare. Resta la barra, ogni 15 minuti.

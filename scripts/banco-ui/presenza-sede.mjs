@@ -36,7 +36,9 @@ try {
   await foto(cdp, 'presenza-01-in-sede');
   // Il banco va in secondi, una giornata in ore: l'ingresso si sposta
   // indietro di tre ore, cosi' la presenza non dura zero minuti.
-  execSync(`supabase db query --linked "update timbri_grezzi set ts = ts - interval '3 hours' where sorgente='app' and dipendente_id='c1d00000-0000-4000-8000-00000000bb01' and tipo='ingresso'"`, { stdio: 'ignore' });
+  // Si sposta l'ingresso indietro di tre ore, ma mai prima della mezzanotte
+  // italiana: lanciato di notte, la presenza finirebbe nel giorno prima.
+  execSync(`supabase db query --linked "update timbri_grezzi set ts = ts - least(interval '3 hours', (now() at time zone 'Europe/Rome')::time - time '00:05') where sorgente='app' and dipendente_id='c1d00000-0000-4000-8000-00000000bb01' and tipo='ingresso'"`, { stdio: 'ignore' });
   await vaiA(cdp, '/office/kantiere/rapportini');
   await finoA(cdp, PILLOLA, { cosa: 'pillola', timeoutMs: 60000 });
 

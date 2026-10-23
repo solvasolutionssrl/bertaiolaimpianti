@@ -6,6 +6,7 @@ import {
   fasiScegibili,
   luogoDaChiave,
   luogoDaValore,
+  ordinaFasi,
   radiceChiave,
   stessoLuogo,
   valoreLuogo,
@@ -43,6 +44,24 @@ describe('valore dei pannelli', () => {
   it('stessoLuogo ignora la differenza fra null e assente', () => {
     expect(stessoLuogo({ cantiereId: 'c1', sottocantiereId: null }, { cantiereId: 'c1', sottocantiereId: null })).toBe(true);
     expect(stessoLuogo({ cantiereId: 'c1', sottocantiereId: 'f1' }, { cantiereId: 'c1', sottocantiereId: null })).toBe(false);
+  });
+});
+
+describe('ordinaFasi', () => {
+  it('⭐ ordine naturale dei codici: 25151.2 prima di 25151.10, e il nome come spareggio', () => {
+    const out = ordinaFasi([
+      { codice: '25151.10', nome: 'B' },
+      { codice: '25151.2', nome: 'A' },
+      { codice: null, nome: 'Z' },
+      { codice: null, nome: 'C' },
+    ]);
+    expect(out.map((f) => f.codice ?? f.nome)).toEqual(['C', 'Z', '25151.2', '25151.10']);
+  });
+  it('non tocca l\'elenco ricevuto', () => {
+    const in_ = [{ codice: 'b', nome: 'b' }, { codice: 'a', nome: 'a' }];
+    ordinaFasi(in_);
+    expect(in_[0]!.codice).toBe('b');
+    expect(ordinaFasi(null)).toEqual([]);
   });
 });
 

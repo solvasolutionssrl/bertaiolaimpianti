@@ -231,7 +231,10 @@ function CantierePills({ labels }: { labels: string[] }) {
       {shown.map((l) => (
         <span
           key={l}
-          className="inline-flex max-w-[12rem] items-center gap-1 rounded-full border border-border bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-foreground/80"
+          title={l}
+          // Con la fase («Cantiere › Fase», 23/10/2026) l'etichetta e' piu' lunga:
+          // a 12rem due pillole dello stesso cantiere si leggevano uguali.
+          className="inline-flex max-w-[17rem] items-center gap-1 rounded-full border border-border bg-muted/50 px-1.5 py-0.5 text-[11px] font-medium text-foreground/80"
         >
           <MapPin className="h-2.5 w-2.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="truncate">{l}</span>

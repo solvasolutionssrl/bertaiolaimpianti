@@ -196,6 +196,7 @@ Per un cantiere, alla timbratura/fine turno si propongono **solo**:
 ## 5. Stima viaggio: provider per-tenant
 
 - Astrazione `RoutingProvider`: famiglia **free** (OSRM/OpenRouteService, gratis, **senza traffico**) o **google** (Google Routes API, **traffico reale**, a pagamento).
+- Nella famiglia free, con `ORS_API_KEY`, si prova OpenRouteService e **se non risponde si ripiega su OSRM** (dal 24/10/2026): ORS rifiuta un punto a più di 350 m da una strada che conosce, e un cantiere in mezzo ai campi restava «Senza stima».
 - La scelta è **per-tenant**, dal super admin (tab **"Viaggio"** di `/admin/tenants/[id]`): `tenant_modules.config.routing_provider` ∈ `free | google` (default `free`).
 - La **chiave Google è unica di piattaforma** (`GOOGLE_MAPS_API_KEY`, in env — **mai** nel DB, **mai** per-tenant). Se il tenant è su `google` ma la chiave manca → fallback automatico a free.
 - Lo **stesso toggle** vale anche per l'**autocomplete indirizzi** delle sedi/cantieri, così indirizzi, tempo e km di un tenant restano coerenti.
@@ -664,6 +665,7 @@ ovunque, riga grigia nella lista dell'ufficio.
 | Sottocantieri: scrittore unico delle timbrature (eredità della fase) | `apps/web/app/_actions/_lib/timbrature-scrivi.ts` |
 | Sottocantieri: API | `apps/web/app/api/v1/_lib/sottocantieri.ts`, rotte `cantieri`, `ore`, `spese`, `letture` |
 | `packages/api/src/fasi-gestionale.ts` + `_lib/integrazione/promuovi.ts` | Promozione delle fasi dal gestionale (crea, aggiorna, collega; mai chiude) |
+| I tecnici da computer | `apps/web/app/office/mio/**` (guscio ufficio con barra ridotta, azioni self), `office/layout.tsx` (presidio: un tecnico Kantiere entra solo lì), `resolveOfficeLanding` e `casaPerRuolo(ruolo, { telefono })` per l'atterraggio |
 
 ## 12. Sottocantieri (fasi) — dal 23/10/2026
 

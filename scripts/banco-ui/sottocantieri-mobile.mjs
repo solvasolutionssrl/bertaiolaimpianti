@@ -24,14 +24,16 @@ const leggi = (q) => {
     return [];
   }
 };
-const oggiAlle = (hhmm) => `((current_date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
+/** Il giorno italiano: `current_date` nel database e' UTC, e dopo mezzanotte e' ancora ieri. */
+const OGGI_ROME = "((now() at time zone 'Europe/Rome')::date)";
+const oggiAlle = (hhmm) => `((${OGGI_ROME}::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 const testo = (cdp) => valuta(cdp, `document.body.innerText`);
 
 const pulisci = () => {
-  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=${OGGI_ROME}`);
   sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= ${oggiAlle('00:00')}`);
-  sql(`delete from rapportini where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from rapportini where dipendente_id='${DIP}' and data=${OGGI_ROME}`);
   sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and sorgente='app' and ts >= ${oggiAlle('00:00')}`);
   sql(`delete from sottocantieri where codice='B-01' and nome='Fase banco' and tenant_id=${TENANT}`);
 };
@@ -139,6 +141,10 @@ try {
   await pausa(600);
 
   // 5. Fine turno: la fase si eredita sull'uscita e sulla riga delle ore.
+  // ⚠️ Con il passo di 5 minuti di DEMOC un turno aperto e chiuso nello stesso
+  // slot vale zero minuti e non produce nessuna riga: l'ingresso si sposta
+  // indietro di un quarto d'ora, cosi' la riga esiste e si puo' misurare.
+  sql(`update timbrature set ts = ts - interval '15 minutes' where dipendente_id='${DIP}' and tipo='ingresso' and ts >= ${oggiAlle('00:00')}`);
   await clicVero(cdp, `[...document.querySelectorAll('button')].find((b) => /^Termina turno/.test(b.textContent.trim()))`);
   await finoA(cdp, `/Destinazione/.test(document.body.innerText)`, { cosa: 'dialog fine turno', timeoutMs: 15_000 });
   await pausa(800);
@@ -149,7 +155,7 @@ try {
   await pausa(1500);
   const uscite = leggi(`select sottocantiere_id from timbrature where dipendente_id='${DIP}' and ts >= ${oggiAlle('00:00')} and tipo='uscita'`);
   esito(uscite.length === 1 && uscite[0].sottocantiere_id === seminata[0].id, 'l’uscita eredita la fase dell’ingresso');
-  const righe = leggi(`select r.sottocantiere_id from rapportino_righe r join rapportini p on p.id=r.rapportino_id where p.dipendente_id='${DIP}' and p.data=current_date`);
+  const righe = leggi(`select r.sottocantiere_id from rapportino_righe r join rapportini p on p.id=r.rapportino_id where p.dipendente_id='${DIP}' and p.data=${OGGI_ROME}`);
   esito(righe.length === 1 && righe[0].sottocantiere_id === seminata[0].id, 'la riga delle ore è della fase');
 
   await vaiA(cdp, '/mobile/kantiere/ore');
@@ -162,7 +168,8 @@ try {
   for (const e of erroriBrowser.slice(0, 5)) console.log(`    · ${e}`);
 } finally {
   await chiudi();
-  pulisci();
+  // `BANCO_TIENI=1` lascia i dati sul demo per guardarli: poi si ripulisce a mano.
+  if (!process.env.BANCO_TIENI) pulisci();
   sql(`update dipendenti set modalita_lavoro='ufficio' where id='${DIP}'`);
 }
 

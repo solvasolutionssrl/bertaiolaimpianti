@@ -90,3 +90,15 @@ export function fasiScegibili<T extends { stato?: string | null }>(fasi: readonl
  * `FASE_RICHIESTA` del server.
  */
 export const MESSAGGIO_FASE_RICHIESTA = 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+
+/**
+ * L'ordine in cui si mostrano le fasi, ovunque: per codice con i numeri in
+ * ordine naturale («25151.2» prima di «25151.10»), poi per nome. Era scritto
+ * due volte (picker del telefono e API) con lo stesso comparatore: una copia
+ * sola, cosi' il giorno che cambia cambia dappertutto.
+ */
+export function ordinaFasi<T extends { codice: string | null; nome: string }>(fasi: readonly T[] | null | undefined): T[] {
+  return [...(fasi ?? [])].sort(
+    (a, b) => (a.codice ?? '').localeCompare(b.codice ?? '', 'it', { numeric: true }) || a.nome.localeCompare(b.nome, 'it'),
+  );
+}

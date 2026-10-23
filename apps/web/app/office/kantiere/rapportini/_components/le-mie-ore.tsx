@@ -70,7 +70,13 @@ export function LeMieOre({
           )}
           {stato.testo}
         </span>
-        <button type="button" onClick={() => onVediLeMie(false)} className="ml-auto text-xs font-medium text-primary hover:underline">
+        {/* Un collegamento alto come i tasti della barra (32px): un testo da 16px
+            e' un bersaglio troppo piccolo, lo misura il banco dell'ufficio. */}
+        <button
+          type="button"
+          onClick={() => onVediLeMie(false)}
+          className="ml-auto inline-flex h-8 items-center rounded-md px-2 text-xs font-medium text-primary hover:bg-primary/5 hover:underline"
+        >
           Vedi le mie giornate
         </button>
       </div>
