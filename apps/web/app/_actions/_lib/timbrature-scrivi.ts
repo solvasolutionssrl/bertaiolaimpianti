@@ -74,6 +74,7 @@ export async function scriviTimbrature(
     const { data: prec } = await supabase
       .from('timbrature' as never)
       .select('dipendente_id, cantiere_id, sottocantiere_id, ts')
+      .eq('tenant_id', daEreditare[0]!.tenant_id)
       .in('dipendente_id', persone)
       .gte('ts', dal)
       .order('ts', { ascending: false });

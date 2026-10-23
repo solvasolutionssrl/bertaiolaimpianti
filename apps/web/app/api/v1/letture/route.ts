@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
       // sosta non ha colonne per loro): chi promuove li legge da li'.
       const datiFase =
         entita === 'sottocantiere'
-          ? { externalCantiereId: r.externalCantiereId!.trim(), descrizione: r.descrizione?.trim().slice(0, 1000) || null }
+          ? { externalCantiereId: r.externalCantiereId!.trim().slice(0, 200), descrizione: r.descrizione?.trim().slice(0, 1000) || null }
           : {};
       const canonici = [
         r.nome,

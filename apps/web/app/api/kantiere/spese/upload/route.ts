@@ -12,7 +12,7 @@ import {
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
-import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 
 export const maxDuration = 60;
@@ -95,6 +95,13 @@ export async function POST(request: NextRequest) {
       return Response.json({ ok: false, code: scrivibile.error }, { status: 400 });
     }
     cantiereId = cantiereIdInput;
+    // La fase (23/10): deve esistere ed essere di QUESTO cantiere; chiusa non
+    // blocca una spesa gia' sostenuta. Senza questo controllo l'errore sarebbe
+    // quello della chiave esterna, che una persona non puo' leggere.
+    if (sottocantiereIdInput) {
+      const fase = await sottocantieriScrivibili(service, [{ cantiereId, sottocantiereId: sottocantiereIdInput }], ctx.tenantId, { forzato: true });
+      if (!fase.ok) return Response.json({ ok: false, code: fase.error }, { status: 400 });
+    }
     commessaId = scrivibile.commessaId ?? null;
   }
 
