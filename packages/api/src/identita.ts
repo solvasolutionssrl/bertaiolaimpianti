@@ -373,8 +373,23 @@ export function etichettaRuolo(
  * `/mobile/kantiere/cantieri`. Scrivere qui quelle destinazioni vorrebbe dire
  * una seconda mappa da tenere allineata alla prima.
  */
-export function casaPerRuolo(ruolo: string): string {
-  return ruolo === 'admin' || ruolo === 'office' ? '/office' : '/mobile';
+export function casaPerRuolo(ruolo: string, opzioni: { telefono?: boolean } = {}): string {
+  if (ruolo === 'admin' || ruolo === 'office') return '/office';
+  // Un tecnico da computer (23/10/2026) ha la sua area dentro l'ufficio,
+  // `/office/mio`: la sceglie il middleware da `/office`. Dal telefono resta
+  // sul telefono. Senza sapere il dispositivo si assume il telefono, che e'
+  // il suo caso comune.
+  return opzioni.telefono === false ? '/office' : '/mobile';
+}
+
+/**
+ * Il dispositivo dal solo User-Agent, per chi decide la casa dal server
+ * (impersonazione, cambio password): telefoni e tablet Android/iOS. Un iPad
+ * con Safari si dichiara Mac, e finisce nell'ufficio: accettato, da li' un
+ * tecnico ha la sua area e un tocco in piu' lo porta sul telefono.
+ */
+export function telefonoDaUserAgent(ua: string | null | undefined): boolean {
+  return /Android|iPhone|iPad|iPod|Mobile|Mobi/i.test(ua ?? '');
 }
 
 /** I ruoli vivi, in ordine di ampiezza. I dismessi (`owner`, `capo`) non ci sono. */

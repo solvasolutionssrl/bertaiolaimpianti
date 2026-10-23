@@ -1,7 +1,7 @@
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { casaPerRuolo } from '@kommessa/api/identita';
+import { casaPerRuolo, telefonoDaUserAgent } from '@kommessa/api/identita';
 import { etichettaImpersonazione } from '@kommessa/api/impersonazione';
 
 import { leggiShadow, SHADOW_COOKIE } from '../admin/_lib/shadow';
@@ -52,7 +52,7 @@ export default function PaginaImpersonazione() {
       admin={shadow.admin_email}
       // Dove tornare «dentro»: il guscio del mestiere di chi si impersona, non
       // l'ufficio per tutti — un tecnico lì ci rimbalzerebbe.
-      dentro={casaPerRuolo(ruolo ?? 'tecnico')}
+      dentro={casaPerRuolo(ruolo ?? 'tecnico', { telefono: telefonoDaUserAgent(headers().get('user-agent')) })}
       scadeAt={shadow.scade_at}
     />
   );

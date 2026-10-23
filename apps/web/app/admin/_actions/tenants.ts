@@ -14,7 +14,8 @@ import { chiaviValide } from '@/app/_lib/personalizzazioni-registry';
 import { firmaShadow, leggiShadow, SHADOW_COOKIE, SHADOW_DURATA_S } from '../_lib/shadow';
 import { requirePlatformAdmin } from '../_lib/guard';
 import { nomeModelloPlausibile } from '@kommessa/api/trascrizione';
-import { casaPerRuolo } from '@kommessa/api/identita';
+import { headers } from 'next/headers';
+import { casaPerRuolo, telefonoDaUserAgent } from '@kommessa/api/identita';
 import {
   motivoNonImpersonabile,
   type PersonaImpersonabile,
@@ -669,7 +670,9 @@ export async function impersonateUser(opts: {
     },
   });
 
-  redirect(casaPerRuolo(persona.role));
+  // Dove atterra chi impersona dipende dal mestiere E dal dispositivo: un
+  // tecnico guardato da un computer entra in /office/mio, non nel telefono.
+  redirect(casaPerRuolo(persona.role, { telefono: telefonoDaUserAgent(headers().get('user-agent')) }));
 }
 
 /**

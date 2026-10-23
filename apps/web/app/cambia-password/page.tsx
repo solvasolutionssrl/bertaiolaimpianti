@@ -6,7 +6,8 @@ import { formattaGiorno, quandoScade, testoScadenza } from '@kommessa/api/scaden
 
 import { getTenantContextCached } from '@/app/_lib/tenant-cache';
 import { statoPassword } from '@/app/_lib/cambio-password';
-import { casaPerRuolo } from '@kommessa/api/identita';
+import { headers } from 'next/headers';
+import { casaPerRuolo, telefonoDaUserAgent } from '@kommessa/api/identita';
 import { CambiaPasswordForm } from './_components/cambia-password-form';
 
 export const dynamic = 'force-dynamic';
@@ -88,7 +89,7 @@ export default async function CambiaPasswordPage() {
         <CambiaPasswordForm
           nomeAccesso={etichettaAccesso(ctx.email)}
           obbligato={obbligato}
-          casa={casaPerRuolo(ctx.role)}
+          casa={casaPerRuolo(ctx.role, { telefono: telefonoDaUserAgent(headers().get('user-agent')) })}
         />
       </div>
     </div>

@@ -343,6 +343,10 @@ describe('casaPerRuolo', () => {
 
   it('i tecnici nel guscio del telefono', () => {
     expect(casaPerRuolo('tecnico')).toBe('/mobile');
+    // Da computer il tecnico entra nel guscio dell'ufficio (poi /office/mio).
+    expect(casaPerRuolo('tecnico', { telefono: false })).toBe('/office');
+    expect(casaPerRuolo('tecnico', { telefono: true })).toBe('/mobile');
+    expect(casaPerRuolo('admin', { telefono: true })).toBe('/office');
   });
 
   it('un ruolo che non conosciamo finisce sul telefono, non sull’ufficio', () => {
