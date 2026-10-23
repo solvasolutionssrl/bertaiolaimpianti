@@ -1,3 +1,5 @@
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { NESSUN_ARROTONDAMENTO, coppiaPausaAllineata, type RegolaArrotondamentoTimbri } from '@kommessa/api/arrotondamento-timbri';
 import { z } from 'zod';
 import type { createServerSupabase } from '@kommessa/api/server';
 import { SOGLIA_PAUSA_PRANZO_ORE, statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
@@ -56,13 +58,12 @@ export function coppiaPausaCentrata(
   startIso: string,
   endIso: string,
   minuti: number,
+  // Con le timbrature lette al passo (23/10/2026) la pausa si allinea al
+  // passo, o 30 minuti dichiarati ne varrebbero 35: vedi `coppiaPausaAllineata`.
+  regola: RegolaArrotondamentoTimbri = NESSUN_ARROTONDAMENTO,
 ): { uscitaIso: string; ingressoIso: string } {
-  const mid = (Date.parse(startIso) + Date.parse(endIso)) / 2;
-  const half = (minuti * 60000) / 2;
-  return {
-    uscitaIso: new Date(mid - half).toISOString(),
-    ingressoIso: new Date(mid + half).toISOString(),
-  };
+  const c = coppiaPausaAllineata(Date.parse(startIso), Date.parse(endIso), minuti, regola);
+  return { uscitaIso: new Date(c.uscitaMs).toISOString(), ingressoIso: new Date(c.ingressoMs).toISOString() };
 }
 
 /**
@@ -83,7 +84,8 @@ export async function inserisciPausaDichiarata(
     minuti: number;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { uscitaIso, ingressoIso } = coppiaPausaCentrata(opts.startIso, opts.endIso, opts.minuti);
+  const regola = await leggiRegolaTimbri(supabase, opts.tenantId);
+  const { uscitaIso, ingressoIso } = coppiaPausaCentrata(opts.startIso, opts.endIso, opts.minuti, regola);
   const base = {
     tenant_id: opts.tenantId,
     dipendente_id: opts.dipendenteId,

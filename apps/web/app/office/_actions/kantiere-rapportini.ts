@@ -1,5 +1,6 @@
 'use server';
 
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
@@ -748,7 +749,7 @@ export async function aggiungiPausaGiornata(
     .lt('ts', toIso);
 
   // Stessa coppia-pausa centrata della pausa dichiarata in chiusura turno.
-  const { uscitaIso, ingressoIso } = coppiaPausaCentrata(primoIngresso.ts, ultimaUscita.ts, minuti);
+  const { uscitaIso, ingressoIso } = coppiaPausaCentrata(primoIngresso.ts, ultimaUscita.ts, minuti, await leggiRegolaTimbri(supabase, ctx.tenantId));
   const base = {
     tenant_id: ctx.tenantId,
     dipendente_id: dipendenteId,

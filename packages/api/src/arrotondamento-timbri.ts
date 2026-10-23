@@ -72,3 +72,29 @@ export function arrotondaEventi<T extends { ms: number }>(eventi: readonly T[], 
   if (!(regola.passoMin > 0)) return [...eventi];
   return eventi.map((e) => ({ ...e, ms: arrotondaMs(e.ms, regola) }));
 }
+
+/**
+ * Una pausa DICHIARATA (30/45/60 min, scelta a fine turno o aggiunta
+ * dall'ufficio) si scrive come coppia uscita→ingresso centrata nel turno. Con
+ * la regola accesa il centro esatto cadrebbe fra due slot: 12:02:30→12:32:30
+ * letti ai 5 minuti diventano 12:00→12:35, e la pausa di 30 ne varrebbe 35.
+ * Quindi l'inizio della pausa si allinea al passo, e la fine e' inizio +
+ * minuti: cosi' i minuti dichiarati sono esattamente quelli contati.
+ * La coppia resta dentro `[startMs, endMs]`: se non c'e' spazio, si appoggia
+ * all'estremo. Con passo 0 (o giorno fuori regola) e' il centro esatto.
+ */
+export function coppiaPausaAllineata(
+  startMs: number,
+  endMs: number,
+  minuti: number,
+  regola: RegolaArrotondamentoTimbri,
+): { uscitaMs: number; ingressoMs: number } {
+  const durata = Math.max(0, minuti) * 60_000;
+  const mid = (startMs + endMs) / 2;
+  let uscita = arrotondaMs(mid - durata / 2, regola);
+  const lo = arrotondaMs(startMs, regola);
+  const hi = arrotondaMs(endMs, regola);
+  if (uscita + durata > hi) uscita = hi - durata;
+  if (uscita < lo) uscita = lo;
+  return { uscitaMs: uscita, ingressoMs: uscita + durata };
+}

@@ -1619,6 +1619,11 @@ ciò che esce verso il gestionale sono multipli del passo.
   doppioni si misura sull'esatto**, altrimenti tre gesti a due minuti l'uno
   dall'altro diventavano un doppione solo. Chi arrotonda prima di passare
   gli eventi a un motore deve passare anche `ordine`.
+- ⚠️ **La pausa dichiarata si allinea al passo** (`coppiaPausaAllineata`,
+  usata da `coppiaPausaCentrata` nei due scrittori: fine turno con pausa
+  dichiarata e «aggiungi pausa» dell'ufficio). Centrata al secondo, una
+  pausa di 30 letta ai 5 minuti ne valeva 35 (12:02:30→12:32:30 diventa
+  12:00→12:35). Ora l'inizio sta sul passo e la fine e' inizio + minuti.
 - Vocabolario a schermo e tab **Regole** del super admin aggiornati; il
   passo della display (`PASSO_ORA_MOSTRATA_MIN`) resta 5 per tutti.
 

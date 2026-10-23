@@ -102,3 +102,25 @@ describe('⚠️ a parita\' di minuto arrotondato conta l\'ordine vero', async (
     expect(p.minutiNetti).toBe(190);
   });
 });
+
+describe('coppiaPausaAllineata', async () => {
+  const { coppiaPausaAllineata } = await import('./arrotondamento-timbri');
+  const iso = (m: number) => new Date(m).toISOString();
+  it('⭐ la pausa di 30 vale 30 anche letta ai 5 minuti', () => {
+    // Turno 07:59:10 → 16:05:50: centro 12:02:30, pausa esatta 11:47:30→12:17:30
+    // (ora italiana). L'inizio a meta' slot va in su: 11:50 → 12:20.
+    const r = coppiaPausaAllineata(ms('2026-10-23T05:59:10Z'), ms('2026-10-23T14:05:50Z'), 30, R5);
+    expect([iso(r.uscitaMs), iso(r.ingressoMs)]).toEqual(['2026-10-23T09:50:00.000Z', '2026-10-23T10:20:00.000Z']);
+    expect(arrotondaMs(r.ingressoMs, R5) - arrotondaMs(r.uscitaMs, R5)).toBe(30 * 60_000);
+  });
+  it('con passo 0 e\' il centro esatto', () => {
+    const r = coppiaPausaAllineata(ms('2026-10-23T06:00:00Z'), ms('2026-10-23T14:00:00Z'), 60, NESSUN_ARROTONDAMENTO);
+    expect([iso(r.uscitaMs), iso(r.ingressoMs)]).toEqual(['2026-10-23T09:30:00.000Z', '2026-10-23T10:30:00.000Z']);
+  });
+  it('resta dentro il turno quando lo spazio e\' poco', () => {
+    const r = coppiaPausaAllineata(ms('2026-10-23T06:02:00Z'), ms('2026-10-23T06:40:00Z'), 30, R5);
+    expect(r.uscitaMs).toBeGreaterThanOrEqual(ms('2026-10-23T06:00:00Z'));
+    expect(r.ingressoMs).toBeLessThanOrEqual(ms('2026-10-23T06:40:00Z'));
+    expect(r.ingressoMs - r.uscitaMs).toBe(30 * 60_000);
+  });
+});
