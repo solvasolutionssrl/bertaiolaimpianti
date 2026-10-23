@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     'mobile-web-app-capable': 'yes',
     'apple-mobile-web-app-capable': 'yes',
     // NB: `apple-mobile-web-app-status-bar-style` è impostato una sola volta nel
-    // root layout (appleWebApp.statusBarStyle = 'black-translucent'). NON
+    // root layout (appleWebApp.statusBarStyle = 'default', dal 23/10/2026). NON
     // ripeterlo qui: due meta con lo stesso nome creerebbero un duplicato e iOS
     // userebbe il primo (era il vecchio 'default' → barra bianca).
   },

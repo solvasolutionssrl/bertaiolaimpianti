@@ -24,12 +24,15 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    // black-translucent: la status bar iOS diventa un overlay trasparente e il
-    // contenuto va a tutto schermo SOTTO Dynamic Island / notch. Lo sfondo
-    // dell'app prosegue dietro l'isola (niente più barra bianca). L'inset in
-    // alto è gestito centralmente nel layout mobile (padding + scrim blu).
-    // Sul telefono l'app installata finisce su /mobile (da /avvio), quindi vale lì.
-    statusBarStyle: 'black-translucent',
+    // ⚠️ Dal 23/10/2026 `default` (barra di stato OPACA, la pagina parte sotto).
+    // Con `black-translucent` iOS 26.1+ disegna un effetto vetro sfocato sui
+    // primi ~40 punti (iOS 27: ~110) dell'app installata, sopra i nostri tasti
+    // fissi in alto (campanella, «+ Spesa»); nessun meta o CSS lo spegne, e la
+    // nostra fascia blu alta quanto l'inset non basta a farlo saltare. Con la
+    // barra opaca `safe-area-inset-top` vale 0, la fascia blu del layout mobile
+    // sparisce da sola e `--inset-top` tiene il minimo di 12px. Il colore della
+    // barra lo da' `viewport.themeColor` (chiaro/scuro). Misurato su iOS 27.0.1.
+    statusBarStyle: 'default',
     title: 'Kommessa',
   },
   formatDetection: {
