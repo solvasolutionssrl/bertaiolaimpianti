@@ -126,7 +126,7 @@ export default async function KantiereHomePage() {
             Kantiere
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-            {me ? `Ciao, ${titoloCase(me.nome)}` : 'Kantiere'}
+            {me ? titoloCase(me.nome) : 'Kantiere'}
           </h1>
           <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
         </header>
@@ -163,7 +163,7 @@ export default async function KantiereHomePage() {
           Kantiere
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          {me ? `Ciao, ${titoloCase(me.nome)}` : 'Kantiere'}
+          {me ? titoloCase(me.nome) : 'Kantiere'}
         </h1>
         <p className="mt-0.5 text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
       </header>

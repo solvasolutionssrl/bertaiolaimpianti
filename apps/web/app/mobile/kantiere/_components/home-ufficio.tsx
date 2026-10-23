@@ -68,7 +68,7 @@ export function HomeUfficio({
     <div className="flex flex-col gap-4">
       {nome ? (
         <p className="text-sm text-muted-foreground">
-          Ciao <span className="font-medium text-foreground">{titoloCase(nome)}</span>
+          <span className="font-medium text-foreground">{titoloCase(nome)}</span>
         </p>
       ) : null}
 
