@@ -15,6 +15,8 @@ import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
+import { HomeUfficio } from '../_components/home-ufficio';
+import { caricaGiornataUfficio } from '../_lib/giornata-ufficio';
 import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
 import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 
@@ -202,6 +204,10 @@ export default async function MobileOrePage() {
   const azioni = turno
     ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, turno.cantiereId)
     : null;
+  // Utente ufficio che timbra anche lui: la sua giornata (inizia, pausa,
+  // chiudi) sta anche qui, in cima alle ore. Se il terminale ha gia' chiuso
+  // il turno, la card non deve dire «Fine turno»: si passa senza turno.
+  const giornataUfficio = await caricaGiornataUfficio(ctx);
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
@@ -219,7 +225,17 @@ export default async function MobileOrePage() {
         </div>
       </header>
 
-      {turno && azioni && !turnoChiusoDalTimbro ? (
+      {giornataUfficio ? (
+        <HomeUfficio
+          compatto
+          turno={turnoChiusoDalTimbro ? null : giornataUfficio.turno}
+          azioni={giornataUfficio.azioni}
+          cantieri={giornataUfficio.cantieri}
+          presenza={giornataUfficio.presenza}
+        />
+      ) : null}
+
+      {!giornataUfficio && turno && azioni && !turnoChiusoDalTimbro ? (
         <TurnoAzioniCantiere
           cantiereId={turno.cantiereId}
           cantiereNome={turno.cantiereNome}

@@ -56,6 +56,7 @@ export function HomeUfficio({
   azioni,
   cantieri,
   presenza,
+  compatto = false,
 }: {
   nome?: string | null;
   turno: TurnoApertoUfficio | null;
@@ -63,10 +64,19 @@ export function HomeUfficio({
   cantieri?: PickerCantiere[];
   /** La presenza in sede senza cantiere di oggi (registro), se c'e'. */
   presenza?: PresenzaSedeVista | null;
+  /**
+   * In cima al Cruscotto e alla tab Ore (utenti ufficio, dal 23/10/2026): la
+   * stessa card, con un'etichetta «La mia giornata» e senza il nome e i due
+   * collegamenti (su quelle pagine «Le mie ore» porterebbe dove si e' gia').
+   */
+  compatto?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-4">
-      {nome ? (
+    <div className="flex flex-col gap-4" data-giornata-ufficio={compatto ? 'compatta' : 'intera'}>
+      {compatto ? (
+        <p className="-mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">La mia giornata</p>
+      ) : null}
+      {nome && !compatto ? (
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{titoloCase(nome)}</span>
         </p>
@@ -103,6 +113,7 @@ export function HomeUfficio({
         </>
       )}
 
+      {compatto ? null : (
       <div className="grid grid-cols-2 gap-3">
         <Link
           href="/mobile/kantiere/ore"
@@ -126,6 +137,7 @@ export function HomeUfficio({
           <span className="text-sm font-semibold">Scansiona QR</span>
         </Link>
       </div>
+      )}
     </div>
   );
 }

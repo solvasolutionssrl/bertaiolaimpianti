@@ -29,6 +29,8 @@ import { statoDaEventi, type EventoOggi } from '../_lib/presenze';
 import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { caricaTurnoAzioniContesto } from '../_lib/turno-azioni-contesto';
 import { TurnoAzioniCantiere } from '../_components/turno-azioni-cantiere';
+import { HomeUfficio } from '../_components/home-ufficio';
+import { caricaGiornataUfficio } from '../_lib/giornata-ufficio';
 import { PresenzeGiorno, type PersonaGiorno } from './_components/ultime-timbrature';
 import { NuovaSpesa } from '../spese/_components/nuova-spesa';
 import { elencoCantieriPicker } from '../_lib/cantieri-picker-data';
@@ -197,6 +199,10 @@ export default async function CruscottoKantierePage({
   const mioTurnoAzioni = mioTurno
     ? await caricaTurnoAzioniContesto(ctx.tenantId, ctx.userId, mioTurno.cantiereId)
     : null;
+  // Chi sta in ufficio e timbra anche lui trova QUI la sua giornata (inizia,
+  // pausa, chiudi, inserisci le commesse), non solo nella tab Cantieri. Al
+  // suo posto, per chi lavora fuori, resta la card del turno qui sotto.
+  const giornataUfficio = await caricaGiornataUfficio(ctx);
 
   // Lista cantieri (formato picker) per la nuova spesa — solo se ha un profilo
   // dipendente (altrimenti la pill non compare).
@@ -391,9 +397,20 @@ export default async function CruscottoKantierePage({
         {isOggi ? <LiveRefresh className="-ml-1.5 mt-1.5" /> : null}
       </header>
 
+      {giornataUfficio ? (
+        <HomeUfficio
+          compatto
+          turno={giornataUfficio.turno}
+          azioni={giornataUfficio.azioni}
+          cantieri={giornataUfficio.cantieri}
+          presenza={giornataUfficio.presenza}
+        />
+      ) : null}
+
       {/* Turno attivo dell'admin/office: stessa card delle sue Ore (pausa,
-          cambio cantiere, fine turno), come promemoria in cima al cruscotto. */}
-      {mioTurno && mioTurnoAzioni ? (
+          cambio cantiere, fine turno), come promemoria in cima al cruscotto.
+          Chi sta in ufficio ha gia' la sua card qui sopra. */}
+      {!giornataUfficio && mioTurno && mioTurnoAzioni ? (
         <TurnoAzioniCantiere
           compatto
           cantiereId={mioTurno.cantiereId}

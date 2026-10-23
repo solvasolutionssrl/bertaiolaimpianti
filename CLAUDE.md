@@ -1622,6 +1622,24 @@ ciò che esce verso il gestionale sono multipli del passo.
 - Vocabolario a schermo e tab **Regole** del super admin aggiornati; il
   passo della display (`PASSO_ORA_MOSTRATA_MIN`) resta 5 per tutti.
 
+### «Inizia giornata» per l'ufficio anche su Cruscotto e Ore (23/10/2026) — nessuna migration
+
+Per un utente ufficio che timbra anche lui «Inizia giornata» stava solo
+nella tab Cantieri, che non e' la sua tab. Ora la stessa card («La mia
+giornata»: stato di oggi, Inizia giornata, pausa, chiudi, presenza in sede,
+Inserisci le commesse) sta **in cima al Cruscotto e alla tab Ore**, e resta
+anche in Cantieri. Per i **tecnici non cambia niente** (scelta di Luca).
+
+- Lettura unica `mobile/kantiere/_lib/giornata-ufficio.ts`
+  (`caricaGiornataUfficio`): torna `null` per i tecnici, per chi non ha una
+  scheda dipendente e per chi lavora in modalita' «esterno» (quelli hanno gia'
+  la card del turno e «Inizia turno» in Cantieri). `HomeUfficio` ha la prop
+  `compatto` (etichetta, senza nome e senza i due collegamenti).
+- ⚠️ Dove la card c'e', la card del turno di quelle pagine **non si mostra**:
+  due «Fine turno» sulla stessa pagina chiuderebbero in due modi diversi.
+  Nella tab Ore, con il turno gia' chiuso dal terminale, la card passa senza
+  turno (stessa regola della card del turno).
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.
