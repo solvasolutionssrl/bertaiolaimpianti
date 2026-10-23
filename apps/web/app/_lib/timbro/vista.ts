@@ -21,7 +21,7 @@ export interface TimbroGiornataVista {
   pausaTimbrataMin: number;
   inizioFisico: boolean;
   fineFisica: boolean;
-  primoCantiere: { id: string; nome: string; codice: string | null } | null;
+  primoCantiere: { id: string; nome: string; codice: string | null; sottocantiereId: string | null; sottocantiereNome: string | null } | null;
   timbri: TimbroVisto[];
   /** Gli intervalli di presenza da riempire (ISO), per l'anteprima esatta. */
   intervalli: { inizioIso: string; fineIso: string }[];
@@ -45,9 +45,12 @@ export function vistaDaGiornata(
   dipendenteNome: string,
   nomeCantiere: (id: string) => { nome: string; codice: string | null } | null,
   modalitaLavoro: 'ufficio' | 'esterno' = 'esterno',
+  /** Il nome di una fase (sottocantiere) dal suo id, se il chiamante li conosce. */
+  nomeFase: (id: string) => string | null = () => null,
 ): TimbroGiornataVista {
   const s = g.scatola;
   const pc = s?.ingressoEsistente ? nomeCantiere(s.ingressoEsistente.cantiereId) : null;
+  const faseId = s?.ingressoEsistente?.sottocantiereId ?? null;
   const primo = g.presenza?.intervalli[0]?.inizioMs ?? null;
   const ultimo = g.presenza?.intervalli[g.presenza.intervalli.length - 1]?.fineMs ?? null;
   const primoTimbro = g.timbri.find((t) => !t.scartato)?.ts ?? null;
@@ -65,7 +68,13 @@ export function vistaDaGiornata(
     inizioFisico: s?.inizioFisico ?? true,
     fineFisica: s?.fineFisica ?? true,
     primoCantiere: s?.ingressoEsistente
-      ? { id: s.ingressoEsistente.cantiereId, nome: pc?.nome ?? 'Cantiere', codice: pc?.codice ?? null }
+      ? {
+          id: s.ingressoEsistente.cantiereId,
+          nome: pc?.nome ?? 'Cantiere',
+          codice: pc?.codice ?? null,
+          sottocantiereId: faseId,
+          sottocantiereNome: faseId ? nomeFase(faseId) : null,
+        }
       : null,
     timbri: g.timbri,
     intervalli: (s?.intervalli ?? g.presenza?.intervalli ?? []).map((i) => ({

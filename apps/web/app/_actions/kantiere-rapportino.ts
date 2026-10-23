@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
@@ -19,6 +20,8 @@ type RigaRapportino = {
   id: string;
   commessa_id: string | null;
   cantiere_id: string | null;
+  /** La fase (sottocantiere) delle ore, se scelta. */
+  sottocantiere_id?: string | null;
   target_label: string;
   ore_ordinarie: number;
   ore_straordinarie: number;
@@ -196,15 +199,17 @@ async function esisteRapportinoOTimbrature(
 async function caricaPayloadRapportino(
   supabase: ReturnType<typeof createServerSupabase>,
   rapp: { id: string; data: string; stato: string; note: string | null },
+  tenantId: string,
 ): Promise<RapportinoPayload> {
   const { data: righeRaw } = await supabase
     .from('rapportino_righe' as never)
-    .select('id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
+    .select('id, commessa_id, cantiere_id, sottocantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, note')
     .eq('rapportino_id', rapp.id);
   const righeRows = (righeRaw as {
     id: string;
     commessa_id: string | null;
     cantiere_id: string | null;
+    sottocantiere_id: string | null;
     ore_ordinarie: number;
     ore_straordinarie: number;
     ore_viaggio: number;
@@ -212,15 +217,18 @@ async function caricaPayloadRapportino(
   }[]) ?? [];
   const commessaIds = righeRows.flatMap((r) => (r.commessa_id ? [r.commessa_id] : []));
   const cantiereIds = righeRows.flatMap((r) => (r.cantiere_id ? [r.cantiere_id] : []));
-  const [mappaCommesse, mappaCantieri] = await Promise.all([
+  const [mappaCommesse, mappaCantieri, fasi] = await Promise.all([
     titoliCommesse(supabase, commessaIds),
     nomiCantieri(supabase, cantiereIds),
+    nomiSottocantieri(supabase, tenantId, righeRows.map((r) => r.sottocantiere_id)),
   ]);
   const righe: RigaRapportino[] = righeRows.map((rr) => ({
     id: rr.id,
     commessa_id: rr.commessa_id,
     cantiere_id: rr.cantiere_id,
-    target_label: labelRiga(rr, mappaCommesse, mappaCantieri),
+    sottocantiere_id: rr.sottocantiere_id ?? null,
+    // «Cantiere › Fase» quando le ore sono di una fase.
+    target_label: etichettaConFase(labelRiga(rr, mappaCommesse, mappaCantieri), rr.sottocantiere_id, fasi),
     ore_ordinarie: Number(rr.ore_ordinarie),
     ore_straordinarie: Number(rr.ore_straordinarie),
     ore_viaggio: Number(rr.ore_viaggio),
@@ -268,7 +276,7 @@ export async function precompilaMioRapportino(
     return { ok: true, rapportino: { id: '', data, stato: 'bozza', note: null, righe: [] } };
   }
 
-  return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp) };
+  return { ok: true, rapportino: await caricaPayloadRapportino(supabase, rapp, ctx.tenantId) };
 }
 
 // ── 5) mioStoricoRapportini ──────────────────────────────────────────────────
@@ -451,7 +459,7 @@ export async function caricaMiaGiornata(
   let righe: RigaGiornataModifica[] = [];
   let stato = 'bozza';
   if (rapp) {
-    const payload = await caricaPayloadRapportino(supabase, rapp);
+    const payload = await caricaPayloadRapportino(supabase, rapp, ctx.tenantId);
     stato = payload.stato;
     righe = payload.righe.map((rr) => ({
       commessa_id: rr.commessa_id,

@@ -19,7 +19,7 @@ import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { chiaviSpeseValide } from '@/app/api/kantiere/spese/_lib/r2-spese';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 import { auditTenant } from '@/app/_actions/_lib/audit';
-import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import {
   buildSnapshotSpesa,
   diffSnapshotSpesa,
@@ -93,6 +93,8 @@ async function metodoAmmesso(
 const CreaOfficeSchema = z.object({
   dipendenteId: z.string().uuid(),
   cantiereId: z.string().uuid().nullable().optional(),
+  /** La fase del cantiere (23/10/2026), se la spesa e' di una fase. */
+  sottocantiereId: z.string().uuid().nullable().optional(),
   categoria: z.enum(CATEGORIE_SPESA),
   importoTotale: z.number().finite().positive(),
   importoIva: z.number().finite().nonnegative().nullable().optional(),
@@ -166,6 +168,8 @@ export async function creaSpesaOffice(
     });
     if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
     commessaId = scrivibile.commessaId ?? null;
+    const fase = await sottocantieriScrivibili(service, [{ cantiereId: d.cantiereId, sottocantiereId: d.sottocantiereId }], ctx.tenantId, { forzato: d.forzato });
+    if (!fase.ok) return { ok: false, error: fase.error };
   }
 
   // Il codice del metodo deve stare nell'elenco di QUESTO cliente: lo schema
@@ -181,6 +185,7 @@ export async function creaSpesaOffice(
       tenant_id: ctx.tenantId,
       dipendente_id: d.dipendenteId,
       cantiere_id: d.cantiereId ?? null,
+      sottocantiere_id: d.cantiereId ? (d.sottocantiereId ?? null) : null,
       commessa_id: commessaId,
       categoria: d.categoria,
       ragione_sociale: d.ragioneSociale ?? null,
@@ -217,6 +222,8 @@ const AggiornaSchema = z.object({
   id: z.string().uuid(),
   categoria: z.enum(CATEGORIE_SPESA).optional(),
   cantiereId: z.string().uuid().nullable().optional(),
+  /** Con `cantiereId`: la fase (null = cantiere intero). Senza cantiere non ha senso. */
+  sottocantiereId: z.string().uuid().nullable().optional(),
   ragioneSociale: z.string().trim().max(200).nullable().optional(),
   importoTotale: z.number().finite().positive().optional(),
   importoIva: z.number().finite().nonnegative().nullable().optional(),
@@ -283,10 +290,16 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
       forzato: d.forzato,
     });
     if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
+    const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: d.cantiereId, sottocantiereId: d.sottocantiereId }], ctx.tenantId, { forzato: d.forzato });
+    if (!fase.ok) return { ok: false, error: fase.error };
     patch.cantiere_id = d.cantiereId;
+    // Cambiando cantiere la fase si riscrive sempre: una fase dell'altro
+    // cantiere non puo' restare (e il database la rifiuterebbe).
+    patch.sottocantiere_id = d.sottocantiereId ?? null;
     patch.commessa_id = scrivibile.commessaId ?? null;
   } else if (d.cantiereId === null) {
     patch.cantiere_id = null;
+    patch.sottocantiere_id = null;
     patch.commessa_id = null;
   }
 
