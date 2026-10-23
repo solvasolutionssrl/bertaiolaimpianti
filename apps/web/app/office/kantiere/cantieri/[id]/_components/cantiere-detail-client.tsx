@@ -14,6 +14,7 @@ import {
   Crown,
   HardHat,
   History,
+  Layers,
   Loader2,
   MapPin,
   Navigation,
@@ -49,6 +50,7 @@ import {
   impostaSquadraCantiere,
 } from '../../../../_actions/cantieri';
 import { CantiereSediCard, type SedeTenant } from './cantiere-sedi-card';
+import { SottocantieriCard, type SottocantiereRow } from './sottocantieri-card';
 import { ChiInCantiere, SezioneHeader, type PresenteRow } from './chi-in-cantiere';
 import { StoricoPresenze, type StoricoData } from './storico-presenze';
 import { SincGestionale } from '@/app/office/_components/sinc-gestionale';
@@ -113,6 +115,8 @@ interface Props {
   /** Sedi del tenant (con flag predefinita) + quelle collegate a questo cantiere. */
   sediTenant: SedeTenant[];
   sediAssociate: string[];
+  /** Le fasi del cantiere, chiuse comprese. */
+  sottocantieri: SottocantiereRow[];
   commessaCollegata: string | null;
   anomalie: AnomaliaRow[];
   chiInCantiere: PresenteRow[];
@@ -253,6 +257,7 @@ export function CantiereDetailClient({
   commesse,
   sediTenant,
   sediAssociate,
+  sottocantieri,
   commessaCollegata,
   anomalie,
   chiInCantiere,
@@ -817,6 +822,26 @@ export function CantiereDetailClient({
                 </div>
               </div>
             </form>
+          </Sezione>
+
+          {/* Sottocantieri (fasi) */}
+          <Sezione
+            header={
+              <SezioneHeader
+                icon={<Layers className="h-4 w-4" aria-hidden="true" />}
+                titolo="Sottocantieri"
+                accent="blue"
+                right={
+                  sottocantieri.some((f) => f.stato === 'attivo') ? (
+                    <span className="font-mono text-xs font-semibold text-muted-foreground">
+                      {sottocantieri.filter((f) => f.stato === 'attivo').length}
+                    </span>
+                  ) : null
+                }
+              />
+            }
+          >
+            <SottocantieriCard cantiereId={cantiere.id} fasi={sottocantieri} />
           </Sezione>
 
           {/* Chi c'è in cantiere ora */}

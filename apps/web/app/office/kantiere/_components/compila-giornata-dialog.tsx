@@ -1,6 +1,7 @@
 'use client';
 
 import { arrotondaMsAlPasso } from '@kommessa/api/arrotondamento-timbri';
+import { etichettaLuogo, luogoDaValore, valoreLuogo } from '@kommessa/api/sottocantieri';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Car, Coffee, Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
@@ -51,7 +52,7 @@ export interface DatiCompila {
   impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number; arrotondamentoTimbriMin?: number };
 }
 
-type Riga = { cantiereId: string; minuti: number; inSede: boolean };
+type Riga = { cantiereId: string; sottocantiereId: string | null; minuti: number; inSede: boolean };
 type Stima = { minuti: number; km: number | null } | null;
 
 const fmtOra = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
@@ -110,21 +111,21 @@ export function CompilaGiornataDialog({
       setPausaMin(modo.vista.pausaTimbrataMin > 0 ? 0 : modo.vista.nettoMin > 5 * 60 ? 60 : 0);
       setRighe(
         modo.vista.primoCantiere
-          ? [{ cantiereId: modo.vista.primoCantiere.id, minuti: 0, inSede: false }]
-          : [{ cantiereId: '', minuti: 0, inSede: inUfficio }],
+          ? [{ cantiereId: modo.vista.primoCantiere.id, sottocantiereId: modo.vista.primoCantiere.sottocantiereId ?? null, minuti: 0, inSede: false }]
+          : [{ cantiereId: '', sottocantiereId: null, minuti: 0, inSede: inUfficio }],
       );
       setPartenza(sede);
       setRientro(sede);
     } else if (modo.tipo === 'chiusura') {
       setInizio(hmRome(modo.turno.inizioTs));
       setPausaMin(0);
-      setRighe([{ cantiereId: modo.turno.cantiereId, minuti: 0, inSede: modo.turno.inSede }]);
+      setRighe([{ cantiereId: modo.turno.cantiereId, sottocantiereId: modo.turno.sottocantiereId, minuti: 0, inSede: modo.turno.inSede }]);
       setPartenza(sede);
       setRientro(sede);
     } else {
       setInizio('08:00');
       setPausaMin(60);
-      setRighe([{ cantiereId: '', minuti: 0, inSede: inUfficio }]);
+      setRighe([{ cantiereId: '', sottocantiereId: null, minuti: 0, inSede: inUfficio }]);
       setPartenza(sede);
       setRientro(sede);
     }
@@ -207,15 +208,15 @@ export function CompilaGiornataDialog({
   const ultimaAssorbe = modo?.tipo === 'scatola' || modo?.tipo === 'chiusura';
 
   // ── l'anteprima: la giornata come verra' scritta ───────────────────────────
-  const segmenti = vive.map((r, i) => ({ cantiereId: r.cantiereId, minuti: ultimaAssorbe && i === vive.length - 1 ? r.minuti + Math.max(0, resto) : r.minuti }));
-  let eventi: { cantiereId: string; tipo: 'ingresso' | 'uscita'; pausa: boolean; ms: number }[] = [];
+  const segmenti = vive.map((r, i) => ({ cantiereId: r.cantiereId, sottocantiereId: r.sottocantiereId, minuti: ultimaAssorbe && i === vive.length - 1 ? r.minuti + Math.max(0, resto) : r.minuti }));
+  let eventi: { cantiereId: string; sottocantiereId?: string | null; tipo: 'ingresso' | 'uscita'; pausa: boolean; ms: number }[] = [];
   let anteprimaErrore: string | null = null;
   if (modo?.tipo === 'chiusura' && vive.length <= 1) {
     // Chiusura secca sul cantiere del turno: nessuna divisione da far
     // quadrare, la giornata e' «dall'apertura ad adesso» e basta.
     eventi = [
-      { cantiereId: modo.turno.cantiereId, tipo: 'ingresso', pausa: false, ms: inizioMs },
-      { cantiereId: modo.turno.cantiereId, tipo: 'uscita', pausa: false, ms: fineMs },
+      { cantiereId: modo.turno.cantiereId, sottocantiereId: modo.turno.sottocantiereId, tipo: 'ingresso', pausa: false, ms: inizioMs },
+      { cantiereId: modo.turno.cantiereId, sottocantiereId: modo.turno.sottocantiereId, tipo: 'uscita', pausa: false, ms: fineMs },
     ];
   } else if (vive.length > 0 && vive.every((r) => r.cantiereId)) {
     const esito =
@@ -230,12 +231,16 @@ export function CompilaGiornataDialog({
           })
         : (() => {
             const c = calcolaSegmentiSplit({ ingressoMs: inizioMs, uscitaMs: fineMs, pausaMin, segmenti, viaggioPrima });
-            return c.ok ? { ok: true as const, eventi: [{ cantiereId: segmenti[0]!.cantiereId, tipo: 'ingresso' as const, pausa: false, ms: inizioMs }, ...c.eventi], nettoMin: c.nettoMin } : c;
+            return c.ok ? { ok: true as const, eventi: [{ cantiereId: segmenti[0]!.cantiereId, sottocantiereId: segmenti[0]!.sottocantiereId, tipo: 'ingresso' as const, pausa: false, ms: inizioMs }, ...c.eventi], nettoMin: c.nettoMin } : c;
           })();
     if (esito.ok) eventi = esito.eventi;
     else anteprimaErrore = esito.error === 'SOMMA_NON_TORNA' ? 'Le ore dei cantieri superano il tempo disponibile.' : 'Nessun tempo da ripartire.';
   }
-  const nomeCantiere = (id: string) => dati.cantieri.find((c) => c.id === id)?.nome ?? 'Cantiere';
+  // «Cantiere › Fase» quando la riga e' per fase.
+  const nomeCantiere = (id: string, faseId?: string | null) => {
+    const c = dati.cantieri.find((x) => x.id === id);
+    return etichettaLuogo(c?.nome ?? 'Cantiere', faseId ? (c?.sottocantieri?.find((f) => f.id === faseId)?.nome ?? null) : null);
+  };
   const nomeSede = (id: string) => dati.sedi.find((s) => s.id === id)?.nome ?? 'Sede';
   const righeAnteprima: { ora: string; testo: string; tono: 'lavoro' | 'pausa' | 'viaggio' }[] = [];
   if (eventi.length > 0) {
@@ -248,7 +253,7 @@ export function CompilaGiornataDialog({
       const e = eventi[i]!;
       if (e.tipo === 'ingresso') {
         const u = eventi.slice(i + 1).find((x) => x.tipo === 'uscita');
-        righeAnteprima.push({ ora: `${hmRome(new Date(e.ms).toISOString())}–${u ? hmRome(new Date(u.ms).toISOString()) : '…'}`, testo: nomeCantiere(e.cantiereId) + (righe.find((r) => r.cantiereId === e.cantiereId)?.inSede ? ' · in sede' : ''), tono: 'lavoro' });
+        righeAnteprima.push({ ora: `${hmRome(new Date(e.ms).toISOString())}–${u ? hmRome(new Date(u.ms).toISOString()) : '…'}`, testo: nomeCantiere(e.cantiereId, e.sottocantiereId) + (righe.find((r) => r.cantiereId === e.cantiereId)?.inSede ? ' · in sede' : ''), tono: 'lavoro' });
       } else {
         const n = eventi[i + 1];
         if (n && n.tipo === 'ingresso' && n.ms > e.ms) {
@@ -288,7 +293,7 @@ export function CompilaGiornataDialog({
         ? { sedeId, durataStimataMin: st ? Math.round(st.minuti) : null, durataConfermataMin: minutiTratta(k), distanzaKm: st?.km ?? null, autista, mezzoId: autista ? mezzoId || null : null }
         : null;
     };
-    const split = segmenti.map((s) => ({ cantiereId: s.cantiereId, minuti: s.minuti, daSede: righe.find((r) => r.cantiereId === s.cantiereId)?.inSede || undefined }));
+    const split = segmenti.map((s) => ({ cantiereId: s.cantiereId, sottocantiereId: s.sottocantiereId, minuti: s.minuti, daSede: righe.find((r) => r.cantiereId === s.cantiereId)?.inSede || undefined }));
     const percorso = {
       andata: chiediAndata && partenza !== 'casa' ? tratta(trattaAndata, partenza) : null,
       ritorno: rientro !== 'casa' ? tratta(trattaRitorno, rientro) : null,
@@ -311,7 +316,7 @@ export function CompilaGiornataDialog({
           dispositivo: 'pc',
           ...(pausaMin > 0 ? { pausaPranzoMin: pausaMin } : {}),
           ...(ritornoViaggio ? { viaggio: ritornoViaggio } : {}),
-          ...(split.length >= 2 ? { split: split.map((s) => ({ cantiereId: s.cantiereId, minuti: s.minuti })) } : {}),
+          ...(split.length >= 2 ? { split: split.map((s) => ({ cantiereId: s.cantiereId, sottocantiereId: s.sottocantiereId, minuti: s.minuti })) } : {}),
         });
       }
       if (!res.ok) {
@@ -333,7 +338,15 @@ export function CompilaGiornataDialog({
         : `${fmtGiorno.format(new Date(`${giorno}T12:00:00Z`))} · senza timbrature`;
   const sediDi = (cantiereId: string | undefined) => dati.sedi.filter((s) => s.isDefault || (cantiereId && (dati.sediPerCantiere[cantiereId] ?? []).includes(s.id)));
   const puoAggiungere = modo.tipo !== 'chiusura' || (modo.turno.giornataPulita && dati.impostazioni.splitAttivo);
-  const opzioniCantieri = dati.cantieri.map((c) => ({ valore: c.id, etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome }));
+  // Le fasi come figli: il valore di una fase e' `<cantiere>/<fase>`.
+  const opzioniCantieri = dati.cantieri.map((c) => ({
+    valore: c.id,
+    etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome,
+    dettaglio: c.codice ?? undefined,
+    ...(c.sottocantieri && c.sottocantieri.length > 0
+      ? { figli: c.sottocantieri.map((f) => ({ valore: valoreLuogo(c.id, f.id), etichetta: f.codice ? `${f.codice} · ${f.nome}` : f.nome })) }
+      : {}),
+  }));
   const mostraPercorso = vive.some((r) => !r.inSede) || !sedeDefault;
 
   return (
@@ -402,10 +415,21 @@ export function CompilaGiornataDialog({
                   <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3">
                     {bloccata ? (
                       <span className="flex h-10 items-center truncate rounded-md border border-border bg-muted/30 px-3 text-sm">
-                        {nomeCantiere(r.cantiereId)}&nbsp;<span className="text-[10px] uppercase text-muted-foreground">turno aperto</span>
+                        {nomeCantiere(r.cantiereId, r.sottocantiereId)}&nbsp;<span className="text-[10px] uppercase text-muted-foreground">turno aperto</span>
                       </span>
                     ) : (
-                      <Scelta opzioni={opzioniCantieri} valore={r.cantiereId || null} onCambia={(v) => setRighe((p) => p.map((x, j) => (j === i ? { ...x, cantiereId: v ?? '' } : x)))} segnaposto="Cantiere…" disabilitato={pending} className="h-10 [&>button]:h-10 [&>button]:min-h-0 [&>button]:py-0" />
+                      <Scelta
+                        opzioni={opzioniCantieri}
+                        valore={r.cantiereId ? valoreLuogo(r.cantiereId, r.sottocantiereId) : null}
+                        onCambia={(v) => {
+                          const l = luogoDaValore(v);
+                          setRighe((p) => p.map((x, j) => (j === i ? { ...x, cantiereId: l?.cantiereId ?? '', sottocantiereId: l?.sottocantiereId ?? null } : x)));
+                        }}
+                        segnaposto="Cantiere…"
+                        segnapostoRicerca="Cerca cantiere, fase, codice…"
+                        disabilitato={pending}
+                        className="h-10 [&>button]:h-10 [&>button]:min-h-0 [&>button]:py-0"
+                      />
                     )}
                     {sedeDefault ? (
                       <div role="radiogroup" aria-label="Dove" className="inline-flex h-10 overflow-hidden rounded-md border border-border text-xs">
@@ -428,7 +452,7 @@ export function CompilaGiornataDialog({
                 );
               })}
               {puoAggiungere ? (
-                <Button variant="outline" size="sm" disabled={pending || righe.length >= 12} onClick={() => setRighe((p) => [...p, { cantiereId: '', minuti: 0, inSede: inUfficio && !!sedeDefault }])}>
+                <Button variant="outline" size="sm" disabled={pending || righe.length >= 12} onClick={() => setRighe((p) => [...p, { cantiereId: '', sottocantiereId: null, minuti: 0, inSede: inUfficio && !!sedeDefault }])}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Aggiungi cantiere
                 </Button>
               ) : (

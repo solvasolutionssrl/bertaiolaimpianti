@@ -17,7 +17,8 @@ import {
 } from '@/app/_actions/_lib/ricomputa-rapportino';
 import { coppiaPausaCentrata } from '@/app/_actions/_lib/viaggio-timbra';
 import { aggiornaRigheGiornata } from '@/app/_actions/_lib/righe-giornata';
-import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
+import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
+import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 import { leggiTutto } from '@kommessa/api/pagine';
 import { scriviTimbrature } from '@/app/_actions/_lib/timbrature-scrivi';
@@ -43,6 +44,8 @@ const RegistraOreSchema = z
     dipendenteId: z.string().uuid(),
     commessaId: z.string().uuid().optional(),
     cantiereId: z.string().uuid().optional(),
+    /** La fase del cantiere (23/10/2026); assente = ore sul cantiere intero. */
+    sottocantiereId: z.string().uuid().nullable().optional(),
     data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Formato data non valido (YYYY-MM-DD)'),
     /** Ore di lavoro sul cantiere, pure: ordinarie e straordinarie si derivano. */
     ore_lavoro: z.number().min(0).max(24),
@@ -248,6 +251,7 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
   const supabase = createServerSupabase();
 
   const { dipendenteId, commessaId, cantiereId, data, ore_lavoro, ore_viaggio, note } = parsed.data;
+  const sottocantiereId = cantiereId ? (parsed.data.sottocantiereId ?? null) : null;
 
   // Verifica che il dipendente appartenga al tenant
   const { data: dipRow, error: dipErr } = await supabase
@@ -267,6 +271,9 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
       forzato: parsed.data.forzato,
     });
     if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
+    // La fase deve essere di quel cantiere; chiusa non blocca l'ufficio (forzato).
+    const fase = await sottocantieriScrivibili(supabase, [{ cantiereId, sottocantiereId }], ctx.tenantId, { forzato: parsed.data.forzato });
+    if (!fase.ok) return { ok: false, error: fase.error };
   }
 
   const now = new Date().toISOString();
@@ -336,6 +343,7 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
       {
         commessa_id: commessaId ?? null,
         cantiere_id: cantiereId ?? null,
+        sottocantiere_id: sottocantiereId,
         minutiLavoro: Math.round(ore_lavoro * 60),
         minutiViaggio: Math.round(ore_viaggio * 60),
         note: note ?? null,
@@ -506,6 +514,7 @@ export async function giornateAperte(
     dipendente_id: string;
     commessa_id: string | null;
     cantiere_id: string | null;
+    sottocantiere_id: string | null;
     tipo: 'ingresso' | 'uscita';
     ts: string;
     pausa: boolean | null;
@@ -518,7 +527,7 @@ export async function giornateAperte(
       (da, a) =>
         supabase
           .from('timbrature' as never)
-          .select('dipendente_id, commessa_id, cantiere_id, tipo, ts, pausa')
+          .select('dipendente_id, commessa_id, cantiere_id, sottocantiere_id, tipo, ts, pausa')
           .eq('tenant_id', ctx.tenantId)
           .gte('ts', fromIso)
           .order('ts', { ascending: true })
@@ -534,7 +543,7 @@ export async function giornateAperte(
   // chiude il turno: resta "aperto" finché non arriva la fine turno.
   const aperti = new Map<
     string,
-    { dipId: string; giorno: string; commessaId: string | null; cantiereId: string | null; ingressoTs: string }
+    { dipId: string; giorno: string; commessaId: string | null; cantiereId: string | null; sottocantiereId: string | null; ingressoTs: string }
   >();
   for (const t of timb) {
     const giorno = romeDay(new Date(t.ts));
@@ -548,6 +557,7 @@ export async function giornateAperte(
           giorno,
           commessaId: t.commessa_id,
           cantiereId: t.cantiere_id,
+          sottocantiereId: t.sottocantiere_id ?? null,
           ingressoTs: t.ts,
         });
       }
@@ -583,6 +593,7 @@ export async function giornateAperte(
   const commMap = new Map<string, string>();
   for (const c of (commRes.data as { id: string; codice_interno: string | null }[] | null) ?? [])
     commMap.set(c.id, c.codice_interno || 'Commessa');
+  const fasiMap = await nomiSottocantieri(supabase, ctx.tenantId, aperte.map((a) => a.sottocantiereId));
 
   const giorni: GiornataAperta[] = aperte
     .map((a) => ({
@@ -591,7 +602,7 @@ export async function giornateAperte(
       giorno: a.giorno,
       ingressoTs: a.ingressoTs,
       targetLabel: a.cantiereId
-        ? cantMap.get(a.cantiereId) ?? 'Cantiere'
+        ? etichettaConFase(cantMap.get(a.cantiereId) ?? 'Cantiere', a.sottocantiereId, fasiMap)
         : a.commessaId
           ? commMap.get(a.commessaId) ?? 'Commessa'
           : '',

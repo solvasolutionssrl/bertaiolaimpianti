@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { ChevronDown, FileDown, Loader2, Users } from 'lucide-react';
 import { Button } from '@kommessa/ui';
 import { NOMI_GIORNO_BREVI, settimanaISO, slugPianificazione } from '@kommessa/api/pianificazione';
@@ -136,7 +137,7 @@ export function ExportMenu({
     if (b.tipo === 'cantiere') {
       const cod = b.cantiereId ? commessaMap.get(b.cantiereId) ?? null : null;
       return {
-        testo: b.cantiereNome ?? 'Cantiere',
+        testo: etichettaLuogo(b.cantiereNome ?? 'Cantiere', b.sottocantiereNome),
         sub: [cod, fasciaMarker(b)].filter(Boolean).join(' · '),
         tipo: 'cantiere',
         ...comune,

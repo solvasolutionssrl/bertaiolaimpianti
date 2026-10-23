@@ -29,8 +29,10 @@ import { CantiereCombo } from './cantiere-combo';
 export type SpesaRiga = {
   id: string;
   dipendenteNome: string;
+  /** «Cantiere › Fase», pronto da leggere. */
   cantiereNome: string | null;
   cantiereId: string | null;
+  sottocantiereId?: string | null;
   categoria: string | null;
   ragioneSociale: string | null;
   importoTotale: number | null;
@@ -48,7 +50,13 @@ export type SpesaRiga = {
   esportazioni?: Esportazione[];
 };
 
-export type CantiereOption = { id: string; nome: string; stato?: string | null };
+export type CantiereOption = {
+  id: string;
+  nome: string;
+  stato?: string | null;
+  /** Le fasi aperte del cantiere (23/10/2026). */
+  sottocantieri?: { id: string; nome: string; codice: string | null }[];
+};
 export type DipendenteOption = { id: string; nome: string };
 
 /**
@@ -271,6 +279,7 @@ export function SpeseTable({
                     <CantiereCombo
                       spesaId={s.id}
                       cantiereId={s.cantiereId}
+                      sottocantiereId={s.sottocantiereId ?? null}
                       cantiereNome={s.cantiereNome}
                       cantieri={cantieri}
                     />

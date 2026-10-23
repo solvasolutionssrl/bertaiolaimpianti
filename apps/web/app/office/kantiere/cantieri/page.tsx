@@ -32,6 +32,8 @@ export interface CantiereRow {
    * produce un testo diverso fra server e browser.
    */
   nuovoDalGestionale: boolean;
+  /** Fasi (sottocantieri) attive del cantiere. */
+  nFasi: number;
 }
 
 export interface CommessaOption {
@@ -96,6 +98,25 @@ export default async function CantieriPage() {
     for (const r of squadra) {
       personeCounts[r.cantiere_id] = (personeCounts[r.cantiere_id] ?? 0) + 1;
     }
+  }
+
+  // 2b. Batch: fasi attive per cantiere (23/10/2026)
+  const fasiCounts: Record<string, number> = {};
+  if (ids.length > 0) {
+    const fasi = await leggiPerId(
+      ids,
+      (gruppo, da, a) =>
+        supabase
+          .from('sottocantieri' as never)
+          .select('cantiere_id')
+          .eq('stato', 'attivo')
+          .in('cantiere_id', gruppo)
+          .order('cantiere_id')
+          .order('id')
+          .range(da, a) as unknown as Pagina<{ cantiere_id: string }>,
+      { contesto: 'cantieri: sottocantieri' },
+    );
+    for (const r of fasi) fasiCounts[r.cantiere_id] = (fasiCounts[r.cantiere_id] ?? 0) + 1;
   }
 
   // 3. Batch: set di cantiere_id con QR attivo
@@ -217,6 +238,7 @@ export default async function CantieriPage() {
     commessaTitolo: c.commessa_id ? (commessaTitoliMap[c.commessa_id] ?? null) : null,
     nPersone: personeCounts[c.id] ?? 0,
     haQr: qrSet.has(c.id),
+    nFasi: fasiCounts[c.id] ?? 0,
     externalId: collegamenti.externalPerId.get(c.id) ?? null,
     nuovoDalGestionale:
       !!c.origine_gestionale_al &&

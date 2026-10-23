@@ -1,4 +1,5 @@
 import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
+import { etichettaLuogo, fasiScegibili, type SottocantiereLite } from '@kommessa/api/sottocantieri';
 import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
@@ -26,6 +27,9 @@ export type ComeAperto = 'app' | 'qr' | 'terminale' | 'ufficio' | 'altro';
 
 export interface TurnoMio {
   cantiereId: string;
+  /** La fase del cantiere su cui e' aperto il turno (23/10/2026). */
+  sottocantiereId: string | null;
+  /** «Cantiere › Fase», o il solo cantiere: pronto da leggere. */
   cantiereNome: string;
   inizioTs: string;
   inPausa: boolean;
@@ -43,6 +47,8 @@ export interface CantiereOpzione {
   nome: string;
   codice: string | null;
   cliente: string | null;
+  /** Le fasi aperte del cantiere: figli nella tendina. Assente = nessuna. */
+  sottocantieri?: SottocantiereLite[];
 }
 
 export interface MiaGiornata {
@@ -98,7 +104,7 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
   const [timbRes, cantRes, sediRes, assocRes, mezziRes, ultimoRes, imp, modalita, statoTimbro] = await Promise.all([
     supabase
       .from('timbrature' as never)
-      .select('id, cantiere_id, tipo, pausa, ts, origine, modalita, sede_lavoro_id')
+      .select('id, cantiere_id, sottocantiere_id, tipo, pausa, ts, origine, modalita, sede_lavoro_id')
       .eq('tenant_id', tenantId)
       .eq('dipendente_id', dipendenteId)
       .gte('ts', fromIso)
@@ -106,7 +112,7 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
       .order('ts'),
     supabase
       .from('cantieri' as never)
-      .select('id, nome, codice, codice_commessa, cliente_nome')
+      .select('id, nome, codice, codice_commessa, cliente_nome, sottocantieri(id, nome, codice, stato)')
       .eq('tenant_id', tenantId)
       .in('stato', STATI_CANTIERE_VIVI as unknown as string[])
       .order('nome'),
@@ -127,7 +133,7 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
     leggiStatoTimbro(tenantId),
   ]);
 
-  type T = { id: string; cantiere_id: string | null; tipo: 'ingresso' | 'uscita'; pausa: boolean | null; ts: string; origine: string | null; modalita: string | null; sede_lavoro_id: string | null };
+  type T = { id: string; cantiere_id: string | null; sottocantiere_id: string | null; tipo: 'ingresso' | 'uscita'; pausa: boolean | null; ts: string; origine: string | null; modalita: string | null; sede_lavoro_id: string | null };
   // Orari arrotondati al passo del cliente: e' cosi' che si contano le ore.
   const timbrature = arrotondaTimbrature(((timbRes.data as T[] | null) ?? []).filter((t) => t.cantiere_id), regolaTimbriDa(imp));
 
@@ -161,10 +167,20 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
       }
     }
   }
-  const cantieri = ((cantRes.data as { id: string; nome: string | null; codice: string | null; codice_commessa: string | null; cliente_nome: string | null }[] | null) ?? []).map(
-    (c) => ({ id: c.id, nome: titoloCase(c.nome ?? '') || c.codice || 'Cantiere', codice: c.codice_commessa ?? c.codice, cliente: c.cliente_nome }),
+  const cantieri: CantiereOpzione[] = ((cantRes.data as { id: string; nome: string | null; codice: string | null; codice_commessa: string | null; cliente_nome: string | null; sottocantieri?: SottocantiereLite[] }[] | null) ?? []).map(
+    (c) => {
+      const fasi = fasiScegibili(c.sottocantieri);
+      return {
+        id: c.id,
+        nome: titoloCase(c.nome ?? '') || c.codice || 'Cantiere',
+        codice: c.codice_commessa ?? c.codice,
+        cliente: c.cliente_nome,
+        ...(fasi.length > 0 ? { sottocantieri: fasi.map((f) => ({ id: f.id, nome: f.nome, codice: f.codice ?? null })) } : {}),
+      };
+    },
   );
   const nomeCantiere = new Map(cantieri.map((c) => [c.id, c.nome]));
+  const nomeFase = new Map(cantieri.flatMap((c) => (c.sottocantieri ?? []).map((f) => [f.id, f.nome] as [string, string])));
 
   let turno: TurnoMio | null = null;
   const [primoAperto] = [...aperti.entries()];
@@ -172,7 +188,8 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
     const [cantiereId, st] = primoAperto;
     turno = {
       cantiereId,
-      cantiereNome: nomeCantiere.get(cantiereId) ?? 'Cantiere',
+      sottocantiereId: st.inizio.sottocantiere_id ?? null,
+      cantiereNome: etichettaLuogo(nomeCantiere.get(cantiereId) ?? 'Cantiere', st.inizio.sottocantiere_id ? (nomeFase.get(st.inizio.sottocantiere_id) ?? null) : null),
       inizioTs: st.inizio.ts,
       inPausa: st.inPausa,
       inizioPausaTs: st.inizioPausaTs,

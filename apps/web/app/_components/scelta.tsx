@@ -3,14 +3,17 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { FocusScope } from '@radix-ui/react-focus-scope';
-import { Check, ChevronDown, Search, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 import { cn } from '@kommessa/ui';
 import {
+  appiattisciOpzioni,
   filtraOpzioni,
   primoIndiceUtile,
   prossimoIndice,
   raggruppaOpzioni,
+  trovaOpzione,
   type OpzioneScelta,
+  type VoceAppiattita,
 } from '@kommessa/api/scelta-opzioni';
 
 /**
@@ -271,8 +274,9 @@ function Elenco({
   idElenco,
   piede,
   onTastiera,
+  toggleAperto,
 }: {
-  opzioni: OpzioneScelta[];
+  opzioni: VoceAppiattita[];
   query: string;
   setQuery: (s: string) => void;
   attivo: number;
@@ -287,6 +291,8 @@ function Elenco({
   idElenco: string;
   piede?: React.ReactNode;
   onTastiera: (e: React.KeyboardEvent) => void;
+  /** Apre o chiude i figli di una voce (le fasi di un cantiere). */
+  toggleAperto: (valore: string) => void;
 }) {
   const conRicerca = opzioni.length > SOGLIA_RICERCA || query.length > 0;
   const rifLista = React.useRef<HTMLDivElement>(null);
@@ -424,19 +430,24 @@ function Elenco({
                 indice += 1;
                 const i = indice;
                 const scelta = eSelezionata(o.valore);
+                const conFigli = (o.nFigli ?? 0) > 0;
                 return (
                   <button
                     key={o.valore}
                     type="button"
                     role="option"
                     aria-selected={scelta}
+                    data-aperta={conFigli ? String(!!o.aperta) : undefined}
                     data-indice={i}
+                    data-livello={o.livello}
                     disabled={o.disabilitata}
                     onMouseEnter={() => !o.disabilitata && setAttivo(i)}
                     onClick={() => !o.disabilitata && scegli(o)}
                     className={cn(
                       'flex w-full items-center gap-2 px-2.5 text-left transition',
                       'min-h-[34px] py-1 max-sm:min-h-[44px]',
+                      // I figli stanno rientrati sotto il padre, con una riga di guida a sinistra.
+                      o.livello === 1 && 'pl-8 before:absolute before:bottom-0 before:left-[18px] before:top-0 before:w-px before:bg-border relative',
                       i === attivo && 'bg-accent/10',
                       o.disabilitata && 'cursor-not-allowed opacity-45',
                     )}
@@ -459,6 +470,28 @@ function Elenco({
                         </span>
                       ) : null}
                     </span>
+                    {conFigli ? (
+                      // Il pallino dice quante fasi ha il cantiere; la freccia le apre
+                      // sotto. E' uno `span` con ruolo di tasto, non un `<button>`:
+                      // un tasto dentro un tasto non e' HTML valido.
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        aria-label={o.aperta ? 'Nascondi le fasi' : `Mostra le ${o.nFigli} fasi`}
+                        data-apri-figli={o.valore}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleAperto(o.valore);
+                        }}
+                        className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted/60 py-0.5 pl-2 pr-1 text-[11px] font-semibold tabular-nums text-muted-foreground hover:bg-accent/15 hover:text-foreground"
+                      >
+                        {o.nFigli}
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={cn('h-3.5 w-3.5 transition-transform', o.aperta && 'rotate-90')}
+                        />
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -509,16 +542,28 @@ function useTendina(opzioni: readonly OpzioneScelta[]) {
   const [aperto, setAperto] = React.useState(false);
   const [query, setQuery] = React.useState('');
   const [attivo, setAttivo] = React.useState(-1);
+  // Le voci con figli che l'utente ha aperto. Si azzera alla chiusura.
+  const [aperti, setAperti] = React.useState<ReadonlySet<string>>(() => new Set());
 
   const visibili = React.useMemo(
-    () => filtraOpzioni(opzioni, query),
-    [opzioni, query],
+    () => appiattisciOpzioni(filtraOpzioni(opzioni, query), aperti, query),
+    [opzioni, query, aperti],
   );
+
+  const toggleAperto = React.useCallback((valore: string) => {
+    setAperti((prev) => {
+      const next = new Set(prev);
+      if (next.has(valore)) next.delete(valore);
+      else next.add(valore);
+      return next;
+    });
+  }, []);
 
   const chiudi = React.useCallback(() => {
     setAperto(false);
     setQuery('');
     setAttivo(-1);
+    setAperti(new Set());
   }, []);
 
   const guscio = useChiudiSuClicFuori(aperto, chiudi);
@@ -539,6 +584,7 @@ function useTendina(opzioni: readonly OpzioneScelta[]) {
     attivo,
     setAttivo,
     visibili,
+    toggleAperto,
     chiudi,
     guscio,
     posizione,
@@ -554,6 +600,7 @@ function tastieraElenco({
   setAttivo,
   visibili,
   conferma,
+  toggleAperto,
 }: {
   e: React.KeyboardEvent;
   aperto: boolean;
@@ -561,8 +608,9 @@ function tastieraElenco({
   chiudi: () => void;
   attivo: number;
   setAttivo: (n: number) => void;
-  visibili: OpzioneScelta[];
+  visibili: VoceAppiattita[];
   conferma: (o: OpzioneScelta) => void;
+  toggleAperto: (valore: string) => void;
 }): void {
   if (!aperto) {
     if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
@@ -592,6 +640,29 @@ function tastieraElenco({
       e.preventDefault();
       const o = visibili[attivo];
       if (o && !o.disabilitata) conferma(o);
+      break;
+    }
+    // Freccia a destra apre le fasi della voce attiva, a sinistra le chiude
+    // (o risale al padre, se si e' su una fase).
+    case 'ArrowRight': {
+      const o = visibili[attivo];
+      if (o && (o.nFigli ?? 0) > 0 && !o.aperta) {
+        e.preventDefault();
+        toggleAperto(o.valore);
+      }
+      break;
+    }
+    case 'ArrowLeft': {
+      const o = visibili[attivo];
+      if (!o) break;
+      if ((o.nFigli ?? 0) > 0 && o.aperta) {
+        e.preventDefault();
+        toggleAperto(o.valore);
+      } else if (o.livello === 1 && o.padre) {
+        e.preventDefault();
+        const iPadre = visibili.findIndex((v) => v.valore === o.padre);
+        if (iPadre >= 0) setAttivo(iPadre);
+      }
       break;
     }
     case 'Escape':
@@ -656,7 +727,8 @@ const VUOTO = '\u0000nessuno';
 
   const t = useTendina(complete);
 
-  const scelta = opzioni.find((o) => o.valore === valore) ?? null;
+  // Anche fra i figli: la fase scelta si legge nel tasto come una voce qualsiasi.
+  const scelta = trovaOpzione(opzioni, valore);
 
   function conferma(o: OpzioneScelta) {
     onCambia(o.valore === VUOTO ? null : o.valore);
@@ -676,6 +748,7 @@ const VUOTO = '\u0000nessuno';
       setAttivo: t.setAttivo,
       visibili: t.visibili,
       conferma,
+      toggleAperto: t.toggleAperto,
     });
 
   return (
@@ -709,6 +782,7 @@ const VUOTO = '\u0000nessuno';
           nessunRisultato={nessunRisultato}
           idElenco={idElenco}
           onTastiera={tastiera}
+          toggleAperto={t.toggleAperto}
         />
       ) : null}
     </div>
@@ -778,7 +852,7 @@ export function SceltaMultipla({
 
   const t = useTendina(conTetto);
 
-  const scelte = opzioni.filter((o) => valori.includes(o.valore));
+  const scelte = opzioni.flatMap((o) => [o, ...(o.figli ?? [])]).filter((o) => valori.includes(o.valore));
 
   function conferma(o: OpzioneScelta) {
     onCambia(
@@ -799,6 +873,7 @@ export function SceltaMultipla({
       setAttivo: t.setAttivo,
       visibili: t.visibili,
       conferma,
+      toggleAperto: t.toggleAperto,
     });
 
   return (
@@ -866,6 +941,7 @@ export function SceltaMultipla({
           nessunRisultato={nessunRisultato}
           idElenco={idElenco}
           onTastiera={tastiera}
+          toggleAperto={t.toggleAperto}
           piede={
             <div className="flex items-center justify-between gap-2 border-t border-border px-2 py-1.5">
               <span className="text-xs text-muted-foreground">

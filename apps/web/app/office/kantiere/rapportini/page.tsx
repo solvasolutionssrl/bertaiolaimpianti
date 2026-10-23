@@ -20,6 +20,8 @@ import {
 } from '@/app/_lib/kantiere-config';
 import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
 import { leggiMiaGiornata } from '@/app/office/_lib/mia-giornata';
+import { etichettaConFase, nomiSottocantieri, type SottocantiereNome } from '@/app/_lib/sottocantieri-nomi';
+import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
 import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
@@ -42,6 +44,7 @@ type RigaRow = RigaRapportinoLetta & {
   rapportino_id: string;
   commessa_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -53,6 +56,7 @@ type TimbratureRow = {
   dipendente_id: string;
   commessa_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   tipo: string;
   ts: string;
   origine: string | null;
@@ -90,14 +94,15 @@ type CantiereRow = {
   stato?: string | null;
 };
 
-/** Etichetta display: titolo commessa o nome cantiere */
+/** Etichetta display: titolo commessa, o «Cantiere › Fase» */
 function targetLabel(
-  row: { commessa_id: string | null; cantiere_id: string | null },
+  row: { commessa_id: string | null; cantiere_id: string | null; sottocantiere_id?: string | null },
   commesseTitoloMap: Map<string, string>,
   cantieriNomeMap: Map<string, string>,
+  fasi: Map<string, SottocantiereNome> = new Map(),
 ): string {
   if (row.commessa_id) return commesseTitoloMap.get(row.commessa_id) ?? row.commessa_id;
-  if (row.cantiere_id) return cantieriNomeMap.get(row.cantiere_id) ?? row.cantiere_id;
+  if (row.cantiere_id) return etichettaConFase(cantieriNomeMap.get(row.cantiere_id) ?? row.cantiere_id, row.sottocantiere_id, fasi);
   return '';
 }
 
@@ -175,7 +180,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       (da, a) =>
         supabase
           .from('rapportino_righe' as never)
-          .select(`id, rapportino_id, commessa_id, cantiere_id, note, ${COLONNE_QUOTE}`)
+          .select(`id, rapportino_id, commessa_id, cantiere_id, sottocantiere_id, note, ${COLONNE_QUOTE}`)
           .in('rapportino_id', gruppo)
           .order('id')
           .range(da, a) as never,
@@ -247,7 +252,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         (da, a) =>
           supabase
             .from('timbrature' as never)
-            .select('id, dipendente_id, commessa_id, cantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa, modalita, geo_lat')
+            .select('id, dipendente_id, commessa_id, cantiere_id, sottocantiere_id, tipo, ts, origine, pausa, created_at, creato_da, auto_chiusa, modalita, geo_lat')
             .eq('tenant_id', ctx.tenantId)
             .in('dipendente_id', gruppo)
             .gte('ts', tsFrom)
@@ -323,6 +328,12 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     }
   }
 
+  // Le fasi citate da righe e timbrature: «Cantiere › Fase» (23/10/2026).
+  const fasiMap = await nomiSottocantieri(supabase, ctx.tenantId, [
+    ...righeData.map((r) => r.sottocantiere_id),
+    ...timbratureData.map((t) => t.sottocantiere_id),
+  ]);
+
   // Risolvi i nomi di chi ha creato le timbrature (per "aggiunta da …" sulle
   // righe inserite a mano).
   const creatoNomeMap = new Map<string, string>();
@@ -350,7 +361,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     const giorno = timbraturaGiorno(t.ts);
     const key = `${t.dipendente_id}:${giorno}`;
     const arr = timbratureByKey.get(key) ?? [];
-    const label = targetLabel(t, commesseTitoloMap, cantieriNomeMap);
+    const label = targetLabel(t, commesseTitoloMap, cantieriNomeMap, fasiMap);
     arr.push({
       tipo: t.tipo,
       ts: t.ts,
@@ -605,7 +616,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       righe: rr.map((x) => ({
         targetId: x.commessa_id ?? x.cantiere_id ?? null,
         targetTipo: x.commessa_id ? ('commessa' as const) : x.cantiere_id ? ('cantiere' as const) : null,
-        commessaTitolo: targetLabel(x, commesseTitoloMap, cantieriNomeMap),
+        sottocantiereId: x.cantiere_id ? (x.sottocantiere_id ?? null) : null,
+        commessaTitolo: targetLabel(x, commesseTitoloMap, cantieriNomeMap, fasiMap),
         ore_ordinarie: x.ore_ordinarie ?? 0,
         ore_straordinarie: x.ore_straordinarie ?? 0,
         ore_viaggio: x.ore_viaggio ?? 0,
@@ -764,7 +776,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     (da, a) =>
       supabase
         .from('cantieri' as never)
-        .select('id, nome, codice, codice_commessa, cliente_nome, stato')
+        .select('id, nome, codice, codice_commessa, cliente_nome, stato, sottocantieri(id, nome, codice, stato)')
         .eq('tenant_id', ctx.tenantId)
         .order('nome')
         .order('id')
@@ -772,13 +784,18 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     { contesto: 'cantieri del tenant' },
   );
 
-  const cantieriPicker: CantierePickerItem[] = cantieriRaw.map((k) => ({
-    id: k.id,
-    nome: k.nome || k.codice || k.id,
-    stato: k.stato ?? null,
-    codice: k.codice_commessa || k.codice || null,
-    cliente: k.cliente_nome ?? null,
-  }));
+  const cantieriPicker: CantierePickerItem[] = cantieriRaw.map((k) => {
+    // Le fasi aperte del cantiere, per la tendina con figli di «Registra ore».
+    const fasi = ((k as unknown as { sottocantieri?: SottocantiereLite[] }).sottocantieri ?? []).filter((f) => !f.stato || f.stato === 'attivo');
+    return {
+      id: k.id,
+      nome: k.nome || k.codice || k.id,
+      stato: k.stato ?? null,
+      codice: k.codice_commessa || k.codice || null,
+      cliente: k.cliente_nome ?? null,
+      ...(fasi.length > 0 ? { sottocantieri: fasi.map((f) => ({ id: f.id, nome: f.nome, codice: f.codice ?? null })) } : {}),
+    };
+  });
 
   // Giornate passate rimaste aperte (uscita mancante) → promemoria ufficio.
   const giorniApertiRes = await giornateAperte({});

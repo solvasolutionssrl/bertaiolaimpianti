@@ -465,6 +465,24 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
   // torna vuoto e la nuvoletta non compare.
   const collegamenti = await leggiCollegamenti(supabase, ctx.tenantId, [cantiere.id]);
 
+  // Le fasi del cantiere (23/10/2026): tutte, chiuse comprese; la card decide cosa mostrare.
+  const { data: fasiRaw } = await supabase
+    .from('sottocantieri' as never)
+    .select('id, nome, descrizione, codice, stato, origine_gestionale_al')
+    .eq('cantiere_id', params.id)
+    .eq('tenant_id', ctx.tenantId)
+    .order('stato')
+    .order('codice', { nullsFirst: false })
+    .order('nome');
+  const sottocantieri = ((fasiRaw as { id: string; nome: string; descrizione: string | null; codice: string | null; stato: 'attivo' | 'chiuso'; origine_gestionale_al: string | null }[] | null) ?? []).map((f) => ({
+    id: f.id,
+    nome: f.nome,
+    descrizione: f.descrizione,
+    codice: f.codice,
+    stato: f.stato,
+    dalGestionale: !!f.origine_gestionale_al,
+  }));
+
   return (
     <div className="w-full space-y-6">
       <CantiereDetailClient
@@ -501,6 +519,7 @@ export default async function CantiereDetailPage({ params, searchParams }: PageP
         commesse={commesse}
         sediTenant={sediTenant}
         sediAssociate={sediAssociate}
+        sottocantieri={sottocantieri}
         commessaCollegata={commessaCollegata}
         anomalie={anomalie}
         chiInCantiere={chiInCantiere}

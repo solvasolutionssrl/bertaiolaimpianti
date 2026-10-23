@@ -1,8 +1,8 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.8
+**Versione**: 1.9
 **Stato**: Attivo (in produzione)
-**Ultimo aggiornamento**: 22/09/2026
+**Ultimo aggiornamento**: 23/10/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
 
 > **A cosa serve questo file.** Non è un manuale d'uso: è il registro delle **regole e delle scelte operative** già implementate (arrotondamenti, soglie, quando si caricano i km, come si collegano sedi e cantieri, quali impostazioni gestisce l'ufficio). Serve come base per una futura sezione **Help** nell'office e come contesto per un **agente AI interno**.
@@ -658,6 +658,77 @@ ovunque, riga grigia nella lista dell'ufficio.
 | Pagina impostazioni | `apps/web/app/office/kantiere/impostazioni/_components/impostazioni-client.tsx`, azione `office/_actions/kantiere-impostazioni.ts` |
 | Stima viaggio + geocoding | `apps/web/app/_lib/routing/` (cache condivisa `stima-cache.ts`), `apps/web/app/api/routing/stima`, `apps/web/app/api/geocode/autocomplete` |
 | Registra giornata (UI) | `apps/web/app/mobile/kantiere/ore/_components/registra-giornata-dialog.tsx`, `percorso-giornata.tsx` |
+| Sottocantieri: vocabolario (puro + testato) | `packages/api/src/sottocantieri.ts` (`chiaveCantiere`, `radiceChiave`, `luogoDaValore`, `etichettaLuogo`, `fasiScegibili`) |
+| Sottocantieri: nomi per le scritte | `apps/web/app/_lib/sottocantieri-nomi.ts` (`nomiSottocantieri`, `etichettaConFase`) |
+| Sottocantieri: guardia di scrittura | `apps/web/app/_actions/_lib/lavoro-aperto.ts` (`sottocantieriScrivibili`) |
+| Sottocantieri: scrittore unico delle timbrature (eredità della fase) | `apps/web/app/_actions/_lib/timbrature-scrivi.ts` |
+| Sottocantieri: API | `apps/web/app/api/v1/_lib/sottocantieri.ts`, rotte `cantieri`, `ore`, `spese`, `letture` |
+
+## 12. Sottocantieri (fasi) — dal 23/10/2026
+
+Un cantiere può essere composto da più **sottocantieri**, che FPM chiama anche **fasi**
+(per FPM arriveranno dal gestionale; l'ufficio li può anche scrivere a mano). Migration
+`20261023150000_sottocantieri.sql`. Decisioni di Luca, 23/10/2026:
+
+| Decisione | Scelta |
+|---|---|
+| Le ore registrate su una fase | restano **attribuite alla fase** (colonna su timbrature e righe ore, una riga per fase, codice verso il gestionale) |
+| Chi crea le fasi | l'**ufficio**, dalla scheda cantiere; oppure il gestionale |
+| Il cantiere padre, se ha fasi | resta **sempre scegibile**: nessun blocco a chi non conosce la fase, l'ufficio corregge dopo |
+| Il codice della fase | **testo** (può essere `25098.01`), unico dentro il cantiere |
+
+### 12.1 Il modello
+
+- Tabella `sottocantieri`: `cantiere_id`, `nome`, `descrizione`, `codice` (testo, unico
+  nel cantiere), `stato` (`attivo` / `chiuso`), `origine_gestionale_al` (chi nasce dal
+  gestionale non si rinomina a mano). Stessa RLS dei cantieri.
+- Colonna **facoltativa** `sottocantiere_id` su `timbrature`, `rapportino_righe`, `spese` e
+  `pianificazione_blocchi`. Vuota = «il cantiere intero»: nessuna riga esistente cambia.
+- ⭐ **La fase deve essere del cantiere della riga, e lo garantisce il database**: chiave
+  esterna **composta** `(sottocantiere_id, cantiere_id) → sottocantieri (id, cantiere_id)`,
+  `on delete set null (sottocantiere_id)` (Postgres 15+). Niente trigger. Con la fase vuota
+  la chiave non controlla nulla.
+
+### 12.2 Le ore: la fase entra nella chiave, il viaggio no
+
+Tutti i motori raggruppano per una chiave testuale. Dal 23/10 la chiave di un cantiere è
+`cantiere:<id>` **oppure** `cantiere:<id>/<fase>` (`@kommessa/api/sottocantieri`):
+
+- le **righe** nascono per fase (`scriviRigheGiornata`, `ricomputaRapportinoAuto`): due fasi
+  dello stesso cantiere nello stesso giorno sono due righe; il totale per cantiere si somma;
+- lo **split** di fine turno e la **scatola** della giornata timbrata portano la fase negli
+  eventi che sintetizzano; nella scatola due segmenti consecutivi si fondono solo se hanno
+  stesso cantiere **e** stessa fase (fra due fasi dello stesso cantiere la strada vale zero);
+- il **viaggio resta per cantiere**: una tratta nomina il cantiere, non la fase. In
+  `minutiDaTimbrature` i minuti di una tratta si attaccano alla **prima riga di quel
+  cantiere** (confronto sulla **radice** della chiave), mai a una riga vuota; e il cambio
+  fra due cantieri si riconosce anche se le righe sono per fase. Testato.
+- ⭐ **La fase, una volta aperta, vale fino alla fine del turno.** Chi scrive una pausa, una
+  ripresa o una fine turno (QR, app, capo squadra, ufficio) non conosce la fase
+  dell'ingresso: lo scrittore unico `scriviTimbrature` la **eredita** dall'ultima timbratura
+  di oggi della stessa persona sullo stesso cantiere. Senza, un ingresso con fase e
+  un'uscita senza avrebbero due chiavi diverse e il ricalcolo non li appaierebbe. Chi passa
+  `sottocantiere_id` esplicito (anche `null`) decide da sé.
+- Il cambio cantiere dal vivo accetta anche **stesso cantiere, fase diversa**: nessuna tratta.
+- Nella ripartizione di una giornata timbrata con un turno aperto dall'app, la fase del primo
+  segmento è quella dell'ingresso esistente: la decide il server, non il telefono.
+
+### 12.3 La guardia
+
+`sottocantieriScrivibili`: ogni fase scelta deve esistere, essere del suo cantiere e non
+chiusa (`SOTTOCANTIERE_NON_VALIDO` / `SOTTOCANTIERE_CHIUSO`). Come per i cantieri, una
+fase chiusa **non blocca la chiusura di una giornata già lavorata** (`forzato`).
+
+### 12.4 Verso il gestionale
+
+- `GET /cantieri` annida le fasi nel padre (`sottocantieri[]`, chiuse comprese); `GET /ore`
+  e `GET /spese` espongono `sottocantiere { id, nome, codice, externalId } | null`;
+  `GET /viaggi` **non cambia** (il viaggio è per cantiere).
+- `POST /letture` accetta l'entità `sottocantiere` (`externalCantiereId` obbligatorio,
+  `externalCodiceFase`, `descrizione`): **solo area di sosta**.
+- **Aperto, di proposito**: la promozione delle fasi dall'area di sosta ai cantieri
+  collegati, e la mappatura `sottocantiere ↔ externalId`. Si decide con FPM e con chi
+  gestisce ERGO: una fase sotto il cantiere sbagliato raccoglie ore senza nessun segnale.
 
 ---
 

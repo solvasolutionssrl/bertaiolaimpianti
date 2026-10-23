@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { Scelta } from '@/app/_components/scelta';
+import { luogoDaValore, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { Loader2, Upload, PenLine, AlertTriangle, FileText, X, Minus, Plus } from 'lucide-react';
 import {
@@ -373,7 +375,8 @@ export function NuovaSpesaOffice({
 
     startTransition(async () => {
       // Cantiere chiuso: si registra lo stesso, ma solo dopo una conferma.
-      const scelto = cantiereId ? cantieri.find((k) => k.id === cantiereId) : undefined;
+      const luogo = luogoDaValore(cantiereId);
+      const scelto = luogo ? cantieri.find((k) => k.id === luogo.cantiereId) : undefined;
       const forzato = !!scelto && !cantiereImputabile(scelto.stato);
       if (forzato) {
         const procedi = await chiediConferma({
@@ -386,7 +389,8 @@ export function NuovaSpesaOffice({
 
       const res = await creaSpesaOffice({
         dipendenteId,
-        cantiereId: cantiereId ? cantiereId : null,
+        cantiereId: luogo?.cantiereId ?? null,
+        sottocantiereId: luogo?.sottocantiereId ?? null,
         ...(forzato ? { forzato: true } : {}),
         categoria,
         importoTotale: importoNum,
@@ -551,19 +555,24 @@ export function NuovaSpesaOffice({
                 {/* Cantiere */}
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-medium text-muted-foreground">Cantiere</label>
-                  <select
-                    value={cantiereId}
-                    onChange={(e) => setCantiereId(e.target.value)}
-                    className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Da assegnare</option>
-                    {/* I chiusi ci sono ma si vedono: al salvataggio si conferma. */}
-                    {cantieri.map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {cantiereImputabile(k.stato) ? k.nome : `${k.nome} · chiuso`}
-                      </option>
-                    ))}
-                  </select>
+                  {/* Tendina cercabile con le fasi come figli (23/10/2026): il
+                      valore di una fase e' `<cantiere>/<fase>`. I chiusi ci sono
+                      ma si vedono: al salvataggio si conferma. */}
+                  <Scelta
+                    opzioni={cantieri.map((k) => ({
+                      valore: k.id,
+                      etichetta: cantiereImputabile(k.stato) ? k.nome : `${k.nome} · chiuso`,
+                      ...(k.sottocantieri && k.sottocantieri.length > 0
+                        ? { figli: k.sottocantieri.map((f) => ({ valore: valoreLuogo(k.id, f.id), etichetta: f.codice ? `${f.codice} · ${f.nome}` : f.nome })) }
+                        : {}),
+                    }))}
+                    valore={cantiereId || null}
+                    onCambia={(v) => setCantiereId(v ?? '')}
+                    etichettaNessuno="Da assegnare"
+                    segnaposto="Da assegnare"
+                    segnapostoRicerca="Cerca cantiere o fase…"
+                    aria-label="Cantiere"
+                  />
                 </div>
 
                 {/* Categoria */}

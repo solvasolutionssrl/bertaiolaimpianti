@@ -9,7 +9,13 @@ import { aggiornaSpesa } from '@/app/_actions/kantiere-spese';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 
-export type CantiereOption = { id: string; nome: string; stato?: string | null };
+export type CantiereOption = {
+  id: string;
+  nome: string;
+  stato?: string | null;
+  /** Le fasi aperte: righe rientrate sotto il cantiere, scegibili. */
+  sottocantieri?: { id: string; nome: string; codice: string | null }[];
+};
 
 /** I codici che torna `aggiornaSpesa`, detti in italiano. */
 const MESSAGGI: Record<string, string> = {
@@ -23,6 +29,7 @@ const MESSAGGI: Record<string, string> = {
 interface Props {
   spesaId: string;
   cantiereId: string | null;
+  sottocantiereId?: string | null;
   cantiereNome: string | null;
   cantieri: CantiereOption[];
 }
@@ -35,7 +42,7 @@ const POP_W = 256; // w-64
  * tagliato dal contenitore con scroll orizzontale della tabella. Si chiude su
  * selezione, click fuori o Esc. La scrittura chiama `aggiornaSpesa`.
  */
-export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: Props) {
+export function CantiereCombo({ spesaId, cantiereId, sottocantiereId = null, cantiereNome, cantieri }: Props) {
   const router = useRouter();
   const [aperto, setAperto] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -54,8 +61,13 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
     // I chiusi restano scegliibili, perche' l'ufficio deve poter assegnare
     // sempre. Vanno pero' in fondo e si riconoscono a vista: la conferma
     // arriva al momento della scelta, non nascondendo la voce.
+    // Cercando il nome di una fase si trova anche il suo cantiere.
     const q = query.trim().toLowerCase();
-    const base = q ? cantieri.filter((k) => k.nome.toLowerCase().includes(q)) : cantieri;
+    const base = q
+      ? cantieri.filter(
+          (k) => k.nome.toLowerCase().includes(q) || (k.sottocantieri ?? []).some((f) => `${f.codice ?? ''} ${f.nome}`.toLowerCase().includes(q)),
+        )
+      : cantieri;
     return [...base].sort(
       (a, b) => Number(!cantiereImputabile(a.stato)) - Number(!cantiereImputabile(b.stato)),
     );
@@ -105,9 +117,9 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
   }, [aperto, riposiziona]);
 
   const seleziona = React.useCallback(
-    (nuovoId: string | null) => {
+    (nuovoId: string | null, nuovaFase: string | null = null) => {
       setAperto(false);
-      if (nuovoId === (cantiereId ?? null)) return;
+      if (nuovoId === (cantiereId ?? null) && nuovaFase === (sottocantiereId ?? null)) return;
       startTransition(async () => {
         // Assegnare a un cantiere chiuso si puo', ma una volta va detto.
         const scelto = cantieri.find((k) => k.id === nuovoId);
@@ -123,6 +135,7 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
         const res = await aggiornaSpesa({
           id: spesaId,
           cantiereId: nuovoId,
+          sottocantiereId: nuovoId ? nuovaFase : null,
           ...(forzato ? { forzato: true } : {}),
         });
         if (res.ok) {
@@ -137,7 +150,7 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
         });
       });
     },
-    [cantiereId, spesaId, router, cantieri, chiediConferma, mostraAvviso],
+    [cantiereId, sottocantiereId, spesaId, router, cantieri, chiediConferma, mostraAvviso],
   );
 
   return (
@@ -206,7 +219,8 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
                   </button>
                 </li>
                 {filtrati.map((k) => {
-                  const selezionato = k.id === cantiereId;
+                  const selezionato = k.id === cantiereId && !sottocantiereId;
+                  const fasi = k.sottocantieri ?? [];
                   return (
                     <li key={k.id}>
                       <button
@@ -223,8 +237,35 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
                             <span className="ml-1.5 text-xs text-muted-foreground">· chiuso</span>
                           )}
                         </span>
+                        {fasi.length > 0 ? (
+                          <span className="shrink-0 rounded-full border border-border bg-muted/60 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                            {fasi.length}
+                          </span>
+                        ) : null}
                         {selezionato ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
                       </button>
+                      {/* Le fasi, rientrate sotto il cantiere. */}
+                      {fasi.map((f) => {
+                        const sel = k.id === cantiereId && f.id === sottocantiereId;
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => seleziona(k.id, f.id)}
+                            className={cn(
+                              'flex w-full items-center justify-between gap-2 py-1.5 pl-7 pr-3 text-left text-sm transition hover:bg-muted',
+                              sel && 'font-medium',
+                            )}
+                          >
+                            <span className="truncate">
+                              <span className="mr-1 text-muted-foreground">›</span>
+                              {f.codice ? <span className="mr-1 font-mono text-xs text-muted-foreground">{f.codice}</span> : null}
+                              {f.nome}
+                            </span>
+                            {sel ? <Check className="h-4 w-4 shrink-0" aria-hidden="true" /> : null}
+                          </button>
+                        );
+                      })}
                     </li>
                   );
                 })}

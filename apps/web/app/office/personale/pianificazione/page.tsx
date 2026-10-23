@@ -35,7 +35,7 @@ export default async function PianificazionePage({
       .order('cognome'),
     supabase
       .from('cantieri' as never)
-      .select('id, nome, codice_commessa, cliente_nome, categoria, stato')
+      .select('id, nome, codice_commessa, cliente_nome, categoria, stato, sottocantieri(id, nome, codice, stato)')
       .eq('tenant_id', ctx.tenantId)
       .neq('stato', 'chiuso')
       .order('nome'),
@@ -102,12 +102,14 @@ export default async function PianificazionePage({
     codice_commessa: string | null;
     cliente_nome: string | null;
     categoria: string | null;
+    sottocantieri?: { id: string; nome: string; codice: string | null; stato: string | null }[];
   }>).map((c) => ({
     id: c.id,
     nome: c.nome,
     codiceCommessa: c.codice_commessa,
     clienteNome: c.cliente_nome,
     categoria: c.categoria,
+    sottocantieri: (c.sottocantieri ?? []).filter((f) => !f.stato || f.stato === 'attivo').map((f) => ({ id: f.id, nome: f.nome, codice: f.codice })),
   }));
 
   const mezzi: MezzoRow[] = ((mezziRes.data ?? []) as unknown as Array<{

@@ -23,6 +23,7 @@ import {
   inviabile,
   num,
 } from '../_lib/risorse';
+import { riferimentoFase, type SottocantiereDb } from '../_lib/sottocantieri';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -46,6 +47,8 @@ interface SpesaDb {
   id: string;
   dipendente_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
+  sottocantiere: SottocantiereDb | SottocantiereDb[] | null;
   commessa_id: string | null;
   categoria: string | null;
   ragione_sociale: string | null;
@@ -98,7 +101,8 @@ export async function GET(request: NextRequest) {
   let q = service
     .from('spese' as never)
     .select(
-      'id, dipendente_id, cantiere_id, commessa_id, categoria, ragione_sociale,' +
+      'id, dipendente_id, cantiere_id, sottocantiere_id, commessa_id, categoria, ragione_sociale,' +
+        ' sottocantiere:sottocantieri(id, nome, codice, stato),' +
         ' importo_totale, importo_iva, imponibile, valuta, partita_iva, metodo_pagamento,' +
         ' numero_documento, indirizzo_esercente, data_scontrino, stato, rimborsabile,' +
         ' numero_persone, note, geo_lat, geo_lng, r2_key, analisi_at, analisi_errore,' +
@@ -176,6 +180,8 @@ export async function GET(request: NextRequest) {
             externalClienteId: commessaExt ? (clienteDi.get(commessaExt) ?? null) : null,
           }
         : null,
+      // La fase del cantiere (23/10/2026), se la spesa e' stata agganciata a una fase.
+      sottocantiere: riferimentoFase(r.sottocantiere, mapp.sottocantiere),
 
       // `bozza` = ancora in revisione o in analisi automatica. Si consegna
       // comunque: sapere che esiste una spesa non ancora confermata puo'

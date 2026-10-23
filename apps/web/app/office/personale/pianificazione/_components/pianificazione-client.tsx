@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import {
   CalendarClock,
@@ -34,6 +35,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  cn,
 } from '@kommessa/ui';
 import {
   addGiorni,
@@ -77,6 +79,8 @@ export interface CantRow {
   codiceCommessa: string | null;
   clienteNome: string | null;
   categoria: string | null;
+  /** Le fasi aperte del cantiere (23/10/2026). */
+  sottocantieri?: { id: string; nome: string; codice: string | null }[];
 }
 export interface MezzoRow {
   id: string;
@@ -125,7 +129,7 @@ function messaggioSalva(code: string): string {
 }
 /** Etichetta di un blocco per l'anteprima/chip (nome cantiere o titolo). */
 function labelBlocco(b: BloccoView): string {
-  return b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
+  return b.tipo === 'cantiere' ? etichettaLuogo(b.cantiereNome ?? 'Cantiere', b.sottocantiereNome) : b.titolo ?? 'Evento';
 }
 function tipoMezzoLabel(t: string): string {
   return t === 'autocarro' ? 'Autocarro' : t === 'autovettura' ? 'Autovettura' : 'Mezzo';
@@ -246,6 +250,7 @@ interface FormState {
   oraInizio: string;
   oraFine: string;
   cantiereId: string | null;
+  sottocantiereId: string | null;
   titolo: string;
   luogo: string;
   luogoLat: number | null;
@@ -265,6 +270,7 @@ function formVuoto(data: string, dipId?: string): FormState {
     oraInizio: '08:00',
     oraFine: '17:00',
     cantiereId: null,
+    sottocantiereId: null,
     titolo: '',
     luogo: '',
     luogoLat: null,
@@ -284,6 +290,7 @@ function formDaBlocco(b: BloccoView, contestoDipId?: string): FormState {
     oraInizio: b.oraInizio,
     oraFine: b.oraFine,
     cantiereId: b.cantiereId,
+    sottocantiereId: b.sottocantiereId,
     titolo: b.titolo ?? '',
     luogo: b.luogo ?? '',
     luogoLat: b.luogoLat,
@@ -354,19 +361,25 @@ function BloccoDialog({
 
   // Cantiere: nessuna lista di default. Solo quando si digita compaiono i
   // primi 5 risultati coerenti (in un dropdown che si sovrappone al resto).
-  const cantMatches = React.useMemo(() => {
+  // Con le fasi: un risultato e' il cantiere intero oppure una sua fase
+  // (riga rientrata). Cercando il nome di una fase si trovano entrambi.
+  type RisultatoCant = { cantiere: CantRow; fase: { id: string; nome: string; codice: string | null } | null };
+  const cantMatches = React.useMemo<RisultatoCant[]>(() => {
     const q = cercaCant.trim().toLowerCase();
     if (!q) return [];
     const tokens = q.split(/\s+/);
-    return cantieri
-      .filter((c) => {
-        const blob = [c.nome, c.codiceCommessa, c.clienteNome, c.categoria]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return tokens.every((t) => blob.includes(t));
-      })
-      .slice(0, 5);
+    const corrisponde = (testo: string) => tokens.every((t) => testo.includes(t));
+    const out: RisultatoCant[] = [];
+    for (const c of cantieri) {
+      const blob = [c.nome, c.codiceCommessa, c.clienteNome, c.categoria].filter(Boolean).join(' ').toLowerCase();
+      const fasi = (c.sottocantieri ?? []).filter((f) => corrisponde(`${blob} ${f.codice ?? ''} ${f.nome}`.toLowerCase()));
+      if (corrisponde(blob) || fasi.length > 0) {
+        out.push({ cantiere: c, fase: null });
+        for (const f of corrisponde(blob) ? (c.sottocantieri ?? []) : fasi) out.push({ cantiere: c, fase: f });
+      }
+      if (out.length >= 8) break;
+    }
+    return out.slice(0, 8);
   }, [cantieri, cercaCant]);
 
   const dipFiltrati = React.useMemo(() => {
@@ -386,6 +399,7 @@ function BloccoDialog({
   }, [mezzi, cercaMezzo]);
 
   const cantScelto = cantieri.find((c) => c.id === f.cantiereId) ?? null;
+  const faseScelta = cantScelto?.sottocantieri?.find((x) => x.id === f.sottocantiereId) ?? null;
   const isCantiere = f.tipo === 'cantiere';
   const accent = TIPO_ACCENT[f.tipo];
 
@@ -470,6 +484,7 @@ function BloccoDialog({
         oraInizio: f.fascia === 'custom' ? f.oraInizio : null,
         oraFine: f.fascia === 'custom' ? f.oraFine : null,
         cantiereId: isCantiere ? f.cantiereId : null,
+        sottocantiereId: isCantiere ? f.sottocantiereId : null,
         titolo: isCantiere ? null : f.titolo,
         luogo: isCantiere ? null : f.luogo,
         luogoLat: isCantiere ? null : f.luogoLat,
@@ -625,7 +640,7 @@ function BloccoDialog({
                   {cantScelto ? (
                     <div className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-sky-300 bg-white px-3 py-2">
                       <span className="min-w-0 truncate text-sm">
-                        <span className="font-medium">{cantScelto.nome}</span>
+                        <span className="font-medium">{etichettaLuogo(cantScelto.nome, faseScelta?.nome ?? null)}</span>
                         {cantScelto.clienteNome ? (
                           <span className="text-muted-foreground"> · {cantScelto.clienteNome}</span>
                         ) : null}
@@ -634,6 +649,7 @@ function BloccoDialog({
                         type="button"
                         onClick={() => {
                           set('cantiereId', null);
+                          set('sottocantiereId', null);
                           setCercaCant('');
                         }}
                         className="shrink-0 text-muted-foreground hover:text-foreground"
@@ -660,20 +676,37 @@ function BloccoDialog({
                               Nessun cantiere
                             </p>
                           ) : (
-                            cantMatches.map((c) => (
+                            cantMatches.map(({ cantiere: c, fase }) => (
                               <button
-                                key={c.id}
+                                key={fase ? `${c.id}/${fase.id}` : c.id}
                                 type="button"
                                 onClick={() => {
                                   set('cantiereId', c.id);
+                                  set('sottocantiereId', fase?.id ?? null);
                                   setCercaCant('');
                                 }}
-                                className="flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-sm hover:bg-muted/60"
+                                className={cn(
+                                  'flex w-full min-w-0 items-center gap-2 px-2.5 py-2 text-left text-sm hover:bg-muted/60',
+                                  fase && 'pl-7',
+                                )}
                               >
-                                <span className="min-w-0 flex-1 truncate">{c.nome}</span>
-                                {c.clienteNome ? (
+                                {fase ? (
+                                  <span className="min-w-0 flex-1 truncate">
+                                    <span className="mr-1 text-muted-foreground">›</span>
+                                    {fase.codice ? <span className="mr-1 font-mono text-xs text-muted-foreground">{fase.codice}</span> : null}
+                                    {fase.nome}
+                                  </span>
+                                ) : (
+                                  <span className="min-w-0 flex-1 truncate">{c.nome}</span>
+                                )}
+                                {!fase && c.clienteNome ? (
                                   <span className="min-w-0 shrink truncate text-right text-xs text-muted-foreground">
                                     {c.clienteNome}
+                                  </span>
+                                ) : null}
+                                {!fase && (c.sottocantieri?.length ?? 0) > 0 ? (
+                                  <span className="shrink-0 rounded-full border border-border bg-muted/60 px-1.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                                    {c.sottocantieri!.length}
                                   </span>
                                 ) : null}
                               </button>
@@ -1040,7 +1073,7 @@ function Chip({
   drag?: GridDrag;
 }) {
   const h = hueTipo(b);
-  const label = b.tipo === 'cantiere' ? b.cantiereNome ?? 'Cantiere' : b.titolo ?? 'Evento';
+  const label = b.tipo === 'cantiere' ? etichettaLuogo(b.cantiereNome ?? 'Cantiere', b.sottocantiereNome) : b.titolo ?? 'Evento';
   const Icon = b.tipo === 'formazione' ? GraduationCap : b.tipo === 'evento' ? CalendarClock : null;
   const isSquad = b.membri.length > 1;
   const nota = b.note?.trim() ?? '';

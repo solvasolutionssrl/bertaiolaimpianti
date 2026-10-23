@@ -111,6 +111,8 @@ export function inviabile(ctx: ContestoApi, esternoCollegato: string | null): bo
 
 export interface Mappature {
   cantiere: Map<string, string>;
+  /** Le fasi di un cantiere (23/10/2026): `entita='sottocantiere'`. */
+  sottocantiere: Map<string, string>;
   commessa: Map<string, string>;
   dipendente: Map<string, string>;
   cliente: Map<string, string>;
@@ -118,6 +120,7 @@ export interface Mappature {
 
 const VUOTE: Mappature = {
   cantiere: new Map(),
+  sottocantiere: new Map(),
   commessa: new Map(),
   dipendente: new Map(),
   cliente: new Map(),
@@ -143,6 +146,7 @@ export async function caricaMappature(ctx: ContestoApi): Promise<Mappature> {
 
   const out: Mappature = {
     cantiere: new Map(),
+    sottocantiere: new Map(),
     commessa: new Map(),
     dipendente: new Map(),
     cliente: new Map(),

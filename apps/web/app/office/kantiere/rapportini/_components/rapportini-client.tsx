@@ -44,6 +44,7 @@ import {
 } from '../../_components/correggi-giornata-dialog';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 import { Scelta } from '@/app/_components/scelta';
+import { luogoDaValore, valoreLuogo } from '@kommessa/api/sottocantieri';
 
 export type TimbraturaItem = {
   tipo: string;
@@ -77,6 +78,8 @@ export type RigaCommessa = {
   /** Id del target (commessa o cantiere). Null se la riga non è collegata. */
   targetId: string | null;
   targetTipo: 'commessa' | 'cantiere' | null;
+  /** La fase del cantiere, se la riga e' per fase. */
+  sottocantiereId?: string | null;
   commessaTitolo: string;
   /** Lavoro entro l'orario ordinario (ord + straord = lavoro). */
   ore_ordinarie: number;
@@ -138,7 +141,15 @@ export type FiltriRapportini = {
 export type DipendenteItem = { id: string; nome: string; modalita?: 'ufficio' | 'esterno' };
 export type CommessaPickerItem = { id: string; titolo: string };
 /** `stato` serve solo a segnare i chiusi e a chiedere conferma prima di scrivere. */
-export type CantierePickerItem = { id: string; nome: string; stato?: string | null; codice?: string | null; cliente?: string | null };
+export type CantierePickerItem = {
+  id: string;
+  nome: string;
+  stato?: string | null;
+  codice?: string | null;
+  cliente?: string | null;
+  /** Le fasi aperte del cantiere (23/10/2026): figli nella tendina di «Registra ore». */
+  sottocantieri?: { id: string; nome: string; codice: string | null }[];
+};
 
 // Giorno corrente in formato YYYY-MM-DD (client-side, fuso locale) — per il dialog "Registra ore".
 function oggiLocale(): string {
@@ -459,7 +470,8 @@ export function RapportiniClient({
   const setRipartisciFor = (g: TimbroGiornataVista | null) =>
     setModoCompila(g ? { tipo: 'scatola', vista: g, dipendenteId: g.dipendenteId, dipendenteNome: g.dipendenteNome } : null);
   const datiCompila = (dipendenteId: string | null) => ({
-    cantieri: cantieri.map((c) => ({ id: c.id, nome: c.nome, codice: null, cliente: null })),
+    // Con le fasi, se il cantiere ne ha: la tendina del dialog le mostra come figli.
+    cantieri: cantieri.map((c) => ({ id: c.id, nome: c.nome, codice: c.codice ?? null, cliente: c.cliente ?? null, ...(c.sottocantieri ? { sottocantieri: c.sottocantieri } : {}) })),
     sedi: compila?.sedi ?? [],
     sediPerCantiere: compila?.sediPerCantiere ?? {},
     mezzi: compila?.mezzi ?? [],
@@ -515,7 +527,9 @@ export function RapportiniClient({
         r.targetId != null && r.targetTipo != null,
       )
       .map((r) => ({
-        targetId: r.targetId,
+        // Con la fase, il target della riga e' `<cantiere>/<fase>`: due fasi
+        // dello stesso cantiere sono due righe distinte anche per il dialog.
+        targetId: r.targetTipo === 'cantiere' ? valoreLuogo(r.targetId, r.sottocantiereId) : r.targetId,
         targetTipo: r.targetTipo,
         titolo: r.commessaTitolo,
         lavoro: r.lavoro,
@@ -578,7 +592,10 @@ export function RapportiniClient({
 
     const isCommessa = regTarget.startsWith('k:');
     const isCantiere = regTarget.startsWith('c:');
-    const targetId = regTarget.slice(2);
+    // Un cantiere puo' arrivare come `<cantiere>/<fase>`.
+    const luogo = isCantiere ? luogoDaValore(regTarget.slice(2)) : null;
+    const targetId = isCantiere ? (luogo?.cantiereId ?? '') : regTarget.slice(2);
+    const sottocantiereId = luogo?.sottocantiereId ?? null;
 
     startRegAction(async () => {
       // Su un cantiere chiuso l'ufficio puo' scrivere lo stesso, ma lo deve
@@ -599,6 +616,7 @@ export function RapportiniClient({
         dipendenteId: regDipendenteId,
         commessaId: isCommessa ? targetId : undefined,
         cantiereId: isCantiere ? targetId : undefined,
+        ...(sottocantiereId ? { sottocantiereId } : {}),
         data: regData,
         ore_lavoro: regLavoro,
         ore_viaggio: regViaggio,
@@ -1251,34 +1269,36 @@ export function RapportiniClient({
               </select>
             </div>
 
-            {/* Target: commessa o cantiere */}
+            {/* Target: commessa o cantiere (con le fasi come figli). Una tendina
+                cercabile, non un menu di sistema: su FPM i cantieri sono centinaia. */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">Commessa o cantiere</label>
-              <select
-                value={regTarget}
-                onChange={(e) => setRegTarget(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              >
-                <option value="">Seleziona...</option>
-                {commesse.length > 0 && (
-                  <optgroup label="Commesse">
-                    {commesse.map((c) => (
-                      <option key={c.id} value={`k:${c.id}`}>{c.titolo}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {cantieri.length > 0 && (
-                  <optgroup label="Cantieri">
-                    {/* I chiusi restano scegliibili (l'ufficio puo' sempre
-                        registrare) ma si vedono: al salvataggio si conferma. */}
-                    {cantieri.map((k) => (
-                      <option key={k.id} value={`c:${k.id}`}>
-                        {cantiereImputabile(k.stato) ? k.nome : `${k.nome} · chiuso`}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+              <Scelta
+                opzioni={[
+                  ...commesse.map((c) => ({ valore: `k:${c.id}`, etichetta: c.titolo, gruppo: 'Commesse' })),
+                  // I chiusi restano scegliibili (l'ufficio puo' sempre
+                  // registrare) ma si vedono: al salvataggio si conferma.
+                  ...cantieri.map((k) => ({
+                    valore: `c:${k.id}`,
+                    etichetta: cantiereImputabile(k.stato) ? k.nome : `${k.nome} · chiuso`,
+                    dettaglio: [k.codice, k.cliente].filter(Boolean).join(' · ') || undefined,
+                    gruppo: 'Cantieri',
+                    ...(k.sottocantieri && k.sottocantieri.length > 0
+                      ? {
+                          figli: k.sottocantieri.map((f) => ({
+                            valore: `c:${valoreLuogo(k.id, f.id)}`,
+                            etichetta: f.codice ? `${f.codice} · ${f.nome}` : f.nome,
+                          })),
+                        }
+                      : {}),
+                  })),
+                ]}
+                valore={regTarget || null}
+                onCambia={(v) => setRegTarget(v ?? '')}
+                segnaposto="Seleziona…"
+                segnapostoRicerca="Cerca cantiere, fase, codice, cliente…"
+                aria-label="Commessa o cantiere"
+              />
             </div>
 
             {/* Data */}

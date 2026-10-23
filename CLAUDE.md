@@ -1645,6 +1645,52 @@ anche in Cantieri. Per i **tecnici non cambia niente** (scelta di Luca).
   Nella tab Ore, con il turno gia' chiuso dal terminale, la card passa senza
   turno (stessa regola della card del turno).
 
+### Sottocantieri (fasi) dei cantieri (23/10/2026, migration `20261023150000`)
+
+Un cantiere del mondo Kantiere puo' avere dei **sottocantieri** (FPM li chiama
+fasi; per FPM arriveranno da ERGO, l'ufficio li scrive anche a mano). Decisioni
+di Luca: le ore **restano attribuite alla fase**; CRUD dell'ufficio dalla scheda
+cantiere; il **cantiere intero resta sempre scegibile**; `codice` e' **testo**
+(puo' essere `25098.01`). Manuale: `Logiche_Kantiere.md` §12.
+
+- Tabella `sottocantieri` + colonna facoltativa `sottocantiere_id` su
+  `timbrature`, `rapportino_righe`, `spese`, `pianificazione_blocchi`. Vuota =
+  cantiere intero: **nessuna riga esistente cambia**.
+- ⭐ **La fase deve essere del cantiere della riga, e lo garantisce il
+  database**: chiave esterna COMPOSTA `(sottocantiere_id, cantiere_id)` con
+  `on delete set null (sottocantiere_id)` (Postgres 15+). Niente trigger, e
+  una fase di un altro cantiere viene rifiutata anche da chi scrive via SQL.
+- ⭐ **La fase entra nella chiave dei motori, il viaggio no.** La chiave e'
+  `cantiere:<id>/<fase>` (`@kommessa/api/sottocantieri`): righe per fase,
+  totale per cantiere sommando. Una tratta nomina il cantiere: in
+  `minutiDaTimbrature` i suoi minuti vanno alla **prima riga di quel cantiere**
+  (confronto sulla **radice** della chiave), mai a una riga vuota — e il
+  cambio fra due cantieri si riconosce anche con le righe per fase. Testato.
+- ⚠️⚠️ **La fase, una volta aperta, vale fino alla fine del turno.** Pausa,
+  ripresa e fine turno arrivano da QR, app, capo squadra, ufficio: nessuno di
+  loro conosce la fase dell'ingresso. Lo scrittore unico `scriviTimbrature`
+  la **eredita** dall'ultima timbratura di oggi della stessa persona sullo
+  stesso cantiere quando `sottocantiere_id` e' `undefined`. Senza, ingresso
+  con fase e uscita senza avrebbero chiavi diverse e il ricalcolo non li
+  appaierebbe. Chi passa il campo (anche `null`) decide da se'.
+- ⚠️ `conFase()` in `kantiere-split.ts` e `timbro-giornata.ts` **non emette
+  il campo se la fase e' nulla**: gli eventi senza fase restano identici a
+  prima, byte per byte (sette test `toEqual` lo pretendono).
+- Nella scatola due segmenti consecutivi si fondono solo con **stesso
+  cantiere e stessa fase**; fra due fasi dello stesso cantiere la strada vale
+  zero. Il cambio cantiere dal vivo accetta anche «stesso cantiere, fase
+  diversa». Con un turno aperto dall'app, la fase del primo segmento della
+  ripartizione e' quella dell'ingresso: la decide il server.
+- Guardia `sottocantieriScrivibili` (`lavoro-aperto.ts`): esiste, e' del suo
+  cantiere, non chiusa; `forzato` per le giornate gia' lavorate, come i cantieri.
+- **API**: `/cantieri` annida `sottocantieri[]` (chiuse comprese, ordinate per
+  codice naturale e nome; ⚠️ `modificatoAl` del padre non cambia con le fasi);
+  `/ore` e `/spese` espongono `sottocantiere { id, nome, codice, externalId } | null`;
+  `/viaggi` invariata; `/letture` accetta `entita: 'sottocantiere'`
+  (`externalCantiereId` obbligatorio) **solo in area di sosta**: la promozione
+  e la mappatura `sottocantiere ↔ externalId` restano da decidere con FPM/ERGO.
+- Nomi per le scritte «Cantiere › Fase»: `_lib/sottocantieri-nomi.ts`.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

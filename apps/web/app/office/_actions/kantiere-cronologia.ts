@@ -15,6 +15,7 @@ import {
   type ViaggioCronologia,
 } from '@kommessa/api/kantiere-cronologia';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 
 /**
  * La cronologia completa di una giornata, per l'ufficio.
@@ -78,7 +79,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
       .maybeSingle(),
     supabase
       .from('timbrature' as never)
-      .select('id, tipo, ts, origine, modalita, pausa, auto_chiusa, created_at, creato_da, geo_lat, cantiere_id, sede_lavoro_id')
+      .select('id, tipo, ts, origine, modalita, pausa, auto_chiusa, created_at, creato_da, geo_lat, cantiere_id, sottocantiere_id, sede_lavoro_id')
       .eq('tenant_id', ctx.tenantId)
       .eq('dipendente_id', rapp.dipendente_id)
       .gte('ts', fromIso)
@@ -92,7 +93,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
       .order('versione', { ascending: true }),
     supabase
       .from('rapportino_righe' as never)
-      .select('cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
+      .select('cantiere_id, sottocantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio')
       .eq('rapportino_id', rapp.id),
     // Viaggi non legati a una timbratura: ore a mano e trasferimenti fra cantieri.
     supabase
@@ -117,6 +118,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     creato_da: string | null;
     geo_lat: number | null;
     cantiere_id: string | null;
+    sottocantiere_id: string | null;
     sede_lavoro_id: string | null;
   }[] | null) ?? [];
   const versioni = (versRes.data as {
@@ -128,6 +130,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
   }[] | null) ?? [];
   const righe = (righeRes.data as {
     cantiere_id: string | null;
+    sottocantiere_id: string | null;
     ore_ordinarie: number | null;
     ore_straordinarie: number | null;
     ore_viaggio: number | null;
@@ -169,6 +172,11 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     ...new Set([...viaggi.map((v) => v.sede_id), ...timb.map((t) => t.sede_lavoro_id)].filter((x): x is string => !!x)),
   ];
 
+  // Le fasi citate: «Cantiere › Fase» anche nella cronologia (23/10/2026).
+  const fasi = await nomiSottocantieri(supabase, ctx.tenantId, [...timb.map((t) => t.sottocantiere_id), ...righe.map((r) => r.sottocantiere_id)]);
+  const conFase = (cantiereId: string | null, sottocantiereId: string | null) =>
+    cantiereId ? etichettaConFase(nomeCantiere.get(cantiereId) ?? '', sottocantiereId, fasi) || null : null;
+
   const [utentiRes, cantieriRes, sediRes] = await Promise.all([
     idUtenti.length
       ? supabase.from('users' as never).select('id, display_name').in('id', idUtenti)
@@ -207,7 +215,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     creatoDa: t.creato_da,
     creatoNome: t.creato_da ? (nomeUtente.get(t.creato_da) ?? null) : null,
     haGeo: t.geo_lat != null,
-    cantiere: t.cantiere_id ? (nomeCantiere.get(t.cantiere_id) ?? null) : null,
+    cantiere: conFase(t.cantiere_id, t.sottocantiere_id),
     sedeLavoro: t.sede_lavoro_id ? (nomeSede.get(t.sede_lavoro_id) ?? 'Sede') : null,
   }));
 
@@ -242,7 +250,7 @@ export async function cronologiaGiornata(input: unknown): Promise<Esito> {
     // Per le giornate scritte a mano senza timbrature: il lavoro ha un pallino.
     data: rapp.data,
     lavoro: righe.map((r) => ({
-      cantiere: r.cantiere_id ? (nomeCantiere.get(r.cantiere_id) ?? null) : null,
+      cantiere: conFase(r.cantiere_id, r.sottocantiere_id),
       minutiOrdinari: Math.round(Number(r.ore_ordinarie ?? 0) * 60),
       minutiStraordinari: Math.round(Number(r.ore_straordinarie ?? 0) * 60),
     })),

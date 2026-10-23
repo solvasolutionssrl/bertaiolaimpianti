@@ -13,13 +13,18 @@ import {
 } from '@kommessa/ui';
 import { fmtData } from '@/app/office/_lib/format';
 import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
+import { luogoDaValore } from '@kommessa/api/sottocantieri';
 import {
   aggiungiPausaGiornata,
   correggiViaggio,
   registraOrePerDipendente,
 } from '@/app/office/_actions/kantiere-rapportini';
 
-/** Riga (target) modificabile a mano nella sezione avanzata. */
+/**
+ * Riga (target) modificabile a mano nella sezione avanzata.
+ * ⚠️ Per un cantiere `targetId` puo' essere `<cantiere>/<fase>` (23/10/2026):
+ * si rilegge con `luogoDaValore` prima di scrivere.
+ */
 export type CorreggiRiga = {
   targetId: string;
   targetTipo: 'commessa' | 'cantiere';
@@ -168,10 +173,12 @@ export function CorreggiGiornataDialog({
     const v = valori[r.targetId] ?? { lavoro: r.lavoro, viaggio: r.viaggio };
     setSalvataId(null);
     startTransition(async () => {
+      const luogo = r.targetTipo === 'cantiere' ? luogoDaValore(r.targetId) : null;
       const res = await registraOrePerDipendente({
         dipendenteId,
         commessaId: r.targetTipo === 'commessa' ? r.targetId : undefined,
-        cantiereId: r.targetTipo === 'cantiere' ? r.targetId : undefined,
+        cantiereId: luogo?.cantiereId,
+        ...(luogo?.sottocantiereId ? { sottocantiereId: luogo.sottocantiereId } : {}),
         data,
         ore_lavoro: v.lavoro,
         ore_viaggio: v.viaggio,

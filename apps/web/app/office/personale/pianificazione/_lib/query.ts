@@ -73,6 +73,9 @@ export interface BloccoView {
   tipo: TipoBlocco;
   cantiereId: string | null;
   cantiereNome: string | null;
+  /** La fase del cantiere (23/10/2026). */
+  sottocantiereId: string | null;
+  sottocantiereNome: string | null;
   titolo: string | null;
   luogo: string | null;
   luogoLat: number | null;
@@ -87,16 +90,18 @@ export interface BloccoView {
 }
 
 const SELECT_BLOCCO =
-  'id, data, tipo, cantiere_id, titolo, luogo, luogo_lat, luogo_lng, fascia, ora_inizio, ora_fine, note, stato, ' +
+  'id, data, tipo, cantiere_id, sottocantiere_id, titolo, luogo, luogo_lat, luogo_lng, fascia, ora_inizio, ora_fine, note, stato, ' +
   'membri:pianificazione_membri(dipendente_id), ' +
   'mezzi:pianificazione_blocco_mezzi(mezzo_id), ' +
-  'cantiere:cantieri(nome)';
+  'cantiere:cantieri(nome), ' +
+  'sottocantiere:sottocantieri(nome)';
 
 interface BloccoRowRaw {
   id: string;
   data: string;
   tipo: TipoBlocco;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   titolo: string | null;
   luogo: string | null;
   luogo_lat: number | null;
@@ -109,6 +114,7 @@ interface BloccoRowRaw {
   membri: { dipendente_id: string }[] | null;
   mezzi: { mezzo_id: string }[] | null;
   cantiere: { nome: string } | null;
+  sottocantiere: { nome: string } | null;
 }
 
 function mapBloccoRow(r: BloccoRowRaw): BloccoView {
@@ -118,6 +124,8 @@ function mapBloccoRow(r: BloccoRowRaw): BloccoView {
     tipo: r.tipo,
     cantiereId: r.cantiere_id ?? null,
     cantiereNome: r.cantiere?.nome ?? null,
+    sottocantiereId: r.sottocantiere_id ?? null,
+    sottocantiereNome: r.sottocantiere?.nome ?? null,
     titolo: r.titolo ?? null,
     luogo: r.luogo ?? null,
     luogoLat: r.luogo_lat ?? null,

@@ -54,6 +54,9 @@ export async function POST(request: NextRequest) {
   const cantiereIdRaw = form?.get('cantiereId');
   const cantiereIdInput =
     typeof cantiereIdRaw === 'string' && cantiereIdRaw.trim() ? cantiereIdRaw.trim() : null;
+  // La fase del cantiere (23/10/2026), se scelta: il DB controlla che sia del cantiere.
+  const sottoRaw = form?.get('sottocantiereId');
+  const sottocantiereIdInput = typeof sottoRaw === 'string' && /^[0-9a-f-]{36}$/i.test(sottoRaw.trim()) ? sottoRaw.trim() : null;
 
   if (!(file instanceof Blob) || file.size === 0) {
     return Response.json({ ok: false, code: 'FILE_MANCANTE' }, { status: 400 });
@@ -173,6 +176,7 @@ export async function POST(request: NextRequest) {
       tenant_id: ctx.tenantId,
       dipendente_id: dipId,
       cantiere_id: cantiereId,
+      sottocantiere_id: cantiereId ? sottocantiereIdInput : null,
       commessa_id: commessaId,
       categoria: 'varie',
       importo_totale: null,

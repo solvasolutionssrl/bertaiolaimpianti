@@ -11,6 +11,7 @@ import {
   rispostaElenco,
 } from '../_lib/api';
 import { caricaMappature, clienteDelleCommesse, num } from '../_lib/risorse';
+import { fasiOrdinate, type SottocantiereDb } from '../_lib/sottocantieri';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -48,6 +49,7 @@ interface CantiereDb {
   note: string | null;
   created_at: string;
   updated_at: string;
+  sottocantieri: SottocantiereDb[] | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -64,7 +66,10 @@ export async function GET(request: NextRequest) {
     .select(
       'id, codice, nome, codice_commessa, cliente_nome, categoria, stato, indirizzo,' +
         ' indirizzo_lat, indirizzo_lng, indirizzo_da_verificare, sede_partenza, note,' +
-        ' created_at, updated_at',
+        ' created_at, updated_at,' +
+        // Le fasi (23/10/2026) viaggiano DENTRO il cantiere: chi legge il
+        // padre ha gia' i figli, senza una rotta in piu' da paginare.
+        ' sottocantieri(id, nome, descrizione, codice, stato, created_at, updated_at)',
     )
     .eq('tenant_id', ctx.tenantId)
     .order('updated_at', { ascending: true })
@@ -107,6 +112,19 @@ export async function GET(request: NextRequest) {
       externalId,
       externalClienteId: externalId ? (clienteDi.get(externalId) ?? null) : null,
       collegato: !!externalId,
+      // Le fasi del cantiere, in ordine di codice e nome. Vuoto = nessuna.
+      // ⚠️ `modificatoAl` del padre non cambia quando cambia una fase: chi
+      // filtra con `modificatoDopo` rilegge il cantiere, non le sue fasi.
+      sottocantieri: fasiOrdinate(r.sottocantieri).map((f) => ({
+        id: f.id,
+        nome: f.nome,
+        descrizione: f.descrizione,
+        codice: f.codice,
+        stato: f.stato,
+        externalId: mapp.sottocantiere.get(f.id) ?? null,
+        registratoAl: f.created_at,
+        modificatoAl: f.updated_at,
+      })),
       registratoAl: r.created_at,
       modificatoAl: r.updated_at,
     };

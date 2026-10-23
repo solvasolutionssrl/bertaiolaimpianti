@@ -314,7 +314,20 @@ export function CantieriClient({
                             ) : null}
                           </div>
                         </td>
-                        <td className="px-3 py-2 font-semibold">{row.nome}</td>
+                        <td className="px-3 py-2 font-semibold">
+                          <span className="inline-flex max-w-full items-center gap-1.5">
+                            <span className="truncate">{row.nome}</span>
+                            {row.nFasi > 0 ? (
+                              <span
+                                title={`${row.nFasi} ${row.nFasi === 1 ? 'sottocantiere attivo' : 'sottocantieri attivi'}`}
+                                data-fasi={row.nFasi}
+                                className="shrink-0 rounded-full border border-border bg-muted/60 px-1.5 py-0 text-[10px] font-semibold tabular-nums text-muted-foreground"
+                              >
+                                {row.nFasi} {row.nFasi === 1 ? 'fase' : 'fasi'}
+                              </span>
+                            ) : null}
+                          </span>
+                        </td>
                         <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">
                           {row.cliente_nome ?? <span className="text-muted-foreground/50">·</span>}
                         </td>

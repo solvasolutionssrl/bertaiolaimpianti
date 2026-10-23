@@ -1,4 +1,6 @@
 import { leggiCollegamenti, leggiEsportazioni } from '@/app/_lib/integrazione/collegati';
+import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
+import { fasiScegibili, type SottocantiereLite } from '@kommessa/api/sottocantieri';
 import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiMetodiAttivi } from '@/app/_lib/metodi-pagamento';
@@ -25,6 +27,7 @@ type SpesaRow = {
   id: string;
   dipendente_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   categoria: string | null;
   ragione_sociale: string | null;
   importo_totale: number | null;
@@ -79,7 +82,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
     let query = supabase
       .from('spese' as never)
       .select(
-        'id, dipendente_id, cantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key, numero_persone, stato',
+        'id, dipendente_id, cantiere_id, sottocantiere_id, categoria, ragione_sociale, importo_totale, importo_iva, imponibile, valuta, data_scontrino, created_at, note, foto_mime, r2_key, numero_persone, stato',
       )
       .eq('tenant_id', ctx.tenantId);
 
@@ -128,6 +131,8 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
       .in('id', cantIds)) as { data: CantiereRow[] | null };
     for (const k of data ?? []) cantieriMap.set(k.id, k.nome || k.codice || k.id);
   }
+  // Le fasi citate dalle spese: «Cantiere › Fase» (23/10/2026).
+  const fasiMap = await nomiSottocantieri(supabase, ctx.tenantId, spese.map((s) => s.sottocantiere_id));
 
   // Liste opzioni per i filtri e per la riassegnazione: tutti i cantieri +
   // tutti i dipendenti del tenant.
@@ -140,14 +145,18 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   // (`forzato: true`).
   const { data: tuttiCantieri } = (await supabase
     .from('cantieri' as never)
-    .select('id, nome, codice, stato')
+    .select('id, nome, codice, stato, sottocantieri(id, nome, codice, stato)')
     .eq('tenant_id', ctx.tenantId)
-    .order('nome')) as { data: CantiereRow[] | null };
-  const cantieriOptions: CantiereOption[] = (tuttiCantieri ?? []).map((k) => ({
-    id: k.id,
-    nome: k.nome || k.codice || k.id,
-    stato: (k as { stato?: string | null }).stato ?? null,
-  }));
+    .order('nome')) as { data: (CantiereRow & { sottocantieri?: SottocantiereLite[] })[] | null };
+  const cantieriOptions: CantiereOption[] = (tuttiCantieri ?? []).map((k) => {
+    const fasi = fasiScegibili(k.sottocantieri);
+    return {
+      id: k.id,
+      nome: k.nome || k.codice || k.id,
+      stato: (k as { stato?: string | null }).stato ?? null,
+      ...(fasi.length > 0 ? { sottocantieri: fasi.map((f) => ({ id: f.id, nome: f.nome, codice: f.codice ?? null })) } : {}),
+    };
+  });
 
   const { data: tuttiDipendenti } = (await supabase
     .from('dipendenti' as never)
@@ -183,8 +192,9 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   const righe: SpesaRiga[] = spese.map((s) => ({
     id: s.id,
     dipendenteNome: s.dipendente_id ? dipendentiMap.get(s.dipendente_id) ?? 'Sconosciuto' : 'Sconosciuto',
-    cantiereNome: s.cantiere_id ? cantieriMap.get(s.cantiere_id) ?? null : null,
+    cantiereNome: s.cantiere_id ? etichettaConFase(cantieriMap.get(s.cantiere_id) ?? '', s.sottocantiere_id, fasiMap) || null : null,
     cantiereId: s.cantiere_id,
+    sottocantiereId: s.cantiere_id ? (s.sottocantiere_id ?? null) : null,
     categoria: s.categoria,
     ragioneSociale: s.ragione_sociale,
     importoTotale: s.importo_totale,

@@ -9,7 +9,9 @@ import { CONTRATTO, autenticaApi, erroreApi, leggiJson } from '../_lib/api';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const ENTITA_AMMESSE = ['commessa', 'cliente', 'dipendente'] as const;
+// `sottocantiere` dal 23/10/2026: le fasi di un cantiere. Solo area di sosta,
+// nessuna promozione automatica (la si decide con il cliente e il gestionale).
+const ENTITA_AMMESSE = ['commessa', 'cliente', 'dipendente', 'sottocantiere'] as const;
 const MAX_RECORD = 1000;
 
 /**
@@ -45,6 +47,15 @@ interface RecordLetto {
    * accoppiamenti falsi su 35, cioe' ore sulla busta paga sbagliata.
    */
   externalCodiceDipendente?: string | null;
+  /**
+   * Per `entita: "sottocantiere"`: l'`externalId` del CANTIERE padre sul
+   * gestionale. Senza, la fase non e' agganciabile a niente: obbligatorio.
+   */
+  externalCantiereId?: string | null;
+  /** Per `entita: "sottocantiere"`: il codice della fase sul gestionale (testo: puo' essere `25098.01`). */
+  externalCodiceFase?: string | null;
+  /** Per `entita: "sottocantiere"`: descrizione libera della fase. */
+  descrizione?: string | null;
   /** Committente sul gestionale: i documenti di km e spese lo pretendono. */
   externalClienteId?: string | null;
   /**
@@ -128,7 +139,9 @@ export async function POST(request: NextRequest) {
         typeof r.externalId === 'string' &&
         r.externalId.trim() !== '' &&
         typeof r.nome === 'string' &&
-        r.nome.trim() !== '';
+        r.nome.trim() !== '' &&
+        // Una fase senza il suo cantiere non si puo' agganciare a niente.
+        (entita !== 'sottocantiere' || (typeof r.externalCantiereId === 'string' && r.externalCantiereId.trim() !== ''));
       if (!ok) scartati.push(String((r as RecordLetto | undefined)?.externalId ?? '?'));
       return ok;
     })
@@ -136,8 +149,18 @@ export async function POST(request: NextRequest) {
       // Una colonna sola per il codice del gestionale: quale dei due nomi
       // valga lo dice l'entita', e un dipendente non ha un codice commessa.
       const externalCodice =
-        (entita === 'dipendente' ? r.externalCodiceDipendente : r.externalCodiceCommessa)
-          ?.trim() || null;
+        (entita === 'dipendente'
+          ? r.externalCodiceDipendente
+          : entita === 'sottocantiere'
+            ? r.externalCodiceFase
+            : r.externalCodiceCommessa
+        )?.trim() || null;
+      // La fase porta il padre e la descrizione DENTRO `dati` (la tabella di
+      // sosta non ha colonne per loro): chi promuove li legge da li'.
+      const datiFase =
+        entita === 'sottocantiere'
+          ? { externalCantiereId: r.externalCantiereId!.trim(), descrizione: r.descrizione?.trim().slice(0, 1000) || null }
+          : {};
       const canonici = [
         r.nome,
         externalCodice,
@@ -146,6 +169,7 @@ export async function POST(request: NextRequest) {
         r.categoria,
         r.indirizzo,
         r.attiva,
+        datiFase,
       ];
       return {
         tenant_id: tenantId,
@@ -159,7 +183,7 @@ export async function POST(request: NextRequest) {
         categoria: r.categoria?.trim().slice(0, 120) || null,
         indirizzo: r.indirizzo?.trim().slice(0, 400) || null,
         attiva: typeof r.attiva === 'boolean' ? r.attiva : null,
-        dati: r.dati ?? {},
+        dati: { ...(r.dati ?? {}), ...datiFase },
         // L'impronta copre anche i campi canonici: se cambia il nome ma non il
         // grezzo (o viceversa) il record va comunque rivisto.
         contenuto_hash: createHash('sha256')
@@ -173,7 +197,9 @@ export async function POST(request: NextRequest) {
     return erroreApi(
       400,
       'nessun_record_valido',
-      'Ogni record deve avere `externalId` e `nome`.',
+      entita === 'sottocantiere'
+        ? 'Ogni record deve avere `externalId`, `nome` e `externalCantiereId`.'
+        : 'Ogni record deve avere `externalId` e `nome`.',
     );
   }
 

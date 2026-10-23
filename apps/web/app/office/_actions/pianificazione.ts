@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { cantiereScrivibile } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import type { AppRole } from '@kommessa/api';
 import {
@@ -212,6 +212,8 @@ const BloccoSchema = z.object({
   oraInizio: z.string().optional().nullable(),
   oraFine: z.string().optional().nullable(),
   cantiereId: z.string().uuid().optional().nullable(),
+  /** La fase del cantiere (23/10/2026); null = il cantiere intero. */
+  sottocantiereId: z.string().uuid().optional().nullable(),
   titolo: z.string().trim().max(160).optional().nullable(),
   luogo: z.string().trim().max(200).optional().nullable(),
   luogoLat: z.number().optional().nullable(),
@@ -309,6 +311,8 @@ export async function creaBlocco(input: unknown): Promise<SalvaResult> {
   if (data.tipo === 'cantiere' && data.cantiereId) {
     const aperto = await cantiereScrivibile(supabase, data.cantiereId, ctx.tenantId);
     if (!aperto.ok) return { ok: false, error: aperto.error };
+    const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }], ctx.tenantId);
+    if (!fase.ok) return { ok: false, error: fase.error };
   }
 
   // Insert blocco → membri → mezzi (cleanup best-effort se figli falliscono).
@@ -319,6 +323,7 @@ export async function creaBlocco(input: unknown): Promise<SalvaResult> {
       data: data.data,
       tipo: data.tipo,
       cantiere_id: data.tipo === 'cantiere' ? data.cantiereId : null,
+      sottocantiere_id: data.tipo === 'cantiere' ? (data.sottocantiereId ?? null) : null,
       titolo: data.tipo !== 'cantiere' ? data.titolo?.trim() : null,
       luogo: data.tipo !== 'cantiere' ? data.luogo?.trim() ?? null : null,
       luogo_lat: data.tipo !== 'cantiere' ? data.luogoLat ?? null : null,
@@ -429,6 +434,8 @@ export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteR
   if (data.tipo === 'cantiere' && data.cantiereId) {
     const aperto = await cantiereScrivibile(supabase, data.cantiereId, ctx.tenantId);
     if (!aperto.ok) return { ok: false, error: aperto.error };
+    const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }], ctx.tenantId);
+    if (!fase.ok) return { ok: false, error: fase.error };
   }
 
   const date = Array.from(new Set(data.date)).sort();
@@ -482,6 +489,7 @@ export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteR
         data: giorno,
         tipo: data.tipo,
         cantiere_id: data.tipo === 'cantiere' ? data.cantiereId : null,
+        sottocantiere_id: data.tipo === 'cantiere' ? (data.sottocantiereId ?? null) : null,
         titolo: data.tipo !== 'cantiere' ? data.titolo?.trim() : null,
         luogo: data.tipo !== 'cantiere' ? data.luogo?.trim() ?? null : null,
         luogo_lat: data.tipo !== 'cantiere' ? data.luogoLat ?? null : null,
@@ -594,6 +602,8 @@ export async function aggiornaBlocco(input: unknown): Promise<SalvaResult> {
   if (data.tipo === 'cantiere' && data.cantiereId) {
     const aperto = await cantiereScrivibile(supabase, data.cantiereId, ctx.tenantId);
     if (!aperto.ok) return { ok: false, error: aperto.error };
+    const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }], ctx.tenantId);
+    if (!fase.ok) return { ok: false, error: fase.error };
   }
 
   const { error: errUpd } = await supabase
@@ -602,6 +612,7 @@ export async function aggiornaBlocco(input: unknown): Promise<SalvaResult> {
       data: data.data,
       tipo: data.tipo,
       cantiere_id: data.tipo === 'cantiere' ? data.cantiereId : null,
+      sottocantiere_id: data.tipo === 'cantiere' ? (data.sottocantiereId ?? null) : null,
       titolo: data.tipo !== 'cantiere' ? data.titolo?.trim() : null,
       luogo: data.tipo !== 'cantiere' ? data.luogo?.trim() ?? null : null,
       luogo_lat: data.tipo !== 'cantiere' ? data.luogoLat ?? null : null,
@@ -959,6 +970,7 @@ export async function ripetiBlocco(
           data: dc.giorno,
           tipo: b.tipo,
           cantiere_id: b.cantiereId,
+          sottocantiere_id: b.sottocantiereId ?? null,
           titolo: b.titolo,
           luogo: b.luogo,
           luogo_lat: b.luogoLat,
@@ -1209,6 +1221,7 @@ export async function copiaSettimanaPrecedente(input: unknown): Promise<CopiaRes
         data: nuovaData,
         tipo: b.tipo,
         cantiere_id: b.cantiereId,
+        sottocantiere_id: b.sottocantiereId ?? null,
         titolo: b.titolo,
         luogo: b.luogo,
         // Le coordinate si portano dietro: senza, una formazione con

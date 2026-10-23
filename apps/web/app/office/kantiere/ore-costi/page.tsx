@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
 import { leggiRighePerId } from '@/app/_lib/letture-complete';
@@ -60,6 +61,7 @@ type RigaRow = {
   rapportino_id: string;
   commessa_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id?: string | null;
   ore_ordinarie: number;
   ore_straordinarie: number;
   ore_viaggio: number;
@@ -222,7 +224,7 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
   const righeData = await leggiRighePerId<RigaRow>(
     supabase,
     'rapportino_righe',
-    'rapportino_id, commessa_id, cantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti',
+    'rapportino_id, commessa_id, cantiere_id, sottocantiere_id, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti',
     'rapportino_id',
     rapportinoIds,
     'ore e costi: righe',
@@ -265,6 +267,9 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
     return v;
   }
 
+  // Le fasi citate dalle righe: «Cantiere › Fase» (23/10/2026).
+  const fasiMap = await nomiSottocantieri(supabase, ctx.tenantId, righeData.map((r) => r.sottocantiere_id));
+
   const righeCosto: RigaCosto[] = righeData.map((r) => {
     const meta = rapMeta.get(r.rapportino_id);
     const dipId = meta?.dipendente_id ?? '';
@@ -275,7 +280,7 @@ export default async function OreCostiPage({ searchParams }: PageProps) {
     const targetLabel = r.commessa_id
       ? commesseTitoloMap.get(r.commessa_id) ?? r.commessa_id
       : r.cantiere_id
-        ? cantNomeMap.get(r.cantiere_id) ?? r.cantiere_id
+        ? etichettaConFase(cantNomeMap.get(r.cantiere_id) ?? r.cantiere_id, r.sottocantiere_id, fasiMap)
         : 'Sconosciuto';
 
     return calcolaCostoGiornataCond({

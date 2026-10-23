@@ -20,6 +20,7 @@ import {
   num,
   oreHMM,
 } from '../_lib/risorse';
+import { riferimentoFase, type SottocantiereDb } from '../_lib/sottocantieri';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -54,6 +55,8 @@ interface RigaDb {
   id: string;
   rapportino_id: string;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
+  sottocantiere: SottocantiereDb | SottocantiereDb[] | null;
   commessa_id: string | null;
   ore_ordinarie: unknown;
   ore_straordinarie: unknown;
@@ -117,8 +120,9 @@ export async function GET(request: NextRequest) {
   let q = service
     .from('rapportino_righe' as never)
     .select(
-      'id, rapportino_id, cantiere_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio,' +
+      'id, rapportino_id, cantiere_id, sottocantiere_id, commessa_id, ore_ordinarie, ore_straordinarie, ore_viaggio,' +
         ' minuti_lavoro, minuti_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti, note,' +
+        ' sottocantiere:sottocantieri(id, nome, codice, stato),' +
         ' rapportino:rapportini!inner(id, data, stato, note, approvato_at, inviato_at, updated_at, dipendente_id,' +
         ' dipendente:dipendenti(id, nome, cognome, mansione, codice_interno, stato_attivo))',
     )
@@ -195,6 +199,9 @@ export async function GET(request: NextRequest) {
                 : null,
           }
         : null,
+      // La fase del cantiere (23/10/2026), se le ore sono state attribuite a
+      // una fase. Una riga per fase: il totale per cantiere si somma a valle.
+      sottocantiere: riferimentoFase(r.sottocantiere, mapp.sottocantiere),
 
       // Le tre quote, mai sommate. In ore decimali e in minuti: i gestionali
       // vogliono l'una o gli altri, e convertire a valle e' un'occasione di

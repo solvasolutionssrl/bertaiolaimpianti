@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { appiattisciOpzioni, figliCorrispondenti, trovaOpzione } from './scelta-opzioni';
 
 import {
   filtraOpzioni,
@@ -171,5 +172,47 @@ describe('navigazione con le frecce', () => {
 
   it('su un elenco vuoto non seleziona niente', () => {
     expect(primoIndiceUtile([])).toBe(-1);
+  });
+});
+
+describe('voci con figli (le fasi di un cantiere)', () => {
+  const opz = [
+    { valore: 'c1', etichetta: 'Fincantieri Monfalcone', figli: [
+      { valore: 'c1/f1', etichetta: '01 · Quadri' },
+      { valore: 'c1/f2', etichetta: '02 · Cavi' },
+    ] },
+    { valore: 'c2', etichetta: 'Ospedale Verona' },
+  ];
+  it('cercando una fase si trova il cantiere, e il padre si apre da solo con quella fase sotto', () => {
+    const tenute = filtraOpzioni(opz, 'cavi');
+    expect(tenute.map((o) => o.valore)).toEqual(['c1']);
+    const piatte = appiattisciOpzioni(tenute, new Set(), 'cavi');
+    expect(piatte.map((v) => `${v.livello}:${v.valore}`)).toEqual(['0:c1', '1:c1/f2']);
+    expect(piatte[0]!.aperta).toBe(true);
+    expect(piatte[0]!.nFigli).toBe(1);
+  });
+  it('senza ricerca il padre e\' chiuso finche\' non lo si apre, e poi mostra tutti i figli', () => {
+    expect(appiattisciOpzioni(opz, new Set(), '').map((v) => v.valore)).toEqual(['c1', 'c2']);
+    const aperte = appiattisciOpzioni(opz, new Set(['c1']), '');
+    expect(aperte.map((v) => v.valore)).toEqual(['c1', 'c1/f1', 'c1/f2', 'c2']);
+    expect(aperte[1]!.padre).toBe('c1');
+    expect(aperte[0]!.nFigli).toBe(2);
+  });
+  it('un padre che corrisponde da solo resta chiuso: il pallino dice quante fasi ha', () => {
+    const piatte = appiattisciOpzioni(filtraOpzioni(opz, 'fincantieri'), new Set(), 'fincantieri');
+    expect(piatte.map((v) => v.valore)).toEqual(['c1']);
+    expect(piatte[0]!.aperta).toBe(false);
+    expect(piatte[0]!.nFigli).toBe(2);
+  });
+  it('i figli ereditano il gruppo del padre', () => {
+    const conGruppo = [{ ...opz[0]!, gruppo: 'Attivi' }];
+    const piatte = appiattisciOpzioni(conGruppo, new Set(['c1']), '');
+    expect(piatte.every((v) => v.gruppo === 'Attivi')).toBe(true);
+  });
+  it('trovaOpzione guarda anche fra i figli', () => {
+    expect(trovaOpzione(opz, 'c1/f2')?.etichetta).toBe('02 · Cavi');
+    expect(trovaOpzione(opz, 'c2')?.etichetta).toBe('Ospedale Verona');
+    expect(trovaOpzione(opz, 'zzz')).toBeNull();
+    expect(figliCorrispondenti(opz[0]!, 'quadri').length).toBe(1);
   });
 });

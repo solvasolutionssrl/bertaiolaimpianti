@@ -140,6 +140,7 @@ Le ore lavorate, **una riga per giornata e per cantiere**.
     "id": "uuid", "entita": "cantiere",
     "externalId": "26087", "externalClienteId": "70796"
   },
+  "sottocantiere": { "id": "uuid", "nome": "Quadri", "codice": "25098.01", "externalId": null },
   "ore":    { "lavoro": 7, "ordinarie": 7, "straordinarie": 0, "viaggio": 2,
               "viaggioOrdinario": 1, "viaggioEccedente": 1, "totale": 9 },
   "minuti": { "lavoro": 420, "ordinarie": 420, "straordinarie": 0, "viaggio": 120,
@@ -181,6 +182,15 @@ registrate prima della regola hanno `viaggioOrdinario` 0 e tutto il viaggio in
 **Arrivano anche le giornate non approvate**, con `giornata.stato` in chiaro. Decidere se
 mandarle è una politica, e le politiche stanno da chi conosce il sistema di destinazione.
 
+**La fase del cantiere** (dal 23/10/2026). Un cantiere può avere dei sottocantieri (fasi) e le
+ore possono essere attribuite a una fase: `sottocantiere` è `null` quando le ore sono sul
+cantiere intero. **Una riga per fase**: lo stesso giorno sullo stesso cantiere può produrre
+due righe con lo stesso `commessa` e due `sottocantiere` diversi; il totale per cantiere si
+somma a valle. `externalId` è l'identificativo della fase sul gestionale, quando è collegata
+(`integrazione_mappature`, entità `sottocantiere`); finché non lo è, resta `null` e `codice`
+è il codice che l'ufficio o il gestionale hanno scritto sulla fase. Il viaggio **non** ha una
+fase: una tratta è del cantiere, e i suoi minuti stanno sulla prima riga di quel cantiere.
+
 ## `GET /spese`
 
 ```jsonc
@@ -192,6 +202,7 @@ mandarle è una politica, e le politiche stanno da chi conosce il sistema di des
   "importo": { "totale": 45, "iva": 4.09, "imponibile": 40.91, "valuta": "EUR" },
   "metodoPagamento": "carta", "rimborsabile": true, "numeroPersone": 2,
   "dipendente": { … }, "commessa": { … },
+  "sottocantiere": null,
   "stato": "confermata", "confermata": true,
   "analisi": { "conclusaAl": "…", "errore": null },
   "haFoto": true, "posizione": { "lat": 45.4, "lng": 10.9 },
@@ -210,6 +221,9 @@ bozza può essere **incompleta**: se l'analisi della foto è fallita, `importo.t
 un gestionale contabile non ha senso: **controlla `confermata` prima di portarla fuori.**
 Non lo decidiamo noi al posto tuo — `inviabile` risponde a un'altra domanda, cioè se la
 sicura di collaudo ti autorizza, non se il record è pronto.
+
+`sottocantiere` (dal 23/10/2026) ha la stessa forma che in `/ore`: la fase a cui la spesa è
+stata agganciata, o `null`.
 
 ## `GET /viaggi`
 
@@ -261,6 +275,10 @@ giornata): `tipo` dice quale. I km si imputano sempre alla **destinazione**.
   "indirizzo": { "testo": "…", "lat": 45.4, "lng": 10.9, "daVerificare": false },
   "sedePartenza": "…", "note": null,
   "externalId": "26084", "externalClienteId": "70796", "collegato": true,
+  "sottocantieri": [
+    { "id": "uuid", "nome": "Quadri", "descrizione": null, "codice": "25098.01",
+      "stato": "attivo", "externalId": null, "registratoAl": "…", "modificatoAl": "…" }
+  ],
   "registratoAl": "…", "modificatoAl": "…"
 }
 ```
@@ -268,6 +286,15 @@ giornata): `tipo` dice quale. I km si imputano sempre alla **destinazione**.
 > ⚠️ **Due codici, e il prefisso è lì apposta.** `codiceCommessa` è il NOSTRO
 > (`CAN-00190`), `externalCodiceCommessa` è quello del gestionale (`26084`). Scambiarli
 > scrive nella numerazione sbagliata, e non dà nessun segnale finché i conti non tornano.
+
+**`sottocantieri`** (dal 23/10/2026): le fasi del cantiere, dentro il padre, in ordine di
+`codice` (con i numeri in ordine naturale) e poi di `nome`. Vuoto = nessuna fase. Arrivano
+anche le fasi **chiuse** (`stato: "chiuso"`): senza, non distingueresti «chiusa» da
+«sparita». `codice` è testo (può essere `25098.01`), unico dentro il cantiere.
+
+> ⚠️ `modificatoAl` del cantiere **non cambia** quando cambia una sua fase. Chi legge con
+> `modificatoDopo` rilegge i cantieri, non le fasi: se ti servono le fasi aggiornate,
+> rileggi l'elenco intero (sono poche decine per cantiere, non una tabella a parte).
 
 ## `GET /dipendenti`
 
@@ -342,8 +369,9 @@ Deposita quello che hai letto dal tuo gestionale, **in lingua canonica**.
   }] }
 ```
 
-Massimo 1000 record. `entita` ∈ `commessa` | `cliente` | `dipendente`. Solo `externalId` e
-`nome` sono obbligatori: **se il tuo gestionale non ha gli altri, ometti e basta.**
+Massimo 1000 record. `entita` ∈ `commessa` | `cliente` | `dipendente` | `sottocantiere`. Solo
+`externalId` e `nome` sono obbligatori (per `sottocantiere` anche `externalCantiereId`):
+**se il tuo gestionale non ha gli altri, ometti e basta.**
 
 | Campo | Note |
 |---|---|
@@ -354,6 +382,28 @@ Massimo 1000 record. `entita` ∈ `commessa` | `cliente` | `dipendente`. Solo `e
 | `categoria` | gruppo / tipo di lavoro |
 | `indirizzo` | **una riga sola, già composta** |
 | `attiva` | `false` = chiusa / non più in forza |
+| `externalCantiereId` | solo `sottocantiere`: l'`externalId` del **cantiere padre** da voi. Obbligatorio |
+| `externalCodiceFase` | solo `sottocantiere`: il codice della fase da voi (testo, può essere `25098.01`) |
+| `descrizione` | solo `sottocantiere`: descrizione libera della fase |
+
+**Le fasi di un cantiere** (`entita: "sottocantiere"`, dal 23/10/2026):
+
+```jsonc
+{ "entita": "sottocantiere",
+  "record": [{
+    "externalId": "25098-01",          // la vostra chiave della fase
+    "externalCantiereId": "25098",     // il cantiere padre, la stessa chiave che mandate in `commessa`
+    "nome": "Quadri elettrici",
+    "externalCodiceFase": "25098.01",
+    "descrizione": "Fornitura e posa quadri piano terra",
+    "attiva": true
+  }] }
+```
+
+Anche queste si fermano nell'area di sosta: **nessuna fase nasce da sola** nei cantieri di
+Kommessa. La promozione (creare la fase sotto il cantiere collegato, e scrivere la
+mappatura) è un passo che si deciderà con il cliente, perché una fase sbagliata sotto il
+cantiere sbagliato raccoglierebbe ore senza nessun segnale.
 
 **L'indirizzo lo componi tu.** Se il tuo gestionale lo tiene a pezzi (via / cap / comune),
 ricomporli è compito del client: accettare la tua forma vorrebbe dire farci entrare in casa

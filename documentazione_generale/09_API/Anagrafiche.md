@@ -1,6 +1,6 @@
 # Le anagrafiche: collegare, creare, ignorare
 
-**Aggiornato**: 14/08/2026
+**Aggiornato**: 23/10/2026
 
 Prima che una sola ora o una sola spesa possa uscire da Kommessa, i due sistemi
 devono essere d'accordo su **chi è chi** e **cosa è cosa**. Questa pagina descrive come
@@ -23,6 +23,13 @@ Tre parole, tre cose diverse. Confonderle è l'errore più comune:
 | **Registrato sul gestionale** | un nostro dato è stato scritto là fuori (`integrazione_scritture`) |
 
 Un cantiere può essere collegato da settimane senza che ne sia uscito niente.
+
+**Le fasi** (dal 23/10/2026). Un cantiere può avere dei **sottocantieri**; il gestionale può
+depositarli con `POST /letture`, entità `sottocantiere`, indicando il cantiere padre con la
+**sua** chiave (`externalCantiereId`). Oggi si fermano all'area di sosta: la promozione a
+fasi vere sotto il cantiere collegato, e la riga in `integrazione_mappature` con entità
+`sottocantiere`, non esistono ancora. Le fasi scritte a mano dall'ufficio non hanno
+`externalId`, e l'API le espone lo stesso con il loro `codice`.
 
 > **A schermo non si scrive mai il nome del gestionale.** Si dice «il gestionale»; il nome
 > vero (`ergo`, `teamsystem`…) arriva dalla configurazione del cliente e compare solo nel

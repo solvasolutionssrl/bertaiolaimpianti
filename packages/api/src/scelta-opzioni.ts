@@ -51,6 +51,25 @@ export interface OpzioneScelta {
   cerca?: string;
   /** La voce si vede ma non si può scegliere. */
   disabilitata?: boolean;
+  /**
+   * Voci FIGLIE (23/10/2026): le fasi di un cantiere. Nella riga del padre
+   * compare un pallino con il conto e una freccia che le apre sotto, rientrate;
+   * il padre resta scegibile, ogni figlio ha il suo `valore`. La ricerca
+   * guarda anche qui dentro, e un figlio che corrisponde apre il padre da sé.
+   */
+  figli?: OpzioneScelta[];
+}
+
+/** Una voce dell'elenco APPIATTITO che la tendina disegna: padri e figli aperti. */
+export interface VoceAppiattita extends OpzioneScelta {
+  /** 0 = voce di primo livello, 1 = figlio rientrato sotto il padre. */
+  livello: 0 | 1;
+  /** Il `valore` del padre, per i figli. */
+  padre?: string;
+  /** Per un padre: quanti figli ha (quelli che corrispondono alla ricerca, se c'è). */
+  nFigli?: number;
+  /** Per un padre con figli: sono mostrati sotto? */
+  aperta?: boolean;
 }
 
 /**
@@ -100,9 +119,66 @@ export function testoCorrisponde(mucchioNormalizzato: string, query: string): bo
   return token.every((t) => mucchioNormalizzato.includes(t));
 }
 
-/** Vero se la voce contiene **tutte** le parole digitate, ovunque esse siano. */
-export function opzioneCorrisponde(o: OpzioneScelta, query: string): boolean {
+/** Vero se la voce STESSA contiene tutte le parole digitate (i figli non contano). */
+function voceCorrisponde(o: OpzioneScelta, query: string): boolean {
   return testoCorrisponde(mucchio(o), query);
+}
+
+/**
+ * Vero se la voce contiene **tutte** le parole digitate, ovunque esse siano —
+ * oppure se le contiene uno dei suoi figli: cercando una fase si deve trovare
+ * il cantiere che la contiene.
+ */
+export function opzioneCorrisponde(o: OpzioneScelta, query: string): boolean {
+  return voceCorrisponde(o, query) || (o.figli ?? []).some((f) => voceCorrisponde(f, query));
+}
+
+/** I figli che corrispondono alla ricerca da soli (con query vuota: tutti). */
+export function figliCorrispondenti(o: OpzioneScelta, query: string): OpzioneScelta[] {
+  return (o.figli ?? []).filter((f) => voceCorrisponde(f, query));
+}
+
+/** La voce con quel `valore`, cercando anche fra i figli. */
+export function trovaOpzione(opzioni: readonly OpzioneScelta[], valore: string | null | undefined): OpzioneScelta | null {
+  if (valore == null) return null;
+  for (const o of opzioni) {
+    if (o.valore === valore) return o;
+    const f = o.figli?.find((x) => x.valore === valore);
+    if (f) return f;
+  }
+  return null;
+}
+
+/**
+ * L'elenco che la tendina disegna: i padri in ordine, e sotto ogni padre
+ * aperto i suoi figli, rientrati. Un padre è aperto se l'utente l'ha aperto
+ * (`aperti`) oppure se la ricerca trova qualcosa fra i suoi figli: in quel
+ * caso sotto compaiono solo i figli che corrispondono. I figli ereditano il
+ * gruppo del padre, così restano attaccati a lui anche nel raggruppamento.
+ */
+export function appiattisciOpzioni(
+  opzioni: readonly OpzioneScelta[],
+  aperti: ReadonlySet<string>,
+  query: string,
+): VoceAppiattita[] {
+  const conQuery = tokenDiRicerca(query).length > 0;
+  const out: VoceAppiattita[] = [];
+  for (const o of opzioni) {
+    const figli = o.figli ?? [];
+    if (figli.length === 0) {
+      out.push({ ...o, livello: 0 });
+      continue;
+    }
+    const corrispondenti = conQuery ? figliCorrispondenti(o, query) : figli;
+    const daRicerca = conQuery && corrispondenti.length > 0;
+    const aperta = daRicerca || aperti.has(o.valore);
+    const mostrati = daRicerca ? corrispondenti : figli;
+    out.push({ ...o, livello: 0, nFigli: conQuery ? corrispondenti.length || figli.length : figli.length, aperta });
+    if (aperta) {
+      for (const f of mostrati) out.push({ ...f, gruppo: o.gruppo, livello: 1, padre: o.valore });
+    }
+  }
+  return out;
 }
 
 /**
@@ -139,10 +215,10 @@ export function filtraOpzioni(
     .map((x) => x.o);
 }
 
-export interface GruppoOpzioni {
+export interface GruppoOpzioni<T extends OpzioneScelta = OpzioneScelta> {
   /** `null` = voci senza gruppo. */
   gruppo: string | null;
-  opzioni: OpzioneScelta[];
+  opzioni: T[];
 }
 
 /**
@@ -152,12 +228,12 @@ export interface GruppoOpzioni {
  *
  * Le voci senza gruppo finiscono in un unico blocco `null` in fondo.
  */
-export function raggruppaOpzioni(
-  opzioni: readonly OpzioneScelta[],
-): GruppoOpzioni[] {
+export function raggruppaOpzioni<T extends OpzioneScelta>(
+  opzioni: readonly T[],
+): GruppoOpzioni<T>[] {
   const ordine: string[] = [];
-  const per = new Map<string, OpzioneScelta[]>();
-  const senza: OpzioneScelta[] = [];
+  const per = new Map<string, T[]>();
+  const senza: T[] = [];
 
   for (const o of opzioni) {
     if (!o.gruppo) {
@@ -171,7 +247,7 @@ export function raggruppaOpzioni(
     per.get(o.gruppo)!.push(o);
   }
 
-  const out: GruppoOpzioni[] = ordine.map((g) => ({
+  const out: GruppoOpzioni<T>[] = ordine.map((g) => ({
     gruppo: g,
     opzioni: per.get(g)!,
   }));
