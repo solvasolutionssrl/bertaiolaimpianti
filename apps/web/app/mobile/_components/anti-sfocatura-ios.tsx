@@ -12,9 +12,10 @@ import * as React from 'react';
  *
  * Due cose la fanno saltare, documentate e provate su iOS 27 da altri
  * (FreshRSS #9382, simple-liturgy #14, ottobre 2026):
- *  1. una striscia FISSA di 11px che tocca il bordo alto: WebKit la trova e
- *     usa il suo colore al posto dell'effetto; con `background-clip: text`
- *     non dipinge niente (CSS in `globals.css`, solo iOS + app installata);
+ *  1. una striscia FISSA di 12px, solida, dello stesso blu della fascia
+ *     dietro l'isola, che tocca il bordo alto: WebKit la trova con la sua
+ *     sonda e usa il suo colore al posto dell'effetto (CSS in `globals.css`,
+ *     solo iOS + app installata; il come e' scritto li');
  *  2. all'avvio, un pannello fisso fuori schermo che scorre dentro e fuori
  *     una volta (450 ms, invisibile: alfa 0.01, `pointer-events: none`):
  *     cambia lo stato di composizione del livello in cima e la sfocatura
@@ -48,8 +49,13 @@ export function AntiSfocaturaIos() {
       cover.classList.add('acceso');
       pannello.classList.add('dentro');
       timer = window.setTimeout(() => {
-        cover.classList.remove('acceso');
         pannello.classList.remove('dentro');
+        // ⚠️ La copertura si TOGLIE, non si spegne: a opacita' zero resterebbe
+        // l'elemento fisso piu' in alto nel punto che WebKit sonda
+        // (`fixedContainerEdges`), e un elemento quasi trasparente fa fallire
+        // il campionamento del colore: tornava l'effetto vetro. Il pannello,
+        // fuori schermo, resta (e' lui che tiene lo stato).
+        cover.remove();
       }, 450);
     });
     return () => {

@@ -67,15 +67,25 @@
      ottobre 2026. `-webkit-touch-callout` esiste solo su iOS. */
   @supports (-webkit-touch-callout: none) {
     @media (display-mode: standalone) {
+      /* Come WebKit decide (LocalFrameView::fixedContainerEdges, letto il
+         24/10/2026): sonda UN punto 4px sotto il bordo alto, al centro; prende
+         l'elemento colpito e risale al primo antenato fixed/sticky; lo scarta
+         se e' piu' basso o stretto di 10px, se e' quasi trasparente
+         (opacita' sotto soglia, `visibility: hidden`) o se e' meno largo del
+         90% della finestra; altrimenti usa il suo `background-color` al
+         posto dell'effetto vetro. Quindi la striscia deve essere SOLIDA (niente
+         `background-clip: text`: il colore lo legge dallo stile, ma un
+         elemento che non dipinge e' un rischio), piu' alta di 10px, e deve
+         restare l'elemento piu' in alto in quel punto: nessuna copertura
+         fissa a opacita' zero sopra di lei (vedi `anti-sfocatura-ios.tsx`).
+         Sta sotto la barra di stato, sopra la fascia blu dello stesso colore:
+         invisibile su ogni pagina. */
       .ios-sfocatura-striscia {
         position: fixed;
         inset: 0 0 auto;
-        height: 11px;
-        background: hsl(var(--primary));
-        -webkit-background-clip: text;
-        background-clip: text;
-        pointer-events: none;
-        z-index: 2147483645;
+        height: 12px;
+        background-color: hsl(var(--primary));
+        z-index: 2147483647;
       }
       .ios-sfocatura-cover {
         position: fixed;
@@ -95,7 +105,7 @@
         right: 0;
         bottom: 0;
         width: 90%;
-        z-index: 2147483647;
+        z-index: 2147483646;
         background: rgba(255, 255, 255, 0.01);
         pointer-events: none;
         transform: translateX(110%);
