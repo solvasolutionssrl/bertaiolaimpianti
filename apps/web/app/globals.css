@@ -54,6 +54,20 @@
     --brand-blu: 220 80% 32%;
     --brand-arancio: 22 92% 54%;
   }
+  /* ⚠️ iOS 26.1+/27, app installata: il sistema disegna una sfocatura
+     progressiva («Liquid Glass») per ~40 punti SOTTO la barra di stato, sopra
+     qualunque cosa ci stia: nessun meta, CSS o barra opaca la spegne (provato
+     il 23/10/2026 con la barra `default`: la pagina parte sotto la barra e la
+     sfocatura resta). L'unica leva e' non mettere niente in quei 40 punti.
+     `-webkit-touch-callout` esiste solo su iOS: Android installato non paga
+     il margine. */
+  @media (display-mode: standalone) {
+    @supports (-webkit-touch-callout: none) {
+      :root {
+        --inset-top: calc(env(safe-area-inset-top, 0px) + 2.5rem);
+      }
+    }
+  }
 
   .dark {
     --background: 220 30% 7%;
