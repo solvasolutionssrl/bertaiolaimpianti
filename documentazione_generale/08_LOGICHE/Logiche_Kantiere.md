@@ -1,6 +1,6 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 1.7
+**Versione**: 1.8
 **Stato**: Attivo (in produzione)
 **Ultimo aggiornamento**: 22/09/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
@@ -49,6 +49,7 @@ Ogni riga della giornata (`rapportino_righe`) conserva i **minuti puri** per can
 | **Tolleranza chiusura** | **5 min** | `tolleranza_chiusura_min` | Nello split "cosa hai fatto oggi" e nella "registra giornata": se i minuti assegnati ai cantieri si discostano dal totale di **≤ tolleranza**, si salva lo stesso e **l'ultimo cantiere assorbe il piccolo resto**. Così i minuti dispari (turno che finisce alle X:03) non bloccano l'utente. |
 | **Arrotondamento viaggio** | **5 min** | `arrotondamento_viaggio_min` | Ogni tragitto **> 0** conta almeno uno step (≥ 5 min); un tragitto **= 0** resta 0. Vale sui turni **futuri**. |
 | **Arrotondamento ore lavoro** | **0 = nessuno** | `arrotondamento_ore_min` | Scelta del cliente: si **raccoglie tutto al minuto** e si arrotonda **nel report a fine mese** sul dato aggregato, non sul singolo turno. |
+| **Arrotondamento timbrature** (dal 23/10/2026) | **0 = al minuto** (FPM: **5**, dal 23/10/2026) | `arrotondamento_timbri_min` + `arrotondamento_timbri_dal` | Gli **orari** delle timbrature si arrotondano **al più vicino** (08:02 → 08:00, 08:03 → 08:05) in **tutti i calcoli** delle ore, per **tutte le bocche** (badge, QR, app, PC): scatola della giornata, tetto del «+», righe per cantiere, ciò che esce verso il gestionale. Il dato nel database resta **esatto**; a video si legge già arrotondato (`ora-mostrata`). La regola vale **dal giorno in cui l'ufficio cambia il valore** (la data la scrive il salvataggio): le giornate precedenti si calcolano come prima, anche con «Ricalcola». Decisione di Luca con FPM e il consulente del lavoro (nessun vincolo normativo). Logica pura in `@kommessa/api/arrotondamento-timbri`. |
 
 > `arrotondaA(min, step)` è l'helper unico (step < 1 = arrotondamento disattivato).
 

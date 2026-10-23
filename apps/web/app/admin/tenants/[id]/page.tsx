@@ -46,6 +46,8 @@ const CONFIG_KANTIERE_LABELS: [string, string][] = [
   ['quote_ore_dal', 'Viaggio nell\'orario ordinario dal'],
   ['arrotondamento_viaggio_min', 'Arrotondamento viaggio (min)'],
   ['arrotondamento_ore_min', 'Arrotondamento ore di lavoro (min)'],
+  ['arrotondamento_timbri_min', 'Arrotondamento timbrature nei calcoli (min)'],
+  ['arrotondamento_timbri_dal', 'Arrotondamento timbrature dal'],
   ['avvio_turno_libero', 'Avvio turno su ogni cantiere'],
   ['split_fine_turno_attivo', 'Ripartizione ore alla chiusura'],
   ['registra_giornata_attivo', 'Registra giornata'],

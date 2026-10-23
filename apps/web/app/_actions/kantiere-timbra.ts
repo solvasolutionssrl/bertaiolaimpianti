@@ -1,5 +1,7 @@
 'use server';
 
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { arrotondaMs, arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
@@ -570,10 +572,12 @@ async function terminaConSplit(
   const cc = await cantieriScrivibili(supabase, ids, tenantId, { forzato: true });
   if (!cc.ok) return { ok: false, error: cc.error };
 
-  // 4. Sintesi segmenti (pura, unit-testata).
+  // 4. Sintesi segmenti (pura, unit-testata), sugli estremi ARROTONDATI al
+  //    passo del cliente: i segmenti scritti sono derivati, non timbri.
+  const regola = await leggiRegolaTimbri(supabase, tenantId);
   const calc = calcolaSegmentiSplit({
-    ingressoMs: Date.parse(opts.ingressoIso),
-    uscitaMs: Date.parse(opts.ts),
+    ingressoMs: arrotondaMs(Date.parse(opts.ingressoIso), regola),
+    uscitaMs: arrotondaMs(Date.parse(opts.ts), regola),
     pausaMin: opts.pausaMin,
     segmenti: opts.split,
   });
@@ -1476,6 +1480,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
   if ((count ?? 0) !== 0) return { ok: false, error: 'GIORNATA_NON_VUOTA' };
 
   const primoCantiere = parsed.data.split[0]!.cantiereId;
+  const regola = await leggiRegolaTimbri(supabase, ctx.tenantId);
   return scriviGiornataRipartita({
     supabase,
     tenantId: ctx.tenantId,
@@ -1493,8 +1498,8 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
     // Sintesi segmenti (calc.eventi ESCLUDE l'ingresso iniziale → lo prependo).
     generaEventi: (viaggioPrima) => {
       const calc = calcolaSegmentiSplit({
-        ingressoMs: Date.parse(inizioIso),
-        uscitaMs: Date.parse(fineIso),
+        ingressoMs: arrotondaMs(Date.parse(inizioIso), regola),
+        uscitaMs: arrotondaMs(Date.parse(fineIso), regola),
         pausaMin,
         segmenti: parsed.data.split,
         viaggioPrima,
@@ -1557,6 +1562,7 @@ export async function registraGiornataPerDipendente(input: unknown): Promise<Res
   if ((count ?? 0) !== 0) return { ok: false, error: 'GIORNATA_NON_VUOTA' };
 
   const primoCantiere = parsed.data.split[0]!.cantiereId;
+  const regola = await leggiRegolaTimbri(supabase, ctx.tenantId);
   return scriviGiornataRipartita({
     supabase,
     tenantId: ctx.tenantId,
@@ -1574,8 +1580,8 @@ export async function registraGiornataPerDipendente(input: unknown): Promise<Res
     autoEstremi: false,
     generaEventi: (viaggioPrima) => {
       const calc = calcolaSegmentiSplit({
-        ingressoMs: Date.parse(inizioIso),
-        uscitaMs: Date.parse(fineIso),
+        ingressoMs: arrotondaMs(Date.parse(inizioIso), regola),
+        uscitaMs: arrotondaMs(Date.parse(fineIso), regola),
         pausaMin,
         segmenti: parsed.data.split,
         viaggioPrima,

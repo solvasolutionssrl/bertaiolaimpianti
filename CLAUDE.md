@@ -1578,6 +1578,50 @@ dell'ufficio FPM. Tre difetti, tutti nostri, e un pezzo di interfaccia.
   il sistema che parla in prima persona («Non sono riuscito a…»). Regola in
   memoria: `feedback_tono_formale_testi.md`.
 
+### Le timbrature si arrotondano nei calcoli, non nel database (23/10/2026) — nessuna migration
+
+Decisione di Luca con FPM e il consulente del lavoro (nessun vincolo
+normativo sui 5 minuti). Chi timbra scrive l'orario **esatto**; a video si
+legge ai 5 minuti (`ora-mostrata`, dal 22/10); e da oggi le **ore si
+calcolano sugli orari arrotondati al più vicino**, per **tutte le bocche**
+(badge, QR, app, PC): la scatola, il tetto del «+», le righe per cantiere e
+ciò che esce verso il gestionale sono multipli del passo.
+
+- **Un posto solo**: `@kommessa/api/arrotondamento-timbri` (`arrotondaMs`,
+  `arrotondaTimbrature`, `arrotondaEventi`; regola `{ passoMin, dal }`),
+  letto con `leggiRegolaTimbri` / `regolaTimbriDa` in `_lib/kantiere-config`.
+  Si applica **dove le timbrature entrano in un calcolo**: `ricomputa-rapportino`
+  (righe della giornata), `_lib/timbro/giornate.ts` (scatola e intervalli dal
+  registro e dalle timbrature), le tre `calcolaSegmentiSplit` di
+  `kantiere-timbra.ts` (chiusura con divisione, registra giornata, per un
+  altro), `leggiMiaGiornata`, la pagina Presenze e ore (una volta, poi
+  totali, timeline e dettaglio coincidono), il cruscotto e la scheda cantiere
+  del telefono. ⚠️ Un nuovo punto che legge `timbrature.ts` per contare ore
+  passa di qui, o conta al minuto da solo.
+- ⭐ **Il passato non si tocca**: `arrotondamento_timbri_dal` è il primo
+  giorno a cui la regola si applica, e lo scrive il **salvataggio** quando
+  l'ufficio cambia il valore (Impostazioni Kantiere → Orario e ore). Prima di
+  quella data si calcola al minuto, anche premendo «Ricalcola». FPM: 5 min dal
+  23/10/2026 (scritto via SQL); DEMOC uguale, così i banchi la esercitano
+  (`timbro.mjs` aspetta 8:35 da badge 08:00/12:30/13:00/17:03).
+- Nei dialog da scrivania la chiusura in anteprima usa gli stessi estremi
+  arrotondati del server; l'ora digitata ha `step` al passo. Le righe
+  sintetizzate dalla divisione di fine turno nascono già arrotondate (sono
+  derivate, non timbri). ⚠️ Due timbri nello stesso slot danno un intervallo
+  da zero, mai negativo (test).
+- ⚠️⚠️ **A parità di minuto arrotondato conta l'ordine vero.** Pausa,
+  ripresa e fine nello stesso slot cadono sullo stesso `ms`; il risolutore
+  ordinava per `ms` e poi per `id` (un uuid), quindi la ripresa finiva dopo
+  la fine e la presenza restava aperta: trovato dal banco
+  `presenza-sede-mobile`, non dalla rilettura. Ora `EventoTimbro`,
+  `TimbraturaAttribuita` e `TimbraturaMinuti` hanno `ordine?` (l'istante
+  esatto, o un indice crescente) come spareggio, e **la finestra dei
+  doppioni si misura sull'esatto**, altrimenti tre gesti a due minuti l'uno
+  dall'altro diventavano un doppione solo. Chi arrotonda prima di passare
+  gli eventi a un motore deve passare anche `ordine`.
+- Vocabolario a schermo e tab **Regole** del super admin aggiornati; il
+  passo della display (`PASSO_ORA_MOSTRATA_MIN`) resta 5 per tutti.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

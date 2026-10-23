@@ -4,7 +4,8 @@
  *   node scripts/banco-ui/timbro.mjs
  *
  * Semina da solo quattro badge finti per Marco Rinaldi (DEMOC): 08:00, 12:30,
- * 13:00, 17:03 → presenza 8:33 con la pausa timbrata. SCRIVE sul tenant demo
+ * 13:00, 17:03 → presenza 8:35 con la pausa timbrata (DEMOC arrotonda le
+ * timbrature ai 5 minuti nei calcoli: 17:03 conta 17:05). SCRIVE sul tenant demo
  * e si ripulisce alla fine.
  */
 import { apriChrome, vaiA, accedi, esito, riepilogo, foto, clicVero } from './comune.mjs';
@@ -44,14 +45,14 @@ try {
       card: /Inserisci le commesse sulle quali hai lavorato oggi/.test(testo),
       daRipartire: /Da ripartire/.test(testo),
       pillole: [...document.querySelectorAll('span[title]')].filter((x) => /badge al terminale/.test(x.title)).length,
-      presenza: /8:33 di presenza/.test(testo),
+      presenza: /8:35 di presenza/.test(testo),
       registraNascosto: !/Giornata senza timbrature/.test(testo),
     };
   })()`);
   esito(s1.card, 'telefono: la card «Inserisci le commesse» compare');
   esito(s1.daRipartire, 'telefono: stato «Da ripartire»');
   esito(s1.pillole === 4, 'telefono: quattro passaggi al terminale', `trovati ${s1.pillole}`);
-  esito(s1.presenza, 'telefono: presenza 8:33 (pausa timbrata esclusa)');
+  esito(s1.presenza, 'telefono: presenza 8:35 (pausa timbrata esclusa)');
   esito(s1.registraNascosto, 'telefono: «Registra giornata» non si propone (la giornata e’ timbrata)');
   await foto(cdp, 'timbro-01-card');
 
@@ -63,17 +64,17 @@ try {
     const inizio = d.querySelector('input[type=time]');
     return {
       titolo: /Inserisci le commesse sulle quali hai lavorato oggi/.test(testo),
-      timbrato: /badge in sede 08:00 → 17:03/.test(testo) && /pausa 0:30/.test(testo),
+      timbrato: /badge in sede 08:00 → 17:05/.test(testo) && /pausa 0:30/.test(testo),
       inizioFisso: inizio ? inizio.value === '08:00' && inizio.disabled : null,
-      fineTimbrata: /17:03/.test(testo),
-      daRipartire: /8:33/.test(testo),
+      fineTimbrata: /17:05/.test(testo),
+      daRipartire: /8:35/.test(testo),
       tasto: [...d.querySelectorAll('button')].some((b) => /Salva le ore/.test(b.textContent)),
     };
   })()`);
   esito(s2.titolo, 'dialog: titolo nuovo');
-  esito(s2.timbrato, 'dialog: sottotitolo «badge in sede 08:00 → 17:03 · pausa 0:30»');
+  esito(s2.timbrato, 'dialog: sottotitolo «badge in sede 08:00 → 17:05 · pausa 0:30»');
   esito(s2.inizioFisso === true, 'dialog: inizio fisso a 08:00, non modificabile');
-  esito(s2.daRipartire, 'dialog: 8:33 da ripartire');
+  esito(s2.daRipartire, 'dialog: 8:35 da ripartire');
   esito(s2.tasto, 'dialog: tasto «Salva le ore»');
   await foto(cdp, 'timbro-02-dialog');
 
@@ -85,7 +86,7 @@ try {
   const s3 = await valuta(cdp, `(() => { ${AIUTI}
     const d = dialogo();
     const scelto = [...d.querySelectorAll('[role=radio][aria-checked="true"]')].map((b) => t(b.textContent));
-    return { etichetta: scelto.join(','), spuntato: scelto.includes('In sede'), inSede: /tutto il giorno in sede/i.test(t(d.innerText)), resto: /8:33 attribuite all’ultimo cantiere/.test(t(d.innerText)) };
+    return { etichetta: scelto.join(','), spuntato: scelto.includes('In sede'), inSede: /tutto il giorno in sede/i.test(t(d.innerText)), resto: /8:35 attribuite all’ultimo cantiere/.test(t(d.innerText)) };
   })()`);
   // Il tecnico demo e' in modalita' ufficio: il default e' «In sede».
   esito(s3.spuntato === true, 'riga cantiere: «In sede» scelto per default (persona in modalità ufficio)', s3.etichetta ?? '');
@@ -103,9 +104,9 @@ try {
 
   await vaiA(cdp, '/mobile/kantiere/ore');
   await pausa(1500);
-  const s4 = await valuta(cdp, `(() => { const testo = document.body.innerText; return { coperta: /già sui cantieri/.test(testo), card: /Inserisci le commesse/.test(testo), ore: /8:33/.test(testo) }; })()`);
+  const s4 = await valuta(cdp, `(() => { const testo = document.body.innerText; return { coperta: /già sui cantieri/.test(testo), card: /Inserisci le commesse/.test(testo), ore: /8:35/.test(testo) }; })()`);
   esito(s4.coperta && !s4.card, 'dopo: la giornata risulta coperta e la card sparisce');
-  esito(s4.ore, 'dopo: le ore di oggi sono 8:33');
+  esito(s4.ore, 'dopo: le ore di oggi sono 8:35');
   await foto(cdp, 'timbro-05-dopo');
 
   // Ufficio.

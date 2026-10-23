@@ -29,6 +29,7 @@ interface Valori {
   sogliaOreOrdinarie: number;
   arrotondamentoViaggioMin: number;
   arrotondamentoOreMin: number;
+  arrotondamentoTimbriMin: number;
   avvioTurnoLibero: boolean;
   splitFineTurnoAttivo: boolean;
   registraGiornataAttivo: boolean;
@@ -50,6 +51,7 @@ function valoriDa(imp: ImpostazioniKantiere): Valori {
     sogliaOreOrdinarie: Math.round((imp.orarioOrdinarioMin / 60) * 100) / 100,
     arrotondamentoViaggioMin: imp.arrotondamentoViaggioMin,
     arrotondamentoOreMin: imp.arrotondamentoOreMin,
+    arrotondamentoTimbriMin: imp.arrotondamentoTimbriMin,
     avvioTurnoLibero: imp.avvioTurnoLibero,
     splitFineTurnoAttivo: imp.splitFineTurnoAttivo,
     registraGiornataAttivo: imp.registraGiornataAttivo,
@@ -104,6 +106,7 @@ const LIMITI: {
   { chiave: 'sogliaOreOrdinarie', nome: 'Orario ordinario giornaliero', min: 1, max: 24, intero: false, sezione: 'ore' },
   { chiave: 'arrotondamentoViaggioMin', nome: 'Arrotondamento del tempo di viaggio', min: 1, max: 60, intero: true, sezione: 'ore' },
   { chiave: 'arrotondamentoOreMin', nome: 'Arrotondamento delle ore di lavoro', min: 0, max: 60, intero: true, sezione: 'ore' },
+  { chiave: 'arrotondamentoTimbriMin', nome: 'Arrotondamento delle timbrature', min: 0, max: 60, intero: true, sezione: 'ore' },
   { chiave: 'tolleranzaChiusuraMin', nome: 'Tolleranza sulla ripartizione', min: 0, max: 30, intero: true, sezione: 'turni' },
   { chiave: 'sogliaPausaPranzoOre', nome: 'Promemoria pausa pranzo', min: 1, max: 12, intero: true, sezione: 'pause' },
   { chiave: 'sogliaAutoSpegnimentoPausaOre', nome: 'Chiusura automatica della pausa', min: 0.5, max: 8, intero: false, sezione: 'pause' },
@@ -356,6 +359,12 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
           ? 'ore di lavoro senza arrotondamento'
           : `ore di lavoro arrotondate a ${v.arrotondamentoOreMin} min`,
       );
+    if (v.arrotondamentoTimbriMin !== base.arrotondamentoTimbriMin)
+      parti.push(
+        v.arrotondamentoTimbriMin === 0
+          ? 'timbrature calcolate al minuto da oggi'
+          : `timbrature arrotondate a ${v.arrotondamentoTimbriMin} min nei calcoli, da oggi (le giornate passate non cambiano)`,
+      );
     if (v.autoApprovaRapportini !== base.autoApprovaRapportini)
       parti.push(v.autoApprovaRapportini ? 'approvazione automatica attiva' : 'approvazione automatica disattivata');
     if (v.anomaliaTurnoOreMax !== base.anomaliaTurnoOreMax)
@@ -516,6 +525,24 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                     step={1}
                     unita="min"
                     errore={errori.has('arrotondamentoOreMin')}
+                  />
+                </Campo>
+                <Campo
+                  id="arr-timbri"
+                  etichetta="Arrotondamento delle timbrature"
+                  predefinito="0 (al minuto)"
+                  errore={erroreDi('arrotondamentoTimbriMin')}
+                  descrizione="Passo a cui si arrotondano gli orari delle timbrature nei calcoli delle ore, al più vicino (08:02 → 08:00, 08:03 → 08:05), per badge, QR e app. L'orario esatto resta registrato. Vale dal giorno in cui si cambia il valore: le giornate precedenti non si muovono."
+                >
+                  <Numero
+                    id="arr-timbri"
+                    valore={valori.arrotondamentoTimbriMin}
+                    onChange={(n) => imposta('arrotondamentoTimbriMin', n)}
+                    min={0}
+                    max={60}
+                    step={5}
+                    unita="min"
+                    errore={errori.has('arrotondamentoTimbriMin')}
                   />
                 </Campo>
               </div>

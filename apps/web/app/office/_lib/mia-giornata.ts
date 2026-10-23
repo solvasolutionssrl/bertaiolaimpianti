@@ -1,10 +1,11 @@
+import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { STATI_CANTIERE_VIVI } from '@kommessa/api/stato-lavoro';
 
-import { leggiImpostazioniKantiere } from '@/app/_lib/kantiere-config';
+import { leggiImpostazioniKantiere, regolaTimbriDa } from '@/app/_lib/kantiere-config';
 import { modalitaLavoroDi } from '@/app/_lib/dipendenti-modalita';
 import { leggiStatoTimbro } from '@/app/_lib/timbro/config';
 import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
@@ -67,6 +68,8 @@ export interface MiaGiornata {
     splitAttivo: boolean;
     registraGiornataAttivo: boolean;
     tolleranzaChiusuraMin: number;
+    /** Passo (min) delle timbrature nei calcoli; 0 = al minuto. */
+    arrotondamentoTimbriMin: number;
   };
 }
 
@@ -125,7 +128,8 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
   ]);
 
   type T = { id: string; cantiere_id: string | null; tipo: 'ingresso' | 'uscita'; pausa: boolean | null; ts: string; origine: string | null; modalita: string | null; sede_lavoro_id: string | null };
-  const timbrature = ((timbRes.data as T[] | null) ?? []).filter((t) => t.cantiere_id);
+  // Orari arrotondati al passo del cliente: e' cosi' che si contano le ore.
+  const timbrature = arrotondaTimbrature(((timbRes.data as T[] | null) ?? []).filter((t) => t.cantiere_id), regolaTimbriDa(imp));
 
   // Il turno aperto: per cantiere, finche' non arriva un'uscita di fine.
   type Stato = { inizio: T; inPausa: boolean; inizioPausaTs: string | null; ultimoIngresso: T };
@@ -229,6 +233,7 @@ export async function leggiMiaGiornata(tenantId: string, userId: string, role: s
       splitAttivo: imp.splitFineTurnoAttivo,
       registraGiornataAttivo: imp.registraGiornataAttivo,
       tolleranzaChiusuraMin: imp.tolleranzaChiusuraMin,
+      arrotondamentoTimbriMin: imp.arrotondamentoTimbriMin,
     },
   };
 }

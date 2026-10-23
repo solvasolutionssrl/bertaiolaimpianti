@@ -114,6 +114,7 @@ export function TabRegole({ dati }: { dati: DatiTabRegole }) {
         { nome: 'Quote con il viaggio nell’orario dal', valore: imp.quoteOreDal ?? 'da sempre', chiave: 'codice', dove: 'tenant_modules.config.quote_ore_dal (solo via SQL)' },
         { nome: 'Arrotondamento tempo di viaggio', valore: `${imp.arrotondamentoViaggioMin} min`, chiave: 'ufficio', dove: `${urlImpostazioni} → Orario e ore` },
         { nome: 'Arrotondamento ore di lavoro', valore: imp.arrotondamentoOreMin === 0 ? 'al minuto' : `${imp.arrotondamentoOreMin} min`, chiave: 'ufficio', dove: `${urlImpostazioni} → Orario e ore` },
+        { nome: 'Arrotondamento delle timbrature nei calcoli', valore: imp.arrotondamentoTimbriMin === 0 ? 'al minuto' : `${imp.arrotondamentoTimbriMin} min al più vicino, dal ${imp.arrotondamentoTimbriDal ?? 'sempre'}`, chiave: 'ufficio', dove: `${urlImpostazioni} → Orario e ore`, cosa: 'Vale per badge, QR e app; il dato nel database resta esatto; la data di partenza la scrive il salvataggio.' },
         { nome: 'Promemoria pausa pranzo oltre', valore: ore(imp.sogliaPausaPranzoOre), chiave: 'ufficio', dove: `${urlImpostazioni} → Pause` },
         { nome: 'Chiusura automatica della pausa dopo', valore: ore(imp.sogliaAutoSpegnimentoPausaOre), chiave: 'ufficio', dove: `${urlImpostazioni} → Pause` },
         { nome: 'Pause rapide proposte', valore: '30 · 45 · 60 min, oppure libera a passi di 5 (5–240)', chiave: 'codice', dove: 'kantiere-pausa.ts' },

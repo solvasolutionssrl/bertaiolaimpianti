@@ -95,6 +95,13 @@ export interface TimbraturaAttribuita {
   ms: number;
   pausa: boolean;
   cantiereId: string | null;
+  /**
+   * Istante ESATTO (o un indice crescente), per l'ordine a parita' di `ms`:
+   * con le timbrature arrotondate al passo (23/10/2026) una ripresa e una fine
+   * nello stesso slot cadono sullo stesso `ms`, e l'ordine in cui sono
+   * avvenute non deve andare perso.
+   */
+  ordine?: number;
 }
 
 export type StatoGiornataTimbro =
@@ -153,7 +160,7 @@ export const TOLLERANZA_COPERTURA_MIN = 15;
  */
 function minutiAttribuiti(timbrature: readonly TimbraturaAttribuita[]): number {
   const ord = [...timbrature].sort(
-    (a, b) => a.ms - b.ms || (a.tipo === b.tipo ? 0 : a.tipo === 'uscita' ? -1 : 1),
+    (a, b) => a.ms - b.ms || (a.ordine ?? a.ms) - (b.ordine ?? b.ms) || (a.tipo === b.tipo ? 0 : a.tipo === 'uscita' ? -1 : 1),
   );
   let tot = 0;
   let aperto: number | null = null;
@@ -188,7 +195,7 @@ export function statoGiornataTimbro(input: {
   if (input.eventi.length === 0) return vuoto('nessun_timbro');
 
   const ordinate = [...input.timbrature].sort(
-    (a, b) => a.ms - b.ms || (a.tipo === b.tipo ? 0 : a.tipo === 'uscita' ? -1 : 1),
+    (a, b) => a.ms - b.ms || (a.ordine ?? a.ms) - (b.ordine ?? b.ms) || (a.tipo === b.tipo ? 0 : a.tipo === 'uscita' ? -1 : 1),
   );
   const ultima = ordinate[ordinate.length - 1];
   const turnoAperto = ultima && ultima.tipo === 'ingresso' ? ultima : null;

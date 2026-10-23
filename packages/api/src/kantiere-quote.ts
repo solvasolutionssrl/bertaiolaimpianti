@@ -216,6 +216,13 @@ export interface TimbraturaMinuti {
   ms: number;
   /** Chiave del target (`cantiere:<id>` / `commessa:<id>`); null = senza target. */
   chiave: string | null;
+  /**
+   * Istante ESATTO (o un indice crescente), per l'ordine a parita' di `ms`:
+   * con le timbrature arrotondate al passo (23/10/2026) una ripresa e una fine
+   * nello stesso slot cadono sullo stesso `ms`, e l'ordine in cui sono
+   * avvenute non deve andare perso.
+   */
+  ordine?: number;
 }
 
 export interface TrattaMinuti {
@@ -249,7 +256,7 @@ export function minutiDaTimbrature(
   tratte: readonly TrattaMinuti[],
 ): Map<string, { minutiLavoro: number; minutiViaggio: number }> {
   const ordinate = [...timbrature].sort(
-    (a, b) => a.ms - b.ms || (a.tipo === b.tipo ? 0 : a.tipo === 'uscita' ? -1 : 1),
+    (a, b) => a.ms - b.ms || (a.ordine ?? a.ms) - (b.ordine ?? b.ms) || (a.tipo === b.tipo ? 0 : a.tipo === 'uscita' ? -1 : 1),
   );
 
   // Segmenti chiusi ingresso → uscita per target, in ordine di inizio.

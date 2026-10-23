@@ -1,3 +1,5 @@
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
@@ -136,7 +138,7 @@ export default async function CruscottoKantierePage({
   // superano le 1000 righe che il database restituisce per richiesta.
   type Dip = { id: string; nome: string; cognome: string; user_id: string | null };
   type Cant = { id: string; nome: string | null; codice: string | null; codice_commessa: string | null };
-  const [dipendenti, cantieri, timbRows] = await Promise.all([
+  const [dipendenti, cantieri, timbRowsEsatte] = await Promise.all([
     leggiTutto<Dip>(
       (da, a) =>
         supabase
@@ -202,6 +204,8 @@ export default async function CruscottoKantierePage({
 
   // Nomi di chi ha inserito le timbrature (per "Inserita a mano · da …").
   const creatoNomeMap = new Map<string, string>();
+  // Ore e stati sugli orari arrotondati al passo del cliente (il dato resta esatto).
+  const timbRows = arrotondaTimbrature(timbRowsEsatte, await leggiRegolaTimbri(supabase, ctx.tenantId));
   const creatoDaIds = [...new Set(timbRows.map((t) => t.creato_da).filter((id): id is string => id != null))];
   if (creatoDaIds.length > 0) {
     const { data } = (await supabase.from('users' as never).select('id, display_name').in('id', creatoDaIds)) as {

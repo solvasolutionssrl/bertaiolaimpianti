@@ -1,3 +1,5 @@
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { arrotondaMs, arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import 'server-only';
 
 import type { createServerSupabase } from '@kommessa/api/server';
@@ -164,19 +166,24 @@ export async function leggiGiornateTimbro(
     }
   }
 
+  // Scatola e intervalli sugli orari arrotondati al passo del cliente: e' da
+  // qui che nasce il tempo da ripartire. `timbri` (a video) resta esatto.
+  const regola = await leggiRegolaTimbri(supabase, tenantId);
   const out = new Map<string, GiornataTimbroLetta>();
   for (const [k, righe] of perGiornata) {
     const [dipendenteId, giorno] = k.split('|') as [string, string];
     const eventi: EventoTimbro[] = righe.map((r) => ({
       id: r.id,
-      ms: r.ts ? Date.parse(r.ts) : Number.NaN,
+      ms: r.ts ? arrotondaMs(Date.parse(r.ts), regola) : Number.NaN,
+      ordine: r.ts ? Date.parse(r.ts) : undefined,
       tipo: r.tipo,
       orologio: r.orologio === 'fisso' ? 'fisso' : 'telefono',
     }));
     const attribuite: TimbraturaAttribuita[] = (timbPerGiornata.get(k) ?? []).map((t) => ({
       id: t.id,
       tipo: t.tipo,
-      ms: Date.parse(t.ts),
+      ms: arrotondaMs(Date.parse(t.ts), regola),
+      ordine: Date.parse(t.ts),
       pausa: !!t.pausa,
       cantiereId: t.cantiere_id ?? t.commessa_id,
     }));

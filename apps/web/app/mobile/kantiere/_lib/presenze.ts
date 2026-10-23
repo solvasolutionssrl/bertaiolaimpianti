@@ -1,3 +1,5 @@
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import { createServerSupabase } from '@kommessa/api/server';
 import { appaiaTimbrature, statoTurno } from '@kommessa/api/kantiere-ore';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
@@ -79,7 +81,7 @@ export async function eventiOggiCantiere(
     .gte('ts', fromIso)
     .lt('ts', toIso)
     .order('ts', { ascending: true });
-  const rows = (data as (EventoOggi & { dipendente_id: string })[] | null) ?? [];
+  const rows = arrotondaTimbrature((data as (EventoOggi & { dipendente_id: string })[] | null) ?? [], await leggiRegolaTimbri(supabase, tenantId));
   for (const r of rows) {
     const arr = out.get(r.dipendente_id) ?? [];
     arr.push({ tipo: r.tipo, ts: r.ts, pausa: r.pausa, cantiere_id: r.cantiere_id });

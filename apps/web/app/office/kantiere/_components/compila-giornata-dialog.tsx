@@ -1,5 +1,6 @@
 'use client';
 
+import { arrotondaMsAlPasso } from '@kommessa/api/arrotondamento-timbri';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Car, Coffee, Loader2, MapPin, Plus, Trash2 } from 'lucide-react';
@@ -47,7 +48,7 @@ export interface DatiCompila {
   mezzi: { id: string; targa: string; modello: string | null }[];
   ultimoMezzoId: string | null;
   modalitaLavoro: 'ufficio' | 'esterno';
-  impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number };
+  impostazioni: { passoMinuti: number; stepViaggio: number; sogliaPausaPranzoOre: number; splitAttivo: boolean; tolleranzaChiusuraMin: number; arrotondamentoTimbriMin?: number };
 }
 
 type Riga = { cantiereId: string; minuti: number; inSede: boolean };
@@ -183,6 +184,7 @@ export function CompilaGiornataDialog({
 
   // ── i conti ────────────────────────────────────────────────────────────────
   const assegnato = vive.reduce((a, r) => a + r.minuti, 0);
+  const passoTimbri = dati.impostazioni.arrotondamentoTimbriMin ?? 0;
   let nettoMin: number; // lavoro da versare
   let inizioMs: number;
   let fineMs: number;
@@ -192,11 +194,12 @@ export function CompilaGiornataDialog({
     inizioMs = modo.vista.inizioIso ? Date.parse(modo.vista.inizioIso) : adesso;
     fineMs = modo.vista.fineIso ? Date.parse(modo.vista.fineIso) : adesso;
   } else if (modo?.tipo === 'chiusura') {
-    inizioMs = Date.parse(modo.turno.inizioTs);
-    fineMs = adesso;
+    // Come fara' il server: estremi arrotondati al passo del cliente.
+    inizioMs = arrotondaMsAlPasso(Date.parse(modo.turno.inizioTs), passoTimbri);
+    fineMs = arrotondaMsAlPasso(adesso, passoTimbri);
     nettoMin = Math.round((fineMs - inizioMs) / 60_000) - pausaMin - fraMin;
   } else {
-    inizioMs = Date.parse(isoDi(giorno, inizio));
+    inizioMs = arrotondaMsAlPasso(Date.parse(isoDi(giorno, inizio)), passoTimbri);
     nettoMin = assegnato;
     fineMs = inizioMs + (assegnato + pausaMin + fraMin) * 60_000;
   }
@@ -357,6 +360,7 @@ export function CompilaGiornataDialog({
                 <input
                   type="time"
                   value={inizio}
+                  step={passoTimbri > 0 ? passoTimbri * 60 : 60}
                   disabled={pending || modo.tipo === 'scatola' || modo.tipo === 'chiusura'}
                   onChange={(e) => setInizio(e.target.value || '08:00')}
                   className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums disabled:opacity-70"

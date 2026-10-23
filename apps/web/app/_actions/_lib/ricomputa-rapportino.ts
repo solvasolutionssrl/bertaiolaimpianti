@@ -1,3 +1,5 @@
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { arrotondaMs, arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import { createServerSupabase } from '@kommessa/api/server';
 import {
   arrotondaA,
@@ -219,14 +221,20 @@ export async function ricomputaRapportinoAuto(
     .gte('ts', fromIso)
     .lt('ts', toIso)
     .order('ts', { ascending: true });
-  const timbrature = (timbRaw as {
-    id: string;
-    commessa_id: string | null;
-    cantiere_id: string | null;
-    tipo: 'ingresso' | 'uscita';
-    ts: string;
-    pausa: boolean | null;
-  }[]) ?? [];
+  // Le ore si contano sugli orari ARROTONDATI al passo del cliente (23/10/2026):
+  // il dato nel database resta esatto, la regola ha una data di partenza.
+  const regolaTimbri = await leggiRegolaTimbri(supabase, tenantId);
+  const timbrature = arrotondaTimbrature(
+    (timbRaw as {
+      id: string;
+      commessa_id: string | null;
+      cantiere_id: string | null;
+      tipo: 'ingresso' | 'uscita';
+      ts: string;
+      pausa: boolean | null;
+    }[]) ?? [],
+    regolaTimbri,
+  );
 
   // 3b. Override manuale: se le ore sono state corrette a mano
   //     (auto_compilato=false) quella correzione VINCE e non viene sovrascritta
@@ -259,7 +267,9 @@ export async function ricomputaRapportinoAuto(
     timbrature.map((t) => t.id),
   );
   const perTarget = minutiDaTimbrature(
-    timbrature.map((t) => ({ id: t.id, tipo: t.tipo, ms: Date.parse(t.ts), chiave: chiaveTarget(t) || null })),
+    // `ordine` = posizione nell'ordine esatto del database: a parita' di
+    // minuto arrotondato conta chi e' venuto prima.
+    timbrature.map((t, i) => ({ id: t.id, tipo: t.tipo, ms: Date.parse(t.ts), ordine: i, chiave: chiaveTarget(t) || null })),
     tratte,
   );
   // Arrotondamento ore-lavoro: default 0 = nessuno (dettaglio massimo).

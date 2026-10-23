@@ -1,3 +1,5 @@
+import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import { createServerSupabase } from '@kommessa/api/server';
 import { COLONNE_QUOTE, quoteDaRiga, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { requireTenantContext } from '@kommessa/api/tenant';
@@ -258,6 +260,9 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
     );
     // Con più gruppi di dipendenti l'ordine si ricompone qui: per ora, poi id.
     timbratureData.sort((x, y) => (x.ts < y.ts ? -1 : x.ts > y.ts ? 1 : x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+    // Da qui in poi la pagina ragiona (e mostra) sugli orari arrotondati al
+    // passo del cliente: totali, timeline e dettaglio coincidono con le righe.
+    timbratureData = arrotondaTimbrature(timbratureData, await leggiRegolaTimbri(supabase, ctx.tenantId));
     for (const t of timbratureData) {
       if (t.commessa_id) timbratureCommessaIds.add(t.commessa_id);
     }
@@ -723,6 +728,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
       sogliaPausaPranzoOre: impKantiere.sogliaPausaPranzoOre,
       splitAttivo: impKantiere.splitFineTurnoAttivo,
       tolleranzaChiusuraMin: impKantiere.tolleranzaChiusuraMin,
+      arrotondamentoTimbriMin: impKantiere.arrotondamentoTimbriMin,
     },
   };
 

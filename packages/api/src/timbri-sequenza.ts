@@ -41,6 +41,13 @@ export interface EventoTimbro {
   /** `null` = da dedurre. Valorizzato = **dichiarato** da chi l'ha generato. */
   tipo: TipoTimbro | null;
   orologio: Orologio;
+  /**
+   * Istante ESATTO (o un indice crescente), per l'ordine a parita' di `ms`:
+   * con le timbrature arrotondate al passo (23/10/2026) una ripresa e una fine
+   * nello stesso slot cadono sullo stesso `ms`, e l'ordine in cui sono
+   * avvenute non deve andare perso.
+   */
+  ordine?: number;
 }
 
 export interface TimbroRisolto {
@@ -126,13 +133,20 @@ export function risolviSequenza(
   // 2. Ordine per istante, e l'id come spareggio: a parita' di millisecondo il
   //    risultato deve essere lo stesso a ogni ricalcolo, o la giornata cambia
   //    da sola fra due letture.
-  const ordinati = [...conOra].sort((x, y) => x.ms - y.ms || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+  const ordinati = [...conOra].sort(
+    (x, y) => x.ms - y.ms || (x.ordine ?? x.ms) - (y.ordine ?? y.ms) || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0),
+  );
 
-  // 3. I doppioni collassano sul gesto, non sulla riga.
+  // 3. I doppioni collassano sul gesto, non sulla riga. La distanza si misura
+  //    sull'istante ESATTO (`ordine`, se c'e'): con le timbrature arrotondate
+  //    al passo una pausa, una ripresa e una fine nello stesso slot cadono
+  //    tutte sullo stesso `ms`, ma sono tre gesti a mezzo minuto l'uno
+  //    dall'altro, non un doppione.
+  const esatto = (e: EventoTimbro) => e.ordine ?? e.ms;
   const tenuti: EventoTimbro[] = [];
   for (const e of ordinati) {
     const ultimo = tenuti[tenuti.length - 1];
-    if (ultimo && e.ms - ultimo.ms <= finestraMs && stessoGesto(ultimo, e)) {
+    if (ultimo && esatto(e) - esatto(ultimo) <= finestraMs && stessoGesto(ultimo, e)) {
       const resta = vince(ultimo, e);
       const esce = resta === ultimo ? e : ultimo;
       tenuti[tenuti.length - 1] = resta;

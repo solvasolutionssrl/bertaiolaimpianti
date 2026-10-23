@@ -1,5 +1,6 @@
 'use server';
 
+import { romeDay } from '@kommessa/api/rome-time';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createServiceSupabase } from '@kommessa/api/service';
@@ -36,6 +37,7 @@ const schema = z.object({
   sogliaOreOrdinarie: z.number().min(1).max(24),
   arrotondamentoViaggioMin: z.number().int().min(1).max(60).optional(),
   arrotondamentoOreMin: z.number().int().min(0).max(60).optional(),
+  arrotondamentoTimbriMin: z.number().int().min(0).max(60).optional(),
   // Turni
   avvioTurnoLibero: z.boolean().optional(),
   splitFineTurnoAttivo: z.boolean().optional(),
@@ -99,6 +101,14 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   };
   imposta('arrotondamento_viaggio_min', d.arrotondamentoViaggioMin);
   imposta('arrotondamento_ore_min', d.arrotondamentoOreMin);
+  // Il passo delle timbrature vale da OGGI: il passato resta calcolato come
+  // era. La data la scrive il salvataggio quando il valore cambia, cosi'
+  // l'ufficio non deve conoscerla e nessuna giornata chiusa si muove.
+  if (d.arrotondamentoTimbriMin !== undefined) {
+    const prima = Number(existingConfig['arrotondamento_timbri_min'] ?? 0);
+    newConfig['arrotondamento_timbri_min'] = d.arrotondamentoTimbriMin;
+    if (d.arrotondamentoTimbriMin !== prima) newConfig['arrotondamento_timbri_dal'] = romeDay(new Date());
+  }
   imposta('avvio_turno_libero', d.avvioTurnoLibero);
   imposta('split_fine_turno_attivo', d.splitFineTurnoAttivo);
   imposta('registra_giornata_attivo', d.registraGiornataAttivo);

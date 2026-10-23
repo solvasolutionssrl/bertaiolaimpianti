@@ -1,3 +1,4 @@
+import type { RegolaArrotondamentoTimbri } from '@kommessa/api/arrotondamento-timbri';
 import 'server-only';
 import { formattaOreTotale } from '@kommessa/api/kantiere-ore';
 import { orarioOrdinarioValido } from '@kommessa/api/kantiere-quote';
@@ -35,6 +36,14 @@ export interface ImpostazioniKantiere {
   arrotondamentoViaggioMin: number;
   /** `arrotondamento_ore_min`: passo delle ore di lavoro, 0 = al minuto. Predefinito 0. */
   arrotondamentoOreMin: number;
+  /**
+   * `arrotondamento_timbri_min`: passo (min) a cui si arrotondano le TIMBRATURE
+   * nei calcoli delle ore, al piu' vicino, per tutte le bocche. Il dato nel
+   * database resta esatto. 0 = al minuto. Predefinito 0 (FPM: 5 dal 23/10/2026).
+   */
+  arrotondamentoTimbriMin: number;
+  /** `arrotondamento_timbri_dal`: primo giorno a cui il passo si applica; null = da sempre. Lo scrive il salvataggio. */
+  arrotondamentoTimbriDal: string | null;
   /** `avvio_turno_libero`: turno avviabile su ogni cantiere. Predefinito sì. */
   avvioTurnoLibero: boolean;
   /** `split_fine_turno_attivo`: ripartizione delle ore alla chiusura. Predefinito sì. */
@@ -100,6 +109,10 @@ function intero(v: unknown, def: number): number {
   return def;
 }
 
+function giornoValido(v: unknown): string | null {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
 function decimale(v: unknown): number | null {
   const n = typeof v === 'number' ? v : typeof v === 'string' ? parseFloat(v) : NaN;
   return Number.isFinite(n) ? n : null;
@@ -118,9 +131,11 @@ export function impostazioniDaConfig(config: Record<string, unknown>): Impostazi
       : {};
   return {
     orarioOrdinarioMin: orarioOrdinarioValido(soglia != null ? Math.round(soglia * 60) : null),
-    quoteOreDal: typeof dal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dal) ? dal : null,
+    quoteOreDal: giornoValido(dal),
     arrotondamentoViaggioMin: intero(config['arrotondamento_viaggio_min'], 5),
     arrotondamentoOreMin: intero(config['arrotondamento_ore_min'], 0),
+    arrotondamentoTimbriMin: Math.min(60, intero(config['arrotondamento_timbri_min'], 0)),
+    arrotondamentoTimbriDal: giornoValido(config['arrotondamento_timbri_dal']),
     avvioTurnoLibero: config['avvio_turno_libero'] !== false,
     splitFineTurnoAttivo: config['split_fine_turno_attivo'] !== false,
     registraGiornataAttivo: config['registra_giornata_attivo'] !== false,
@@ -170,11 +185,22 @@ export type ArrotondamentiKantiere = {
   viaggioMin: number;
   /** Passo (min) delle ore di lavoro, 0 = al minuto. */
   oreMin: number;
+  /** Le timbrature nei calcoli: passo e giorno di partenza (`@kommessa/api/arrotondamento-timbri`). */
+  timbri: RegolaArrotondamentoTimbri;
 };
+
+export function regolaTimbriDa(imp: Pick<ImpostazioniKantiere, 'arrotondamentoTimbriMin' | 'arrotondamentoTimbriDal'>): RegolaArrotondamentoTimbri {
+  return { passoMin: imp.arrotondamentoTimbriMin, dal: imp.arrotondamentoTimbriDal };
+}
 
 export async function leggiArrotondamenti(supabase: Supa, tenantId: string): Promise<ArrotondamentiKantiere> {
   const imp = await leggiImpostazioniKantiere(supabase, tenantId);
-  return { viaggioMin: imp.arrotondamentoViaggioMin, oreMin: imp.arrotondamentoOreMin };
+  return { viaggioMin: imp.arrotondamentoViaggioMin, oreMin: imp.arrotondamentoOreMin, timbri: regolaTimbriDa(imp) };
+}
+
+/** Solo la regola sulle timbrature: per chi deriva ore e non ha bisogno del resto. */
+export async function leggiRegolaTimbri(supabase: Supa, tenantId: string): Promise<RegolaArrotondamentoTimbri> {
+  return regolaTimbriDa(await leggiImpostazioniKantiere(supabase, tenantId));
 }
 
 export type RegolaQuote = {
