@@ -285,6 +285,19 @@ export function minutiDaTimbrature(
   };
   const chiavePerId = new Map(ordinate.map((t) => [t.id, t.chiave]));
 
+  // Il viaggio e' del CANTIERE, le righe possono essere per FASE
+  // (`cantiere:<id>/<fase>`, dal 23/10/2026). Una tratta che nomina il solo
+  // cantiere si attribuisce al primo segmento di quel cantiere, non a una riga
+  // vuota; e il cambio fra due cantieri si riconosce sulla radice della chiave.
+  const radice = (k: string) => {
+    const i = k.indexOf('/');
+    return i < 0 ? k : k.slice(0, i);
+  };
+  const chiaveDelViaggio = (k: string) => {
+    if (segmenti.some((s) => s.chiave === k)) return k;
+    return segmenti.find((s) => radice(s.chiave) === radice(k))?.chiave ?? k;
+  };
+
   // Ogni tratta: a chi va il viaggio, e a quale cambio fra segmenti appartiene.
   type Collocata = { minuti: number; confine: number; erodeArrivo: boolean };
   const perConfine = new Map<number, Collocata[]>();
@@ -292,7 +305,7 @@ export function minutiDaTimbrature(
   for (const tr of tratte) {
     const minuti = Math.max(0, Number(tr.minuti) || 0);
     const chiave = tr.timbraturaId ? (chiavePerId.get(tr.timbraturaId) ?? tr.chiave) : tr.chiave;
-    if (chiave) voce(chiave).minutiViaggio += minuti;
+    if (chiave) voce(chiaveDelViaggio(chiave)).minutiViaggio += minuti;
     if (minuti <= 0) continue;
 
     let confine = -1;
@@ -309,7 +322,7 @@ export function minutiDaTimbrature(
     } else if (tr.daChiave && tr.chiave) {
       for (let b = 0; b < segmenti.length - 1; b++) {
         if (confiniTrasferimento.has(b)) continue;
-        if (segmenti[b]!.chiave === tr.daChiave && segmenti[b + 1]!.chiave === tr.chiave) {
+        if (radice(segmenti[b]!.chiave) === radice(tr.daChiave) && radice(segmenti[b + 1]!.chiave) === radice(tr.chiave)) {
           confine = b;
           confiniTrasferimento.add(b);
           break;

@@ -1,5 +1,6 @@
 import type { createServerSupabase } from '@kommessa/api/server';
 import { oreDaMinuti, quoteDaRiga, quoteGiornata, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
+import { chiaveCantiere } from '@kommessa/api/sottocantieri';
 import { leggiRegolaQuote } from '@/app/_lib/kantiere-config';
 
 /**
@@ -20,16 +21,19 @@ type Supa = ReturnType<typeof createServerSupabase>;
 export interface RigaGiornataPura {
   commessa_id: string | null;
   cantiere_id: string | null;
+  /** La fase del cantiere (23/10/2026); assente o null = ore sul cantiere intero. */
+  sottocantiere_id?: string | null;
   minutiLavoro: number;
   minutiViaggio: number;
   note?: string | null;
 }
 
 const COLONNE_LETTE =
-  'commessa_id, cantiere_id, note, minuti_lavoro, minuti_viaggio, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti';
+  'commessa_id, cantiere_id, sottocantiere_id, note, minuti_lavoro, minuti_viaggio, ore_ordinarie, ore_straordinarie, ore_viaggio, ore_viaggio_ordinarie, ore_viaggio_eccedenti';
 
-const chiaveTarget = (r: { commessa_id: string | null; cantiere_id: string | null }) =>
-  r.cantiere_id ? `cantiere:${r.cantiere_id}` : r.commessa_id ? `commessa:${r.commessa_id}` : '';
+// La fase fa parte della chiave: due fasi dello stesso cantiere sono due righe.
+const chiaveTarget = (r: { commessa_id: string | null; cantiere_id: string | null; sottocantiere_id?: string | null }) =>
+  r.cantiere_id ? chiaveCantiere(r.cantiere_id, r.sottocantiere_id) : r.commessa_id ? `commessa:${r.commessa_id}` : '';
 
 /**
  * Sostituisce tutte le righe della giornata con quelle date. L'ordine conta:
@@ -61,6 +65,7 @@ export async function scriviRigheGiornata(
       rapportino_id: opts.rapportinoId,
       commessa_id: r.commessa_id,
       cantiere_id: r.cantiere_id,
+      sottocantiere_id: r.cantiere_id ? (r.sottocantiere_id ?? null) : null,
       note: r.note ?? null,
       minuti_lavoro: q.minutiLavoro,
       minuti_viaggio: q.minutiViaggio,
@@ -120,12 +125,14 @@ export async function leggiRigheGiornata(supabase: Supa, rapportinoId: string): 
   return ((data as (RigaRapportinoLetta & {
     commessa_id: string | null;
     cantiere_id: string | null;
+    sottocantiere_id: string | null;
     note: string | null;
   })[] | null) ?? []).map((r) => {
     const q = quoteDaRiga(r);
     return {
       commessa_id: r.commessa_id,
       cantiere_id: r.cantiere_id,
+      sottocantiere_id: r.sottocantiere_id ?? null,
       note: r.note,
       minutiLavoro: q.minutiLavoro,
       minutiViaggio: q.minutiViaggio,

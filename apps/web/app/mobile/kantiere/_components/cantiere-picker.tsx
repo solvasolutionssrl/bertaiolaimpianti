@@ -1,5 +1,6 @@
 'use client';
 
+import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { Search, Check, X, MapPin } from 'lucide-react';
 
@@ -35,6 +36,8 @@ export interface PickerCantiere {
   cliente_nome: string | null;
   indirizzo: string | null;
   categoria: string | null;
+  /** Le fasi scegibili del cantiere (23/10/2026); assente o vuoto = nessuna. */
+  sottocantieri?: SottocantiereLite[];
 }
 
 /**

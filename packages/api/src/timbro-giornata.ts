@@ -95,6 +95,8 @@ export interface TimbraturaAttribuita {
   ms: number;
   pausa: boolean;
   cantiereId: string | null;
+  /** La fase del cantiere, se le ore sono attribuite a una fase. */
+  sottocantiereId?: string | null;
   /**
    * Istante ESATTO (o un indice crescente), per l'ordine a parita' di `ms`:
    * con le timbrature arrotondate al passo (23/10/2026) una ripresa e una fine
@@ -131,7 +133,7 @@ export interface Scatola {
    * Il turno aperto dall'app che il timbro chiude: il primo cantiere della
    * ripartizione e' questo, e il suo ingresso esiste gia'.
    */
-  ingressoEsistente: { id: string; cantiereId: string; ms: number } | null;
+  ingressoEsistente: { id: string; cantiereId: string; sottocantiereId?: string | null; ms: number } | null;
   /**
    * L'inizio e' un passaggio al terminale: la persona era in sede. Da qui la
    * proposta «lavoro in sede» e, se e' uscita, la strada dalla sede sta DENTRO
@@ -290,7 +292,12 @@ export function statoGiornataTimbro(input: {
       fineMs,
       nettoMin,
       pausaTimbrataMin: pausa,
-      ingressoEsistente: { id: turnoAperto.id, cantiereId: turnoAperto.cantiereId, ms: turnoAperto.ms },
+      ingressoEsistente: {
+        id: turnoAperto.id,
+        cantiereId: turnoAperto.cantiereId,
+        ...conFase(turnoAperto.sottocantiereId),
+        ms: turnoAperto.ms,
+      },
       inizioFisico: false,
       fineFisica: true,
     });
@@ -350,11 +357,14 @@ export function statoGiornataTimbro(input: {
 
 export interface SegmentoScatola {
   cantiereId: string;
+  /** La fase del cantiere, se scelta. Due fasi dello stesso cantiere sono due segmenti. */
+  sottocantiereId?: string | null;
   minuti: number;
 }
 
 export interface EventoScatola {
   cantiereId: string;
+  sottocantiereId?: string | null;
   tipo: 'ingresso' | 'uscita';
   pausa: boolean;
   ms: number;
@@ -383,6 +393,9 @@ export interface RiempiScatolaInput {
 export type RiempiScatolaResult =
   | { ok: true; eventi: EventoScatola[]; nettoMin: number }
   | { ok: false; error: ErroreScatola };
+
+/** Il campo della fase compare solo se c'e': gli eventi senza fase restano com'erano. */
+const conFase = (fase: string | null | undefined) => (fase ? { sottocantiereId: fase } : {});
 
 function nonNeg(n: number | undefined): number {
   return Math.max(0, Math.round(n ?? 0));
@@ -424,18 +437,21 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   const andata = nonNeg(input.andataMin);
   const ritorno = nonNeg(input.ritornoMin);
 
-  // Cantieri consecutivi uguali sono uno: nessuna strada verso se' stessi.
-  type Seg = { cantiereId: string; minuti: number; viaggioPrima: number };
+  // Cantieri consecutivi uguali (stessa fase) sono uno: nessuna strada verso
+  // se' stessi. Due fasi dello stesso cantiere restano due segmenti: cambiano
+  // le righe, non la strada (che fra loro vale zero).
+  type Seg = { cantiereId: string; sottocantiereId: string | null; minuti: number; viaggioPrima: number };
   const segs: Seg[] = [];
   input.segmenti.forEach((s, i) => {
     const m = nonNeg(s.minuti);
     const v = i === 0 ? 0 : nonNeg(input.viaggioPrima?.[i]);
+    const fase = s.sottocantiereId ?? null;
     const prev = segs[segs.length - 1];
-    if (prev && prev.cantiereId === s.cantiereId) {
+    if (prev && prev.cantiereId === s.cantiereId && prev.sottocantiereId === fase) {
       prev.minuti += m;
       return;
     }
-    segs.push({ cantiereId: s.cantiereId, minuti: m, viaggioPrima: v });
+    segs.push({ cantiereId: s.cantiereId, sottocantiereId: fase, minuti: m, viaggioPrima: v });
   });
   const ultimo = segs.length - 1;
   const stradaFra = segs.reduce((a, s, i) => a + (s.minuti > 0 || i === ultimo ? s.viaggioPrima : 0), 0);
@@ -458,6 +474,7 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   let k = 0;
   let cursore = intervalli[0]!.inizioMs;
   let cantiereAperto: string | null = null;
+  let faseAperta: string | null = null;
 
   const viaggia = (min: number) => {
     let resto = min * MIN_MS;
@@ -484,7 +501,7 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
     }
   };
 
-  const lavora = (cantiereId: string, min: number): boolean => {
+  const lavora = (cantiereId: string, sottocantiereId: string | null, min: number): boolean => {
     let resto = min * MIN_MS;
     while (resto > 0) {
       const fine = intervalli[k]!.fineMs;
@@ -496,10 +513,10 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
         // L'intervallo e' finito: pausa timbrata. Si chiude e si riapre sullo
         // stesso cantiere, con il flag che lo dice.
         if (k + 1 >= intervalli.length) return false;
-        eventi.push({ cantiereId, tipo: 'uscita', pausa: true, ms: cursore });
+        eventi.push({ cantiereId, ...conFase(sottocantiereId), tipo: 'uscita', pausa: true, ms: cursore });
         k += 1;
         cursore = intervalli[k]!.inizioMs;
-        eventi.push({ cantiereId, tipo: 'ingresso', pausa: true, ms: cursore });
+        eventi.push({ cantiereId, ...conFase(sottocantiereId), tipo: 'ingresso', pausa: true, ms: cursore });
       }
     }
     return true;
@@ -509,8 +526,9 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   for (let i = 0; i < vivi.length; i++) {
     const s = vivi[i]!;
     if (cantiereAperto) {
-      eventi.push({ cantiereId: cantiereAperto, tipo: 'uscita', pausa: false, ms: cursore });
+      eventi.push({ cantiereId: cantiereAperto, ...conFase(faseAperta), tipo: 'uscita', pausa: false, ms: cursore });
       cantiereAperto = null;
+      faseAperta = null;
       if (!viaggia(s.viaggioPrima)) return { ok: false, error: 'NETTO_NON_VALIDO' };
     }
     allineaAllInizio();
@@ -519,12 +537,13 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
     const precedente = eventi[eventi.length - 1];
     const sulBordo = precedente && precedente.tipo === 'uscita' && cursore > precedente.ms && s.viaggioPrima === 0;
     if (sulBordo) precedente.pausa = true;
-    eventi.push({ cantiereId: s.cantiereId, tipo: 'ingresso', pausa: !!sulBordo, ms: cursore });
+    eventi.push({ cantiereId: s.cantiereId, ...conFase(s.sottocantiereId), tipo: 'ingresso', pausa: !!sulBordo, ms: cursore });
     cantiereAperto = s.cantiereId;
-    if (!lavora(s.cantiereId, s.minuti)) return { ok: false, error: 'NETTO_NON_VALIDO' };
+    faseAperta = s.sottocantiereId;
+    if (!lavora(s.cantiereId, s.sottocantiereId, s.minuti)) return { ok: false, error: 'NETTO_NON_VALIDO' };
   }
   if (cantiereAperto) {
-    eventi.push({ cantiereId: cantiereAperto, tipo: 'uscita', pausa: false, ms: cursore });
+    eventi.push({ cantiereId: cantiereAperto, ...conFase(faseAperta), tipo: 'uscita', pausa: false, ms: cursore });
   }
   if (!viaggia(ritorno)) return { ok: false, error: 'NETTO_NON_VALIDO' };
 

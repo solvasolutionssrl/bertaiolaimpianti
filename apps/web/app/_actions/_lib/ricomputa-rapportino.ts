@@ -13,6 +13,7 @@ import {
   type TrattaMinuti,
 } from '@kommessa/api/kantiere-quote';
 import { targetTimbratura } from '@kommessa/api/kantiere';
+import { chiaveCantiere, luogoDaChiave } from '@kommessa/api/sottocantieri';
 import { romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
   leggiArrotondamenti,
@@ -50,16 +51,19 @@ export interface RapportinoBase {
 
 // ── chiave sintetica polimorfica (commessa XOR cantiere) ─────────────────────
 
-export function chiaveTarget(row: { commessa_id: string | null; cantiere_id: string | null }): string {
+// Dal 23/10/2026 la FASE del cantiere fa parte della chiave (`cantiere:<id>/<fase>`):
+// le righe nascono per fase, il viaggio resta per cantiere (vedi `minutiDaTimbrature`).
+export function chiaveTarget(row: { commessa_id: string | null; cantiere_id: string | null; sottocantiere_id?: string | null }): string {
   const t = targetTimbratura(row);
   if (!t) return '';
-  return t.tipo === 'cantiere' ? `cantiere:${t.id}` : `commessa:${t.id}`;
+  return t.tipo === 'cantiere' ? chiaveCantiere(t.id, row.sottocantiere_id) : `commessa:${t.id}`;
 }
 
-export function decodeChiave(key: string): { commessa_id: string | null; cantiere_id: string | null } {
-  if (key.startsWith('cantiere:')) return { commessa_id: null, cantiere_id: key.slice('cantiere:'.length) };
-  if (key.startsWith('commessa:')) return { commessa_id: key.slice('commessa:'.length), cantiere_id: null };
-  return { commessa_id: key || null, cantiere_id: null };
+export function decodeChiave(key: string): { commessa_id: string | null; cantiere_id: string | null; sottocantiere_id: string | null } {
+  const luogo = luogoDaChiave(key);
+  if (luogo) return { commessa_id: null, cantiere_id: luogo.cantiereId, sottocantiere_id: luogo.sottocantiereId };
+  if (key.startsWith('commessa:')) return { commessa_id: key.slice('commessa:'.length), cantiere_id: null, sottocantiere_id: null };
+  return { commessa_id: key || null, cantiere_id: null, sottocantiere_id: null };
 }
 
 export function oreDaMin(min: number): number {
@@ -215,7 +219,7 @@ export async function ricomputaRapportinoAuto(
   const { fromIso, toIso } = romeDayBoundsUtc(data);
   const { data: timbRaw } = await supabase
     .from('timbrature' as never)
-    .select('id, commessa_id, cantiere_id, tipo, ts, pausa')
+    .select('id, commessa_id, cantiere_id, sottocantiere_id, tipo, ts, pausa')
     .eq('tenant_id', tenantId)
     .eq('dipendente_id', dipendenteId)
     .gte('ts', fromIso)
@@ -229,6 +233,7 @@ export async function ricomputaRapportinoAuto(
       id: string;
       commessa_id: string | null;
       cantiere_id: string | null;
+      sottocantiere_id: string | null;
       tipo: 'ingresso' | 'uscita';
       ts: string;
       pausa: boolean | null;

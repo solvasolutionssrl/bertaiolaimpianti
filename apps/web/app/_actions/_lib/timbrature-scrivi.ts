@@ -28,6 +28,8 @@ export interface TimbraturaDaScrivere {
   tenant_id: string;
   dipendente_id: string;
   cantiere_id: string | null;
+  /** La fase del cantiere (23/10/2026), se le ore vanno a una fase. Il DB controlla che sia del cantiere. */
+  sottocantiere_id?: string | null;
   commessa_id: string | null;
   tipo: 'ingresso' | 'uscita';
   pausa: boolean;
@@ -48,6 +50,7 @@ export interface TimbraturaScritta {
   ts: string;
   pausa: boolean;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
 }
 
 export type EsitoScrittura = { ok: true; righe: TimbraturaScritta[] } | { ok: false; error: string };
@@ -58,13 +61,36 @@ export async function scriviTimbrature(
   opts: { dispositivo?: 'pc' | 'telefono' } = {},
 ): Promise<EsitoScrittura> {
   if (righe.length === 0) return { ok: true, righe: [] };
+  // ⭐ La FASE, una volta aperta, vale fino alla fine del turno. Chi scrive una
+  // pausa, una ripresa o una fine turno (QR, app, capo squadra, ufficio) non
+  // conosce la fase dell'ingresso: la si eredita qui, dall'ultima timbratura
+  // di oggi della stessa persona sullo stesso cantiere. Senza, un ingresso
+  // con fase e un'uscita senza avrebbero due chiavi diverse e il ricalcolo
+  // non li appaierebbe. Chi passa `sottocantiere_id` (anche null) decide da se'.
+  const daEreditare = righe.filter((r) => r.sottocantiere_id === undefined && r.cantiere_id && (r.tipo === 'uscita' || r.pausa));
+  if (daEreditare.length > 0) {
+    const persone = [...new Set(daEreditare.map((r) => r.dipendente_id))];
+    const dal = new Date(Math.min(...daEreditare.map((r) => Date.parse(r.ts))) - 20 * 3_600_000).toISOString();
+    const { data: prec } = await supabase
+      .from('timbrature' as never)
+      .select('dipendente_id, cantiere_id, sottocantiere_id, ts')
+      .in('dipendente_id', persone)
+      .gte('ts', dal)
+      .order('ts', { ascending: false });
+    const ultime = (prec as { dipendente_id: string; cantiere_id: string | null; sottocantiere_id: string | null; ts: string }[] | null) ?? [];
+    for (const r of daEreditare) {
+      const u = ultime.find((x) => x.dipendente_id === r.dipendente_id && x.cantiere_id === r.cantiere_id && Date.parse(x.ts) <= Date.parse(r.ts));
+      r.sottocantiere_id = u?.sottocantiere_id ?? null;
+    }
+  }
+  for (const r of righe) if (r.sottocantiere_id === undefined) r.sottocantiere_id = null;
   const { data, error } = await supabase
     .from('timbrature' as never)
     .insert(righe as never)
-    .select('id, tipo, ts, pausa, cantiere_id');
+    .select('id, tipo, ts, pausa, cantiere_id, sottocantiere_id');
   if (error) return { ok: false, error: error.message };
-  const scritte = ((data as { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null }[] | null) ?? [])
-    .map((r) => ({ id: r.id, tipo: r.tipo, ts: r.ts, pausa: !!r.pausa, cantiere_id: r.cantiere_id }));
+  const scritte = ((data as { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null; sottocantiere_id: string | null }[] | null) ?? [])
+    .map((r) => ({ id: r.id, tipo: r.tipo, ts: r.ts, pausa: !!r.pausa, cantiere_id: r.cantiere_id, sottocantiere_id: r.sottocantiere_id ?? null }));
 
   // Una fine turno per persona: l'ultima, se ce n'e' piu' d'una nel lotto.
   const fini = new Map<string, TimbraturaDaScrivere>();

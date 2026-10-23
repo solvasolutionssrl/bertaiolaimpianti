@@ -21,6 +21,8 @@
 
 export interface SegmentoSplit {
   cantiereId: string;
+  /** La fase del cantiere, se scelta (23/10/2026). Il viaggio non la guarda. */
+  sottocantiereId?: string | null;
   minuti: number;
 }
 
@@ -51,6 +53,7 @@ export interface CalcolaSplitInput {
 
 export interface EventoSplit {
   cantiereId: string;
+  sottocantiereId?: string | null;
   tipo: 'ingresso' | 'uscita';
   pausa: boolean;
   ms: number;
@@ -63,6 +66,9 @@ export type CalcolaSplitResult =
   | { ok: false; error: SplitError };
 
 const MIN_MS = 60000;
+
+/** Il campo della fase compare solo se c'e': gli eventi senza fase restano com'erano. */
+const conFase = (fase: string | null | undefined) => (fase ? { sottocantiereId: fase } : {});
 
 /** Netto (minuti lavorati) di una giornata: (uscita - ingresso) - pausa. */
 export function nettoMinuti(ingressoMs: number, uscitaMs: number, pausaMin: number): number {
@@ -80,6 +86,7 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
   const ultimo = input.segmenti.length - 1;
   let segs = input.segmenti.map((s, i) => ({
     cantiereId: s.cantiereId,
+    sottocantiereId: s.sottocantiereId ?? null,
     minuti: Math.max(0, Math.round(s.minuti)),
     viaggioPrima: i === 0 ? 0 : Math.max(0, Math.round(input.viaggioPrima?.[i] ?? 0)),
   }));
@@ -106,10 +113,10 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
   const cum: number[] = [0];
   for (const s of segs) cum.push(cum[cum.length - 1]! + s.minuti);
 
-  type Cut = { netTime: number; nextCantiere: string; pausa: boolean; viaggio: number };
+  type Cut = { netTime: number; nextCantiere: string; nextFase: string | null; pausa: boolean; viaggio: number };
   const cuts: Cut[] = [];
   for (let i = 1; i < segs.length; i++) {
-    cuts.push({ netTime: cum[i]!, nextCantiere: segs[i]!.cantiereId, pausa: false, viaggio: segs[i]!.viaggioPrima });
+    cuts.push({ netTime: cum[i]!, nextCantiere: segs[i]!.cantiereId, nextFase: segs[i]!.sottocantiereId, pausa: false, viaggio: segs[i]!.viaggioPrima });
   }
 
   // Pausa = gap. Con ≥2 segmenti → confine più vicino al centro; con 1 solo
@@ -132,15 +139,15 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
       if (scelto.viaggio === 0) {
         scelto.pausa = true;
       } else if (scarto(arrivo.minuti) >= 1) {
-        cuts.push({ netTime: scelto.netTime + scarto(arrivo.minuti), nextCantiere: arrivo.cantiereId, pausa: true, viaggio: 0 });
+        cuts.push({ netTime: scelto.netTime + scarto(arrivo.minuti), nextCantiere: arrivo.cantiereId, nextFase: arrivo.sottocantiereId, pausa: true, viaggio: 0 });
       } else if (scarto(partenza.minuti) >= 1) {
-        cuts.push({ netTime: scelto.netTime - scarto(partenza.minuti), nextCantiere: partenza.cantiereId, pausa: true, viaggio: 0 });
+        cuts.push({ netTime: scelto.netTime - scarto(partenza.minuti), nextCantiere: partenza.cantiereId, nextFase: partenza.sottocantiereId, pausa: true, viaggio: 0 });
       } else {
         scelto.pausa = true;
       }
     } else {
       const mid = Math.min(netLavoro - 1, Math.max(1, Math.round(center)));
-      cuts.push({ netTime: mid, nextCantiere: segs[0]!.cantiereId, pausa: true, viaggio: 0 });
+      cuts.push({ netTime: mid, nextCantiere: segs[0]!.cantiereId, nextFase: segs[0]!.sottocantiereId, pausa: true, viaggio: 0 });
     }
   }
   cuts.sort((a, b) => a.netTime - b.netTime);
@@ -149,18 +156,20 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
   const eventi: EventoSplit[] = [];
   let realMs = input.ingressoMs;
   let cur = segs[0]!.cantiereId;
+  let curFase: string | null = segs[0]!.sottocantiereId;
   let prevNet = 0;
   for (const cut of cuts) {
     realMs += (cut.netTime - prevNet) * MIN_MS;
-    eventi.push({ cantiereId: cur, tipo: 'uscita', pausa: cut.pausa, ms: realMs });
+    eventi.push({ cantiereId: cur, ...conFase(curFase), tipo: 'uscita', pausa: cut.pausa, ms: realMs });
     if (cut.pausa) realMs += P * MIN_MS;
     realMs += cut.viaggio * MIN_MS;
-    eventi.push({ cantiereId: cut.nextCantiere, tipo: 'ingresso', pausa: cut.pausa, ms: realMs });
+    eventi.push({ cantiereId: cut.nextCantiere, ...conFase(cut.nextFase), tipo: 'ingresso', pausa: cut.pausa, ms: realMs });
     cur = cut.nextCantiere;
+    curFase = cut.nextFase;
     prevNet = cut.netTime;
   }
   realMs += (netLavoro - prevNet) * MIN_MS;
-  eventi.push({ cantiereId: cur, tipo: 'uscita', pausa: false, ms: realMs });
+  eventi.push({ cantiereId: cur, ...conFase(curFase), tipo: 'uscita', pausa: false, ms: realMs });
 
   return { ok: true, eventi, nettoMin: netLavoro };
 }

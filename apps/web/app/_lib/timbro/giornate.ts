@@ -64,6 +64,7 @@ interface RigaTimbratura {
   ts: string;
   pausa: boolean | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   commessa_id: string | null;
 }
 
@@ -118,7 +119,7 @@ export async function leggiGiornateTimbro(
     (da, a) =>
       supabase
         .from('timbrature' as never)
-        .select('id, dipendente_id, tipo, ts, pausa, cantiere_id, commessa_id')
+        .select('id, dipendente_id, tipo, ts, pausa, cantiere_id, sottocantiere_id, commessa_id')
         .eq('tenant_id', tenantId)
         .in('dipendente_id', dipendenti.slice(0, 100))
         .gte('ts', fromIso)
@@ -186,6 +187,7 @@ export async function leggiGiornateTimbro(
       ordine: Date.parse(t.ts),
       pausa: !!t.pausa,
       cantiereId: t.cantiere_id ?? t.commessa_id,
+      sottocantiereId: t.sottocantiere_id ?? null,
     }));
     const g = statoGiornataTimbro({
       eventi,

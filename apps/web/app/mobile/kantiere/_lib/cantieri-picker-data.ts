@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { fasiScegibili } from '@kommessa/api/sottocantieri';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
 
 /**
@@ -13,25 +14,22 @@ export async function elencoCantieriPicker(tenantId: string): Promise<PickerCant
   const supabase = createServerSupabase();
   const { data } = await supabase
     .from('cantieri' as never)
-    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria')
+    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, sottocantieri(id, nome, codice, descrizione, stato)')
     .eq('tenant_id', tenantId)
     .in('stato', ['attivo', 'sospeso'])
     .order('nome', { ascending: true });
-  return ((data as Array<{
-    id: string;
-    codice: string | null;
-    codice_commessa: string | null;
-    nome: string | null;
-    cliente_nome: string | null;
-    indirizzo: string | null;
-    categoria: string | null;
-  }>) ?? []).map((c) => ({
-    id: c.id,
-    codice: c.codice,
-    codice_commessa: c.codice_commessa,
-    nome: c.nome,
-    cliente_nome: c.cliente_nome,
-    indirizzo: c.indirizzo,
-    categoria: c.categoria,
-  }));
+  return conFasiScegibili((data as PickerCantiere[] | null) ?? []);
+}
+
+/**
+ * Le fasi arrivano con l'embed del picker: si tengono solo quelle aperte, in
+ * ordine di codice e nome, e il campo sparisce se non ce n'e' nessuna.
+ */
+export function conFasiScegibili(cantieri: PickerCantiere[]): PickerCantiere[] {
+  return cantieri.map((c) => {
+    const fasi = fasiScegibili(c.sottocantieri).sort((a, b) =>
+      (a.codice ?? '').localeCompare(b.codice ?? '', 'it', { numeric: true }) || a.nome.localeCompare(b.nome, 'it'),
+    );
+    return { ...c, sottocantieri: fasi.length > 0 ? fasi : undefined };
+  });
 }

@@ -25,6 +25,7 @@
     "./kantiere-percorso": "./src/kantiere-percorso.ts",
     "./kantiere-quote": "./src/kantiere-quote.ts",
     "./arrotondamento-timbri": "./src/arrotondamento-timbri.ts",
+    "./sottocantieri": "./src/sottocantieri.ts",
     "./ora-mostrata": "./src/ora-mostrata.ts",
     "./kantiere-report": "./src/kantiere-report.ts",
     "./kantiere-costi": "./src/kantiere-costi.ts",

@@ -23,7 +23,7 @@ import {
   viaggioFraCantieri,
 } from '@kommessa/api/kantiere-percorso';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
-import { cantiereScrivibile, cantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, cantieriScrivibili, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
   leggiArrotondamenti,
@@ -34,6 +34,7 @@ import {
 import { getRoutingProvider, type Coord } from '@/app/_lib/routing';
 import { stimaConCache } from '@/app/_lib/routing/stima-cache';
 import type { PickerCantiere } from '@/app/mobile/kantiere/_components/cantiere-picker';
+import { conFasiScegibili } from '@/app/mobile/kantiere/_lib/cantieri-picker-data';
 import { caricaTurnoAzioniContesto } from '@/app/mobile/kantiere/_lib/turno-azioni-contesto';
 import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import { leggiGiornataTimbro } from '@/app/_lib/timbro/giornate';
@@ -390,7 +391,7 @@ const TerminaTurnoSchema = z.object({
    * primo cantiere è quello del turno. Min 2 (con 1 solo non è uno split).
    */
   split: z
-    .array(z.object({ cantiereId: z.string().uuid(), minuti: z.number().int().nonnegative() }))
+    .array(z.object({ cantiereId: z.string().uuid(), sottocantiereId: z.string().uuid().nullable().optional(), minuti: z.number().int().nonnegative() }))
     .min(2)
     .max(12)
     .optional(),
@@ -540,7 +541,7 @@ async function terminaConSplit(
     ts: string;
     ingressoIso: string;
     pausaMin: number;
-    split: { cantiereId: string; minuti: number }[];
+    split: { cantiereId: string; sottocantiereId?: string | null; minuti: number }[];
     viaggio: ViaggioInput | null;
     dispositivo: 'pc' | 'telefono';
   },
@@ -571,6 +572,23 @@ async function terminaConSplit(
   const ids = [...new Set(opts.split.map((s) => s.cantiereId))];
   const cc = await cantieriScrivibili(supabase, ids, tenantId, { forzato: true });
   if (!cc.ok) return { ok: false, error: cc.error };
+  const ff = await sottocantieriScrivibili(supabase, opts.split, tenantId, { forzato: true });
+  if (!ff.ok) return { ok: false, error: ff.error };
+  // La fase del primo segmento e' quella del turno aperto (l'ingresso esiste gia').
+  {
+    const { data: ing } = await supabase
+      .from('timbrature' as never)
+      .select('sottocantiere_id')
+      .eq('dipendente_id', dipendenteId)
+      .eq('cantiere_id', opts.cantiereId)
+      .eq('tipo', 'ingresso')
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
+      .order('ts', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    opts.split[0] = { ...opts.split[0]!, sottocantiereId: (ing as { sottocantiere_id: string | null } | null)?.sottocantiere_id ?? null };
+  }
 
   // 4. Sintesi segmenti (pura, unit-testata), sugli estremi ARROTONDATI al
   //    passo del cliente: i segmenti scritti sono derivati, non timbri.
@@ -608,6 +626,7 @@ async function terminaConSplit(
     eventi.map((e, i) => ({
       ...base,
       cantiere_id: e.cantiereId,
+      sottocantiere_id: e.sottocantiereId ?? null,
       tipo: i === eventi.length - 1 ? ('uscita' as const) : e.tipo,
       pausa: i === eventi.length - 1 ? false : e.pausa,
       ts: new Date(e.ms).toISOString(),
@@ -1101,8 +1120,31 @@ async function sedeLavoroAperta(
   return (data as { sede_lavoro_id: string | null } | null)?.sede_lavoro_id ?? null;
 }
 
+/** La fase dell'ingresso aperto di oggi su un cantiere (null = cantiere intero). */
+async function faseTurnoAperto(
+  supabase: ReturnType<typeof createServerSupabase>,
+  dipendenteId: string,
+  cantiereId: string,
+): Promise<string | null> {
+  const { fromIso, toIso } = romeDayBoundsUtc(romeDay(new Date()));
+  const { data } = await supabase
+    .from('timbrature' as never)
+    .select('sottocantiere_id')
+    .eq('dipendente_id', dipendenteId)
+    .eq('cantiere_id', cantiereId)
+    .eq('tipo', 'ingresso')
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { sottocantiere_id: string | null } | null)?.sottocantiere_id ?? null;
+}
+
 const AvviaTurnoSchema = z.object({
   cantiereId: z.string().uuid(),
+  /** La fase del cantiere su cui si lavora (23/10/2026); assente = il cantiere intero. */
+  sottocantiereId: z.string().uuid().nullable().optional(),
   /**
    * Viaggio di ANDATA (partenza da app): sede di partenza, stima, autista,
    * mezzo, km. Assente quando il tecnico parte da "Abitazione privata" (0 km /
@@ -1153,6 +1195,8 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
   // cantiere chiuso non si apre un turno nuovo.
   const apribile = await cantiereScrivibile(supabase, parsed.data.cantiereId, ctx.tenantId);
   if (!apribile.ok) return { ok: false, error: apribile.error };
+  const faseOk = await sottocantieriScrivibili(supabase, [parsed.data], ctx.tenantId);
+  if (!faseOk.ok) return { ok: false, error: faseOk.error };
 
   const sedeLavoroId = parsed.data.daSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
   if (parsed.data.daSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
@@ -1172,6 +1216,7 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
     tenant_id: ctx.tenantId,
     dipendente_id: me.id,
     cantiere_id: parsed.data.cantiereId,
+    sottocantiere_id: parsed.data.sottocantiereId ?? null,
     sede_lavoro_id: sedeLavoroId,
     commessa_id: null,
     tipo: 'ingresso',
@@ -1245,6 +1290,8 @@ export async function opzioniViaggioPartenza(input: unknown): Promise<
 const CambiaCantiereSchema = z.object({
   daCantiereId: z.string().uuid(),
   aCantiereId: z.string().uuid(),
+  /** La fase di destinazione (23/10/2026). Stesso cantiere, fase diversa: e' un cambio valido. */
+  aSottocantiereId: z.string().uuid().nullable().optional(),
   /** Sul nuovo cantiere si lavora dalla sede predefinita («Lavoro dalla sede sul progetto»). */
   aSede: z.boolean().optional(),
 });
@@ -1258,9 +1305,7 @@ const CambiaCantiereSchema = z.object({
 export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   const parsed = CambiaCantiereSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
-  if (parsed.data.daCantiereId === parsed.data.aCantiereId) {
-    return { ok: false, error: 'STESSO_CANTIERE' };
-  }
+  const stessoCantiere = parsed.data.daCantiereId === parsed.data.aCantiereId;
   const r = await ctxConModulo();
   if ('error' in r) return { ok: false, error: r.error };
   const { ctx } = r;
@@ -1277,11 +1322,18 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   const info = statoTurno(eventi);
   if (info.stato === 'idle') return { ok: false, error: 'NESSUN_TURNO_APERTO' };
   if (info.stato === 'pausa') return { ok: false, error: 'IN_PAUSA' };
+  // Sullo stesso cantiere si cambia solo FASE: con la stessa fase non c'e' niente da fare.
+  if (stessoCantiere) {
+    const faseAperta = await faseTurnoAperto(supabase, me.id, parsed.data.daCantiereId);
+    if ((parsed.data.aSottocantiereId ?? null) === faseAperta) return { ok: false, error: 'STESSO_CANTIERE' };
+  }
 
   // Il cantiere di destinazione deve appartenere al tenant ed essere aperto:
   // spostarsi su un cantiere chiuso e' comunque aprire del lavoro nuovo.
   const dest = await cantiereScrivibile(supabase, parsed.data.aCantiereId, ctx.tenantId);
   if (!dest.ok) return { ok: false, error: dest.error };
+  const faseOk = await sottocantieriScrivibili(supabase, [{ cantiereId: parsed.data.aCantiereId, sottocantiereId: parsed.data.aSottocantiereId }], ctx.tenantId);
+  if (!faseOk.ok) return { ok: false, error: faseOk.error };
 
   // Dove si lavorava e dove si lavorerà: la sede del flag o il cantiere.
   const sedeDa = await sedeLavoroAperta(supabase, me.id, parsed.data.daCantiereId);
@@ -1312,7 +1364,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   };
   const scritte = await scriviTimbrature(supabase, [
     { ...base, cantiere_id: parsed.data.daCantiereId, tipo: 'uscita', ts: uscitaTs },
-    { ...base, cantiere_id: parsed.data.aCantiereId, sede_lavoro_id: sedeA, tipo: 'ingresso', ts: ingressoTs },
+    { ...base, cantiere_id: parsed.data.aCantiereId, sottocantiere_id: parsed.data.aSottocantiereId ?? null, sede_lavoro_id: sedeA, tipo: 'ingresso', ts: ingressoTs },
   ]);
   const errIngresso = scritte.ok ? null : { message: scritte.error };
   if (errIngresso) {
@@ -1331,7 +1383,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   // quello in cui si lavora ora (sede o cantiere); nella stessa sede non c'è.
   const luogoDa = sedeDa ?? parsed.data.daCantiereId;
   const luogoA = sedeA ?? parsed.data.aCantiereId;
-  if (luogoDa !== luogoA) {
+  if (luogoDa !== luogoA && !stessoCantiere) {
     const stime =
       sedeDa || sedeA ? await stimeFraLuoghi(supabase, ctx.tenantId, [[luogoDa, luogoA]]) : null;
     await registraTrasferimentiCantiere(supabase, {
@@ -1367,11 +1419,11 @@ export async function elencoCantieriTurno(): Promise<
   const supabase = createServerSupabase();
   const { data } = await supabase
     .from('cantieri' as never)
-    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria')
+    .select('id, codice, codice_commessa, nome, cliente_nome, indirizzo, categoria, sottocantieri(id, nome, codice, descrizione, stato)')
     .eq('tenant_id', ctx.tenantId)
     .in('stato', ['attivo', 'sospeso'])
     .order('nome', { ascending: true });
-  return { ok: true, cantieri: (data as PickerCantiere[] | null) ?? [] };
+  return { ok: true, cantieri: conFasiScegibili((data as PickerCantiere[] | null) ?? []) };
 }
 
 // ── 5) caso 4: registra l'intera giornata SENZA timbrature ──────────────────
@@ -1435,6 +1487,7 @@ const RegistraGiornataSchema = z.object({
     .array(
       z.object({
         cantiereId: z.string().uuid(),
+        sottocantiereId: z.string().uuid().nullable().optional(),
         minuti: z.number().int().nonnegative(),
         /** «Lavoro dalla sede sul progetto»: ore del cantiere, luogo la sede predefinita. */
         daSede: z.boolean().optional(),
@@ -1508,7 +1561,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
       return {
         ok: true,
         eventi: [
-          { cantiereId: primoCantiere, tipo: 'ingresso', pausa: false, ms: Date.parse(inizioIso) },
+          { cantiereId: primoCantiere, sottocantiereId: parsed.data.split[0]!.sottocantiereId ?? null, tipo: 'ingresso', pausa: false, ms: Date.parse(inizioIso) },
           ...calc.eventi,
         ],
       };
@@ -1589,7 +1642,7 @@ export async function registraGiornataPerDipendente(input: unknown): Promise<Res
       if (!calc.ok) return calc;
       return {
         ok: true,
-        eventi: [{ cantiereId: primoCantiere, tipo: 'ingresso', pausa: false, ms: Date.parse(inizioIso) }, ...calc.eventi],
+        eventi: [{ cantiereId: primoCantiere, sottocantiereId: parsed.data.split[0]!.sottocantiereId ?? null, tipo: 'ingresso', pausa: false, ms: Date.parse(inizioIso) }, ...calc.eventi],
       };
     },
   });
@@ -1612,6 +1665,7 @@ const RipartisciTimbroSchema = z.object({
     .array(
       z.object({
         cantiereId: z.string().uuid(),
+        sottocantiereId: z.string().uuid().nullable().optional(),
         minuti: z.number().int().nonnegative(),
         daSede: z.boolean().optional(),
       }),
@@ -1666,6 +1720,10 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
   if (scatola.ingressoEsistente && scatola.ingressoEsistente.cantiereId !== primoCantiere) {
     return { ok: false, error: 'SPLIT_PRIMO_CANTIERE' };
   }
+  // Il primo segmento continua il turno aperto: la sua fase e' quella dell'ingresso.
+  if (scatola.ingressoEsistente) {
+    parsed.data.split[0] = { ...parsed.data.split[0]!, sottocantiereId: scatola.ingressoEsistente.sottocantiereId ?? null };
+  }
   // Le righe scritte dicono da dove vengono: dal terminale se almeno un
   // evento e' un badge, altrimenti dall'app (la presenza segnata senza cantiere).
   const dalTerminale = g.sorgenti.includes('timbro');
@@ -1687,6 +1745,7 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
       ? {
           id: scatola.ingressoEsistente.id,
           cantiereId: scatola.ingressoEsistente.cantiereId,
+          sottocantiereId: scatola.ingressoEsistente.sottocantiereId ?? null,
           ts: new Date(scatola.ingressoEsistente.ms).toISOString(),
         }
       : null,
@@ -1772,7 +1831,7 @@ export async function segnaPresenzaInSede(input: unknown): Promise<Result> {
 
 // ── Lo scrittore unico di una giornata ripartita ──────────────────────────
 
-type EventoGiornata = { cantiereId: string; tipo: 'ingresso' | 'uscita'; pausa: boolean; ms: number };
+type EventoGiornata = { cantiereId: string; sottocantiereId?: string | null; tipo: 'ingresso' | 'uscita'; pausa: boolean; ms: number };
 
 interface GiornataRipartitaInput {
   supabase: ReturnType<typeof createServerSupabase>;
@@ -1780,14 +1839,14 @@ interface GiornataRipartitaInput {
   userId: string;
   dipendenteId: string;
   giorno: string;
-  split: { cantiereId: string; minuti: number; daSede?: boolean }[];
+  split: { cantiereId: string; sottocantiereId?: string | null; minuti: number; daSede?: boolean }[];
   percorso: z.infer<typeof PercorsoGiornataSchema> | null;
   origine: 'manuale' | 'timbro' | 'cronometro';
   modalita: 'giornata_dichiarata' | 'timbratrice' | 'ufficio' | 'app';
   /** I cantieri chiusi nel frattempo non bloccano (chiusura di una giornata gia' lavorata). */
   cantieriForzati: boolean;
   /** Il primo ingresso esiste gia' (turno aperto dall'app): non si riscrive. */
-  ingressoEsistente: { id: string; cantiereId: string; ts: string } | null;
+  ingressoEsistente: { id: string; cantiereId: string; sottocantiereId?: string | null; ts: string } | null;
   /** Andata e ritorno stanno DENTRO gli estremi (badge in sede) e si passano a `generaEventi`. */
   estremiDentro: boolean;
   /** Senza un percorso dichiarato, andata e ritorno si propongono dalla sede predefinita. */
@@ -1810,6 +1869,8 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
   const ids = [...new Set(p.split.map((s) => s.cantiereId))];
   const cc = await cantieriScrivibili(supabase, ids, tenantId, { forzato: p.cantieriForzati });
   if (!cc.ok) return { ok: false, error: cc.error };
+  const ff = await sottocantieriScrivibili(supabase, p.split, tenantId, { forzato: p.cantieriForzati });
+  if (!ff.ok) return { ok: false, error: ff.error };
 
   // Prima prova dei conti, senza strada: se non tornano, inutile stimare.
   const prova = p.generaEventi([], 0, 0);
@@ -2016,6 +2077,7 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
   const rows = daScrivere.map((e) => ({
     ...base,
     cantiere_id: e.cantiereId,
+    sottocantiere_id: e.sottocantiereId ?? null,
     sede_lavoro_id: sedeDi(e.cantiereId),
     tipo: e.tipo,
     pausa: e.pausa,

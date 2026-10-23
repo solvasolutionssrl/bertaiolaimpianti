@@ -94,6 +94,36 @@ export async function cantiereScrivibile(
 }
 
 /**
+ * Le fasi scelte (23/10/2026): ognuna deve esistere, essere del SUO cantiere e
+ * non chiusa. Il database rifiuterebbe comunque una fase di un altro cantiere
+ * (chiave esterna composta), ma con un errore che una persona non puo' leggere.
+ * Le fasi chiuse non bloccano una giornata gia' lavorata (`forzato`), come i
+ * cantieri.
+ */
+export async function sottocantieriScrivibili(
+  supa: Supa,
+  luoghi: readonly { cantiereId: string; sottocantiereId?: string | null }[],
+  tenantId: string,
+  opts: { forzato?: boolean } = {},
+): Promise<EsitoCantiere> {
+  const coppie = new Map<string, string>();
+  for (const l of luoghi) if (l.sottocantiereId) coppie.set(l.sottocantiereId, l.cantiereId);
+  if (coppie.size === 0) return { ok: true };
+  const { data } = await supa
+    .from('sottocantieri' as never)
+    .select('id, cantiere_id, nome, stato')
+    .in('id', [...coppie.keys()])
+    .eq('tenant_id', tenantId);
+  const righe = (data as { id: string; cantiere_id: string; nome: string; stato: string }[] | null) ?? [];
+  if (righe.length !== coppie.size) return { ok: false, error: 'SOTTOCANTIERE_NON_VALIDO' };
+  if (righe.some((r) => coppie.get(r.id) !== r.cantiere_id)) return { ok: false, error: 'SOTTOCANTIERE_NON_VALIDO' };
+  if (opts.forzato) return { ok: true };
+  const chiusa = righe.find((r) => r.stato === 'chiuso');
+  if (chiusa) return { ok: false, error: 'SOTTOCANTIERE_CHIUSO', motivo: `La fase «${chiusa.nome}» è chiusa.` };
+  return { ok: true };
+}
+
+/**
  * Piu' cantieri in un colpo (split di fine turno, Registra giornata).
  *
  * Basta uno chiuso perche' la registrazione non parta: meglio fermarsi prima
