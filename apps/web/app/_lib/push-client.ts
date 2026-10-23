@@ -10,12 +10,30 @@
  */
 export type EsitoSync = 'nessuna' | 'ok' | 'errore' | 'nonsupportato';
 
+/**
+ * La registrazione del service worker, se c'e'. ⚠️ Mai `serviceWorker.ready`
+ * qui: e' una promise che si risolve solo quando UNA registrazione esiste, e
+ * sull'ufficio da PC il service worker non lo registra nessuno (`SwRegistrar`
+ * sta nel guscio del telefono). Con `ready` il logout da desktop restava
+ * appeso alla prima riga per sempre (misurato il 23/10/2026: il menu si
+ * chiudeva e non succedeva niente). `getRegistration()` risponde subito,
+ * anche «nessuna».
+ */
+async function registrazioneSw(): Promise<ServiceWorkerRegistration | null> {
+  try {
+    return (await navigator.serviceWorker.getRegistration('/')) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sincronizzaSottoscrizionePush(): Promise<EsitoSync> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return 'nonsupportato';
   }
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await registrazioneSw();
+    if (!reg) return 'nessuna';
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return 'nessuna';
     const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
@@ -42,7 +60,8 @@ export async function sincronizzaSottoscrizionePush(): Promise<EsitoSync> {
 export async function spegniSottoscrizionePush(): Promise<void> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await registrazioneSw();
+    if (!reg) return;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return;
     await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(sub.endpoint)}`, { method: 'DELETE' }).catch(() => null);
