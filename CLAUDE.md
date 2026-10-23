@@ -1715,6 +1715,36 @@ cantiere; il **cantiere intero resta sempre scegibile**; `codice` e' **testo**
   esiste** per Next (cartella privata): per provare una funzione server-only dal dev
   server la rotta va sotto `api/cron/<nome>` con il segreto del cron, e poi si toglie.
 
+### I tecnici da computer: `/office/mio` (23/10/2026) — nessuna migration
+
+Un tecnico del mondo presenze che entra da PC vedeva la PWA del telefono
+allargata (il middleware lo mandava a `/mobile/kantiere/cantieri`). Luca ha
+chiesto «una versione desktop semplice con layout riadattato, non il mobile
+allargato». Ora entra nel guscio dell'ufficio (`OfficeShell`) con una barra
+ridotta: **Oggi** · Il mio lavoro (Cantieri, Le mie ore, Le mie spese se
+Kontabilita', La mia settimana se la pianificazione e' attiva) · Altro
+(Avvisi, Profilo). Pagine sotto `apps/web/app/office/mio/`.
+
+- ⭐ **Niente di nuovo nel motore**: la card «Le mie ore» e i dialog da
+  scrivania (`compila-giornata-dialog` nei soli modi `registra` e `scatola`,
+  senza `dipendenteId`) sono riusati; le azioni sono quelle *self*
+  (`segnaPresenzaInSede`, `avviaTurnoMio`, `ripartisciGiornataTimbro`,
+  `registraGiornataDaZero`), **mai** quelle «per un altro» dell'ufficio.
+- ⚠️ **Il presidio e' il layout, piu' il middleware per l'atterraggio**:
+  `office/layout.tsx` lascia entrare un tecnico del mondo presenze SOLO in
+  `/office/mio/**` e `/office/notifiche`, ogni altra `/office/...` rimbalza
+  a `/office/mio` (via `x-percorso`); nel mondo commesse il tecnico resta su
+  `/mobile`. `resolveOfficeLanding` (packages/api `server.ts`) legge anche
+  il ruolo. Cancello password e impersonazione intatti. Tutte le query
+  filtrano per la **scheda dipendente** della persona, mai per tenant.
+- ⚠️ Dal PC non si attivano le push: su `/office` non c'e' service worker
+  (vedi il difetto del logout del 23/10) e il profilo rimanda all'app
+  installata.
+- Aperto: «Inizia giornata» dalla scheda cantiere porta a Oggi senza
+  preselezionare il cantiere; il login da PC fa due salti
+  (`/office` → `/office/mio`); le spese dal PC non hanno anteprima prima
+  dell'invio. Banco `scripts/banco-ui/desktop-tecnico.mjs` (15 controlli).
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.
