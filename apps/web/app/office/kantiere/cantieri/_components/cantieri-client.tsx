@@ -306,7 +306,7 @@ export function CantieriClient({
                             ) : null}
                             {row.nuovoDalGestionale ? (
                               <span
-                                title="Arrivato da poco dal gestionale locale. Controlla indirizzo e categoria."
+                                title="Importato di recente dal gestionale locale. Verificare indirizzo e categoria."
                                 className="rounded-full bg-emerald-500/15 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400"
                               >
                                 nuovo

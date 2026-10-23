@@ -171,7 +171,7 @@ export function StampaQrClient({
             opacity: scaricando ? 0.6 : 1,
           }}
         >
-          {scaricando ? 'Preparo il PDF…' : 'Scarica PDF'}
+          {scaricando ? 'Preparazione del PDF…' : 'Scarica PDF'}
         </button>
       </div>
 

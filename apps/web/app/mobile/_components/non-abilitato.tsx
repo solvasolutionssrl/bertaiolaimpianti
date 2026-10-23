@@ -40,7 +40,7 @@ export function NonAbilitato({
         href="/mobile"
         className="inline-flex h-11 items-center rounded-lg border border-border px-5 text-sm font-medium"
       >
-        Torna a oggi
+        Torna alla pagina iniziale
       </Link>
     </div>
   );

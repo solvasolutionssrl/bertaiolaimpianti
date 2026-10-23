@@ -55,7 +55,7 @@ export function FunzioniClient({
                 </p>
                 {!f.scelta ? (
                   <p className="mt-1 text-[11px] text-muted-foreground/80">
-                    Valore di partenza: {f.accesa ? 'accesa' : 'spenta'}.
+                    Valore predefinito: {f.accesa ? 'attiva' : 'non attiva'}.
                   </p>
                 ) : null}
               </div>

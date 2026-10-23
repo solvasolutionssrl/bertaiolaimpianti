@@ -44,7 +44,7 @@ export function GiornateApertePanel({ giorni }: { giorni: GiornataAperta[] }) {
       </p>
       <ul className="mt-2.5 space-y-1.5">
         {giorni.map((g) => (
-          <GiornataRow
+          <GiornataApertaRiga
             key={`${g.dipendenteId}-${g.giorno}-${g.ingressoTs}`}
             g={g}
             onDone={() => router.refresh()}
@@ -55,7 +55,8 @@ export function GiornateApertePanel({ giorni }: { giorni: GiornataAperta[] }) {
   );
 }
 
-function GiornataRow({ g, onDone }: { g: GiornataAperta; onDone: () => void }) {
+/** Una giornata aperta con il controllo per chiuderla. `senzaNome` dove il nome e' gia' nel titolo (la zona «Le mie ore»). */
+export function GiornataApertaRiga({ g, onDone, senzaNome = false }: { g: GiornataAperta; onDone: () => void; senzaNome?: boolean }) {
   const [open, setOpen] = React.useState(false);
   const [ora, setOra] = React.useState('17:00');
   const [pending, start] = React.useTransition();
@@ -78,9 +79,9 @@ function GiornataRow({ g, onDone }: { g: GiornataAperta; onDone: () => void }) {
     <li className="rounded-lg border border-amber-300/50 bg-white px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 text-sm">
-          <span className="font-medium text-foreground">{g.dipendenteNome}</span>
+          {senzaNome ? null : <span className="font-medium text-foreground">{g.dipendenteNome}</span>}
           <span className="text-muted-foreground">
-            {' · '}
+            {senzaNome ? '' : ' · '}
             {fmtData(g.giorno)}
             {g.targetLabel ? ` · ${g.targetLabel}` : ''}
             {' · ingresso '}

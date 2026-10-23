@@ -115,7 +115,7 @@ export function CantiereCombo({ spesaId, cantiereId, cantiereNome, cantieri }: P
         if (forzato) {
           const procedi = await chiediConferma({
             title: 'Il cantiere è chiuso',
-            description: `"${scelto!.nome}" non è più in lavorazione. Assegno comunque la spesa?`,
+            description: `"${scelto!.nome}" non è più in lavorazione. Assegnare comunque la spesa?`,
             confirmLabel: 'Assegna',
           });
           if (!procedi) return;

@@ -32,10 +32,10 @@ export async function salvaPotere(input: {
   try {
     assertCanManageTenant(ctx);
   } catch {
-    return { ok: false, error: 'Solo un amministratore può cambiare i poteri di una persona.' };
+    return { ok: false, error: 'Solo un amministratore può modificare le autorizzazioni di una persona.' };
   }
 
-  if (!eCapacita(input?.capacita)) return { ok: false, error: 'Potere non riconosciuto.' };
+  if (!eCapacita(input?.capacita)) return { ok: false, error: 'Autorizzazione non riconosciuta.' };
   const capacita: Capacita = input.capacita;
   const acceso = input?.acceso === true;
 
@@ -59,7 +59,7 @@ export async function salvaPotere(input: {
   if (t.role === 'admin' || t.role === 'office') {
     return {
       ok: false,
-      error: 'Chi è in ufficio o amministra può già farlo: per togliergli qualcosa si cambia il ruolo.',
+      error: 'I ruoli Ufficio e Amministratore hanno già questa autorizzazione: per limitarla occorre modificare il ruolo.',
     };
   }
 

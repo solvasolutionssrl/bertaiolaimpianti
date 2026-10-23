@@ -31,7 +31,7 @@ import { IniziaSenzaCantiere } from './presenza-sede';
 function messaggioErrore(code: string): string {
   switch (code) {
     case 'TURNO_GIA_APERTO':
-      return 'Hai già una giornata aperta. Chiudila prima di iniziarne un’altra.';
+      return 'Risulta una giornata già aperta: chiuderla prima di iniziarne un’altra.';
     case 'CANTIERE_NON_VALIDO':
       return 'Lavoro non valido. Riprova.';
     case 'CANTIERE_CHIUSO':
@@ -109,7 +109,7 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
 
       <CantiereSearchSheet
         open={open}
-        title="Su cosa lavori oggi"
+        title="Il lavoro di oggi"
         cantieri={cantieri ?? []}
         selectedId={selectedId}
         onPick={(id) => {

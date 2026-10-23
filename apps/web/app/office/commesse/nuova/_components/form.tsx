@@ -586,7 +586,7 @@ export function NuovaCommessaForm({
                         </svg>
                       )}
                       <span className="truncate max-w-[180px]">{r.name}</span>
-                      {!r.ok && <span className="text-destructive/70">— fallito, riprova dalla commessa</span>}
+                      {!r.ok && <span className="text-destructive/70">non riuscito: ripetere dalla scheda commessa</span>}
                     </span>
                   ))}
                 </div>
@@ -630,7 +630,7 @@ export function NuovaCommessaForm({
               Compila a voce in 30 secondi
             </p>
             <p className="text-xs text-muted-foreground">
-              Parla: cliente, indirizzo, tipo di lavoro. L&apos;AI riempie il form per te.
+              Indicare a voce cliente, indirizzo e tipo di lavoro: l&apos;AI compila il modulo.
             </p>
           </div>
         </div>
@@ -688,7 +688,7 @@ export function NuovaCommessaForm({
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   {voicePending === 'transcribing'
                     ? 'Trascrivo l’audio…'
-                    : 'Estraggo i campi dal testo…'}
+                    : 'Estrazione dei campi in corso…'}
                 </div>
               ) : null}
               {voiceError ? (
@@ -1056,7 +1056,7 @@ export function NuovaCommessaForm({
                     <CardTitle className="text-base">Descrizione</CardTitle>
                     <CardDescription>
                       <strong>Note</strong>: contesto libero in italiano (resta visibile come "Dettagli" della commessa).<br />
-                      <strong>Descrizione</strong>: il titolo del lavoro, in parole normali.
+                      <strong>Descrizione</strong>: il titolo del lavoro, in linguaggio corrente.
                     </CardDescription>
                   </div>
                 </div>
@@ -1075,7 +1075,7 @@ export function NuovaCommessaForm({
                     placeholder="Es. caldaia da sostituire, refurbishment bagno…"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Frase libera che resterà come "Dettagli" della commessa, visibile ai tecnici. Se hai dettato a voce, qui finisce la versione AI-sistemata (non il dettato grezzo).
+                    Frase libera che resterà come "Dettagli" della commessa, visibile ai tecnici. In caso di dettatura il campo riporta la versione rielaborata dall&apos;AI, non la trascrizione originale.
                   </p>
                 </div>
 
@@ -1086,7 +1086,7 @@ export function NuovaCommessaForm({
                     <span className="sr-only">campo obbligatorio</span>
                   </Label>
                   <p className="text-[11px] text-muted-foreground">
-                    Il titolo del lavoro, come lo diresti a voce. Es. &quot;Sostituzione caldaia&quot;, &quot;Rifacimento bagno&quot;.
+                    Il titolo del lavoro in forma sintetica. Esempi: «Sostituzione caldaia», «Rifacimento bagno».
                   </p>
 
                   {/* CTA AI prominente: prima era un'icona "stellina" silenziosa
@@ -1182,7 +1182,7 @@ export function NuovaCommessaForm({
                   /{anteprima}
                 </code>
                 <p className="mt-3 text-[11px] leading-snug text-muted-foreground">
-                  La cartella nascerà su Nextcloud in <code className="font-mono">01_Richieste</code>.
+                  La cartella verrà creata su Nextcloud in <code className="font-mono">01_Richieste</code>.
                   Il <code className="font-mono">&lt;codice&gt;</code> viene assegnato al salvataggio
                   (sigla azienda, mese e anno, progressivo). Il nome della cartella non si
                   cambia più: la descrizione sì.

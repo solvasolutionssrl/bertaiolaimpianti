@@ -242,7 +242,7 @@ export default async function RichiestaMobilePage({
         </div>
 
         <div className="mt-4">
-          <HeroMeta>Arrivata in ufficio</HeroMeta>
+          <HeroMeta>Registrata dall’ufficio</HeroMeta>
           <h1 className="mt-1 text-[22px] font-bold leading-tight">{r.titolo}</h1>
 
           {cliente ? (
@@ -331,7 +331,7 @@ export default async function RichiestaMobilePage({
         {/* ─── cosa è stato detto al telefono ─── */}
         {r.descrizione?.trim() ? (
           <section className="animate-fade-up rounded-xl border border-border bg-card p-4 shadow-soft">
-            <MetaLine>Cosa è stato detto</MetaLine>
+            <MetaLine>Contenuto della richiesta</MetaLine>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">
               {r.descrizione}
             </p>

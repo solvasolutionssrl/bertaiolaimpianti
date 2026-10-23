@@ -340,7 +340,7 @@ export function PagheClient({
         <Kpi etichetta="Viaggio" valore={`${ore(totali.viaggio)} ore`} />
         <Kpi etichetta="Assenze" valore={String(totali.assenze)} nota="righe di assenza" />
         <Kpi
-          etichetta="Da guardare"
+          etichetta="Da verificare"
           valore={String(blocchi.length + attenzioni.length + mese.causaliDaDecidere.length)}
           nota={blocchi.length > 0 ? `${blocchi.length} bloccanti` : 'nessun blocco'}
         />
@@ -388,7 +388,7 @@ export function PagheClient({
             <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
                 <Stethoscope className="h-4 w-4" />
-                Il file esce comunque, ma lo Studio dovra' completare a mano
+                Il file viene generato, ma lo Studio dovrà completarlo manualmente
               </div>
               <ul className="mt-1.5 space-y-0.5 text-[13px] text-amber-800">
                 {attenzioni.slice(0, 5).map((a, i) => (
@@ -482,9 +482,8 @@ export function PagheClient({
             <Sezione icona={AlertTriangle} titolo="Giornate non approvate">
               <p className="text-[12px] leading-snug text-muted-foreground">
                 {mese.giornateSospese.length}{' '}
-                {mese.giornateSospese.length === 1 ? 'giornata resta' : 'giornate restano'} fuori
-                dal file: finche' non sono approvate in Presenze e ore, le loro ore non si
-                comunicano.
+                {mese.giornateSospese.length === 1 ? 'giornata resta esclusa' : 'giornate restano escluse'}{' '}
+                dal file: fino all'approvazione in Presenze e ore le ore non vengono comunicate.
               </p>
               <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[12px]">
                 {mese.giornateSospese.slice(0, 20).map((g, i) => {
@@ -541,8 +540,8 @@ export function PagheClient({
             ) : (
               <>
                 <p className="text-[12px] text-muted-foreground">
-                  Quando hai mandato il file allo Studio, segnalo qui: serve a sapere a colpo
-                  d'occhio quali mesi sono chiusi.
+                  Dopo l'invio del file allo Studio, registrare qui la consegna: permette di vedere
+                  subito i mesi chiusi.
                 </p>
                 <Button
                   size="sm"
@@ -654,11 +653,11 @@ function RiepilogoVista({
       <Card>
         <CardContent className="p-8 text-center">
           <p className="text-sm font-medium text-foreground">
-            Per questo mese non c'e' niente da comunicare.
+            Per questo mese non ci sono variazioni da comunicare.
           </p>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Le giornate normali non si esportano: nel file vanno solo straordinari, assenze e
-            maggiorazioni.
+            Le giornate ordinarie non vengono esportate: il file riporta solo straordinari,
+            assenze e maggiorazioni.
           </p>
         </CardContent>
       </Card>
@@ -712,7 +711,7 @@ function RiepilogoVista({
                           </span>
                           {!d.usaKommessa ? (
                             <span
-                              title="Non ha giornate registrate in Kommessa: le sue variazioni sono scritte a mano."
+                              title="Nessuna giornata registrata in Kommessa: le variazioni sono inserite manualmente."
                               className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
                             >
                               a mano
@@ -918,7 +917,7 @@ function FileVista({ mese }: { mese: ModelloMese }) {
         <CardContent className="p-8 text-center text-[13px] text-muted-foreground">
           {mese.config.codiceDitta
             ? 'Nessuna riga da scrivere per questo mese.'
-            : "Manca il codice ditta dello Studio: impostalo qui a fianco e il file si genera."}
+            : 'Codice ditta dello Studio mancante: impostarlo nel riquadro a lato per generare il file.'}
         </CardContent>
       </Card>
     );
@@ -931,7 +930,7 @@ function FileVista({ mese }: { mese: ModelloMese }) {
           <div className="min-w-0">
             <p className="truncate text-[13px] font-medium text-foreground">DatiMese.txt</p>
             <p className="truncate text-[11px] text-muted-foreground">
-              {mese.esito.righe.length} righe a lunghezza fissa. Accanto a ogni riga c'e' cosa dice.
+              {mese.esito.righe.length} righe a lunghezza fissa, ciascuna con la relativa descrizione.
             </p>
           </div>
           <Badge className="shrink-0 bg-muted text-muted-foreground">ASCII</Badge>

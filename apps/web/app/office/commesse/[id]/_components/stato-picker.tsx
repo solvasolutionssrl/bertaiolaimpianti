@@ -256,7 +256,7 @@ export function StatoPicker({
       {pending ? (
         <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
-          Sposto la cartella…
+          Spostamento della cartella in corso…
         </p>
       ) : null}
     </div>

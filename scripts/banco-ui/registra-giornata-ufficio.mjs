@@ -108,19 +108,19 @@ const LEGGI = `(() => {
   ${AIUTI}
   const p = pagina();
   const testoCorpo = t(corpo()?.innerText);
-  const lab = [...(p?.querySelectorAll('label') ?? [])]
-    .find((l) => /Lavoro (presso il cliente|dalla sede)/i.test(l.textContent || ''));
-  const box = lab?.querySelector('input[type=checkbox]');
+  // Dal 22/10 il flag e' il radiogroup «Dove» della riga cantiere: In sede / In cantiere.
+  const dove = p?.querySelector('[role="radiogroup"][aria-label^="Luogo di lavoro per"]');
+  const scelto = dove?.querySelector('[role="radio"][aria-checked="true"]');
   return {
-    etichettaFlag: lab ? t(lab.textContent) : null,
-    flagSpuntato: box ? box.checked : null,
+    etichettaFlag: scelto ? t(scelto.textContent) : null,
+    flagSpuntato: scelto ? /In cantiere/i.test(scelto.textContent || '') : null,
     // Il percorso: la tappa «tutto il giorno in sede» oppure partenza e rientro.
     tuttoInSede: /tutto il giorno in sede/i.test(testoCorpo),
     // ⚠️ innerText restituisce il testo GIÀ TRASFORMATO dal CSS: questi titoli
     // sono in maiuscolo, quindi il confronto non deve distinguerle.
     haPartenza: /\\bPartenza\\b/i.test(testoCorpo),
     haRientro: /\\bRientro\\b/i.test(testoCorpo),
-    chiGuidava: /Chi guidava/i.test(testoCorpo),
+    chiGuidava: /Conducente/i.test(testoCorpo),
     // I pezzi che devono restare comunque.
     haInizio: !!p?.querySelector('input[type=time][aria-label="Inizio lavoro"]'),
     fine: t(p?.querySelector('[aria-label="Fine lavoro calcolata"]')?.textContent),
@@ -194,8 +194,8 @@ try {
   s = await valuta(cdp, LEGGI);
 
   esito(
-    s.etichettaFlag === 'Lavoro presso il cliente',
-    'il flag dice l’eccezione, non la regola',
+    s.etichettaFlag === 'In sede',
+    'la riga nasce «In sede»: la regola, non l’eccezione',
     s.etichettaFlag ?? 'assente',
   );
   esito(s.flagSpuntato === false, 'di partenza non è spuntato: si lavora dalla sede');
@@ -218,10 +218,9 @@ try {
     cdp,
     `(() => {
       ${AIUTI}
-      const lab = [...pagina().querySelectorAll('label')].find((l) => /Lavoro presso il cliente/i.test(l.textContent || ''));
-      const box = lab?.querySelector('input[type=checkbox]');
-      if (!box) return false;
-      box.click();
+      const r = [...pagina().querySelectorAll('[role="radiogroup"][aria-label^="Luogo di lavoro per"] [role="radio"]')].find((x) => /In cantiere/i.test(x.textContent || ''));
+      if (!r) return false;
+      r.click();
       return true;
     })()`,
   );
@@ -244,8 +243,7 @@ try {
     cdp,
     `(() => {
       ${AIUTI}
-      const lab = [...pagina().querySelectorAll('label')].find((l) => /Lavoro presso il cliente/i.test(l.textContent || ''));
-      lab?.querySelector('input[type=checkbox]')?.click();
+      [...pagina().querySelectorAll('[role="radiogroup"][aria-label^="Luogo di lavoro per"] [role="radio"]')].find((x) => /In sede/i.test(x.textContent || ''))?.click();
       return true;
     })()`,
   );

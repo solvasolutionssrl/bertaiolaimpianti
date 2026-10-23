@@ -76,7 +76,7 @@ export function SpesePanoramica({
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
           <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
-          Le tue spese
+          Spese
         </p>
         <Link
           href="/mobile/kantiere/spese"

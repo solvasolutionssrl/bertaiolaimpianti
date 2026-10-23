@@ -260,10 +260,10 @@ export function ScansionaClient() {
           return;
         }
         setFotoStato('errore');
-        setFotoErr('Nessun QR riconosciuto nella foto. Avvicinati e inquadra bene il codice, poi riprova.');
+        setFotoErr('Nessun QR riconosciuto. Inquadrare il codice da vicino e riprovare.');
       } catch {
         setFotoStato('errore');
-        setFotoErr('Non sono riuscito a leggere la foto. Riprova.');
+        setFotoErr('Lettura della foto non riuscita. Riprovare.');
       } finally {
         bitmap?.cleanup();
       }
@@ -302,8 +302,8 @@ export function ScansionaClient() {
               <QrCode className="h-10 w-10 opacity-80" aria-hidden="true" />
               <p className="text-sm opacity-90">
                 {statoLive === 'errore'
-                  ? 'Fotocamera non disponibile. Usa il codice manuale qui sotto.'
-                  : 'Avvio fotocamera… inquadra il QR del cantiere.'}
+                  ? 'Fotocamera non disponibile. Inserire il codice manualmente.'
+                  : 'Avvio della fotocamera. Inquadrare il QR del cantiere.'}
               </p>
             </div>
           ) : null}
@@ -371,7 +371,7 @@ export function ScansionaClient() {
                 <QrCode className="h-8 w-8 text-primary" aria-hidden="true" />
               </span>
               <p className="text-sm text-muted-foreground">
-                Oppure scatta una foto al QR: la leggo io.
+                In alternativa, fotografare il QR: il codice viene letto automaticamente.
               </p>
             </div>
           ) : null}

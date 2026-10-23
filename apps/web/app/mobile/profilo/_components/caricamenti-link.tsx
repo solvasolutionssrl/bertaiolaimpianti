@@ -40,7 +40,7 @@ export function CaricamentiLink() {
         <span className="block text-xs text-muted-foreground">
           {inSospeso > 0
             ? `${inSospeso} file da completare`
-            : 'Foto e video già arrivati'}
+            : 'Foto e video caricati'}
         </span>
       </span>
       <ChevronRight

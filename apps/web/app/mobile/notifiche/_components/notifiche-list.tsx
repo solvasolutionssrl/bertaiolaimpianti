@@ -106,7 +106,7 @@ function destinazioneMobile(n: NotificaRow): { href: string; label: string } | n
   if (urlScritto) return { href: urlScritto, label: etichettaDestinazione(n, urlScritto) };
 
   if (n.type === 'todo_assegnato' && p.e_richiesta === true) {
-    return { href: '/mobile', label: 'Vedi cosa fare' };
+    return { href: '/mobile', label: 'Apri le attività' };
   }
   if (n.type === 'kantiere_modifica_tecnico' && typeof p.data === 'string') {
     return { href: `/mobile/kantiere/cruscotto?giorno=${p.data}`, label: 'Vedi la giornata' };
@@ -120,7 +120,7 @@ function destinazioneMobile(n: NotificaRow): { href: string; label: string } | n
 /** Cosa si legge sul tasto: dipende da dove porta, non dal tipo di avviso. */
 function etichettaDestinazione(n: NotificaRow, href: string): string {
   if (href.startsWith('/mobile/richiesta/')) return 'Apri la richiesta';
-  if (href.includes('evidenzia=')) return 'Vedi cosa fare';
+  if (href.includes('evidenzia=')) return 'Apri le attività';
   if (href.startsWith('/mobile/commessa/')) return 'Apri la commessa';
   if (href.startsWith('/mobile/kantiere/cruscotto')) return 'Vedi la giornata';
   return 'Apri';
@@ -207,7 +207,7 @@ export function NotificheList({ rows }: { rows: NotificaRow[] }) {
         <BellOff className="mx-auto mb-2 h-6 w-6 text-muted-foreground" aria-hidden="true" />
         <p className="text-sm font-medium">Nessuna notifica</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Quando succede qualcosa (ore modificate, ticket, ecc.) lo trovi qui.
+          Le comunicazioni (ore modificate, richieste e altri eventi) vengono elencate in questa pagina.
         </p>
       </div>
     );

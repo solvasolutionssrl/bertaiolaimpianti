@@ -128,8 +128,8 @@ export default async function CommessaTab({
             </p>
           ) : (
             <p className="text-sm italic text-muted-foreground">
-              Nessuna nota. Usa la matita per aggiungere il contesto del lavoro,
-              visibile ai tecnici in cantiere.
+              Nessuna nota. Usare il tasto di modifica per inserire il contesto del
+              lavoro, visibile ai tecnici.
             </p>
           )}
           <DettagliEdit
@@ -143,7 +143,7 @@ export default async function CommessaTab({
       {/* Cose da fare: TODO + Riunioni (ex tab Lavori) */}
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Cose da fare
+          Attività
         </p>
         <LavoriSection id={params.id} />
       </div>

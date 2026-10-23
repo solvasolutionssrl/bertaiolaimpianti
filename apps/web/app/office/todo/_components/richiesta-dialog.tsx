@@ -204,8 +204,8 @@ export function RichiestaDialog({
   const salva = async () => {
     if (titolo.trim().length === 0) {
       await showAlert({
-        title: 'Manca cosa serve',
-        body: 'Scrivi in una riga la richiesta: è l’unica cosa indispensabile.',
+        title: 'Descrizione mancante',
+        body: 'Indicare la richiesta in una riga: è l’unico dato obbligatorio.',
       });
       return;
     }
@@ -259,7 +259,7 @@ export function RichiestaDialog({
         // e si creano doppioni. È il difetto che ha prodotto due «Lago Maria
         // Rosanna» a quattro minuti di distanza.
         await showAlert({
-          title: 'Salvata, ma non ho mandato nessuno',
+          title: 'Richiesta salvata, nessun tecnico assegnato',
           body: `${r2.error}\n\nLa richiesta è registrata: riapri e riprova a mandarli.`,
         });
         router.refresh();
@@ -357,7 +357,7 @@ export function RichiestaDialog({
               value={dettagli}
               onChange={(e) => setDettagli(e.target.value)}
               rows={3}
-              placeholder="Marca e modello, cosa succede, quando sono in casa…"
+              placeholder="Marca e modello, problema rilevato, disponibilità del cliente…"
               className="mt-1.5 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm"
             />
           </div>
@@ -383,14 +383,14 @@ export function RichiestaDialog({
                 opzioni={opzioniPersone}
                 valore={assegnatoA || null}
                 onCambia={(v) => setAssegnatoA(v ?? '')}
-                etichettaNessuno="Nessuno, per ora"
-                segnaposto="Nessuno, per ora"
+                etichettaNessuno="Nessuno"
+                segnaposto="Nessuno"
                 segnapostoRicerca="Cerca una persona…"
                 aria-label={ETICHETTA_RESPONSABILE}
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Ne risponde lui e riceve una notifica sul telefono. Può essere un
-                caposquadra, che poi manda i suoi tecnici.
+                Il responsabile riceve una notifica sul telefono. Può essere un
+                caposquadra, che poi assegna i tecnici.
               </p>
             </div>
             <div className="min-w-0">
@@ -420,13 +420,13 @@ export function RichiestaDialog({
               opzioni={opzioniPersone}
               valori={squadra}
               onCambia={setSquadra}
-              segnaposto="Nessuno, per ora"
+              segnaposto="Nessuno"
               segnapostoRicerca="Cerca una persona…"
               aria-label={ETICHETTA_TECNICI_PIU}
             />
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Uno o più tecnici: la vedono sul telefono e possono spuntarla. Il
-              responsabile non cambia.
+              Uno o più tecnici: la vedono sul telefono e possono completarla. Il
+              responsabile resta invariato.
             </p>
           </div>
         </div>

@@ -149,11 +149,11 @@ export function NuovaSpesa({
           if (NON_RIPROVABILE.has(resp.status)) {
             lastErr =
               resp.status === 413
-                ? 'Foto troppo grande. Riprova con uno scatto più leggero.'
+                ? 'Fotografia troppo grande. Ripetere con un’immagine più leggera.'
                 : 'Non è stato possibile registrare la spesa. Riprova.';
             break; // inutile ritentare
           }
-          lastErr = 'Invio non riuscito. Riprovo…';
+          lastErr = 'Invio non riuscito. Nuovo tentativo in corso…';
         } catch {
           lastErr = 'Connessione assente o instabile.';
         }
@@ -223,7 +223,7 @@ export function NuovaSpesa({
   }
 
   const titoloFase =
-    fase === 'cantiere' ? 'A quale cantiere?' : fase === 'foto' ? 'Scatta la ricevuta' : 'Nuova spesa';
+    fase === 'cantiere' ? 'Cantiere' : fase === 'foto' ? 'Scatta la ricevuta' : 'Nuova spesa';
 
   return (
     <div
@@ -284,7 +284,7 @@ export function NuovaSpesa({
             <div className="flex-1 overflow-y-auto px-4 py-4">
               <div className="rounded-2xl border border-primary/25 bg-primary/[0.06] p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary/80">
-                  Stai lavorando su
+                  Cantiere del turno in corso
                 </p>
                 <p className="mt-1 flex items-center gap-2 text-lg font-semibold text-foreground">
                   <MapPin className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
@@ -346,7 +346,7 @@ export function NuovaSpesa({
               }}
               className="mt-2 w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground"
             >
-              Assegna il cantiere dopo →
+              Assegna il cantiere in seguito
             </button>
           </div>
         </div>
@@ -379,8 +379,8 @@ export function NuovaSpesa({
               <Receipt className="h-8 w-8" aria-hidden="true" />
             </span>
             <p className="text-sm text-muted-foreground">
-              Scatta o allega la foto dello scontrino. Viene caricata subito; l’analisi la fa il
-              sistema in automatico.
+              Scattare o allegare la foto dello scontrino. Il caricamento è immediato e l’analisi
+              avviene automaticamente.
             </p>
             <div className="grid w-full grid-cols-2 gap-2">
               <Button
@@ -462,7 +462,7 @@ export function NuovaSpesa({
               }}
             >
               <Camera className="mr-2 h-5 w-5" aria-hidden="true" />
-              Rifai foto
+              Nuova foto
             </Button>
           </div>
         </div>
@@ -491,7 +491,7 @@ export function NuovaSpesa({
           <div className="animate-fade-up space-y-1.5">
             <p className="text-lg font-semibold text-foreground">Caricamento completato</p>
             <p className="mx-auto max-w-xs text-sm text-muted-foreground">
-              La foto è al sicuro. L’analisi viene fatta in cloud: tra poco trovi la spesa compilata
+              Fotografia salvata. L’analisi avviene in cloud: la spesa sarà compilata a breve
               nella pagina <span className="font-medium text-foreground">Spese</span>.
             </p>
           </div>

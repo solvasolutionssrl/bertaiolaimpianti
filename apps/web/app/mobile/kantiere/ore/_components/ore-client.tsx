@@ -195,7 +195,7 @@ export function OreClient({
       {cantieriOggi.length >= 2 ? (
         <section className="rounded-2xl border border-border bg-card p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Cantieri di oggi
+            Cantieri della giornata
           </p>
           <div className="mt-2 overflow-hidden rounded-lg border border-border">
             <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 border-b border-border bg-muted/40 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -233,7 +233,7 @@ export function OreClient({
         >
           <div className="flex items-center justify-between gap-2">
             <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-primary/80">
-              Riepilogo di oggi
+              Riepilogo della giornata
             </p>
             <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
               <PenLine className="h-3 w-3" aria-hidden="true" />
@@ -261,8 +261,8 @@ export function OreClient({
             ))}
           </div>
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            Giornata chiusa, calcolata dalle tue timbrature. Controlla che sia tutto giusto: tocca per
-            rivedere o correggere ore e pausa.
+            Giornata chiusa, calcolata dalle timbrature. Toccare per verificare o correggere ore e
+            pausa.
           </p>
         </button>
       ) : null}
@@ -309,7 +309,7 @@ export function OreClient({
       {puoiRegistrare && (
         <section className="space-y-2.5 rounded-2xl border border-border bg-card p-3.5 shadow-soft">
           <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Non hai timbrato?
+            Giornata senza timbrature
           </p>
           <button
             type="button"
@@ -336,8 +336,8 @@ export function OreClient({
         <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">
           <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>
-            Giornata in verifica dall&apos;ufficio. Le ore vengono confermate o sistemate da loro:
-            non devi fare nulla.
+            Giornata in verifica presso l&apos;ufficio. Le ore verranno confermate o rettificate
+            dall&apos;ufficio; nessuna azione richiesta.
           </span>
         </div>
       )}

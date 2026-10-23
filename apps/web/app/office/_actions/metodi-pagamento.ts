@@ -63,7 +63,7 @@ export async function assicuraMetodiPredefiniti(): Promise<Result> {
     revalidatePath('/office/impostazioni/pagamenti');
     return { ok: true };
   } catch {
-    return { ok: false, error: 'Non sono riuscito a preparare i metodi di pagamento.' };
+    return { ok: false, error: 'Preparazione dei metodi di pagamento non riuscita.' };
   }
 }
 
@@ -93,7 +93,7 @@ export async function rinominaMetodoPagamento(input: unknown): Promise<Result> {
       .update({ nome: parsed.data.nome, updated_at: new Date().toISOString() } as never)
       .eq('id', parsed.data.id)
       .eq('tenant_id', ctx.tenantId);
-    if (error) return { ok: false, error: 'Non sono riuscito a salvare il nuovo nome.' };
+    if (error) return { ok: false, error: 'Salvataggio del nuovo nome non riuscito.' };
 
     await auditTenant(service, {
       tenantId: ctx.tenantId,
@@ -109,7 +109,7 @@ export async function rinominaMetodoPagamento(input: unknown): Promise<Result> {
     revalidatePath('/office/impostazioni/pagamenti');
     return { ok: true };
   } catch {
-    return { ok: false, error: 'Non sono riuscito a rinominare il metodo.' };
+    return { ok: false, error: 'Ridenominazione del metodo non riuscita.' };
   }
 }
 
@@ -144,7 +144,7 @@ export async function aggiungiMetodoPagamento(input: unknown): Promise<Result> {
       } as never)
       .select('id')
       .single();
-    if (error || !data) return { ok: false, error: 'Non sono riuscito ad aggiungere il metodo.' };
+    if (error || !data) return { ok: false, error: 'Aggiunta del metodo non riuscita.' };
 
     await auditTenant(service, {
       tenantId: ctx.tenantId,
@@ -159,7 +159,7 @@ export async function aggiungiMetodoPagamento(input: unknown): Promise<Result> {
     revalidatePath('/office/impostazioni/pagamenti');
     return { ok: true };
   } catch {
-    return { ok: false, error: 'Non sono riuscito ad aggiungere il metodo.' };
+    return { ok: false, error: 'Aggiunta del metodo non riuscita.' };
   }
 }
 
@@ -190,7 +190,7 @@ export async function cambiaStatoMetodoPagamento(input: unknown): Promise<Result
       .update({ attivo: parsed.data.attivo, updated_at: new Date().toISOString() } as never)
       .eq('id', parsed.data.id)
       .eq('tenant_id', ctx.tenantId);
-    if (error) return { ok: false, error: 'Non sono riuscito a salvare.' };
+    if (error) return { ok: false, error: 'Salvataggio non riuscito.' };
 
     await auditTenant(service, {
       tenantId: ctx.tenantId,
@@ -204,7 +204,7 @@ export async function cambiaStatoMetodoPagamento(input: unknown): Promise<Result
     revalidatePath('/office/impostazioni/pagamenti');
     return { ok: true };
   } catch {
-    return { ok: false, error: 'Non sono riuscito a salvare.' };
+    return { ok: false, error: 'Salvataggio non riuscito.' };
   }
 }
 

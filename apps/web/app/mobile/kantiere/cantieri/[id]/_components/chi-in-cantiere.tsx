@@ -41,7 +41,7 @@ export function ChiInCantiere({ persone }: { persone: PersonaDentro[] }) {
 
       {persone.length === 0 ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          Nessuno sta lavorando qui in questo momento.
+          Nessuna presenza registrata su questo cantiere.
         </p>
       ) : (
         <ul className="mt-2 space-y-1.5">

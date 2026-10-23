@@ -57,7 +57,7 @@ export default async function BachecaSettingsPage() {
     <div className="space-y-4">
       <SectionHeader
         title="Bacheca"
-        description="Una pagina da aprire sul televisore dell’ufficio: per ogni persona, cosa le resta da fare."
+        description="Pagina per il televisore dell’ufficio: per ogni persona, le attività ancora da svolgere."
         icon={<MonitorPlay />}
       />
       {!canEdit ? <AdminRequiredNotice /> : null}

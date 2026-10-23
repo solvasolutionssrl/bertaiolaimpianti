@@ -106,8 +106,8 @@ export default async function NotifichePage({
             <EmptyState
               icon={CheckCircle2}
               tone="primary"
-              title="Tutto in ordine"
-              description="Nessun avviso attivo al momento. Buon lavoro!"
+              title="Nessun avviso attivo"
+              description="Nessun avviso attivo al momento."
             />
           ) : (
             <>

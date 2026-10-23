@@ -258,8 +258,8 @@ export function PwaInstallPrompt({
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {isIos
-                    ? 'Tienila a portata di pollice — apertura più veloce, niente barra browser.'
-                    : 'Aprila come app dal tuo cantiere — più veloce, schermo intero, funziona anche offline.'}
+                    ? 'Accesso più rapido, senza barra del browser.'
+                    : 'Utilizzo come applicazione: avvio più rapido, schermo intero, funzionamento anche offline.'}
                 </p>
               </div>
             </div>
@@ -302,7 +302,7 @@ export function PwaInstallPrompt({
               <ul className="mt-5 space-y-2">
                 <BenefitLine text="Apertura più rapida — niente barra browser" />
                 <BenefitLine text="Foto cantiere anche offline (Background Sync)" />
-                <BenefitLine text="Notifiche push per nuovi tickets" />
+                <BenefitLine text="Notifiche per le nuove richieste" />
               </ul>
             )}
 
@@ -313,7 +313,7 @@ export function PwaInstallPrompt({
                 onClick={handleLater}
                 className="flex-1 rounded-lg border border-border bg-background px-4 py-3 font-mono text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-[0.98]"
               >
-                {isIos ? 'Capito' : 'Più tardi'}
+                {isIos ? 'Chiudi' : 'Più tardi'}
               </button>
               {!isIos && (
                 <button

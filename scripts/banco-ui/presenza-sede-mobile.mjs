@@ -34,7 +34,7 @@ try {
   await clicVero(cdp, bottone('^Inizia senza cantiere'));
   await attendiCard(cdp, 'aperta');
   const t1 = await testoCard(cdp);
-  esito(/Dentro dalle \d\d:\d\d/.test(t1) && /Pausa/.test(t1) && /Fine giornata/.test(t1), 'ufficio: card aperta con Pausa e Fine', t1);
+  esito(/Presenza aperta dalle \d\d:\d\d/.test(t1) && /Pausa/.test(t1) && /Fine giornata/.test(t1), 'ufficio: card aperta con Pausa e Fine', t1);
   esito(!(await valuta(cdp, `!!${bottone('^Inizia giornata')}`)), 'ufficio: niente «Inizia giornata» con la presenza aperta');
   await foto(cdp, 'presenza-mobile-02-aperta');
 

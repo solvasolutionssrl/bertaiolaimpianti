@@ -177,7 +177,7 @@ export default async function TokenPage({
           QR non valido o revocato
         </h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          Chiedi all&apos;ufficio un QR aggiornato del cantiere.
+          Richiedere all&apos;ufficio un QR aggiornato del cantiere.
         </p>
       </Schermo>
     );
@@ -212,8 +212,8 @@ export default async function TokenPage({
             Cantiere chiuso
           </h1>
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Qui non si timbra più. Se hai lavorato su questo cantiere, dillo
-            all&apos;ufficio: può registrare le ore per te.
+            Il cantiere non accetta più timbrature. Segnalare all&apos;ufficio le ore
+            svolte: provvederà alla registrazione.
           </p>
         </Schermo>
       );
@@ -275,12 +275,12 @@ export default async function TokenPage({
       <Schermo>
         <IconaQr />
         <h1 className="text-center text-lg font-semibold tracking-tight text-foreground">
-          {scaduta ? testoScadenza(statoPwd.scadenza).titolo : 'Scegli la tua password'}
+          {scaduta ? testoScadenza(statoPwd.scadenza).titolo : 'Impostazione della password'}
         </h1>
         <p className="max-w-xs text-center text-sm text-muted-foreground">
           {scaduta
-            ? `${testoScadenza(statoPwd.scadenza).corpo} Poi torni subito a timbrare.`
-            : 'Prima di timbrare devi sostituire la password che ti hanno dato in ufficio con una che sai solo tu.'}
+            ? `${testoScadenza(statoPwd.scadenza).corpo} Al termine è possibile riprendere la timbratura.`
+            : 'Prima della timbratura è necessario sostituire la password fornita dall’ufficio con una password personale.'}
         </p>
         <Link
           href="/cambia-password"
@@ -301,7 +301,7 @@ export default async function TokenPage({
           Account non valido
         </h1>
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          Questo QR appartiene a un altro spazio. Esci e accedi con l&apos;account giusto.
+          Il QR appartiene a un altro spazio di lavoro. Chiudere la sessione e accedere con l&apos;account corretto.
         </p>
       </Schermo>
     );

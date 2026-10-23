@@ -393,7 +393,7 @@ export async function eliminaTipoPermessoCustom(codice: string): Promise<Ok> {
     const quante = count ?? 0;
     return {
       ok: false,
-      error: `Questo tipo è usato da ${quante} ${quante === 1 ? 'assenza' : 'assenze'}: toglierlo le lascerebbe senza nome e senza giustificativo. Prima cambia il tipo a quelle assenze.`,
+      error: `Questo tipo è usato da ${quante} ${quante === 1 ? 'assenza' : 'assenze'}: la rimozione lascerebbe quelle assenze senza tipo e senza giustificativo. Modificare prima il tipo.`,
     };
   }
 

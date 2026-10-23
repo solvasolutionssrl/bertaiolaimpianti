@@ -64,7 +64,7 @@ export function NoteRichiesta({
         </ul>
       ) : (
         <p className="mt-2 text-sm text-muted-foreground">
-          Niente, per ora. Quello che scopri sul posto si scrive qui.
+          Nessuna nota. Le informazioni rilevate sul posto si annotano qui.
         </p>
       )}
 

@@ -38,9 +38,9 @@ function durataTurnoMin(inizioTs: string | null): number {
 function messaggioErrore(code: string): string {
   switch (code) {
     case 'AZIONE_NON_VALIDA':
-      return 'Lo stato è cambiato nel frattempo. Aggiorna e riprova.';
+      return 'Lo stato è stato aggiornato: ricaricare la pagina e riprovare.';
     case 'NON_AUTORIZZATO':
-      return 'Non sei autorizzato per questo membro.';
+      return 'Autorizzazione mancante per questo membro.';
     case 'MODULO_OFF':
       return 'Modulo Kantiere non attivo.';
     default:
@@ -178,8 +178,8 @@ export function GestioneSquadraClient({
   if (gruppi.length === 0) {
     return (
       <p className="rounded-xl border border-border bg-card p-5 text-center text-sm text-muted-foreground shadow-soft">
-        Nessuna squadra assegnata. Quando l&apos;ufficio ti assegna come capo di un cantiere,
-        i tuoi membri compaiono qui.
+        Nessuna squadra assegnata. I membri compaiono in questa pagina dopo l&apos;assegnazione
+        come capo cantiere da parte dell&apos;ufficio.
       </p>
     );
   }
@@ -382,7 +382,7 @@ function MembroRiga({
           </p>
           {minAutoChiusura != null && minAutoChiusura > 0 ? (
             <p className="mt-0.5 text-[11px] font-medium text-amber-700">
-              La pausa si chiude da sola tra ~{minAutoChiusura} min
+              Chiusura automatica della pausa fra circa {minAutoChiusura} minuti
             </p>
           ) : null}
         </div>

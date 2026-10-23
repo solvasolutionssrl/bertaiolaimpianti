@@ -204,7 +204,7 @@ export default async function KantiereHomePage() {
           </p>
           {ultima ? (
             <p className="mt-1 text-lg font-semibold">
-              {dentro ? 'Sei in cantiere' : 'Hai timbrato l’uscita'}
+              {dentro ? 'Presenza in cantiere' : 'Uscita registrata'}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 ({ultima.tipo === 'ingresso' ? 'ingresso' : 'uscita'} alle {formatOra(ultima.ts)})
               </span>
@@ -217,8 +217,8 @@ export default async function KantiereHomePage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-5 text-sm text-muted-foreground">
-          Nessun profilo dipendente collegato a questo account. Puoi comunque
-          consultare cantieri e ore.
+          Nessun profilo dipendente collegato all&apos;account. Restano consultabili
+          cantieri e ore.
         </div>
       )}
 

@@ -124,7 +124,7 @@ export function PermessiMobileClient({
         </button>
       ) : (
         <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          Il tuo account non è collegato a una scheda dipendente. Chiedi all&apos;ufficio.
+          L&apos;account non è collegato a una scheda dipendente. Rivolgersi all&apos;ufficio.
         </p>
       )}
 

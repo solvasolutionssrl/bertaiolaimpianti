@@ -87,8 +87,8 @@ try {
   await pausa(600);
   esito(await clicca(cdp, 'Aurora'), 'si sceglie il cantiere');
   // Il tasto porta anche il nome del cantiere scelto: «Continua · …».
-  esito(await clicca(cdp, '^Continua'), 'si passa a «Da dove parti?»');
-  await finoA(cdp, `/Da dove parti\\?/.test(document.body.innerText) && !/Carico le sedi/.test(document.body.innerText)`, {
+  esito(await clicca(cdp, '^Continua'), 'si passa a «Luogo di partenza»');
+  await finoA(cdp, `/Luogo di partenza/.test(document.body.innerText) && !/Carico le sedi/.test(document.body.innerText)`, {
     cosa: 'foglio partenza',
     timeoutMs: 20_000,
   });
@@ -103,7 +103,7 @@ try {
 
   esito((await spunta(cdp, 'Lavoro dalla sede sul progetto')) === true, 'si indica il lavoro dalla sede');
   t = await testo(cdp);
-  esito(/Parti dalla sede in cui lavori/.test(t) && !/TEMPO DI VIAGGIO/.test(t), 'dalla sede predefinita non c’è viaggio');
+  esito(/Partenza dalla sede di lavoro/.test(t) && !/TEMPO DI VIAGGIO/.test(t), 'dalla sede predefinita non c’è viaggio');
   await foto(cdp, 'sede-02-dalla-sede');
 
   if (/Hotel Europa/.test(t)) {
@@ -134,7 +134,7 @@ try {
     await pausa(600);
 
     await clicca(cdp, '^Termina turno');
-    await finoA(cdp, `/Dove vai adesso\\?/.test(document.body.innerText)`, { cosa: 'dialog fine turno', timeoutMs: 15_000 });
+    await finoA(cdp, `/Destinazione/.test(document.body.innerText)`, { cosa: 'dialog fine turno', timeoutMs: 15_000 });
     await pausa(800);
     t = await testo(cdp);
     esito(

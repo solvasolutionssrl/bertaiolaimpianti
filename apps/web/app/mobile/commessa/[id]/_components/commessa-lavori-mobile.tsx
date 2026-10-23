@@ -128,8 +128,8 @@ export function CommessaLavoriMobile({
         ) : riunioni.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/60 bg-background/50 p-5 text-center text-sm text-muted-foreground">
             <p>
-              Nessun lavoro tracciato.
-              {canWrite || puoScrivereTodo || puoScrivereRiunione ? ' Il primo si crea qui sopra.' : ''}
+              Nessun lavoro registrato.
+              {canWrite || puoScrivereTodo || puoScrivereRiunione ? ' Il primo si crea dai tasti in alto.' : ''}
             </p>
           </div>
         ) : null}

@@ -457,9 +457,8 @@ function AllegatiAttacher({
             aria-hidden="true"
           />
           <span>
-            <strong>Il telefono sta preparando i file.</strong> Prima di
-            consegnarli li converte: sui video può volerci qualche decina di
-            secondi.
+            <strong>Preparazione dei file in corso.</strong> La conversione dei
+            video può richiedere alcune decine di secondi.
           </span>
         </div>
       ) : null}

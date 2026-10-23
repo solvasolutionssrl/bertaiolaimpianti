@@ -161,7 +161,7 @@ export function PersonaleSettingsClient({
             <Sparkles className="h-4 w-4 text-primary" /> Tipi personalizzati
           </h2>
           <p className="mb-3 text-xs text-muted-foreground">
-            Crea un tipo tuo (es. &laquo;Permesso sindacale interno&raquo;) scegliendo la durata:
+            Creare un tipo personalizzato (ad esempio &laquo;Permesso sindacale interno&raquo;) indicando la durata:
             giorni interi, a ore (con eventuale durata predefinita) o libera.
           </p>
 

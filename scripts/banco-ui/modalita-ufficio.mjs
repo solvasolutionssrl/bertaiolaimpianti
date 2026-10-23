@@ -52,7 +52,7 @@ const LEGGI_FOGLIO = `(() => {
   return {
     titolo: d.querySelector('h2')?.textContent?.trim() ?? null,
     // Un passo solo: non deve chiedere da dove si parte.
-    chiedeDaDoveParti: /da dove parti/i.test(t),
+    chiedeDaDoveParti: /luogo di partenza/i.test(t),
     haRicerca: !!d.querySelector('input[type=search]'),
     testo: t.slice(0, 220),
   };
@@ -61,6 +61,8 @@ const LEGGI_FOGLIO = `(() => {
 const { cdp, chiudi } = await apriChrome({ mobile: true });
 try {
   await accedi(cdp, 'tecnico');
+  // Il foglio «Attiva le notifiche» (22/10) si mette davanti ai dialog: lo si mette via per la sessione.
+  await valuta(cdp, `sessionStorage.setItem('kommessa.notifiche.proposto', '1')`);
 
   // ── Dove la persona atterra ────────────────────────────────────────────
   await vaiA(cdp, ATTERRAGGIO);
@@ -100,7 +102,7 @@ try {
   await new Promise((r) => setTimeout(r, 500));
   const foglio = await valuta(cdp, LEGGI_FOGLIO);
   esito(
-    /Su cosa lavori/i.test(foglio?.titolo ?? ''),
+    /lavoro di oggi/i.test(foglio?.titolo ?? ''),
     'il foglio chiede su cosa si lavora',
     foglio?.titolo ?? 'assente',
   );

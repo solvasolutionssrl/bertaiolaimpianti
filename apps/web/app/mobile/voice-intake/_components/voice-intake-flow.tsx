@@ -298,14 +298,14 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
       setState((s) => ({
         ...s,
         error:
-          'Manca il nome cliente. Torna indietro e modifica la card "Cliente".',
+          'Nome cliente mancante: tornare indietro e modificare la sezione «Cliente».',
       }));
       return;
     }
     if (!d.descrizione?.trim()) {
       setState((s) => ({
         ...s,
-        error: 'Manca la descrizione del lavoro.',
+        error: 'Descrizione del lavoro mancante.',
       }));
       return;
     }
@@ -360,12 +360,12 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
       {bozzaMediaUploading ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Carico foto/video ({mediaFiles.length} file)…
+          Caricamento foto/video in corso ({mediaFiles.length} file)…
         </>
       ) : state.phase === 'creating' ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          Creo la commessa…
+          Creazione della commessa in corso…
         </>
       ) : (
         <>
@@ -394,7 +394,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             Dettato vocale
           </h1>
           <p className="text-sm text-muted-foreground">
-            Crea una commessa parlando. Il resto lo facciamo noi.
+            Creazione della commessa tramite dettatura. I dati vengono compilati automaticamente.
           </p>
         </div>
 
@@ -473,8 +473,8 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             >
               <p className="font-semibold">Sei offline</p>
               <p className="mt-0.5 text-xs leading-snug text-amber-800/90">
-                La dettatura con AI funziona solo con la connessione. Riprova
-                quando torni online: puoi uscire e rientrare più tardi.
+                La dettatura richiede la connessione. Riprovare al ripristino della
+                rete.
               </p>
             </div>
           ) : null}
@@ -486,7 +486,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             disabled={!online}
           />
           <p className="max-w-xs text-center text-sm text-muted-foreground">
-            Tap per iniziare. Parla con calma di{' '}
+            Toccare per avviare. Indicare con chiarezza{' '}
             <strong className="text-foreground">cliente</strong>,{' '}
             <strong className="text-foreground">lavoro</strong>,{' '}
             <strong className="text-foreground">indirizzo</strong> e{' '}
@@ -530,13 +530,13 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
           </div>
           <p className="text-center text-base font-medium">
             {state.phase === 'uploading'
-              ? 'Carico l’audio…'
+              ? 'Caricamento dell’audio in corso…'
               : state.phase === 'transcribing'
-                ? 'Trascrivo l’audio con AI…'
-                : 'Estraggo i campi con AI…'}
+                ? 'Trascrizione dell’audio in corso…'
+                : 'Estrazione dei campi in corso…'}
           </p>
           <p className="text-xs text-muted-foreground">
-            Tempo tipico: 3-8 secondi.
+            Durata indicativa: 3-8 secondi.
           </p>
         </section>
       ) : null}
@@ -570,7 +570,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
               fondo). Resta anche in fondo per chi scorre. */}
           {creaCommessaButton}
           <p className="-mt-1 text-center text-[11px] text-muted-foreground">
-            Aggiungi foto e controlla i dati qui sotto, poi crea.
+            Aggiungere foto e verificare i dati, quindi creare.
           </p>
 
           {/* Foto/video prima — l'utente le vede subito e le aggiunge prima di confermare */}
@@ -653,7 +653,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
             <div>
               <p className="font-semibold text-success">Commessa creata.</p>
               <p className="text-xs text-success/80">
-                Hai dettato tutto in pochi secondi.
+                Dettatura completata.
               </p>
             </div>
           </div>
@@ -680,7 +680,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
                 )}
                 {uploadResults.filter((r) => !r.ok).length > 0 && (
                   <span className="ml-2 text-destructive">
-                    {uploadResults.filter((r) => !r.ok).length} falliti, riprova dalla commessa
+                    {uploadResults.filter((r) => !r.ok).length} caricamenti non riusciti: ripetere dalla commessa
                   </span>
                 )}
               </p>
@@ -737,7 +737,7 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
               Suggerimenti
             </DialogTitle>
             <DialogDescription>
-              Come parlare per fare un dettato efficace.
+              Indicazioni per una dettatura efficace.
             </DialogDescription>
           </DialogHeader>
           <ul className="space-y-3 text-sm">
@@ -760,8 +760,8 @@ export function VoiceIntakeFlow({ voci, vociDefault, resumeBozzaId }: FlowProps)
               <p className="italic">&ldquo;{SUGGESTION_EXAMPLES[2]}&rdquo;</p>
             </li>
             <li className="text-xs text-muted-foreground">
-              Tip · Parla 30-90 secondi, frasi corte, dai dettagli chiari (via,
-              civico, città, numeri di telefono).
+              Suggerimento: 30-90 secondi, frasi brevi, dati completi (via, civico,
+              città, telefono).
             </li>
           </ul>
           <DialogFooter>

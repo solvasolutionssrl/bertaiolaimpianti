@@ -15,7 +15,7 @@ export const TIP = {
   // Azioni
   pubblica: 'Pubblica la settimana e avvisa i tecnici coinvolti',
   copiaPrecedente: 'Copia i blocchi della settimana precedente (come bozza)',
-  salvaBozza: 'La pianificazione si salva da sola: questo conferma il salvataggio',
+  salvaBozza: 'La pianificazione viene salvata automaticamente: il comando conferma il salvataggio',
   nuovoBlocco: 'Crea un nuovo blocco di pianificazione',
   esportaPdf: 'Esporta la settimana in PDF (sempre disponibile, anche in bozza)',
   altreAzioni: 'Altre azioni',

@@ -119,7 +119,7 @@ export default async function CategoriePage() {
         <p className="text-sm text-muted-foreground">
           Le voci con cui classificate i lavori.
           {sistema
-            ? ' Quelle che arrivano dal gestionale locale si agganciano a queste. Quello che non riconosciamo resta qui sotto e aspetta te.'
+            ? ' Le categorie del gestionale locale vengono associate a queste. Le voci non riconosciute restano in attesa di classificazione.'
             : null}
         </p>
       </header>

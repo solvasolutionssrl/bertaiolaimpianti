@@ -147,9 +147,9 @@ function TodoCard({ todo, isMine, readonly }: { todo: TodoMobileRow; isMine: boo
    */
   const complete = async () => {
     const ok = await chiediConferma({
-      title: 'Segnare come fatta?',
-      description: `"${todo.titolo}"\n\nPassa fra le cose fatte. Si puo' riaprire dall'ufficio.`,
-      confirmLabel: 'Sì, è fatta',
+      title: 'Confermare il completamento?',
+      description: `"${todo.titolo}"\n\nL'attività risulterà completata. Riapertura possibile dall'ufficio.`,
+      confirmLabel: 'Conferma',
     });
     if (!ok) return;
     setPending(true);

@@ -71,7 +71,7 @@ function AnteprimaRicevuta({ spesaId }: { spesaId: string }) {
       {stato === 'attesa' ? (
         <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-          <span className="text-xs">Carico la ricevuta…</span>
+          <span className="text-xs">Caricamento della ricevuta…</span>
         </span>
       ) : null}
 
@@ -79,7 +79,7 @@ function AnteprimaRicevuta({ spesaId }: { spesaId: string }) {
         <span className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
           <ImageOff className="h-7 w-7" aria-hidden="true" />
           <span className="text-xs">
-            Anteprima non disponibile. Il file c&apos;è: aprilo qui sotto.
+            Anteprima non disponibile. Il file è presente e si apre qui sotto.
           </span>
         </span>
       ) : (

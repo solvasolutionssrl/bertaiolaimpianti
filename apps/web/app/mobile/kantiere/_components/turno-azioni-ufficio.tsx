@@ -90,7 +90,7 @@ function messaggioErrore(code: string): string {
     case 'NESSUN_TURNO_APERTO':
       return 'Nessuna giornata aperta.';
     case 'RIPRENDI_PRIMA':
-      return 'Sei in pausa: riprendi prima di chiudere.';
+      return 'Turno in pausa: riprenderlo prima di chiudere.';
     case 'AZIONE_NON_VALIDA':
       return 'La giornata è cambiata nel frattempo. Ricarica e riprova.';
     default:
@@ -271,7 +271,7 @@ export function TurnoAzioniUfficio({
                   className="flex items-center justify-center gap-1.5 text-center text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
                   <Route className="h-3.5 w-3.5" aria-hidden="true" />
-                  Oggi ho fatto un viaggio
+                  Registra un viaggio di oggi
                 </button>
                 <button
                   type="button"
@@ -279,7 +279,7 @@ export function TurnoAzioniUfficio({
                   disabled={pending}
                   className="text-center text-xs font-medium text-muted-foreground hover:text-foreground"
                 >
-                  Sono uscito prima? Cambia l&apos;ora
+                  Modifica l&apos;ora di fine
                 </button>
               </div>
             ) : (

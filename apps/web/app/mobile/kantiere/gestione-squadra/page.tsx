@@ -99,8 +99,8 @@ export default async function GestioneSquadraPage() {
           Gestione squadra
         </h1>
         <p className="mt-1 text-xs text-muted-foreground">
-          Stato dei tuoi ragazzi e timbrature per conto loro (ingresso, pausa pranzo, fine turno).
-          Possono comunque timbrare anche da soli con il QR.
+          Stato dei membri della squadra e timbrature per loro conto (ingresso, pausa pranzo, fine turno).
+          I membri possono timbrare anche autonomamente con il QR.
         </p>
       </header>
 

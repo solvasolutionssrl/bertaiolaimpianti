@@ -56,7 +56,7 @@ export function SincGestionale({
   if (!collegato) {
     return (
       <span
-        title="Non è collegato al gestionale locale: i dati di questo lavoro non escono da qui."
+        title="Non collegato al gestionale locale: i dati non vengono trasmessi."
         className={cn(
           'inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground',
           className,
@@ -149,7 +149,7 @@ export function RegistratoSulGestionale({
     const motivo = fallite[0]?.errore?.slice(0, 200);
     return (
       <span
-        title={`Ho provato a mandarla sul gestionale locale e non ci sono riuscito.${motivo ? ` Motivo: ${motivo}` : ''}`}
+        title={`Trasmissione al gestionale locale non riuscita.${motivo ? ` Motivo: ${motivo}` : ''}`}
         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
       >
         <AlertTriangle className="h-3 w-3" aria-hidden="true" />

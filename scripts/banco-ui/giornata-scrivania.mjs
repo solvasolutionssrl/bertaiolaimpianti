@@ -17,7 +17,7 @@ const apriMenu = async (cdp) => { await clicVero(cdp, PILLOLA); await finoA(cdp,
 const bottone = (re) => `[...document.querySelectorAll('[role=menu] button, [role=dialog] button')].find((b) => new RegExp(${JSON.stringify(re)}).test(b.textContent.trim()))`;
 const sceltaCantiere = async (cdp, nome) => {
   // In sede il cantiere e' facoltativo: la tendina dice «Nessuno: lo dici a fine giornata».
-  await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button')].find((b) => /Cantiere…|Nessuno: lo dici/.test(b.textContent))`);
+  await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button')].find((b) => /Cantiere…|Nessuno: da indicare/.test(b.textContent))`);
   await pausa(500);
   await clicVero(cdp, `[...document.querySelectorAll('[role=option], [data-popover-portale] button')].find((b) => new RegExp(${JSON.stringify(nome)}).test(b.textContent))`);
   await pausa(400);

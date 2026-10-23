@@ -26,17 +26,17 @@ import { IniziaSenzaCantiere } from './presenza-sede';
 function messaggioErrore(code: string): string {
   switch (code) {
     case 'TURNO_GIA_APERTO':
-      return 'Hai già un turno aperto. Chiudilo o cambia cantiere.';
+      return 'Risulta un turno già aperto: chiuderlo oppure cambiare cantiere.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
     case 'CANTIERE_CHIUSO':
-      return 'Questo cantiere è chiuso: non si timbra più. Se ci hai lavorato, dillo all’ufficio.';
+      return 'Il cantiere è chiuso e non accetta timbrature. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'SEDE_NON_VALIDA':
       return 'Sede di partenza non valida. Riprova.';
     case 'SEDE_PREDEFINITA_MANCANTE':
       return 'Nessuna sede predefinita impostata: l’ufficio la indica in Impostazioni → Sedi.';
     case 'GIUSTIFICAZIONE_RICHIESTA':
-      return 'Hai modificato la stima: inserisci una giustificazione.';
+      return 'Stima modificata: indicare la motivazione.';
     case 'MEZZO_NON_VALIDA':
     case 'MEZZO_NON_VALIDO':
       return 'Mezzo non valido. Riprova.';
@@ -45,7 +45,7 @@ function messaggioErrore(code: string): string {
     case 'MODULO_OFF':
       return 'Il modulo Kantiere non è abilitato.';
     case 'NON_AUTENTICATO':
-      return 'Devi accedere per avviare un turno.';
+      return 'Accesso necessario per avviare un turno.';
     default:
       return 'Avvio non riuscito. Riprova.';
   }

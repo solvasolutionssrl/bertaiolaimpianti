@@ -161,8 +161,7 @@ export default async function RegistroModifichePage({ searchParams }: PageProps)
           Registro modifiche
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Chi ha fatto cosa, e quando. Il registro non si corregge: le voci restano come sono
-          state scritte.
+          Operazioni con autore e data. Il registro non è modificabile.
         </p>
       </header>
 

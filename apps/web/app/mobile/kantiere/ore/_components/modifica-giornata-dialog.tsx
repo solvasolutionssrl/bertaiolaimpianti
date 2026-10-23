@@ -506,11 +506,11 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
                   <p className="text-xs font-medium text-amber-900">
                     Pausa già registrata
                     {pausaMinutiEsistente ? ` di ${pausaMinutiEsistente} min` : ''}.
-                    {giornataChiusa ? ' Puoi modificarla qui sotto.' : ''}
+                    {giornataChiusa ? ' La modifica è disponibile di seguito.' : ''}
                   </p>
                 ) : giornataChiusa ? (
                   <p className="text-xs text-amber-800/90">
-                    Nessuna pausa registrata. Aggiungila se hai fatto la pausa pranzo.
+                    Nessuna pausa registrata. Aggiungerla se la pausa pranzo è stata effettuata.
                   </p>
                 ) : (
                   <p className="text-xs text-amber-800/90">
@@ -539,7 +539,7 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
               {/* Nota informativa */}
               <p className="flex items-start gap-1.5 rounded-md border border-blue-500/25 bg-blue-500/5 px-3 py-2 text-[11px] text-blue-700">
                 <Info className="mt-px h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-                La modifica avvisa l&apos;ufficio.
+                La modifica viene notificata all&apos;ufficio.
               </p>
 
               {errore && (

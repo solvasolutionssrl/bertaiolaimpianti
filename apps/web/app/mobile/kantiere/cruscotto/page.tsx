@@ -427,7 +427,7 @@ export default async function CruscottoKantierePage({
             <span className="text-[11px] text-emerald-600">Oggi · in tempo reale</span>
           ) : (
             <Link href="/mobile/kantiere/cruscotto" className="text-[11px] font-medium text-primary">
-              Torna a oggi
+              Torna alla pagina iniziale
             </Link>
           )}
         </div>
@@ -488,7 +488,7 @@ export default async function CruscottoKantierePage({
             className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-center text-sm font-semibold shadow-soft transition-transform active:scale-[0.99]"
           >
             <Receipt className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Le mie spese
+            Spese
           </Link>
         </div>
       ) : null}

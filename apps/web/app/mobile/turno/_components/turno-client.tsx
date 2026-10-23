@@ -70,14 +70,14 @@ export function TurnoClient({ aperto, commesse }: Props) {
             Nessun turno in corso
           </h2>
           <p className="text-sm text-muted-foreground">
-            Seleziona la commessa e avvia il cronometro.
+            Selezionare la commessa e avviare il conteggio.
           </p>
         </div>
 
         {commesse.length === 0 ? (
           <p className="rounded-md border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
-            Nessuna commessa attiva assegnata. Chiedi al capo di assegnartene
-            una.
+            Nessuna commessa attiva assegnata. Richiedere l&apos;assegnazione al
+            responsabile.
           </p>
         ) : (
           <div className="space-y-2">

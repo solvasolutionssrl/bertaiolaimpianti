@@ -521,11 +521,11 @@ export function CreaRiunioneDialog({
 
               {recording ? (
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  Parla pure: quando hai finito premi «Ferma», l&apos;AI trascrive e compila i campi.
+                  Al termine della registrazione premere «Ferma»: l&apos;AI trascrive e compila i campi.
                 </p>
               ) : !transcribing ? (
                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
-                  Racconta la riunione a voce: l&apos;AI la trascrive e prepara reportino e cose da fare.
+                  Registrare la riunione a voce: l&apos;AI produce trascrizione, report e attività.
                 </p>
               ) : null}
 
@@ -534,7 +534,7 @@ export function CreaRiunioneDialog({
                   value={corpoLibero}
                   onChange={(e) => setCorpoLibero(e.target.value)}
                   rows={5}
-                  placeholder="Punti discussi, decisioni, cose da fare…"
+                  placeholder="Punti discussi, decisioni, attività da svolgere…"
                   className="w-full resize-y rounded-md border border-border bg-background px-3 py-2 text-sm leading-relaxed placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-ring"
                 />
                 {corpoLibero.length > 0 ? (

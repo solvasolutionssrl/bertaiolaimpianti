@@ -114,7 +114,7 @@ export default async function DipendentiPage() {
         <p className="text-sm text-muted-foreground">
           {mondoPresenze
             ? 'Anagrafica del personale, accessi all’app e turni.'
-            : 'Chi lavora in azienda, con che accesso entra nell’app, e cosa ha fatto.'}
+            : 'Personale aziendale, accessi all’applicazione e attività svolte.'}
         </p>
       </header>
       {/* Il raffronto col gestionale compare solo a chi ha l'integrazione. */}

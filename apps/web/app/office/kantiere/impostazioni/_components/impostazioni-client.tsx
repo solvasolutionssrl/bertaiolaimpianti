@@ -773,13 +773,13 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
               <SezioneHeader
                 icon={Clock}
                 title="Promemoria ore"
-                description="Per chi timbra al terminale e non ha ancora detto su quali commesse ha lavorato. Vale solo con la timbratrice collegata."
+                description="Per il personale che timbra al terminale e non ha ancora ripartito le ore sulle commesse. Disponibile solo con la timbratrice collegata."
               />
               <Campo
                 id="promemoria-attivo"
                 etichetta="Promemoria sul telefono"
                 predefinito="attivo"
-                descrizione="Attivo: la sera arriva un avviso a chi ha timbrato e non ha ripartito la giornata, e la mattina dopo un altro se ancora manca. Chi lo spegne dalle proprie notifiche non lo riceve."
+                descrizione="Attivo: la sera viene inviato un avviso a chi ha timbrato senza ripartire la giornata, e un secondo la mattina successiva se la ripartizione manca ancora. Non viene inviato a chi lo ha disattivato nelle proprie notifiche."
               >
                 <Interruttore
                   id="promemoria-attivo"

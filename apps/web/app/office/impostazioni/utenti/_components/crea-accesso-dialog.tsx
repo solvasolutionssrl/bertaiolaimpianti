@@ -133,7 +133,7 @@ export function CreaAccessoDialog({
           acceso: true,
         });
         if (!p.ok) {
-          setMessaggio(`Account creato, ma il potere di capo squadra no: ${p.error}`);
+          setMessaggio(`Account creato. Assegnazione della funzione di capo squadra non riuscita: ${p.error}`);
         }
       }
       setFatto(r.data);
@@ -148,8 +148,8 @@ export function CreaAccessoDialog({
           <DialogHeader>
             <DialogTitle>Accesso creato</DialogTitle>
             <DialogDescription>
-              Dettali adesso alla persona. La password non si rivede più: al primo
-              accesso l&apos;app le chiederà di scegliersene una sua.
+              Comunicare subito le credenziali: la password non sarà più visibile.
+              Al primo accesso verrà richiesto di impostarne una nuova.
             </DialogDescription>
           </DialogHeader>
 
@@ -207,7 +207,7 @@ export function CreaAccessoDialog({
     <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : chiudi())}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Far entrare una persona</DialogTitle>
+          <DialogTitle>Nuovo accesso</DialogTitle>
         </DialogHeader>
 
         {/* La scelta della strada, prima di tutto il resto. */}
@@ -267,8 +267,8 @@ export function CreaAccessoDialog({
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                È quello che la persona batte per entrare. La password la genera
-                il sistema e si vede una volta sola.
+                È il nome utente per l’accesso. La password è generata dal sistema
+                ed è visibile una sola volta.
               </p>
             </div>
           ) : (
@@ -284,8 +284,8 @@ export function CreaAccessoDialog({
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
-                Riceve un messaggio con cui scegliersi la password. Serve una
-                casella che funzioni davvero.
+                Riceve un messaggio per impostare la password. È necessario un
+                indirizzo email attivo.
               </p>
             </div>
           )}

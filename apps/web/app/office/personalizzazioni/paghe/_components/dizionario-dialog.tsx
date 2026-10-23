@@ -200,8 +200,8 @@ export function DizionarioDialog({
         {scheda === 'file' ? (
           <div className="min-w-0 space-y-4">
             <p className="text-[13px] leading-snug text-muted-foreground">
-              Come si presenta il file allo Studio. Sono due dati soli, ma senza il primo il file
-              non si genera.
+              Intestazione del file per lo Studio. Due campi: senza il primo il file non viene
+              generato.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -216,7 +216,7 @@ export function DizionarioDialog({
                   className="mt-1 h-9 bg-background font-mono shadow-none"
                 />
                 <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                  Va scritto come lo ha dato il consulente, gruppo compreso.
+                  Da inserire come indicato dal consulente, gruppo compreso.
                 </p>
               </div>
               <div>
@@ -231,14 +231,14 @@ export function DizionarioDialog({
                   className="mt-1 h-9 bg-background shadow-none"
                 />
                 <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                  Compare nell'intestazione del file. Si cambia solo se lo chiede lo Studio.
+                  Compare nell'intestazione del file. Da modificare solo su richiesta dello Studio.
                 </p>
               </div>
             </div>
             {!ditta.trim() ? (
               <p className="rounded-md border border-amber-200 bg-amber-50 p-2.5 text-[12px] leading-snug text-amber-800">
-                Finche' il codice ditta e' vuoto il file non si puo' generare: un file consegnato
-                sulla ditta sbagliata sarebbe peggio di un file mancante.
+                Senza codice ditta il file non può essere generato: non è ammessa la trasmissione
+                su una ditta errata.
               </p>
             ) : null}
             <div className="flex justify-end">
@@ -253,9 +253,9 @@ export function DizionarioDialog({
         {scheda === 'corrispondenze' ? (
           <div className="min-w-0">
             <p className="mb-2 text-[13px] leading-snug text-muted-foreground">
-              Con quale causale si comunica ogni tipo di assenza di Kommessa. Quelle lasciate da
-              decidere non sono una dimenticanza: il programma paghe ha piu' voci vicine e la
-              scelta va fatta con il consulente.
+              Con quale causale si comunica ogni tipo di assenza di Kommessa. Le voci non
+              assegnate restano in attesa: il programma paghe prevede causali simili e la scelta
+              va concordata con il consulente.
             </p>
             <div className="max-h-[52vh] overflow-y-auto rounded-md border border-border">
               <table className="w-full table-fixed border-collapse text-sm">
@@ -274,7 +274,7 @@ export function DizionarioDialog({
                           </span>
                           {manca ? (
                             <span className="text-[11px] text-amber-700">
-                              usata questo mese, serve una scelta
+                              usata nel mese: causale da definire
                             </span>
                           ) : null}
                         </td>
@@ -295,7 +295,7 @@ export function DizionarioDialog({
               </table>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Il permesso 104 cambia voce da solo a seconda che sia a giornate o a ore.
+              Il permesso 104 usa automaticamente la causale a giornate o a ore.
             </p>
           </div>
         ) : null}
@@ -339,7 +339,7 @@ export function DizionarioDialog({
                           </span>
                           {mia ? (
                             <span className="text-[10px] uppercase tracking-wide text-emerald-700">
-                              aggiunta da voi
+                              aggiunta dall'azienda
                             </span>
                           ) : null}
                         </td>
@@ -381,7 +381,7 @@ export function DizionarioDialog({
                 />
                 <Input
                   value={nuovo.descrizione}
-                  placeholder="Che cosa vuol dire"
+                  placeholder="Descrizione della causale"
                   onChange={(e) => setNuovo({ ...nuovo, descrizione: e.target.value })}
                   className="h-9 bg-background shadow-none"
                 />
@@ -417,8 +417,8 @@ export function DizionarioDialog({
                 </Button>
               </div>
               <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-                Serve solo se il consulente apre una voce che nella tabella non c'e'. Le 233
-                causali dello Studio ci sono gia' tutte.
+                Da usare solo se il consulente introduce una causale non presente in tabella. Le
+                233 causali dello Studio sono già incluse.
               </p>
             </div>
           </div>
@@ -475,8 +475,8 @@ export function DizionarioDialog({
                 <option value="30">Alla mezz'ora</option>
               </select>
               <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
-                Si applica al totale del giorno, non alla singola timbratura. Cambia quello che
-                viene pagato: decidilo con il consulente.
+                Si applica al totale giornaliero, non alla singola timbratura. Incide sugli
+                importi retribuiti: concordare il valore con il consulente.
               </p>
             </div>
 

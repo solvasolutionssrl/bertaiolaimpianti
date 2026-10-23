@@ -109,11 +109,11 @@ function messaggioErrore(code: string): string {
     case 'MODULO_OFF':
       return 'Il modulo Kantiere non è abilitato per questo spazio.';
     case 'CANTIERE_CHIUSO':
-      return 'Questo cantiere è chiuso: non si timbra più. Se ci hai lavorato, dillo all’ufficio.';
+      return 'Il cantiere è chiuso e non accetta timbrature. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'QR_NON_VALIDO':
       return 'QR non valido o revocato.';
     case 'QR_ALTRO_TENANT':
-      return 'Questo QR appartiene a un altro spazio.';
+      return 'Il QR appartiene a un altro spazio di lavoro.';
     case 'NESSUN_DIPENDENTE':
       return 'Nessun profilo dipendente collegato a questo account.';
     case 'NON_CAPO':
@@ -121,7 +121,7 @@ function messaggioErrore(code: string): string {
     case 'NON_AUTORIZZATO':
       return 'Non sei autorizzato a timbrare per questo dipendente.';
     case 'GIUSTIFICAZIONE_RICHIESTA':
-      return 'Hai modificato la stima: inserisci una giustificazione.';
+      return 'Stima modificata: indicare la motivazione.';
     case 'AZIONE_NON_VALIDA':
       return 'Il turno è cambiato nel frattempo. Ricarica la pagina e riprova.';
     default:
@@ -229,14 +229,14 @@ function ContenutoOk({ testo, ts }: { testo: string; ts: string }) {
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3 text-base font-semibold text-white shadow-soft transition-all hover:bg-emerald-700 active:scale-[0.99]"
       >
         <Home className="h-5 w-5" strokeWidth={2} />
-        Vai alla home
+        Vai alla pagina iniziale
       </button>
       <p className="text-xs text-muted-foreground">Torni alla home tra {sec}s…</p>
       <Link
         href="/mobile/kantiere/ore"
         className="inline-flex items-center justify-center gap-1 text-xs font-medium text-emerald-700 underline-offset-2 hover:underline"
       >
-        Le mie ore di oggi
+        Ore della giornata
       </Link>
     </div>
   );
@@ -340,7 +340,7 @@ function TimbraConViaggio({
         return;
       }
       if (giustObbligatoria && giustificazione.trim().length < 3) {
-        setErrLocale('Hai modificato la stima: scrivi una breve giustificazione.');
+        setErrLocale('Stima modificata: indicare la motivazione.');
         return;
       }
     }
@@ -376,7 +376,7 @@ function TimbraConViaggio({
           <div className="space-y-2">
             <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
               <MapPin className="h-4 w-4 text-primary" strokeWidth={1.75} />
-              {azione === 'inizio' ? 'Da dove sei partito?' : 'Dove vai adesso?'}
+              {azione === 'inizio' ? 'Luogo di partenza' : 'Destinazione'}
             </p>
             <div className="grid gap-2">
               {viaggio.sedi.map((s) => (
@@ -446,7 +446,7 @@ function TimbraConViaggio({
             {giustObbligatoria && (
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">
-                  Hai modificato la stima. Motivo (es. traffico):
+                  Stima modificata. Motivazione (esempio: traffico):
                 </label>
                 <input
                   type="text"
@@ -469,9 +469,7 @@ function TimbraConViaggio({
               />
               <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                 <Car className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
-                {azione === 'inizio'
-                  ? "Ero io l'autista del mezzo"
-                  : "Sarò io l'autista del mezzo"}
+                Conducente del mezzo
               </span>
             </label>
             {autista && (
@@ -491,7 +489,7 @@ function TimbraConViaggio({
             )}
             {autista && viaggio.mezzi.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Nessun mezzo configurato. L&apos;ufficio può aggiungerli nel parco mezzi.
+                Nessun mezzo configurato: l&apos;inserimento è a cura dell&apos;ufficio.
               </p>
             )}
           </div>
@@ -506,9 +504,8 @@ function TimbraConViaggio({
             Pausa pranzo non rilevata
           </p>
           <p className="text-[13px] leading-snug text-amber-800">
-            Hai lavorato {formatDurata(pausaPrompt.durataMin)} senza timbrare una
-            pausa. Ricorda: <strong>timbrare la pausa è il modo corretto</strong> —
-            questa è solo una correzione.
+            Risultano {formatDurata(pausaPrompt.durataMin)} di lavoro senza pausa
+            timbrata. <strong>La pausa va timbrata</strong>: questa è una rettifica.
           </p>
           <label className="flex cursor-pointer items-center gap-2 select-none">
             <input
@@ -518,7 +515,7 @@ function TimbraConViaggio({
               className="h-4 w-4 rounded border-amber-400 accent-amber-600"
             />
             <span className="text-sm font-medium text-amber-900">
-              Ho fatto la pausa pranzo
+              Pausa pranzo effettuata
             </span>
           </label>
           {pausaFatta ? <SceltaPausaPranzo valore={pausaMin} onChange={setPausaMin} /> : null}
@@ -771,7 +768,7 @@ export function TimbraClient({
       {capo && membri.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            La mia squadra
+            Squadra assegnata
           </p>
           <div className="space-y-2">
             {membri.map((m) => (

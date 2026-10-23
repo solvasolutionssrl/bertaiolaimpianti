@@ -48,7 +48,7 @@ export default async function MobileTurnoPage() {
     return (
       <NonAbilitato
         titolo="Funzione non abilitata"
-        spiegazione="La gestione del turno non è accesa per la vostra azienda. Se vi serve, l’ufficio la può accendere dalle impostazioni."
+        spiegazione="La gestione del turno non è attiva per l’azienda. L’attivazione può essere richiesta all’ufficio."
       />
     );
   }
@@ -164,7 +164,7 @@ export default async function MobileTurnoPage() {
           Time tracking
         </p>
         <h1 className="mt-1 text-xl font-semibold tracking-tight">
-          Il mio turno
+          Turno
         </h1>
       </header>
 

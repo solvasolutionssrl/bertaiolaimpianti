@@ -65,7 +65,7 @@ export default async function ClientiPage({
           title={searchParams.q ? 'Nessun cliente trovato' : 'Anagrafica clienti vuota'}
           description={
             searchParams.q
-              ? `Nessun risultato per "${searchParams.q}". Prova un altro termine.`
+              ? `Nessun risultato per «${searchParams.q}». Modificare i termini di ricerca.`
               : 'Aggiungi il primo cliente per cominciare a creare commesse e ticket.'
           }
           action={

@@ -283,8 +283,8 @@ export function MediaAttachSection({
             <span>
               <strong>Il telefono sta preparando i file.</strong> Prima di
               consegnarli li converte (i video soprattutto): può volerci
-              qualche decina di secondi. Il caricamento parte da solo appena
-              finisce.
+              qualche decina di secondi. Il caricamento si avvia automaticamente
+              appena finisce.
             </span>
           </div>
         ) : null}
@@ -584,7 +584,7 @@ export function MediaAttachSection({
             <span>
               Video grande (&gt;{warnVideoMb} MB) — il caricamento richiede qualche minuto su rete mobile.
               Per file più leggeri: <strong>Impostazioni iPhone → Fotocamera → Formato → Alta efficienza</strong> (H.265 dimezza la dimensione senza perdita visibile).
-              Puoi continuare a lavorare o chiudere l&apos;app: il caricamento riprende da solo.
+              È possibile proseguire o chiudere l&apos;applicazione: il caricamento riprende automaticamente.
             </span>
           </div>
         )}
@@ -646,7 +646,7 @@ export function MediaAttachSection({
               onClick={() => setSkipOpen(true)}
               className="underline-offset-2 hover:text-foreground hover:underline"
             >
-              Salta per ora
+              Salta questo passaggio
             </button>
           ) : null}
         </div>

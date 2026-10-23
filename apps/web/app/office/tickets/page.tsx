@@ -145,7 +145,7 @@ export default async function TicketsPage({
           title={hasFilters ? 'Nessun ticket con questi filtri' : 'Nessun ticket aperto'}
           description={
             hasFilters
-              ? 'Allenta i filtri per vedere tutti i ticket o crea un nuovo ticket manuale.'
+              ? 'Ampliare i filtri o creare un nuovo ticket.'
               : 'I ticket arriveranno da email, portale cliente o creazione manuale.'
           }
           action={

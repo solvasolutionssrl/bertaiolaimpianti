@@ -466,16 +466,16 @@ function SpuntaRichiesta({ id, titolo }: { id: string; titolo: string }) {
 
   const spunta = async () => {
     const ok = await chiediConferma({
-      title: 'Segnare come fatta?',
-      description: `"${titolo}"\n\nL'ufficio la vede chiusa. Si puo' riaprire da li'.`,
-      confirmLabel: 'Sì, è fatta',
+      title: 'Confermare il completamento?',
+      description: `"${titolo}"\n\nL'attività risulterà completata. Riapertura possibile dall'ufficio.`,
+      confirmLabel: 'Conferma',
     });
     if (!ok) return;
     setInCorso(true);
     const res = await cambiaTodoStato({ id, stato: 'completato' });
     setInCorso(false);
     if (!res.ok) {
-      await mostraAvviso({ title: 'Non sono riuscito a chiuderla', body: res.error });
+      await mostraAvviso({ title: 'Chiusura non completata', body: res.error });
       return;
     }
     router.refresh();

@@ -145,7 +145,7 @@ export function VoiceNoteCapture({ commessaId }: VoiceNoteCaptureProps) {
           <div>
             <p className="text-sm font-semibold">Aggiungi nota vocale</p>
             <p className="text-xs text-muted-foreground">
-              Parla la nota: la trascriviamo e la salviamo nella commessa.
+              Registrare la nota a voce: verrà trascritta e salvata nella commessa.
             </p>
           </div>
         </div>

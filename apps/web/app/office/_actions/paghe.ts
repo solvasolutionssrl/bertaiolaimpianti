@@ -324,7 +324,7 @@ export async function eliminaCausalePersonalizzata(codice: string): Promise<Esit
   if (inUso.includes(parsed.data)) {
     return {
       ok: false,
-      error: `La causale ${parsed.data} e' ancora usata in una corrispondenza: cambiala prima di toglierla.`,
+      error: `La causale ${parsed.data} è ancora usata in una corrispondenza: modificarla prima della rimozione.`,
     };
   }
 
@@ -385,7 +385,7 @@ export async function salvaEventoPaghe(input: z.input<typeof EventoSchema>): Pro
 
   const mese = estremiDelMese(d.periodo);
   if (d.dal < mese.dal || d.al > mese.al) {
-    return { ok: false, error: 'Le date devono stare dentro il mese che stai preparando.' };
+    return { ok: false, error: 'Le date devono essere comprese nel mese in preparazione.' };
   }
 
   const ctx = await contesto();
@@ -457,7 +457,7 @@ export async function salvaEventoPaghe(input: z.input<typeof EventoSchema>): Pro
     return {
       ok: false,
       error:
-        'Nel periodo scelto non ci sono giorni lavorativi. Togli la spunta se vuoi comunicare anche sabati, domeniche e festivi.',
+        'Nel periodo selezionato non ci sono giorni lavorativi. Disattivare l’opzione per comunicare anche sabati, domeniche e festivi.',
     };
   }
 

@@ -562,8 +562,8 @@ function Step2Capture({
     <section className="space-y-4">
       <h2 className="text-base font-semibold">2 · Descrizione vocale</h2>
       <p className="text-sm text-muted-foreground">
-        Parla per 30–60 secondi: tipo di lavoro, stato dell&apos;impianto, note urgenti.
-        L&apos;AI pre-compila i prossimi step.
+        Registrare 30-60 secondi indicando tipo di lavoro, stato dell&apos;impianto e note
+        urgenti. I passaggi successivi vengono precompilati.
       </p>
 
       {/* Registratore inline — primario */}
@@ -577,7 +577,7 @@ function Step2Capture({
           {voicePending !== 'idle' ? (
             <div className="mt-3 flex items-center justify-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              {voicePending === 'transcribing' ? 'Trascrivo l’audio…' : 'Estraggo i campi…'}
+              {voicePending === 'transcribing' ? 'Trascrizione dell’audio in corso…' : 'Estrazione dei campi in corso…'}
             </div>
           ) : null}
           {voiceError ? (
@@ -586,7 +586,7 @@ function Step2Capture({
             </p>
           ) : null}
           <p className="mt-3 text-center text-xs text-muted-foreground">
-            Puoi anche saltare questo step e compilare i campi manualmente.
+            È possibile saltare questo passaggio e compilare i campi manualmente.
           </p>
         </div>
       ) : (
@@ -615,7 +615,7 @@ function Step2Capture({
       {/* Hint a cambio modalità — in basso, non in evidenza */}
       <div className="mt-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
         <p className="text-xs text-muted-foreground">
-          Preferisci creare la commessa con un unico dettato completo?{' '}
+          Per creare la commessa con un unico dettato:{' '}
           <a
             href="/mobile/voice-intake"
             className="font-medium text-primary underline-offset-2 hover:underline"
@@ -819,7 +819,7 @@ function Step3Voci({
         {search ? (
           <p className="mt-1 text-[10px] text-muted-foreground">
             {matchCount === 0
-              ? 'Nessuna voce — prova "Nuova voce" qui sopra.'
+              ? 'Nessuna voce. Usare «Nuova voce».'
               : `${matchCount} risultat${matchCount === 1 ? 'o' : 'i'}`}
           </p>
         ) : (
@@ -979,8 +979,8 @@ function NuovaVoceMobileDialog({
           <div className="min-w-0">
             <h3 className="text-base font-semibold">Nuova voce custom</h3>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Prima di aggiungere, cerca: probabilmente esiste già con un
-              nome simile. Niente doppioni.
+              Prima di aggiungere, verificare che non esista già una voce con
+              nome simile.
             </p>
           </div>
           <button
@@ -1055,8 +1055,8 @@ function NuovaVoceMobileDialog({
                 ))}
               </ul>
               <p className="mt-1 text-[10px] text-amber-900/70 dark:text-amber-200/70">
-                Se è davvero diversa, conferma. Altrimenti seleziona quella
-                già esistente dall&apos;elenco.
+                Se la voce è effettivamente diversa, confermare; altrimenti
+                selezionare quella esistente.
               </p>
             </div>
           ) : null}
@@ -1085,7 +1085,7 @@ function NuovaVoceMobileDialog({
               disabled={pending}
               onClick={() => submit(true)}
             >
-              {pending ? 'Creo…' : 'Crea comunque'}
+              {pending ? 'Creazione in corso…' : 'Crea comunque'}
             </Button>
           ) : (
             <Button
@@ -1207,7 +1207,7 @@ function Step5Nome({
         ) : (
           <Sparkles className="h-4 w-4" aria-hidden="true" />
         )}
-        {aiPending ? 'Genero proposta…' : 'Rigenera proposta'}
+        {aiPending ? 'Generazione della proposta in corso…' : 'Rigenera proposta'}
       </Button>
 
       <div className="rounded-md border bg-muted/30 p-3 text-xs">
@@ -1243,7 +1243,7 @@ function Step6Media({
         <h2 className="text-base font-semibold">6 · Foto/video sopralluogo</h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Documenta lo stato iniziale del cantiere — opzionale, puoi aggiungere altro in seguito.
+        Documentazione dello stato iniziale del cantiere (facoltativa): è possibile aggiungere materiale in seguito.
       </p>
       <MediaAttachSection files={mediaFiles} onChange={onChange} />
     </section>
@@ -1294,7 +1294,7 @@ function Step7Conferma({
         {busy ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Creo la commessa…
+            Creazione della commessa in corso…
           </>
         ) : (
           <>
@@ -1344,8 +1344,8 @@ function Step8Success({
         </p>
         {mediaCount > 0 ? (
           <p className="border-t border-border pt-2 text-xs text-muted-foreground">
-            {mediaCount} file in caricamento. Puoi chiudere l&apos;app: riprendono
-            da soli alla riapertura.
+            {mediaCount} file in caricamento. È possibile chiudere l&apos;applicazione: il
+            trasferimento riprende alla riapertura.
           </p>
         ) : null}
         <p className="pt-1">

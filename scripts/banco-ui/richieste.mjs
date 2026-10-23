@@ -666,7 +666,7 @@ try {
   await attendi(900);
   const avviso = await valuta(cdp, `(() => {
     const righe = [...document.querySelectorAll('button')]
-      .filter(b => /affidat/i.test(b.textContent || ''));
+      .filter(b => /assegnat/i.test(b.textContent || ''));
     if (righe.length === 0) return { trovato: false };
     const t = (righe[0].textContent || '').split(/[\\s]+/).join(' ');
     return { trovato: true, testo: t.slice(0, 150) };
@@ -683,9 +683,9 @@ try {
   }
 
   // Il tasto deve portare sulla scheda, non in un elenco di venti righe.
-  await clicVero(cdp, `[...document.querySelectorAll('button')].find(b => /affidat/i.test(b.textContent || ''))`, { attesaMs: 900 });
+  await clicVero(cdp, `[...document.querySelectorAll('button')].find(b => /assegnat/i.test(b.textContent || ''))`, { attesaMs: 900 });
   const vai = await valuta(cdp, `(() => {
-    const b = [...document.querySelectorAll('button')].find(x => /apri la richiesta|vedi cosa fare|apri la commessa/i.test(x.textContent || ''));
+    const b = [...document.querySelectorAll('button')].find(x => /apri la richiesta|vedi cosa fare|apri le attività|apri la commessa/i.test(x.textContent || ''));
     return b ? b.textContent.trim() : null;
   })()`);
   esito(vai === 'Apri la richiesta', '⭐ il tasto dice dove porta', vai ?? 'nessun tasto');
@@ -719,8 +719,8 @@ try {
       const d = document.querySelector('[role=dialog], [role=alertdialog]');
       return d ? (d.textContent || '').split(/[\\s]+/).join(' ').trim().slice(0, 70) : null;
     })()`);
-    esito(Boolean(domanda) && /fatta/i.test(domanda), 'e chiede conferma anche qui', domanda ?? 'NESSUNA DOMANDA');
-    await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button, [role=alertdialog] button')].find(b => /è fatta/i.test(b.textContent))`, { attesaMs: 1500 });
+    esito(Boolean(domanda) && /completamento/i.test(domanda), 'e chiede conferma anche qui', domanda ?? 'NESSUNA DOMANDA');
+    await clicVero(cdp, `[...document.querySelectorAll('[role=dialog] button, [role=alertdialog] button')].find(b => /^Conferma$/.test(b.textContent.trim()))`, { attesaMs: 1500 });
     // ⚠️ Si guarda l'ELENCO, non tutta la pagina: il titolo resta nel dialog
     // di conferma finche' quello e' a schermo, e il banco dichiarava fallita
     // una chiusura riuscita. E' la seconda volta oggi.

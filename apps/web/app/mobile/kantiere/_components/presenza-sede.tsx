@@ -26,7 +26,7 @@ import { oraMostrata } from '@kommessa/api/ora-mostrata';
 export function messaggioPresenza(code: string): string {
   switch (code) {
     case 'TURNO_GIA_APERTO':
-      return 'Hai già una giornata aperta. Chiudila prima di iniziarne un’altra.';
+      return 'Risulta una giornata già aperta: chiuderla prima di iniziarne un’altra.';
     case 'NESSUN_TURNO_APERTO':
       return 'Non risulta una presenza aperta. Ricarica la pagina.';
     case 'NESSUN_DIPENDENTE':
@@ -36,7 +36,7 @@ export function messaggioPresenza(code: string): string {
     case 'NON_AUTENTICATO':
       return 'Devi accedere per iniziare la giornata.';
     default:
-      return 'Non riuscito. Riprova.';
+      return 'Operazione non riuscita. Riprovare.';
   }
 }
 
@@ -110,13 +110,13 @@ export function PresenzaSedeCard({ presenza }: { presenza: PresenzaSedeVista }) 
       </p>
       {presenza.aperta ? (
         <>
-          <p className="mt-1 text-lg font-semibold text-sky-900">Dentro dalle {inizio}</p>
+          <p className="mt-1 text-lg font-semibold text-sky-900">Presenza aperta dalle {inizio}</p>
           {
             <>
               <p className="mt-1 text-xs text-sky-900/80">
                 {presenza.dalTerminale
-                  ? 'Col badge. Puoi chiudere da qui o al terminale; le ore le assegni alla fine.'
-                  : 'Senza cantiere: le ore le assegni alla fine, quando chiudi.'}
+                  ? 'Rilevazione da badge. Chiusura possibile da qui o dal terminale; le ore si attribuiscono al termine.'
+                  : 'Presenza senza cantiere: le ore si attribuiscono alla chiusura.'}
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button

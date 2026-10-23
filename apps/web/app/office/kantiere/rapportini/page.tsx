@@ -17,6 +17,7 @@ import {
   leggiImpostazioniKantiere,
 } from '@/app/_lib/kantiere-config';
 import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
+import { leggiMiaGiornata } from '@/app/office/_lib/mia-giornata';
 import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import { RapportiniClient, type RapportiniRiga, type DipendenteItem, type CommessaPickerItem, type CantierePickerItem, type ViaggioTratta } from './_components/rapportini-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
@@ -776,6 +777,8 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   // Giornate passate rimaste aperte (uscita mancante) → promemoria ufficio.
   const giorniApertiRes = await giornateAperte({});
   const giorniAperti = giorniApertiRes.ok ? giorniApertiRes.giorni : [];
+  // Chi guarda timbra anche per se'? Allora la pagina ha una zona sua in cima.
+  const mia = await leggiMiaGiornata(ctx.tenantId, ctx.userId, ctx.role);
 
   return (
     <div className="w-full space-y-3">
@@ -805,6 +808,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         timbroGiornate={timbroGiornate}
         compila={compila}
         oggi={oggiRome}
+        mia={mia}
         sogliaOre={sogliaAnomaliaTurnoOre}
         sogliaPausaOre={sogliaPausaOre}
       />

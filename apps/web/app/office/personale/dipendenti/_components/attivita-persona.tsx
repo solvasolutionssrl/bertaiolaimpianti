@@ -40,9 +40,9 @@ export async function AttivitaPersona({
     return (
       <Card className="border-dashed">
         <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          {nome} non ha un accesso all&apos;app: non c&apos;è niente da
-          raccontare. Collegandogli un utente, da quel momento in poi quello che
-          fa compare qui.
+          {nome} non ha un accesso all&apos;applicazione: nessuna attività
+          disponibile. Collegando un utente, le attività successive vengono
+          registrate.
         </CardContent>
       </Card>
     );
@@ -131,7 +131,7 @@ export async function AttivitaPersona({
         <Numero
           icona={<CheckCircle2 className="h-4 w-4" />}
           valore={spunteTot ?? 0}
-          etichetta="cose spuntate"
+          etichetta="attività completate"
         />
         <Numero
           icona={<Camera className="h-4 w-4" />}
@@ -145,7 +145,7 @@ export async function AttivitaPersona({
         />
       </div>
 
-      <Sezione titolo="Cose spuntate" vuoto="Non ha ancora spuntato niente.">
+      <Sezione titolo="Attività completate" vuoto="Nessuna attività completata.">
         {spunte.length > 0
           ? spunte.map((t) => (
               <Riga
@@ -159,7 +159,7 @@ export async function AttivitaPersona({
           : null}
       </Sezione>
 
-      <Sezione titolo="Foto e video caricati" vuoto="Non ha ancora caricato niente.">
+      <Sezione titolo="Foto e video caricati" vuoto="Nessun file caricato.">
         {foto.length > 0
           ? foto.map((f) => (
               <Riga
@@ -175,7 +175,7 @@ export async function AttivitaPersona({
 
       <Sezione
         titolo="Registro"
-        vuoto="Nessuna traccia: o non ha ancora fatto niente, o lo ha fatto prima che registrassimo."
+        vuoto="Nessuna attività registrata nel periodo disponibile."
       >
         {registro.length > 0
           ? registro.map((e) => (

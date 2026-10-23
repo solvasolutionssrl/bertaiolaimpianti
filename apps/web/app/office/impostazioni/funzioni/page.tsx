@@ -52,7 +52,7 @@ export default async function FunzioniPage() {
     <div className="space-y-4">
       <SectionHeader
         title="Funzioni"
-        description="Cosa è acceso nel vostro spazio di lavoro. Si può cambiare idea in qualsiasi momento: niente viene cancellato."
+        description="Funzioni attive nello spazio di lavoro. La configurazione è modificabile in qualsiasi momento, senza perdita di dati."
         icon={<ToggleRight />}
       />
 

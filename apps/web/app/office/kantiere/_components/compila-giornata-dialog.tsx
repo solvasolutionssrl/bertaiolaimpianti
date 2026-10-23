@@ -230,7 +230,7 @@ export function CompilaGiornataDialog({
             return c.ok ? { ok: true as const, eventi: [{ cantiereId: segmenti[0]!.cantiereId, tipo: 'ingresso' as const, pausa: false, ms: inizioMs }, ...c.eventi], nettoMin: c.nettoMin } : c;
           })();
     if (esito.ok) eventi = esito.eventi;
-    else anteprimaErrore = esito.error === 'SOMMA_NON_TORNA' ? 'Le ore dei cantieri superano il tempo disponibile.' : 'Non c’è tempo da ripartire.';
+    else anteprimaErrore = esito.error === 'SOMMA_NON_TORNA' ? 'Le ore dei cantieri superano il tempo disponibile.' : 'Nessun tempo da ripartire.';
   }
   const nomeCantiere = (id: string) => dati.cantieri.find((c) => c.id === id)?.nome ?? 'Cantiere';
   const nomeSede = (id: string) => dati.sedi.find((s) => s.id === id)?.nome ?? 'Sede';
@@ -274,9 +274,9 @@ export function CompilaGiornataDialog({
     if (vive.length === 0 || righe.some((r) => !r.cantiereId)) return setErrore('Scegli un cantiere per ogni riga.');
     if (inAttesa) return setErrore('Calcolo dei tempi di viaggio in corso: riprova fra un istante.');
     if (anteprimaErrore) return setErrore(anteprimaErrore);
-    if (autista && dati.mezzi.length > 0 && !mezzoId) return setErrore('Se guidavi tu, indica il mezzo.');
+    if (autista && dati.mezzi.length > 0 && !mezzoId) return setErrore('In caso di guida, indicare il mezzo.');
     if ((modo.tipo === 'registra' || modo.tipo === 'registra_altro') && vive.some((r) => r.minuti <= 0)) return setErrore('Ogni cantiere deve avere delle ore.');
-    if (ultimaAssorbe && vive.slice(0, -1).some((r) => r.minuti <= 0)) return setErrore('Ogni cantiere deve avere delle ore (l’ultimo prende il resto).');
+    if (ultimaAssorbe && vive.slice(0, -1).some((r) => r.minuti <= 0)) return setErrore('Indicare le ore di ogni cantiere: all’ultimo va il tempo residuo.');
 
     const tratta = (k: string | null, sedeId: string) => {
       const s = k ? stime[k] : null;
@@ -459,7 +459,7 @@ export function CompilaGiornataDialog({
                   <div className="flex flex-wrap items-center gap-3 text-xs">
                     <label className="flex items-center gap-1.5">
                       <input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={autista} disabled={pending} onChange={(e) => setAutista(e.target.checked)} />
-                      Guidavo io
+                      Conducente
                     </label>
                     {autista && dati.mezzi.length > 0 ? (
                       <select value={mezzoId} disabled={pending} onChange={(e) => setMezzoId(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
@@ -483,7 +483,7 @@ export function CompilaGiornataDialog({
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Come verrà scritta</p>
             {righeAnteprima.length === 0 ? (
               <div className="mt-3 rounded-md border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
-                {anteprimaErrore ?? 'Qui compare la giornata come verrà scritta: orari di ogni cantiere, pause, tratte.'}
+                {anteprimaErrore ?? 'Anteprima della giornata come verrà registrata: orari di ogni cantiere, pause e tratte.'}
               </div>
             ) : (
               <ol className="mt-2 space-y-1.5">
@@ -558,7 +558,7 @@ function messaggioErrore(code: string): string {
     case 'ORA_NON_VALIDA': return 'Controlla gli orari: inizio e fine devono stare nello stesso giorno.';
     case 'SPLIT_SOMMA': case 'SPLIT_NETTO': return 'Le ore dei cantieri non tornano con il tempo disponibile.';
     case 'SPLIT_NON_APPLICABILE': return 'La giornata ha già più eventi: si chiude senza dividerla.';
-    case 'RIPRENDI_PRIMA': return 'Sei in pausa: prima riprendi, poi chiudi.';
+    case 'RIPRENDI_PRIMA': return 'Pausa in corso: riprendere il turno prima della chiusura.';
     case 'NESSUN_TURNO_APERTO': return 'Il turno risulta già chiuso. Ricarica la pagina.';
     case 'SCATOLA_NON_DISPONIBILE': return 'La giornata timbrata è cambiata nel frattempo: ricarica la pagina.';
     case 'SEDE_PREDEFINITA_MANCANTE': return 'Manca la sede predefinita: impostala in Sedi.';

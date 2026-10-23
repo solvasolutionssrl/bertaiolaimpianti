@@ -31,10 +31,10 @@ export function LogoutButton() {
 
   const onLogout = async () => {
     const ok = await askConfirm({
-      title: 'Vuoi uscire dall’account?',
+      title: 'Chiudere la sessione?',
       description:
-        'Verrà chiusa la sessione. Per rientrare dovrai inserire di nuovo email e password.',
-      confirmLabel: 'Sì, esci',
+        'La sessione verrà chiusa. Per il nuovo accesso sono richiesti email e password.',
+      confirmLabel: 'Esci',
       cancelLabel: 'Annulla',
       destructive: true,
     });
@@ -84,8 +84,8 @@ export function LogoutButton() {
       {open ? (
         <div className="border-t border-dashed border-border px-3 py-3">
           <p className="mb-2 text-xs text-muted-foreground">
-            Chiudere la sessione termina l’accesso su questo dispositivo. I
-            dati restano salvati e potrai rientrare con le tue credenziali.
+            La chiusura termina l’accesso su questo dispositivo. I dati restano
+            salvati e l’accesso resta possibile con le proprie credenziali.
           </p>
           <Button
             variant="outline"

@@ -137,9 +137,9 @@ export function UtentiTable({
 
   async function reimposta(u: UtenteRow) {
     const ok = await chiedi({
-      title: `Dare una password nuova a ${u.display_name ?? etichettaAccesso(u.email)}?`,
+      title: `Reimpostare la password di ${u.display_name ?? etichettaAccesso(u.email)}?`,
       description:
-        'La password di adesso smette di funzionare subito. Te ne diamo una nuova da dettare, che la persona dovrà cambiare al primo accesso.',
+        'La password attuale cessa subito di essere valida. Viene generata una nuova password da comunicare, da modificare al primo accesso.',
       confirmLabel: 'Genera',
     });
     if (!ok) return;
@@ -309,7 +309,7 @@ export function UtentiTable({
                                     <HardHat className="mr-2 h-4 w-4" />
                                     {eCapo ? 'Togli capo squadra' : 'Rendi capo squadra'}
                                     <span className="ml-auto pl-3 text-[10px] text-muted-foreground">
-                                      {eCapo ? 'può aprire lavori' : 'non può aprire lavori'}
+                                      {eCapo ? 'autorizzato ad aprire lavori' : 'non autorizzato'}
                                     </span>
                                   </DropdownMenuItem>
                                 </>
@@ -330,7 +330,7 @@ export function UtentiTable({
                                     const ok = await chiedi({
                                       title: `Chiudere l’accesso a ${u.display_name ?? accesso}?`,
                                       description:
-                                        'Non entrerà più. Il lavoro che ha fatto resta tutto: foto, cose fatte, storico.',
+                                        'L’utente non potrà più accedere. I dati prodotti restano: foto, attività completate, storico.',
                                       destructive: true,
                                     });
                                     if (!ok) return;
@@ -398,8 +398,8 @@ export function UtentiTable({
           <DialogHeader>
             <DialogTitle>Password nuova per {nuovaPassword?.nome}</DialogTitle>
             <DialogDescription>
-              Dettala adesso: non si rivede più. Al primo accesso l&apos;app chiederà
-              di scegliersene una sua.
+              Comunicare subito le credenziali: la password non sarà più visibile.
+              Al primo accesso verrà richiesto di impostarne una nuova.
             </DialogDescription>
           </DialogHeader>
           {nuovaPassword ? (

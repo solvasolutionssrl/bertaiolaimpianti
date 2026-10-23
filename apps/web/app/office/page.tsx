@@ -69,7 +69,7 @@ export default async function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <p className="hidden text-xs text-muted-foreground sm:block">
-            Commesse, collaudi e attività del team in un colpo d&apos;occhio.
+            Riepilogo di commesse, collaudi e attività del team.
           </p>
           {/* La dashboard è la pagina che resta aperta tutto il giorno: deve
               dire quello che succede adesso, non quello che succedeva quando

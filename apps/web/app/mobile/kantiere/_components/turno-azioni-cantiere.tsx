@@ -104,7 +104,7 @@ function messaggioErrore(code: string): string {
     case 'NESSUN_TURNO_APERTO':
       return 'Nessun turno aperto.';
     case 'RIPRENDI_PRIMA':
-      return 'Sei in pausa: riprendi il turno prima di chiuderlo.';
+      return 'Turno in pausa: riprenderlo prima di chiudere.';
     default:
       return 'Operazione non riuscita. Riprova.';
   }
@@ -297,7 +297,7 @@ export function TurnoAzioniCantiere({
       )}
       {inPausa && rimanentePausaMs != null ? (
         <p className="mt-1 text-[11px] font-medium tabular-nums text-amber-800">
-          La pausa si chiude tra {fmtCountdown(rimanentePausaMs)} · ricordati di interromperla a mano
+          Chiusura automatica della pausa fra {fmtCountdown(rimanentePausaMs)}. Si raccomanda l’interruzione manuale.
         </p>
       ) : null}
 
@@ -390,7 +390,7 @@ export function TurnoAzioniCantiere({
               disabled={pending}
               className="text-center text-xs font-medium text-muted-foreground hover:text-foreground"
             >
-              Sono uscito prima? Cambia l&apos;ora di fine
+              Modifica l&apos;ora di fine
             </button>
           </div>
         ) : (

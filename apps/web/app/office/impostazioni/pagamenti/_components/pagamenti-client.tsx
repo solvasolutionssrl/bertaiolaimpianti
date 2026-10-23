@@ -50,7 +50,7 @@ export function PagamentiClient({
     setPending(chiave);
     try {
       const res = await azione();
-      if (!res.ok) await alert({ title: 'Non ha funzionato', body: res.error });
+      if (!res.ok) await alert({ title: 'Operazione non riuscita', body: res.error });
       else router.refresh();
       return res.ok;
     } finally {
@@ -113,8 +113,8 @@ export function PagamentiClient({
           Metodi di pagamento
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Come si paga una spesa di cantiere. Sono le voci che il tecnico trova nell’app quando
-          registra uno scontrino, e tra cui sceglie l’assistente quando lo legge.
+          Modalità di pagamento delle spese di cantiere: le voci disponibili nell’applicazione
+          alla registrazione di uno scontrino e quelle usate dall’assistente in lettura.
         </p>
       </header>
 
@@ -240,7 +240,7 @@ export function PagamentiClient({
                   if (e.key === 'Enter') void salvaNuovo();
                   if (e.key === 'Escape') setApriNuovo(false);
                 }}
-                placeholder="Come si chiama? es. Bonifico"
+                placeholder="Nome del metodo, ad esempio Bonifico"
                 maxLength={40}
                 autoFocus
                 className="h-10 max-w-xs"
@@ -261,8 +261,8 @@ export function PagamentiClient({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Ritirare un metodo non cancella niente: sparisce dalle scelte nuove, ma le spese che lo
-        usavano restano com’erano.
+        Il ritiro non elimina dati: il metodo non è più selezionabile per le nuove spese, quelle
+        registrate lo conservano.
       </p>
     </div>
   );

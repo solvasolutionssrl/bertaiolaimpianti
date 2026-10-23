@@ -306,8 +306,8 @@ function VoceAggiornaSlot({
   if (!online) {
     return (
       <p className="rounded-md border border-dashed border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
-        Offline: dettatura e match AI non disponibili. Esci e riprova quando
-        torni online.
+        Connessione assente: dettatura e riconoscimento automatico non disponibili.
+        Riprovare al ripristino della connessione.
       </p>
     );
   }
@@ -338,7 +338,7 @@ function VoceAggiornaSlot({
         ) : (
           <Mic className="h-4 w-4" aria-hidden="true" />
         )}
-        {busy ? 'Trascrivo…' : 'Detta per aggiornare (opzionale)'}
+        {busy ? 'Trascrizione in corso…' : 'Detta per aggiornare (opzionale)'}
       </Button>
       {err ? (
         <p className="flex items-center gap-1 text-[11px] text-destructive">
@@ -347,8 +347,8 @@ function VoceAggiornaSlot({
         </p>
       ) : null}
       <p className="text-[11px] text-muted-foreground">
-        La dettatura riempie i campi vuoti e aggiunge il testo alle note. Non
-        sovrascrive quello che hai già scritto.
+        La dettatura compila i campi vuoti e aggiunge il testo alle note, senza
+        sovrascrivere i dati già inseriti.
       </p>
     </div>
   );

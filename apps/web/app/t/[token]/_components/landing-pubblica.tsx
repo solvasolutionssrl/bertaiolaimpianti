@@ -64,8 +64,8 @@ export function LandingPubblica({
             </Button>
           </Link>
           <p className="mt-2.5 text-center text-xs text-slate-400">
-            Sei un tecnico? Accedi con il tuo account per registrare ingresso e
-            uscita.
+            Personale tecnico: accedere con le proprie credenziali per registrare
+            ingresso e uscita.
           </p>
         </div>
 

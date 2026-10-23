@@ -31,7 +31,7 @@ const CHIUDI = `(() => {
 /** Spunta «Ho fatto la pausa pranzo», che e' cio' che rivela le scelte. */
 const SPUNTA_PAUSA = `(() => {
   const l = [...document.querySelectorAll('label')]
-    .find((x) => /Ho fatto la pausa pranzo/i.test(x.textContent || ''));
+    .find((x) => /Pausa pranzo effettuata/i.test(x.textContent || ''));
   const c = l?.querySelector('input[type=checkbox]');
   if (!c) return false;
   c.click();

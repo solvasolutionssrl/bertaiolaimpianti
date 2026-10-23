@@ -211,7 +211,7 @@ export default async function CommessePage({
           title="Nessuna commessa trovata"
           description={
             hasFilters
-              ? 'Prova ad allargare i filtri o resetta la ricerca per vedere tutte le commesse.'
+              ? 'Ampliare i filtri o azzerare la ricerca per vedere tutte le commesse.'
               : 'Crea la tua prima commessa per iniziare a tracciare lavori, fasi e foto.'
           }
           action={

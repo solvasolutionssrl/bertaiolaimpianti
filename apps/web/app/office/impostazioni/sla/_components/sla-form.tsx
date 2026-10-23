@@ -17,7 +17,7 @@ export interface SlaPolicyRow {
 const PRIORITA_DESCR: Record<Priorita, string> = {
   urgente: 'Blocco totale, fuori orario, intervento immediato.',
   alta: 'Disservizio significativo, intervento entro la giornata.',
-  bassa: 'Il livello normale: tutto quello per cui nessuno ha chiesto fretta.',
+  bassa: 'Livello standard: interventi senza urgenza dichiarata.',
 };
 
 // Dall'urgente al normale, come ovunque nell'app. La riga di policy del

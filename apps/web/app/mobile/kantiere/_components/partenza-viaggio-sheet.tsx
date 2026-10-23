@@ -232,11 +232,11 @@ export function PartenzaViaggioSheet({
       return;
     }
     if (!sedeId) {
-      setErrLocale('Seleziona da dove parti.');
+      setErrLocale('Indicare il luogo di partenza.');
       return;
     }
     if (giustObbligatoria && giustificazione.trim().length < 3) {
-      setErrLocale('Hai modificato la stima: scrivi una breve giustificazione.');
+      setErrLocale('Stima modificata: indicare la motivazione.');
       return;
     }
     // Passeggero dichiarato: i km non glieli conta nessuno, meglio chiedere.
@@ -284,7 +284,7 @@ export function PartenzaViaggioSheet({
           </button>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-semibold leading-tight tracking-tight text-foreground">
-              Da dove parti?
+              Luogo di partenza
             </h2>
             <p className="truncate text-xs leading-tight text-muted-foreground">
               Turno su {cantiereNome}
@@ -379,11 +379,11 @@ export function PartenzaViaggioSheet({
 
             {casa ? (
               <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                Parti da casa: nessun km né tempo di viaggio da registrare.
+                Partenza dall’abitazione: nessun chilometro né tempo di viaggio da registrare.
               </p>
             ) : stessaSede ? (
               <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                Parti dalla sede in cui lavori: nessun km né tempo di viaggio da registrare.
+                Partenza dalla sede di lavoro: nessun chilometro né tempo di viaggio da registrare.
               </p>
             ) : (
               <>
@@ -433,7 +433,7 @@ export function PartenzaViaggioSheet({
                   {giustObbligatoria && (
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">
-                        Hai modificato la stima. Motivo (es. traffico):
+                        Stima modificata. Motivazione (esempio: traffico):
                       </label>
                       <input
                         type="text"
@@ -462,7 +462,7 @@ export function PartenzaViaggioSheet({
                     />
                     <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
                       <Car className="h-4 w-4 text-muted-foreground" strokeWidth={1.75} />
-                      Sono io l&apos;autista del mezzo
+                      Conducente del mezzo
                     </span>
                   </label>
                   {autista && (
@@ -482,7 +482,7 @@ export function PartenzaViaggioSheet({
                   )}
                   {autista && mezzi.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Nessun mezzo configurato. L&apos;ufficio può aggiungerli nel parco mezzi.
+                      Nessun mezzo configurato: l&apos;inserimento è a cura dell&apos;ufficio.
                     </p>
                   )}
                 </div>

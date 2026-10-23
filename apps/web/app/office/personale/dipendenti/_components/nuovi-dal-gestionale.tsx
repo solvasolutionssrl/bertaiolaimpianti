@@ -93,7 +93,7 @@ export function NuoviDalGestionale({
     start(async () => {
       const r = await fn();
       if (!r.ok) {
-        await showAlert({ title: 'Non fatto', body: r.error });
+        await showAlert({ title: 'Operazione non eseguita', body: r.error });
         return;
       }
       setModo(null);
@@ -204,8 +204,8 @@ export function NuoviDalGestionale({
           <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs text-muted-foreground">
             <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
             {ignorati.length === 1
-              ? 'Hai messo da parte una voce che non è una persona'
-              : `Hai messo da parte ${ignorati.length} voci che non sono persone`}
+              ? 'Una voce è stata esclusa perché non corrisponde a una persona'
+              : `${ignorati.length} voci sono state escluse perché non corrispondono a persone`}
           </summary>
           <ul className="mt-2 space-y-1 border-t border-border/60 pt-2">
             {ignorati.map((i) => (
@@ -232,7 +232,7 @@ export function NuoviDalGestionale({
                   }
                 >
                   <RotateCcw className="h-3 w-3" />
-                  Rimettila in elenco
+                  Ripristina in elenco
                 </Button>
               </li>
             ))}
@@ -249,7 +249,7 @@ export function NuoviDalGestionale({
           <DialogHeader>
             <DialogTitle>Collega {modo?.riga.nome}</DialogTitle>
             <DialogDescription>
-              Chi è, fra i tuoi? Da adesso in poi le sue ore escono con questo nome.
+              Indicare la persona corrispondente in anagrafica: da questo momento le ore escono con quel nominativo.
             </DialogDescription>
           </DialogHeader>
 
@@ -271,8 +271,8 @@ export function NuoviDalGestionale({
               ))}
             </select>
             <p className="text-[11px] text-muted-foreground">
-              Chi è già collegato non si può scegliere: la stessa persona su due
-              nomi farebbe contare le ore due volte.
+              Le persone già collegate non sono selezionabili: un doppio
+              collegamento conterebbe le ore due volte.
             </p>
           </div>
 
@@ -308,7 +308,7 @@ export function NuoviDalGestionale({
           <DialogHeader>
             <DialogTitle>Crea {modo?.riga.nome}</DialogTitle>
             <DialogDescription>
-              Nome e cognome arrivano dal gestionale locale. Il resto lo metti tu.
+              Nome e cognome provengono dal gestionale locale. Gli altri dati vanno inseriti manualmente.
             </DialogDescription>
           </DialogHeader>
 
@@ -356,9 +356,9 @@ export function NuoviDalGestionale({
               'text-[11px] leading-relaxed text-amber-800 dark:text-amber-300',
             )}
           >
-            La <strong>matricola è la vostra</strong>, quella del consulente del
-            lavoro. Non quella del gestionale locale: si somigliano ma non sono la
-            stessa cosa. Se non la sai, lasciala vuota e la metti dopo.
+            La <strong>matricola è quella aziendale</strong>, usata dal consulente
+            del lavoro, non quella del gestionale locale. Se non è disponibile,
+            lasciare vuoto e completare in seguito.
           </p>
 
           <DialogFooter>

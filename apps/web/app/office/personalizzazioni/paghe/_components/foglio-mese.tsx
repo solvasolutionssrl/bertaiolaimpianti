@@ -161,7 +161,7 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
   async function salva() {
     if (!dipendenteId || !giorno) return;
     if (!causale) {
-      await showAlert({ title: 'Manca la causale', body: 'Scegli cosa e' + "' successo quel giorno." });
+      await showAlert({ title: 'Manca la causale', body: 'Selezionare la causale del giorno.' });
       return;
     }
     const valore = Number(quante.replace(',', '.'));
@@ -195,7 +195,7 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
   async function togli(evento: EventoMese) {
     if (!evento.id) return;
     const ok = await conferma({
-      title: 'Togli la riga',
+      title: 'Rimuovi la riga',
       description: `${evento.causale} del ${giornoBreve(evento.dal)}${evento.dal !== evento.al ? ` fino al ${giornoBreve(evento.al)}` : ''}.`,
       confirmLabel: 'Togli',
       destructive: true,
@@ -248,7 +248,7 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
                   </span>
                   {d.usaKommessa ? (
                     <span
-                      title="Ha giornate registrate in Kommessa: straordinari e viaggio arrivano da soli."
+                      title="Giornate registrate in Kommessa: straordinari e viaggio sono calcolati automaticamente."
                       className={`h-1.5 w-1.5 shrink-0 rounded-full ${scelto ? 'bg-primary-foreground' : 'bg-emerald-500'}`}
                     />
                   ) : (
@@ -269,8 +269,8 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
             })}
           </div>
           <p className="mt-2 border-t border-border pt-2 text-[11px] leading-snug text-muted-foreground">
-            Il pallino verde è di chi timbra: per quelli non serve scrivere niente. Gli altri
-            mostrano quante righe hanno.
+            L'indicatore verde segna chi timbra: per queste persone non è richiesto alcun
+            inserimento. Gli altri mostrano quante righe hanno.
           </p>
         </CardContent>
       </Card>
@@ -403,9 +403,9 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
               </div>
 
               <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-                In azzurro quello che hai scritto tu, in verde quello che arriva dalle timbrature:
-                quello non si tocca da qui, si corregge nella giornata. I giorni normali non vanno
-                scritti, nel file vanno solo le variazioni.
+                In azzurro i dati inseriti manualmente, in verde quelli dalle timbrature: questi
+                non si modificano da qui ma nella giornata. I giorni ordinari non vanno inseriti:
+                il file riporta solo le variazioni.
               </p>
             </>
           )}
@@ -421,8 +421,8 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
 
           {!giorno ? (
             <p className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-[12px] leading-snug text-muted-foreground">
-              Clicca un giorno del calendario. Poi scegli la causale una volta sola: resta scelta, e
-              per i giorni dopo basta cliccare e premere Invio.
+              Selezionare un giorno e indicare la causale: resta selezionata, e per i giorni
+              successivi basta selezionare e confermare.
             </p>
           ) : (
             <div className="space-y-3">
@@ -531,7 +531,7 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
                 Aggiungi
               </Button>
               <p className="text-[11px] leading-snug text-muted-foreground">
-                La causale resta scelta: per il giorno dopo basta cliccarlo e premere Invio.
+                La causale resta selezionata: per il giorno successivo basta selezionarlo e confermare.
               </p>
             </div>
           )}

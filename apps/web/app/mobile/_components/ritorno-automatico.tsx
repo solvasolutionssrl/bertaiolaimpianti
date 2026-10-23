@@ -20,7 +20,7 @@ import { useRouter } from 'next/navigation';
 export function RitornoAutomatico({
   secondi = 3,
   verso = '/mobile',
-  etichetta = 'Torno alla home',
+  etichetta = 'Ritorno alla pagina iniziale',
 }: {
   secondi?: number;
   verso?: string;
@@ -59,7 +59,7 @@ export function RitornoAutomatico({
         onClick={() => setAttivo(false)}
         className="font-medium text-foreground underline underline-offset-2"
       >
-        resta qui
+        Rimani in questa pagina
       </button>
     </p>
   );

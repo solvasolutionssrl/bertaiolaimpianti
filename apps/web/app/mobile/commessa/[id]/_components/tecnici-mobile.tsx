@@ -128,7 +128,7 @@ export function TecniciMobile({
         {assigned.length === 0 ? (
           <p className="mt-2 text-xs italic text-muted-foreground">
             {canManage
-              ? "Tap su 'Gestisci' per assegnare i tecnici."
+              ? 'Usare «Gestisci» per assegnare i tecnici.'
               : 'Nessun tecnico assegnato a questa commessa.'}
           </p>
         ) : (

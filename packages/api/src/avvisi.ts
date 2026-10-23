@@ -181,22 +181,22 @@ export function componiAssegnazione(dati: {
 
   if (dati.tipo === 'commessa') {
     return {
-      titolo: 'Ti è stato affidato un lavoro',
-      corpo: corpo([oggetto, cliente, dove], 'Un nuovo lavoro'),
+      titolo: 'Commessa assegnata',
+      corpo: corpo([oggetto, cliente, dove], 'Nuova commessa'),
     };
   }
 
   if (dati.tipo === 'richiesta') {
     return {
-      titolo: 'Ti è stata affidata una richiesta',
+      titolo: 'Richiesta assegnata',
       // Per una richiesta il cliente e il posto sono **la** notizia: chi la
       // riceve deve sapere da chi andare prima ancora di aprire l'app.
-      corpo: corpo([oggetto, cliente, dove], 'Una richiesta arrivata in ufficio'),
+      corpo: corpo([oggetto, cliente, dove], 'Richiesta ricevuta in ufficio'),
     };
   }
 
   return {
-    titolo: 'Ti è stata affidata una cosa da fare',
-    corpo: corpo([oggetto, codice, cliente, dove], 'Una cosa da fare'),
+    titolo: 'Attività assegnata',
+    corpo: corpo([oggetto, codice, cliente, dove], 'Nuova attività'),
   };
 }

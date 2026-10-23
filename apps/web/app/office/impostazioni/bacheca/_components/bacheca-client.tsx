@@ -65,7 +65,7 @@ export function BachecaClient({
     } catch {
       await avvisa({
         title: 'Copia non riuscita',
-        body: 'Selezionate l’indirizzo e copiatelo a mano.',
+        body: 'Selezionare l’indirizzo e copiarlo manualmente.',
       });
     }
   }
@@ -100,11 +100,11 @@ export function BachecaClient({
               <MonitorPlay aria-hidden="true" className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-sm font-medium">La bacheca non è ancora accesa.</p>
+              <p className="text-sm font-medium">La bacheca non è ancora attiva.</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Scegliete una password: quella si batte una volta sul televisore,
-                e poi resta aperto per {BACHECA_GIORNI_SESSIONE} giorni. Chi apre
-                l’indirizzo senza la password non vede niente — nemmeno di chi è.
+                Impostare una password: va inserita una volta sul televisore e la
+                sessione resta valida {BACHECA_GIORNI_SESSIONE} giorni. Senza
+                password l’indirizzo non mostra alcun contenuto.
               </p>
             </div>
           </div>
@@ -123,13 +123,13 @@ export function BachecaClient({
                   autoComplete="off"
                 />
                 <Button size="sm" onClick={() => salvaPassword(true)} disabled={inCorso}>
-                  Accendi la bacheca
+                  Attiva la bacheca
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                In chiaro di proposito: è una password da ufficio, da leggere
-                mentre la si batte sul telecomando. Non è la password di
-                nessuno.
+                Visibile in chiaro per scelta: è una password condivisa di ufficio,
+                da inserire con il telecomando. Non corrisponde alla password
+                personale di alcun utente.
               </p>
               {errore ? (
                 <p role="alert" className="text-sm text-destructive">
@@ -191,7 +191,7 @@ export function BachecaClient({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            L’indirizzo si può rileggere da qui: non è il segreto, lo è la
+            L’indirizzo è consultabile da questa pagina: l’elemento riservato è la
             password.
           </p>
         </CardContent>
@@ -222,8 +222,8 @@ export function BachecaClient({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                I televisori già aperti restano aperti: la password serve a
-                entrare, non a restare.
+                I televisori già collegati restano attivi: la password è richiesta
+                solo all’accesso.
               </p>
               {errore ? (
                 <p role="alert" className="text-sm text-destructive">
@@ -241,7 +241,7 @@ export function BachecaClient({
                   const ok = await chiedi({
                     title: 'Rigenerare l’indirizzo?',
                     description:
-                      'Quello di adesso smette di funzionare subito, e tutti i televisori già aperti vengono chiusi: andranno ribattuti a mano con l’indirizzo nuovo.',
+                      'L’indirizzo attuale cessa subito di funzionare e le sessioni attive vengono chiuse: andrà inserito manualmente il nuovo indirizzo.',
                     confirmLabel: 'Rigenera',
                   });
                   if (!ok) return;
@@ -266,9 +266,9 @@ export function BachecaClient({
                   disabled={inCorso}
                   onClick={async () => {
                     const ok = await chiedi({
-                      title: 'Spegnere la bacheca?',
+                      title: 'Disattivare la bacheca?',
                       description:
-                        'L’indirizzo smette di mostrare qualcosa. Non si perde niente: riaccendendola torna com’era, stesso indirizzo e stessa password.',
+                        'L’indirizzo non mostrerà più contenuti. Nessun dato viene perso: alla riattivazione restano invariati indirizzo e password.',
                       confirmLabel: 'Spegni',
                       destructive: true,
                     });

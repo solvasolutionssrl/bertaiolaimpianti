@@ -666,16 +666,16 @@ export function CantiereDetailClient({
                     {correzioneOk ? (
                       <p className="flex items-center gap-2 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
                         <Check className="h-5 w-5" aria-hidden="true" />
-                        Indirizzo verificato!
+                        Indirizzo verificato
                       </p>
                     ) : (
                       <>
                         <p className="mb-2 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
                           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           <span>
-                            Questo indirizzo è <strong>da verificare</strong>. Cerca qui sotto
-                            quello corretto e <strong>selezionalo dai suggerimenti</strong>: il
-                            riquadro si chiude da solo quando è a posto.
+                            Indirizzo <strong>da verificare</strong>. Cercare quello corretto e
+                            <strong>selezionarlo fra i suggerimenti</strong>: il riquadro si
+                            chiude automaticamente.
                           </span>
                         </p>
                         <AddressAutocomplete
@@ -824,7 +824,7 @@ export function CantiereDetailClient({
             header={
               <SezioneHeader
                 icon={<HardHat className="h-4 w-4" aria-hidden="true" />}
-                titolo="Chi c'è in cantiere ora"
+                titolo="Presenti in cantiere"
                 accent="emerald"
                 right={
                   personeAttive > 0 ? (

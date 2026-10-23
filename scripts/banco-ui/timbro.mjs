@@ -45,7 +45,7 @@ try {
       daRipartire: /Da ripartire/.test(testo),
       pillole: [...document.querySelectorAll('span[title]')].filter((x) => /badge al terminale/.test(x.title)).length,
       presenza: /8:33 di presenza/.test(testo),
-      registraNascosto: !/Non hai timbrato\\?/.test(testo),
+      registraNascosto: !/Giornata senza timbrature/.test(testo),
     };
   })()`);
   esito(s1.card, 'telefono: la card «Inserisci le commesse» compare');
@@ -85,7 +85,7 @@ try {
   const s3 = await valuta(cdp, `(() => { ${AIUTI}
     const d = dialogo();
     const scelto = [...d.querySelectorAll('[role=radio][aria-checked="true"]')].map((b) => t(b.textContent));
-    return { etichetta: scelto.join(','), spuntato: scelto.includes('In sede'), inSede: /tutto il giorno in sede/i.test(t(d.innerText)), resto: /8:33 vanno sull’ultimo cantiere/.test(t(d.innerText)) };
+    return { etichetta: scelto.join(','), spuntato: scelto.includes('In sede'), inSede: /tutto il giorno in sede/i.test(t(d.innerText)), resto: /8:33 attribuite all’ultimo cantiere/.test(t(d.innerText)) };
   })()`);
   // Il tecnico demo e' in modalita' ufficio: il default e' «In sede».
   esito(s3.spuntato === true, 'riga cantiere: «In sede» scelto per default (persona in modalità ufficio)', s3.etichetta ?? '');
@@ -114,10 +114,10 @@ try {
   await pausa(1500);
   await clicVero(cdp, `[...document.querySelectorAll('tr')].find((r) => /Rinaldi/.test(r.textContent) && /In corso oggi|bg-emerald/.test(r.className + r.textContent))`).catch(() => null);
   await pausa(800);
-  const s5 = await valuta(cdp, `(() => { const testo = document.body.innerText; return { passaggi: /Badge al terminale/i.test(testo), terminale: /Timbrata · badge/i.test(testo), pannello: /da sistemare/.test(testo) }; })()`);
+  const s5 = await valuta(cdp, `(() => { const testo = document.body.innerText; return { passaggi: /Badge al terminale/i.test(testo), terminale: /Timbrata · badge/i.test(testo), pannello: /da completare/.test(testo) }; })()`);
   esito(s5.passaggi, 'ufficio: il dettaglio mostra «Badge al terminale»');
   esito(s5.terminale, 'ufficio: l’origine delle timbrature dice «Timbrata · badge»');
-  esito(!s5.pannello, 'ufficio: nessuna giornata «da sistemare» (e’ stata ripartita)');
+  esito(!s5.pannello, 'ufficio: nessuna giornata «da completare» (e’ stata ripartita)');
   await foto(cdp, 'timbro-06-ufficio');
 } finally {
   await chiudi();

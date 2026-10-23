@@ -80,10 +80,10 @@ export function BollinoAffidabilita({
       : 'border-border bg-muted/50 text-muted-foreground';
   const testo = dopo ? 'Modificata dopo l’approvazione' : AFFIDABILITA_ETICHETTA[affidabilita];
   const spiega = dopo
-    ? 'Le ore sono cambiate quando la giornata era già approvata. Apri la cronologia per vedere chi e cosa.'
+    ? 'Le ore sono state modificate dopo l’approvazione. Consultare la cronologia per autore e dettaglio.'
     : affidabilita === 'corretta_ufficio'
       ? 'L’ufficio ha cambiato le ore o inserito timbrature per questa persona.'
-      : 'Almeno una parte della giornata è stata dichiarata a mano invece che timbrata.';
+      : 'Almeno una parte della giornata è stata dichiarata manualmente e non timbrata.';
 
   const contenuto = (
     <>

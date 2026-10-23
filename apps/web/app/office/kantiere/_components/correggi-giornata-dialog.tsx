@@ -204,7 +204,7 @@ export function CorreggiGiornataDialog({
     const v = valoriTratta[t.id] ?? { km: t.km, minuti: t.minuti, motivo: '' };
     const cambiato = v.km !== t.km || v.minuti !== t.minuti;
     if (!cambiato) {
-      setErroreTratta((prev) => ({ ...prev, [t.id]: 'Non hai cambiato nessun valore.' }));
+      setErroreTratta((prev) => ({ ...prev, [t.id]: 'Nessun valore modificato.' }));
       return;
     }
     // Il motivo non è una formalità: un km corretto senza una ragione scritta
@@ -274,7 +274,7 @@ export function CorreggiGiornataDialog({
           {oltreSoglia ? (
             <p className="flex items-start gap-1.5 -mt-2 text-xs text-amber-700">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span>Turno lungo, manca la pausa pranzo?</span>
+              <span>Turno prolungato senza pausa pranzo registrata</span>
             </p>
           ) : null}
 
@@ -288,7 +288,7 @@ export function CorreggiGiornataDialog({
             </div>
             <p className="mb-3 text-xs text-amber-800">
               Aggiungi la pausa non timbrata: le ore vengono ricalcolate e, se rientrano nella
-              soglia, la giornata si approva da sola.
+              soglia, la giornata viene approvata automaticamente.
             </p>
 
             <div className="mb-3">
@@ -304,7 +304,7 @@ export function CorreggiGiornataDialog({
               {rientraSoglia ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                   <Check className="h-3 w-3" aria-hidden="true" />
-                  Rientra nella soglia, si auto-approva
+                  Entro la soglia: approvazione automatica
                 </span>
               ) : null}
             </div>
@@ -334,7 +334,7 @@ export function CorreggiGiornataDialog({
               onClick={() => setAvanzateOpen((v) => !v)}
               className="flex w-full items-center justify-between px-3 py-2.5 text-left"
             >
-              <span className="text-sm font-medium text-foreground">Correggi le ore a mano</span>
+              <span className="text-sm font-medium text-foreground">Correzione manuale delle ore</span>
               {avanzateOpen ? (
                 <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               ) : (
@@ -349,7 +349,7 @@ export function CorreggiGiornataDialog({
                 ) : (
                   <>
                     <p className="mb-3 text-xs text-muted-foreground">
-                      La correzione a mano segna la giornata come approvata dall&apos;ufficio.
+                      La correzione manuale registra la giornata come approvata dall&apos;ufficio.
                       Ordinarie, straordinarie e viaggio eccedente si calcolano dall&apos;orario
                       ordinario giornaliero delle impostazioni.
                     </p>

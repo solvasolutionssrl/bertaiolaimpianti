@@ -33,7 +33,7 @@ const TIPI = [
   {
     codice: 'P' as const,
     titolo: 'PUC',
-    descrizione: 'Numero del certificato telematico inviato dal medico. E' + "' il caso normale.",
+    descrizione: 'Numero del certificato telematico inviato dal medico. È il caso più frequente.',
   },
   {
     codice: 'M' as const,
@@ -179,18 +179,18 @@ export function CertificatoDialog({
               value={numero}
               maxLength={30}
               onChange={(e) => setNumero(e.target.value)}
-              placeholder="Come sta sul certificato"
+              placeholder="Come riportato sul certificato"
               className="mt-1 h-9 bg-background font-mono shadow-none"
             />
             {numero.trim() ? (
               <p className="mt-1 flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
-                Finira' nel file accanto al periodo di malattia.
+                Verrà riportato nel file accanto al periodo di malattia.
               </p>
             ) : (
               <p className="mt-1 text-[11px] leading-snug text-amber-700">
-                Senza numero il file esce comunque, ma lo Studio dovra' inserirlo a mano. Non va
-                inventato.
+                Senza numero il file esce comunque, ma lo Studio dovrà inserirlo manualmente. Non
+                va inventato.
               </p>
             )}
           </div>

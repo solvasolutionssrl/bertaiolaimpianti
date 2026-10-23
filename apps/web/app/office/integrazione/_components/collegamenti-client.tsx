@@ -142,10 +142,9 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
       <Card>
         <CardContent className="space-y-2 p-6 text-center">
           <CircleDashed className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-          <p className="font-medium">Il gestionale locale non ha ancora mandato niente</p>
+          <p className="font-medium">Il gestionale locale non ha ancora trasmesso dati</p>
           <p className="mx-auto max-w-md text-sm text-muted-foreground">
-            Deve fare almeno una lettura prima che ci sia qualcosa da abbinare.
-            Finché non succede, qui non c’è niente da fare.
+            È necessaria almeno una lettura prima di poter abbinare.
           </p>
         </CardContent>
       </Card>
@@ -167,7 +166,7 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
             {daCollegare > 0 ? (
               <span className="text-amber-700 dark:text-amber-400">
                 <strong className="tabular-nums">{daCollegare}</strong> ancora da
-                collegare: le loro ore non partono
+                collegare: le relative ore non vengono trasmesse
               </span>
             ) : (
               <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
@@ -186,8 +185,8 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
           <CardContent className="flex items-start gap-2 p-3.5 text-sm text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
             <span>
-              Hai scelto la stessa commessa per più cantieri (le righe in rosso).
-              Così le ore si contano due volte: sistema prima di salvare.
+              La stessa commessa è associata a più cantieri (righe in rosso).
+              Le ore verrebbero conteggiate due volte: correggere prima di salvare.
             </span>
           </CardContent>
         </Card>
@@ -226,7 +225,7 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
             onChange={(e) => setSoloDaFare(e.target.checked)}
             className="h-4 w-4"
           />
-          Solo quelli da decidere
+          Solo i cantieri da abbinare
         </label>
         <Button
           onClick={() => setConferma(true)}
@@ -341,9 +340,9 @@ export function CollegamentiClient({ dati }: { dati: DatiCollegamenti }) {
                 {cambiate.length === 1 ? 'modifica' : 'modifiche'}?
               </p>
               <p className="text-sm text-muted-foreground">
-                Da adesso ore, chilometri e spese di questi cantieri finiscono sulla
-                commessa che hai scelto. Se sbagli abbinamento i dati vanno sulla
-                commessa di un altro, e sul gestionale locale non si tornano indietro.
+                Da questo momento ore, chilometri e spese dei cantieri indicati sono
+                attribuiti alla commessa selezionata. Un abbinamento errato attribuisce i
+                dati a un’altra commessa e non è reversibile sul gestionale locale.
               </p>
               <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto rounded-md border border-border p-2.5">
                 {cambiate.map((r) => {

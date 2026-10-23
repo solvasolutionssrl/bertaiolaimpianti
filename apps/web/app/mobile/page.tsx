@@ -146,7 +146,7 @@ async function GestioneDashboard({
       <Hero>
         <div className="flex items-start justify-between gap-3">
           <HeroMeta>
-            {greeting()} · {formatToday()}
+            {formatToday()}
           </HeroMeta>
           <CampanellaHero
             userId={ctx.userId}
@@ -256,7 +256,7 @@ async function CampoOggi({
   if (erroreAssegnazioni) {
     return (
       <ErrorState
-        title="Impossibile caricare i tuoi lavori"
+        title="Caricamento delle commesse non riuscito"
         detail={erroreAssegnazioni.message}
       />
     );
@@ -399,7 +399,7 @@ async function CampoOggi({
     commesseRes.error ?? todosRes.error ?? richiesteRes.error ?? mandatiRes.error;
   if (primoGuasto) {
     return (
-      <ErrorState title="Impossibile caricare i tuoi lavori" detail={primoGuasto.message} />
+      <ErrorState title="Caricamento delle commesse non riuscito" detail={primoGuasto.message} />
     );
   }
 
@@ -527,7 +527,7 @@ async function CampoOggi({
     return (
       <CampoVuoto
         title="Nessuna commessa assegnata"
-        body="Quando l'ufficio o l'amministratore ti assegna una commessa o una richiesta, la vedrai qui."
+        body="Le commesse e le richieste assegnate dall'ufficio compaiono in questa pagina."
       />
     );
   }
@@ -537,7 +537,7 @@ async function CampoOggi({
       <Hero>
         <div className="flex items-start justify-between gap-3">
           <HeroMeta>
-            {greeting()} · {formatToday()}
+            {formatToday()}
           </HeroMeta>
           <CampanellaHero
             userId={ctx.userId}
@@ -759,7 +759,7 @@ function CampoVuoto({ title, body }: { title: string; body: string }) {
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col">
       <Hero>
-        <HeroMeta>il tuo lavoro di oggi</HeroMeta>
+        <HeroMeta>attività del giorno</HeroMeta>
         <h1 className="mt-1 font-mono text-3xl font-bold leading-none tracking-tightest text-primary-foreground">
           OGGI
         </h1>
@@ -798,13 +798,6 @@ function ErrorState({ title, detail }: { title: string; detail: string }) {
       <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
     </div>
   );
-}
-
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Buongiorno';
-  if (h < 18) return 'Buon pomeriggio';
-  return 'Buonasera';
 }
 
 function formatToday() {

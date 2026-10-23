@@ -326,9 +326,9 @@ export function LavoriBoard({
    */
   const onComplete = async (id: string, titolo: string) => {
     const ok = await askConfirm({
-      title: 'Segnare come fatta?',
-      description: `"${titolo}"\n\nPassa fra le cose fatte. Si puo' riaprire.`,
-      confirmLabel: 'Sì, è fatta',
+      title: 'Confermare il completamento?',
+      description: `"${titolo}"\n\nL’attività passa fra quelle completate; è possibile riaprirla.`,
+      confirmLabel: 'Conferma',
     });
     if (!ok) return;
     start(async () => {

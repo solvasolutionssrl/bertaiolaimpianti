@@ -112,7 +112,7 @@ export async function vaiA(cdp, path, { attesaMs = 25_000 } = {}) {
 }
 
 /** Accede con le credenziali demo. Lascia il browser dentro l'area riservata. */
-export async function accedi(cdp, mondo = 'kommessa') {
+export async function accedi(cdp, mondo = 'kommessa', { foglioNotifiche = false } = {}) {
   const { email, password } = ACCESSI[mondo];
   await vaiA(cdp, '/login');
   await finoA(cdp, `document.querySelector('input[name=email]')`, { cosa: 'campo email' });
@@ -136,6 +136,13 @@ export async function accedi(cdp, mondo = 'kommessa') {
     cosa: 'uscita dalla pagina di accesso',
   });
   await finoA(cdp, `document.readyState === 'complete'`, { timeoutMs: 30_000 });
+  // Il foglio «Attiva le notifiche» (22/10) compare a ogni apertura dell'app
+  // sul telefono e si mette davanti a ogni dialog: un banco che cerca il primo
+  // `[role=dialog]` troverebbe lui. Lo si mette via per la sessione, salvo per
+  // il banco che lo misura (`foglioNotifiche: true`).
+  if (!foglioNotifiche) {
+    await valuta(cdp, `(() => { try { sessionStorage.setItem('kommessa.notifiche.proposto', '1'); } catch {} return true; })()`);
+  }
 }
 
 /** Salva uno screenshot sotto scripts/banco-ui/esiti/. */

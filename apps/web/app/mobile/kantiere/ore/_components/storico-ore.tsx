@@ -151,7 +151,7 @@ export function StoricoOre({ giorni, passo = 15 }: { giorni: GiornoStorico[]; pa
           </div>
           <p className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
             <Lock className="h-3 w-3" aria-hidden="true" />
-            Le ore sono modificabili fino a 3 giorni fa. Tocca una giornata recente per correggerla.
+            Le ore sono modificabili entro tre giorni. Selezionare una giornata recente per correggerla.
           </p>
         </>
       )}

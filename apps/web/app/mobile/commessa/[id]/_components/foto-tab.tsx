@@ -88,7 +88,7 @@ export function FotoTab({
             className="min-h-[48px] w-full font-mono text-xs uppercase tracking-[0.14em]"
           >
             <Camera className="mr-1.5 h-4 w-4" aria-hidden="true" />
-            Scatta dal vivo
+            Scatta una foto
           </Button>
         </Link>
         <Button
@@ -122,7 +122,7 @@ export function FotoTab({
           </span>
           <p className="text-sm font-medium text-foreground">Nessuna foto o video</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Scatta dal vivo o carica dalla galleria
+            Scatta una foto o carica dalla galleria
           </p>
         </div>
       ) : (

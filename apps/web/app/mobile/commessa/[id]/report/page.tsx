@@ -237,7 +237,7 @@ export default async function ReportPageMobile({
             <div className="mt-4 flex flex-col gap-2">
               <PrintButton />
               <p className="text-center font-mono text-[10px] uppercase tracking-[0.14em] text-primary-foreground/60">
-                Tap "Stampa" → Salva come PDF dal tuo browser
+                Selezionare «Stampa» e salvare in PDF dal browser
               </p>
             </div>
           </Hero>

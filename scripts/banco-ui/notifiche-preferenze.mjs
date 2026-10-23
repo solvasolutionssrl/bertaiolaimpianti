@@ -63,7 +63,7 @@ try {
     cdp,
     `${interruttori}.map(b => b.getAttribute('aria-label') ?? '')`,
   );
-  esito(etichette.length === 4, 'quattro interruttori, uno per avviso ammesso', `${etichette.length}`);
+  esito(etichette.length === 5, 'cinque interruttori, uno per avviso ammesso (dal 22/10 c’è «Ore da inserire»)', `${etichette.length}`);
   esito(
     !etichette.some((e) => /approvare/i.test(e)),
     '⭐ niente «richieste da approvare»: un tecnico non le approva',
@@ -73,7 +73,7 @@ try {
   // ── 3. ogni voce dice QUANDO arriva ──
   const spiegazioni = await valuta(
     cdp,
-    `[...document.querySelectorAll('p')].filter(p => /^Quando /.test(p.textContent?.trim() ?? '')).length`,
+    `[...document.querySelectorAll('p')].filter(p => /^(Quando |La sera)/.test(p.textContent?.trim() ?? '')).length`,
   );
   esito(
     spiegazioni === etichette.length,
@@ -114,7 +114,7 @@ try {
     cdp,
     `(() => {
       const titoli = [...document.querySelectorAll('h2')];
-      const sezione = titoli.find(h => /su questo telefono/i.test(h.textContent ?? ''))?.parentElement;
+      const sezione = titoli.find(h => /su questo dispositivo/i.test(h.textContent ?? ''))?.parentElement;
       if (!sezione) return { trovata: false, testo: '' };
       const tasto = sezione.querySelector('button');
       const avviso = sezione.querySelector('p');

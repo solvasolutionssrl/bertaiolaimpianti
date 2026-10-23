@@ -20,7 +20,7 @@ const CHIAVE = 'kommessa.notifiche.proposto';
  * dentro** (il permesso del browser si chiede nel tocco, non dopo un giro).
  *
  * Compare a ogni apertura dell'app, una volta per sessione del browser:
- * «Non ora» la mette via fino alla prossima apertura, non per quattordici
+ * «Più tardi» la mette via fino alla prossima apertura, non per quattordici
  * giorni. Tre forme, una per situazione:
  *  - si puo' attivare → il tasto grande;
  *  - iPhone fuori dall'app installata → i due passi per metterla in Home,
@@ -104,7 +104,7 @@ export function AttivaNotificheSheet() {
             <>
               <h2 className="mt-5 text-center text-2xl font-semibold tracking-tight">Metti Kommessa in Home</h2>
               <p className="mt-2 text-center text-sm leading-relaxed text-muted-foreground">
-                Su iPhone le notifiche arrivano solo dall’app installata. Bastano due tocchi, poi riapri da lì.
+                Su iPhone le notifiche sono disponibili solo dall’applicazione installata. Completare l’installazione e riaprire da lì.
               </p>
               <ol className="mt-5 space-y-3">
                 <Passo n={1} icona={<Share className="h-5 w-5" aria-hidden="true" />}>
@@ -135,14 +135,14 @@ export function AttivaNotificheSheet() {
               </h2>
               <p className="mt-2 text-center text-sm leading-relaxed text-muted-foreground">
                 {stato === 'fatto'
-                  ? 'Da ora gli avvisi arrivano su questo telefono, anche ad app chiusa.'
-                  : 'Così sai subito cosa ti riguarda, anche ad app chiusa.'}
+                  ? 'Gli avvisi verranno recapitati su questo dispositivo, anche ad applicazione chiusa.'
+                  : 'Le comunicazioni di competenza arrivano tempestivamente, anche ad applicazione chiusa.'}
               </p>
               {stato !== 'fatto' ? (
                 <ul className="mt-5 space-y-3">
-                  <Voce icona={<Briefcase className="h-5 w-5" aria-hidden="true" />} titolo="Lavori affidati a te" testo="Quando l’ufficio ti mette su un lavoro o una cosa da fare." />
-                  <Voce icona={<CalendarClock className="h-5 w-5" aria-hidden="true" />} titolo="Promemoria delle ore" testo="La sera, se hai timbrato e manca ancora la commessa." />
-                  <Voce icona={<CalendarDays className="h-5 w-5" aria-hidden="true" />} titolo="La tua settimana" testo="Quando la pianificazione che ti riguarda cambia." />
+                  <Voce icona={<Briefcase className="h-5 w-5" aria-hidden="true" />} titolo="Commesse e attività assegnate" testo="Quando l’ufficio assegna una commessa o un’attività." />
+                  <Voce icona={<CalendarClock className="h-5 w-5" aria-hidden="true" />} titolo="Ore da inserire" testo="La sera, se la presenza è registrata e le ore non sono attribuite alle commesse." />
+                  <Voce icona={<CalendarDays className="h-5 w-5" aria-hidden="true" />} titolo="Pianificazione settimanale" testo="Quando la pianificazione viene pubblicata o modificata." />
                 </ul>
               ) : null}
               {errore ? (
@@ -159,10 +159,10 @@ export function AttivaNotificheSheet() {
                     className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-base font-semibold text-white shadow-soft transition-transform active:scale-[0.99] disabled:opacity-60"
                   >
                     {stato === 'accendo' ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <BellRing className="h-5 w-5" aria-hidden="true" />}
-                    {stato === 'accendo' ? 'Un momento…' : 'Attiva le notifiche'}
+                    {stato === 'accendo' ? 'Attivazione in corso…' : 'Attiva le notifiche'}
                   </button>
                   <button type="button" onClick={metti_via} className="mt-2 w-full py-3 text-sm font-medium text-muted-foreground active:text-foreground">
-                    Non ora
+                    Più tardi
                   </button>
                 </>
               ) : null}

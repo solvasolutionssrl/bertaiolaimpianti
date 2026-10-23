@@ -49,7 +49,7 @@ export default async function NotifichePage() {
               ? `${nUnread} da leggere`
               : rows.length === 0
                 ? 'Notifiche'
-                : 'Tutto letto'}
+                : 'Nessun avviso da leggere'}
           </h1>
           {/* Gli avvisi arrivano mentre la pagina è aperta: è proprio il posto
               dove non si deve ricaricare a mano. */}

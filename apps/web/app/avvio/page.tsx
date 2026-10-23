@@ -24,7 +24,7 @@ export default function AvvioPage() {
   }, []);
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[#E0ECF5] text-sm text-slate-600">
-      <p>Apro Kommessa…</p>
+      <p>Avvio in corso…</p>
     </main>
   );
 }

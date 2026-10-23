@@ -28,7 +28,7 @@ try {
   await apriMenu(cdp);
   await clicVero(cdp, bottone('^Inizia giornata'));
   await finoA(cdp, `document.querySelector('[role=dialog][aria-label="Inizia giornata"]')`, { cosa: 'dialog avvio' });
-  const a = await valuta(cdp, `(() => { const d = document.querySelector('[role=dialog][aria-label="Inizia giornata"]'); const t = d.innerText; return { facoltativo: /facoltativo/.test(t), spiega: /le ore le assegni ai cantieri quando chiudi/i.test(t) }; })()`);
+  const a = await valuta(cdp, `(() => { const d = document.querySelector('[role=dialog][aria-label="Inizia giornata"]'); const t = d.innerText; return { facoltativo: /facoltativo/.test(t), spiega: /le ore si attribuiscono ai cantieri alla chiusura/i.test(t) }; })()`);
   esito(a.facoltativo && a.spiega, 'avvio: il cantiere è facoltativo e lo dice');
   await clicVero(cdp, bottone('^Inizia$'));
   await attendiPillola(cdp, 'In sede · dalle');

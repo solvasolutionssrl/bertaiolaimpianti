@@ -205,9 +205,9 @@ export function TodoGlobaleBoard({
    */
   const onComplete = async (row: Row) => {
     const ok = await chiediConferma({
-      title: 'Segnare come fatta?',
-      description: `"${row.titolo}"\n\nPassa fra le cose fatte. Si puo' riaprire.`,
-      confirmLabel: 'Sì, è fatta',
+      title: 'Confermare il completamento?',
+      description: `"${row.titolo}"\n\nL’attività passa fra quelle completate; è possibile riaprirla.`,
+      confirmLabel: 'Conferma',
     });
     if (!ok) return;
     start(async () => {
@@ -235,7 +235,7 @@ export function TodoGlobaleBoard({
       description:
         `"${row.titolo}"\n\n` +
         'Si cancellano anche le note e gli allegati. Non si torna indietro.\n\n' +
-        'Se invece la cosa era vera e non si fa più, meglio segnarla come fatta: resta nello storico.',
+        'Se l’attività non deve più essere svolta, è preferibile segnarla come completata: resta nello storico.',
       destructive: true,
       confirmLabel: 'Elimina',
     });
@@ -270,7 +270,7 @@ export function TodoGlobaleBoard({
     start(async () => {
       const res = await affidaSquadraTodo({ todoId: id, userIds });
       if (!res.ok) {
-        await showAlert({ title: 'Non sono riuscito a mandarli', body: res.error });
+        await showAlert({ title: 'Assegnazione non riuscita', body: res.error });
         return;
       }
       router.refresh();
@@ -284,9 +284,9 @@ export function TodoGlobaleBoard({
     const ok = await chiediConferma({
       title: 'Creare la commessa?',
       description:
-        `«${row.titolo}»\n\nSi apre il form di creazione già compilato con quello che sai. ` +
-        'Il codice interno e le cartelle su Nextcloud si creano solo quando confermi lì: ' +
-        'da qui non si fa ancora niente di definitivo.',
+        `«${row.titolo}»\n\nSi apre il modulo di creazione precompilato con i dati disponibili. ` +
+        'Codice interno e cartelle su Nextcloud vengono creati solo alla conferma: ' +
+        'da qui non viene registrato nulla di definitivo.',
       confirmLabel: 'Continua',
     });
     if (!ok) return;
@@ -497,7 +497,7 @@ export function TodoGlobaleBoard({
                       Rimuovi tutti i filtri
                     </button>
                   ) : canWrite ? (
-                    <span>Si creano col pulsante «Nuovo task» qui sopra.</span>
+                    <span>Si creano con il pulsante «Nuovo task» in alto.</span>
                   ) : null
                 }
               />
@@ -510,7 +510,7 @@ export function TodoGlobaleBoard({
             tono="richiesta"
             icona={<Phone className="h-3.5 w-3.5" />}
             titolo="Richieste"
-            spiegazione="Arrivate al telefono, non ancora un lavoro"
+            spiegazione="Richieste ricevute telefonicamente, non ancora convertite in commessa"
             quante={richieste.length}
             azione={
               canWrite ? (
@@ -533,13 +533,13 @@ export function TodoGlobaleBoard({
                     ? 'Le richieste non hanno una commessa.'
                     : activeFiltri > 0
                       ? 'Nessuna richiesta con questi filtri.'
-                      : 'Nessuna richiesta da smistare.'
+                      : 'Nessuna richiesta da assegnare.'
                 }
                 suggerimento={
                   filtri.commessa ? (
                     <span>
-                      Il filtro per commessa le esclude tutte: diventano un lavoro solo
-                      quando si crea la commessa.
+                      Il filtro per commessa le esclude tutte: diventano lavori solo con
+                      la creazione della commessa.
                     </span>
                   ) : activeFiltri > 0 ? (
                     <button
@@ -551,8 +551,8 @@ export function TodoGlobaleBoard({
                     </button>
                   ) : canWrite ? (
                     <span>
-                      Si registrano col pulsante «Nuova richiesta»: chi chiama, cosa
-                      serve, e a chi la passi.
+                      Si registrano con «Nuova richiesta»: chiamante, oggetto della
+                      richiesta e assegnatario.
                     </span>
                   ) : null
                 }
@@ -1010,7 +1010,7 @@ function TodoRow({
               <Badge
                 variant="outline"
                 className="border-primary/30 bg-primary/5 text-[10px] uppercase text-primary"
-                title="Nato dal report di una riunione"
+                title="Generato dal report di una riunione"
               >
                 <Sparkles className="mr-0.5 h-2.5 w-2.5" />
                 Da riunione

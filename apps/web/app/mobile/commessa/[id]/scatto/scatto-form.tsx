@@ -164,7 +164,7 @@ export function ScattoForm({
           <div className="min-w-0">
             <p className="text-sm font-semibold">{enqueuedCount} file in caricamento</p>
             <p className="text-xs text-muted-foreground">
-              Va in background: puoi continuare ad aggiungere. Lo stato è nel pannello in basso.
+              Il caricamento prosegue in background. È possibile aggiungere altri file; lo stato è nel pannello in basso.
             </p>
           </div>
         </div>
@@ -254,7 +254,7 @@ export function ScattoForm({
         {files.length > 0 ? `Carica ${files.length} file` : 'Carica'}
       </Button>
       <p className="text-center text-[11px] text-muted-foreground">
-        L&apos;upload va in background. Vedi lo stato nel pannello in basso.
+        Il caricamento prosegue in background. Lo stato è nel pannello in basso.
       </p>
 
       {/* Scanner PDF a tutto schermo */}

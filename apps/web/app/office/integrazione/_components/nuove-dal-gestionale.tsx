@@ -56,13 +56,13 @@ export function NuoveDalGestionale({ voci }: { voci: SoloNelGestionale[] }) {
           <div>
             <p className="font-semibold">
               {voci.length === 1
-                ? 'C’è una commessa che sta solo sul gestionale locale'
+                ? 'Una commessa è presente solo sul gestionale locale'
                 : `Ci sono ${voci.length} commesse che stanno solo sul gestionale locale`}
             </p>
             <p className="text-sm text-muted-foreground">
-              Puoi crearle qui, già collegate. Da quel momento il cantiere è tuo:
-              indirizzo, foto e QR li metti da qui, e il gestionale locale non te
-              li tocca più.
+              Si possono creare da qui, già collegate. Da quel momento il cantiere è
+              gestito in Kommessa: indirizzo, foto e QR si inseriscono qui e il
+              gestionale non li modifica più.
             </p>
           </div>
           <Button
@@ -182,9 +182,9 @@ export function NuoveDalGestionale({ voci }: { voci: SoloNelGestionale[] }) {
                   Creare {scelti.size} {scelti.size === 1 ? 'cantiere' : 'cantieri'}?
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Prendono il prossimo numero della tua numerazione, con accanto il
-                  codice del gestionale locale. L’indirizzo lo metti tu: per ora li
-                  trovi segnati come da verificare.
+                  Ricevono il numero successivo della numerazione aziendale, con accanto
+                  il codice del gestionale. L’indirizzo va inserito manualmente: fino ad
+                  allora risultano da verificare.
                 </p>
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setConferma(false)} disabled={pending}>

@@ -18,7 +18,7 @@ import { mioTurnoAttivo } from '../_lib/turno-attivo';
 import { LiveRefresh } from '@/app/_components/live-refresh';
 
 export const metadata: Metadata = {
-  title: 'Le mie spese',
+  title: 'Spese',
 };
 
 export const dynamic = 'force-dynamic';
@@ -144,13 +144,13 @@ export default async function SpeseMobilePage() {
           <Receipt className="h-3.5 w-3.5" aria-hidden="true" />
           Kontabilità
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie spese</h1>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Spese</h1>
         {/* Lo scontrino appena fotografato resta "in elaborazione" per qualche
             secondo: la riga deve cambiare da sola, senza tirare giù la pagina.
             «Aggiornato alle» sta sotto il titolo: in alto a destra c'è la campanella. */}
         <div className="mt-0.5 flex items-start justify-between gap-3">
           <p className="min-w-0 text-xs text-muted-foreground">
-            Scatta lo scontrino: leggo importo e categoria, tu controlli e salvi.
+            Fotografare lo scontrino: importo e categoria vengono rilevati automaticamente, da verificare e salvare.
           </p>
           <LiveRefresh className="-my-1 -mr-1.5 shrink-0" />
         </div>
@@ -158,8 +158,8 @@ export default async function SpeseMobilePage() {
 
       {isManager && !dipId ? (
         <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          Il tuo profilo non è collegato a un dipendente: non puoi registrare spese a tuo
-          nome. Chiedi in ufficio di collegarti.
+          Il profilo non è collegato a una scheda dipendente: la registrazione di spese non è
+          disponibile. Richiedere il collegamento all&apos;ufficio.
         </p>
       ) : (
         <NuovaSpesa

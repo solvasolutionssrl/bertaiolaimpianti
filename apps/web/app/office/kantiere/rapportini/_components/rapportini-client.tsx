@@ -16,6 +16,7 @@ import {
   Coffee,
   MapPin,
   Car,
+  Users,
 } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
 import { registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
@@ -30,6 +31,8 @@ import {
   useTotaleGiornata,
 } from '../../_components/timbrature-riepilogo';
 import { GiornateApertePanel } from './giornate-aperte-panel';
+import { LeMieOre } from './le-mie-ore';
+import type { MiaGiornata } from '@/app/office/_lib/mia-giornata';
 import { TimbriTerminale, titoloPassaggi } from '../../_components/timbri-terminale';
 import { CompilaGiornataDialog, type ModoCompila } from '../../_components/compila-giornata-dialog';
 import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
@@ -164,6 +167,8 @@ interface Props {
   };
   /** Giorno corrente in Europe/Rome (YYYY-MM-DD): separa "oggi" dallo storico. */
   oggi: string;
+  /** La giornata di chi guarda, se ha una scheda dipendente: accende la zona «Le mie ore». */
+  mia?: MiaGiornata | null;
   /** Soglia (ore) anomalia turno, per-tenant (`anomalia_turno_ore_max`). Default 10. */
   sogliaOre?: number;
   /** Soglia (ore) turno "lungo" oltre cui ci si aspetta la pausa pranzo. Default 5. */
@@ -359,14 +364,25 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
  * Niente esito: le pill della giornata occupano lo spazio Ore+Esito (colSpan 2);
  * il totale ore LIVE va nell'ultima colonna, sempre popolato.
  */
+/** «tu» accanto al nome: la riga e' di chi guarda, e in alto c'e' la sua zona. */
+function TagTu() {
+  return (
+    <span className="ml-1.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-px align-middle text-[10px] font-semibold text-primary" data-tag-tu>
+      tu
+    </span>
+  );
+}
+
 function OggiRow({
   riga,
   isOpen,
   onToggle,
+  mioId = null,
 }: {
   riga: RapportiniRiga;
   isOpen: boolean;
   onToggle: () => void;
+  mioId?: string | null;
 }) {
   const { minuti } = useTotaleGiornata(riga.timbrature);
   const labels = targetLabels(riga);
@@ -380,7 +396,10 @@ function OggiRow({
           {isOpen ? <ChevronDown className="mt-0.5 h-3.5 w-3.5" /> : <ChevronRight className="mt-0.5 h-3.5 w-3.5" />}
         </td>
         <td className="px-2.5 py-1.5 align-top">
-          <div className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</div>
+          <div className="text-[13px] font-medium text-foreground">
+            {riga.dipendenteNome}
+            {mioId === riga.dipendenteId ? <TagTu /> : null}
+          </div>
         </td>
         <td className="px-2.5 py-1.5 align-top">
           <CantierePills labels={labels} />
@@ -427,6 +446,7 @@ export function RapportiniClient({
   timbroGiornate = [],
   compila,
   oggi,
+  mia = null,
   sogliaOre = 10,
   sogliaPausaOre = 5,
 }: Props) {
@@ -449,13 +469,21 @@ export function RapportiniClient({
   });
   // Le giornate timbrate che chiedono una mano: da ripartire, da chiudere, o
   // che non tornano. Quelle di oggi ancora aperte no: stanno lavorando.
-  const timbroDaFare = timbroGiornate.filter(
+  const timbroDaFareTutte = timbroGiornate.filter(
     (g) =>
       g.stato === 'da_ripartire' ||
       g.stato === 'da_chiudere' ||
       g.stato === 'da_verificare' ||
       (g.stato === 'presenza_aperta' && g.giorno < oggi),
   );
+  // Chi guarda ha una scheda dipendente: le SUE cose stanno in «Le mie ore»,
+  // il resto della pagina parla degli altri. Senza scheda, la pagina e' tutta
+  // «gli altri» e non cambia niente.
+  const mioId = mia?.dipendenteId ?? null;
+  const timbroDaFare = mioId ? timbroDaFareTutte.filter((g) => g.dipendenteId !== mioId) : timbroDaFareTutte;
+  const timbroMie = mioId ? timbroDaFareTutte.filter((g) => g.dipendenteId === mioId) : [];
+  const giorniApertiAltri = mioId ? giorniAperti.filter((g) => g.dipendenteId !== mioId) : giorniAperti;
+  const giorniApertiMie = mioId ? giorniAperti.filter((g) => g.dipendenteId === mioId) : [];
 
   // Filtri locali controllati
   const [from, setFrom] = React.useState(filtri.from);
@@ -561,7 +589,7 @@ export function RapportiniClient({
       if (forzato) {
         const procedi = await chiediConferma({
           title: 'Il cantiere è chiuso',
-          description: `"${cantiereScelto!.nome}" non è più in lavorazione. Registro comunque le ore?`,
+          description: `"${cantiereScelto!.nome}" non è più in lavorazione. Registrare comunque le ore?`,
           confirmLabel: 'Registra',
         });
         if (!procedi) return;
@@ -581,7 +609,7 @@ export function RapportiniClient({
         // I codici non si mostrano a schermo: a leggerli e' una persona.
         setRegError(
           res.error === 'CANTIERE_CHIUSO'
-            ? 'Il cantiere è chiuso. Riprova: ti verrà chiesta conferma.'
+            ? 'Il cantiere è chiuso. Ripetere l’operazione: verrà richiesta una conferma.'
             : res.error,
         );
         return;
@@ -641,6 +669,7 @@ export function RapportiniClient({
 
   // Anomalie (da verificare) nello storico: giornate passate non finalizzate.
   const nAnomalie = storicoTutte.filter((r) => r.daVerificare).length;
+  const nAnomalieMie = mioId ? storicoTutte.filter((r) => r.daVerificare && r.dipendenteId === mioId).length : 0;
 
   // Raggruppa lo storico per giorno (le righe arrivano già ordinate per data desc).
   const gruppi: { giorno: string; righe: RapportiniRiga[] }[] = [];
@@ -671,7 +700,7 @@ export function RapportiniClient({
   // Barra filtri — in cima alla card unica (giorni di oggi + storico).
   // Una riga sola, tutto alto 40px come i tasti dell'ufficio: i filtri a
   // sinistra, le azioni a destra. Sotto i 1280px va a capo fra i due gruppi.
-  const campo = 'h-10 rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+  const campo = 'h-10 w-[8.25rem] rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring';
   const filtriBar = (
     <div className="border-b border-border p-2.5">
       <div className="flex flex-wrap items-end gap-2">
@@ -699,7 +728,7 @@ export function RapportiniClient({
             className={campo}
           />
         </div>
-        <div className="flex w-40 flex-col gap-0.5">
+        <div className="flex w-32 flex-col gap-0.5">
           <label className="text-[11px] font-medium text-muted-foreground">Dipendente</label>
           <Scelta
             opzioni={dipendenti.map((d) => ({ valore: d.id, etichetta: d.nome }))}
@@ -715,7 +744,7 @@ export function RapportiniClient({
             aria-label="Dipendente"
           />
         </div>
-        <div className="flex w-56 flex-col gap-0.5">
+        <div className="flex w-44 flex-col gap-0.5">
           <label className="text-[11px] font-medium text-muted-foreground">Cantiere</label>
           {/* Cercabile per nome, codice e cliente: su FPM i cantieri sono
               centinaia, e un menu di sistema non si cerca. */}
@@ -738,17 +767,23 @@ export function RapportiniClient({
           />
         </div>
         {nAnomalie > 0 ? (
-          <label className="flex h-10 cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium text-foreground">
-            <input
-              type="checkbox"
-              checked={soloAnomalie}
-              onChange={(e) => setSoloAnomalie(e.target.checked)}
-              className="h-3.5 w-3.5 cursor-pointer rounded border-input accent-amber-600"
-            />
-            Solo anomalie
-          </label>
+          /* Un interruttore a icona: nella barra lo spazio e' contato, e la
+             frase per esteso sta gia' nel riquadro ambra qui sopra. */
+          <button
+            type="button"
+            aria-pressed={soloAnomalie}
+            aria-label="Solo anomalie"
+            title={soloAnomalie ? 'Mostra tutte le giornate' : `Mostra solo le anomalie (${nAnomalie})`}
+            onClick={() => setSoloAnomalie((v) => !v)}
+            className={[
+              'inline-flex h-10 w-10 items-center justify-center rounded-md border text-amber-700 transition-colors',
+              soloAnomalie ? 'border-amber-400 bg-amber-100' : 'border-input bg-background hover:bg-amber-50',
+            ].join(' ')}
+          >
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          </button>
         ) : null}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
           <Button
             variant="outline"
             size="sm"
@@ -787,7 +822,7 @@ export function RapportiniClient({
               <Download className="h-4 w-4" aria-hidden="true" />
             </a>
           </Button>
-          <LiveRefresh intervalMs={60000} className="h-10" />
+          <LiveRefresh intervalMs={60000} className="h-10" compatto />
         </div>
       </div>
       {ricalcoloMsg ? <p className="mt-2 text-[11px] text-muted-foreground">{ricalcoloMsg}</p> : null}
@@ -798,12 +833,34 @@ export function RapportiniClient({
 
   return (
     <div className="space-y-3">
+      {mia ? (
+        <>
+          <LeMieOre
+            mia={mia}
+            timbroOggi={timbroGiornate.find((g) => g.dipendenteId === mioId && g.giorno === oggi) ?? null}
+            timbro={timbroMie}
+            giorniAperti={giorniApertiMie}
+            nAnomalie={nAnomalieMie}
+            onRipartisci={(g) => setRipartisciFor(g)}
+            onVediLeMie={(anomalie) => {
+              setDipendente(mia.dipendenteId);
+              setSoloAnomalie(anomalie);
+              applyFiltri({ dipendente: mia.dipendenteId });
+            }}
+          />
+          <h2 className="flex items-center gap-1.5 pt-1 text-sm font-semibold" data-zona-squadra>
+            <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            Dipendenti
+            <span className="font-normal text-muted-foreground">· le giornate degli altri, da sistemare e da controllare</span>
+          </h2>
+        </>
+      ) : null}
       {/* Promemoria: giornate rimaste aperte da chiudere */}
       {timbroDaFare.length > 0 ? (
         <div className="rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-xs font-semibold text-sky-900">
-              Giornate timbrate al terminale da sistemare · {timbroDaFare.length}
+              Giornate timbrate al terminale da completare · {timbroDaFare.length}
             </p>
             <p className="text-[11px] text-sky-800/80">
               La presenza c’è, le ore non sono ancora sui cantieri: finché non si ripartisce non entrano nei conti.
@@ -838,7 +895,7 @@ export function RapportiniClient({
           </ul>
         </div>
       ) : null}
-      <GiornateApertePanel giorni={giorniAperti} />
+      <GiornateApertePanel giorni={giorniApertiAltri} />
       <CompilaGiornataDialog
         open={modoCompila != null}
         onOpenChange={(o) => {
@@ -912,7 +969,7 @@ export function RapportiniClient({
           </span>
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-xs font-semibold text-amber-900">
-              Anomalie da sistemare
+              Anomalie da correggere
               <span className="inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-amber-600 px-1.5 text-[10px] font-bold text-white">
                 {nAnomalie}
               </span>
@@ -1003,6 +1060,7 @@ export function RapportiniClient({
                             riga={riga}
                             isOpen={expanded.has(riga.id)}
                             onToggle={() => toggleExpand(riga.id)}
+                            mioId={mioId}
                           />
                         ))}
                       </>
@@ -1041,6 +1099,7 @@ export function RapportiniClient({
                                 <td className="px-2.5 py-1.5 align-top">
                                   <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                                     <span className="text-[13px] font-medium text-foreground">{riga.dipendenteNome}</span>
+                                    {mioId === riga.dipendenteId ? <TagTu /> : null}
                                     {riga.affidabilita ? (
                                       <BollinoAffidabilita
                                         affidabilita={riga.affidabilita}
@@ -1105,7 +1164,7 @@ export function RapportiniClient({
                                       </span>
                                       {pausaMancante ? (
                                         <span
-                                          title={`Pausa pranzo non timbrata in una giornata oltre ${fmtOreColon(sogliaPausaOre)}. Controlla se è stata fatta e, se sì, aggiungila con Modifica.`}
+                                          title={`Pausa pranzo non timbrata in una giornata oltre ${fmtOreColon(sogliaPausaOre)}. Verificare se la pausa è stata effettuata e, in tal caso, inserirla con Modifica.`}
                                           className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
                                         >
                                           <AlertTriangle className="h-3 w-3" aria-hidden="true" />

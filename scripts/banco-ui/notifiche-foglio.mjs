@@ -21,15 +21,15 @@ const bottone = (re) => `[...document.querySelectorAll('[data-foglio-notifiche] 
     // Su un Mac l'emulazione tiene `platform` MacIntel con il touch: per il
     // foglio e' un iPad. Qui si vuole un Android.
     await cdp.invia('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
-    await accedi(cdp, 'tecnico');
+    await accedi(cdp, 'tecnico', { foglioNotifiche: true });
     await vaiA(cdp, '/mobile/kantiere/cantieri');
     await finoA(cdp, `(${FOGLIO})?.dataset.foglioNotifiche === 'spento'`, { cosa: 'foglio', timeoutMs: 60000 });
     const t = await testo(cdp);
-    esito(/Attiva le notifiche/.test(t) && /Lavori affidati a te/.test(t) && /Promemoria delle ore/.test(t) && /Non ora/.test(t), 'foglio: titolo, i tre motivi, il tasto e «Non ora»', t.slice(0, 120));
+    esito(/Attiva le notifiche/.test(t) && /Commesse e attività assegnate/.test(t) && /Ore da inserire/.test(t) && /Più tardi/.test(t), 'foglio: titolo, i tre motivi, il tasto e «Più tardi»', t.slice(0, 120));
     const geom = await valuta(cdp, `(() => { const b = ${bottone('^Attiva le notifiche')}; const r = b.getBoundingClientRect(); return { h: Math.round(r.height), w: Math.round(r.width), vw: innerWidth }; })()`);
     esito(geom.h >= 52 && geom.w >= geom.vw * 0.8, 'foglio: tasto grande, a tutta larghezza', JSON.stringify(geom));
     await foto(cdp, 'notifiche-foglio-01-attiva');
-    await clicVero(cdp, bottone('^Non ora$'));
+    await clicVero(cdp, bottone('^Più tardi$'));
     await finoA(cdp, `!${FOGLIO}`, { cosa: 'foglio chiuso' });
     esito(true, 'foglio: «Non ora» lo mette via');
     await vaiA(cdp, '/mobile/kantiere/ore');
@@ -51,7 +51,7 @@ const bottone = (re) => `[...document.querySelectorAll('[data-foglio-notifiche] 
   const { cdp, chiudi } = await apriChrome({ mobile: true });
   try {
     await cdp.invia('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', platform: 'iPhone' });
-    await accedi(cdp, 'tecnico');
+    await accedi(cdp, 'tecnico', { foglioNotifiche: true });
     await vaiA(cdp, '/mobile/kantiere/cantieri');
     await finoA(cdp, `(${FOGLIO})?.dataset.foglioNotifiche === 'serve_home'`, { cosa: 'foglio iPhone', timeoutMs: 60000 });
     const t = await testo(cdp);

@@ -519,7 +519,7 @@ export function ViaggioRitornoDialog({
               <div className="space-y-2">
                 <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                   <MapPin className="h-4 w-4 text-primary" strokeWidth={1.75} />
-                  Dove vai adesso?
+                  Destinazione
                 </p>
                 <div className="grid gap-2">
                   {sedi.map((s) => (
@@ -694,7 +694,7 @@ export function ViaggioRitornoDialog({
                   onChange={(e) => setPausaFatta(e.target.checked)}
                   className="h-4 w-4 rounded border-amber-400 accent-amber-600"
                 />
-                <span className="text-sm font-medium text-amber-900">Ho fatto la pausa pranzo</span>
+                <span className="text-sm font-medium text-amber-900">Pausa pranzo effettuata</span>
               </label>
               {pausaFatta ? <SceltaPausaPranzo valore={pausaMin} onChange={setPausaMin} /> : null}
               {pausaFatta ? (

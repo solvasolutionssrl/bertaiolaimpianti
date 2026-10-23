@@ -154,9 +154,9 @@ export default async function CantieriMobilePage() {
             <span className="block text-xs leading-snug text-muted-foreground">
               {daRipartire.oggi
                 ? daRipartire.dalTerminale
-                  ? 'Hai timbrato al terminale: manca solo dire dove.'
-                  : 'Hai segnato la presenza: manca solo dire dove.'
-                : `La giornata del ${new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'long' }).format(new Date(`${daRipartire.giorno}T12:00:00Z`))} aspetta le commesse.`}
+                  ? 'Timbratura registrata al terminale: resta da indicare il cantiere.'
+                  : 'Presenza registrata: resta da indicare il cantiere.'
+                : `La giornata del ${new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: 'numeric', month: 'long' }).format(new Date(`${daRipartire.giorno}T12:00:00Z`))} è in attesa dell’attribuzione alle commesse.`}
             </span>
           </span>
         </Link>

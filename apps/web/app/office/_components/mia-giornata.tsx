@@ -29,46 +29,17 @@ const COME: Record<string, { testo: string; Icona: React.ComponentType<{ classNa
   altro: { testo: '', Icona: MapPin },
 };
 
-export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
-  const router = useRouter();
-  const [pending, startTransition] = React.useTransition();
-  const [aperto, setAperto] = React.useState(false);
-  const [modo, setModo] = React.useState<ModoCompila | null>(null);
-  const [avvio, setAvvio] = React.useState(false);
-  const [errore, setErrore] = React.useState<string | null>(null);
-  const ref = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!aperto) return;
-    const fuori = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setAperto(false);
-    };
-    document.addEventListener('mousedown', fuori);
-    return () => document.removeEventListener('mousedown', fuori);
-  }, [aperto]);
-
+/** Com'e' messa la giornata, in una riga: testo, colore e icona della pillola. */
+export function statoMiaGiornata(dati: MiaGiornataDati): {
+  testo: string;
+  colore: string;
+  Icona: React.ComponentType<{ className?: string }>;
+  /** Turno in corso: il pallino pulsa. */
+  pulsa: boolean;
+} {
   const t = dati.turno;
   const scatola = dati.timbro && (dati.timbro.stato === 'da_ripartire' || dati.timbro.stato === 'da_chiudere') ? dati.timbro : null;
   const presenzaAperta = dati.timbro?.stato === 'presenza_aperta' && !t;
-  // La presenza nel registro e' di oggi e l'ultimo segno e' un'uscita: si puo' riprendere.
-  const ultimoSegno = dati.timbro?.giorno === dati.giorno ? (dati.timbro.timbri.filter((x) => !x.scartato).pop() ?? null) : null;
-  const puoRiprendere = !t && ultimoSegno?.tipo === 'uscita';
-  const presenza = (azione: 'inizio' | 'pausa' | 'ripresa' | 'fine') => azione_(() => segnaPresenzaInSede({ azione }));
-  const azione_ = (fn: () => Promise<{ ok: boolean; error?: string }>) => azione(fn);
-
-  const azione = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
-    setErrore(null);
-    startTransition(async () => {
-      const r = await fn();
-      if (!r.ok) setErrore(r.error ?? 'Non riuscito');
-      else {
-        setAperto(false);
-        router.refresh();
-      }
-    });
-  };
-
-  // La pillola: lo stato in una riga.
   let colore = 'bg-muted text-muted-foreground border-border';
   let testo = 'Nessun turno';
   let Icona: React.ComponentType<{ className?: string }> = Square;
@@ -88,6 +59,46 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
   } else if (dati.lavoratiOggiMin > 0) {
     testo = `Oggi ${hm(dati.lavoratiOggiMin)} di lavoro`;
   }
+  return { testo, colore, Icona, pulsa: !!t && !t.inPausa };
+}
+
+/**
+ * Le azioni sulla mia giornata (pausa, ripresa, chiusura, avvio, registra,
+ * inserisci le commesse) e i dialog che aprono. Un hook, non un componente:
+ * nella pillola i tasti stanno dentro un menu che si smonta al clic, e un
+ * dialog montato li' dentro morirebbe con lui. Chi usa l'hook mette `corpo`
+ * dove vuole e `dialoghi` fuori da tutto cio' che si smonta.
+ */
+export function useMiaGiornata(dati: MiaGiornataDati, { dopo }: { dopo?: () => void } = {}) {
+  const router = useRouter();
+  const [pending, startTransition] = React.useTransition();
+  const [modo, setModo] = React.useState<ModoCompila | null>(null);
+  const [avvio, setAvvio] = React.useState(false);
+  const [errore, setErrore] = React.useState<string | null>(null);
+
+  const t = dati.turno;
+  const scatola = dati.timbro && (dati.timbro.stato === 'da_ripartire' || dati.timbro.stato === 'da_chiudere') ? dati.timbro : null;
+  const presenzaAperta = dati.timbro?.stato === 'presenza_aperta' && !t;
+  // La presenza nel registro e' di oggi e l'ultimo segno e' un'uscita: si puo' riprendere.
+  const ultimoSegno = dati.timbro?.giorno === dati.giorno ? (dati.timbro.timbri.filter((x) => !x.scartato).pop() ?? null) : null;
+  const puoRiprendere = !t && ultimoSegno?.tipo === 'uscita';
+
+  const azione = (fn: () => Promise<{ ok: boolean; error?: string }>) => {
+    setErrore(null);
+    startTransition(async () => {
+      const r = await fn();
+      if (!r.ok) setErrore(r.error ?? 'Non riuscito');
+      else {
+        dopo?.();
+        router.refresh();
+      }
+    });
+  };
+  const presenza = (az: 'inizio' | 'pausa' | 'ripresa' | 'fine') => azione(() => segnaPresenzaInSede({ azione: az }));
+  const apri = (fn: () => void) => {
+    dopo?.();
+    fn();
+  };
 
   const datiDialog = {
     cantieri: dati.cantieri,
@@ -99,6 +110,108 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
     impostazioni: dati.impostazioni,
   };
 
+  const corpo = (
+    <>
+      {t ? (
+        <div className="space-y-2">
+          <p className="text-sm">
+            <span className="font-semibold">{t.cantiereNome}</span>
+            <span className="text-muted-foreground"> · dalle {oraMostrata(t.inizioTs)} {COME[t.come]?.testo ?? ''}{t.inSede ? ' · in sede' : ''}</span>
+            {t.inPausa && t.inizioPausaTs ? <span className="block text-xs text-amber-700">In pausa dalle {oraMostrata(t.inizioPausaTs)}</span> : null}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {t.inPausa ? (
+              <Button size="sm" variant="outline" disabled={pending} onClick={() => azione(() => riprendiTurnoMio({ cantiereId: t.cantiereId }))}>
+                <Play className="mr-1.5 h-3.5 w-3.5" /> Riprendi
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" disabled={pending || t.pausaOggiFatta} onClick={() => azione(() => pausaPranzoMia({ cantiereId: t.cantiereId }))}>
+                <Coffee className="mr-1.5 h-3.5 w-3.5" /> Pausa pranzo
+              </Button>
+            )}
+            <Button size="sm" disabled={pending || t.inPausa} onClick={() => apri(() => setModo({ tipo: 'chiusura', turno: t }))}>
+              <Square className="mr-1.5 h-3.5 w-3.5" /> Chiudi il turno
+            </Button>
+          </div>
+          {t.inPausa ? <p className="text-[11px] text-muted-foreground">Durante la pausa il turno non si chiude: riprenderlo prima.</p> : null}
+        </div>
+      ) : scatola ? (
+        <div className="space-y-2">
+          <p className="text-sm">
+            {scatola.dalTerminale ? 'Badge' : 'In sede'} {scatola.inizioIso ? oraMostrata(scatola.inizioIso) : ''} → {scatola.fineIso ? oraMostrata(scatola.fineIso) : ''}
+            <span className="block text-xs text-muted-foreground">{hm(scatola.nettoMin)} di presenza{scatola.giorno !== dati.giorno ? ` · ${scatola.giorno}` : ''}. Ore da attribuire alle commesse.</span>
+          </p>
+          {/* «Riprendi» prende la sua larghezza, il tasto lungo tutto il resto:
+              a due colonne uguali «Inserisci le commesse» usciva dal bordo. */}
+          <div className={cn('grid gap-2', puoRiprendere ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1')}>
+            {puoRiprendere ? (
+              <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('ripresa')}>
+                <Play className="mr-1.5 h-3.5 w-3.5" /> Riprendi
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={() => apri(() => setModo({ tipo: 'scatola', vista: scatola }))}>
+              <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Inserisci le commesse
+            </Button>
+          </div>
+        </div>
+      ) : presenzaAperta ? (
+        <div className="space-y-2">
+          <p className="text-sm">
+            In sede dalle {dati.timbro?.inizioIso ? oraMostrata(dati.timbro.inizioIso) : ''}
+            <span className="block text-xs text-muted-foreground">Presenza senza cantiere: le ore si attribuiscono alla chiusura.</span>
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('pausa')}>
+              <Coffee className="mr-1.5 h-3.5 w-3.5" /> Pausa
+            </Button>
+            <Button size="sm" disabled={pending} onClick={() => presenza('fine')}>
+              <Square className="mr-1.5 h-3.5 w-3.5" /> Fine giornata
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {dati.lavoratiOggiMin > 0 ? <p className="text-sm text-muted-foreground">Oggi {hm(dati.lavoratiOggiMin)} di lavoro già registrate.</p> : <p className="text-sm text-muted-foreground">Nessun turno aperto.</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <Button size="sm" disabled={pending} onClick={() => apri(() => setAvvio(true))}>
+              <Play className="mr-1.5 h-3.5 w-3.5" /> Inizia giornata
+            </Button>
+            <Button size="sm" variant="outline" disabled={pending || dati.haTimbratureOggi || !dati.impostazioni.registraGiornataAttivo} title={dati.haTimbratureOggi ? 'Timbrature già presenti per oggi' : undefined} onClick={() => apri(() => setModo({ tipo: 'registra' }))}>
+              <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Registra giornata
+            </Button>
+          </div>
+        </div>
+      )}
+      {errore ? <p className="mt-2 text-xs text-destructive">{errore}</p> : null}
+      {pending ? <Loader2 className="mt-2 h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+    </>
+  );
+
+  const dialoghi = (
+    <>
+      <CompilaGiornataDialog open={modo != null} onOpenChange={(o) => { if (!o) setModo(null); }} modo={modo} dati={datiDialog} />
+      <AvviaGiornataDialog open={avvio} onClose={() => setAvvio(false)} dati={dati} />
+    </>
+  );
+
+  return { stato: statoMiaGiornata(dati), corpo, dialoghi, pending };
+}
+
+export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
+  const [aperto, setAperto] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const { stato, corpo, dialoghi } = useMiaGiornata(dati, { dopo: () => setAperto(false) });
+  const { Icona } = stato;
+
+  React.useEffect(() => {
+    if (!aperto) return;
+    const fuori = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAperto(false);
+    };
+    document.addEventListener('mousedown', fuori);
+    return () => document.removeEventListener('mousedown', fuori);
+  }, [aperto]);
+
   return (
     <div ref={ref} className="relative hidden md:block">
       <button
@@ -107,9 +220,9 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
         aria-expanded={aperto}
         aria-haspopup="menu"
         title="La mia giornata"
-        className={cn('inline-flex h-9 max-w-[22rem] items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors hover:brightness-95', colore)}
+        className={cn('inline-flex h-9 max-w-[22rem] items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors hover:brightness-95', stato.colore)}
       >
-        {t && !t.inPausa ? (
+        {stato.pulsa ? (
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
@@ -117,90 +230,19 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
         ) : (
           <Icona className="h-3.5 w-3.5 shrink-0" />
         )}
-        <span className="truncate">{testo}</span>
+        <span className="truncate">{stato.testo}</span>
         <ChevronDown className="h-3 w-3 shrink-0 opacity-70" aria-hidden="true" />
       </button>
 
       {aperto ? (
         <div role="menu" className="absolute right-0 top-11 z-50 w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-lg">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">La mia giornata</p>
-          {t ? (
-            <div className="mt-2 space-y-2">
-              <p className="text-sm">
-                <span className="font-semibold">{t.cantiereNome}</span>
-                <span className="text-muted-foreground"> · dalle {oraMostrata(t.inizioTs)} {COME[t.come]?.testo ?? ''}{t.inSede ? ' · in sede' : ''}</span>
-                {t.inPausa && t.inizioPausaTs ? <span className="block text-xs text-amber-700">In pausa dalle {oraMostrata(t.inizioPausaTs)}</span> : null}
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {t.inPausa ? (
-                  <Button size="sm" variant="outline" disabled={pending} onClick={() => azione(() => riprendiTurnoMio({ cantiereId: t.cantiereId }))}>
-                    <Play className="mr-1.5 h-3.5 w-3.5" /> Riprendi
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" disabled={pending || t.pausaOggiFatta} onClick={() => azione(() => pausaPranzoMia({ cantiereId: t.cantiereId }))}>
-                    <Coffee className="mr-1.5 h-3.5 w-3.5" /> Pausa pranzo
-                  </Button>
-                )}
-                <Button size="sm" disabled={pending || t.inPausa} onClick={() => { setAperto(false); setModo({ tipo: 'chiusura', turno: t }); }}>
-                  <Square className="mr-1.5 h-3.5 w-3.5" /> Chiudi il turno
-                </Button>
-              </div>
-              {t.inPausa ? <p className="text-[11px] text-muted-foreground">In pausa non si chiude: prima si riprende.</p> : null}
-            </div>
-          ) : scatola ? (
-            <div className="mt-2 space-y-2">
-              <p className="text-sm">
-                {scatola.dalTerminale ? 'Badge' : 'In sede'} {scatola.inizioIso ? oraMostrata(scatola.inizioIso) : ''} → {scatola.fineIso ? oraMostrata(scatola.fineIso) : ''}
-                <span className="block text-xs text-muted-foreground">{hm(scatola.nettoMin)} di presenza{scatola.giorno !== dati.giorno ? ` · ${scatola.giorno}` : ''}: dì su quali commesse hai lavorato.</span>
-              </p>
-              {/* «Riprendi» prende la sua larghezza, il tasto lungo tutto il resto:
-                  a due colonne uguali «Inserisci le commesse» usciva dal bordo. */}
-              <div className={cn('grid gap-2', puoRiprendere ? 'grid-cols-[auto_minmax(0,1fr)]' : 'grid-cols-1')}>
-                {puoRiprendere ? (
-                  <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('ripresa')}>
-                    <Play className="mr-1.5 h-3.5 w-3.5" /> Riprendi
-                  </Button>
-                ) : null}
-                <Button size="sm" onClick={() => { setAperto(false); setModo({ tipo: 'scatola', vista: scatola }); }}>
-                  <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Inserisci le commesse
-                </Button>
-              </div>
-            </div>
-          ) : presenzaAperta ? (
-            <div className="mt-2 space-y-2">
-              <p className="text-sm">
-                In sede dalle {dati.timbro?.inizioIso ? oraMostrata(dati.timbro.inizioIso) : ''}
-                <span className="block text-xs text-muted-foreground">Senza cantiere: le ore le assegni alla fine, quando chiudi.</span>
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" variant="outline" disabled={pending} onClick={() => presenza('pausa')}>
-                  <Coffee className="mr-1.5 h-3.5 w-3.5" /> Pausa
-                </Button>
-                <Button size="sm" disabled={pending} onClick={() => presenza('fine')}>
-                  <Square className="mr-1.5 h-3.5 w-3.5" /> Fine giornata
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="mt-2 space-y-2">
-              {dati.lavoratiOggiMin > 0 ? <p className="text-sm text-muted-foreground">Oggi {hm(dati.lavoratiOggiMin)} di lavoro già registrate.</p> : <p className="text-sm text-muted-foreground">Nessun turno aperto.</p>}
-              <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" disabled={pending} onClick={() => { setAperto(false); setAvvio(true); }}>
-                  <Play className="mr-1.5 h-3.5 w-3.5" /> Inizia giornata
-                </Button>
-                <Button size="sm" variant="outline" disabled={pending || dati.haTimbratureOggi || !dati.impostazioni.registraGiornataAttivo} title={dati.haTimbratureOggi ? 'Oggi hai già delle timbrature' : undefined} onClick={() => { setAperto(false); setModo({ tipo: 'registra' }); }}>
-                  <CalendarClock className="mr-1.5 h-3.5 w-3.5" /> Registra giornata
-                </Button>
-              </div>
-            </div>
-          )}
-          {errore ? <p className="mt-2 text-xs text-destructive">{errore}</p> : null}
-          {pending ? <Loader2 className="mt-2 h-3.5 w-3.5 animate-spin text-muted-foreground" /> : null}
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">La mia giornata</p>
+          {corpo}
         </div>
       ) : null}
 
-      <CompilaGiornataDialog open={modo != null} onOpenChange={(o) => { if (!o) setModo(null); }} modo={modo} dati={datiDialog} />
-      <AvviaGiornataDialog open={avvio} onClose={() => setAvvio(false)} dati={dati} />
+      {/* Fuori dal menu: nel menu stanno i tasti, non lo stato. */}
+      {dialoghi}
     </div>
   );
 }
@@ -261,13 +303,13 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
       <div className="w-full max-w-md space-y-4 rounded-xl border border-border bg-card p-5 shadow-xl">
         <div>
           <h2 className="text-base font-semibold">Inizia la giornata</h2>
-          <p className="text-xs text-muted-foreground">Su cosa lavori, e da dove parti.</p>
+          <p className="text-xs text-muted-foreground">Cantiere e luogo di partenza.</p>
         </div>
         <div className="space-y-1 text-xs">
           <span className="font-medium text-muted-foreground">Cantiere{inSede ? ' · facoltativo' : ''}</span>
-          <Scelta opzioni={dati.cantieri.map((c) => ({ valore: c.id, etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome }))} valore={cantiereId} onCambia={(v) => setCantiereId(v)} segnaposto={inSede ? 'Nessuno: lo dici a fine giornata' : 'Cantiere…'} disabilitato={pending} etichettaNessuno={inSede ? 'Nessuno: lo dici a fine giornata' : undefined} />
+          <Scelta opzioni={dati.cantieri.map((c) => ({ valore: c.id, etichetta: c.cliente ? `${c.nome} · ${c.cliente}` : c.nome }))} valore={cantiereId} onCambia={(v) => setCantiereId(v)} segnaposto={inSede ? 'Nessuno: da indicare a fine giornata' : 'Cantiere…'} disabilitato={pending} etichettaNessuno={inSede ? 'Nessuno: da indicare a fine giornata' : undefined} />
           {inSede && !cantiereId ? (
-            <span className="block text-muted-foreground">Parte la presenza in sede; le ore le assegni ai cantieri quando chiudi.</span>
+            <span className="block text-muted-foreground">Viene registrata la presenza in sede; le ore si attribuiscono ai cantieri alla chiusura.</span>
           ) : null}
         </div>
         {sedeDefault ? (
@@ -288,7 +330,7 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
             </label>
             {partenza !== 'casa' ? (
               <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-1.5"><input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={autista} disabled={pending} onChange={(e) => setAutista(e.target.checked)} /> Guidavo io</label>
+                <label className="flex items-center gap-1.5"><input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={autista} disabled={pending} onChange={(e) => setAutista(e.target.checked)} /> Conducente</label>
                 {autista && dati.mezzi.length > 0 ? (
                   <select value={mezzoId} disabled={pending} onChange={(e) => setMezzoId(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
                     <option value="">Mezzo…</option>

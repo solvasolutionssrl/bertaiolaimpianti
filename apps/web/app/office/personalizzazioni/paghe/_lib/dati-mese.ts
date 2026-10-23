@@ -409,7 +409,7 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
       avvisiInPiu.push({
         gravita: 'attenzione' as const,
         dipendenteId: riga.dipendenteId,
-        messaggio: `${nomeDi.get(riga.dipendenteId) ?? 'Dipendente'}: ${riga.causale} del ${riga.dal.slice(8, 10)}/${riga.dal.slice(5, 7)} c'e' due volte, una da Kommessa e una scritta a mano. Nel file escono entrambe.`,
+        messaggio: `${nomeDi.get(riga.dipendenteId) ?? 'Dipendente'}: ${riga.causale} del ${riga.dal.slice(8, 10)}/${riga.dal.slice(5, 7)} risulta due volte, una da Kommessa e una inserita manualmente. Il file riporta entrambe.`,
       });
     }
   }

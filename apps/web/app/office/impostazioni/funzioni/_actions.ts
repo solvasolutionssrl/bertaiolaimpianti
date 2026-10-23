@@ -38,7 +38,7 @@ export async function cambiaFunzioneTenant(input: {
   if (!def.gestibileDaUfficio) {
     return {
       ok: false,
-      error: 'Questa funzione la gestiamo noi: scrivete a SOLVA e la accendiamo.',
+      error: 'L’attivazione di questa funzione è gestita da SOLVA: inviare una richiesta all’assistenza.',
     };
   }
 

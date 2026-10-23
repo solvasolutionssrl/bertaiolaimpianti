@@ -67,24 +67,24 @@ export default async function NotifichePage() {
         </Link>
         <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight">Notifiche</h1>
-          <p className="text-xs text-muted-foreground">Cosa farti sapere, e su quale telefono.</p>
+          <p className="text-xs text-muted-foreground">Avvisi da ricevere e dispositivi.</p>
         </div>
       </header>
 
       <section className="space-y-2">
         <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Su questo telefono
+          Su questo dispositivo
         </h2>
         <SuQuestoTelefono />
       </section>
 
       <section className="space-y-2">
         <h2 className="px-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Cosa farti sapere
+          Avvisi da ricevere
         </h2>
         {avvisi.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-xs text-muted-foreground">
-            Per il tuo profilo non è previsto nessun avviso.
+            Per il profilo in uso non è previsto alcun avviso.
           </p>
         ) : (
           <CosaFartiSapere avvisi={avvisi} sceltiAttivi={sceltiAttivi} />

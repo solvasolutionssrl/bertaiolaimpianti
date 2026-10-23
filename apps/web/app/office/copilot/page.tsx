@@ -85,10 +85,10 @@ export default async function CopilotPage() {
                 Limiti attuali (beta)
               </p>
               <p className="text-xs leading-snug text-muted-foreground">
-                Il co-pilot vede solo i metadati operativi (commesse,
-                tickets, audit). Non legge foto, allegati o documenti
-                cliente finché lo storage cloud non è attivo. Niente
-                azioni distruttive: solo lettura.
+                Il co-pilot accede solo ai metadati operativi (commesse,
+                ticket, registro). Non legge foto, allegati o documenti
+                cliente finché lo storage cloud non è attivo. Accesso in
+                sola lettura.
               </p>
             </CardContent>
           </Card>

@@ -100,8 +100,8 @@ export function CosaFartiSapere({
       ) : null}
 
       <p className="px-1 text-xs leading-relaxed text-muted-foreground">
-        Spento, l’avviso non fa squillare il telefono ma resta nell’elenco della campanella: la
-        traccia di cosa è successo non si perde.
+        Se disattivato, l’avviso non genera una notifica sul dispositivo ma resta nell’elenco, a
+        garanzia della tracciabilità.
       </p>
     </div>
   );

@@ -60,7 +60,7 @@ export function SuQuestoTelefono() {
       else if (esito === 'nonsupportato') setStato('nonsupportato');
       else {
         setStato('guasto');
-        setNota('La sottoscrizione c’è ma il server non l’ha accettata: tocca «Spegni» e poi riattiva.');
+        setNota('Registrazione presente ma non accettata dal server: disattivare e riattivare le notifiche.');
       }
     });
   }, []);
@@ -71,7 +71,7 @@ export function SuQuestoTelefono() {
     const r = await attivaNotifichePush();
     if (r.esito === 'acceso') {
       setStato('acceso');
-      setNota('Fatto. Le notifiche arrivano su questo telefono.');
+      setNota('Attivazione completata. Le notifiche verranno recapitate su questo dispositivo.');
     } else if (r.esito === 'guasto') {
       setStato('guasto');
       setNota(r.messaggio);
@@ -94,9 +94,9 @@ export function SuQuestoTelefono() {
         await sub.unsubscribe();
       }
       setStato('spento');
-      setNota('Spente su questo telefono. Gli avvisi restano nell’elenco della campanella.');
+      setNota('Notifiche disattivate su questo dispositivo. Gli avvisi restano disponibili nell’elenco.');
     } catch (e) {
-      setNota(e instanceof Error ? e.message : 'Non è stato possibile spegnerle.');
+      setNota(e instanceof Error ? e.message : 'Disattivazione non riuscita.');
     }
   }
 
@@ -128,10 +128,10 @@ export function SuQuestoTelefono() {
       {stato === 'acceso' ? (
         <>
           <Riquadro tono="buono" icona={<BellRing className="h-4 w-4" />}>
-            <p className="text-xs font-medium">Notifiche attive su questo telefono.</p>
+            <p className="text-xs font-medium">Notifiche attive su questo dispositivo.</p>
           </Riquadro>
           <Button variant="ghost" size="sm" className="self-start" onClick={spegni}>
-            Spegni su questo telefono
+            Disattiva su questo dispositivo
           </Button>
         </>
       ) : (
@@ -147,7 +147,7 @@ export function SuQuestoTelefono() {
           ) : (
             <Bell className="h-4 w-4" aria-hidden="true" />
           )}
-          {stato === 'accendo' ? 'Attivazione…' : 'Attiva le notifiche su questo telefono'}
+          {stato === 'accendo' ? 'Attivazione…' : 'Attiva le notifiche su questo dispositivo'}
         </Button>
       )}
       {nota ? <p className="text-xs text-muted-foreground">{nota}</p> : null}

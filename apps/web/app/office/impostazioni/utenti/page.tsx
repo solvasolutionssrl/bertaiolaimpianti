@@ -127,7 +127,7 @@ export default async function UtentiPage() {
       <div className="flex items-start justify-between gap-4">
         <SectionHeader
           title="Chi entra nell’app"
-          description="Accessi, mestiere, poteri in più. I tecnici entrano con nome utente e password, senza email."
+          description="Accessi, mansione e autorizzazioni aggiuntive. I tecnici accedono con nome utente e password, senza email."
           icon={<Users />}
         />
         {/* Stats strip inline */}

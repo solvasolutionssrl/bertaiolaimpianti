@@ -61,7 +61,7 @@ export function AreaDocumento({
   const accetta = (scelto: File | null | undefined) => {
     if (!scelto) return;
     if (scelto.size > MAX_BYTE) {
-      onErrore('File troppo grande', `"${scelto.name}" pesa ${pesoLeggibile(scelto.size)}. Il limite è 15 MB.`);
+      onErrore('File troppo grande', `«${scelto.name}» ha una dimensione di ${pesoLeggibile(scelto.size)}. Il limite è 15 MB.`);
       return;
     }
     if (!MIME_AMMESSI.includes(scelto.type)) {

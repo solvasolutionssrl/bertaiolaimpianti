@@ -15,11 +15,11 @@ import {
 function messaggioErrore(code: string): string {
   switch (code) {
     case 'IN_PAUSA':
-      return 'Sei in pausa: riprendi il turno prima di cambiare cantiere.';
+      return 'Turno in pausa: riprenderlo prima di cambiare cantiere.';
     case 'NESSUN_TURNO_APERTO':
       return 'Il turno è cambiato nel frattempo. Ricarica la pagina.';
     case 'STESSO_CANTIERE':
-      return 'È lo stesso cantiere su cui stai già lavorando.';
+      return 'Il cantiere selezionato è quello già in corso.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
     case 'CANTIERE_CHIUSO':
@@ -150,7 +150,7 @@ export function CambiaCantiereButton({
             <p className="px-1 text-[11px] leading-relaxed text-muted-foreground">
               Il turno sul cantiere attuale si chiude e si riapre su quello scelto; le ore si dividono dagli
               orari. {aSede
-                ? 'Sul nuovo cantiere si lavora dalla sede predefinita: il tragitto, se c’è, arriva alla sede.'
+                ? 'Sul nuovo cantiere il lavoro è svolto dalla sede predefinita: l’eventuale tragitto termina alla sede.'
                 : 'Il tragitto conta come viaggio e i km vanno al nuovo cantiere.'}
             </p>
             {errore ? (

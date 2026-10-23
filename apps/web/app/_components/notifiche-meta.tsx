@@ -42,8 +42,8 @@ export const NOTIFICA_RIPIEGO: NotificaMeta = { label: 'Avviso', Icon: Bell };
 
 export const NOTIFICA_META: Record<string, NotificaMeta> = {
   // ── mondo commesse ──
-  todo_assegnato: { label: 'Assegnato a te', Icon: ListChecks },
-  commessa_assegnata: { label: 'Sei su questo lavoro', Icon: Briefcase },
+  todo_assegnato: { label: 'Attività assegnata', Icon: ListChecks },
+  commessa_assegnata: { label: 'Commessa assegnata', Icon: Briefcase },
   ticket_assigned: { label: 'Ticket assegnato', Icon: Ticket },
   ticket_created: { label: 'Nuovo ticket', Icon: Ticket },
   ticket_nuovo_portale: { label: 'Ticket dal cliente', Icon: MessageSquare },

@@ -88,8 +88,8 @@ export function InstallPromptHint() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Per usare Kommessa come una vera app — full-screen e con icona
-          dedicata — installala sul telefono.
+          Installare Kommessa sul dispositivo per usarla a schermo intero e con
+          icona dedicata.
         </p>
 
         {/* Chromium: bottone nativo */}
@@ -179,7 +179,7 @@ export function InstallPromptHint() {
           onClick={() => setDismissed(true)}
           className="text-xs text-muted-foreground underline"
         >
-          Non mostrare più adesso
+          Non mostrare più questo avviso
         </button>
       </CardContent>
     </Card>

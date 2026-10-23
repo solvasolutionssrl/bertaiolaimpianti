@@ -181,7 +181,7 @@ export function VociList({
           <p className="text-xs text-muted-foreground">
             {merged.filter((v) => v.isCustom).length > 0
               ? `${merged.filter((v) => v.isCustom).length} voci custom create per il tuo tenant.`
-              : 'Aggiungi voci specifiche del tuo workflow quando il catalogo standard non basta.'}
+              : 'Aggiungere voci specifiche dei processi aziendali quando il catalogo standard non è sufficiente.'}
           </p>
           <Button
             size="sm"
@@ -759,7 +759,7 @@ function NuovaVoceDialog({
           {similar && similar.length > 0 ? (
             <div className="rounded-md border border-amber-500/40 bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
               <p className="mb-2 font-medium text-amber-900 dark:text-amber-200">
-                Attenzione: ho trovato voci già esistenti con nome simile.
+                Attenzione: sono presenti voci con nome simile.
               </p>
               <ul className="mb-3 space-y-1 text-xs text-amber-900/80 dark:text-amber-200/80">
                 {similar.map((s) => (

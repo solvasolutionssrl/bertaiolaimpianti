@@ -29,7 +29,7 @@ import { leggiConfigDipendenti } from '../../_lib/dipendenti-config';
 import { caricaBlocchiRange } from '@/app/office/personale/pianificazione/_lib/query';
 import { MobileBackButton } from '../_components/mobile-back-button';
 
-export const metadata: Metadata = { title: 'La mia settimana' };
+export const metadata: Metadata = { title: 'Pianificazione settimanale' };
 export const dynamic = 'force-dynamic';
 
 export default async function MiaSettimanaPage({
@@ -94,7 +94,7 @@ export default async function MiaSettimanaPage({
       <header className="mt-2">
         <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
           <CalendarDays className="h-5 w-5 text-primary" />
-          La mia settimana
+          Pianificazione settimanale
         </h1>
         <div className="mt-2 flex items-center justify-between gap-2">
           <Link
@@ -117,7 +117,7 @@ export default async function MiaSettimanaPage({
 
       {!mioDip ? (
         <p className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          Il tuo account non è collegato a una scheda dipendente. Chiedi all&apos;ufficio.
+          L&apos;account non è collegato a una scheda dipendente. Rivolgersi all&apos;ufficio.
         </p>
       ) : (
         <div className="flex flex-col gap-3">

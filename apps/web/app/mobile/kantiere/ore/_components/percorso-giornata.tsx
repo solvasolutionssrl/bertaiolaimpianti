@@ -470,16 +470,16 @@ export function ChipGuida({
 }) {
   const scelto = guida?.autista ? mezzi.find((m) => m.id === guida.mezzo) : undefined;
   const testo = !guida
-    ? 'Chi guidava?'
+    ? 'Conducente'
     : !guida.autista
       ? 'Passeggero'
       : guida.mezzo === MEZZO_NON_IN_ELENCO
-        ? 'Guidavo io · mezzo non in elenco'
+        ? 'Conducente · mezzo non in elenco'
         : scelto
-          ? `Guidavo io · ${scelto.targa}`
+          ? `Conducente · ${scelto.targa}`
           : mezzi.length > 0
-            ? 'Guidavo io · scegli il mezzo'
-            : 'Guidavo io';
+            ? 'Conducente · scegli il mezzo'
+            : 'Conducente';
   const allarme = mancante != null;
   return (
     <div
@@ -494,7 +494,7 @@ export function ChipGuida({
         onClick={onApri}
         disabled={disabled}
         aria-expanded={aperto}
-        aria-label={`Chi guidava: ${testo}`}
+        aria-label={`Guida: ${testo}`}
         className="flex min-h-[36px] w-full items-center gap-2 text-left disabled:opacity-60"
       >
         <span
@@ -523,10 +523,10 @@ export function ChipGuida({
 
       {aperto ? (
         <div className="animate-fade-up mb-1.5 space-y-2">
-          <div className="grid grid-cols-2 gap-1.5" role="listbox" aria-label="Chi guidava">
+          <div className="grid grid-cols-2 gap-1.5" role="listbox" aria-label="Conducente">
             {[
-              { autista: false, titolo: 'Ero passeggero' },
-              { autista: true, titolo: 'Guidavo io' },
+              { autista: false, titolo: 'Passeggero' },
+              { autista: true, titolo: 'Conducente' },
             ].map((o) => {
               const sel = guida != null && guida.autista === o.autista;
               return (
@@ -709,7 +709,7 @@ export function TrattaFraCantieri({
             <EditorTempo vista={vista} disabled={disabled} onMinuti={onMinuti} onMotivo={onMotivo} />
           ) : null}
           <p className="border-t border-border/70 bg-muted/25 px-3 py-2 text-[11px] leading-snug text-muted-foreground">
-            Il tempo della tratta conta come viaggio: allunga la giornata e sposta la fine del lavoro.
+            Il tempo della tratta è conteggiato come viaggio: aumenta la durata della giornata e posticipa la fine del lavoro.
           </p>
         </div>
       ) : null}

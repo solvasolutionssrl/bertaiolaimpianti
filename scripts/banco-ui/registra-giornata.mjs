@@ -146,8 +146,8 @@ async function misura(cdp) {
 
 /** «Guidavo io» nel menu aperto dentro `dentro`, e il mezzo se non è già proposto. */
 async function guidavoIo(cdp, dentro) {
-  const ok = await clicca(cdp, '^Guidavo io$', {
-    dentro: `[...(${dentro})?.querySelectorAll('[role="listbox"][aria-label="Chi guidava"]') ?? []].filter(visibile).pop()`,
+  const ok = await clicca(cdp, '^Conducente$', {
+    dentro: `[...(${dentro})?.querySelectorAll('[role="listbox"][aria-label="Conducente"]') ?? []].filter(visibile).pop()`,
   });
   await pausa(400);
   const mezzo = await valuta(
@@ -262,8 +262,8 @@ try {
   );
   esito(!!tratta, 'fra i due cantieri compare la tratta, con km e tempo', tratta ?? '');
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return /Chi guidava\\?/.test(chip(pagina(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
-    'sulla tratta c’è l’etichetta compatta «Chi guidava?»',
+    await valuta(cdp, `(() => { ${AIUTI} return /Conducente/.test(chip(pagina(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
+    'sulla tratta c’è l’etichetta compatta «Conducente»',
   );
   esito(m.fine !== '17:00' && /di tratte/.test(m.conto), 'la fine comprende la tratta fra i cantieri', m.conto);
   altezze.push(m.altezzaCard);
@@ -281,14 +281,14 @@ try {
   esito(!!m.foglio, 'senza «chi guidava» si apre il foglio «Il viaggio»');
   esito(!!m.foglio && !!m.piede && m.foglio.bottom <= m.piede.top + 1, 'il foglio si ferma sopra la barra dei tempi', JSON.stringify({ foglio: m.foglio, piede: m.piede }));
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return !!foglio()?.querySelector('[role="listbox"][aria-label="Chi guidava"]'); })()`),
+    await valuta(cdp, `(() => { ${AIUTI} return !!foglio()?.querySelector('[role="listbox"][aria-label="Conducente"]'); })()`),
     'il foglio si apre già sul menu di chi guidava',
   );
   await foto(cdp, 'rg-05-foglio-chi-guidava');
   const scelta = await guidavoIo(cdp, 'foglio()');
   esito(scelta.ok, 'nel foglio si sceglie «Guidavo io»', `mezzo: ${scelta.mezzo}`);
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(foglio(), 'andata')?.getAttribute('aria-label') || '') && /Guidavo io/.test(chip(foglio(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
+    await valuta(cdp, `(() => { ${AIUTI} return /Conducente/.test(chip(foglio(), 'andata')?.getAttribute('aria-label') || '') && /Conducente/.test(chip(foglio(), 'tratta:')?.getAttribute('aria-label') || ''); })()`),
     'l’etichetta dice chi guidava, e la tratta dopo prende la stessa scelta',
   );
   await clicca(cdp, 'Torna alla giornata');
@@ -302,7 +302,9 @@ try {
     await valuta(cdp, `(() => { ${AIUTI} return !!(${pannello})?.querySelector('button[aria-label="Più 5 minuti"]'); })()`),
     'anche la tratta fra cantieri ha il tempo modificabile',
   );
-  const radio = `[...pagina().querySelectorAll('[role="radiogroup"] [role="radio"]')]`;
+  // Dal 22/10 ogni cantiere ha il suo radiogroup «Dove» (In sede / In cantiere):
+  // la tratta si prende dal SUO gruppo, non dal primo che capita.
+  const radio = `[...pagina().querySelectorAll('[role="radiogroup"][aria-label="Come sei passato da un cantiere all\\'altro"] [role="radio"]')]`;
   const scelte = await valuta(
     cdp,
     `(() => { ${AIUTI} return ${radio}.map((r) => ({ testo: t(r.textContent), scelta: r.getAttribute('aria-checked') === 'true', tenue: r.className.includes('opacity-60'), larghezza: Math.round(r.getBoundingClientRect().width) })); })()`,
@@ -349,11 +351,11 @@ try {
   // ── Rientro in sede (predefinito): prende l'ultima scelta, poi si cambia ──
   await pausa(500);
   esito(
-    await valuta(cdp, `(() => { ${AIUTI} return /Guidavo io/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
+    await valuta(cdp, `(() => { ${AIUTI} return /Conducente/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
     'il rientro prende l’ultima scelta di chi guidava',
   );
-  await clicca(cdp, 'Chi guidava: Guidavo io', { dentro: `cardDi(pagina(), 'Rientro')` });
-  await clicca(cdp, '^Ero passeggero$', { dentro: `cardDi(pagina(), 'Rientro')` });
+  await clicca(cdp, 'Guida: Conducente', { dentro: `cardDi(pagina(), 'Rientro')` });
+  await clicca(cdp, '^Passeggero$', { dentro: `cardDi(pagina(), 'Rientro')` });
   esito(
     await valuta(cdp, `(() => { ${AIUTI} return /Passeggero/.test(chip(pagina(), 'ritorno')?.getAttribute('aria-label') || ''); })()`),
     'sul rientro si indica «Passeggero»',
@@ -373,7 +375,7 @@ try {
     await clicca(cdp, 'No, guidavo io', { dentro: 'pagina()' });
     await pausa(900);
     esito(
-      await valuta(cdp, `(() => { ${AIUTI} const c = cardDi(pagina(), 'Rientro'); return !!c?.querySelector('[role="listbox"][aria-label="Chi guidava"]'); })()`),
+      await valuta(cdp, `(() => { ${AIUTI} const c = cardDi(pagina(), 'Rientro'); return !!c?.querySelector('[role="listbox"][aria-label="Conducente"]'); })()`),
       '«No, guidavo io» riapre chi guidava sul rientro',
     );
     await foto(cdp, 'rg-08-rientro-riaperto');

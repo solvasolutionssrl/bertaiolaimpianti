@@ -30,7 +30,7 @@ export async function salvaAvvisoSulTelefono(input: {
   const ctx = await requireTenantContextCached();
 
   if (!avvisoAmmesso(input.codice, ctx.role)) {
-    return { ok: false, error: 'Questo avviso non è previsto per il tuo profilo.' };
+    return { ok: false, error: 'Avviso non previsto per il profilo in uso.' };
   }
   if (typeof input.attivo !== 'boolean') {
     return { ok: false, error: 'Valore non valido.' };

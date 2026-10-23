@@ -83,7 +83,7 @@ export function ContattiEditor({
       <ul className="space-y-2">
         {sorted.length === 0 && !adding ? (
           <li className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-3 text-center text-xs text-muted-foreground">
-            Nessun contatto. {canEdit ? 'Aggiungine uno qui sotto.' : ''}
+            Nessun contatto. {canEdit ? 'Aggiungerne uno qui sotto.' : ''}
           </li>
         ) : null}
         {sorted.map((c) =>

@@ -88,7 +88,7 @@ describe('pushAttiva', () => {
 describe('componiAssegnazione', () => {
   it('dice cosa è successo nel titolo e di cosa si tratta nel corpo', () => {
     const c = componiAssegnazione({ tipo: 'commessa', oggetto: 'Zanetti Paolo — Caldaia' });
-    expect(c.titolo).toBe('Ti è stato affidato un lavoro');
+    expect(c.titolo).toBe('Commessa assegnata');
     expect(c.corpo).toContain('Zanetti Paolo');
   });
 
@@ -140,14 +140,14 @@ describe('componiAssegnazione', () => {
       oggetto: 'Ordinare il kit di raccordi',
       codiceCommessa: 'BER-26-012',
     });
-    expect(t.titolo).toContain('cosa da fare');
+    expect(t.titolo).toBe('Attività assegnata');
     expect(t.corpo).toContain('Ordinare il kit');
     expect(t.corpo).toContain('BER-26-012');
   });
 
   it('la richiesta si riconosce dal titolo', () => {
     const r = componiAssegnazione({ tipo: 'richiesta', oggetto: 'Caldaia in blocco, signora Elena' });
-    expect(r.titolo).toContain('richiesta');
+    expect(r.titolo).toBe('Richiesta assegnata');
     expect(r.corpo).toContain('Caldaia in blocco');
   });
 

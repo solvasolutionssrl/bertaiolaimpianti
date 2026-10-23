@@ -181,7 +181,7 @@ export function CategorieClient({
 
           {categorie.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-              Nessuna categoria. Aggiungine una, oppure lasciale nascere dai cantieri.
+              Nessuna categoria. Aggiungerne una oppure crearle dai cantieri.
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -346,7 +346,7 @@ export function CategorieClient({
                               variant="ghost"
                               title={
                                 c.usata > 0
-                                  ? 'La usano dei cantieri: nascondila o uniscila'
+                                  ? 'Usata da alcuni cantieri: nasconderla oppure unirla'
                                   : 'Elimina'
                               }
                               disabled={pending || c.usata > 0}

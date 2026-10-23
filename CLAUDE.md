@@ -1544,6 +1544,40 @@ dell'ufficio FPM. Tre difetti, tutti nostri, e un pezzo di interfaccia.
   Ricalcola ed Esporta solo icona. Banchi: `notifiche-foglio.mjs`,
   `filtri-presenze.mjs`.
 
+### «Le mie ore» e il tono dei testi (23/10/2026) — nessuna migration
+
+- **Chi ha ruolo ufficio e timbra anche per sé** trovava le proprie cose in
+  tre posti (pillola nell'header, pannelli «da sistemare» mischiati con gli
+  altri, riga nella tabella senza segno). Ora «Presenze e ore» ha **due zone
+  con un titolo**: la card **«Le mie ore»** in cima (solo per chi ha una scheda
+  dipendente: stato di oggi con i tasti, e le mie giornate da completare) e
+  sotto **«Dipendenti»**, i pannelli e la tabella degli altri. Le mie righe
+  restano nella tabella, marcate «tu», perché totali ed export non cambiano.
+  Chi non ha una scheda dipendente vede la pagina come prima.
+- ⭐ La pillola è diventata un hook, `useMiaGiornata` in
+  `office/_components/mia-giornata.tsx`: restituisce `stato`, `corpo` (i
+  tasti) e `dialoghi`. Card e pillola sono la **stessa logica e gli stessi
+  dialog**, non una copia. ⚠️ I dialoghi vanno montati **fuori** dal menu che
+  si smonta (lezione dell'08/10: nel menu stanno i tasti, non lo stato).
+  ⚠️ Nella card il blocco «Oggi» parla di oggi (`timbroOggi`), mentre la
+  pillola mostra la giornata più vecchia da ripartire: due promemoria diversi
+  per due posti diversi.
+- Barra dei filtri su una riga a 1440 px: date 8,25 rem, dipendente `w-32`,
+  cantiere `w-44`, «Solo anomalie» è un interruttore a icona, `LiveRefresh`
+  ha la prop `compatto` (solo l'ora). A 1280 px va a capo fra i due gruppi,
+  ed è accettato.
+- ⚠️ **Tono dei testi: formale, mai colloquiale.** Luca ha letto le notifiche
+  sui telefoni di FPM e le ha trovate «da azienda di campagna». Il promemoria
+  serale ora dice «Registrazione ore · Presenza registrata. Ricordati di
+  caricare le ore sulle commesse di oggi.»; le notifiche di assegnazione
+  hanno titoli come «Commessa assegnata». Il 23/10 è stato fatto un
+  censimento dei testi del telefono e dell'ufficio con le riscritture
+  (`scripts/banco-ui/esiti/proposte-tono-*.md`). Il «tu» dei tasti resta;
+  quello che non si scrive più: «dì su quali commesse hai lavorato», «i tuoi
+  ragazzi», «dillo all'ufficio», «la leggo io», «Ciao, nome», «Buon lavoro!»,
+  il sistema che parla in prima persona («Non sono riuscito a…»). Regola in
+  memoria: `feedback_tono_formale_testi.md`.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

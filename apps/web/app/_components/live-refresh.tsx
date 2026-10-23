@@ -14,9 +14,12 @@ import { RefreshCw } from 'lucide-react';
 export function LiveRefresh({
   intervalMs = 60000,
   className,
+  compatto = false,
 }: {
   intervalMs?: number;
   className?: string;
+  /** Solo l'ora, senza «Aggiornato alle»: per le barre strette. Il titolo lo dice comunque. */
+  compatto?: boolean;
 }) {
   const router = useRouter();
   const [ultimo, setUltimo] = React.useState<Date | null>(null);
@@ -63,7 +66,7 @@ export function LiveRefresh({
       data-live-refresh={intervalMs}
       onClick={() => aggiorna(true)}
       disabled={refreshing}
-      title="Aggiorna i dati adesso (si aggiornano comunque da soli ogni minuto)"
+      title={`Aggiornato alle ${ora}. Clic per aggiornare adesso (si aggiornano comunque da soli ogni minuto)`}
       aria-label="Aggiorna i dati adesso"
       className={[
         'group inline-flex select-none items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors',
@@ -80,7 +83,7 @@ export function LiveRefresh({
         ].join(' ')}
         aria-hidden="true"
       />
-      Aggiornato alle {ora}
+      {compatto ? ora : `Aggiornato alle ${ora}`}
     </button>
   );
 }

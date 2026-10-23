@@ -79,7 +79,7 @@ const FASI_ANALISI = [
   "Leggo l'importo...",
   "Riconosco l'esercente...",
   "Estraggo l'IVA...",
-  'Rilevo la data...',
+  'Rilevamento della data…',
 ] as const;
 
 /**
@@ -325,12 +325,12 @@ export function NuovaSpesaOffice({
           setScan(null);
           setFileName(null);
           revokePreview();
-          setAvviso('Ricevuta non leggibile. Compila a mano oppure riprova con uno scatto piu nitido.');
+          setAvviso('Ricevuta non leggibile. Inserire i dati manualmente oppure ripetere con un’immagine più nitida.');
           setFase('form');
           return;
         }
         if (!resp.ok) {
-          setErrMsg('Non sono riuscito a leggere la ricevuta. Riprova.');
+          setErrMsg('Lettura della ricevuta non riuscita. Riprovare.');
           revokePreview();
           setFase('scelta');
           return;
@@ -350,7 +350,7 @@ export function NuovaSpesaOffice({
         setValuta(est.valuta || 'EUR');
         setNumeroPersone(est.numero_persone ?? 1);
         if (data.isPdf) {
-          setAvviso('PDF allegato. Inserisci i dati a mano, il documento resta agganciato alla spesa.');
+          setAvviso('PDF allegato. Inserire i dati manualmente: il documento resta associato alla spesa.');
         }
         setFase('form');
       } catch {
@@ -378,7 +378,7 @@ export function NuovaSpesaOffice({
       if (forzato) {
         const procedi = await chiediConferma({
           title: 'Il cantiere è chiuso',
-          description: `"${scelto!.nome}" non è più in lavorazione. Registro comunque la spesa?`,
+          description: `"${scelto!.nome}" non è più in lavorazione. Registrare comunque la spesa?`,
           confirmLabel: 'Registra',
         });
         if (!procedi) return;
@@ -449,7 +449,7 @@ export function NuovaSpesaOffice({
             <DialogHeader>
               <DialogTitle>Nuova spesa</DialogTitle>
               <DialogDescription>
-                Carica una ricevuta da leggere in automatico oppure inserisci i dati a mano.
+                Caricare una ricevuta per la lettura automatica oppure inserire i dati manualmente.
               </DialogDescription>
             </DialogHeader>
 

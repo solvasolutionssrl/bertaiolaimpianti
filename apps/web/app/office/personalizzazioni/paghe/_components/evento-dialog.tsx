@@ -86,11 +86,11 @@ export function EventoDialog({
 
   async function salva() {
     if (!dipendenteId) {
-      await showAlert({ title: 'Manca il dipendente', body: 'Scegli a chi si riferisce.' });
+      await showAlert({ title: 'Manca il dipendente', body: 'Selezionare il dipendente.' });
       return;
     }
     if (!scelta) {
-      await showAlert({ title: 'Manca la causale', body: 'Scegli come si chiama questo evento.' });
+      await showAlert({ title: 'Manca la causale', body: 'Selezionare la causale.' });
       return;
     }
     const valore = Number(ore.replace(',', '.'));
@@ -208,7 +208,7 @@ export function EventoDialog({
                     ) : null}
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    Senza cercare vedi le causali usate piu' spesso.
+                    Senza ricerca vengono mostrate le causali più usate.
                   </p>
                 </>
               )}
@@ -276,8 +276,7 @@ export function EventoDialog({
                 className="mt-1 h-9 bg-background font-mono shadow-none"
               />
               <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                Le ore sono in centesimi: 1,50 vuol dire un'ora e mezza, non un'ora e cinquanta
-                minuti.
+                Le ore sono in centesimi: 1,50 corrisponde a un'ora e trenta minuti.
               </p>
             </div>
 

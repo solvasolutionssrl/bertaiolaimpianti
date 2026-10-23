@@ -19,7 +19,7 @@ import { giornateTimbroPersona } from '@/app/_lib/timbro/giornate';
 import { vistaDaGiornata, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 
 export const metadata: Metadata = {
-  title: 'Le mie ore di oggi',
+  title: 'Ore della giornata',
 };
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +55,7 @@ export default async function MobileOrePage() {
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
             Kantiere
           </p>
-          <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+          <h1 className="mt-1 text-xl font-semibold tracking-tight">Ore della giornata</h1>
           {/* «Aggiornato alle» sulla riga della data: in alto a destra c'è la campanella. */}
           <div className="mt-0.5 flex items-center justify-between gap-2">
             <p className="text-xs capitalize text-muted-foreground">{formatDataOggi()}</p>
@@ -210,7 +210,7 @@ export default async function MobileOrePage() {
           <Clock className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere
         </p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight">Le mie ore di oggi</h1>
+        <h1 className="mt-1 text-xl font-semibold tracking-tight">Ore della giornata</h1>
         {/* Il turno in corso cresce mentre la pagina è aperta. «Aggiornato alle»
             sta sulla riga della data: in alto a destra c'è la campanella. */}
         <div className="mt-0.5 flex items-center justify-between gap-2">

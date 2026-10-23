@@ -10,8 +10,8 @@ export function CloudRetry() {
       </span>
       <p className="text-sm font-semibold text-foreground">Cartella in creazione</p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-        Se la commessa è appena stata creata, la cartella cloud è ancora in preparazione.
-        Riprova tra qualche secondo.
+        Per le commesse appena create la cartella cloud è in preparazione.
+        Riprovare fra qualche secondo.
       </p>
       <button
         type="button"

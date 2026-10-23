@@ -325,8 +325,8 @@ export function SpesaDettaglio({
                   </p>
                   <p className={'text-xs ' + (inElab ? 'text-muted-foreground' : 'text-amber-700')}>
                     {inElab
-                      ? 'I dati vengono compilati in automatico. Torna tra poco.'
-                      : 'L’analisi non ha letto tutto: controlla o riprova.'}
+                      ? 'Compilazione automatica in corso. Ricontrollare fra qualche istante.'
+                      : 'L’analisi non ha rilevato tutti i dati: verificare o ripetere.'}
                   </p>
                 </div>
                 <button
@@ -452,7 +452,7 @@ export function SpesaDettaglio({
                   <p className={GROUP_LBL}>Dettaglio</p>
                   <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-2">
                     <label htmlFor="det-persone" className="block text-[11px] font-bold uppercase tracking-wider text-primary">
-                      Per quante persone?
+                      Numero di persone
                     </label>
                     <div className="mt-1 flex items-center gap-2">
                       <button

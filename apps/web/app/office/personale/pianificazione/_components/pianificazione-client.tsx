@@ -117,7 +117,7 @@ function nomeDip(d: DipRow): string {
  */
 const MESSAGGI_SALVA: Record<string, string> = {
   CANTIERE_CHIUSO:
-    'Il cantiere è chiuso: non ci si pianifica sopra. Se il lavoro riparte, riaprilo dalla sua scheda.',
+    'Il cantiere è chiuso: non è possibile pianificare. Se il lavoro riprende, riaprirlo dalla sua scheda.',
   CANTIERE_NON_VALIDO: 'Il cantiere scelto non esiste più, o non è di questa azienda.',
 };
 function messaggioSalva(code: string): string {
@@ -1400,7 +1400,7 @@ export function PianificazioneClient({
       // Si dice quanti ne sono arrivati davvero e cosa e' rimasto fuori:
       // prima si annunciava «Copiata» anche con zero blocchi copiati.
       await alert({
-        title: res.copiati === 0 ? 'Niente da copiare' : 'Copiata',
+        title: res.copiati === 0 ? 'Nessun blocco da copiare' : 'Copiata',
         body:
           (res.copiati === 0
             ? 'Nessun blocco copiato.'

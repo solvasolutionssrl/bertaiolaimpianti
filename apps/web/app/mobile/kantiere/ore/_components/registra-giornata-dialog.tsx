@@ -84,24 +84,24 @@ function messaggioErrore(code: string): string {
     case 'TIMBRO_OFF':
       return 'La timbratrice non è attiva per questa azienda.';
     case 'GIORNO_TROPPO_VECCHIO':
-      return 'È passato troppo tempo: per questa giornata chiedi all’ufficio.';
+      return 'Termine superato: per questa giornata rivolgersi all’ufficio.';
     case 'SPLIT_PRIMO_CANTIERE':
-      return 'Il primo cantiere deve essere quello su cui avevi aperto il turno.';
+      return 'Il primo cantiere deve corrispondere a quello di apertura del turno.';
     case 'NON_AUTORIZZATO':
       return 'Non puoi ripartire le ore di un’altra persona.';
     case 'GIORNATA_NON_VUOTA':
-      return 'Hai già delle timbrature di oggi: qui si registra solo una giornata senza timbrature.';
+      return 'Risultano timbrature per oggi: questa funzione registra solo giornate senza timbrature.';
     case 'ORA_NON_VALIDA':
       return 'Controlla l’ora di inizio: la giornata deve iniziare e finire oggi.';
     case 'SPLIT_SOMMA':
     case 'SPLIT_NETTO':
-      return 'Le ore dei cantieri non tornano con il totale della giornata.';
+      return 'Le ore dei cantieri non corrispondono al totale della giornata.';
     case 'REGISTRA_OFF':
       return 'La registrazione giornata è disattivata dall’ufficio.';
     case 'CANTIERE_NON_VALIDO':
       return 'Un cantiere selezionato non è valido.';
     case 'CANTIERE_CHIUSO':
-      return 'Uno dei cantieri scelti è chiuso: non accetta più ore. Se ci hai lavorato, dillo all’ufficio.';
+      return 'Uno dei cantieri selezionati è chiuso e non accetta ore. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'SEDE_NON_VALIDA':
       return 'Una sede scelta non è ammessa per quel cantiere. Controlla partenza, rientro e tratte.';
     case 'SEDE_PREDEFINITA_MANCANTE':
@@ -986,10 +986,10 @@ export function RegistraGiornataDialog({
     }
     // La fine dipende dalle tratte: prima si aspettano le stime.
     if (teAndata.inArrivo || teRitorno.inArrivo || fraCantieri.inArrivo) {
-      return setErrore('Calcolo dei tempi di viaggio in corso: riprova tra un istante.');
+      return setErrore('Calcolo dei tempi di viaggio in corso: riprovare fra qualche istante.');
     }
     if (oltreMezzanotte)
-      return setErrore('La giornata supera la mezzanotte: controlla l’ora di inizio e le ore.');
+      return setErrore('La giornata supera la mezzanotte: verificare l’ora di inizio e le ore inserite.');
 
     // Quello che manca si chiede nel foglio «Il viaggio», aperto sul primo punto.
     if (mancanti.length > 0) {
@@ -1244,7 +1244,7 @@ export function RegistraGiornataDialog({
             </div>
             <div className="mt-1.5 flex items-center justify-between gap-2">
               <span className="text-muted-foreground text-xs font-medium">
-                {scatola && i === righe.length - 1 && righe.length > 1 ? 'Ore lavorate (il resto va qui)' : 'Ore lavorate'}
+                {scatola && i === righe.length - 1 && righe.length > 1 ? 'Ore lavorate (quota residua)' : 'Ore lavorate'}
               </span>
               <StepperMin
                 minuti={r.minuti}
@@ -1262,7 +1262,7 @@ export function RegistraGiornataDialog({
                 <span className="text-muted-foreground text-xs font-medium">Dove</span>
                 <div
                   role="radiogroup"
-                  aria-label={`Dove hai lavorato su ${r.nome}`}
+                  aria-label={`Luogo di lavoro per ${r.nome}`}
                   className="border-border inline-flex overflow-hidden rounded-lg border text-xs"
                 >
                   {(
@@ -1520,7 +1520,7 @@ export function RegistraGiornataDialog({
                         {fmtHM(Math.max(0, daAssegnare))}
                       </span>{' '}
                       da ripartire
-                      {restoScatola > 0 && righe.length > 0 ? ` · ${fmtHM(restoScatola)} vanno sull’ultimo cantiere` : ''}
+                      {restoScatola > 0 && righe.length > 0 ? ` · ${fmtHM(restoScatola)} attribuite all’ultimo cantiere` : ''}
                     </>
                   ) : fineMostrata ? (
                     <>
@@ -1600,7 +1600,7 @@ export function RegistraGiornataDialog({
                         Il viaggio
                       </h3>
                       <p className="text-muted-foreground mt-0.5 text-xs leading-snug">
-                        Partenza, rientro e chi guidava su ogni tratta.
+                        Partenza, rientro e conducente di ogni tratta.
                       </p>
                     </div>
                     <button

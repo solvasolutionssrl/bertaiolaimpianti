@@ -422,7 +422,7 @@ export function DipendentiClient({
           body:
             res.error +
             (nuoveCredenziali
-              ? ` — l'accesso "${nuoveCredenziali.username}" è stato creato: collegalo a mano.`
+              ? `. L'accesso "${nuoveCredenziali.username}" è stato creato: collegarlo manualmente.`
               : ''),
         });
         return;
@@ -787,8 +787,8 @@ export function DipendentiClient({
                   Accesso creato e collegato al dipendente
                 </p>
                 <p className="mt-1 text-xs text-emerald-700/90 dark:text-emerald-400/80">
-                  Dettale adesso alla persona: la password non si rivede più. Al
-                  primo accesso l&apos;app le chiederà di scegliersene una sua.
+                  Comunicare subito le credenziali: la password non sarà più visibile.
+                  Al primo accesso verrà richiesto di impostarne una nuova.
                 </p>
               </div>
               {credenziali.codiceAzienda ? (
@@ -875,7 +875,7 @@ export function DipendentiClient({
                   onChange={handleChange}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Serve agli auguri che la timbratrice fa all&apos;ingresso.
+                  Usata dalla timbratrice per il messaggio di auguri all&apos;ingresso.
                 </p>
               </div>
             </div>
@@ -1071,7 +1071,7 @@ export function DipendentiClient({
             {mondoPresenze ? (
             <div className="rounded-md border border-border bg-muted/30 p-3">
               <span className="block text-xs font-medium text-foreground">
-                Come lavora · serve all&apos;app
+                Modalità di lavoro · usata dall&apos;applicazione
               </span>
               <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {MODALITA_LAVORO.map((m) => {
@@ -1103,7 +1103,7 @@ export function DipendentiClient({
                 })}
               </div>
               <p className="mt-1.5 text-[11px] text-muted-foreground">
-                Non cambia i permessi: quelli restano il ruolo dell&apos;account.
+                Non modifica i permessi, definiti dal ruolo dell&apos;account.
               </p>
             </div>
             ) : null}

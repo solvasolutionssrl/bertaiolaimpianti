@@ -122,8 +122,10 @@ async function run(request: NextRequest) {
       avvisi.push({
         userId,
         codice: 'ore_da_inserire',
-        titolo: eOggi ? 'Inserisci le ore di oggi' : 'Ore ancora da inserire',
-        corpo: `Hai timbrato ${giornoTesto}: dì su quali commesse hai lavorato.`,
+        // Registro formale e oggettivo: un fatto e l'azione richiesta.
+        titolo: eOggi ? 'Registrazione ore' : `Registrazione ore · ${giornoTesto}`,
+        // Testo scelto da Luca il 23/10/2026.
+        corpo: `Presenza registrata. Ricordati di caricare le ore sulle commesse di ${giornoTesto}.`,
         url: '/mobile/kantiere/ore',
         extra: { giorno: g.giorno, finestra },
       });

@@ -167,7 +167,7 @@ export function BottomNavShell({
             href: '#',
             spento: {
               messaggio:
-                'La gestione del turno non è abilitata per la vostra azienda. Se vi serve, l’ufficio la può accendere dalle impostazioni.',
+                'La gestione del turno non è attiva per l’azienda. L’attivazione può essere richiesta all’ufficio.',
             },
           },
       puoAprireLavori

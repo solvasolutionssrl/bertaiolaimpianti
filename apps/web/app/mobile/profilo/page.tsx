@@ -191,7 +191,7 @@ export default async function ProfiloPage() {
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">Notifiche</span>
           <span className="block text-xs text-muted-foreground">
-            Cosa farti sapere, e su quale telefono
+            Avvisi da ricevere e dispositivi
           </span>
         </span>
         <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -209,7 +209,7 @@ export default async function ProfiloPage() {
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold">Ferie e permessi</span>
             <span className="block text-xs text-muted-foreground">
-              Richiedi e vedi lo stato delle tue richieste
+              Invio delle richieste e stato
             </span>
           </span>
           <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />

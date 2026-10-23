@@ -53,7 +53,7 @@ export function CaricamentiList() {
         </span>
         <p className="text-sm font-medium">Non c&apos;è niente in sospeso</p>
         <p className="max-w-[26ch] text-xs text-muted-foreground">
-          Tutte le foto e i video che hai aggiunto sono già arrivati.
+          Tutte le foto e i video aggiunti sono stati caricati.
         </p>
       </div>
     );
@@ -67,8 +67,8 @@ export function CaricamentiList() {
             {daFare} file da completare
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {formattaByte(bytesDaFare)} ancora da mandare. Vanno avanti da soli
-            mentre usi l&apos;app, e riprendono se la chiudi.
+            {formattaByte(bytesDaFare)} da trasferire. Il caricamento prosegue durante
+            l&apos;uso e riprende alla riapertura.
           </p>
           {falliti.length > 0 ? (
             <Button
@@ -86,7 +86,7 @@ export function CaricamentiList() {
 
       <Gruppo
         titolo="Riprendo"
-        sottotitolo="Rimasti indietro: li sto finendo"
+        sottotitolo="Trasferimenti in completamento"
         icona={<RotateCw className="h-3.5 w-3.5" aria-hidden="true" />}
         jobs={ripresi}
         cancel={cancel}
@@ -95,7 +95,7 @@ export function CaricamentiList() {
       />
       <Gruppo
         titolo="In corso"
-        sottotitolo="Aggiunti adesso"
+        sottotitolo="Aggiunti di recente"
         icona={<UploadCloud className="h-3.5 w-3.5" aria-hidden="true" />}
         jobs={nuovi}
         cancel={cancel}
