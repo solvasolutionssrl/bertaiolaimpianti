@@ -60,14 +60,10 @@ export default async function OfficeLayout({
     redirect('/login');
   }
 
-  // Guard ruolo: i tecnici NON hanno accesso a /office/* (l'ufficio è
-  // pensato per admin/office). I tecnici operano dal mobile PWA. Se un
-  // tecnico finisce qui (es. login da desktop + pickHomeForDevice errato),
-  // lo reindirizziamo. Stesso trattamento per 'cliente' che ha il suo
-  // portal dedicato.
-  if (ctx.role === 'tecnico') {
-    redirect('/mobile');
-  }
+  // Guard ruolo. I clienti hanno il loro portale. I tecnici: nel mondo
+  // commesse operano dal telefono; nel mondo presenze (dal 23/10/2026) hanno
+  // da computer un'area tutta loro, `/office/mio`, e NIENT'ALTRO di /office:
+  // la decisione sta piu' sotto, quando si sa il mondo del cliente.
   if (ctx.role === 'cliente') {
     redirect('/portal');
   }
@@ -154,6 +150,17 @@ export default async function OfficeLayout({
   const appMode: 'kommessa' | 'kantiere' | 'full' =
     (rawAppMode === 'kantiere' || rawAppMode === 'full') && hasKantiere ? rawAppMode : 'kommessa';
   const kommessaWorld = appMode !== 'kantiere';
+  // Il tecnico da computer: solo il mondo presenze ha la sua area. Qualunque
+  // altra pagina dell'ufficio lo riporta li'; gli avvisi sono gli stessi per
+  // tutti. Il mondo commesse lo manda al telefono come sempre.
+  const tecnico = ctx.role === 'tecnico';
+  if (tecnico) {
+    if (appMode !== 'kantiere') redirect('/mobile');
+    const percorso = (headers().get('x-percorso') ?? '').split('?')[0] ?? '';
+    if (!percorso.startsWith('/office/mio') && !percorso.startsWith('/office/notifiche')) {
+      redirect('/office/mio');
+    }
+  }
   // Kontabilità (interruttore del super admin) e funzioni del mondo commesse:
   // servono a menu e ricerca rapida per non proporre pagine che non si aprono.
   const [hasKontabilita, showVoci, showPreset, limitiUpload] = await Promise.all([
@@ -165,7 +172,8 @@ export default async function OfficeLayout({
     getLimitiUploadCached(),
   ]);
   const onboardedAt = (userRow?.onboarded_at as string | null | undefined) ?? null;
-  const showOnboardingTour = onboardedAt === null;
+  // Il giro guidato racconta l'ufficio: a un tecnico non serve.
+  const showOnboardingTour = onboardedAt === null && !tecnico;
 
   // Impersonation / platform admin badges. Letti dal JWT app_metadata.
   // Sono opzionali — non bloccanti.
@@ -216,13 +224,18 @@ export default async function OfficeLayout({
         funzioniPersonalizzate={funzioniPersonalizzate}
         hasKontabilita={hasKontabilita}
         appMode={appMode}
-        mondoRicerca={{
-          commesse: kommessaWorld,
-          kantiere: hasKantiere,
-          dipendenti: hasDipendenti,
-          voci: showVoci,
-          preset: showPreset,
-        }}
+        tecnico={tecnico}
+        mondoRicerca={
+          tecnico
+            ? { commesse: false, kantiere: false, dipendenti: false, voci: false, preset: false }
+            : {
+                commesse: kommessaWorld,
+                kantiere: hasKantiere,
+                dipendenti: hasDipendenti,
+                voci: showVoci,
+                preset: showPreset,
+              }
+        }
       >
         {isPlatformAdmin && !isImpersonating ? <PlatformAdminPill /> : null}
         <LimitiUploadProvider limiti={limitiUpload}>{children}</LimitiUploadProvider>

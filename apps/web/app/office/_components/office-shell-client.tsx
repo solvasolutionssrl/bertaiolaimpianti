@@ -63,6 +63,12 @@ interface Props {
   appMode?: 'kommessa' | 'kantiere' | 'full';
   /** Quali mondi e funzioni mostrare nella ricerca rapida (⌘K). */
   mondoRicerca?: MondoRicerca;
+  /**
+   * Un tecnico da computer (23/10/2026): barra ridotta alla SUA area
+   * (`/office/mio`), niente voci dell'ufficio. Il server lo ha gia' fermato
+   * fuori da quelle pagine; qui si fa solo in modo che non le veda.
+   */
+  tecnico?: boolean;
   /** Barra di servizio sopra l'header (impersonation): va dentro la shell. */
   banner?: React.ReactNode;
   /** Nell'header, prima degli avvisi: «la mia giornata» di chi timbra anche da PC. */
@@ -579,6 +585,48 @@ function deriveActiveId(pathname: string | null, nav: OfficeNavItem[]): string |
   return undefined;
 }
 
+/**
+ * La barra del tecnico da computer: le cose SUE, e basta. Stessa forma delle
+ * altre barre (una voce in alto, un gruppo, «Altro»), cosi' chi passa
+ * dall'ufficio al tecnico non cambia lingua.
+ */
+function buildNavTecnico(opts: { hasKontabilita?: boolean; hasPianificazione?: boolean }): OfficeNavItem[] {
+  return [
+    { id: 'mio-oggi', label: 'Oggi', href: '/office/mio', icon: LayoutDashboard },
+    {
+      id: 'sec-mio',
+      label: 'Il mio lavoro',
+      href: '#',
+      icon: HardHat,
+      variant: 'section',
+      defaultOpen: true,
+      children: [
+        { id: 'mio-cantieri', label: 'Cantieri', href: '/office/mio/cantieri', icon: MapPin },
+        { id: 'mio-ore', label: 'Le mie ore', href: '/office/mio/ore', icon: Timer },
+        ...(opts.hasKontabilita !== false
+          ? [{ id: 'mio-spese', label: 'Le mie spese', href: '/office/mio/spese', icon: ReceiptText }]
+          : []),
+        ...(opts.hasPianificazione
+          ? [{ id: 'mio-pianificazione', label: 'La mia settimana', href: '/office/mio/pianificazione', icon: CalendarDays }]
+          : []),
+      ],
+    },
+    {
+      id: 'sec-altro',
+      label: 'Altro',
+      href: '#',
+      icon: Boxes,
+      variant: 'section',
+      // Due voci sole: aperte, o un tecnico non saprebbe che esistono.
+      defaultOpen: true,
+      children: [
+        { id: 'notifiche', label: 'Avvisi', href: '/office/notifiche', icon: Bell },
+        { id: 'mio-profilo', label: 'Profilo', href: '/office/mio/profilo', icon: UsersRound },
+      ],
+    },
+  ];
+}
+
 export function OfficeShellClient({
   tenant,
   user,
@@ -593,6 +641,7 @@ export function OfficeShellClient({
   hasKontabilita,
   appMode,
   mondoRicerca,
+  tecnico,
   banner,
   headerExtra,
   children,
@@ -602,17 +651,19 @@ export function OfficeShellClient({
   const navBase = buildNav(hasKantiere, appMode).filter(
     (item) => item.id !== 'kontabilita' || hasKontabilita !== false,
   );
-  const nav = injectIntegrazione(
-    injectPersonalizzazioni(
-      injectPersonale(navBase, {
-        hasDipendenti,
-        hasPianificazione,
-        hasFerie,
-      }),
-      funzioniPersonalizzate,
-    ),
-    hasIntegrazione,
-  );
+  const nav = tecnico
+    ? buildNavTecnico({ hasKontabilita, hasPianificazione })
+    : injectIntegrazione(
+        injectPersonalizzazioni(
+          injectPersonale(navBase, {
+            hasDipendenti,
+            hasPianificazione,
+            hasFerie,
+          }),
+          funzioniPersonalizzate,
+        ),
+        hasIntegrazione,
+      );
   const computedActiveId = activeNavId ?? deriveActiveId(pathname, nav);
 
   const [paletteOpen, setPaletteOpen] = React.useState(false);

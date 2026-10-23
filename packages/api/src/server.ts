@@ -187,10 +187,11 @@ export async function resolveOfficeLanding(req: NextRequest): Promise<string | n
 
   const { data: urow } = await supabase
     .from('users')
-    .select('tenant_id')
+    .select('tenant_id, role')
     .eq('id', user.id)
     .maybeSingle();
-  const tenantId = (urow as { tenant_id: string | null } | null)?.tenant_id ?? null;
+  const tenantId = (urow as { tenant_id: string | null; role?: string | null } | null)?.tenant_id ?? null;
+  const ruolo = (urow as { role?: string | null } | null)?.role ?? null;
   if (!tenantId) return null;
 
   const { data: trow } = await supabase
@@ -207,5 +208,8 @@ export async function resolveOfficeLanding(req: NextRequest): Promise<string | n
     .eq('tenant_id', tenantId);
   if (!isModuleActive((mrows ?? []) as unknown as TenantModuleRow[], 'kantiere')) return null;
 
+  // Un tecnico da computer (23/10/2026) ha la sua area, non la Panoramica
+  // dell'ufficio: il layout di /office lo rimanderebbe comunque li'.
+  if (ruolo === 'tecnico') return '/office/mio';
   return '/office/kantiere';
 }
