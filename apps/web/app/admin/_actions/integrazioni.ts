@@ -1,5 +1,6 @@
 'use server';
 
+import { promuoviFasiDalGestionale, type EsitoFasi } from '@/app/_lib/integrazione/promuovi';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -437,6 +438,33 @@ const SVUOTA_SCHEMA = z.object({
  * Serve quando il gestionale cambia (o cambia il modo di leggerlo) e il
  * deposito vecchio confonde le proposte con roba che non esiste piu'.
  */
+/**
+ * «Promuovi le fasi ora»: lo stesso passo che gira a fine giro di lettura,
+ * ma a comando. Serve quando il deposito ha gia' le fasi del gestionale e
+ * non si vuole aspettare la notte. Non crea cantieri, non chiude fasi.
+ */
+export async function promuoviFasiOra(input: { tenantId: string }): Promise<
+  { ok: true; esito: EsitoFasi } | { ok: false; error: string }
+> {
+  const admin = await requirePlatformAdmin();
+  const parsed = z.object({ tenantId: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido.' };
+  const esito = await promuoviFasiDalGestionale(parsed.data.tenantId);
+  await auditPlatform({
+    actorUserId: admin.userId,
+    actorEmail: admin.email,
+    tenantId: parsed.data.tenantId,
+    entityType: 'tenant',
+    entityId: parsed.data.tenantId,
+    action: 'tenant.integrazione.fasi_promosse',
+    metadata: { ...esito },
+  });
+  revalidatePath(`/admin/tenants/${parsed.data.tenantId}`);
+  revalidatePath('/admin/integrazioni');
+  if (!esito.ok) return { ok: false, error: esito.motivo ?? 'Promozione non partita.' };
+  return { ok: true, esito };
+}
+
 export async function svuotaStagingIntegrazione(input: {
   tenantId: string;
   conferma: string;

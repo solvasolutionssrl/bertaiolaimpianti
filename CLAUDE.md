@@ -1691,6 +1691,30 @@ cantiere; il **cantiere intero resta sempre scegibile**; `codice` e' **testo**
   e la mappatura `sottocantiere ↔ externalId` restano da decidere con FPM/ERGO.
 - Nomi per le scritte «Cantiere › Fase»: `_lib/sottocantieri-nomi.ts`.
 
+#### Le fasi da ERGO e la scelta obbligatoria (23/10/2026 sera) — nessuna migration
+
+- **Promozione delle fasi** dall'area di sosta: pura in `@kommessa/api/fasi-gestionale`,
+  wiring `promuoviFasiDalGestionale` in `_lib/integrazione/promuovi.ts`, che gira DOPO i
+  cantieri nello stesso giro di chiusura della lettura e a comando dal tasto «Promuovi le
+  fasi ora» (tab Integrazione, super admin). ⭐ **Mai chiude ne' cancella** una fase che
+  non arriva piu' (per ERGO puo' essere commessa chiusa, fase rimasta sola o lettura
+  fallita). ⚠️ Padre non collegato → la fase resta in sosta, contata (`fasiSenzaPadre`):
+  qui non si crea mai un cantiere. ⭐ Una fase scritta a mano con lo stesso codice si
+  **collega** invece di nascere due volte. Idempotente, provata sul tenant demo.
+- **E' una personalizzazione del cliente FPM**: ERGO manda solo le commesse aperte con
+  due o piu' fasi, chiave `commessa.fase` (`25151.2`), nessuna descrizione; sulla
+  commessa con una fase sola la fase la mette l'agente. Errori permanenti su
+  `/scritture` («la fase X non esiste sulla commessa Y») si risolvono scegliendo di
+  nuovo la fase in Kommessa. Dettagli in `Logiche_Kantiere.md` §12.5.
+- **`fase_obbligatoria`** (Impostazioni Kantiere → Turni; FPM acceso dal 23/10):
+  guardia server `faseRichiesta` (`lavoro-aperto.ts`, codice `FASE_RICHIESTA`,
+  messaggio `MESSAGGIO_FASE_RICHIESTA`). ⚠️ Il primo segmento di una chiusura o di una
+  scatola che continua un turno aperto eredita la fase dell'ingresso e **non** passa
+  dalla guardia: un turno aperto prima delle fasi deve potersi chiudere.
+- ⚠️ Una rotta di prova sotto `app/api/` con la cartella che comincia per `_` **non
+  esiste** per Next (cartella privata): per provare una funzione server-only dal dev
+  server la rotta va sotto `api/cron/<nome>` con il segreto del cron, e poi si toglie.
+
 ### Richieste al telefono (dal 05/10/2026, migration `20261005120000`) — mondo commesse
 
 L'ufficio risponde al telefono («c'è da cambiare la caldaia, signora Elena, è una Viessmann») e finora scriveva un **post-it** da portare a mano a chi se ne doveva occupare. Il flusso del prodotto parte dal **sopralluogo**: questo momento sta a monte di tutto e non esisteva da nessuna parte.

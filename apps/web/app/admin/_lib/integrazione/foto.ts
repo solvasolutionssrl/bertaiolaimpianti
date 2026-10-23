@@ -40,6 +40,8 @@ export interface PromozioneVista {
   categorieDaSmistare?: number;
   cantieriCreati?: number;
   saltati?: number;
+  fasiCreate?: number;
+  fasiSenzaPadre?: number;
 }
 
 export interface CollegamentoAdmin {
@@ -47,7 +49,7 @@ export interface CollegamentoAdmin {
   diagnosi: Diagnosi;
   attivo: boolean;
   /** Anagrafiche depositate dall'ultima lettura, per entita'. */
-  staging: { commesse: number; clienti: number; dipendenti: number };
+  staging: { commesse: number; clienti: number; dipendenti: number; fasi: number };
   ultimaLettura: string | null;
   /** Quante nostre anagrafiche esistono in totale, per dare senso a `nonCollegati`. */
   nostreTotali: number;
@@ -267,6 +269,7 @@ export async function fotoCollegamenti(
           commesse: conta('commessa'),
           clienti: conta('cliente'),
           dipendenti: conta('dipendente'),
+          fasi: conta('sottocantiere'),
         },
         ultimaLettura,
         nostreTotali,

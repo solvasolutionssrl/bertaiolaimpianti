@@ -26,10 +26,15 @@ Un cantiere può essere collegato da settimane senza che ne sia uscito niente.
 
 **Le fasi** (dal 23/10/2026). Un cantiere può avere dei **sottocantieri**; il gestionale può
 depositarli con `POST /letture`, entità `sottocantiere`, indicando il cantiere padre con la
-**sua** chiave (`externalCantiereId`). Oggi si fermano all'area di sosta: la promozione a
-fasi vere sotto il cantiere collegato, e la riga in `integrazione_mappature` con entità
-`sottocantiere`, non esistono ancora. Le fasi scritte a mano dall'ufficio non hanno
-`externalId`, e l'API le espone lo stesso con il loro `codice`.
+**sua** chiave (`externalCantiereId`). Alla chiusura del giro di lettura (e dal tasto
+«Promuovi le fasi ora» del super admin) le fasi dei cantieri **collegati** diventano
+sottocantieri veri, con la riga in `integrazione_mappature` entità `sottocantiere`; quelle
+il cui padre non è collegato restano in sosta e vengono contate. Una fase scritta a mano
+con lo stesso codice viene collegata, non duplicata. **Una fase che non arriva più non si
+chiude né si cancella.** Le fasi scritte a mano dall'ufficio e mai collegate non hanno
+`externalId`, e l'API le espone lo stesso con il loro `codice`. Il contratto con ERGO
+(chiave `commessa.fase`, solo commesse con due o più fasi) sta in `Logiche_Kantiere.md`
+§12.5.
 
 > **A schermo non si scrive mai il nome del gestionale.** Si dice «il gestionale»; il nome
 > vero (`ergo`, `teamsystem`…) arriva dalla configurazione del cliente e compare solo nel

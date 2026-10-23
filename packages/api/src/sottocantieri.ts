@@ -83,3 +83,10 @@ export function etichettaLuogo(cantiere: string, fase?: string | null): string {
 export function fasiScegibili<T extends { stato?: string | null }>(fasi: readonly T[] | null | undefined): T[] {
   return (fasi ?? []).filter((f) => !f.stato || f.stato === 'attivo');
 }
+
+/**
+ * Il messaggio quando il cliente pretende la fase (`fase_obbligatoria`) e un
+ * cantiere con fasi arriva senza: lo usano le interfacce per il codice
+ * `FASE_RICHIESTA` del server.
+ */
+export const MESSAGGIO_FASE_RICHIESTA = 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';

@@ -120,6 +120,8 @@ export default async function IntegrazioniPage() {
           motivo: c.ultimaPromozione.motivo,
           cantieriCreati: c.ultimaPromozione.cantieriCreati,
           categorieDaSmistare: c.ultimaPromozione.categorieDaSmistare,
+          fasiCreate: c.ultimaPromozione.fasiCreate,
+          fasiSenzaPadre: c.ultimaPromozione.fasiSenzaPadre,
         }
       : null,
   }));

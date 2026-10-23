@@ -663,6 +663,7 @@ ovunque, riga grigia nella lista dell'ufficio.
 | Sottocantieri: guardia di scrittura | `apps/web/app/_actions/_lib/lavoro-aperto.ts` (`sottocantieriScrivibili`) |
 | Sottocantieri: scrittore unico delle timbrature (eredità della fase) | `apps/web/app/_actions/_lib/timbrature-scrivi.ts` |
 | Sottocantieri: API | `apps/web/app/api/v1/_lib/sottocantieri.ts`, rotte `cantieri`, `ore`, `spese`, `letture` |
+| `packages/api/src/fasi-gestionale.ts` + `_lib/integrazione/promuovi.ts` | Promozione delle fasi dal gestionale (crea, aggiorna, collega; mai chiude) |
 
 ## 12. Sottocantieri (fasi) — dal 23/10/2026
 
@@ -726,9 +727,69 @@ fase chiusa **non blocca la chiusura di una giornata già lavorata** (`forzato`)
   `GET /viaggi` **non cambia** (il viaggio è per cantiere).
 - `POST /letture` accetta l'entità `sottocantiere` (`externalCantiereId` obbligatorio,
   `externalCodiceFase`, `descrizione`): **solo area di sosta**.
-- **Aperto, di proposito**: la promozione delle fasi dall'area di sosta ai cantieri
-  collegati, e la mappatura `sottocantiere ↔ externalId`. Si decide con FPM e con chi
-  gestisce ERGO: una fase sotto il cantiere sbagliato raccoglie ore senza nessun segnale.
+- La **promozione** delle fasi dall'area di sosta è in §12.5; dal 23/10 sera esiste.
+
+### 12.5 Le fasi dal gestionale: la promozione (dal 23/10/2026 sera)
+
+Logica pura in `@kommessa/api/fasi-gestionale` (`pianificaFasiDalGestionale`), wiring in
+`_lib/integrazione/promuovi.ts` (`promuoviFasiDalGestionale`), che gira **dopo i cantieri**
+nello stesso giro di chiusura della lettura (`POST /esecuzioni {chiudi}`), e a comando dal
+tasto **«Promuovi le fasi ora»** nel tab Integrazione del super admin (compare quando il
+deposito ha fasi). L'esito finisce in `integrazione_esecuzioni.dettaglio.promozione`
+(`fasiCreate`, `fasiAggiornate`, `fasiCollegate`, `fasiSenzaPadre`, `fasiErrori`) e nel
+semaforo di `/admin/integrazioni`.
+
+Per ogni riga in sosta con `entita = sottocantiere`:
+
+| Caso | Cosa si fa |
+|---|---|
+| il padre (`externalCantiereId`) **non è collegato** a un nostro cantiere | la fase **resta in sosta** e viene contata (`senzaPadre`). Qui **non si crea mai un cantiere** |
+| fase già mappata | si aggiorna solo se nome o codice sono cambiati |
+| fase non mappata ma **esiste sul cantiere con lo stesso codice** (scritta a mano prima) | si **collega** e si marca `origine_gestionale_al`: niente doppione |
+| altrimenti | si **crea** (`nome`, `codice = externalCodiceFase`, `origine_gestionale_al`) e si scrive la mappatura `sottocantiere ↔ externalId` |
+
+Il padre si cerca prima nelle mappature dei cantieri, poi per `codice_commessa` (rete di
+riserva, non sovrascrive mai una mappatura). Idempotente: rilanciata non cambia nulla
+(provato sul tenant demo: 2 create → 0 → 1 aggiornata dopo un cambio di nome).
+
+⚠️ **Una fase che non arriva più NON si chiude e NON si cancella.** Per ERGO può voler dire
+commessa chiusa, fase rimasta sola (allora non la manda), o lettura fallita quella notte.
+Chiudere una fase per un silenzio farebbe sparire una scelta dalle tendine e manderebbe
+le ore sul cantiere intero. Se un giorno il gestionale manda `attiva: false`, si deciderà.
+
+#### Il contratto con ERGO (personalizzazione del cliente FPM)
+
+- Ogni notte alle 03:00, dopo le commesse: `POST /letture` con `entita: "sottocantiere"`,
+  `externalId = "<commessa>.<fase>"` (es. `25151.2`; il numero riparte da 1 in ogni
+  commessa e può avere buchi), `externalCodiceFase` uguale, `externalCantiereId` = la
+  commessa, `nome` (ERGO ha un solo testo: niente `descrizione`), `attiva: true`, `dati`.
+- Arrivano **solo le commesse aperte con due o più fasi** (il 23/10: 65 commesse, 426
+  fasi). Commesse con una fase sola o nessuna: niente, e lì la fase la mette l'agente
+  (decisione di Luca). Commesse chiuse: niente.
+- Su `/ore` e `/spese` l'agente legge `sottocantiere.externalId` **identico** a quello
+  mandato; `sottocantiere: null` = riga sul cantiere intero. Una riga per fase per giorno
+  va bene: su ERGO sono scritture separate. Sui viaggi non serve niente (la bolla km prende
+  la fase solo se la commessa ne ha una sola). Nelle scritture ok `externalRiferimento`
+  porta anche `lotId`, la fase usata su ERGO.
+- Finché `externalId` è `null` l'agente scrive sul cantiere intero: **non blocca**, perché
+  una riga saltata non viene riletta e le ore andrebbero perse.
+- Errori **permanenti** su `POST /scritture` (esito errore): «La fase X non esiste sulla
+  commessa Y in ERGO», «La fase X appartiene alla commessa Z, non alla Y della riga». Si
+  risolvono scegliendo di nuovo la fase in Kommessa: la modifica cambia `modificatoAl` e
+  l'agente rilegge la riga al giro dopo.
+
+### 12.6 La scelta obbligatoria (impostazione `fase_obbligatoria`)
+
+Impostazioni Kantiere → **Turni** → «Scelta della fase obbligatoria» (predefinito spento;
+**FPM acceso dal 23/10/2026**). Accesa, una riga di ore su un cantiere che ha fasi attive
+deve indicarne una: la guardia è nel server (`faseRichiesta` in `lavoro-aperto.ts`, codice
+`FASE_RICHIESTA`, messaggio `MESSAGGIO_FASE_RICHIESTA` in `@kommessa/api/sottocantieri`),
+chiamata dove già si controllano le fasi: avvio turno, cambio cantiere, divisione a fine
+turno, registra giornata, scatola, registra ore dall'ufficio. ⚠️ Il **primo segmento** di
+una chiusura o di una scatola che continua un turno già aperto eredita la fase
+dell'ingresso e **non** passa dalla guardia: altrimenti un turno aperto prima che le fasi
+esistessero non si potrebbe più chiudere. Le righe già registrate senza fase restano
+valide, e il gestionale non le blocca.
 
 ---
 

@@ -124,6 +124,40 @@ export async function sottocantieriScrivibili(
 }
 
 /**
+ * Con `fase_obbligatoria` acceso: una riga su un cantiere che HA fasi attive
+ * deve indicarne una (`FASE_RICHIESTA`). Le righe che ereditano la fase di un
+ * ingresso gia' scritto non passano di qui: chi chiama le toglie dall'elenco.
+ * Spento, o cantiere senza fasi: passa tutto.
+ */
+export async function faseRichiesta(
+  supa: Supa,
+  luoghi: readonly { cantiereId: string; sottocantiereId?: string | null }[],
+  tenantId: string,
+): Promise<EsitoCantiere> {
+  const senzaFase = [...new Set(luoghi.filter((l) => !l.sottocantiereId).map((l) => l.cantiereId))];
+  if (senzaFase.length === 0) return { ok: true };
+  const { data: modRaw } = await supa
+    .from('tenant_modules' as never)
+    .select('config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'kantiere')
+    .maybeSingle();
+  const cfg = (modRaw as { config: Record<string, unknown> | null } | null)?.config;
+  if (cfg?.['fase_obbligatoria'] !== true) return { ok: true };
+  const { data } = await supa
+    .from('sottocantieri' as never)
+    .select('cantiere_id')
+    .in('cantiere_id', senzaFase)
+    .eq('tenant_id', tenantId)
+    .eq('stato', 'attivo')
+    .limit(1);
+  if (((data as unknown[] | null) ?? []).length > 0) {
+    return { ok: false, error: 'FASE_RICHIESTA', motivo: 'Questo cantiere ha delle fasi: indica su quale hai lavorato.' };
+  }
+  return { ok: true };
+}
+
+/**
  * Piu' cantieri in un colpo (split di fine turno, Registra giornata).
  *
  * Basta uno chiuso perche' la registrazione non parta: meglio fermarsi prima

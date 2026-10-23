@@ -67,13 +67,17 @@ function promozioneRiquadro(
 
   const creati = p.cantieriCreati ?? 0;
   const daSmistare = p.categorieDaSmistare ?? 0;
-  if (creati === 0 && daSmistare === 0)
+  const fasi = p.fasiCreate ?? 0;
+  const fasiOrfane = p.fasiSenzaPadre ?? 0;
+  if (creati === 0 && daSmistare === 0 && fasi === 0 && fasiOrfane === 0)
     return ['Promozione', 'a vuoto', '', 'Ha girato: dal gestionale non e’ arrivato niente di nuovo.'];
+  const titolo =
+    creati > 0 ? `${creati} ${creati === 1 ? 'cantiere' : 'cantieri'}` : fasi > 0 ? `${fasi} ${fasi === 1 ? 'fase' : 'fasi'}` : daSmistare > 0 ? `${daSmistare} da smistare` : `${fasiOrfane} fasi senza cantiere`;
   return [
     'Promozione',
-    creati > 0 ? `${creati} ${creati === 1 ? 'cantiere' : 'cantieri'}` : `${daSmistare} da smistare`,
-    daSmistare > 0 ? 'ambra' : '',
-    `${creati} cantieri creati, ${daSmistare} categorie da smistare.`,
+    titolo,
+    daSmistare > 0 || fasiOrfane > 0 ? 'ambra' : '',
+    `${creati} cantieri creati, ${fasi} fasi create, ${daSmistare} categorie da smistare, ${fasiOrfane} fasi in sosta senza cantiere collegato.`,
   ];
 }
 

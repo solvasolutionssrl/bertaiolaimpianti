@@ -23,7 +23,7 @@ import {
   viaggioFraCantieri,
 } from '@kommessa/api/kantiere-percorso';
 import { puoTimbrarePer, targetTimbratura } from '@kommessa/api/kantiere';
-import { cantiereScrivibile, cantieriScrivibili, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, cantieriScrivibili, faseRichiesta, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import {
   leggiArrotondamenti,
@@ -589,6 +589,10 @@ async function terminaConSplit(
       .maybeSingle();
     opts.split[0] = { ...opts.split[0]!, sottocantiereId: (ing as { sottocantiere_id: string | null } | null)?.sottocantiere_id ?? null };
   }
+  // Il primo segmento continua il turno aperto (la fase e' quella che era): la
+  // scelta obbligatoria vale per i cantieri aggiunti alla chiusura.
+  const fr = await faseRichiesta(supabase, opts.split.slice(1), tenantId);
+  if (!fr.ok) return { ok: false, error: fr.error };
 
   // 4. Sintesi segmenti (pura, unit-testata), sugli estremi ARROTONDATI al
   //    passo del cliente: i segmenti scritti sono derivati, non timbri.
@@ -1197,6 +1201,8 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
   if (!apribile.ok) return { ok: false, error: apribile.error };
   const faseOk = await sottocantieriScrivibili(supabase, [parsed.data], ctx.tenantId);
   if (!faseOk.ok) return { ok: false, error: faseOk.error };
+  const fr = await faseRichiesta(supabase, [parsed.data], ctx.tenantId);
+  if (!fr.ok) return { ok: false, error: fr.error };
 
   const sedeLavoroId = parsed.data.daSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
   if (parsed.data.daSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
@@ -1334,6 +1340,8 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   if (!dest.ok) return { ok: false, error: dest.error };
   const faseOk = await sottocantieriScrivibili(supabase, [{ cantiereId: parsed.data.aCantiereId, sottocantiereId: parsed.data.aSottocantiereId }], ctx.tenantId);
   if (!faseOk.ok) return { ok: false, error: faseOk.error };
+  const fr = await faseRichiesta(supabase, [{ cantiereId: parsed.data.aCantiereId, sottocantiereId: parsed.data.aSottocantiereId }], ctx.tenantId);
+  if (!fr.ok) return { ok: false, error: fr.error };
 
   // Dove si lavorava e dove si lavorerà: la sede del flag o il cantiere.
   const sedeDa = await sedeLavoroAperta(supabase, me.id, parsed.data.daCantiereId);
@@ -1871,6 +1879,10 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
   if (!cc.ok) return { ok: false, error: cc.error };
   const ff = await sottocantieriScrivibili(supabase, p.split, tenantId, { forzato: p.cantieriForzati });
   if (!ff.ok) return { ok: false, error: ff.error };
+  // Con un ingresso gia' scritto il primo segmento eredita la sua fase: la
+  // scelta obbligatoria vale per il resto.
+  const fr = await faseRichiesta(supabase, p.ingressoEsistente ? p.split.slice(1) : p.split, tenantId);
+  if (!fr.ok) return { ok: false, error: fr.error };
 
   // Prima prova dei conti, senza strada: se non tornano, inutile stimare.
   const prova = p.generaEventi([], 0, 0);

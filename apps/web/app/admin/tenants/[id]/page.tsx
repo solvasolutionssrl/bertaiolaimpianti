@@ -576,7 +576,7 @@ export default async function TenantDetailPage({
               nostreTotali: collegamento?.nostreTotali ?? 0,
               collegate: collegamento?.collegate ?? 0,
               staging:
-                collegamento?.staging ?? { commesse: 0, clienti: 0, dipendenti: 0 },
+                collegamento?.staging ?? { commesse: 0, clienti: 0, dipendenti: 0, fasi: 0 },
               ultimaLettura: collegamento?.ultimaLettura ?? null,
               token: tokenIntegrazione,
             }}

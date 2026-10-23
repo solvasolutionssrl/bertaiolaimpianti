@@ -33,6 +33,7 @@ interface Valori {
   avvioTurnoLibero: boolean;
   splitFineTurnoAttivo: boolean;
   registraGiornataAttivo: boolean;
+  faseObbligatoria: boolean;
   tolleranzaChiusuraMin: number;
   passoMinutiStepper: 5 | 10 | 15 | 30;
   sogliaPausaPranzoOre: number;
@@ -55,6 +56,7 @@ function valoriDa(imp: ImpostazioniKantiere): Valori {
     avvioTurnoLibero: imp.avvioTurnoLibero,
     splitFineTurnoAttivo: imp.splitFineTurnoAttivo,
     registraGiornataAttivo: imp.registraGiornataAttivo,
+    faseObbligatoria: imp.faseObbligatoria,
     tolleranzaChiusuraMin: imp.tolleranzaChiusuraMin,
     passoMinutiStepper: imp.passoMinutiStepper as Valori['passoMinutiStepper'],
     sogliaPausaPranzoOre: imp.sogliaPausaPranzoOre,
@@ -584,6 +586,14 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                     attivo={valori.registraGiornataAttivo}
                     onChange={(b) => imposta('registraGiornataAttivo', b)}
                   />
+                </Campo>
+                <Campo
+                  id="fase-obbligatoria"
+                  etichetta="Scelta della fase obbligatoria"
+                  predefinito="disattivo"
+                  descrizione="Attivo: se un cantiere ha delle fasi (sottocantieri), per registrare le ore se ne sceglie una. Le righe già registrate senza fase restano valide."
+                >
+                  <Interruttore id="fase-obbligatoria" attivo={valori.faseObbligatoria} onChange={(b) => imposta('faseObbligatoria', b)} />
                 </Campo>
                 <Campo
                   id="tolleranza"

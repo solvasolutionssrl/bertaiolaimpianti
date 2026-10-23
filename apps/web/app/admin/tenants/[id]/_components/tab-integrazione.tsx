@@ -27,6 +27,7 @@ import {
   attivaIntegrazioneTenant,
   impostaModalitaIntegrazione,
   svuotaStagingIntegrazione,
+  promuoviFasiOra,
 } from '../../../_actions/integrazioni';
 import { revocaApiToken } from '../../../_actions/api-tokens';
 import { SemaforoCollegamento } from '../../../_components/semaforo-collegamento';
@@ -73,7 +74,7 @@ export interface DatiTabIntegrazione {
   giriAperti: number;
   nostreTotali: number;
   collegate: number;
-  staging: { commesse: number; clienti: number; dipendenti: number };
+  staging: { commesse: number; clienti: number; dipendenti: number; fasi: number };
   ultimaLettura: string | null;
   token: TokenIntegrazione[];
 }
@@ -197,6 +198,22 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
         return r;
       }),
     );
+  };
+
+  const promuoviFasi = () => {
+    start(async () => {
+      const res = await promuoviFasiOra({ tenantId: dati.tenantId });
+      if (!res.ok) {
+        await showAlert({ title: 'Non fatto', body: res.error });
+        return;
+      }
+      const e = res.esito;
+      await showAlert({
+        title: 'Fasi promosse',
+        body: `${e.create} create, ${e.aggiornate} aggiornate, ${e.collegate} collegate a fasi già scritte a mano, ${e.senzaPadre} in sosta senza cantiere collegato${e.errori ? `, ${e.errori} errori` : ''}.`,
+      });
+      router.refresh();
+    });
   };
 
   const svuota = () => {
@@ -782,17 +799,27 @@ export function TabIntegrazione({ dati }: { dati: DatiTabIntegrazione }) {
               <span>
                 <strong>{dati.staging.dipendenti}</strong> dipendenti
               </span>
+              <span>
+                <strong>{dati.staging.fasi}</strong> fasi
+              </span>
               <span className="text-muted-foreground">letti il {fmt(dati.ultimaLettura)}</span>
             </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              onClick={() => setSvuotaAperto((v) => !v)}
-            >
-              Svuota deposito
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {dati.staging.fasi > 0 ? (
+                <Button type="button" size="sm" variant="outline" disabled={pending} onClick={promuoviFasi}>
+                  Promuovi le fasi ora
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => setSvuotaAperto((v) => !v)}
+              >
+                Svuota deposito
+              </Button>
+            </div>
           </div>
 
           {svuotaAperto ? (

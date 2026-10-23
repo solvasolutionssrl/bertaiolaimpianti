@@ -18,7 +18,7 @@ import {
 import { coppiaPausaCentrata } from '@/app/_actions/_lib/viaggio-timbra';
 import { aggiornaRigheGiornata } from '@/app/_actions/_lib/righe-giornata';
 import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
-import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, faseRichiesta, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 import { leggiTutto } from '@kommessa/api/pagine';
 import { scriviTimbrature } from '@/app/_actions/_lib/timbrature-scrivi';
@@ -274,6 +274,8 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
     // La fase deve essere di quel cantiere; chiusa non blocca l'ufficio (forzato).
     const fase = await sottocantieriScrivibili(supabase, [{ cantiereId, sottocantiereId }], ctx.tenantId, { forzato: parsed.data.forzato });
     if (!fase.ok) return { ok: false, error: fase.error };
+    const fr = await faseRichiesta(supabase, [{ cantiereId, sottocantiereId }], ctx.tenantId);
+    if (!fr.ok) return { ok: false, error: fr.error };
   }
 
   const now = new Date().toISOString();

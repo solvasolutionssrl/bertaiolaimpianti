@@ -7,6 +7,7 @@ import {
   smistaCategorie,
   type CategoriaNostra,
 } from '@kommessa/api/categorie-smistamento';
+import { cantierePerExternalDa, pianificaFasiDalGestionale } from '@kommessa/api/fasi-gestionale';
 
 /**
  * Promozione: dal deposito delle letture ai dati veri.
@@ -44,6 +45,20 @@ export interface EsitoPromozione {
   cantieriChiusi?: number;
   /** Cantieri tornati aperti sul gestionale e riaperti anche qui. */
   cantieriRiaperti?: number;
+  /** Le fasi (sottocantieri) dal gestionale, dal 23/10/2026. */
+  fasi?: EsitoFasi;
+}
+
+export interface EsitoFasi {
+  ok: boolean;
+  motivo?: string;
+  create: number;
+  aggiornate: number;
+  /** Fasi scritte a mano e ricollegate per codice. */
+  collegate: number;
+  /** Righe in sosta il cui cantiere padre non e' collegato: restano li'. */
+  senzaPadre: number;
+  errori: number;
 }
 
 const NULLA: EsitoPromozione = {
@@ -67,6 +82,149 @@ interface RigaStaging {
 }
 
 export async function promuoviDalGestionale(
+  tenantId: string,
+): Promise<EsitoPromozione> {
+  const esito = await promuoviCommesse(tenantId);
+  // Le fasi DOPO i cantieri: una fase si aggancia a un cantiere che deve gia'
+  // esistere ed essere collegato. Gira anche con la creazione dei cantieri
+  // spenta (sono due decisioni diverse); non gira se il modulo e' spento o
+  // nel mondo commesse.
+  if (!esito.ok) return esito;
+  return { ...esito, fasi: await promuoviFasiDalGestionale(tenantId) };
+}
+
+/**
+ * Le FASI dal gestionale (sottocantieri, dal 23/10/2026). Per FPM/ERGO e' una
+ * personalizzazione: ERGO manda solo le commesse aperte con due o piu' fasi,
+ * chiave `commessa.fase`. Logica pura in `@kommessa/api/fasi-gestionale`:
+ * crea, aggiorna il nome, collega per codice; **mai** chiude o cancella una
+ * fase che non arriva piu'. Il cantiere padre non collegato lascia la fase in
+ * sosta e la conta: qui non si creano cantieri.
+ */
+export async function promuoviFasiDalGestionale(tenantId: string): Promise<EsitoFasi> {
+  const service = createServiceSupabase();
+  const nulla: EsitoFasi = { ok: true, create: 0, aggiornate: 0, collegate: 0, senzaPadre: 0, errori: 0 };
+  const { data: modRaw } = await service
+    .from('tenant_modules' as never)
+    .select('attivo, config')
+    .eq('tenant_id', tenantId)
+    .eq('module_code', 'integrazione')
+    .maybeSingle();
+  const mod = modRaw as unknown as { attivo: boolean; config: Record<string, unknown> | null } | null;
+  if (!mod?.attivo) return { ...nulla, ok: false, motivo: 'modulo spento' };
+  const sistema = typeof mod.config?.sistema === 'string' ? mod.config.sistema : null;
+  if (!sistema) return { ...nulla, ok: false, motivo: 'gestionale non scelto' };
+
+  const { data: sostaRaw } = await service
+    .from('integrazione_staging' as never)
+    .select('external_id, nome, external_codice, dati')
+    .eq('tenant_id', tenantId)
+    .eq('sistema', sistema)
+    .eq('entita', 'sottocantiere');
+  const sosta = ((sostaRaw ?? []) as unknown as { external_id: string; nome: string | null; external_codice: string | null; dati: Record<string, unknown> | null }[]).map((r) => ({
+    externalId: r.external_id,
+    nome: r.nome ?? '',
+    externalCodice: r.external_codice,
+    externalCantiereId: typeof r.dati?.externalCantiereId === 'string' ? r.dati.externalCantiereId : null,
+    descrizione: typeof r.dati?.descrizione === 'string' ? r.dati.descrizione : null,
+  }));
+  if (sosta.length === 0) return nulla;
+
+  const [{ data: mapCantRaw }, { data: cantRaw }, { data: fasiRaw }, { data: mapFasiRaw }] = await Promise.all([
+    service.from('integrazione_mappature' as never).select('external_id, entita_id').eq('tenant_id', tenantId).eq('sistema', sistema).eq('entita', 'cantiere'),
+    service.from('cantieri' as never).select('id, codice_commessa').eq('tenant_id', tenantId),
+    service.from('sottocantieri' as never).select('id, cantiere_id, nome, codice, origine_gestionale_al').eq('tenant_id', tenantId),
+    service.from('integrazione_mappature' as never).select('external_id, entita_id').eq('tenant_id', tenantId).eq('sistema', sistema).eq('entita', 'sottocantiere'),
+  ]);
+  const mappe = (r: unknown) => ((r ?? []) as { external_id: string; entita_id: string }[]).map((m) => ({ externalId: m.external_id, entitaId: m.entita_id }));
+  const adesso = new Date().toISOString();
+  const piano = pianificaFasiDalGestionale({
+    sosta,
+    cantierePerExternal: cantierePerExternalDa(
+      mappe(mapCantRaw),
+      ((cantRaw ?? []) as { id: string; codice_commessa: string | null }[]).map((c) => ({ id: c.id, codiceCommessa: c.codice_commessa })),
+    ),
+    fasiNostre: ((fasiRaw ?? []) as { id: string; cantiere_id: string; nome: string; codice: string | null; origine_gestionale_al: string | null }[]).map((f) => ({
+      id: f.id,
+      cantiereId: f.cantiere_id,
+      nome: f.nome,
+      codice: f.codice,
+      origineGestionaleAl: f.origine_gestionale_al,
+    })),
+    mappature: mappe(mapFasiRaw),
+    adesso,
+  });
+
+  let create = 0;
+  let aggiornate = 0;
+  let collegate = 0;
+  let errori = 0;
+  const idPerExternal = new Map<string, string>();
+  // Le fasi da creare, una per una: un codice gia' usato sul cantiere (vincolo
+  // unico) non deve fermare le altre.
+  for (const c of piano.crea) {
+    const { data, error } = await service
+      .from('sottocantieri' as never)
+      .insert({
+        tenant_id: tenantId,
+        cantiere_id: c.cantiereId,
+        nome: c.nome,
+        codice: c.codice,
+        descrizione: c.descrizione,
+        stato: 'attivo',
+        origine_gestionale_al: adesso,
+      } as never)
+      .select('id')
+      .single();
+    if (error || !data) {
+      errori += 1;
+      console.error('[promuovi] fase non creata', { tenantId, externalId: c.externalId, errore: error?.message });
+      continue;
+    }
+    idPerExternal.set(c.externalId, (data as { id: string }).id);
+    create += 1;
+  }
+  for (const a of piano.aggiorna) {
+    const { id, ...campi } = a;
+    const { error } = await service
+      .from('sottocantieri' as never)
+      .update({
+        ...(campi.nome !== undefined ? { nome: campi.nome } : {}),
+        ...(campi.codice !== undefined ? { codice: campi.codice } : {}),
+        ...(campi.origineGestionaleAl !== undefined ? { origine_gestionale_al: campi.origineGestionaleAl } : {}),
+      } as never)
+      .eq('id', id)
+      .eq('tenant_id', tenantId);
+    if (error) errori += 1;
+    else aggiornate += 1;
+  }
+  const righeMappa = piano.mappa
+    .map((m) => ({ externalId: m.externalId, entitaId: m.entitaId ?? idPerExternal.get(m.externalId) ?? null, nuova: m.nuova }))
+    .filter((m): m is { externalId: string; entitaId: string; nuova: boolean } => !!m.entitaId);
+  for (let i = 0; i < righeMappa.length; i += 100) {
+    const lotto = righeMappa.slice(i, i + 100);
+    const { error } = await service.from('integrazione_mappature' as never).upsert(
+      lotto.map((m) => ({
+        tenant_id: tenantId,
+        sistema,
+        entita: 'sottocantiere',
+        entita_id: m.entitaId,
+        external_id: m.externalId,
+        origine: 'automatico',
+      })) as never,
+      { onConflict: 'tenant_id,sistema,entita,external_id' },
+    );
+    if (error) {
+      errori += lotto.length;
+      console.error('[promuovi] mappature fasi non scritte', { tenantId, quante: lotto.length, errore: error.message });
+      continue;
+    }
+    collegate += lotto.filter((m) => m.nuova && !idPerExternal.has(m.externalId)).length;
+  }
+  return { ok: true, create, aggiornate, collegate, senzaPadre: piano.senzaPadre.length, errori };
+}
+
+async function promuoviCommesse(
   tenantId: string,
 ): Promise<EsitoPromozione> {
   const service = createServiceSupabase();
@@ -459,6 +617,11 @@ export async function promuoviERegistra(
       cantieriChiusi: e.cantieriChiusi ?? 0,
       cantieriRiaperti: e.cantieriRiaperti ?? 0,
       saltati: e.cantieriSaltati.length,
+      fasiCreate: e.fasi?.create ?? 0,
+      fasiAggiornate: e.fasi?.aggiornate ?? 0,
+      fasiCollegate: e.fasi?.collegate ?? 0,
+      fasiSenzaPadre: e.fasi?.senzaPadre ?? 0,
+      fasiErrori: e.fasi?.errori ?? 0,
       // Un assaggio basta: se sono tanti il numero sopra dice comunque quanti.
       esempiSaltati: e.cantieriSaltati.slice(0, 10),
     };

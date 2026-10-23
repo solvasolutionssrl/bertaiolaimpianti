@@ -38,6 +38,8 @@ export interface RigaCollegamento {
     motivo?: string;
     cantieriCreati?: number;
     categorieDaSmistare?: number;
+    fasiCreate?: number;
+    fasiSenzaPadre?: number;
   } | null;
 }
 

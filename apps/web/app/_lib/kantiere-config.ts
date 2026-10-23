@@ -50,6 +50,12 @@ export interface ImpostazioniKantiere {
   splitFineTurnoAttivo: boolean;
   /** `registra_giornata_attivo`: giornata senza timbrature. Predefinito sì. */
   registraGiornataAttivo: boolean;
+  /**
+   * `fase_obbligatoria`: se un cantiere ha delle fasi (sottocantieri), per
+   * registrare le ore se ne sceglie una. Le righe gia' scritte senza fase
+   * restano valide. Predefinito no (FPM: sì dal 23/10/2026).
+   */
+  faseObbligatoria: boolean;
   /** `tolleranza_chiusura_min`: scarto ammesso nella ripartizione (0-30). Predefinito 5. */
   tolleranzaChiusuraMin: number;
   /** `passo_minuti_stepper`: passo dei tasti + e − (5/10/15/30). Predefinito 15. */
@@ -139,6 +145,7 @@ export function impostazioniDaConfig(config: Record<string, unknown>): Impostazi
     avvioTurnoLibero: config['avvio_turno_libero'] !== false,
     splitFineTurnoAttivo: config['split_fine_turno_attivo'] !== false,
     registraGiornataAttivo: config['registra_giornata_attivo'] !== false,
+    faseObbligatoria: config['fase_obbligatoria'] === true,
     tolleranzaChiusuraMin: Math.min(30, intero(config['tolleranza_chiusura_min'], 5)),
     passoMinutiStepper: (PASSI_MINUTI_STEPPER as readonly number[]).includes(passo) ? passo : 15,
     sogliaPausaPranzoOre: pausa >= 1 ? pausa : 5,
@@ -254,6 +261,7 @@ export type ImpostazioniTurno = {
   passoMinuti: number;
   avvioLibero: boolean;
   registraGiornataAttivo: boolean;
+  faseObbligatoria: boolean;
 };
 
 /** Impostazioni del flusso turni (avvio, chiusura, ripartizione, stepper). */
@@ -265,6 +273,7 @@ export async function leggiImpostazioniTurno(supabase: Supa, tenantId: string): 
     passoMinuti: imp.passoMinutiStepper,
     avvioLibero: imp.avvioTurnoLibero,
     registraGiornataAttivo: imp.registraGiornataAttivo,
+    faseObbligatoria: imp.faseObbligatoria,
   };
 }
 

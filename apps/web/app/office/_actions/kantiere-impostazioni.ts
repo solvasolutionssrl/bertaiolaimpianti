@@ -42,6 +42,7 @@ const schema = z.object({
   avvioTurnoLibero: z.boolean().optional(),
   splitFineTurnoAttivo: z.boolean().optional(),
   registraGiornataAttivo: z.boolean().optional(),
+  faseObbligatoria: z.boolean().optional(),
   tolleranzaChiusuraMin: z.number().int().min(0).max(30).optional(),
   passoMinutiStepper: z.union([z.literal(5), z.literal(10), z.literal(15), z.literal(30)]).optional(),
   // Pause
@@ -112,6 +113,7 @@ export async function salvaImpostazioniKantiere(input: unknown): Promise<Result>
   imposta('avvio_turno_libero', d.avvioTurnoLibero);
   imposta('split_fine_turno_attivo', d.splitFineTurnoAttivo);
   imposta('registra_giornata_attivo', d.registraGiornataAttivo);
+  imposta('fase_obbligatoria', d.faseObbligatoria);
   imposta('tolleranza_chiusura_min', d.tolleranzaChiusuraMin);
   imposta('passo_minuti_stepper', d.passoMinutiStepper);
   imposta('soglia_pausa_pranzo_ore', d.sogliaPausaPranzoOre);
