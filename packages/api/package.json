@@ -26,6 +26,8 @@
     "./kantiere-quote": "./src/kantiere-quote.ts",
     "./arrotondamento-timbri": "./src/arrotondamento-timbri.ts",
     "./sottocantieri": "./src/sottocantieri.ts",
+    "./ore-testo": "./src/ore-testo.ts",
+    "./permessi-richiesta": "./src/permessi-richiesta.ts",
     "./fasi-gestionale": "./src/fasi-gestionale.ts",
     "./ora-mostrata": "./src/ora-mostrata.ts",
     "./kantiere-report": "./src/kantiere-report.ts",

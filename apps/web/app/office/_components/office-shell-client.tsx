@@ -590,7 +590,7 @@ function deriveActiveId(pathname: string | null, nav: OfficeNavItem[]): string |
  * altre barre (una voce in alto, un gruppo, «Altro»), cosi' chi passa
  * dall'ufficio al tecnico non cambia lingua.
  */
-function buildNavTecnico(opts: { hasKontabilita?: boolean; hasPianificazione?: boolean }): OfficeNavItem[] {
+function buildNavTecnico(opts: { hasKontabilita?: boolean; hasPianificazione?: boolean; hasFerie?: boolean }): OfficeNavItem[] {
   return [
     { id: 'mio-oggi', label: 'Oggi', href: '/office/mio', icon: LayoutDashboard },
     {
@@ -608,6 +608,9 @@ function buildNavTecnico(opts: { hasKontabilita?: boolean; hasPianificazione?: b
           : []),
         ...(opts.hasPianificazione
           ? [{ id: 'mio-pianificazione', label: 'La mia settimana', href: '/office/mio/pianificazione', icon: CalendarDays }]
+          : []),
+        ...(opts.hasFerie
+          ? [{ id: 'mio-richieste', label: 'Le mie richieste', href: '/office/mio/richieste', icon: CalendarCheck }]
           : []),
       ],
     },
@@ -652,7 +655,7 @@ export function OfficeShellClient({
     (item) => item.id !== 'kontabilita' || hasKontabilita !== false,
   );
   const nav = tecnico
-    ? buildNavTecnico({ hasKontabilita, hasPianificazione })
+    ? buildNavTecnico({ hasKontabilita, hasPianificazione, hasFerie })
     : injectIntegrazione(
         injectPersonalizzazioni(
           injectPersonale(navBase, {
