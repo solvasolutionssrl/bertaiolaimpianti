@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ZONA_DIPENDENTI } from '@kommessa/api/zone-dati';
 import { COLONNE_QUOTE, quoteDaRiga, quoteOre, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiPerGruppi, leggiTutto, type EsitoPagina } from '@kommessa/api/pagine';
@@ -344,7 +345,7 @@ export default async function KantierePanoramica() {
             <LiveRefresh className="text-xs" />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Riepilogo operativo presenze, cantieri e rapportini.
+            Riepilogo operativo di {ZONA_DIPENDENTI.tutti.toLowerCase()}: presenze, cantieri e rapportini. La tua giornata sta nella pillola in alto.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

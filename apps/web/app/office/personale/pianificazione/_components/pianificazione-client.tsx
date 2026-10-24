@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { eMio } from '@kommessa/api/zone-dati';
+import { TagTu } from '@/app/_components/tag-tu';
 import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import {
@@ -1181,6 +1183,7 @@ function MoreMenu({ children }: { children: React.ReactNode }) {
 // ── Main ─────────────────────────────────────────────────────────────
 
 export function PianificazioneClient({
+  mioDipendenteId = null,
   lunediISO,
   oggiLunediISO,
   oggiISO,
@@ -1195,6 +1198,8 @@ export function PianificazioneClient({
   logoUrl,
   brandColor,
 }: {
+  /** La scheda di chi guarda, se timbra anche lui: la sua riga porta «tu». */
+  mioDipendenteId?: string | null;
   lunediISO: string;
   oggiLunediISO: string;
   oggiISO: string;
@@ -1696,7 +1701,10 @@ export function PianificazioneClient({
                         baseBg
                       }
                     >
-                      <div className="truncate text-sm font-medium">{nomeDip(d)}</div>
+                      <div className="truncate text-sm font-medium">
+                        {nomeDip(d)}
+                        {eMio(mioDipendenteId, d.id) ? <TagTu /> : null}
+                      </div>
                       {d.mansione ? (
                         <div className="truncate text-[11px] text-muted-foreground">
                           {d.mansione}

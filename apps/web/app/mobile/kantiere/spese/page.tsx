@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ZONA_MIA } from '@kommessa/api/zone-dati';
 import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 import { notFound } from 'next/navigation';
@@ -178,6 +179,12 @@ export default async function SpeseMobilePage() {
         />
       )}
 
+      {dipId ? (
+        <p className="-mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {ZONA_MIA.spese}
+          {isManager ? <span className="ml-1 normal-case tracking-normal text-muted-foreground/80">· quelle di tutti sono in Kontabilità, dall’ufficio</span> : null}
+        </p>
+      ) : null}
       <SpeseClient
         spese={spese}
         metodi={metodi}

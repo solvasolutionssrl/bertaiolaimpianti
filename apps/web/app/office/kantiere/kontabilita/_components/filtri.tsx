@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { TAG_TU, ZONA_DIPENDENTI, ZONA_MIA } from '@kommessa/api/zone-dati';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@kommessa/ui';
 import { CATEGORIA_META, CATEGORIE_ORDINATE } from '@/app/_components/spese/categoria';
@@ -22,6 +23,8 @@ interface Props {
   dipendenti: DipendenteOption[];
   /** Righe attualmente mostrate, per l'export CSV. */
   righe: SpesaRiga[];
+  /** La scheda di chi guarda, se ne ha una: accende la scorciatoia «Le mie spese». */
+  mioDipendenteId?: string | null;
 }
 
 /** Formatta un numero con la virgola decimale italiana, senza simbolo valuta. */
@@ -51,7 +54,7 @@ function csvCell(v: string): string {
   return s;
 }
 
-export function Filtri({ valori, cantieri, dipendenti, righe }: Props) {
+export function Filtri({ valori, cantieri, dipendenti, righe, mioDipendenteId = null }: Props) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -144,8 +147,9 @@ export function Filtri({ valori, cantieri, dipendenti, righe }: Props) {
         onChange={(e) => applica({ dipendente: e.target.value })}
         className={selectCls}
       >
-        <option value="">Tutti i dipendenti</option>
-        {dipendenti.map((d) => (
+        <option value="">{ZONA_DIPENDENTI.tutti}</option>
+        {mioDipendenteId ? <option value={mioDipendenteId}>{ZONA_MIA.spese} ({TAG_TU})</option> : null}
+        {dipendenti.filter((d) => d.id !== mioDipendenteId).map((d) => (
           <option key={d.id} value={d.id}>
             {d.nome}
           </option>

@@ -119,8 +119,18 @@ export default async function PianificazionePage({
     tipo: string;
   }>).map((m) => ({ id: m.id, targa: m.targa, modello: m.modello, tipo: m.tipo }));
 
+  // La scheda di chi guarda, se timbra anche lui: la sua riga porta il segno «tu».
+  const { data: miaScheda } = await supabase
+    .from('dipendenti' as never)
+    .select('id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('user_id', ctx.userId)
+    .maybeSingle();
+  const mioDipendenteId = (miaScheda as { id: string } | null)?.id ?? null;
+
   return (
     <PianificazioneClient
+      mioDipendenteId={mioDipendenteId}
       lunediISO={lunedi}
       oggiLunediISO={oggiLunedi}
       oggiISO={oggi}

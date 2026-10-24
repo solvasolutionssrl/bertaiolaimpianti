@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { ZONA_MIA } from '@kommessa/api/zone-dati';
 import { useRouter } from 'next/navigation';
 import { UserRound } from 'lucide-react';
 import { Button, cn } from '@kommessa/ui';
@@ -57,7 +58,7 @@ export function LeMieOre({
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
           <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          Le mie ore
+          {ZONA_MIA.ore}
         </h2>
         <span className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium', stato.colore)}>
           {stato.pulsa ? (

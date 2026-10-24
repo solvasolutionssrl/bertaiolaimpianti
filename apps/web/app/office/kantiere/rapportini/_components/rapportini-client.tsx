@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { ZONA_DIPENDENTI } from '@kommessa/api/zone-dati';
+import { TagTu } from '@/app/_components/tag-tu';
 import { useRouter } from 'next/navigation';
 import {
   Loader2,
@@ -378,14 +380,6 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
  * Niente esito: le pill della giornata occupano lo spazio Ore+Esito (colSpan 2);
  * il totale ore LIVE va nell'ultima colonna, sempre popolato.
  */
-/** «tu» accanto al nome: la riga e' di chi guarda, e in alto c'e' la sua zona. */
-function TagTu() {
-  return (
-    <span className="ml-1.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-px align-middle text-[10px] font-semibold text-primary" data-tag-tu>
-      tu
-    </span>
-  );
-}
 
 function OggiRow({
   riga,
@@ -873,8 +867,8 @@ export function RapportiniClient({
           />
           <h2 className="flex items-center gap-1.5 pt-1 text-sm font-semibold" data-zona-squadra>
             <Users className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            Dipendenti
-            <span className="font-normal text-muted-foreground">· le giornate degli altri, da sistemare e da controllare</span>
+            {ZONA_DIPENDENTI.titolo}
+            <span className="font-normal text-muted-foreground">· {ZONA_DIPENDENTI.sottotitolo}</span>
           </h2>
         </>
       ) : null}

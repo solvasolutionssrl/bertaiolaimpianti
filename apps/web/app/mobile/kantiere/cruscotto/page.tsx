@@ -1,4 +1,5 @@
 import { leggiRegolaTimbri } from '@/app/_lib/kantiere-config';
+import { ZONA_DIPENDENTI, eMio } from '@kommessa/api/zone-dati';
 import { etichettaConFase, nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
 import { arrotondaTimbrature } from '@kommessa/api/arrotondamento-timbri';
 import type { Metadata } from 'next';
@@ -348,6 +349,7 @@ export default async function CruscottoKantierePage({
       return {
         dipId,
         nome: dipMap.get(dipId) ?? 'Dipendente',
+        tu: eMio(mioDip, dipId),
         stato,
         oreLabel: soloDentro
           ? `dalle ${oraMostrata(primoTs)}`
@@ -492,7 +494,7 @@ export default async function CruscottoKantierePage({
       {/* Persone del giorno (espandibili → timeline con origine + viaggio) */}
       <section id="persone" className="scroll-mt-4 space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Presenze del giorno
+          {ZONA_DIPENDENTI.titolo} · presenze del giorno{persone.some((p) => p.tu) ? ` · ${ZONA_DIPENDENTI.compresoTu}` : ''}
         </p>
         <PresenzeGiorno persone={persone} />
         <p className="pt-1 text-[11px] text-muted-foreground">

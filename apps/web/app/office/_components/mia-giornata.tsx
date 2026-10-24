@@ -1,6 +1,9 @@
 'use client';
 
 import * as React from 'react';
+import { etichettaMezzo, ordinaMezzi } from '@kommessa/api/mezzi';
+import { ZONA_MIA } from '@kommessa/api/zone-dati';
+import { TagTu } from '@/app/_components/tag-tu';
 import { useRouter } from 'next/navigation';
 import { CalendarClock, ChevronDown, Coffee, Fingerprint, Loader2, MapPin, Play, Smartphone, Square, QrCode } from 'lucide-react';
 import { Button, cn } from '@kommessa/ui';
@@ -219,9 +222,11 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
         onClick={() => setAperto((v) => !v)}
         aria-expanded={aperto}
         aria-haspopup="menu"
-        title="La mia giornata"
+        title={ZONA_MIA.giornata}
         className={cn('inline-flex h-9 max-w-[22rem] items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors hover:brightness-95', stato.colore)}
       >
+        {/* La pillola parla di chi guarda: in una barra piena di dati di tutti, lo dice. */}
+        <TagTu className="ml-0" />
         {stato.pulsa ? (
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500/60" />
@@ -236,7 +241,7 @@ export function MiaGiornata({ dati }: { dati: MiaGiornataDati }) {
 
       {aperto ? (
         <div role="menu" className="absolute right-0 top-11 z-50 w-96 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-card p-3 shadow-lg">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">La mia giornata</p>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{ZONA_MIA.giornata}</p>
           {corpo}
         </div>
       ) : null}
@@ -334,7 +339,7 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
                 {autista && dati.mezzi.length > 0 ? (
                   <select value={mezzoId} disabled={pending} onChange={(e) => setMezzoId(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
                     <option value="">Mezzo…</option>
-                    {dati.mezzi.map((m) => <option key={m.id} value={m.id}>{m.targa}</option>)}
+                    {ordinaMezzi(dati.mezzi).map((m) => <option key={m.id} value={m.id}>{etichettaMezzo(m)}</option>)}
                   </select>
                 ) : null}
               </div>

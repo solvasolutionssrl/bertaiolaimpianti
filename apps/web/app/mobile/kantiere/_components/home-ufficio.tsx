@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ZONA_MIA } from '@kommessa/api/zone-dati';
 import { etichettaLuogo } from '@kommessa/api/sottocantieri';
 import { Clock, QrCode } from 'lucide-react';
 
@@ -76,7 +77,7 @@ export function HomeUfficio({
   return (
     <div className="flex flex-col gap-4" data-giornata-ufficio={compatto ? 'compatta' : 'intera'}>
       {compatto ? (
-        <p className="-mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">La mia giornata</p>
+        <p className="-mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{ZONA_MIA.giornata}</p>
       ) : null}
       {nome && !compatto ? (
         <p className="text-sm text-muted-foreground">

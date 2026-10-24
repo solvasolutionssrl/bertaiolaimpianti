@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { eMio } from '@kommessa/api/zone-dati';
+import { TagTu } from '@/app/_components/tag-tu';
 import { useRouter } from 'next/navigation';
 import { Loader2, Trash2, Receipt, FileText, ExternalLink, ImageOff } from 'lucide-react';
 import {
@@ -28,6 +30,7 @@ import { CantiereCombo } from './cantiere-combo';
 
 export type SpesaRiga = {
   id: string;
+  dipendenteId?: string | null;
   dipendenteNome: string;
   /** «Cantiere › Fase», pronto da leggere. */
   cantiereNome: string | null;
@@ -271,7 +274,10 @@ export function SpeseTable({
 
                   {/* Dipendente */}
                   <td className="max-w-[12rem] px-3 py-1.5 align-middle">
-                    <span className="block truncate text-muted-foreground">{s.dipendenteNome}</span>
+                    <span className="block truncate text-muted-foreground">
+                      {s.dipendenteNome}
+                      {eMio(mioDipendenteId, s.dipendenteId) ? <TagTu /> : null}
+                    </span>
                   </td>
 
                   {/* Cantiere (assegnazione inline) */}

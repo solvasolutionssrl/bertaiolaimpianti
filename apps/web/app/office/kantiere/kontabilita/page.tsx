@@ -191,6 +191,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
   // Righe serializzabili per il client.
   const righe: SpesaRiga[] = spese.map((s) => ({
     id: s.id,
+    dipendenteId: s.dipendente_id,
     dipendenteNome: s.dipendente_id ? dipendentiMap.get(s.dipendente_id) ?? 'Sconosciuto' : 'Sconosciuto',
     cantiereNome: s.cantiere_id ? etichettaConFase(cantieriMap.get(s.cantiere_id) ?? '', s.sottocantiere_id, fasiMap) || null : null,
     cantiereId: s.cantiere_id,
@@ -239,6 +240,7 @@ export default async function KontabilitaPage({ searchParams }: PageProps) {
         cantieri={cantieriOptions}
         dipendenti={dipendentiOptions}
         righe={righe}
+        mioDipendenteId={mioDipendenteId}
       />
 
       <SpeseTable

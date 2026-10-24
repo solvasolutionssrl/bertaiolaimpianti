@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { TagTu } from '@/app/_components/tag-tu';
 import { ChevronDown, Car, UserCheck, Utensils, CircleDot } from 'lucide-react';
 
 import {
@@ -15,6 +16,8 @@ import type { StatoPresenza } from '../../_lib/presenze-types';
 export type PersonaGiorno = {
   dipId: string;
   nome: string;
+  /** E' chi guarda: la riga porta «tu», perche' la sua giornata sta anche nella card in cima. */
+  tu?: boolean;
   stato: StatoPresenza;
   oreLabel: string;
   cantNome: string | null;
@@ -82,7 +85,10 @@ export function PresenzeGiorno({ persone }: { persone: PersonaGiorno[] }) {
             >
               <StatoBadge stato={p.stato} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{p.nome}</span>
+                <span className="block truncate text-sm font-medium">
+                  {p.nome}
+                  {p.tu ? <TagTu /> : null}
+                </span>
                 <span className="block truncate text-[11px] text-muted-foreground">
                   {p.cantNome ? p.cantNome : 'Presenza'} · {p.oreLabel}
                   {p.stato === 'lavoro' ? (p.cantNome ? ' · in cantiere' : ' · in sede') : p.stato === 'pausa' ? ' · in pausa' : ''}
