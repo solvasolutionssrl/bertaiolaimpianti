@@ -20,6 +20,8 @@ export type MezzoView = {
   modello: string | null;
   attivo: boolean;
   note: string | null;
+  /** La voce di sistema «Auto personale» (24/10/2026): non si rinomina ne' si cancella. */
+  personale: boolean;
 };
 
 export type MezzoStats = {
@@ -34,6 +36,7 @@ type MezzoRow = {
   modello: string | null;
   attivo: boolean;
   note: string | null;
+  personale: boolean;
 };
 
 type ViaggioAggRow = {
@@ -51,8 +54,9 @@ export default async function MezziPage() {
   const [mezziRes, viaggi] = await Promise.all([
     supabase
       .from('mezzi' as never)
-      .select('id, tipo, targa, modello, attivo, note')
+      .select('id, tipo, targa, modello, attivo, note, personale')
       .eq('tenant_id', ctx.tenantId)
+      .order('personale')
       .order('tipo')
       .order('targa') as unknown as Promise<{ data: MezzoRow[] | null }>,
     // Km di sempre per mezzo: letti a pagine, oltre il tetto di 1000 righe.

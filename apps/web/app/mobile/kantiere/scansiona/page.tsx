@@ -15,7 +15,11 @@ export default async function ScansionaPage() {
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-5 p-4">
-      <header className="pt-2">
+      {/* ⚠️ Spazio a destra per i due tasti fissi del guscio (campanella e
+          «+ Spesa»): il titolo di questa pagina e' lungo e senza questo
+          margine ci finiva sotto. Regola di sempre: la fascia in alto a
+          destra resta libera. */}
+      <header className="pt-2 pr-32">
         <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
           <QrCode className="h-3.5 w-3.5" aria-hidden="true" />
           Kantiere

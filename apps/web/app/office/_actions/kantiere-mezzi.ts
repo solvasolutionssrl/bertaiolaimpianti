@@ -30,6 +30,28 @@ async function guard() {
   return ctx;
 }
 
+/**
+ * La voce «Auto personale» (24/10/2026) e' di sistema: compare fra i mezzi di
+ * ogni cliente perche' chi viaggia con la propria auto lo possa dichiarare, e
+ * i chilometri restino tracciati per il rimborso. Non e' un mezzo aziendale:
+ * non si rinomina e non si cancella, si puo' solo spegnere.
+ */
+async function ePersonale(
+  supabase: ReturnType<typeof createServerSupabase>,
+  id: string,
+  tenantId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('mezzi' as never)
+    .select('personale')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  return (data as { personale?: boolean } | null)?.personale === true;
+}
+
+const ERRORE_PERSONALE = 'La voce «Auto personale» e\' di sistema: si puo\' solo attivare o disattivare.';
+
 // ── creaMezzo ──────────────────────────────────────────────────────────────
 
 const CreaMezzoSchema = z.object({
@@ -90,6 +112,17 @@ export async function aggiornaMezzo(input: unknown): Promise<OkResult> {
   try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   const supabase = createServerSupabase();
+  if (await ePersonale(supabase, parsed.data.id, ctx.tenantId)) {
+    // Si lascia passare solo l'interruttore: il resto resta com'e'.
+    const { error: eAttivo } = await supabase
+      .from('mezzi' as never)
+      .update({ attivo: parsed.data.attivo } as never)
+      .eq('id', parsed.data.id)
+      .eq('tenant_id', ctx.tenantId);
+    if (eAttivo) return { ok: false, error: eAttivo.message };
+    revalidatePath('/office/kantiere/mezzi');
+    return { ok: true };
+  }
   const { error } = await supabase
     .from('mezzi' as never)
     .update({
@@ -130,6 +163,9 @@ export async function eliminaMezzo(input: unknown): Promise<OkResult> {
   try { ctx = await guard(); } catch (e) { return { ok: false, error: (e as Error).message }; }
 
   const supabase = createServerSupabase();
+  if (await ePersonale(supabase, parsed.data.id, ctx.tenantId)) {
+    return { ok: false, error: ERRORE_PERSONALE };
+  }
   // Com'era prima di sparire: dopo la delete non c'e' piu' modo di dire quale
   // mezzo fosse, e i km dei viaggi puntano proprio ai mezzi.
   const { data: primaRaw } = await supabase

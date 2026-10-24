@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition, useState, useEffect } from 'react';
+import { etichettaMezzoEstesa, ordinaMezzi } from '@kommessa/api/mezzi';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@kommessa/ui';
@@ -10,6 +11,8 @@ import { SOGLIA_PAUSA_PRANZO_ORE } from '@kommessa/api/kantiere-ore';
 import { etichettaPausa } from '@kommessa/api/kantiere-pausa';
 import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
+import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { SceltaFase } from '@/app/mobile/kantiere/_components/scelta-fase';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +57,10 @@ export interface TimbraClientProps {
   pausaOggiFatta?: boolean;
   /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
   sogliaPausaPranzoOre?: number;
+  /** Le fasi aperte del cantiere (24/10/2026): all'ingresso si sceglie su quale si lavora. */
+  fasi?: SottocantiereLite[];
+  /** Regola del cliente: con delle fasi, l'ingresso ne indica una. */
+  faseObbligatoria?: boolean;
 }
 
 // ─── geo best-effort ─────────────────────────────────────────────────────────
@@ -110,6 +117,11 @@ function messaggioErrore(code: string): string {
       return 'Il modulo Kantiere non è abilitato per questo spazio.';
     case 'CANTIERE_CHIUSO':
       return 'Il cantiere è chiuso e non accetta timbrature. Segnalare all’ufficio le ore eventualmente svolte.';
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+    case 'SOTTOCANTIERE_NON_VALIDO':
+    case 'SOTTOCANTIERE_CHIUSO':
+      return 'La fase scelta non è più disponibile: ricaricare la pagina e riprovare.';
     case 'QR_NON_VALIDO':
       return 'QR non valido o revocato.';
     case 'QR_ALTRO_TENANT':
@@ -139,18 +151,32 @@ function labelConferma(tipo: TipoTimbratura, pausa: boolean): string {
 
 // ─── row membro (capo → squadra), invariato (nessuna pausa per i membri) ──────
 
-function RigaMembro({ token, membro }: { token: string; membro: MembroProp }) {
+function RigaMembro({
+  token,
+  membro,
+  fasi,
+  faseObbligatoria,
+}: {
+  token: string;
+  membro: MembroProp;
+  fasi: SottocantiereLite[];
+  faseObbligatoria: boolean;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [stato, setStato] = useState<
     { tipo: 'ok'; ts: string; tipo_timbra: TipoTimbratura } | { tipo: 'errore'; msg: string } | null
   >(null);
+  // La fase per il membro: si chiede solo al suo ingresso, se il cantiere ne ha.
+  const chiedeFase = membro.prossimoTipo === 'ingresso' && fasi.length > 0;
+  const [fase, setFase] = useState<string | null | undefined>(chiedeFase ? undefined : null);
+  const faseMancante = chiedeFase && faseObbligatoria && fase === undefined;
 
   function handleTimbra() {
     startTransition(async () => {
       setStato(null);
       const g = await geo();
-      const res = await timbra({ token, dipendenteId: membro.id, geo: g });
+      const res = await timbra({ token, dipendenteId: membro.id, geo: g, sottocantiereId: chiedeFase ? (fase ?? null) : undefined });
       if (res.ok) {
         setStato({ tipo: 'ok', ts: res.ts, tipo_timbra: res.tipo });
         router.refresh();
@@ -184,12 +210,17 @@ function RigaMembro({ token, membro }: { token: string; membro: MembroProp }) {
             Prossima timbratura: {membro.prossimoTipo === 'ingresso' ? 'ingresso' : 'uscita'}
           </p>
         )}
+        {chiedeFase && stato?.tipo !== 'ok' ? (
+          <div className="mt-2">
+            <SceltaFase fasi={fasi} valore={fase} onChange={setFase} obbligatoria={faseObbligatoria} compatto idBase={`fase-${membro.id}`} />
+          </div>
+        ) : null}
       </div>
       <Button
         size="sm"
         variant={membro.prossimoTipo === 'ingresso' ? 'default' : 'outline'}
         onClick={handleTimbra}
-        disabled={isPending || stato?.tipo === 'ok'}
+        disabled={isPending || stato?.tipo === 'ok' || faseMancante}
       >
         {isPending ? 'Attendere...' : stato?.tipo === 'ok' ? 'Fatto' : `Timbra ${tipoLabel}`}
       </Button>
@@ -250,6 +281,8 @@ function TimbraConViaggio({
   viaggio,
   onOk,
   pausaPrompt,
+  fasi = [],
+  faseObbligatoria = false,
 }: {
   token: string;
   azione: 'inizio' | 'fine';
@@ -257,9 +290,14 @@ function TimbraConViaggio({
   onOk: (r: { ts: string; tipo: TipoTimbratura; pausa: boolean }) => void;
   /** Se presente (solo in uscita), mostra il box "pausa pranzo non rilevata". */
   pausaPrompt?: { durataMin: number } | null;
+  /** Le fasi del cantiere: si chiedono solo all'ingresso. */
+  fasi?: SottocantiereLite[];
+  faseObbligatoria?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [erroreMsg, setErroreMsg] = useState<string | null>(null);
+  const chiedeFase = azione === 'inizio' && fasi.length > 0;
+  const [fase, setFase] = useState<string | null | undefined>(chiedeFase ? undefined : null);
   // Pausa pranzo dichiarata (ripiego se il dipendente non l'ha timbrata).
   const [pausaFatta, setPausaFatta] = useState(false);
   const [pausaMin, setPausaMin] = useState<number>(30);
@@ -344,6 +382,10 @@ function TimbraConViaggio({
         return;
       }
     }
+    if (chiedeFase && faseObbligatoria && fase === undefined) {
+      setErrLocale('Questo cantiere ha delle fasi: indica su quale hai lavorato.');
+      return;
+    }
     startTransition(async () => {
       setErroreMsg(null);
       const g = await geo();
@@ -351,6 +393,7 @@ function TimbraConViaggio({
         token,
         azione,
         geo: g,
+        sottocantiereId: chiedeFase ? (fase ?? null) : undefined,
         viaggio: usaViaggio
           ? {
               sedeId,
@@ -371,6 +414,9 @@ function TimbraConViaggio({
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+      {chiedeFase ? (
+        <SceltaFase fasi={fasi} valore={fase} onChange={(v) => { setFase(v); setErrLocale(null); }} obbligatoria={faseObbligatoria} />
+      ) : null}
       {usaViaggio && viaggio && (
         <>
           <div className="space-y-2">
@@ -479,10 +525,9 @@ function TimbraConViaggio({
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
                 <option value="">Seleziona il mezzo...</option>
-                {viaggio.mezzi.map((m) => (
+                {ordinaMezzi(viaggio.mezzi).map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.targa}
-                    {m.modello ? ` — ${m.modello}` : ''}
+                    {etichettaMezzoEstesa(m)}
                   </option>
                 ))}
               </select>
@@ -601,6 +646,8 @@ function SelfFlow({
   viaggio,
   pausaOggiFatta,
   sogliaPausaPranzoOre,
+  fasi,
+  faseObbligatoria,
 }: {
   token: string;
   nome: string;
@@ -608,6 +655,8 @@ function SelfFlow({
   viaggio: ViaggioCtx | null;
   pausaOggiFatta: boolean;
   sogliaPausaPranzoOre: number;
+  fasi: SottocantiereLite[];
+  faseObbligatoria: boolean;
 }) {
   const router = useRouter();
   // Conferma dopo una timbratura andata a buon fine.
@@ -635,7 +684,7 @@ function SelfFlow({
 
   // IDLE → inizio turno (con eventuale viaggio andata)
   if (stato.stato === 'idle') {
-    return <TimbraConViaggio token={token} azione="inizio" viaggio={viaggio} onOk={handleOk} />;
+    return <TimbraConViaggio token={token} azione="inizio" viaggio={viaggio} onOk={handleOk} fasi={fasi} faseObbligatoria={faseObbligatoria} />;
   }
 
   // Se ha scelto "Termina turno" (da lavoro o pausa): flusso uscita con viaggio ritorno
@@ -741,6 +790,8 @@ export function TimbraClient({
   viaggio,
   pausaOggiFatta = false,
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
+  fasi = [],
+  faseObbligatoria = false,
 }: TimbraClientProps) {
   return (
     <div className="space-y-6">
@@ -761,6 +812,8 @@ export function TimbraClient({
             viaggio={viaggio ?? null}
             pausaOggiFatta={pausaOggiFatta}
             sogliaPausaPranzoOre={sogliaPausaPranzoOre}
+            fasi={fasi}
+            faseObbligatoria={faseObbligatoria}
           />
         </div>
       )}
@@ -772,7 +825,7 @@ export function TimbraClient({
           </p>
           <div className="space-y-2">
             {membri.map((m) => (
-              <RigaMembro key={m.id} token={token} membro={m} />
+              <RigaMembro key={m.id} token={token} membro={m} fasi={fasi} faseObbligatoria={faseObbligatoria} />
             ))}
           </div>
         </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { etichettaMezzo, ordinaMezzi } from '@kommessa/api/mezzi';
 import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
@@ -667,9 +668,9 @@ export function ViaggioRitornoDialog({
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none"
                   >
                     <option value="">Seleziona il mezzo...</option>
-                    {mezzi.map((m) => (
+                    {ordinaMezzi(mezzi).map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.targa}
+                        {etichettaMezzo(m)}
                         {m.modello ? ` ${m.modello}` : ''}
                       </option>
                     ))}

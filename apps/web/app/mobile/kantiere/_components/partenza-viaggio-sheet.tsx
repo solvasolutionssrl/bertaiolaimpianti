@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { etichettaMezzo, ordinaMezzi } from '@kommessa/api/mezzi';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Home, ArrowLeft, X, Play, Building2 } from 'lucide-react';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
@@ -472,9 +473,9 @@ export function PartenzaViaggioSheet({
                       className="w-full rounded-md border border-input bg-background px-3 py-2 text-base focus:border-primary focus:outline-none"
                     >
                       <option value="">Seleziona il mezzo...</option>
-                      {mezzi.map((m) => (
+                      {ordinaMezzi(mezzi).map((m) => (
                         <option key={m.id} value={m.id}>
-                          {m.targa}
+                          {etichettaMezzo(m)}
                           {m.modello ? ` ${m.modello}` : ''}
                         </option>
                       ))}

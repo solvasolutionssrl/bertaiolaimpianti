@@ -223,6 +223,46 @@ function MezzoRow({ mezzo, stats }: { mezzo: MezzoView; stats: MezzoStats | unde
     }
   }
 
+  // ⭐ La voce «Auto personale» e' di sistema: si puo' solo accendere o
+  // spegnere. Mostrarla con i campi aperti inviterebbe a rinominarla, e il
+  // server la rifiuterebbe: meglio non prometterlo.
+  if (mezzo.personale) {
+    return (
+      <tr className="bg-muted/20">
+        <td className="px-3 py-2">
+          <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Di sistema
+          </span>
+        </td>
+        <td className="px-3 py-2 font-medium">Auto personale</td>
+        <td className="px-3 py-2 text-sm text-muted-foreground" colSpan={3}>
+          La sceglie chi viaggia con la propria auto: i chilometri restano tracciati per il rimborso.
+        </td>
+        <td className="px-3 py-2 text-right tabular-nums text-sm text-muted-foreground whitespace-nowrap">
+          {stats ? `${Math.round(stats.kmTotali)} km` : '—'}
+        </td>
+        <td className="px-3 py-2 text-right">
+          <label className="inline-flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={attivo}
+              disabled={busy}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setAttivo(v);
+                setBusy(true);
+                void aggiornaMezzo({ id: mezzo.id, tipo: mezzo.tipo, targa: mezzo.targa, modello: mezzo.modello ?? undefined, attivo: v, note: mezzo.note ?? undefined })
+                  .then(() => router.refresh())
+                  .finally(() => setBusy(false));
+              }}
+            />
+            Disponibile
+          </label>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr className="hover:bg-muted/30">
       {/* Tipo */}
