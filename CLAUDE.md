@@ -1719,6 +1719,28 @@ cantiere; il **cantiere intero resta sempre scegibile**; `codice` e' **testo**
   esiste** per Next (cartella privata): per provare una funzione server-only dal dev
   server la rotta va sotto `api/cron/<nome>` con il segreto del cron, e poi si toglie.
 
+### «Auto personale» fra i mezzi (24/10/2026, migration `20261024090000`)
+
+Chi va in cantiere con la propria auto lo puo' dichiarare, e i chilometri
+restano tracciati per il rimborso.
+
+- ⭐ **Non e' un valore speciale: e' una riga vera in `mezzi`**, una per
+  cliente, con la colonna `personale` e la targa segnaposto `AUTO PERSONALE`.
+  Cosi' compare da se' in tutte e sei le tendine dei mezzi e
+  `timbratura_viaggio.mezzo_id` la cita come qualunque altro mezzo: i km per
+  persona si contano con le query di sempre, senza codice nuovo. L'alternativa
+  (un valore sentinella da riconoscere ovunque) voleva sei modifiche e sei
+  occasioni di sbagliare.
+- ⚠️ **Non si rinomina e non si cancella**: `aggiornaMezzo` lascia passare solo
+  l'interruttore, `eliminaMezzo` rifiuta. Indice unico parziale: una sola per
+  cliente. Nei conteggi del parco **non entra** (non e' un mezzo dell'azienda).
+- A schermo si legge «Auto personale» e sta in fondo all'elenco:
+  `@kommessa/api/mezzi` (`etichettaMezzo`, `etichettaMezzoEstesa`,
+  `ordinaMezzi`, `eAutoPersonale`). La targa segnaposto e' il riconoscimento di
+  riserva, quindi le query che non leggono la colonna funzionano lo stesso.
+- ⚠️ **Resta aperto**: la tariffa del rimborso al chilometro. Oggi i km ci sono
+  (per persona e per tratta), ma nessuno li moltiplica per un importo.
+
 ### I tecnici da computer: `/office/mio` (23/10/2026) — nessuna migration
 
 Un tecnico del mondo presenze che entra da PC vedeva la PWA del telefono

@@ -403,16 +403,21 @@ export function MezziClient({ mezzi, viaggioAgg }: Props) {
     return m;
   }, [viaggioAgg]);
 
-  // Statistiche
-  const totale = mezzi.length;
-  const autocarri = mezzi.filter((m) => m.tipo === 'autocarro').length;
-  const autovetture = mezzi.filter((m) => m.tipo === 'autovettura').length;
-  const attivi = mezzi.filter((m) => m.attivo).length;
+  // Statistiche. ⚠️ La voce «Auto personale» non e' un mezzo dell'azienda:
+  // nei conteggi del parco non entra, altrimenti ogni cliente si ritrova
+  // un'autovettura che non possiede.
+  const flotta = mezzi.filter((m) => !m.personale);
+  const totale = flotta.length;
+  const autocarri = flotta.filter((m) => m.tipo === 'autocarro').length;
+  const autovetture = flotta.filter((m) => m.tipo === 'autovettura').length;
+  const attivi = flotta.filter((m) => m.attivo).length;
   const disattivi = totale - attivi;
 
   // Filtro
   const q = cerca.trim().toUpperCase();
   const visibili = mezzi.filter((m) => {
+    // La voce di sistema sta sotto i filtri di tipo: non e' un tipo di mezzo.
+    if (m.personale) return filtroStato === 'attivi' ? m.attivo : true;
     if (filtroTipo && m.tipo !== filtroTipo) return false;
     if (filtroStato === 'attivi' && !m.attivo) return false;
     if (q && !m.targa.includes(q) && !(m.modello ?? '').toUpperCase().includes(q)) return false;
