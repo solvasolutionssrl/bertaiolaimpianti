@@ -92,7 +92,8 @@ try {
   esito(auto.join(',') === '0,1', 'tendina: cercando la fase il cantiere si apre da solo', auto.join(','));
   await clicVero(cdp, `document.querySelector('[data-popover-portale] [role=option][data-livello="1"]')`);
   await pausa(300);
-  await valuta(cdp, `(() => { const inp = [...document.querySelectorAll('[role=dialog] input[aria-label="Minuti"]')].pop(); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(inp, '480'); inp.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  // Dal 24/10 il campo e' «Ore» e si scrive come viene: «8» = 8:00, confermato con Invio.
+  await valuta(cdp, `(() => { const inp = [...document.querySelectorAll('[role=dialog] input[aria-label="Ore"]')].pop(); inp.focus(); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(inp, '8'); inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); inp.blur(); return true; })()`);
   await pausa(2500);
   const anteprima = await valuta(cdp, `(() => { const d = [...document.querySelectorAll('[role=dialog]')].find((x) => /Compila la giornata di/.test(x.textContent)); return /Aurora.*›.*${FASE.split(' ')[0]}/.test(d.innerText); })()`);
   esito(anteprima, 'compila: l’anteprima scrive «Cantiere › Fase»');

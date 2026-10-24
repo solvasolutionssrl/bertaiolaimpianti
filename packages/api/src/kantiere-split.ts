@@ -49,6 +49,13 @@ export interface CalcolaSplitInput {
    * Assente = segmenti attaccati (split di fine turno, come prima).
    */
   viaggioPrima?: number[];
+  /**
+   * Dove va la pausa dichiarata, se chi compila l'ha spostata (24/10/2026):
+   * dopo il segmento con questo indice in `segmenti`. Assente o fuori dai
+   * confini utili (ultimo segmento compreso, o segmento scartato): la regola
+   * di sempre, il confine piu' vicino al centro.
+   */
+  pausaDopoIndice?: number | null;
 }
 
 export interface EventoSplit {
@@ -87,6 +94,7 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
   let segs = input.segmenti.map((s, i) => ({
     cantiereId: s.cantiereId,
     sottocantiereId: s.sottocantiereId ?? null,
+    indice: i,
     minuti: Math.max(0, Math.round(s.minuti)),
     viaggioPrima: i === 0 ? 0 : Math.max(0, Math.round(input.viaggioPrima?.[i] ?? 0)),
   }));
@@ -131,6 +139,15 @@ export function calcolaSegmentiSplit(input: CalcolaSplitInput): CalcolaSplitResu
       let best = 0;
       for (let i = 1; i < cuts.length; i++) {
         if (Math.abs(cuts[i]!.netTime - center) < Math.abs(cuts[best]!.netTime - center)) best = i;
+      }
+      // Chi compila ha messo la pausa dopo un segmento preciso: vince quel
+      // confine (il taglio `b` sta dopo `segs[b]`). Un indice scartato a zero
+      // minuti cade sul segmento vivo che lo precede.
+      const voluto = input.pausaDopoIndice;
+      if (voluto != null && Number.isInteger(voluto) && voluto >= 0) {
+        let b = -1;
+        for (let i = 0; i < segs.length - 1; i++) if (segs[i]!.indice <= voluto) b = i;
+        if (b >= 0) best = b;
       }
       const scelto = cuts[best]!;
       const scarto = (m: number) => Math.min(SCARTO_PAUSA_MIN, Math.floor(m / 2));

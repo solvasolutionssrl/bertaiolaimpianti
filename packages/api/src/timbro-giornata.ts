@@ -220,6 +220,17 @@ export function statoGiornataTimbro(input: {
   // direzione da leggere (il badge): e' a quello che l'innesto serve. Un
   // turno chiuso dall'app e poi una presenza dichiarata dall'app non hanno
   // bisogno di niente, e innestarlo farebbe due ingressi dichiarati di fila.
+  // ⚠️ Un turno CHIUSO innestato porta con se' anche la sua FINE, ma solo se
+  // senza di essa i tocchi del registro lascerebbero la presenza APERTA
+  // (24/10/2026): «turno dall'app 8→12, poi badge in sede alle 13 e alle 17»
+  // senza l'uscita delle 12 leggeva il badge delle 13 come un'uscita e quello
+  // delle 17 come un ingresso, e la giornata restava «presenza aperta». Se
+  // invece i tocchi chiudono da soli (app 9→17:40 piu' strada e badge alle
+  // 18; oppure app 8→17 con le pause a badge e il badge delle 17:30) la
+  // lettura resta quella di sempre: l'ultimo badge e' l'uscita della
+  // giornata. Con un solo badge dopo un turno chiuso resta un'ambiguita'
+  // vera (puo' essere un rientro in sede): il badge della sera la scioglie
+  // da solo al ricalcolo.
   const eventiPresenza: EventoTimbro[] = [...input.eventi];
   for (const t of ordinate) {
     if (t.tipo !== 'ingresso' || t.pausa) continue;
@@ -227,8 +238,21 @@ export function statoGiornataTimbro(input: {
     const toccoDopo = input.eventi.some((e) => e.tipo === null && e.ms > t.ms);
     if (!aperto && !toccoDopo) continue;
     const prima = presenzaDaEventi(eventiPresenza.filter((e) => e.ms < t.ms));
-    if (!prima.aperta) {
-      eventiPresenza.push({ id: `app:${t.id}`, ms: t.ms, tipo: 'ingresso', orologio: 'telefono' });
+    if (prima.aperta) continue;
+    eventiPresenza.push({ id: `app:${t.id}`, ms: t.ms, tipo: 'ingresso', orologio: 'telefono' });
+    // La fine si innesta SOLO se si e' innestato l'ingresso: un turno dentro
+    // una presenza a badge (badge 8, QR 9→17, badge 17:30) non aggiunge niente.
+    if (aperto) continue;
+    if (!presenzaDaEventi(eventiPresenza).aperta) continue;
+    // La fine del turno e' l'uscita non di pausa che non ha un ingresso nello
+    // stesso istante (il cambio cantiere dal vivo e' uscita+ingresso insieme).
+    const fine = ordinate.find(
+      (u) => u.tipo === 'uscita' && !u.pausa && u.ms > t.ms && !ordinate.some((i) => i.tipo === 'ingresso' && !i.pausa && i.ms === u.ms),
+    );
+    if (!fine) continue;
+    const finoAllaFine = presenzaDaEventi(eventiPresenza.filter((e) => e.ms < fine.ms));
+    if (finoAllaFine.aperta) {
+      eventiPresenza.push({ id: `app:${fine.id}`, ms: fine.ms, tipo: 'uscita', orologio: 'telefono' });
     }
   }
   const presenza = presenzaDaEventi(eventiPresenza);
@@ -388,6 +412,12 @@ export interface RiempiScatolaInput {
   ritornoMin?: number;
   /** Una pausa non timbrata, dichiarata: si scava al centro dell'intervallo piu' lungo. */
   pausaDichiarataMin?: number;
+  /**
+   * Dove va la pausa dichiarata, se chi compila l'ha spostata (24/10/2026):
+   * dopo il segmento con questo indice in `segmenti`. Assente o oltre
+   * l'ultimo segmento vivo: al centro dell'intervallo piu' lungo, come sempre.
+   */
+  pausaDopoIndice?: number | null;
 }
 
 export type RiempiScatolaResult =
@@ -414,7 +444,13 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   //    la stessa scelta di `calcolaSegmentiSplit` per il cantiere unico, ma
   //    qui gli estremi sono fatti e non si spostano.
   const pausaDich = nonNeg(input.pausaDichiarataMin);
-  if (pausaDich > 0) {
+  // La pausa messa a mano dopo un segmento NON si scava dagli intervalli: si
+  // consuma al suo posto mentre si versa (vedi sotto). Si decide qui se il
+  // segmento esiste davvero (vivo), altrimenti vale la regola del centro.
+  const vogliono = input.pausaDopoIndice;
+  const pausaDopo =
+    pausaDich > 0 && vogliono != null && Number.isInteger(vogliono) && vogliono >= 0 ? vogliono : null;
+  if (pausaDich > 0 && pausaDopo === null) {
     let k = 0;
     for (let i = 1; i < intervalli.length; i++) {
       if (intervalli[i]!.fineMs - intervalli[i]!.inizioMs > intervalli[k]!.fineMs - intervalli[k]!.inizioMs) k = i;
@@ -440,7 +476,7 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   // Cantieri consecutivi uguali (stessa fase) sono uno: nessuna strada verso
   // se' stessi. Due fasi dello stesso cantiere restano due segmenti: cambiano
   // le righe, non la strada (che fra loro vale zero).
-  type Seg = { cantiereId: string; sottocantiereId: string | null; minuti: number; viaggioPrima: number };
+  type Seg = { cantiereId: string; sottocantiereId: string | null; minuti: number; viaggioPrima: number; indiceMax: number };
   const segs: Seg[] = [];
   input.segmenti.forEach((s, i) => {
     const m = nonNeg(s.minuti);
@@ -449,13 +485,16 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
     const prev = segs[segs.length - 1];
     if (prev && prev.cantiereId === s.cantiereId && prev.sottocantiereId === fase) {
       prev.minuti += m;
+      prev.indiceMax = i;
       return;
     }
-    segs.push({ cantiereId: s.cantiereId, sottocantiereId: fase, minuti: m, viaggioPrima: v });
+    segs.push({ cantiereId: s.cantiereId, sottocantiereId: fase, minuti: m, viaggioPrima: v, indiceMax: i });
   });
   const ultimo = segs.length - 1;
   const stradaFra = segs.reduce((a, s, i) => a + (s.minuti > 0 || i === ultimo ? s.viaggioPrima : 0), 0);
-  const lavoroMin = presenzaMin - andata - ritorno - stradaFra;
+  // Con la pausa messa a mano, i minuti della pausa escono dal tempo da versare.
+  const pausaInMezzo = pausaDopo !== null ? pausaDich : 0;
+  const lavoroMin = presenzaMin - andata - ritorno - stradaFra - pausaInMezzo;
   if (lavoroMin <= 0) return { ok: false, error: 'NETTO_NON_VALIDO' };
 
   const sommaRest = segs.slice(0, -1).reduce((a, s) => a + s.minuti, 0);
@@ -466,6 +505,31 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   }
   const vivi = segs.filter((s) => s.minuti > 0);
   if (vivi.length === 0) return { ok: false, error: 'NETTO_NON_VALIDO' };
+  // La pausa a mano sta dopo il segmento vivo il cui blocco di indici
+  // contiene quello scelto; dopo l'ultimo vivo non ha senso: si torna al centro.
+  let pausaDopoVivo = -1;
+  if (pausaDopo !== null) {
+    for (let i = 0; i < vivi.length - 1; i++) if (vivi[i]!.indiceMax >= pausaDopo || i === 0) { pausaDopoVivo = i; if (vivi[i]!.indiceMax >= pausaDopo) break; }
+    if (pausaDopoVivo < 0 || vivi.length < 2) {
+      // Ripiego: nessun confine utile. Si scava al centro dell'intervallo piu' lungo.
+      let k = 0;
+      for (let i = 1; i < intervalli.length; i++) {
+        if (intervalli[i]!.fineMs - intervalli[i]!.inizioMs > intervalli[k]!.fineMs - intervalli[k]!.inizioMs) k = i;
+      }
+      const lungo = intervalli[k]!;
+      const durata = minuti(lungo.fineMs - lungo.inizioMs);
+      if (durata <= pausaDich + 1) return { ok: false, error: 'NETTO_NON_VALIDO' };
+      const centro = lungo.inizioMs + Math.round((lungo.fineMs - lungo.inizioMs) / 2);
+      const mezza = Math.round((pausaDich * MIN_MS) / 2);
+      intervalli = [
+        ...intervalli.slice(0, k),
+        { inizioMs: lungo.inizioMs, fineMs: centro - mezza },
+        { inizioMs: centro - mezza + pausaDich * MIN_MS, fineMs: lungo.fineMs },
+        ...intervalli.slice(k + 1),
+      ];
+      pausaDopoVivo = -1;
+    }
+  }
 
   // 4. Si versa: un cursore che scorre gli intervalli. Il lavoro emette le
   //    pause ai bordi; la strada li scavalca senza dire niente (si e' in
@@ -525,19 +589,22 @@ export function riempiScatola(input: RiempiScatolaInput): RiempiScatolaResult {
   if (!viaggia(andata)) return { ok: false, error: 'NETTO_NON_VALIDO' };
   for (let i = 0; i < vivi.length; i++) {
     const s = vivi[i]!;
+    const pausaQui = i > 0 && pausaDopoVivo === i - 1;
     if (cantiereAperto) {
-      eventi.push({ cantiereId: cantiereAperto, ...conFase(faseAperta), tipo: 'uscita', pausa: false, ms: cursore });
+      eventi.push({ cantiereId: cantiereAperto, ...conFase(faseAperta), tipo: 'uscita', pausa: pausaQui, ms: cursore });
       cantiereAperto = null;
       faseAperta = null;
+      // La pausa messa a mano si consuma qui, poi la strada: due buchi, uno dopo l'altro.
+      if (pausaQui && !viaggia(pausaDich)) return { ok: false, error: 'NETTO_NON_VALIDO' };
       if (!viaggia(s.viaggioPrima)) return { ok: false, error: 'NETTO_NON_VALIDO' };
     }
     allineaAllInizio();
     // Un cambio di cantiere che cade esattamente su una pausa timbrata: la
     // pausa si legge sull'uscita precedente e su questo ingresso.
     const precedente = eventi[eventi.length - 1];
-    const sulBordo = precedente && precedente.tipo === 'uscita' && cursore > precedente.ms && s.viaggioPrima === 0;
+    const sulBordo = precedente && precedente.tipo === 'uscita' && cursore > precedente.ms && s.viaggioPrima === 0 && !pausaQui;
     if (sulBordo) precedente.pausa = true;
-    eventi.push({ cantiereId: s.cantiereId, ...conFase(s.sottocantiereId), tipo: 'ingresso', pausa: !!sulBordo, ms: cursore });
+    eventi.push({ cantiereId: s.cantiereId, ...conFase(s.sottocantiereId), tipo: 'ingresso', pausa: !!sulBordo || pausaQui, ms: cursore });
     cantiereAperto = s.cantiereId;
     faseAperta = s.sottocantiereId;
     if (!lavora(s.cantiereId, s.sottocantiereId, s.minuti)) return { ok: false, error: 'NETTO_NON_VALIDO' };

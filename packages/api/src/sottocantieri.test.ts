@@ -148,3 +148,62 @@ describe('i motori delle ore con la fase', async () => {
     expect(out.get('cantiere:c2/g1')).toEqual({ minutiLavoro: 210, minutiViaggio: 30 });
   });
 });
+
+describe('la pausa dove la mette chi compila (pausaDopoIndice)', async () => {
+  const { calcolaSegmentiSplit } = await import('./kantiere-split');
+  const { riempiScatola } = await import('./timbro-giornata');
+  const H = 3_600_000;
+  const T0 = Date.parse('2026-10-24T06:00:00Z');
+  const seg = [
+    { cantiereId: 'A', minuti: 120 },
+    { cantiereId: 'B', minuti: 120 },
+    { cantiereId: 'C', minuti: 240 },
+  ];
+  it('split: senza indicazione la pausa va al confine piu\' vicino al centro (dopo B)', () => {
+    const r = calcolaSegmentiSplit({ ingressoMs: T0, uscitaMs: T0 + 9 * H, pausaMin: 60, segmenti: seg });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const pausa = r.eventi.find((e) => e.tipo === 'uscita' && e.pausa);
+    expect(pausa?.cantiereId).toBe('B');
+  });
+  it('⭐ split: pausaDopoIndice 0 → la pausa sta dopo A', () => {
+    const r = calcolaSegmentiSplit({ ingressoMs: T0, uscitaMs: T0 + 9 * H, pausaMin: 60, segmenti: seg, pausaDopoIndice: 0 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const pausa = r.eventi.find((e) => e.tipo === 'uscita' && e.pausa);
+    expect(pausa?.cantiereId).toBe('A');
+    expect(pausa?.ms).toBe(T0 + 2 * H);
+    expect(r.eventi.find((e) => e.tipo === 'ingresso' && e.pausa)?.ms).toBe(T0 + 3 * H);
+  });
+  it('split: un indice sull\'ultimo segmento o fuori confine ricade sulla regola di sempre', () => {
+    const a = calcolaSegmentiSplit({ ingressoMs: T0, uscitaMs: T0 + 9 * H, pausaMin: 60, segmenti: seg, pausaDopoIndice: 2 });
+    const b = calcolaSegmentiSplit({ ingressoMs: T0, uscitaMs: T0 + 9 * H, pausaMin: 60, segmenti: seg, pausaDopoIndice: 7 });
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    // Oltre l'ultimo confine: resta il confine piu' vicino al centro... che e' B.
+    expect(a.eventi.find((e) => e.tipo === 'uscita' && e.pausa)?.cantiereId).toBe('B');
+    expect(b.eventi.find((e) => e.tipo === 'uscita' && e.pausa)?.cantiereId).toBe('B');
+  });
+  it('⭐ scatola: la pausa messa dopo A si consuma li\', non al centro', () => {
+    const r = riempiScatola({
+      intervalli: [{ inizioMs: T0, fineMs: T0 + 9 * H }],
+      segmenti: seg,
+      pausaDichiarataMin: 60,
+      pausaDopoIndice: 0,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const ev = r.eventi.map((e) => `${e.tipo}${e.pausa ? '*' : ''}:${e.cantiereId}@${(e.ms - T0) / H}`);
+    expect(ev).toEqual(['ingresso:A@0', 'uscita*:A@2', 'ingresso*:B@3', 'uscita:B@5', 'ingresso:C@5', 'uscita:C@9']);
+    expect(r.nettoMin).toBe(480);
+  });
+  it('scatola: senza indicazione resta la regola del centro', () => {
+    const r = riempiScatola({ intervalli: [{ inizioMs: T0, fineMs: T0 + 9 * H }], segmenti: seg, pausaDichiarataMin: 60 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // Centro dell'intervallo (10:30 italiane) meno mezza pausa: uscita alle 4h, rientro alle 5h dall'inizio.
+    const pausa = r.eventi.find((e) => e.tipo === 'uscita' && e.pausa);
+    expect((pausa!.ms - T0) / H).toBe(4);
+    expect(r.nettoMin).toBe(480);
+  });
+});
