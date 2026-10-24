@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { ChevronRight, Clock, Users } from 'lucide-react';
 
 import { createServerSupabase } from '@kommessa/api/server';
+import { ordinaFasi, type SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { leggiImpostazioniKantiere } from '@/app/_lib/kantiere-config';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 import {
   leggiSogliaPausaPranzoOre,
@@ -43,6 +45,26 @@ export default async function GestioneSquadraPage() {
 
   const viaggioByCantiere: Record<string, ViaggioContestoCantiere> = {};
   let mezzi: { id: string; targa: string; modello: string | null }[] = [];
+  // Le fasi aperte di ogni cantiere (24/10/2026): all'ingresso di un membro
+  // il capo dice su quale fase lavora. Obbligatoria se il cliente lo vuole.
+  const fasiByCantiere: Record<string, SottocantiereLite[]> = {};
+  let faseObbligatoria = false;
+  if (cantieriIds.length > 0) {
+    const [fasiRes, imp] = await Promise.all([
+      supabase
+        .from('sottocantieri' as never)
+        .select('id, cantiere_id, nome, codice, descrizione, stato')
+        .eq('tenant_id', ctx.tenantId)
+        .in('cantiere_id', cantieriIds)
+        .eq('stato', 'attivo'),
+      leggiImpostazioniKantiere(supabase, ctx.tenantId),
+    ]);
+    for (const f of (fasiRes.data as (SottocantiereLite & { cantiere_id: string })[] | null) ?? []) {
+      (fasiByCantiere[f.cantiere_id] ??= []).push(f);
+    }
+    for (const k of Object.keys(fasiByCantiere)) fasiByCantiere[k] = ordinaFasi(fasiByCantiere[k]);
+    faseObbligatoria = imp.faseObbligatoria;
+  }
 
   if (cantieriIds.length > 0) {
     const [sediRes, assocRes, mezziRes] = await Promise.all([
@@ -128,6 +150,8 @@ export default async function GestioneSquadraPage() {
         mezzi={mezzi}
         sogliaPausaPranzoOre={sogliaPausaPranzoOre}
         sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
+        fasiByCantiere={fasiByCantiere}
+        faseObbligatoria={faseObbligatoria}
       />
     </div>
   );

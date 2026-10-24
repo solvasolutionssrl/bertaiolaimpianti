@@ -18,6 +18,8 @@ import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext } from '@kommessa/api/tenant';
 import { prossimoTipoTimbratura, statoTurno } from '@kommessa/api/kantiere-ore';
 import { targetTimbratura } from '@kommessa/api/kantiere';
+import { ordinaFasi, type SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { leggiImpostazioniKantiere } from '@/app/_lib/kantiere-config';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import { romeDay, romeDayBoundsUtc } from '@kommessa/api/rome-time';
 import { risolviTitoloCommessa } from '@/app/_lib/commessa-display';
@@ -440,6 +442,25 @@ export default async function TokenPage({
     }
   }
 
+  // Le fasi del cantiere (24/10/2026): il QR conosce gia' il cantiere, quindi
+  // all'ingresso si chiede solo «su quale fase». Obbligatoria se il cliente lo
+  // vuole (`fase_obbligatoria`); il server la ricontrolla comunque.
+  let fasi: SottocantiereLite[] = [];
+  let faseObbligatoria = false;
+  if (target.tipo === 'cantiere') {
+    const [fasiRes, imp] = await Promise.all([
+      supabase
+        .from('sottocantieri' as never)
+        .select('id, nome, codice, descrizione, stato')
+        .eq('tenant_id', ctx.tenantId)
+        .eq('cantiere_id', target.id)
+        .eq('stato', 'attivo'),
+      leggiImpostazioniKantiere(supabase, ctx.tenantId),
+    ]);
+    fasi = ordinaFasi((fasiRes.data as SottocantiereLite[] | null) ?? []);
+    faseObbligatoria = imp.faseObbligatoria;
+  }
+
   // 5a. Nessun profilo dipendente (office/admin senza scheda)
   if (!me && !capo) {
     return (
@@ -502,6 +523,8 @@ export default async function TokenPage({
             viaggio={viaggioCtx}
             pausaOggiFatta={pausaOggiFatta}
             sogliaPausaPranzoOre={sogliaPausaPranzoOre}
+            fasi={fasi}
+            faseObbligatoria={faseObbligatoria}
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.3
+**Versione**: 2.4
 **Stato**: costruita e collaudata sul tenant demo (22/10/2026) · in produzione **spenta** finché il super admin non la accende
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–22/10/2026
@@ -206,6 +206,64 @@ Chiunque apre la giornata con un metodo e la chiude con un altro: badge la matti
 ⚠️ **Le push arrivano solo a chi ha attivato le notifiche su quel telefono.** Al 21/10 c'era **una** sottoscrizione su quattro clienti. Per questo nella PWA c'è ora il banner «Attiva le notifiche su questo telefono». Su iPhone serve l'app **aggiunta alla schermata Home** (iOS ≥ 16.4); su Samsung le notifiche dei siti possono essere spente dalle impostazioni di sistema dell'app browser.
 
 ---
+
+## 7.9 Matrice delle bocche (24/10/2026)
+
+Ogni riga è una combinazione «come si apre · come si fa pausa · come si chiude»,
+con lo stato che `statoGiornataTimbro` deve dare, cosa nasce in `timbrature`,
+cosa resta nel registro (`timbri_grezzi`) e cosa vedono tecnico e ufficio.
+Tutte le righe sono provate dai test puri `packages/api/src/bocche.test.ts`
+(numerazione uguale) e dai banchi `timbro`, `timbro-chiudere`,
+`bocche-incrociate`, `presenza-sede-mobile`, `cruscotto-registro`.
+
+Vocabolario: **badge** = tocco al terminale senza direzione; **app in sede** =
+presenza dichiarata dall'app o dal PC senza cantiere (nel registro); **QR /
+app / PC** = timbratura attribuita a un cantiere (in `timbrature`);
+**specchio** = l'uscita che lo scrittore unico scrive nel registro quando una
+fine turno chiude una presenza aperta.
+
+| # | Apertura | Pausa | Chiusura | Stato | Ore (`timbrature`) | Registro | Tecnico vede | Ufficio vede |
+|---|---|---|---|---|---|---|---|---|
+| 1 | badge | — | badge | `da_ripartire`, scatola = un intervallo | nascono alla ripartizione (`origine timbro`) | 2 tocchi | «Inserisci le commesse» in tab Ore | pannello «giornate timbrate da sistemare» |
+| 2 | badge | badge out/in | badge | `da_ripartire`, due intervalli, pausa dov'è stata timbrata | idem, la pausa resta alle ore dei tocchi | 4 tocchi | idem | idem |
+| 3 | QR / app Inizia turno | QR / app | QR / app / PC | `nessun_timbro`: il registro non c'entra | ingresso/uscita (e pausa) attribuiti | niente | card del turno, ore in tab Ore | Presenze e ore, timeline |
+| 4 | app o PC «presenza in sede» | — | app / PC | `da_ripartire` (come il badge) | alla ripartizione (`origine cronometro`, modalità app/pc) | 2 righe `sorgente app` | card presenza in sede → «Inserisci le commesse» | pannello da sistemare, bocca «app»/«PC» |
+| 5 | badge | — | (manca) | `presenza_aperta` | — | 1 tocco | «Presenza · dalle 8:00» | «in corso» |
+| 6 | app Inizia turno | — | **badge** | `da_chiudere`: il badge chiude il turno, primo cantiere obbligato | ingresso dell'app + ripartizione | 1 tocco (il turno si innesta come ingresso dichiarato) | «Inserisci le commesse», primo cantiere fisso | pannello da sistemare |
+| 7 | badge in sede | — | turno dall'app in cantiere chiuso dall'app | `da_ripartire` solo per la parte in sede PRIMA del turno | turno attribuito; specchio dell'uscita nel registro | tocco + specchio | «Inserisci le commesse» per l'ora in sede | riga del turno + scatola residua |
+| 8 | badge in sede, poi QR in cantiere | — | QR fuori, poi badge | `da_ripartire`: le due code (prima e dopo il turno) | turno dal QR | 2 tocchi | idem | idem |
+| 9 | badge con pausa a badge, turno app nel pomeriggio | badge | app (specchio) | `da_ripartire`: la mattina è la scatola | turno attribuito | 3 tocchi + specchio | idem | idem |
+| 10 | turno app chiuso la mattina, poi badge in sede | — | badge | `da_ripartire`: il pomeriggio in sede è una scatola | turno + ripartizione | 2 tocchi dopo il turno | idem | idem |
+| 11 | app, poi badge della sera, giornata già ripartita | — | badge | `coperta`: il badge resta un'uscita | turno ripartito | 1 tocco | niente da fare | regolare |
+| 12 | badge, turno app, cambio cantiere dal vivo | — | badge | `coperta` | uscita A + ingresso B nello stesso minuto, strada A→B registrata | 2 tocchi | niente da fare | due righe |
+| 13 | badge, turno app | **dichiarata a fine turno** (30/45/60) o aggiunta dall'ufficio | badge | `coperta`: la coppia pausa non è un innesto | coppia pausa `origine manuale`, allineata al passo | 2 tocchi | niente da fare | pausa in timeline, cronologia |
+| 14 | badge | — | app (turno chiuso) **senza** badge serale e senza specchio possibile | `da_verificare` «manca il timbro di uscita» | turno attribuito | 1 tocco | — | anomalia da verificare |
+| 15 | turno app chiuso, poi presenza nuova aperta dall'app in sede | — | (aperta) | `presenza_aperta` | turno attribuito | 1 riga app | card presenza in sede | in corso |
+| 16 | QR / app con **fase** | QR / app | QR / app / PC | — | ingresso con `sottocantiere_id`; pausa, ripresa e fine **ereditano** la fase nello scrittore unico | — | «Cantiere › Fase» | «Cantiere › Fase» |
+
+### Sorprese trovate e cosa si è fatto
+
+- ⚠️ **Riga 10 non tornava**: un turno chiuso dall'app seguito da due badge in
+  sede leggeva il primo badge come un'uscita e il secondo come un ingresso, e
+  la giornata restava «presenza aperta». Ora un turno chiuso che si innesta
+  porta con sé anche la sua fine (direzione dichiarata), **ma solo se dopo di
+  lui ci sono almeno due tocchi**: con un tocco solo la lettura resta quella
+  della riga 11 (il badge è l'uscita della stessa giornata, strada compresa).
+  È un'ambiguità vera: un solo badge dopo un turno chiuso può essere un rientro
+  in sede; il badge della sera la scioglie da solo al ricalcolo.
+- ⚠️ **Il QR e il wizard del capo non proponevano la fase**: su FPM (fase
+  obbligatoria) un ingresso da QR nasceva sul cantiere intero. Ora il foglio
+  del QR (`t/[token]`) e «Gestione squadra» chiedono la fase all'ingresso
+  (`SceltaFase`), l'azione `timbra` e `timbraMembro` accettano
+  `sottocantiereId` con le guardie `sottocantieriScrivibili` e
+  `faseRichiesta`; pausa, ripresa e fine la ereditano.
+- Riga 17 dei test: se un'uscita NON eredita la fase dell'ingresso, le chiavi
+  divergono e il segmento sparisce dal conto. È il motivo per cui l'eredità
+  sta nello scrittore unico e non nei quattordici chiamanti.
+- ⚠️ **Chiusura automatica notturna**: non esiste una chiusura notturna dei
+  turni; esiste solo l'auto-spegnimento della pausa dimenticata
+  (`auto_chiusa=true`, ripresa a `inizioPausa + soglia`). Un turno lasciato
+  aperto resta aperto (riga 5/14) e lo vede l'ufficio.
 
 ## 8. Rischi e presidi
 

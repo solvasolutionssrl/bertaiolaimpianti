@@ -13,6 +13,8 @@ import {
 } from '@/app/_components/viaggio-ritorno-dialog';
 import type { CantiereSquadra, MembroStato, StatoMembro } from '../../_lib/capo';
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
+import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { SceltaFase } from '../../_components/scelta-fase';
 
 /** Contesto viaggio (sedi + sede di default) per un singolo cantiere. */
 export interface ViaggioContestoCantiere {
@@ -43,6 +45,11 @@ function messaggioErrore(code: string): string {
       return 'Autorizzazione mancante per questo membro.';
     case 'MODULO_OFF':
       return 'Modulo Kantiere non attivo.';
+    case 'FASE_RICHIESTA':
+      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+    case 'SOTTOCANTIERE_NON_VALIDO':
+    case 'SOTTOCANTIERE_CHIUSO':
+      return 'La fase scelta non è più disponibile: ricaricare la pagina e riprovare.';
     default:
       return 'Operazione non riuscita. Riprova.';
   }
@@ -66,10 +73,15 @@ export function GestioneSquadraClient({
   mezzi,
   sogliaPausaPranzoOre = SOGLIA_PAUSA_PRANZO_ORE,
   sogliaAutoSpegnimentoPausaOre = 1.5,
+  fasiByCantiere = {},
+  faseObbligatoria = false,
 }: {
   gruppi: CantiereSquadra[];
   viaggioByCantiere: Record<string, ViaggioContestoCantiere>;
   mezzi: ViaggioRitornoMezzo[];
+  /** Le fasi aperte per cantiere: all'ingresso di un membro si sceglie la sua. */
+  fasiByCantiere?: Record<string, SottocantiereLite[]>;
+  faseObbligatoria?: boolean;
   /** Soglia (ore) del prompt pausa pranzo (per-tenant). Default `SOGLIA_PAUSA_PRANZO_ORE`. */
   sogliaPausaPranzoOre?: number;
   /** Soglia (ore) di auto-spegnimento della pausa dimenticata (per-tenant). Default 1.5. */
@@ -100,11 +112,12 @@ export function GestioneSquadraClient({
     dipendenteId: string,
     azione: 'inizio' | 'pausa' | 'ripresa',
     key: string,
+    sottocantiereId?: string | null,
   ) {
     setMsg(null);
     setBusy(key);
     start(async () => {
-      const res = await timbraMembro({ cantiereId, dipendenteId, azione });
+      const res = await timbraMembro({ cantiereId, dipendenteId, azione, sottocantiereId: azione === 'inizio' ? (sottocantiereId ?? null) : undefined });
       setBusy(null);
       if (res.ok) router.refresh();
       else setMsg({ tipo: 'err', testo: messaggioErrore(res.error) });
@@ -280,7 +293,9 @@ export function GestioneSquadraClient({
                   busyKey={busy}
                   pending={pending || dialogAperto}
                   sogliaAutoSpegnimentoPausaOre={sogliaAutoSpegnimentoPausaOre}
-                  onAzione={(az, key) => membro(g.cantiereId, m.dipendenteId, az, key)}
+                  onAzione={(az, key, fase) => membro(g.cantiereId, m.dipendenteId, az, key, fase)}
+                  fasi={fasiByCantiere[g.cantiereId] ?? []}
+                  faseObbligatoria={faseObbligatoria}
                   onFine={() => avviaFine([{ cantiereId: g.cantiereId, membro: m }])}
                 />
               ))}
@@ -340,15 +355,23 @@ function MembroRiga({
   sogliaAutoSpegnimentoPausaOre,
   onAzione,
   onFine,
+  fasi,
+  faseObbligatoria,
 }: {
   membro: MembroStato;
   busyKey: string | null;
   pending: boolean;
   sogliaAutoSpegnimentoPausaOre: number;
-  onAzione: (azione: 'inizio' | 'pausa' | 'ripresa', key: string) => void;
+  onAzione: (azione: 'inizio' | 'pausa' | 'ripresa', key: string, sottocantiereId?: string | null) => void;
   onFine: () => void;
+  fasi: SottocantiereLite[];
+  faseObbligatoria: boolean;
 }) {
   const badge = STATO_BADGE[membro.stato];
+  // La fase all'ingresso del membro, se il cantiere ne ha.
+  const chiedeFase = membro.stato === 'idle' && fasi.length > 0;
+  const [fase, setFase] = useState<string | null | undefined>(chiedeFase ? undefined : null);
+  const faseMancante = chiedeFase && faseObbligatoria && fase === undefined;
   const base = membro.dipendenteId;
   const Spin = <Loader2 className="h-4 w-4 animate-spin" />;
 
@@ -391,12 +414,17 @@ function MembroRiga({
         </span>
       </div>
 
+      {chiedeFase ? (
+        <div className="mt-2.5">
+          <SceltaFase fasi={fasi} valore={fase} onChange={setFase} obbligatoria={faseObbligatoria} compatto idBase={`fase-${base}`} />
+        </div>
+      ) : null}
       <div className="mt-2.5 flex flex-wrap gap-2">
         {membro.stato === 'idle' && (
           <button
             type="button"
-            onClick={() => onAzione('inizio', `${base}:inizio`)}
-            disabled={pending}
+            onClick={() => onAzione('inizio', `${base}:inizio`, chiedeFase ? (fase ?? null) : undefined)}
+            disabled={pending || faseMancante}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground active:scale-[0.98] transition-all disabled:opacity-50"
           >
             {busyKey === `${base}:inizio` ? Spin : <LogIn className="h-4 w-4" />}

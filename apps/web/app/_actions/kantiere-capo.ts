@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { faseRichiesta, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
 import { createServerSupabase } from '@kommessa/api/server';
 import { getTenantContext, type TenantContext } from '@kommessa/api/tenant';
 import { statoTurno, type StatoTurno } from '@kommessa/api/kantiere-ore';
@@ -113,7 +114,7 @@ async function applicaAzione(
   dipendenteId: string,
   azione: AzioneTimbra,
   self: boolean,
-  opts?: { viaggio?: ViaggioInput | null; pausaPranzoMin?: 30 | 45 | 60 },
+  opts?: { viaggio?: ViaggioInput | null; pausaPranzoMin?: 30 | 45 | 60; sottocantiereId?: string | null },
 ): Promise<{ toccato: boolean; error?: string }> {
   const eventi = await eventiOggi(supabase, dipendenteId, cantiereId);
   const info = statoTurno(eventi);
@@ -121,6 +122,17 @@ async function applicaAzione(
 
   const { tipo, pausa } = azioneATimbra(azione);
   const ts = new Date().toISOString();
+
+  // La fase (24/10/2026), solo all'inizio: deve essere del cantiere e aperta,
+  // e se il cliente la vuole obbligatoria va indicata. Pausa, ripresa e fine
+  // la ereditano nello scrittore unico.
+  const luogo = { cantiereId, sottocantiereId: opts?.sottocantiereId ?? null };
+  if (azione === 'inizio') {
+    const faseOk = await sottocantieriScrivibili(supabase, [luogo], ctx.tenantId);
+    if (!faseOk.ok) return { toccato: false, error: faseOk.error };
+    const fr = await faseRichiesta(supabase, [luogo], ctx.tenantId);
+    if (!fr.ok) return { toccato: false, error: fr.error };
+  }
 
   // Solo in chiusura turno ('fine'): pausa dichiarata + viaggio di ritorno.
   const viaggio = azione === 'fine' && opts?.viaggio ? opts.viaggio : null;
@@ -150,6 +162,7 @@ async function applicaAzione(
     tenant_id: ctx.tenantId,
     dipendente_id: dipendenteId,
     cantiere_id: cantiereId,
+    sottocantiere_id: azione === 'inizio' ? luogo.sottocantiereId : undefined,
     commessa_id: null,
     tipo,
     pausa,
@@ -194,6 +207,8 @@ const TimbraMembroSchema = z.object({
   viaggio: ViaggioSchema.optional(),
   /** Solo azione 'fine': pausa pranzo dichiarata del membro. */
   pausaPranzoMin: z.union([z.literal(30), z.literal(45), z.literal(60)]).optional(),
+  /** Solo azione 'inizio': la fase del cantiere su cui il membro lavora. */
+  sottocantiereId: z.string().uuid().nullable().optional(),
 });
 
 export async function timbraMembro(
@@ -219,7 +234,7 @@ export async function timbraMembro(
     parsed.data.dipendenteId,
     parsed.data.azione,
     self,
-    { viaggio: parsed.data.viaggio ?? null, pausaPranzoMin: parsed.data.pausaPranzoMin },
+    { viaggio: parsed.data.viaggio ?? null, pausaPranzoMin: parsed.data.pausaPranzoMin, sottocantiereId: parsed.data.sottocantiereId },
   );
   if (res.error) return { ok: false, error: res.error };
   if (!res.toccato) return { ok: false, error: 'AZIONE_NON_VALIDA' };

@@ -171,6 +171,8 @@ const TimbraSchema = z.object({
     .min(PAUSA_MINIMA_MIN)
     .max(PAUSA_MASSIMA_MIN)
     .optional(),
+  /** La fase del cantiere (24/10/2026), solo all'ingresso: pausa, ripresa e fine la ereditano. */
+  sottocantiereId: z.string().uuid().nullable().optional(),
 });
 
 export async function timbra(input: unknown): Promise<Result> {
@@ -260,9 +262,17 @@ export async function timbra(input: unknown): Promise<Result> {
   // Un cantiere chiuso non apre piu' turni, anche se il cartello con il QR e'
   // rimasto appeso. Chiudere e riprendere restano sempre possibili: una
   // giornata vera non si lascia a meta' per colpa di un cambio di stato.
+  const luogoIngresso = { cantiereId: target.id, sottocantiereId: parsed.data.sottocantiereId ?? null };
   if (target.tipo === 'cantiere' && tipo === 'ingresso' && !pausa) {
     const aperto = await cantiereScrivibile(supabase, target.id, ctx.tenantId);
     if (!aperto.ok) return { ok: false, error: aperto.error };
+    // La fase (24/10/2026): deve essere del cantiere e aperta; se il cliente
+    // la vuole obbligatoria e il cantiere ne ha, va indicata. Vale anche per il
+    // capo che timbra un membro dal QR.
+    const faseOk = await sottocantieriScrivibili(supabase, [luogoIngresso], ctx.tenantId);
+    if (!faseOk.ok) return { ok: false, error: faseOk.error };
+    const fr = await faseRichiesta(supabase, [luogoIngresso], ctx.tenantId);
+    if (!fr.ok) return { ok: false, error: fr.error };
   }
 
   const ts = new Date().toISOString();
@@ -310,6 +320,8 @@ export async function timbra(input: unknown): Promise<Result> {
     dipendente_id: bersaglioId,
     commessa_id: target.tipo === 'commessa' ? target.id : null,
     cantiere_id: target.tipo === 'cantiere' ? target.id : null,
+    // Solo l'ingresso di turno porta la fase; gli altri gesti la ereditano nello scrittore.
+    sottocantiere_id: target.tipo === 'cantiere' && tipo === 'ingresso' && !pausa ? luogoIngresso.sottocantiereId : undefined,
     tipo,
     pausa,
     origine: self ? 'qr' : 'capo',
@@ -381,6 +393,8 @@ const TerminaTurnoSchema = z.object({
     .min(PAUSA_MINIMA_MIN)
     .max(PAUSA_MASSIMA_MIN)
     .optional(),
+  /** Dove va la pausa dichiarata: dopo il segmento con questo indice in `split` (24/10/2026). */
+  pausaDopoIndice: z.number().int().min(0).max(11).optional(),
   /** Viaggio di RITORNO (chiusura da app): sede, stima, autista, mezzo, km. */
   viaggio: ViaggioSchema.optional(),
   /** Da dove si chiude (telefono se assente): finisce nel registro se la presenza era aperta col badge. */
@@ -457,6 +471,7 @@ export async function terminaTurnoMio(input: unknown): Promise<Result> {
       ts,
       ingressoIso: info.ingressoAperto,
       pausaMin: parsed.data.pausaPranzoMin ?? 0,
+      pausaDopoIndice: parsed.data.pausaDopoIndice ?? null,
       split,
       viaggio,
       dispositivo: parsed.data.dispositivo ?? 'telefono',
@@ -541,6 +556,7 @@ async function terminaConSplit(
     ts: string;
     ingressoIso: string;
     pausaMin: number;
+    pausaDopoIndice?: number | null;
     split: { cantiereId: string; sottocantiereId?: string | null; minuti: number }[];
     viaggio: ViaggioInput | null;
     dispositivo: 'pc' | 'telefono';
@@ -601,6 +617,7 @@ async function terminaConSplit(
     ingressoMs: arrotondaMs(Date.parse(opts.ingressoIso), regola),
     uscitaMs: arrotondaMs(Date.parse(opts.ts), regola),
     pausaMin: opts.pausaMin,
+    pausaDopoIndice: opts.pausaDopoIndice ?? null,
     segmenti: opts.split,
   });
   if (!calc.ok) {
@@ -1491,6 +1508,8 @@ const RegistraGiornataSchema = z.object({
   inizioIso: z.string().datetime(),
   fineIso: z.string().datetime(),
   pausaMin: z.number().int().min(0).max(600).optional(),
+  /** Dove va la pausa dichiarata: dopo il segmento con questo indice in `split` (24/10/2026). */
+  pausaDopoIndice: z.number().int().min(0).max(11).optional(),
   split: z
     .array(
       z.object({
@@ -1562,6 +1581,7 @@ export async function registraGiornataDaZero(input: unknown): Promise<Result> {
         ingressoMs: arrotondaMs(Date.parse(inizioIso), regola),
         uscitaMs: arrotondaMs(Date.parse(fineIso), regola),
         pausaMin,
+        pausaDopoIndice: parsed.data.pausaDopoIndice ?? null,
         segmenti: parsed.data.split,
         viaggioPrima,
       });
@@ -1644,6 +1664,7 @@ export async function registraGiornataPerDipendente(input: unknown): Promise<Res
         ingressoMs: arrotondaMs(Date.parse(inizioIso), regola),
         uscitaMs: arrotondaMs(Date.parse(fineIso), regola),
         pausaMin,
+        pausaDopoIndice: parsed.data.pausaDopoIndice ?? null,
         segmenti: parsed.data.split,
         viaggioPrima,
       });
@@ -1669,6 +1690,8 @@ const RipartisciTimbroSchema = z.object({
   dipendenteId: z.string().uuid().optional(),
   /** Una pausa non timbrata, dichiarata: si scava dentro il contenitore. */
   pausaMin: z.number().int().min(0).max(600).optional(),
+  /** Dove va la pausa dichiarata: dopo il segmento con questo indice in `split` (24/10/2026). */
+  pausaDopoIndice: z.number().int().min(0).max(11).optional(),
   split: z
     .array(
       z.object({
@@ -1768,6 +1791,7 @@ export async function ripartisciGiornataTimbro(input: unknown): Promise<Result> 
         andataMin: scatola.inizioFisico ? andataMin : 0,
         ritornoMin: scatola.fineFisica ? ritornoMin : 0,
         pausaDichiarataMin,
+        pausaDopoIndice: parsed.data.pausaDopoIndice ?? null,
       }),
   });
 }
