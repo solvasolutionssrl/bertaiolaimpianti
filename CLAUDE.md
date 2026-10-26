@@ -9,6 +9,7 @@ regola è nata da un difetto pagato, il difetto è scritto accanto, perché è
 quello che impedisce di rifarlo. La cronaca di cosa è stato fatto e quando sta
 in `git log`.
 
+- **La memoria: cosa aprire, e quando**
 - **Stato, stack e infrastruttura**
 - **Cos'è questo repository**
 - **Decisioni che non si contraddicono in silenzio**
@@ -21,6 +22,32 @@ in `git log`.
 
 > Le due superfici sono **invisibili fra loro**: ogni modifica va pensata
 > Bertaiola-safe (mondo commesse) **e** FPM-safe (mondo presenze).
+
+## La memoria: cosa aprire, e quando
+
+Oltre a questo file c'è una **memoria a richiesta** (`MEMORY.md` + un file per
+voce). Di quella, solo l'indice è sempre caricato: il resto si apre quando
+serve, e aprire i file sbagliati costa contesto senza dare niente.
+
+**La regola, in breve:**
+
+| Stai lavorando su… | Apri |
+|---|---|
+| **commesse** (Bertaiola) | «sempre» + **Mondo COMMESSE** |
+| **presenze** (Kantiere/FPM) | «sempre» + **Mondo PRESENZE** |
+| qualcosa di **condiviso** — guscio ufficio, PWA, upload, avvisi, API, sicurezza | anche **«vale per tutti e due»**, in qualunque mondo tu sia |
+
+⚠️ **I due mondi sono invisibili fra loro a schermo, non nel codice.** Una
+modifica va pensata **Bertaiola-safe E FPM-safe**: per questo chi tocca un
+pezzo condiviso apre la sezione trasversale anche se sta lavorando su un
+cliente solo.
+
+⭐ **Cosa sta in memoria e cosa sta qui.** Qui: le regole del prodotto e
+l'architettura, cioè quello che vale per chiunque tocchi questo repo. In
+memoria: chi è Luca e come lavora, il metodo, le trappole pagate, le cose
+aperte, i puntatori fuori dal repo, i fatti misurati sui dati veri. **La
+cronaca non sta in nessuno dei due**: quella è `git log`.
+
 
 ## Stato, stack e infrastruttura
 
