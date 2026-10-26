@@ -89,9 +89,10 @@ export const AVVISI: readonly MetaAvviso[] = [
   {
     codice: 'ore_da_inserire',
     etichetta: 'Ore da inserire',
-    // Mandato dal promemoria delle ore (`/api/cron/promemoria-ore`): la
-    // giornata timbrata al terminale non e' ancora stata ripartita.
-    quando: 'La sera, e la mattina dopo, se hai timbrato ma non hai ancora detto su quali commesse hai lavorato.',
+    // Tre mittenti, una sola domanda: la fine giornata dichiarata al terminale
+    // (`_lib/timbro/avvisa-fine`, dal 26/10/2026), il promemoria della sera e
+    // della mattina (`/api/cron/promemoria-ore`) e il sollecito dell'ufficio.
+    quando: 'Quando timbri la fine giornata, e poi la sera o la mattina dopo, se non hai ancora detto su quali commesse hai lavorato.',
     ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
   },

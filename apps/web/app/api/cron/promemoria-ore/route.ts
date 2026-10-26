@@ -6,6 +6,7 @@ import { romeDay } from '@kommessa/api/rome-time';
 import { bearerValido } from '@/app/_lib/segreto';
 import { promemoriaOreDaConfig } from '@/app/_lib/kantiere-config';
 import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
+import { FINESTRA_FINE_TURNO } from '@/app/_lib/timbro/avvisa-fine';
 import { avvisa, type Avviso } from '@/app/_actions/_lib/avvisa';
 
 export const runtime = 'nodejs';
@@ -102,17 +103,29 @@ async function run(request: NextRequest) {
       .eq('tenant_id', cfg.tenantId)
       .eq('type', 'ore_da_inserire')
       .gte('created_at', da20h);
+    const righeGia = (giaRaw ?? []) as {
+      user_id: string;
+      payload: { giorno?: string; finestra?: string } | null;
+    }[];
     const gia = new Set(
-      ((giaRaw ?? []) as { user_id: string; payload: { giorno?: string; finestra?: string } | null }[]).map(
-        (n) => `${n.user_id}|${n.payload?.giorno ?? ''}|${n.payload?.finestra ?? ''}`,
-      ),
+      righeGia.map((n) => `${n.user_id}|${n.payload?.giorno ?? ''}|${n.payload?.finestra ?? ''}`),
     );
+    // Il promemoria partito al gesto di fine giornata vale per la sera.
+    const giaAlTerminale =
+      finestra === 'sera'
+        ? new Set(
+            righeGia
+              .filter((n) => n.payload?.finestra === FINESTRA_FINE_TURNO)
+              .map((n) => `${n.user_id}|${n.payload?.giorno ?? ''}`),
+          )
+        : new Set<string>();
 
     const avvisi: Avviso[] = [];
     for (const g of giornate) {
       const userId = utenteDi.get(g.dipendenteId);
       if (!userId) continue;
       if (gia.has(`${userId}|${g.giorno}|${finestra}`)) continue;
+      if (giaAlTerminale.has(`${userId}|${g.giorno}`)) continue;
       const eOggi = g.giorno === oggi;
       const giornoTesto = eOggi
         ? 'oggi'

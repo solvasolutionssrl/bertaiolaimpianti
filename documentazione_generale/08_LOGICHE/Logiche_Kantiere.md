@@ -1,6 +1,6 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 2.0
+**Versione**: 2.1
 **Stato**: Attivo (in produzione)
 **Ultimo aggiornamento**: 26/10/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
@@ -416,6 +416,15 @@ proprio profilo; lo manda `/api/cron/promemoria-ore` ogni quarto d'ora dentro la
 finestra. ⚠️ Il dedupe è su `utente | giorno | finestra` nelle ultime 20 ore: un
 **sollecito a mano** dell'ufficio usa la finestra `ufficio` apposta, o
 spegnerebbe il promemoria automatico di quella persona.
+
+⭐ **Dal 26/10/2026 `ore_da_inserire` ha tre mittenti e resta un avviso solo**
+(un interruttore solo nel profilo): la **fine giornata dichiarata** al terminale
+Timbro — finestra `fine_turno`, entro due minuti dal gesto, dove c'è
+l'integrazione (`Logiche_Integrazione_Timbro.md` §10.5) — il cron della
+sera/mattina e il sollecito dell'ufficio. ⚠️ La finestra della **sera salta chi
+ha già ricevuto `fine_turno`** quel giorno: la stessa frase due volte in
+mezz'ora insegna a non leggere l'avviso. La **mattina non lo salta**, perché il
+giorno dopo è la seconda occasione vera.
 
 **Tolte il 15/09/2026**: `km_switch_attivo` (i trasferimenti contano sempre, §3.1) e `anomalie_ore_max` (mai letta: la pagina Anomalie usa `anomalia_turno_ore_max`). La migration `20260915090000` le rimuove dal config e il salvataggio della pagina le toglie comunque.
 

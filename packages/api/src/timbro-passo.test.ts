@@ -7,6 +7,7 @@ import {
   statoNostroDa,
   passoDaTimbratura,
   daSpecchiare,
+  dichiaraFineGiornata,
 } from './timbro-passo';
 
 describe('leggiPasso — la fase impone il verso', () => {
@@ -191,5 +192,34 @@ describe('daSpecchiare — cosa si manda a Timbro e cosa no', () => {
       r('ingresso', false, 'capo', '2026-10-26T08:00:00Z', 'p1'),
     ]);
     expect(out.map((x) => x.dipendenteId).sort()).toEqual(['p1', 'p2']);
+  });
+});
+
+describe('dichiaraFineGiornata — solo una dichiarazione fa partire il promemoria', () => {
+  it('la persona ha toccato FINE GIORNATA', () => {
+    expect(dichiaraFineGiornata({ step: 'end', step_source: 'person' })).toBe(true);
+  });
+
+  it("l'ufficio di Timbro che la scrive vale come dichiarazione", () => {
+    expect(dichiaraFineGiornata({ step: 'end', step_source: 'office' })).toBe(true);
+  });
+
+  it('⚠️ un end DEDOTTO non avvisa nessuno: puo\u2019 essere un cambio cantiere', () => {
+    expect(dichiaraFineGiornata({ step: 'end', step_source: 'inferred', shift_was_open: true })).toBe(false);
+  });
+
+  it('⚠️ nemmeno le nostre, che tornano indietro con origine `api`', () => {
+    expect(dichiaraFineGiornata({ step: 'end', step_source: 'api' })).toBe(false);
+  });
+
+  it('un passo che non c\u2019e\u2019, o un\u2019origine sconosciuta, non avvisa', () => {
+    expect(dichiaraFineGiornata({ step: null, step_source: null })).toBe(false);
+    expect(dichiaraFineGiornata({ step: 'end', step_source: 'qualcosa_di_nuovo' })).toBe(false);
+  });
+
+  it('le altre tre fasi non sono una fine giornata', () => {
+    for (const step of ['start', 'pause_start', 'pause_end']) {
+      expect(dichiaraFineGiornata({ step, step_source: 'person' })).toBe(false);
+    }
   });
 });

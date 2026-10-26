@@ -203,3 +203,22 @@ export function statoNostroDa(
   if (ultima.tipo === 'ingresso') return 'aperto';
   return ultima.pausa ? 'in_pausa' : 'chiuso';
 }
+
+/**
+ * ⭐ **La fine giornata DICHIARATA**: la persona ha toccato FINE GIORNATA al
+ * terminale (o l'ha scritta l'ufficio di Timbro). E' il solo passo su cui si fa
+ * partire qualcosa *verso* la persona — il promemoria «ora dicci su quali
+ * commesse hai lavorato» — e il motivo e' la fiducia.
+ *
+ * ⚠️ **Un'ipotesi non basta.** Un `end` dedotto dal terminale puo' essere il
+ * cambio cantiere di chi sta ancora lavorando: avvisarlo vorrebbe dire
+ * chiedergli di chiudere una giornata che non e' finita. Un promemoria
+ * sbagliato e' peggio di uno in ritardo — quello della sera arriva comunque.
+ *
+ * ⚠️ **Nemmeno `api`**, cioe' le nostre: chi chiude il turno dall'app e' gia'
+ * nell'app, e l'import le salta a monte.
+ */
+export function dichiaraFineGiornata(p: CampiPasso): boolean {
+  const l = leggiPasso(p);
+  return l.passo === 'end' && l.fiducia === 'dichiarata';
+}

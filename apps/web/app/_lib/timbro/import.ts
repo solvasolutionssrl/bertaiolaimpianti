@@ -2,8 +2,10 @@ import 'server-only';
 
 import { createServiceSupabase } from '@kommessa/api/service';
 import { romeWallToUtcIso } from '@kommessa/api/rome-time';
+import { dichiaraFineGiornata } from '@kommessa/api/timbro-passo';
 
 import { ClientTimbro, ErroreTimbro, type PunchTimbro } from './client';
+import { avvisaFineGiornata, type FineDichiarata } from './avvisa-fine';
 import { importAbilitato, leggiConfigTimbro, leggiTutteConfigTimbro, type ConfigTimbro } from './config';
 
 /**
@@ -19,6 +21,12 @@ import { importAbilitato, leggiConfigTimbro, leggiTutteConfigTimbro, type Config
  * fa partire la stessa riconciliazione. Cosi' non esiste un secondo percorso
  * di scrittura da tenere uguale al primo, e se il webhook tace si perde al
  * massimo un giro di due minuti, non un timbro.
+ *
+ * ⭐ Da qui parte anche il **promemoria di fine giornata**: una fase `end`
+ * dichiarata e' l'unico momento in cui la persona ha appena detto di aver
+ * finito, e il promemoria delle ore arriva entro il giro — due minuti dal cron,
+ * qualche secondo col webhook. La regola sta in `./avvisa-fine`, perche' qui si
+ * importa e non si decide chi avvisare.
  *
  * ⚠️ La **data di partenza** (`dal`) si applica sull'ora del passaggio
  * (`occurred_at`), mai su quella di arrivo: un terminale rimasto senza rete
@@ -40,6 +48,8 @@ export interface EsitoImport {
   orfani: number;
   /** Eventi che abbiamo scritto NOI su Timbro e che tornano indietro: si saltano. */
   nostri: number;
+  /** Promemoria «inserisci le ore» mandati per una fine giornata dichiarata. */
+  avvisati: number;
   messaggio: string | null;
 }
 
@@ -81,6 +91,7 @@ export async function importaTimbri(
     primaDellaPartenza: 0,
     orfani: 0,
     nostri: 0,
+    avvisati: 0,
     messaggio: null,
   };
 
@@ -113,6 +124,7 @@ export async function importaTimbri(
   const nostri = new Set(((dipRaw ?? []) as { id: string }[]).map((d) => d.id));
 
   const righe: Record<string, unknown>[] = [];
+  const fini: FineDichiarata[] = [];
   let maxUpdated: string | null = null;
   let maxTimbro: string | null = null;
   for (const p of punches) {
@@ -146,6 +158,17 @@ export async function importaTimbri(
     if (!dipendenteId) esito.orfani += 1;
     if (p.status !== 'voided' && p.occurred_at && (!maxTimbro || p.occurred_at > maxTimbro)) {
       maxTimbro = p.occurred_at;
+    }
+    // Una fine giornata DICHIARATA: candidata al promemoria delle ore. Si
+    // raccoglie qui e si decide dopo la scrittura, perche' lo stato della
+    // giornata si legge dalle righe appena scritte.
+    if (
+      dipendenteId &&
+      p.status !== 'voided' &&
+      p.occurred_at &&
+      dichiaraFineGiornata({ step: p.step, step_source: p.step_source })
+    ) {
+      fini.push({ dipendenteId, ts: p.occurred_at });
     }
     righe.push({
       tenant_id: cfg.tenantId,
@@ -184,6 +207,15 @@ export async function importaTimbri(
       }
       esito.scritti = Math.min(righe.length, i + 200);
     }
+  }
+
+  // ⚠️ **Dopo** la scrittura: lo stato della giornata si legge dai timbri
+  // appena scritti. ⚠️ E non puo' far cadere l'import — un promemoria perso
+  // costa un'ora, un cursore non avanzato costa la riconciliazione.
+  try {
+    esito.avvisati = await avvisaFineGiornata(service, cfg.tenantId, fini);
+  } catch (e) {
+    console.error('[timbro] promemoria fine giornata fallito:', e instanceof Error ? e.message : e);
   }
 
   esito.ok = true;
@@ -240,7 +272,7 @@ async function registraGiro(
       scritti: esito.scritti,
       errori: esito.ok ? 0 : 1,
       messaggio: esito.messaggio,
-      dettaglio: { orfani: esito.orfani, primaDellaPartenza: esito.primaDellaPartenza },
+      dettaglio: { orfani: esito.orfani, primaDellaPartenza: esito.primaDellaPartenza, avvisati: esito.avvisati },
     } as never);
   }
 }
@@ -258,6 +290,7 @@ export async function importaTimbriTenant(tenantId: string, avvio: Avvio): Promi
       primaDellaPartenza: 0,
       orfani: 0,
       nostri: 0,
+      avvisati: 0,
       messaggio: 'Collegamento non configurato.',
     };
   }

@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.5
+**Versione**: 2.6
 **Stato**: **attiva in produzione su FPM dal 26/10/2026** (stato `attivo`, le fasi del turno arrivano)
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–26/10/2026
@@ -21,7 +21,7 @@
 | ✅ **Telefono** | la card «Inserisci le commesse sulle quali hai lavorato oggi» nella tab Ore, il banner nella home, lo stesso dialog di «Registra giornata» in modalità scatola |
 | ✅ **Ufficio** | «Presenze e ore»: pannello «giornate timbrate da sistemare», righe per chi ha timbrato e non ripartito, passaggi al terminale nel dettaglio, dialog da scrivania |
 | ✅ **Super admin** | tab **Timbro** per cliente (stato, token, data di partenza, webhook, abbinamento persone, giornate recenti), semaforo in `/admin/integrazioni`, tab **Regole** |
-| ✅ **Promemoria** | avviso `ore_da_inserire` la sera e la mattina dopo (pg_cron `promemoria-ore`), orari per cliente |
+| ✅ **Promemoria** | avviso `ore_da_inserire` **alla fine giornata dichiarata** (§10.5, entro 2 minuti dal gesto), più la sera e la mattina dopo (pg_cron `promemoria-ore`), orari per cliente |
 | ✅ **Lo specchio verso Timbro** | `_lib/timbro/invia.ts`: scrive solo con stato **`attivo`**, chiave con scope `punches:write` |
 | ✅ **In produzione** | **FPM `attivo` dal 26/10/2026**, `dal = 2026-10-26`. Verificato sul database: giro ogni 2 minuti con esito `ok`, cursore che avanza, **40 passaggi** letti dal 21/10 |
 | ✅ **Fasi del turno** | «Evento con fasi del turno» acceso su FPM: **15 passaggi su 40 portano `passo`** — `pause_start`/`pause_end` con `passo_origine` `person` (l'ha toccato la persona) e `inferred`, `turno_era_aperto` su 16 |
@@ -353,7 +353,36 @@ cursore non le superasse, ogni giro ripartirebbe da prima.
 integrazione scrive. Se un domani ne arriva una, qui va un confronto con i
 nostri id.
 
-### 10.5 Dove siamo, e cosa resta (26/10/2026)
+### 10.5 Il promemoria che parte dal gesto
+
+⭐ **Una fine giornata dichiarata è l'unico momento in cui la persona ha appena
+detto di aver finito**, e quindi il momento giusto per chiederle su quali
+commesse ha lavorato. Prima del 26/10/2026 il promemoria `ore_da_inserire`
+arrivava solo **la sera alle 18:00** (cron) o a mano dall'ufficio: ore dopo, a
+casa, quando la giornata non si ricorda più bene.
+
+Ora `importaTimbri` raccoglie i passaggi con una fine giornata **dichiarata** e
+`_lib/timbro/avvisa-fine.ts` manda il promemoria. Latenza: **due minuti** dal
+cron dell'import, **qualche secondo** col webhook.
+
+| Regola | Perché |
+|---|---|
+| Solo `end` con fiducia **`dichiarata`** (`person`/`office`) | ⚠️ Un `end` dedotto può essere il cambio cantiere di chi sta ancora lavorando: gli si chiederebbe di chiudere una giornata che non è finita. Un promemoria **sbagliato** è peggio di uno in ritardo — quello della sera arriva comunque. Predicato puro `dichiaraFineGiornata`, 6 asserzioni, **3 viste fallire** togliendo il controllo sulla fiducia |
+| Niente per `api` | Sono le nostre: chi chiude dall'app è già nell'app, e l'import le salta a monte (§10.4) |
+| Solo la giornata di **oggi** | ⚠️ Un terminale rimasto senza rete riversa i passaggi giorni dopo: avvisare alle 23 di una fine giornata di mercoledì è una notifica che non si può più capire. Ai giorni passati pensa la finestra della mattina |
+| Solo se lo stato è `da_ripartire` o `da_chiudere` | Lo **stesso predicato** dei tre consumatori di `leggiGiornateTimbro`, così «da fare» vuol dire la stessa cosa in tutti i posti. Chi ha già ripartito le ore non viene disturbato |
+| Finestra **`fine_turno`** | Il dedupe è `utente\|giorno\|finestra` su 20 ore: con lo stesso nome della sera, questo avrebbe **spento** il promemoria serale, o sarebbe stato ingoiato da uno mandato poco prima. Stesso motivo per cui il sollecito dell'ufficio usa `ufficio` |
+| La **sera salta** chi ha già ricevuto `fine_turno` quel giorno | La stessa frase due volte in mezz'ora insegna a non leggere l'avviso. ⚠️ La **mattina no**: il giorno dopo è la seconda occasione vera, per chi non ha fatto quello che il primo promemoria chiedeva |
+| Non è un avviso nuovo | Riusa `ore_da_inserire`, cioè **un interruttore solo** nel profilo. La domanda («vuoi che ti ricordi le ore?») è una: tre mittenti, un consenso |
+| Non può far cadere l'import | ⚠️ `try/catch` attorno alla chiamata, **dopo** la scrittura (lo stato della giornata si legge dai timbri appena scritti). Un promemoria perso costa un'ora; un cursore non avanzato costa la riconciliazione |
+
+Misurato sui dati veri il 26/10/2026: **35 dipendenti FPM su 37 hanno un
+accesso** all'app (gli altri due non possono ricevere niente, ed è giusto che
+non si finga il contrario) e **5 tecnici hanno il telefono registrato** su 8
+dispositivi — gli altri lo leggono nella campanella, perché la riga in app si
+scrive sempre e la preferenza governa solo ciò che interrompe.
+
+### 10.6 Dove siamo, e cosa resta (26/10/2026)
 
 ✅ **Fatto e misurato sul database di produzione**: la chiave con
 `punches:write` c'è, lo stato di FPM è **`attivo`** (quindi lo specchio scrive),
@@ -378,6 +407,11 @@ Resta da fare:
   decide da sé e `faseDaSeguire` esiste senza chiamanti nel percorso di lettura.
   Con `passo_origine: 'person'` che ora arriva davvero, una pausa **dichiarata
   al terminale** potrebbe smettere di essere dedotta.
+- **La prima FINE GIORNATA vera**: fino alle 14:30 del 26/10 il terminale ha
+  registrato `pause_start` dichiarate (8), `pause_end` dedotte (8) e due
+  `start`, ma **nessun `end`** — la funzione è accesa da mezzogiorno e nessuno
+  ha ancora finito il turno. Il promemoria al gesto è quindi provato sul
+  predicato, non ancora su una persona vera: la prima uscita di stasera lo dirà.
 - ⚠️ **L'ipotesi del terminale può contraddirci e nessuno lo sta ancora
   guardando**: `leggiPasso` lo dichiara (`contraddice`), ma nessuna superficie
   lo mostra all'ufficio. Un `inferred` sbagliato — tipico di chi apre il turno

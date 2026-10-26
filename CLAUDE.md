@@ -1044,11 +1044,21 @@ dell'ufficio FPM. Tre difetti, tutti nostri, e un pezzo di interfaccia.
   riceve push); **permesso negato** → dove riaprirlo. ⚠️ Su un Mac
   l'emulazione mobile tiene `platform` MacIntel con il touch: per la
   rilevazione è un iPad, e il banco imposta la piattaforma a mano.
-- Un badge al terminale **non manda nessuna push**: l'avviso è il promemoria
-  `ore_da_inserire` della sera (cron ai minuti 07/22/37/52, finestra di 15
-  minuti dall'orario del cliente; FPM senza orario proprio → 18:00 e 08:00).
-  Per provarlo si chiama `/api/cron/promemoria-ore?finestra=sera` con il
-  segreto, dopo aver tolto la riga in `notifiche` (dedupe di 20 ore).
+- **`ore_da_inserire` ha tre mittenti, ed è un avviso solo** (un interruttore
+  solo nel profilo): la **fine giornata dichiarata** al terminale, che arriva
+  entro il giro di import — due minuti dal cron, qualche secondo col webhook
+  (`_lib/timbro/avvisa-fine`, finestra `fine_turno`); il promemoria della sera
+  e della mattina (cron ai minuti 07/22/37/52, finestra di 15 minuti
+  dall'orario del cliente; FPM senza orario proprio → 18:00 e 08:00); il
+  sollecito a mano dell'ufficio (finestra `ufficio`). ⚠️ Le **finestre sono
+  nomi diversi di proposito**: il dedupe è `utente|giorno|finestra` su 20 ore,
+  quindi con lo stesso nome un mittente spegnerebbe l'altro. La sera **salta
+  chi ha già ricevuto `fine_turno`** per quel giorno — la stessa frase due
+  volte in mezz'ora insegna a non leggere l'avviso — la mattina no, perché il
+  giorno dopo è la seconda occasione vera.
+  ⚠️ Un badge **senza fase dichiarata** non manda niente: resta il promemoria
+  della sera. Per provarlo si chiama `/api/cron/promemoria-ore?finestra=sera`
+  con il segreto, dopo aver tolto la riga in `notifiche`.
 - «Presenze e ore»: barra dei filtri su una riga, tutto alto 40px, dipendente
   e cantiere con la tendina cercabile (`Scelta`: nome, codice, cliente);
   Ricalcola ed Esporta solo icona. Banchi: `notifiche-foglio.mjs`,
