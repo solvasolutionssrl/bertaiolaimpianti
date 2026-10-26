@@ -55,7 +55,7 @@ import {
 export type AzioneTimbra = 'inizio' | 'fine' | 'pausa' | 'ripresa';
 
 type Ok = { ok: true; tipo: 'ingresso' | 'uscita'; pausa: boolean; ts: string };
-type Result = Ok | { ok: false; error: string };
+type Result = Ok | { ok: false; error: string; motivo?: string };
 
 const GeoSchema = z.object({ lat: z.number(), lng: z.number() }).partial().optional();
 
@@ -272,7 +272,7 @@ export async function timbra(input: unknown): Promise<Result> {
     const faseOk = await sottocantieriScrivibili(supabase, [luogoIngresso], ctx.tenantId);
     if (!faseOk.ok) return { ok: false, error: faseOk.error };
     const fr = await faseRichiesta(supabase, [luogoIngresso], ctx.tenantId);
-    if (!fr.ok) return { ok: false, error: fr.error };
+    if (!fr.ok) return { ok: false, error: fr.error, motivo: fr.motivo };
   }
 
   const ts = new Date().toISOString();
@@ -608,7 +608,7 @@ async function terminaConSplit(
   // Il primo segmento continua il turno aperto (la fase e' quella che era): la
   // scelta obbligatoria vale per i cantieri aggiunti alla chiusura.
   const fr = await faseRichiesta(supabase, opts.split.slice(1), tenantId);
-  if (!fr.ok) return { ok: false, error: fr.error };
+  if (!fr.ok) return { ok: false, error: fr.error, motivo: fr.motivo };
 
   // 4. Sintesi segmenti (pura, unit-testata), sugli estremi ARROTONDATI al
   //    passo del cliente: i segmenti scritti sono derivati, non timbri.
@@ -1219,7 +1219,7 @@ export async function avviaTurnoMio(input: unknown): Promise<Result> {
   const faseOk = await sottocantieriScrivibili(supabase, [parsed.data], ctx.tenantId);
   if (!faseOk.ok) return { ok: false, error: faseOk.error };
   const fr = await faseRichiesta(supabase, [parsed.data], ctx.tenantId);
-  if (!fr.ok) return { ok: false, error: fr.error };
+  if (!fr.ok) return { ok: false, error: fr.error, motivo: fr.motivo };
 
   const sedeLavoroId = parsed.data.daSede ? await sedePredefinitaId(supabase, ctx.tenantId) : null;
   if (parsed.data.daSede && !sedeLavoroId) return { ok: false, error: 'SEDE_PREDEFINITA_MANCANTE' };
@@ -1292,7 +1292,7 @@ export async function opzioniViaggioPartenza(input: unknown): Promise<
       sedeDefaultId: string | null;
       mezzi: { id: string; targa: string; modello: string | null }[];
     }
-  | { ok: false; error: string }
+  | { ok: false; error: string; motivo?: string }
 > {
   const parsed = OpzioniPartenzaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
@@ -1358,7 +1358,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
   const faseOk = await sottocantieriScrivibili(supabase, [{ cantiereId: parsed.data.aCantiereId, sottocantiereId: parsed.data.aSottocantiereId }], ctx.tenantId);
   if (!faseOk.ok) return { ok: false, error: faseOk.error };
   const fr = await faseRichiesta(supabase, [{ cantiereId: parsed.data.aCantiereId, sottocantiereId: parsed.data.aSottocantiereId }], ctx.tenantId);
-  if (!fr.ok) return { ok: false, error: fr.error };
+  if (!fr.ok) return { ok: false, error: fr.error, motivo: fr.motivo };
 
   // Dove si lavorava e dove si lavorerà: la sede del flag o il cantiere.
   const sedeDa = await sedeLavoroAperta(supabase, me.id, parsed.data.daCantiereId);
@@ -1436,7 +1436,7 @@ export async function cambiaCantiereMio(input: unknown): Promise<Result> {
  * per nome. Sola lettura, gated dal modulo.
  */
 export async function elencoCantieriTurno(): Promise<
-  { ok: true; cantieri: PickerCantiere[] } | { ok: false; error: string }
+  { ok: true; cantieri: PickerCantiere[] } | { ok: false; error: string; motivo?: string }
 > {
   const r = await ctxConModulo();
   if ('error' in r) return { ok: false, error: r.error };
@@ -1891,7 +1891,7 @@ interface GiornataRipartitaInput {
     viaggioPrima: number[],
     andataMin: number,
     ritornoMin: number,
-  ) => { ok: true; eventi: EventoGiornata[] } | { ok: false; error: string };
+  ) => { ok: true; eventi: EventoGiornata[] } | { ok: false; error: string; motivo?: string };
 }
 
 async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Result> {
@@ -1906,7 +1906,7 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
   // Con un ingresso gia' scritto il primo segmento eredita la sua fase: la
   // scelta obbligatoria vale per il resto.
   const fr = await faseRichiesta(supabase, p.ingressoEsistente ? p.split.slice(1) : p.split, tenantId);
-  if (!fr.ok) return { ok: false, error: fr.error };
+  if (!fr.ok) return { ok: false, error: fr.error, motivo: fr.motivo };
 
   // Prima prova dei conti, senza strada: se non tornano, inutile stimare.
   const prova = p.generaEventi([], 0, 0);

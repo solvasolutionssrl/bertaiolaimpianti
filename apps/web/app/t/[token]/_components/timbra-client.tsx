@@ -12,6 +12,7 @@ import { etichettaPausa } from '@kommessa/api/kantiere-pausa';
 import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
 import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { SceltaFase } from '@/app/mobile/kantiere/_components/scelta-fase';
 
 // ─── tipi ───────────────────────────────────────────────────────────────────
@@ -109,7 +110,12 @@ function formatDurata(min: number): string {
 
 // ─── mappa errori ────────────────────────────────────────────────────────────
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'NON_AUTENTICATO':
       return 'Devi essere autenticato per timbrare.';
@@ -118,7 +124,7 @@ function messaggioErrore(code: string): string {
     case 'CANTIERE_CHIUSO':
       return 'Il cantiere è chiuso e non accetta timbrature. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'SOTTOCANTIERE_NON_VALIDO':
     case 'SOTTOCANTIERE_CHIUSO':
       return 'La fase scelta non è più disponibile: ricaricare la pagina e riprovare.';
@@ -181,7 +187,7 @@ function RigaMembro({
         setStato({ tipo: 'ok', ts: res.ts, tipo_timbra: res.tipo });
         router.refresh();
       } else {
-        setStato({ tipo: 'errore', msg: messaggioErrore(res.error) });
+        setStato({ tipo: 'errore', msg: messaggioErrore(res.error, res.motivo) });
       }
     });
   }
@@ -383,7 +389,7 @@ function TimbraConViaggio({
       }
     }
     if (chiedeFase && faseObbligatoria && fase === undefined) {
-      setErrLocale('Questo cantiere ha delle fasi: indica su quale hai lavorato.');
+      setErrLocale(MESSAGGIO_FASE_RICHIESTA);
       return;
     }
     startTransition(async () => {
@@ -408,7 +414,7 @@ function TimbraConViaggio({
         pausaPranzoMin: pausaPrompt && pausaFatta ? pausaMin : undefined,
       });
       if (res.ok) onOk({ ts: res.ts, tipo: res.tipo, pausa: res.pausa });
-      else setErroreMsg(messaggioErrore(res.error));
+      else setErroreMsg(messaggioErrore(res.error, res.motivo));
     });
   }
 
@@ -614,7 +620,7 @@ function AzioneRapida({
       const g = await geo();
       const res = await timbra({ token, azione, geo: g });
       if (res.ok) onOk({ ts: res.ts, tipo: res.tipo, pausa: res.pausa });
-      else setErr(messaggioErrore(res.error));
+      else setErr(messaggioErrore(res.error, res.motivo));
     });
   }
 

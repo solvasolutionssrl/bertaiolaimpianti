@@ -115,7 +115,7 @@ async function applicaAzione(
   azione: AzioneTimbra,
   self: boolean,
   opts?: { viaggio?: ViaggioInput | null; pausaPranzoMin?: 30 | 45 | 60; sottocantiereId?: string | null },
-): Promise<{ toccato: boolean; error?: string }> {
+): Promise<{ toccato: boolean; error?: string; motivo?: string }> {
   const eventi = await eventiOggi(supabase, dipendenteId, cantiereId);
   const info = statoTurno(eventi);
   if (!AZIONI_AMMESSE[azione].includes(info.stato)) return { toccato: false };
@@ -131,7 +131,7 @@ async function applicaAzione(
     const faseOk = await sottocantieriScrivibili(supabase, [luogo], ctx.tenantId);
     if (!faseOk.ok) return { toccato: false, error: faseOk.error };
     const fr = await faseRichiesta(supabase, [luogo], ctx.tenantId);
-    if (!fr.ok) return { toccato: false, error: fr.error };
+    if (!fr.ok) return { toccato: false, error: fr.error, motivo: fr.motivo };
   }
 
   // Solo in chiusura turno ('fine'): pausa dichiarata + viaggio di ritorno.
@@ -213,7 +213,7 @@ const TimbraMembroSchema = z.object({
 
 export async function timbraMembro(
   input: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; motivo?: string }> {
   const parsed = TimbraMembroSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
   const r = await ctxModulo();
@@ -251,7 +251,7 @@ const BulkSchema = z.object({
 
 export async function timbraMembriBulk(
   input: unknown,
-): Promise<{ ok: true; toccati: number; saltati: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; toccati: number; saltati: number } | { ok: false; error: string; motivo?: string }> {
   const parsed = BulkSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'Input non valido' };
   const r = await ctxModulo();

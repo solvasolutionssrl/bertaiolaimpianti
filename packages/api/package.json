@@ -22,6 +22,8 @@
     "./kantiere-pausa": "./src/kantiere-pausa.ts",
     "./kantiere-cronologia": "./src/kantiere-cronologia.ts",
     "./kantiere-split": "./src/kantiere-split.ts",
+    "./giornata-catena": "./src/giornata-catena.ts",
+    "./trascina-riordino": "./src/trascina-riordino.ts",
     "./mezzi": "./src/mezzi.ts",
     "./kantiere-percorso": "./src/kantiere-percorso.ts",
     "./kantiere-quote": "./src/kantiere-quote.ts",

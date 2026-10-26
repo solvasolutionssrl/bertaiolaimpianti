@@ -19,9 +19,9 @@ const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 const sql = (q) => execSync(`supabase db query --linked "${q.replace(/"/g, '\\"')}"`, { stdio: 'ignore' });
 const DIP_FABBRI = `(select id from dipendenti where cognome='Fabbri' and tenant_id='a0d30000-0000-4000-8000-000000000002' limit 1)`;
 const pulisci = () => {
-  sql(`delete from timbratura_viaggio where dipendente_id=${DIP_FABBRI} and data=current_date`);
-  sql(`delete from timbrature where dipendente_id=${DIP_FABBRI} and (ts at time zone 'Europe/Rome')::date=current_date`);
-  sql(`delete from rapportini where dipendente_id=${DIP_FABBRI} and data=current_date`);
+  sql(`delete from timbratura_viaggio where dipendente_id=${DIP_FABBRI} and data=(now() at time zone 'Europe/Rome')::date`);
+  sql(`delete from timbrature where dipendente_id=${DIP_FABBRI} and (ts at time zone 'Europe/Rome')::date=(now() at time zone 'Europe/Rome')::date`);
+  sql(`delete from rapportini where dipendente_id=${DIP_FABBRI} and data=(now() at time zone 'Europe/Rome')::date`);
 };
 pulisci();
 
@@ -32,6 +32,48 @@ const DX = `${DIALOGO}.querySelector('ol[aria-label^="La giornata come"]')`;
 const ordineSx = () => `[...${SX}.querySelectorAll('li[data-drop-zona=blocchi]')].map((li) => li.querySelector('[role=combobox], button[aria-haspopup]')?.textContent.replace(/\\s+/g,' ').trim().slice(0, 40) ?? li.textContent.trim().slice(0, 40))`;
 const righeDx = () => `[...${DX}.querySelectorAll('li')].map((li) => li.textContent.replace(/\\s+/g,' ').trim().slice(0, 60))`;
 const lavoroDx = () => `[...${DX}.querySelectorAll('li[data-drop-zona=blocchi]')].map((li) => li.dataset.indice + ':' + li.textContent.replace(/\\s+/g,' ').trim().slice(12, 40))`;
+
+/**
+ * Come `trascina`, ma si ferma col tasto premuto sopra la destinazione e
+ * restituisce quello che si vede in quel momento: e' l'unico istante in cui
+ * si puo' misurare se l'interfaccia dice DOVE andra' a finire la card.
+ */
+async function trascinaEOsserva(cdp, daEspr, aEspr, { meta = 'centro' } = {}) {
+  const da = await centroDi(cdp, daEspr);
+  const r = await valuta(cdp, `(() => { const el = ${aEspr}; const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, h: b.height }; })()`);
+  const y = meta === 'sotto' ? r.y + r.h * 0.35 : meta === 'sopra' ? r.y - r.h * 0.35 : r.y;
+  await cdp.invia('Input.dispatchMouseEvent', { type: 'mousePressed', x: da.x, y: da.y, button: 'left', clickCount: 1 });
+  for (let i = 1; i <= 8; i++) {
+    await cdp.invia('Input.dispatchMouseEvent', { type: 'mouseMoved', x: da.x + ((r.x - da.x) * i) / 8, y: da.y + ((y - da.y) * i) / 8, button: 'left' });
+    await pausa(30);
+  }
+  await pausa(150);
+  const visto = await valuta(cdp, `(() => {
+    const righe = [...document.querySelectorAll('[role=dialog] li[data-drop-zona=blocchi]')];
+    const conLinea = righe.filter((li) => li.dataset.latoRilascio);
+    const linea = conLinea[0] ? conLinea[0].querySelector('span[aria-hidden]') : null;
+    const b = linea ? linea.getBoundingClientRect() : null;
+    const trascinata = righe.find((li) => Number(getComputedStyle(li).opacity) < 0.9);
+    const cursore = document.body.style.cursor;
+    return {
+      quante: conLinea.length,
+      lato: conLinea[0]?.dataset.latoRilascio ?? null,
+      indice: conLinea[0]?.dataset.indice ?? null,
+      lineaVisibile: !!(b && b.width > 20 && b.height > 0),
+      opacitaTrascinata: trascinata ? Number(getComputedStyle(trascinata).opacity) : null,
+      cursore,
+    };
+  })()`);
+  // ⚠️ L'osservazione NON deve spostare niente, o il controllo successivo
+  // misura uno stato che ha creato lei. Si esce da ogni zona di rilascio
+  // prima di lasciare: senza bersaglio, `lascia` non chiama `spostaRiga`.
+  const fuori = await valuta(cdp, `(() => { const d = ${DIALOGO}; const b = d.getBoundingClientRect(); return { x: b.left + 12, y: b.top + 12 }; })()`);
+  await cdp.invia('Input.dispatchMouseEvent', { type: 'mouseMoved', x: fuori.x, y: fuori.y, button: 'left' });
+  await pausa(80);
+  await cdp.invia('Input.dispatchMouseEvent', { type: 'mouseReleased', x: fuori.x, y: fuori.y, button: 'left', clickCount: 1 });
+  await pausa(300);
+  return visto;
+}
 
 async function trascina(cdp, daEspr, aEspr, { meta = 'centro' } = {}) {
   const da = await centroDi(cdp, daEspr);
@@ -103,7 +145,22 @@ try {
   esito(/Logistica/.test(primaSx[0]) && /Aurora/.test(primaSx[1]) && primaDx[0]?.startsWith('0:') && primaDx[1]?.startsWith('1:'), 'prima: sinistra e destra nello stesso ordine', `${primaSx.join(' / ')} · ${primaDx.join(' / ')}`);
 
   // 4. Trascino a sinistra: la destra segue.
+  // ── si capisce DOVE andra' a finire? (26/10/2026) ────────────────────────
+  // Prima l'unico segnale era un anello attorno alla riga puntata: diceva
+  // quale riga, non da che parte. Qui si guarda a meta' trascinamento.
+  const su = await trascinaEOsserva(cdp, `[...${SX}.querySelectorAll('button[aria-label^="Sposta il blocco"]')][1]`, `[...${SX}.querySelectorAll('li[data-drop-zona=blocchi]')][0]`);
+  esito(su.quante === 1, 'trascinando: la linea di rilascio compare, e su UNA riga sola', `righe con linea: ${su.quante}`);
+  esito(su.lineaVisibile, 'trascinando: la linea si vede davvero (larga e alta piu\' di zero)', JSON.stringify(su));
+  esito(su.lato === 'sopra', '⭐ salendo, la linea sta SOPRA la riga puntata (e\' li\' che finira\')', `lato: ${su.lato}`);
+  esito(su.opacitaTrascinata !== null && su.opacitaTrascinata < 0.9, 'trascinando: la card presa si alza (opacita\' ridotta)', `opacita: ${su.opacitaTrascinata}`);
+  esito(su.cursore === 'grabbing', 'trascinando: il cursore dice che stai trascinando', su.cursore || '(vuoto)');
+  const nessunaLinea = await valuta(cdp, `[...document.querySelectorAll('[role=dialog] li[data-drop-zona=blocchi]')].filter((li) => li.dataset.latoRilascio).length`);
+  esito(nessunaLinea === 0, 'lasciato il mouse, la linea sparisce', String(nessunaLinea));
+
+  // L'osservazione sopra non ha spostato niente: qui si trascina sul serio.
   await trascina(cdp, `[...${SX}.querySelectorAll('button[aria-label^="Sposta il blocco"]')][1]`, `[...${SX}.querySelectorAll('li[data-drop-zona=blocchi]')][0]`);
+  const lampo = await valuta(cdp, `[...document.querySelectorAll('[role=dialog] li[data-drop-zona=blocchi]')].some((li) => /ring-2/.test(li.className))`);
+  esito(lampo, 'dopo il rilascio: la card che si e\' mossa si accende, cosi\' si vede dov\'e\' finita');
   const dopoSx = await valuta(cdp, ordineSx());
   const dopoDx = await valuta(cdp, lavoroDx());
   esito(/Aurora/.test(dopoSx[0]) && /Logistica/.test(dopoSx[1]), 'trascino a sinistra: l’ordine cambia', dopoSx.join(' / '));
@@ -171,7 +228,7 @@ try {
   if (!chiuso) console.log('  errore:', await valuta(cdp, `document.querySelector('[role=dialog] [role=alert]')?.textContent ?? '-'`));
   esito(chiuso, 'salvato e dialog chiuso');
   if (chiuso) {
-    const righe = JSON.parse(execSync(`supabase db query --linked "select string_agg(to_char(t.ts at time zone 'Europe/Rome','HH24:MI')||' '||t.tipo||(case when t.pausa then '*' else '' end)||' '||left(c.nome,8), ' | ' order by t.ts) s from timbrature t join cantieri c on c.id=t.cantiere_id where t.dipendente_id=${DIP_FABBRI} and (t.ts at time zone 'Europe/Rome')::date=current_date"`, { encoding: 'utf8' }).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')).rows?.[0]?.s ?? '';
+    const righe = JSON.parse(execSync(`supabase db query --linked "select string_agg(to_char(t.ts at time zone 'Europe/Rome','HH24:MI')||' '||t.tipo||(case when t.pausa then '*' else '' end)||' '||left(c.nome,8), ' | ' order by t.ts) s from timbrature t join cantieri c on c.id=t.cantiere_id where t.dipendente_id=${DIP_FABBRI} and (t.ts at time zone 'Europe/Rome')::date=(now() at time zone 'Europe/Rome')::date"`, { encoding: 'utf8' }).replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, '$1')).rows?.[0]?.s ?? '';
     console.log('  timbrature:', righe);
     // Dopo la freccia giu' l'ordine e' Aurora, Logistica, Betulle e la pausa ha
     // seguito Aurora: 08:00 Aurora 4:30 → 12:30, strada → 12:40 Logistica, pausa 13:10.

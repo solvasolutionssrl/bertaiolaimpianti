@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
-import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
+import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import {
   AlertCircle,
@@ -78,7 +78,12 @@ function isoOggi(hhmm: string): string {
   return d.toISOString();
 }
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'SCATOLA_NON_DISPONIBILE':
       return 'La giornata timbrata è cambiata nel frattempo: ricarica la pagina e riprova.';
@@ -102,7 +107,7 @@ function messaggioErrore(code: string): string {
     case 'CANTIERE_NON_VALIDO':
       return 'Un cantiere selezionato non è valido.';
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'CANTIERE_CHIUSO':
       return 'Uno dei cantieri selezionati è chiuso e non accetta ore. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'SEDE_NON_VALIDA':
@@ -1106,7 +1111,7 @@ export function RegistraGiornataDialog({
           router.refresh();
         }, 1100);
       } else {
-        setErrore(messaggioErrore(res.error));
+        setErrore(messaggioErrore(res.error, res.motivo));
       }
     });
   }

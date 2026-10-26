@@ -323,3 +323,18 @@ export function riepilogo() {
   console.log(`\n${ko === 0 ? '\x1b[32m' : '\x1b[31m'}${ok} passati, ${ko} falliti\x1b[0m`);
   return ko;
 }
+
+/**
+ * ⚠️ Nelle query di semina e pulizia il giorno è quello di **Roma**, mai
+ * `current_date`.
+ *
+ * `current_date` è il giorno del server, che è in UTC: fra la mezzanotte di
+ * Roma e la mezzanotte UTC le due date **differiscono**, e in quella finestra
+ * un `delete ... where ...::date = current_date` cancella il giorno sbagliato
+ * **senza dare errore**. Misurato il 26/10/2026 all'01:30: il banco credeva di
+ * aver ripulito, il database aveva 8 timbrature e il salvataggio rispondeva
+ * «quel giorno ha già delle timbrature». Sette banchi avevano la stessa riga.
+ *
+ * Si scrive: `(now() at time zone 'Europe/Rome')::date`.
+ */
+export const OGGI_ROMA = "(now() at time zone 'Europe/Rome')::date";

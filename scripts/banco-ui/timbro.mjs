@@ -16,13 +16,13 @@ import { execSync } from 'node:child_process';
 const DIP = 'c1d00000-0000-4000-8000-000000000001';
 const TENANT = `(select tenant_id from dipendenti where id='${DIP}')`;
 const sql = (q) => execSync(`supabase db query --linked "${q.replace(/"/g, '\\"')}"`, { stdio: 'ignore' });
-const oggiAlle = (hhmm) => `((current_date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
+const oggiAlle = (hhmm) => `(((now() at time zone 'Europe/Rome')::date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
 const badge = (hhmm) => sql(`insert into timbri_grezzi (tenant_id, sorgente, esterno_id, dipendente_id, badge, ts, orologio, tipo, stato, genere, dispositivo) values (${TENANT}, 'timbro', 'banco-'||gen_random_uuid(), '${DIP}', 'BANCO', ${oggiAlle(hhmm)}, 'fisso', null, 'valido', 'badge', 'banco')`);
 const pulisci = () => {
   sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and (sorgente='app' or badge='BANCO')`);
-  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=(now() at time zone 'Europe/Rome')::date`);
   sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= ${oggiAlle('00:00')}`);
-  sql(`delete from rapportini where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from rapportini where dipendente_id='${DIP}' and data=(now() at time zone 'Europe/Rome')::date`);
 };
 pulisci();
 for (const h of ['08:00', '12:30', '13:00', '17:03']) badge(h);

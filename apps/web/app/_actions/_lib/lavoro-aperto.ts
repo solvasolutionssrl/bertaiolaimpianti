@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { createServerSupabase } from '@kommessa/api/server';
 import type { createServiceSupabase } from '@kommessa/api/service';
+import { MESSAGGIO_FASE_RICHIESTA, messaggioFaseRichiesta } from '@kommessa/api/sottocantieri';
 import {
   cantiereImputabile,
   motivoCantiereChiuso,
@@ -133,6 +134,8 @@ export async function faseRichiesta(
   supa: Supa,
   luoghi: readonly { cantiereId: string; sottocantiereId?: string | null }[],
   tenantId: string,
+  /** Il verbo cambia col contesto: una spesa non si «lavora». */
+  messaggio: string = MESSAGGIO_FASE_RICHIESTA,
 ): Promise<EsitoCantiere> {
   const senzaFase = [...new Set(luoghi.filter((l) => !l.sottocantiereId).map((l) => l.cantiereId))];
   if (senzaFase.length === 0) return { ok: true };
@@ -144,15 +147,18 @@ export async function faseRichiesta(
     .maybeSingle();
   const cfg = (modRaw as { config: Record<string, unknown> | null } | null)?.config;
   if (cfg?.['fase_obbligatoria'] !== true) return { ok: true };
+  // ⚠️ Niente `limit(1)`: con una giornata su tre cantieri di cui uno a fasi,
+  // rifiutare senza dire QUALE lascia la persona a indovinare.
   const { data } = await supa
     .from('sottocantieri' as never)
-    .select('cantiere_id')
+    .select('cantiere_id, cantieri(nome)')
     .in('cantiere_id', senzaFase)
     .eq('tenant_id', tenantId)
-    .eq('stato', 'attivo')
-    .limit(1);
-  if (((data as unknown[] | null) ?? []).length > 0) {
-    return { ok: false, error: 'FASE_RICHIESTA', motivo: 'Questo cantiere ha delle fasi: indica su quale hai lavorato.' };
+    .eq('stato', 'attivo');
+  const righe = (data as { cantiere_id: string; cantieri?: { nome?: string | null } | null }[] | null) ?? [];
+  if (righe.length > 0) {
+    const nomi = [...new Set(righe.map((r) => r.cantieri?.nome ?? '').filter(Boolean))];
+    return { ok: false, error: 'FASE_RICHIESTA', motivo: messaggioFaseRichiesta(nomi, messaggio) };
   }
   return { ok: true };
 }

@@ -24,7 +24,7 @@ const leggi = (q) => {
     return [];
   }
 };
-/** Il giorno italiano: `current_date` nel database e' UTC, e dopo mezzanotte e' ancora ieri. */
+/** Il giorno italiano: `(now() at time zone 'Europe/Rome')::date` nel database e' UTC, e dopo mezzanotte e' ancora ieri. */
 const OGGI_ROME = "((now() at time zone 'Europe/Rome')::date)";
 const oggiAlle = (hhmm) => `((${OGGI_ROME}::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));

@@ -26,9 +26,9 @@ const TENANT = `(select tenant_id from dipendenti where id='${DIP}')`;
 const badge = (oreFa) => sql(`insert into timbri_grezzi (tenant_id, sorgente, esterno_id, dipendente_id, badge, ts, orologio, tipo, stato, genere, dispositivo) values (${TENANT}, 'timbro', 'banco-'||gen_random_uuid(), '${DIP}', 'BANCO', now() - interval '${oreFa} hours', 'fisso', null, 'valido', 'badge', 'banco')`);
 const pulisci = () => {
   sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and (sorgente='app' or badge='BANCO')`);
-  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from timbratura_viaggio where dipendente_id='${DIP}' and data=(now() at time zone 'Europe/Rome')::date`);
   sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= date_trunc('day', now() at time zone 'Europe/Rome') at time zone 'Europe/Rome'`);
-  sql(`delete from rapportini where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from rapportini where dipendente_id='${DIP}' and data=(now() at time zone 'Europe/Rome')::date`);
 };
 
 const { cdp, chiudi } = await apriChrome({ mobile: true });

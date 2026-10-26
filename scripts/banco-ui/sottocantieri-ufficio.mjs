@@ -21,11 +21,11 @@ const CANTIERE = 'c0a70000-0000-4000-8000-000000000001'; // Cantiere Gruppo Auro
 const FABBRI = 'c1d00000-0000-4000-8000-000000000002';
 const FASE = 'Banco fase quadri';
 const sql = (q) => execSync(`supabase db query --linked "${q.replace(/"/g, '\\"')}"`, { stdio: 'ignore' });
-const oggi = () => `((current_date::text || ' 00:00')::timestamp at time zone 'Europe/Rome')`;
+const oggi = () => `(((now() at time zone 'Europe/Rome')::date::text || ' 00:00')::timestamp at time zone 'Europe/Rome')`;
 const pulisci = () => {
   sql(`delete from timbrature where dipendente_id='${FABBRI}' and ts >= ${oggi()}`);
-  sql(`delete from timbratura_viaggio where dipendente_id='${FABBRI}' and data=current_date`);
-  sql(`delete from rapportini where dipendente_id='${FABBRI}' and data=current_date`);
+  sql(`delete from timbratura_viaggio where dipendente_id='${FABBRI}' and data=(now() at time zone 'Europe/Rome')::date`);
+  sql(`delete from rapportini where dipendente_id='${FABBRI}' and data=(now() at time zone 'Europe/Rome')::date`);
   sql(`delete from sottocantieri where cantiere_id='${CANTIERE}' and nome like '%${FASE}%'`);
 };
 pulisci();

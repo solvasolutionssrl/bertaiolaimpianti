@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition, useCallback } from 'react';
-import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
+import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { ArrowLeftRight, Loader2 } from 'lucide-react';
 
@@ -13,7 +13,12 @@ import {
   type PickerCantiere,
 } from './cantiere-picker';
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'IN_PAUSA':
       return 'Turno in pausa: riprenderlo prima di cambiare cantiere.';
@@ -24,7 +29,7 @@ function messaggioErrore(code: string): string {
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'CANTIERE_CHIUSO':
       return 'Quel cantiere è chiuso: non ci si può spostare. Se ci hai lavorato, dillo all’ufficio.';
     case 'ORA_NON_VALIDA':
@@ -78,7 +83,7 @@ export function CambiaCantiereButton({
       // Il cantiere corrente resta in elenco solo se ha delle fasi: si puo'
       // cambiare fase senza cambiare cantiere.
       if (res.ok) setCantieri(res.cantieri.filter((c) => c.id !== cantiereId || (c.sottocantieri?.length ?? 0) > 0));
-      else setErrore(messaggioErrore(res.error));
+      else setErrore(messaggioErrore(res.error, res.motivo));
     }
   }, [cantieri, cantiereId]);
 
@@ -109,7 +114,7 @@ export function CambiaCantiereButton({
         chiudi();
         router.refresh();
       } else {
-        setErrore(messaggioErrore(res.error));
+        setErrore(messaggioErrore(res.error, res.motivo));
       }
     });
   }

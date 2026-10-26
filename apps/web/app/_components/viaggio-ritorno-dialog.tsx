@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { etichettaMezzo, ordinaMezzi } from '@kommessa/api/mezzi';
-import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
+import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { createPortal } from 'react-dom';
 import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
@@ -81,7 +81,7 @@ export interface ViaggioRitornoDialogProps {
   splitContesto?: SplitContesto | null;
   onConfirm: (
     payload: ViaggioRitornoConfirm,
-  ) => Promise<{ ok: boolean; error?: string }>;
+  ) => Promise<{ ok: boolean; error?: string; motivo?: string }>;
 }
 
 // ─── format ────────────────────────────────────────────────────────────────────
@@ -187,7 +187,12 @@ function MinutiStepper({
 
 // ─── mappa errori ───────────────────────────────────────────────────────────────
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'SEDE_NON_VALIDA':
       return 'Sede di partenza non valida. Riprova.';
@@ -217,7 +222,7 @@ function messaggioErrore(code: string): string {
     // cantiere chiuso nel frattempo. Se il codice arriva qui, qualcosa e'
     // cambiato sotto i piedi e la pagina va ricaricata.
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'CANTIERE_CHIUSO':
       return 'Un cantiere della giornata è stato chiuso nel frattempo. Ricarica la pagina e riprova.';
     default:
@@ -483,7 +488,7 @@ export function ViaggioRitornoDialog({
             : undefined,
       });
       if (res.ok) onOpenChange(false);
-      else setErroreMsg(messaggioErrore(res.error ?? ''));
+      else setErroreMsg(messaggioErrore(res.error ?? '', res.motivo));
     });
   }
 

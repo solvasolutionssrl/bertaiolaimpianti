@@ -12,7 +12,8 @@ import {
 
 import { tenantHasModule } from '@/app/_lib/modules';
 import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
-import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, sottocantieriScrivibili, faseRichiesta } from '@/app/_actions/_lib/lavoro-aperto';
+import { MESSAGGIO_FASE_RICHIESTA_SPESA } from '@kommessa/api/sottocantieri';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 
 export const maxDuration = 60;
@@ -101,6 +102,17 @@ export async function POST(request: NextRequest) {
     if (sottocantiereIdInput) {
       const fase = await sottocantieriScrivibili(service, [{ cantiereId, sottocantiereId: sottocantiereIdInput }], ctx.tenantId, { forzato: true });
       if (!fase.ok) return Response.json({ ok: false, code: fase.error }, { status: 400 });
+    }
+    // Dove il cliente pretende la fase, uno scontrino su un cantiere che ne ha
+    // piu' d'una non puo' restare sul cantiere intero.
+    const richiesta = await faseRichiesta(
+      service,
+      [{ cantiereId, sottocantiereId: sottocantiereIdInput ?? null }],
+      ctx.tenantId,
+      MESSAGGIO_FASE_RICHIESTA_SPESA,
+    );
+    if (!richiesta.ok) {
+      return Response.json({ ok: false, code: richiesta.error, motivo: richiesta.motivo }, { status: 400 });
     }
     commessaId = scrivibile.commessaId ?? null;
   }

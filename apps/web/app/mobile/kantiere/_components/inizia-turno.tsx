@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition, useCallback } from 'react';
-import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
+import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { Play, Loader2, ArrowRight } from 'lucide-react';
 
@@ -24,14 +24,19 @@ import {
 import { PartenzaViaggioSheet } from './partenza-viaggio-sheet';
 import { IniziaSenzaCantiere } from './presenza-sede';
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'TURNO_GIA_APERTO':
       return 'Risulta un turno già aperto: chiuderlo oppure cambiare cantiere.';
     case 'CANTIERE_NON_VALIDO':
       return 'Cantiere non valido. Riprova.';
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'CANTIERE_CHIUSO':
       return 'Il cantiere è chiuso e non accetta timbrature. Segnalare all’ufficio le ore eventualmente svolte.';
     case 'SEDE_NON_VALIDA':
@@ -102,7 +107,7 @@ export function IniziaTurnoButton({
       const res = await elencoCantieriTurno();
       setLoading(false);
       if (res.ok) setCantieri(res.cantieri);
-      else setErrore(messaggioErrore(res.error));
+      else setErrore(messaggioErrore(res.error, res.motivo));
     }
   }, [cantieri]);
 
@@ -135,7 +140,7 @@ export function IniziaTurnoButton({
       if (res.ok) {
         setOpzioni({ sedi: res.sedi, sedeDefaultId: res.sedeDefaultId, mezzi: res.mezzi });
       } else {
-        setErrore(messaggioErrore(res.error));
+        setErrore(messaggioErrore(res.error, res.motivo));
         setFase('cantiere');
       }
     })();
@@ -156,7 +161,7 @@ export function IniziaTurnoButton({
         chiudi();
         router.refresh();
       } else {
-        setErrore(messaggioErrore(res.error));
+        setErrore(messaggioErrore(res.error, res.motivo));
       }
     });
   }

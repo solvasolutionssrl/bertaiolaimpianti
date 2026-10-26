@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState, useTransition } from 'react';
-import { etichettaLuogo, valoreLuogo } from '@kommessa/api/sottocantieri';
+import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Loader2, Play } from 'lucide-react';
 
@@ -29,14 +29,19 @@ import { IniziaSenzaCantiere } from './presenza-sede';
  * assegnano alla fine.
  */
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'TURNO_GIA_APERTO':
       return 'Risulta una giornata già aperta: chiuderla prima di iniziarne un’altra.';
     case 'CANTIERE_NON_VALIDO':
       return 'Lavoro non valido. Riprova.';
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'CANTIERE_CHIUSO':
       return 'Questo lavoro è chiuso: non si timbra più. Se ci hai lavorato, dillo all’ufficio.';
     case 'SEDE_PREDEFINITA_MANCANTE':
@@ -72,7 +77,7 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
       const res = await elencoCantieriTurno();
       setLoading(false);
       if (res.ok) setCantieri(res.cantieri);
-      else setErrore(messaggioErrore(res.error));
+      else setErrore(messaggioErrore(res.error, res.motivo));
     }
   }, [cantieri]);
 
@@ -93,7 +98,7 @@ export function IniziaGiornataUfficio({ cantieri: cantieriProp }: { cantieri?: P
     setSelectedFase(null);
         router.refresh();
       } else {
-        setErrore(messaggioErrore(res.error));
+        setErrore(messaggioErrore(res.error, res.motivo));
       }
     });
   }

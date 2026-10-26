@@ -7,6 +7,12 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, Car, Coffee, GripVertical, Loader2, MapPin, Plus, Trash2, Undo2 } from 'lucide-react';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, cn } from '@kommessa/ui';
+import {
+  latoRilascioInserimento,
+  latoRilascioRiordino,
+  indiceDopoRiordino,
+  type LatoRilascio,
+} from '@kommessa/api/trascina-riordino';
 import { calcolaSegmentiSplit } from '@kommessa/api/kantiere-split';
 import { arrotondaA } from '@kommessa/api/kantiere-ore';
 import { riempiScatola } from '@kommessa/api/timbro-giornata';
@@ -388,7 +394,38 @@ export function CompilaGiornataDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [righe],
   );
-  const trascina = useTrascina({ spostaRiga, spostaPausa });
+  // Dopo il rilascio la card che si e' mossa si accende un attimo: senza, con
+  // due blocchi simili non si capisce se e dove sia finita.
+  const [lampo, setLampo] = React.useState<number | null>(null);
+  const accendi = React.useCallback((i: number) => {
+    setLampo(i);
+    window.setTimeout(() => setLampo((p) => (p === i ? null : p)), 900);
+  }, []);
+  const spostaRigaConLampo = React.useCallback(
+    (da: number, a: number) => {
+      spostaRiga(da, a);
+      accendi(indiceDopoRiordino(righe.length, da, a));
+    },
+    [spostaRiga, accendi, righe.length],
+  );
+  const trascina = useTrascina({
+    spostaRiga: spostaRigaConLampo,
+    spostaPausa,
+    // `spostaRiga` rifiuta se la destinazione e' bloccata: li' non si accende
+    // nessuna linea, o prometterebbe un rilascio che non avviene.
+    puoRilasciare: (zona, indice) => (zona === 'pausa' ? true : !bloccabile(indice)),
+  });
+
+  /** Il lato su cui disegnare la linea per la riga `i`, o niente. */
+  const latoDiRilascio = React.useCallback(
+    (stato: StatoTrascina | null, i: number): LatoRilascio | null => {
+      if (!stato || stato.sopra !== i) return null;
+      return stato.zona === 'blocchi'
+        ? latoRilascioRiordino(stato.da, i)
+        : latoRilascioInserimento(stato.sotto);
+    },
+    [],
+  );
 
   // ── salvataggio ────────────────────────────────────────────────────────────
   const chiudi = (ok: boolean) => {
@@ -579,7 +616,7 @@ export function CompilaGiornataDialog({
                   const precedente = kVivo > 0 ? vive[kVivo - 1]! : null;
                   const t = tinta(i);
                   const inDrag = trascina.stato?.zona === 'blocchi' && trascina.stato.da === i;
-                  const sopra = trascina.stato?.zona === 'blocchi' && trascina.stato.sopra === i && trascina.stato.da !== i;
+                  const lato = latoDiRilascio(trascina.stato, i);
                   return (
                     <React.Fragment key={r.id}>
                       {kTratta && precedente ? (
@@ -599,14 +636,16 @@ export function CompilaGiornataDialog({
                       <li
                         data-drop-zona="blocchi"
                         data-indice={i}
+                        data-lato-rilascio={lato ?? undefined}
                         className={cn(
-                          'grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border border-border border-l-4 py-1.5 pl-1 pr-2 transition-shadow',
+                          'relative grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border border-border border-l-4 py-1.5 pl-1 pr-2 transition-all duration-150',
                           t.bordo,
                           t.fondo,
-                          inDrag && 'opacity-50',
-                          sopra && 'ring-2 ring-primary/50',
+                          inDrag && 'scale-[0.99] opacity-40 outline-dashed outline-1 outline-primary/50',
+                          lampo === i && 'ring-2 ring-primary',
                         )}
                       >
+                        <LineaRilascio lato={lato} />
                         <button
                           type="button"
                           aria-label={`Sposta il blocco ${i + 1}`}
@@ -614,8 +653,8 @@ export function CompilaGiornataDialog({
                           disabled={pending || bloccata || righe.length < 2}
                           onPointerDown={(e) => trascina.inizia(e, 'blocchi', i)}
                           onKeyDown={(e) => {
-                            if (e.key === 'ArrowUp') { e.preventDefault(); spostaRiga(i, i - 1); }
-                            if (e.key === 'ArrowDown') { e.preventDefault(); spostaRiga(i, i + 1); }
+                            if (e.key === 'ArrowUp') { e.preventDefault(); spostaRigaConLampo(i, i - 1); }
+                            if (e.key === 'ArrowDown') { e.preventDefault(); spostaRigaConLampo(i, i + 1); }
                           }}
                           className="flex h-10 w-7 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:bg-black/5 active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
                         >
@@ -733,22 +772,23 @@ export function CompilaGiornataDialog({
                   const t = r.blocco != null ? tinta(indiceRiga[r.blocco] ?? r.blocco) : null;
                   const indice = r.blocco != null ? indiceRiga[r.blocco] ?? null : null;
                   const inDrag = r.tono === 'lavoro' ? trascina.stato?.zona === 'blocchi' && trascina.stato.da === indice : r.tono === 'pausa' && trascina.stato?.zona === 'pausa';
-                  const sopra = r.tono === 'lavoro' && indice !== null && trascina.stato?.zona === 'blocchi' && trascina.stato.sopra === indice && trascina.stato.da !== indice;
+                  const lato = r.tono === 'lavoro' && indice !== null ? latoDiRilascio(trascina.stato, indice) : null;
                   return (
                     <li
                       key={i}
                       data-drop-zona={r.tono === 'lavoro' && indice !== null ? 'blocchi' : undefined}
                       data-indice={r.tono === 'lavoro' && indice !== null ? indice : undefined}
                       className={cn(
-                        'flex items-center gap-1.5 rounded-md border px-1.5 py-1 text-xs transition-shadow',
+                        'relative flex items-center gap-1.5 rounded-md border px-1.5 py-1 text-xs transition-all duration-150',
                         r.tono === 'lavoro' && cn('border-l-4 bg-card', t?.bordo, t?.fondo),
                         r.tono === 'lavoro' && !t && 'border-border',
                         r.tono === 'pausa' && 'border-amber-200 bg-amber-50 text-amber-800',
                         r.tono === 'viaggio' && 'border-sky-100 bg-sky-50 text-sky-800',
-                        inDrag && 'opacity-50',
-                        sopra && 'ring-2 ring-primary/50',
+                        inDrag && 'scale-[0.99] opacity-40 outline-dashed outline-1 outline-primary/50',
+                        lampo != null && indice === lampo && 'ring-2 ring-primary',
                       )}
                     >
+                      <LineaRilascio lato={lato} />
                       {r.trascinabile ? (
                         <button
                           type="button"
@@ -765,7 +805,7 @@ export function CompilaGiornataDialog({
                               const attuale = pausaDopo ?? (() => { const k = righeAnteprima.slice(0, i).filter((x) => x.tono === 'lavoro').length - 1; return indiceRiga[Math.max(0, k)] ?? 0; })();
                               spostaPausa(attuale + passo);
                             } else if (indice !== null) {
-                              spostaRiga(indice, indice + passo);
+                              spostaRigaConLampo(indice, indice + passo);
                             }
                           }}
                           className="flex h-6 w-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-current/60 hover:bg-black/5 active:cursor-grabbing"
@@ -810,6 +850,28 @@ export function CompilaGiornataDialog({
   );
 }
 
+/**
+ * La linea che dice DOVE finira' la card. Il lato lo decide
+ * `latoRilascioRiordino` / `latoRilascioInserimento`, pure e provate: la
+ * direzione e' la cosa che si inverte senza accorgersene.
+ */
+function LineaRilascio({ lato }: { lato: LatoRilascio | null }) {
+  if (!lato) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'pointer-events-none absolute inset-x-0 z-10 flex items-center',
+        lato === 'sopra' ? '-top-[3px]' : '-bottom-[3px]',
+      )}
+    >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+      <span className="h-[2px] flex-1 rounded-full bg-primary" />
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+    </span>
+  );
+}
+
 // ── il trascinamento, a mano: due zone, lo stesso stato ─────────────────────
 
 type ZonaTrascina = 'blocchi' | 'pausa';
@@ -823,7 +885,18 @@ type StatoTrascina = { zona: ZonaTrascina; da: number; sopra: number | null; sot
  * quel blocco). Le due colonne hanno le stesse righe con gli stessi indici,
  * quindi si puo' partire da una e lasciare sull'altra.
  */
-function useTrascina({ spostaRiga, spostaPausa }: { spostaRiga: (da: number, a: number) => void; spostaPausa: (dopoRiga: number) => void }) {
+function useTrascina({
+  spostaRiga,
+  spostaPausa,
+  puoRilasciare,
+}: {
+  spostaRiga: (da: number, a: number) => void;
+  spostaPausa: (dopoRiga: number) => void;
+  /** ⚠️ Una riga su cui `spostaRiga` rifiuterebbe non deve nemmeno accendersi:
+      una linea di rilascio dove il rilascio non avviene e' un comando che
+      promette e non fa niente. */
+  puoRilasciare: (zona: ZonaTrascina, indice: number) => boolean;
+}) {
   const [stato, setStato] = React.useState<StatoTrascina | null>(null);
   const rif = React.useRef<StatoTrascina | null>(null);
   const aggiorna = (s: StatoTrascina | null) => {
@@ -834,6 +907,11 @@ function useTrascina({ spostaRiga, spostaPausa }: { spostaRiga: (da: number, a: 
     if (e.button !== 0) return;
     e.preventDefault();
     aggiorna({ zona, da, sopra: null, sotto: false });
+    // Mentre si trascina il cursore lo dice, e il testo non si seleziona.
+    const cursorePrima = document.body.style.cursor;
+    const selezionePrima = document.body.style.userSelect;
+    document.body.style.cursor = 'grabbing';
+    document.body.style.userSelect = 'none';
     const muovi = (ev: PointerEvent) => {
       const s = rif.current;
       if (!s) return;
@@ -843,6 +921,10 @@ function useTrascina({ spostaRiga, spostaPausa }: { spostaRiga: (da: number, a: 
         return;
       }
       const indice = Number(el.dataset.indice);
+      if (!Number.isInteger(indice) || !puoRilasciare(s.zona, indice)) {
+        if (s.sopra !== null) aggiorna({ ...s, sopra: null });
+        return;
+      }
       const r = el.getBoundingClientRect();
       const sotto = ev.clientY > r.top + r.height / 2;
       if (s.sopra !== indice || s.sotto !== sotto) aggiorna({ ...s, sopra: indice, sotto });
@@ -851,6 +933,8 @@ function useTrascina({ spostaRiga, spostaPausa }: { spostaRiga: (da: number, a: 
       window.removeEventListener('pointermove', muovi);
       window.removeEventListener('pointerup', lascia);
       window.removeEventListener('pointercancel', lascia);
+      document.body.style.cursor = cursorePrima;
+      document.body.style.userSelect = selezionePrima;
       const s = rif.current;
       aggiorna(null);
       if (!s || s.sopra === null) return;

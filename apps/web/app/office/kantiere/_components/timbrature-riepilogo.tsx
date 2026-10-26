@@ -78,14 +78,14 @@ function fmtDataOra(ts: string): string {
   }).format(new Date(ts));
 }
 
-type OrigineMeta = { origine?: string | null; createdAt?: string | null; creatoNome?: string | null };
+export type OrigineMeta = { origine?: string | null; createdAt?: string | null; creatoNome?: string | null };
 
 /**
  * Riga origine di un evento: badge "Timbrata · QR/app" oppure "Inserita a mano"
  * (con "da {chi} · agg. {quando}"). Così office e super admin vedono SEMPRE come
  * e quando è nata la riga (es. pausa timbrata vs dichiarata a fine giornata).
  */
-function OrigineLine({ meta }: { meta?: OrigineMeta }) {
+export function OrigineLine({ meta }: { meta?: OrigineMeta }) {
   if (!meta || !meta.origine) return null;
   const o = meta.origine;
   // 'timbro' = giornata delimitata dai timbri del terminale e ripartita dalla

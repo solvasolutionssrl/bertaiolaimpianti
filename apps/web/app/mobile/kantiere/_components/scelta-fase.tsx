@@ -1,6 +1,8 @@
 'use client';
 
-import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { useEffect, useRef } from 'react';
+
+import { decidiFase, type SottocantiereLite } from '@kommessa/api/sottocantieri';
 import { cn } from '@kommessa/ui';
 
 /**
@@ -10,6 +12,9 @@ import { cn } from '@kommessa/ui';
  *
  * `obbligatoria` toglie la voce «Cantiere intero»: e' la regola per cliente
  * (`fase_obbligatoria`, FPM). Il server la ricontrolla comunque.
+ *
+ * ⚠️ Con **una sola** fase e l'obbligo acceso non si chiede niente: si prende
+ * quella e lo si scrive (26/10/2026). La regola sta in `decidiFase`, pura.
  */
 export function SceltaFase({
   fasi,
@@ -28,7 +33,31 @@ export function SceltaFase({
   compatto?: boolean;
   idBase?: string;
 }) {
-  if (fasi.length === 0) return null;
+  const decisione = decidiFase(fasi, { obbligatoria });
+  const presa = decisione.modo === 'automatica' ? decisione.fase : null;
+  const gia = useRef<string | null>(null);
+
+  // Una domanda con una risposta sola non e' una domanda: la fase unica si
+  // prende da soli. Il `ref` evita di rilanciarla a ogni render quando il
+  // chiamante ricrea `onChange`.
+  useEffect(() => {
+    if (!presa || gia.current === presa.id || valore === presa.id) return;
+    gia.current = presa.id;
+    onChange(presa.id);
+  }, [presa, valore, onChange]);
+
+  if (decisione.modo === 'nessuna') return null;
+
+  // Presa da soli: non si chiede, ma lo si DICE. Una scelta fatta in silenzio
+  // al posto di qualcuno e' una scelta che nessuno puo' correggere.
+  if (presa) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Fase <span className="font-medium text-foreground">{presa.codice ? `${presa.codice} · ${presa.nome}` : presa.nome}</span>
+        {' · '}unica fase del cantiere
+      </p>
+    );
+  }
 
   if (compatto) {
     return (

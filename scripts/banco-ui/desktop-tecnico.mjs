@@ -33,11 +33,11 @@ const conta = (q) => {
     return 0;
   }
 };
-const oggiAlle = (hhmm) => `((current_date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
+const oggiAlle = (hhmm) => `(((now() at time zone 'Europe/Rome')::date::text || ' ${hhmm}')::timestamp at time zone 'Europe/Rome')`;
 const pulisci = () => {
   sql(`delete from timbri_grezzi where dipendente_id='${DIP}' and sorgente='app' and ts >= ${oggiAlle('00:00')}`);
   sql(`delete from timbrature where dipendente_id='${DIP}' and ts >= ${oggiAlle('00:00')}`);
-  sql(`delete from rapportini where dipendente_id='${DIP}' and data=current_date`);
+  sql(`delete from rapportini where dipendente_id='${DIP}' and data=(now() at time zone 'Europe/Rome')::date`);
 };
 const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
 const MISURA = `(() => {

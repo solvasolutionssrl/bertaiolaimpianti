@@ -14,6 +14,7 @@ import {
 import type { CantiereSquadra, MembroStato, StatoMembro } from '../../_lib/capo';
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
 import type { SottocantiereLite } from '@kommessa/api/sottocantieri';
+import { MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { SceltaFase } from '../../_components/scelta-fase';
 
 /** Contesto viaggio (sedi + sede di default) per un singolo cantiere. */
@@ -37,7 +38,12 @@ function durataTurnoMin(inizioTs: string | null): number {
   return Math.max(0, Math.floor((Date.now() - Date.parse(inizioTs)) / 60000));
 }
 
-function messaggioErrore(code: string): string {
+/**
+ * ⚠️ Il `motivo` del server vince: nomina il cantiere a cui manca la fase,
+ * mentre la traduzione del codice puo' solo dire «questo cantiere».
+ */
+function messaggioErrore(code: string, motivo?: string | null): string {
+  if (motivo) return motivo;
   switch (code) {
     case 'AZIONE_NON_VALIDA':
       return 'Lo stato è stato aggiornato: ricaricare la pagina e riprovare.';
@@ -46,7 +52,7 @@ function messaggioErrore(code: string): string {
     case 'MODULO_OFF':
       return 'Modulo Kantiere non attivo.';
     case 'FASE_RICHIESTA':
-      return 'Questo cantiere ha delle fasi: indica su quale hai lavorato.';
+      return MESSAGGIO_FASE_RICHIESTA;
     case 'SOTTOCANTIERE_NON_VALIDO':
     case 'SOTTOCANTIERE_CHIUSO':
       return 'La fase scelta non è più disponibile: ricaricare la pagina e riprovare.';
@@ -120,7 +126,7 @@ export function GestioneSquadraClient({
       const res = await timbraMembro({ cantiereId, dipendenteId, azione, sottocantiereId: azione === 'inizio' ? (sottocantiereId ?? null) : undefined });
       setBusy(null);
       if (res.ok) router.refresh();
-      else setMsg({ tipo: 'err', testo: messaggioErrore(res.error) });
+      else setMsg({ tipo: 'err', testo: messaggioErrore(res.error, res.motivo) });
     });
   }
 
@@ -342,7 +348,7 @@ export function GestioneSquadraClient({
         });
         router.refresh();
       } else {
-        setMsg({ tipo: 'err', testo: messaggioErrore(res.error) });
+        setMsg({ tipo: 'err', testo: messaggioErrore(res.error, res.motivo) });
       }
     });
   }

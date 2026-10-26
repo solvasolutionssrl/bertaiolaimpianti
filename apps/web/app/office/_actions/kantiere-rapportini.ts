@@ -23,7 +23,7 @@ import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-
 import { leggiTutto } from '@kommessa/api/pagine';
 import { scriviTimbrature } from '@/app/_actions/_lib/timbrature-scrivi';
 
-type Result = { ok: true } | { ok: false; error: string };
+type Result = { ok: true } | { ok: false; error: string; motivo?: string };
 
 async function nomeUtente(
   supabase: ReturnType<typeof createServerSupabase>,
@@ -111,7 +111,7 @@ const CorreggiViaggioSchema = z
 
 export async function correggiViaggio(
   input: unknown,
-): Promise<{ ok: true; avviso?: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; avviso?: string } | { ok: false; error: string; motivo?: string }> {
   const parsed = CorreggiViaggioSchema.safeParse(input);
   if (!parsed.success)
     return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
@@ -275,7 +275,7 @@ export async function registraOrePerDipendente(input: unknown): Promise<Result> 
     const fase = await sottocantieriScrivibili(supabase, [{ cantiereId, sottocantiereId }], ctx.tenantId, { forzato: parsed.data.forzato });
     if (!fase.ok) return { ok: false, error: fase.error };
     const fr = await faseRichiesta(supabase, [{ cantiereId, sottocantiereId }], ctx.tenantId);
-    if (!fr.ok) return { ok: false, error: fr.error };
+    if (!fr.ok) return { ok: false, error: fr.error, motivo: fr.motivo };
   }
 
   const now = new Date().toISOString();
@@ -497,7 +497,7 @@ export type GiornataAperta = {
 
 export async function giornateAperte(
   input?: unknown,
-): Promise<{ ok: true; giorni: GiornataAperta[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; giorni: GiornataAperta[] } | { ok: false; error: string; motivo?: string }> {
   const parsed = z.object({ giorni: z.number().int().min(1).max(60).optional() }).safeParse(input ?? {});
   const n = parsed.success ? parsed.data.giorni ?? 21 : 21;
   let ctx;
@@ -629,7 +629,7 @@ const RicalcoloSchema = z.object({
  */
 export async function ricalcolaPresenzePeriodo(
   input: z.infer<typeof RicalcoloSchema>,
-): Promise<{ ok: true; giorni: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; giorni: number } | { ok: false; error: string; motivo?: string }> {
   const parsed = RicalcoloSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
   const { da, a } = parsed.data;
@@ -701,7 +701,7 @@ const AggiungiPausaSchema = z.object({
  */
 export async function aggiungiPausaGiornata(
   input: z.infer<typeof AggiungiPausaSchema>,
-): Promise<{ ok: true; minutiPausa: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; minutiPausa: number } | { ok: false; error: string; motivo?: string }> {
   const parsed = AggiungiPausaSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'DATI_NON_VALIDI' };
   const { dipendenteId, data, minuti } = parsed.data;

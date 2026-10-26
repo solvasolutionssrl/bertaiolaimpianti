@@ -118,9 +118,14 @@ export function NuovaSpesa({
     setFile(null);
     setErrMsg(null);
     setCantiereId(turnoCantiereId);
+    // ⚠️ La fase va rimessa INSIEME al cantiere: rimettendo solo il cantiere, la
+    // fase dello scontrino precedente (scelto su un altro cantiere) restava
+    // appiccicata e il server la rifiutava con `SOTTOCANTIERE_NON_VALIDO`, che
+    // per chi legge non vuol dire niente.
+    setSottocantiereId(turnoSottocantiereId);
     setRicercaAperta(!turnoCantiereId);
     setFase('cantiere');
-  }, [revokePreview, turnoCantiereId]);
+  }, [revokePreview, turnoCantiereId, turnoSottocantiereId]);
 
   const chiudi = React.useCallback(() => {
     reset();

@@ -19,7 +19,8 @@ import { kontabilitaAttiva } from '@/app/_lib/kontabilita-config';
 import { chiaviSpeseValide } from '@/app/api/kantiere/spese/_lib/r2-spese';
 import { processSpesaAI } from '@/app/api/kantiere/spese/_lib/analisi-spesa';
 import { auditTenant } from '@/app/_actions/_lib/audit';
-import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, faseRichiesta, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { MESSAGGIO_FASE_RICHIESTA_SPESA } from '@kommessa/api/sottocantieri';
 import {
   buildSnapshotSpesa,
   diffSnapshotSpesa,
@@ -170,6 +171,16 @@ export async function creaSpesaOffice(
     commessaId = scrivibile.commessaId ?? null;
     const fase = await sottocantieriScrivibili(service, [{ cantiereId: d.cantiereId, sottocantiereId: d.sottocantiereId }], ctx.tenantId, { forzato: d.forzato });
     if (!fase.ok) return { ok: false, error: fase.error };
+    // `sottocantieriScrivibili` valida la fase SE c'e'; non ne pretende una.
+    // Senza questa guardia uno scontrino su un cantiere a piu' fasi finiva sul
+    // cantiere intero in silenzio.
+    const richiesta = await faseRichiesta(
+      service,
+      [{ cantiereId: d.cantiereId, sottocantiereId: d.sottocantiereId }],
+      ctx.tenantId,
+      MESSAGGIO_FASE_RICHIESTA_SPESA,
+    );
+    if (!richiesta.ok) return { ok: false, error: richiesta.motivo ?? richiesta.error };
   }
 
   // Il codice del metodo deve stare nell'elenco di QUESTO cliente: lo schema
@@ -292,6 +303,13 @@ export async function aggiornaSpesa(input: z.input<typeof AggiornaSchema>): Prom
     if (!scrivibile.ok) return { ok: false, error: scrivibile.error };
     const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: d.cantiereId, sottocantiereId: d.sottocantiereId }], ctx.tenantId, { forzato: d.forzato });
     if (!fase.ok) return { ok: false, error: fase.error };
+    const richiesta = await faseRichiesta(
+      supabase,
+      [{ cantiereId: d.cantiereId, sottocantiereId: d.sottocantiereId }],
+      ctx.tenantId,
+      MESSAGGIO_FASE_RICHIESTA_SPESA,
+    );
+    if (!richiesta.ok) return { ok: false, error: richiesta.motivo ?? richiesta.error };
     patch.cantiere_id = d.cantiereId;
     // Cambiando cantiere la fase si riscrive sempre: una fase dell'altro
     // cantiere non puo' restare (e il database la rifiuterebbe).

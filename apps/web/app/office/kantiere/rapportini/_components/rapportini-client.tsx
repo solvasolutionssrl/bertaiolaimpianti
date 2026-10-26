@@ -17,7 +17,6 @@ import {
   History,
   Coffee,
   MapPin,
-  Car,
   Users,
 } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
@@ -27,7 +26,6 @@ import type { Affidabilita } from '@kommessa/api/kantiere-cronologia';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import { useConfirm } from '@/app/_components/confirm-provider';
 import {
-  TimbratureRiepilogo,
   TimbratureSommario,
   GiornataFlow,
   useTotaleGiornata,
@@ -35,7 +33,8 @@ import {
 import { GiornateApertePanel } from './giornate-aperte-panel';
 import { LeMieOre } from './le-mie-ore';
 import type { MiaGiornata } from '@/app/office/_lib/mia-giornata';
-import { TimbriTerminale, titoloPassaggi } from '../../_components/timbri-terminale';
+import { CatenaGiornata } from '../../_components/catena-giornata';
+import { TimbriTerminale } from '../../_components/timbri-terminale';
 import { CompilaGiornataDialog, type ModoCompila } from '../../_components/compila-giornata-dialog';
 import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
@@ -310,66 +309,21 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
         ) : null}
       </div>
 
-      {/* Timeline timbrature + viaggio */}
-      <div className="space-y-3">
-        {riga.timbro ? (
-          <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {titoloPassaggi(riga.timbro.timbri)}
-            </p>
-            <TimbriTerminale timbri={riga.timbro.timbri} />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Presenza {minToColon(riga.timbro.nettoMin)}
-              {riga.timbro.pausaTimbrataMin > 0 ? ` · pausa timbrata ${minToColon(riga.timbro.pausaTimbrataMin)}` : ''}
-              {' · '}
-              {ETICHETTA_STATO_TIMBRO[riga.timbro.stato]}
-              {riga.timbro.motivo ? ` — ${riga.timbro.motivo}` : ''}
-            </p>
-          </div>
-        ) : null}
-        <div>
-          {/* Le timbrature sui cantieri: QR, app, capo o a mano. Ogni riga
-              dice la sua origine (OrigineLine); il registro del badge sta
-              nel blocco sopra, con le sue pillole. */}
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Timbrature sui cantieri
-          </p>
-          <TimbratureRiepilogo timbrature={riga.timbrature} />
-        </div>
-
-        {riga.viaggi && riga.viaggi.length > 0 ? (
-          <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Viaggio
-            </p>
-            <ul className="space-y-1">
-              {riga.viaggi.map((v, i) => {
-                // Switch cantiere→cantiere: origine = cantiere di partenza.
-                const da = v.daCantiere || (v.direzione === 'andata' ? v.sede : v.cantiere || 'cantiere');
-                const a = v.direzione === 'andata' ? v.cantiere || 'cantiere' : v.sede;
-                return (
-                  <li
-                    key={i}
-                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md border border-sky-200/70 bg-sky-50/60 px-2.5 py-1.5 text-xs"
-                  >
-                    <Car className="h-3 w-3 shrink-0 text-sky-600" aria-hidden="true" />
-                    <span className="font-medium capitalize text-sky-900">{v.direzione}</span>
-                    <span className="text-sky-800">
-                      {da} <span className="text-sky-400">→</span> {a}
-                    </span>
-                    <span className="ml-auto tabular-nums font-medium text-sky-700">
-                      {v.autista && v.km > 0 ? `${Math.round(v.km)} km · ` : ''}
-                      {minToColon(v.minuti)}
-                    </span>
-                    <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
-                      {v.autista ? 'autista' : 'passeggero'}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ) : null}
+      {/* La giornata in UNA catena cronologica: passaggi del registro, segmenti
+          di lavoro, pause e tratte, in un ordine solo. Prima erano tre blocchi
+          impilati e le pause stavano dopo tutti i segmenti. */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          La giornata, in ordine
+        </p>
+        <CatenaGiornata
+          timbrature={riga.timbrature}
+          viaggi={riga.viaggi ?? []}
+          timbro={riga.timbro ?? null}
+          minutiLavoro={Math.round(riga.totale.lavoro * 60)}
+          oreViaggio={riga.totale.viaggio}
+          kmViaggio={riga.viaggioKm ?? 0}
+        />
       </div>
     </div>
   );

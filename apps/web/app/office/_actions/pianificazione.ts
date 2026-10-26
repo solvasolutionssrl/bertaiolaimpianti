@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { createServerSupabase } from '@kommessa/api/server';
 import { createServiceSupabase } from '@kommessa/api/service';
 import { requireTenantContext } from '@kommessa/api/tenant';
-import { cantiereScrivibile, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { cantiereScrivibile, faseRichiesta, sottocantieriScrivibili } from '@/app/_actions/_lib/lavoro-aperto';
+import { MESSAGGIO_FASE_RICHIESTA_PIANIFICAZIONE } from '@kommessa/api/sottocantieri';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
 import type { AppRole } from '@kommessa/api';
 import {
@@ -313,6 +314,16 @@ export async function creaBlocco(input: unknown): Promise<SalvaResult> {
     if (!aperto.ok) return { ok: false, error: aperto.error };
     const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }], ctx.tenantId);
     if (!fase.ok) return { ok: false, error: fase.error };
+    // Dove il cliente pretende la fase, un blocco su un cantiere che ne ha piu'
+    // d'una non puo' restare sul cantiere intero. ⚠️ Qui si PIANIFICA: il
+    // messaggio non puo' dire «su quale hai lavorato».
+    const richiesta = await faseRichiesta(
+      supabase,
+      [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }],
+      ctx.tenantId,
+      MESSAGGIO_FASE_RICHIESTA_PIANIFICAZIONE,
+    );
+    if (!richiesta.ok) return { ok: false, error: richiesta.motivo ?? richiesta.error };
   }
 
   // Insert blocco → membri → mezzi (cleanup best-effort se figli falliscono).
@@ -436,6 +447,16 @@ export async function creaBlocchiRicorrenti(input: unknown): Promise<RicorrenteR
     if (!aperto.ok) return { ok: false, error: aperto.error };
     const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }], ctx.tenantId);
     if (!fase.ok) return { ok: false, error: fase.error };
+    // Dove il cliente pretende la fase, un blocco su un cantiere che ne ha piu'
+    // d'una non puo' restare sul cantiere intero. ⚠️ Qui si PIANIFICA: il
+    // messaggio non puo' dire «su quale hai lavorato».
+    const richiesta = await faseRichiesta(
+      supabase,
+      [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }],
+      ctx.tenantId,
+      MESSAGGIO_FASE_RICHIESTA_PIANIFICAZIONE,
+    );
+    if (!richiesta.ok) return { ok: false, error: richiesta.motivo ?? richiesta.error };
   }
 
   const date = Array.from(new Set(data.date)).sort();
@@ -604,6 +625,16 @@ export async function aggiornaBlocco(input: unknown): Promise<SalvaResult> {
     if (!aperto.ok) return { ok: false, error: aperto.error };
     const fase = await sottocantieriScrivibili(supabase, [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }], ctx.tenantId);
     if (!fase.ok) return { ok: false, error: fase.error };
+    // Dove il cliente pretende la fase, un blocco su un cantiere che ne ha piu'
+    // d'una non puo' restare sul cantiere intero. ⚠️ Qui si PIANIFICA: il
+    // messaggio non puo' dire «su quale hai lavorato».
+    const richiesta = await faseRichiesta(
+      supabase,
+      [{ cantiereId: data.cantiereId, sottocantiereId: data.sottocantiereId }],
+      ctx.tenantId,
+      MESSAGGIO_FASE_RICHIESTA_PIANIFICAZIONE,
+    );
+    if (!richiesta.ok) return { ok: false, error: richiesta.motivo ?? richiesta.error };
   }
 
   const { error: errUpd } = await supabase
