@@ -12,7 +12,7 @@ import {
   type PickerCantiere,
 } from '@/app/mobile/kantiere/_components/cantiere-picker';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { etichettaPausa } from '@kommessa/api/kantiere-pausa';
+import { etichettaPausa, PAUSA_PREDEFINITA_MIN } from '@kommessa/api/kantiere-pausa';
 import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 
 /** Sentinel: "rientro a casa" → nessun viaggio di lavoro (0 km, 0 tempo). */
@@ -279,7 +279,7 @@ export function ViaggioRitornoDialog({
 
   // Pausa pranzo dichiarata (ripiego se non timbrata)
   const [pausaFatta, setPausaFatta] = useState(false);
-  const [pausaMin, setPausaMin] = useState<number>(30);
+  const [pausaMin, setPausaMin] = useState<number>(PAUSA_PREDEFINITA_MIN);
 
   // Portal su body: dentro la shell mobile un `fixed` resta intrappolato nello
   // stacking context e finisce SOTTO la bottom-nav. Su body compete al livello

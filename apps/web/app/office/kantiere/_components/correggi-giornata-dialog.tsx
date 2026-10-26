@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { PAUSA_PREDEFINITA_MIN } from '@kommessa/api/kantiere-pausa';
 import { useRouter } from 'next/navigation';
 import { Loader2, AlertTriangle, Coffee, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -95,7 +96,7 @@ export function CorreggiGiornataDialog({
   const [isPending, startTransition] = React.useTransition();
 
   // Pausa pranzo
-  const [pausaSel, setPausaSel] = React.useState<number>(60);
+  const [pausaSel, setPausaSel] = React.useState<number>(PAUSA_PREDEFINITA_MIN);
   const [errorePausa, setErrorePausa] = React.useState<string | null>(null);
 
   // Sezione avanzata "correggi a mano"
@@ -117,7 +118,7 @@ export function CorreggiGiornataDialog({
   // Reset alla riapertura
   React.useEffect(() => {
     if (open) {
-      setPausaSel(60);
+      setPausaSel(PAUSA_PREDEFINITA_MIN);
       setErrorePausa(null);
       setAvanzateOpen(false);
       setSalvataId(null);

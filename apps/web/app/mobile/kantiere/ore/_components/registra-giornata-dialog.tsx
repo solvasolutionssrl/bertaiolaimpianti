@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react';
+import { PAUSA_PREDEFINITA_MIN } from '@kommessa/api/kantiere-pausa';
 import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { useRouter } from 'next/navigation';
 import {
@@ -415,7 +416,7 @@ export function RegistraGiornataDialog({
   const passeggero = useConfermaPasseggero();
 
   const [inizio, setInizio] = useState('08:00');
-  const [pausaMin, setPausaMin] = useState(60);
+  const [pausaMin, setPausaMin] = useState(PAUSA_PREDEFINITA_MIN);
   const [righe, setRighe] = useState<RigaCantiere[]>([]);
   const [cantieri, setCantieri] = useState<PickerCantiere[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -460,7 +461,7 @@ export function RegistraGiornataDialog({
   useEffect(() => {
     if (!open || !scatola) return;
     setInizio(hmRome(scatola.inizioIso));
-    setPausaMin(scatola.pausaTimbrataMin > 0 ? 0 : scatola.nettoMin > 5 * 60 ? 60 : 0);
+    setPausaMin(scatola.pausaTimbrataMin > 0 ? 0 : scatola.nettoMin > 5 * 60 ? PAUSA_PREDEFINITA_MIN : 0);
     setRighe(
       scatola.primoCantiere
         ? [

@@ -239,7 +239,7 @@ try {
     console.log('  timbrature:', righe);
     // Dopo la freccia giu' l'ordine e' Aurora, Logistica, Betulle e la pausa ha
     // seguito Aurora: 08:00 Aurora 4:30 → 12:30, strada → 12:40 Logistica, pausa 13:10.
-    esito(/13:10 uscita\* Impianto/.test(righe) && /14:10 ingresso\* Impianto/.test(righe), 'db: la pausa sta dove e’ stata trascinata e ha seguito il blocco spostato', righe.slice(0, 160));
+    esito(/13:10 uscita\* Impianto/.test(righe) && /13:40 ingresso\* Impianto/.test(righe), 'db: la pausa sta dove e’ stata trascinata (30 min, il predefinito nuovo) e ha seguito il blocco spostato', righe.slice(0, 160));
   }
 } finally {
   pulisci();

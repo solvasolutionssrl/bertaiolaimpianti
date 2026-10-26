@@ -1,6 +1,7 @@
 'use client';
 
 import { arrotondaMsAlPasso } from '@kommessa/api/arrotondamento-timbri';
+import { PAUSA_PREDEFINITA_MIN } from '@kommessa/api/kantiere-pausa';
 import { etichettaMezzoEstesa, ordinaMezzi } from '@kommessa/api/mezzi';
 import { etichettaLuogo, luogoDaValore, valoreLuogo } from '@kommessa/api/sottocantieri';
 import * as React from 'react';
@@ -142,7 +143,19 @@ export function CompilaGiornataDialog({
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [inizio, setInizio] = React.useState('08:00');
-  const [pausaMin, setPausaMin] = React.useState(60);
+  /**
+   * L'ora di fine, ma SOLO dove non la dice una timbratura.
+   *
+   * ⚠️ In «chiusura» prima era inchiodata ad **adesso**: chi si dimenticava di
+   * chiudere e lo faceva la sera si vedeva scritta la giornata fino alle 22.
+   * Non c'e' un'uscita timbrata da rispettare — e' proprio il caso in cui
+   * manca — quindi la si puo' correggere.
+   *
+   * ⚠️ In «registra» resta **calcolata** dalle ore: e' la scelta del
+   * 15/09/2026, due orari da far quadrare con le ore sotto «facevano casino».
+   */
+  const [fineChiusura, setFineChiusura] = React.useState('');
+  const [pausaMin, setPausaMin] = React.useState(PAUSA_PREDEFINITA_MIN);
   /** Dopo quale riga (indice in `righe`) sta la pausa; null = decide il motore. */
   const [pausaDopo, setPausaDopo] = React.useState<number | null>(null);
   const [righe, setRighe] = React.useState<Riga[]>([]);
@@ -180,13 +193,14 @@ export function CompilaGiornataDialog({
       setRientro(sede);
     } else if (modo.tipo === 'chiusura') {
       setInizio(hmRome(modo.turno.inizioTs));
+      setFineChiusura(hmRome(new Date().toISOString()));
       setPausaMin(0);
       setRighe([nuovaRiga({ cantiereId: modo.turno.cantiereId, sottocantiereId: modo.turno.sottocantiereId, minuti: 0, inSede: modo.turno.inSede })]);
       setPartenza(sede);
       setRientro(sede);
     } else {
       setInizio('08:00');
-      setPausaMin(60);
+      setPausaMin(PAUSA_PREDEFINITA_MIN);
       setRighe([nuovaRiga({ cantiereId: '', sottocantiereId: null, minuti: 0, inSede: inUfficio })]);
       setPartenza(sede);
       setRientro(sede);
@@ -270,7 +284,14 @@ export function CompilaGiornataDialog({
   } else if (modo?.tipo === 'chiusura') {
     // Come fara' il server: estremi arrotondati al passo del cliente.
     inizioMs = arrotondaMsAlPasso(Date.parse(modo.turno.inizioTs), passoTimbri);
-    fineMs = arrotondaMsAlPasso(adesso, passoTimbri);
+    // L'ora scritta vince su «adesso»; se non e' ancora stata impostata, o se
+    // e' prima dell'ingresso, si torna ad adesso invece di scrivere un turno
+    // che finisce prima di cominciare.
+    const scritta = fineChiusura ? Date.parse(isoDi(giorno, fineChiusura)) : NaN;
+    fineMs = arrotondaMsAlPasso(
+      Number.isFinite(scritta) && scritta > inizioMs ? scritta : adesso,
+      passoTimbri,
+    );
     nettoMin = Math.round((fineMs - inizioMs) / 60_000) - pausaMin - fraMin;
   } else {
     inizioMs = arrotondaMsAlPasso(Date.parse(isoDi(giorno, inizio)), passoTimbri);
@@ -585,10 +606,28 @@ export function CompilaGiornataDialog({
                 />
               </label>
               <div className="w-28 space-y-1 text-xs">
-                <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? (modo.vista.dalTerminale ? 'Badge alle' : 'Uscita alle') : modo.tipo === 'chiusura' ? 'Chiusura' : 'Fine · calcolata'}</span>
-                <div className="flex h-8 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
-                  {vive.length > 0 || modo.tipo !== 'registra' ? hmRome(new Date(fineMs).toISOString()) : '--:--'}
-                </div>
+                <span className="font-medium text-muted-foreground">
+                  {modo.tipo === 'scatola'
+                    ? modo.vista.dalTerminale ? 'Badge alle' : 'Uscita alle'
+                    : modo.tipo === 'chiusura' ? 'Fine' : 'Fine · calcolata'}
+                </span>
+                {modo.tipo === 'chiusura' ? (
+                  // Niente uscita timbrata: l'ora si corregge.
+                  <input
+                    type="time"
+                    aria-label="Ora di fine"
+                    value={fineChiusura}
+                    min={inizio}
+                    step={passoTimbri > 0 ? passoTimbri * 60 : 60}
+                    disabled={pending}
+                    onChange={(e) => setFineChiusura(e.target.value)}
+                    className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm font-semibold tabular-nums"
+                  />
+                ) : (
+                  <div className="flex h-8 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
+                    {vive.length > 0 || modo.tipo !== 'registra' ? hmRome(new Date(fineMs).toISOString()) : '--:--'}
+                  </div>
+                )}
               </div>
               <div className="min-w-[16rem] flex-1 space-y-1 text-xs">
                 <span className="flex items-center gap-1 font-medium text-amber-700">
@@ -1135,7 +1174,12 @@ function EstremoCard({
         className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-1.5 text-[13px]"
       >
         {opzioni.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-        <option value="casa">Abitazione privata</option>
+        {/* ⚠️ Niente «Abitazione privata» qui. La regola delle sedi dice da
+            sempre che sta **a fine turno**, non in «Registra giornata»: qui
+            partenza e rientro sono una sede, e la casa non ha km da contare.
+            Resta come ripiego solo se il valore in corso e' gia' quello (una
+            giornata vecchia), per non mostrare una tendina senza selezione. */}
+        {valore === 'casa' ? <option value="casa">Abitazione privata</option> : null}
       </select>
       <span className={cn('shrink-0 whitespace-nowrap tabular-nums text-[11px]', parte ? 'text-sky-800/80' : 'text-slate-600')}>
         {detto}

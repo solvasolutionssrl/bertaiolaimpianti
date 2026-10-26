@@ -15,6 +15,18 @@
 export const PAUSE_RAPIDE_MIN = [30, 45, 60] as const;
 
 /**
+ * Quanto propone l'app quando chiede la pausa pranzo e nessuno ha ancora
+ * scelto. Scelta di Luca il 26/10/2026: **mezz'ora**, che e' il caso piu'
+ * comune; chi ha fatto di piu' la allunga.
+ *
+ * ⚠️ Prima la stessa domanda aveva **due risposte**: il foglio di fine turno
+ * proponeva 30, gli altri tre punti 60, e ciascuno con il numero scritto a
+ * mano. Un predefinito che cambia a seconda di dove lo si incontra non e' un
+ * predefinito: e' un caso.
+ */
+export const PAUSA_PREDEFINITA_MIN = 30;
+
+/**
  * Il passo dell'arrotondamento. Una pausa si dichiara a memoria, a fine
  * giornata: il minuto esatto e' una precisione finta, e cinque minuti sono
  * la grana piu' fine che abbia un senso reale.
