@@ -22,6 +22,14 @@ in `git log`.
 
 > Le due superfici sono **invisibili fra loro**: ogni modifica va pensata
 > Bertaiola-safe (mondo commesse) **e** FPM-safe (mondo presenze).
+>
+> ⚠️ **Non tutto sta qui, di proposito.** Le logiche di un dominio grosso
+> vivono nel loro manuale in `documentazione_generale/08_LOGICHE/`, e qui resta
+> il blocco corto con il gating e il rimando: questo file si carica **intero** a
+> ogni conversazione, quindi quello che serve a una sessione su cinque pesa su
+> tutte e cinque. Dal 26/10/2026 è il caso del **mondo presenze**
+> (`Logiche_Kantiere.md`, ~1.400 righe): la sezione qui dice dov'è e cosa vale
+> comunque.
 
 ## La memoria: cosa aprire, e quando
 
@@ -1211,583 +1219,128 @@ vocabolario e una rotta che la legga.
 
 ## Mondo presenze — Kantiere (FPM)
 
-### Impostazioni e scelte di prodotto
-
-Modulo presenze (tenant FPM, `app_mode=kantiere`). Tutto gated da `tenantHasModule('kantiere')` → **Bertaiola non ne è toccata**. Decisioni di prodotto stabili:
-
-- **Arrotondamenti** (Impostazioni Kantiere office, conferma prima di salvare, valgono sui turni **futuri**): tempo di **viaggio** default **5 min** con pavimento di uno step (ogni tragitto > 0 conta ≥ 5 min; 0 resta 0); ore **lavoro** default **0 = nessun arrotondamento** — scelta cliente: si raccoglie tutto **al minuto**, si arrotonda **nel report a fine mese** sul dato aggregato. Helper `arrotondaA(min, step)` (step<1 = off), config in `tenant_modules.config.arrotondamento_{viaggio,ore}_min`.
-- **Pausa pranzo dichiarata in uscita**: se il turno è durato oltre una **soglia configurabile** senza pausa timbrata, il dialog di uscita mostra un avviso giallo che **ricorda che timbrare la pausa è il modo corretto** (la dichiarazione è un ripiego) + opzioni 30/45/60 min. La soglia è **per-tenant** (`tenant_modules.config.soglia_pausa_pranzo_ore`, default **5h**, gestita in Impostazioni Kantiere → Pause) ed è **identica per QR e tasto in-app** (self scheda cantiere + wizard capo). Costante `SOGLIA_PAUSA_PRANZO_ORE` = solo default; reader `leggiSogliaPausaPranzoOre`. Lato dati è una **coppia pausa** centrata (`origine='manuale'`, helper unico `coppiaPausaCentrata`/`inserisciPausaDichiarata` in `_actions/_lib/viaggio-timbra`) → il calcolo ore la sottrae con la logica pausa esistente. Se la pausa è timbrata regolarmente, **nessun avviso**. La pausa è avviabile anche **da app senza QR** (scheda cantiere → "Avvia pausa pranzo", `pausaPranzoMia`).
-- **Stima viaggio (km + tempo) — provider per-tenant**: l'astrazione `RoutingProvider` (`apps/web/app/_lib/routing`) ha due famiglie: **free** (OSRM demo / OpenRouteService con `ORS_API_KEY`, gratis, **senza traffico**) e **google** (Google Routes API `computeRoutes` + `TRAFFIC_AWARE`, **traffico reale**, a pagamento). La **chiave Google è UNICA di piattaforma** (`GOOGLE_MAPS_API_KEY`, env — **non** per-tenant, **mai** nel DB). Il **super admin** sceglie per-tenant se usarla dal tab **"Viaggio"** di `/admin/tenants/[id]` (`tenant_modules.config.routing_provider` ∈ `free|google`, default `free`; action `aggiornaRoutingProviderTenant`). La route `/api/routing/stima` legge la scelta (`leggiRoutingProvider`), costruisce il provider e fa fail-soft (se google scelto ma chiave assente → free). Cache `routing_cache` per **profilo** (`driving-car` vs `driving-traffic`, non si mescolano) con **TTL 15 min** sul traffico. FPM → google; gli altri restano free (costo zero).
-- **Autocomplete indirizzi (sedi/cantieri)**: `/api/geocode/autocomplete` usa lo **stesso toggle** del routing → **Google Geocoding** per i tenant su provider `google` (chiave `GOOGLE_MAPS_API_KEY`, env), altrimenti **Photon→Nominatim** (free), sempre fail-soft. Componente `AddressAutocomplete` (salva `lat/lng` accanto al testo).
-- **Sedi ↔ cantieri (regola ferrea)**: per un cantiere si propongono SOLO la **sede predefinita** (`sedi.is_default`, sempre) + le **sedi associate** a quel cantiere (`cantiere_sede`) + **"Abitazione privata"** a fine turno (0 km/0 tempo; non in Registra giornata, dove partenza e rientro sono sempre una sede). MAI le sedi di altri cantieri. Applicata in tutte le UI (QR, app, capo, Registra giornata che **filtra le sedi per cantiere**) **e** ri-validata lato server da `sedeAmmessaPerCantiere` (`_actions/_lib/viaggio-timbra.ts`) in `validaViaggio(…, cantiereId)` (e in `registraGiornataDaZero` per le tratte passando da una sede). UI office **Sedi**: il collegamento cantieri usa un **dropdown di ricerca** (`sedi/_components/cantieri-collegati-select.tsx`), non l'intera lista di chip. → dettaglio in `documentazione_generale/08_LOGICHE/Logiche_Kantiere.md` (registro **regole/scelte operative** Kantiere: arrotondamenti, tolleranza, km, sedi, settings, auto-approvazione — **da tenere aggiornato**).
-- **Scanner QR su iPhone-app-installata**: niente stream live (limite WebKit). Si usa **scatto-foto** (`<input capture>` + jsQR) o la fotocamera nativa sul poster. **Android usa BarcodeDetector live — non toccare.**
-- **Super admin**: `/admin/kantiere` (panoramica + timbrature cross-tenant con GPS/origine/chi/viaggio) e `/admin/accessi` (login/logout, tabella `auth_events`). Moduli/app_mode: `kantiere`/`full` richiedono il modulo attivo (guard server); spegnere il modulo riporta a `kommessa` in cascata.
-
-### Presenze e ore
-
-La tab office **"Presenze e ore"** (`/office/kantiere/rapportini`) è stata semplificata e arricchita (solo UI/lettura, motore auto-approvazione invariato):
-
-- **Niente più Approva/Respingi/selezione-bulk a schermo** (l'auto-approvazione resta sotto, nascosta): storico **per giorno** + blocco **"In corso oggi"** (sfondino verde, colonne allineate, timeline inline `GiornataFlow`). Esito per giornata: 🟢 Regolare / 🔴 anomalia con motivo (giorno aperto / oltre soglia) / ☕ pausa non timbrata (giornate lunghe). **Modifica + Cronologia su OGNI giornata** → correzione retroattiva tracciata (`commessa_versioni`-style `rapportino_versioni`, azione `modifica_ufficio`). Filtro "Solo anomalie".
-- **`rapportino` ≠ PDF**: nel codice è il **record-giornata** (con stato approvazione), ed è il nome di questa pagina. Non esiste un PDF "rapportino"; il prospetto ore È questa tabella + export CSV + Ore e costi.
-- **Ore in formato `H:MM`** (es. 7:30, non 7.5/2,6) in **tutte** le tabelle/KPI Kantiere (office desktop + mobile). ⚠️ **Eccezione: i TOTALI.** Su una somma `H:MM` diventa illeggibile (`705:19` per 65 giornate non dice niente e quei minuti non li usa nessuno): coppia di helper puri: **`formattaOreGiornata`** (sempre `7:30`, per riga/giornata) e **`formattaOreTotale`** (`45 min` / `7:30` / `705 ore`, per KPI, totali di colonna, grafici di periodo). **Nel CSV resta il decimale con la virgola**, che il foglio di calcolo deve poter sommare. Audit 01/09: sistemati «Ore e costi» (scriveva `7,5`), scheda cantiere app, KPI «Ore settimana» (`123:55`), grafico «Ripartizione ore». Il viaggio mostra sempre **km + tempo H:MM** (da `timbratura_viaggio.distanza_km`).
-- **Origine + viaggio nel dettaglio espanso** (office desktop + cruscotto mobile): ogni timbratura/pausa mostra l'**origine** (`origine` = `qr`/`cronometro` = "Timbrata"; `manuale` = "Inserita a mano · da {chi} · agg. {quando}" da `created_at`+`creato_da`), e il **viaggio** come tratte (sede→cantiere / cantiere→sede al ritorno, km, H:MM, autista/passeggero). Componente condiviso `office/kantiere/_components/timbrature-riepilogo.tsx` (`TimbratureRiepilogo` con `OrigineLine`, `GiornataFlow`).
-- **Cruscotto mobile office** (`/mobile/kantiere/cruscotto`, gated admin/office) = **dashboard navigabile per giorni** (`?giorno=YYYY-MM-DD`, no futuro): consultabile lo **storico** di un giorno passato; "Presenze del giorno" per-persona espandibili con origine+viaggio.
-- **Anomalie** tolta dalla **sidebar** office (pagina ancora raggiungibile dalla dashboard — non del tutto ridondante: ha festivo/weekend/straordinari). Soglia promemoria pausa **configurabile, default 5h**. Icona card viaggio scheda cantiere: aereo → **macchina** (`Car`).
-
-### Tre bocche, uno scrittore: badge, QR e app
-
-Richiesta di Luca: chiunque apre la giornata con un metodo (badge al terminale,
-QR in cantiere, app) e la chiude con un altro. E un'indicazione di metodo:
-«una sola tipologia di scrittura, triggerata da n metodi».
-
-- ⭐⭐ **`timbrature` ha UNO scrittore**: `_actions/_lib/timbrature-scrivi.ts`
-  (`scriviTimbrature`). Prima erano **quattordici `insert`** sparsi (QR, app,
-  capo, ufficio, divisione di fine turno, pausa dichiarata, chiusura
-  automatica, scatola, cambio cantiere): ogni regola nuova andava ricordata
-  in quattordici posti. Lo scrittore inserisce, restituisce gli id, e **se fra
-  le righe c'e' una fine turno** (uscita non di pausa) chiama
-  `specchiaChiusuraNelRegistro` (`_lib/presenza-registro.ts`): se la presenza
-  della persona e' aperta nel registro (badge o presenza dall'app), scrive
-  l'uscita anche li', alla stessa ora, con `dispositivo` e `origine`. ⚠️ Il
-  ricalcolo della giornata **non** sta nello scrittore: chi scrive sa quando
-  ricalcolare. ⚠️ Nuovi punti che scrivono timbrature passano di qui, o
-  l'invariante si perde di nuovo.
-- ⭐ **La lettura della giornata (`statoGiornataTimbro`) sa di piu'**:
-  (1) un turno dell'app si **innesta** nella sequenza del registro quando e'
-  aperto **oppure** quando dopo di lui c'e' un tocco senza direzione (il
-  badge) da leggere — ma non un turno chiuso dall'app seguito da una presenza
-  dichiarata, che farebbe due ingressi di fila; (2) con tutto chiuso, la parte
-  di presenza **fuori dall'arco del turno** (prima di partire, dopo il
-  rientro) e' una **scatola da ripartire**, non «da verificare»: pause e
-  strade fra i cantieri stanno dentro l'arco; (3) una presenza ancora aperta
-  dopo l'ultima uscita e' una presenza **nuova** (in sede), non un badge di
-  uscita mancante. Tutto puro, 27 test.
-- **Le bocche si vedono, ovunque**: `boccaDelTimbro` / `titoloPassaggi` in
-  `timbri-terminale.tsx` (badge → impronta, app → telefono, PC → monitor, a
-  mano → matita; pillola «11:49 in · badge», «14:50 out · app»). In «Presenze
-  e ore» il blocco si intitola dalla bocca («Badge al terminale», «Presenza
-  segnata dall'app») e le timbrature sui cantieri hanno il loro
-  (`OrigineLine`: «Timbrata · QR / app / badge / dal capo squadra», «Inserita
-  a mano»). Il **cruscotto** sul telefono legge anche il registro: chi ha solo
-  passato il badge e' una persona del giorno («Presenza · dalle 12:26 · in
-  sede»).
-- **Dal telefono si chiude anche una presenza aperta col badge**
-  (`PresenzaSedeCard`): «Col badge. Puoi chiudere da qui o al terminale». Chi
-  poi passa lo stesso il badge fa un secondo gesto che il registro mostra
-  all'ufficio.
-- ⭐ **L'app installata parte da `/avvio`** (`manifest.start_url`): un
-  puntatore «coarse» e' un telefono → `/mobile`, altrimenti → `/office`
-  (`app/avvio/page.tsx`, pubblica nel middleware). Chiude il caso dell'utente
-  ufficio FPM che si era installato la PWA sul PC e vedeva il telefono. ⚠️
-  `id` resta `/mobile`: cambiarlo farebbe nascere una seconda app sui
-  telefoni.
-- **Tasti a schermo**: `TastoComando` (packages/ui) dice «⌘K» su Mac e «Ctrl
-  K» altrove; frecce e invio nella palette sono icone Lucide, non glifi
-  (su Windows «⏎» usciva un quadratino).
-- ⚠️ **Il bundle di sviluppo invecchia sull'indice di `@kommessa/ui`**: un
-  export nuovo nel barrel risultava `undefined` nel componente che lo
-  importava («type is invalid») finche' non si e' pulito `.next`. Seconda
-  volta in un giorno.
-- Banchi: `bocche-incrociate.mjs` (badge → app; badge → turno → app, con lo
-  specchio e la scatola residua), `avvio.mjs`, `cruscotto-registro.mjs`,
-  `palette-tasti.mjs` (Chrome che si dichiara Windows). `timbro.mjs` e
-  `timbro-chiudere.mjs` ora **si seminano da soli** (Marco Rinaldi, DEMOC) e
-  si ripuliscono.
-
-### Turno manuale, multi-cantiere e pattern UI mobile
-
-**Funzioni** (gated kantiere → Bertaiola-safe): **avvio turno senza QR** (scegli un cantiere qualsiasi), **cambia cantiere** live (chiude A/apre B → ore dai timestamp reali + km A→B alla destinazione via provider tenant, tratta con km e tempo, dal 15/09 conta come viaggio), **picker cantiere** riusabile (`mobile/kantiere/_components/cantiere-picker.tsx`), **"Abitazione privata"** a fine turno (0 km/0 tempo), card turno prop **`compatto`** (CTA orizzontali 33/33/33, usata sul cruscotto office), **"Cantieri di oggi"** in tab Ore (mini-tabella), **"Modifica giornata"** con ore **editabili** (input tap-and-type + −/+ 15min). Azioni in `_actions/kantiere-timbra.ts` (`avviaTurnoMio`, `cambiaCantiereMio`, `elencoCantieriTurno`).
-
-**Conteggio ore (regola ferrea)**: `ricomputaRapportinoAuto` **ri-deriva SEMPRE le righe dalle timbrature** (`minutiPerCommessa` appaia ingresso→uscita per cantiere; la pausa è un GAP fra un'uscita e l'ingresso successivo, il flag `pausa` non incide sul conteggio). Quindi lo split ore/cantiere "regge" solo se fatto di **segmenti timbrati reali** → è ciò che produce lo **switch live**.
-
-**Split "cosa hai fatto oggi" a fine turno** (chi NON ha cambiato cantiere live): alla chiusura manuale, se la **giornata è pulita** (un solo evento = l'ingresso; `TurnoAzioniContesto.giornataPulita`), il dialog "Termina turno" offre *Solo qui / Più cantieri*. Dividendo, si **sintetizzano i segmenti timbrati** (NON `rapportino_righe`, che verrebbero sovrascritte) via **`calcolaSegmentiSplit`** (`@kommessa/api/kantiere-split`, **pura + unit-testata**: segmenti back-to-back dai timestamp, pausa come gap al confine più vicino al centro o straddle su cantiere unico, l'ultima riga assorbe il resto, primo ingresso = quello reale). Wiring in `terminaTurnoMio` → `terminaConSplit` (additivo, guardia giornata-pulita, mai delete distruttivo; viaggio di ritorno sull'ultima uscita). UI in `ViaggioRitornoDialog` (sezione split + `MinutiStepper` + foglio picker per aggiungere cantieri). Netto = `(chiusura − inizio) − pausa`, con `ts` di chiusura **snapshot** così UI e server usano lo stesso valore. **Tolleranza** (`tolleranza_chiusura_min`, default 5): se `|restano| ≤ tolleranza` si salva (l'ultima riga assorbe il resto) → i minuti dispari non bloccano.
-
-**Caso 4 — registra giornata SENZA timbrature**: chi non ha mai timbrato dichiara inizio + pausa + cantieri/ore (la fine si calcola) → azione **`registraGiornataDaZero`** (guardia **giornata VUOTA**, gate `registra_giornata_attivo`) = ingresso(inizio) + `calcolaSegmentiSplit`. UI `RegistraGiornataDialog` in tab Ore.
-
-**Impostazioni ufficio "Turni"** (`tenant_modules.config`, tab in Impostazioni Kantiere): `tolleranza_chiusura_min` (5), `split_fine_turno_attivo` (on), `avvio_turno_libero` (on — **sostituisce il gate weekend**: se off i tecnici vedono solo i cantieri con QR attivo), `passo_minuti_stepper` (15, i +/- degli stepper), `registra_giornata_attivo` (on — gate caso 4). **Lettura unica** di tutte le impostazioni Kantiere: `impostazioniDaConfig` / `leggiImpostazioniKantiere` (`_lib/kantiere-config.ts`); i reader parziali (`leggiImpostazioniTurno`, `leggiArrotondamenti`…) passano di lì. Per aggiungerne: campo in `ImpostazioniKantiere` + `impostazioniDaConfig`, schema e merge di `salvaImpostazioniKantiere`, UI con descrizione oggettiva.
-
-**Km switch "A → B"**: `timbratura_viaggio.da_cantiere_id` (migration `20260706000000`) = cantiere di partenza dello switch; il display (cruscotto + rapportini office, `ViaggioTratta.daCantiere`) mostra "cantiere A → cantiere B" invece di "Sede → cantiere".
-
-**Ricerca cantieri = a TOKEN cross-campo** (usata sia nel picker sia nella tab Cantieri): `q.trim().toLowerCase().split(/\s+/)` e **ogni token** deve comparire in `[nome, codice_commessa, codice, cliente_nome, indirizzo, categoria].join(' ')` → "fincantieri monf" trova "Fincantieri … Monfalcone" anche con le parole in campi diversi. Non usare più il match single-field.
-
-**Gotcha UI mobile (dialog/dropdown/foglio) — imparati risolvendo bug reali** (verificati riproducendo in Chrome headless):
-- **Overflow orizzontale "form gigante"**: un `DialogContent` `display:grid` ha grid item con `min-width:auto` (= min-content); un titolo `truncate` (nowrap) allarga il *track* della griglia → tutto sborda. Fix: `min-w-0` sul grid item (+ eventualmente `grid-cols-[minmax(0,1fr)]`), `overflow-x-hidden`, `min-w-0` su tutta la catena, testi troncati.
-- **Scroll che non ingaggia / dialog che cresce**: a `flex-1 overflow-y-auto` serve un antenato ad **altezza definita** e **`min-h-0`** sul figlio flex. Struttura header (`shrink-0`) · body (`min-h-0 flex-1 overflow-y-auto`) · footer (`shrink-0`).
-- **Dialog che sborda su/sotto**: con `viewport-fit=cover`, `100dvh` include status bar e home-indicator → il `max-h` deve **sottrarre `env(safe-area-inset-top/bottom)`**.
-- **Zoom iOS all'apertura**: input con font < 16px → WebKit zooma la pagina. Globals già forza 16px sui form field; per input custom usare `text-base`.
-- **Elemento nascosto sotto la bottom-nav**: un `fixed` dentro la shell resta intrappolato nello stacking context → **`createPortal` su body + z alto** (pattern `Portal`, `mobile/_components/portal.tsx`).
-- **Tastiera che copre i tasti**: aggancia alla **`visualViewport`** (spaziatore bianco = altezza tastiera, oppure restringi il foglio).
-- **Dropdown dentro un dialog Radix — servono QUATTRO cose insieme**, e per settimane ce n'erano due: **(1)** Portal su `document.body` (un overlay in-flow viene **tagliato**: `DialogContent` ha `overflow-y-auto` *e* una `transform`, e una trasformazione impedisce persino a un `position: fixed` di uscire); **(2)** il pannello **marcato** `data-popover-portale`, altrimenti Radix legge il clic su una voce come «fuori» e chiude il dialog sotto (`SEGNO_PANNELLO_PORTATO` in `packages/ui/.../dialog.tsx`); **(3)** ⚠️ **`pointerEvents: 'auto'` esplicito** — un dialog modale Radix mette `pointer-events: none` su tutto il `<body>` e li riaccende **solo** nel proprio recinto: il pannello si vedeva e **il dito ci passava attraverso**, colpendo il campo sotto (`elementFromPoint` sul centro di una voce restituiva la `<textarea>` della descrizione); **(4)** ⚠️ un **`FocusScope`** attorno al pannello — non per intrappolare (`trapped` resta falso) ma per il solo fatto di montarsi: cosi' mette in **pausa** la gabbia del fuoco del dialog, che altrimenti strappa il cursore alla casella di ricerca all'istante. E la tastiera va agganciata **anche al pannello**: gli eventi di un Portal risalgono l'albero di React, dove il pannello e' un *fratello* del tasto, quindi col cursore nella casella le frecce non arrivavano a nessuno. Banco: `scripts/banco-ui/tendine.mjs` (23 controlli, computer e telefono).
-- ⚠️ **E la rotellina del mouse**, quinta cosa: Radix blocca lo scorrimento della pagina mentre un dialog e' aperto con `react-remove-scroll`, che mette un ascoltatore di `wheel` su `document` e **annulla** ogni evento che non venga da dentro il dialog. Il pannello sta su `body`, quindi era «fuori»: l'elenco si scorreva **solo trascinando la barra di lato**. La via d'uscita prevista dalla libreria (`shards`) la passa Radix e non e' raggiungibile; si ferma l'evento **prima** che arrivi a `document`, con uno `stopPropagation` sul pannello (ascoltatore **nativo**, `passive: false`, anche `touchmove`).
-> ⚠️⚠️ **Un banco che sceglie con `elemento.click()` non misura niente di tutto questo**: e' una chiamata al DOM e **ignora `pointer-events`**. Quel banco dava **11 verdi** su una tendina che nessuno riusciva a usare. In `scripts/banco-ui/comune.mjs` ci sono ora `clicVero`, `scriviVero`, `premiTasto`, `chiHaIlFuoco`, `chiRiceveIlTocco`: eventi veri del browser, e `clicVero` dice «in quel punto risponde `<TEXTAREA>`» invece di fingere di aver cliccato.
-- ⚠️⚠️ **Sfocatura di iOS 26/27 in cima all'app installata** (23/10/2026). Apple disegna un effetto vetro sopra la barra di stato e per ~40 punti sotto, sopra campanella e «+ Spesa»; nessun meta o CSS lo spegne. **Lo stile della barra (`black-translucent`) è memorizzato all'installazione**: cambiarlo in `layout.tsx` non tocca le app già sulla Home (provato: un passaggio a `default` non è mai entrato in vigore sul telefono di Luca). Quindi resta `black-translucent` con la fascia blu fissa, e la difesa sta in `mobile/_components/anti-sfocatura-ios.tsx`: una striscia fissa di 11px in cima che non dipinge nulla (`background-clip: text`, WebKit la trova e salta l'effetto) più un pannello fisso fuori schermo fatto scorrere una volta all'avvio (iOS 27). CSS solo sotto `@supports (-webkit-touch-callout: none)` + `display-mode: standalone`. Ricetta di FreshRSS #9382 e simple-liturgy #14. Una fascia vuota di 2,5rem provata lo stesso giorno è stata tolta: Luca l'ha trovata oscena.
-- **Tasti fissi in alto (campanella, «＋ Spesa»)**: 34px a `safe-area + 10px` (dal 23/10, era 6), tocco da 44px con un'area invisibile `before:`. La fascia in alto a destra fino a 40px va lasciata libera: niente a destra sulla riga del titolo, «Aggiornato alle» sta sulla riga sotto (14/09/2026, prima la campanella copriva il testo su Cantieri, Ore, Spese). Banco `scripts/banco-ui/campanella.mjs`.
-
-### Ore pure, quote derivate, lavoro dalla sede
-
-- **Si registra il dato puro**: `rapportino_righe.minuti_lavoro` / `minuti_viaggio` per cantiere (migration `20260914160000`, ✅ APPLICATA). Le quote si **derivano** dall'orario ordinario del tenant (`soglia_ore_ordinarie`, 8 h): **ordinarie** = lavoro + viaggio fino all'orario; **straordinarie** = lavoro oltre; **viaggio eccedente** = viaggio oltre (`ore_viaggio_ordinarie` / `ore_viaggio_eccedenti`, `rapportini.orario_ordinario_min`). Puro e testato: `@kommessa/api/kantiere-quote` (`quoteGiornata`, `quoteDaRiga`, `sommaQuote`, `quoteOre`, `minutiDaTimbrature`, `COLONNE_QUOTE`).
-- ⚠️ **Scrittore unico** delle righe: `scriviRigheGiornata` / `aggiornaRigheGiornata` (`_actions/_lib/righe-giornata.ts`). Nuovi punti che scrivono ore **devono** passare di lì; chi legge usa `quoteDaRiga`/`quoteOre`, mai `ore_ordinarie` da solo (è solo la parte lavoro). Tolti `salvaMioRapportino`, `inviaMioRapportino`, `registraOreManuali`, `calcolaOreGiornata`, `minutiViaggioPerTarget`.
-- **Giornate vecchie intatte**: config `quote_ore_dal` (FPM, DEMOC = 2026-09-15); righe con quote di viaggio null = vecchie, tutto il viaggio conta eccedente. API v1 `/ore`: campi di sempre invariati + `lavoro`, `viaggioOrdinario`, `viaggioEccedente`. Costi: tariffa ordinaria su lavoro + viaggio entro l'orario, `pctViaggio` solo sull'eccedente.
-- **«Lavoro dalla sede sul progetto»** (flag in avvio turno, cambio cantiere, Registra giornata per cantiere): ore del cantiere, tratte da/verso la **sede predefinita**; stessa sede = nessuna tratta. `timbrature.sede_lavoro_id`; `/api/routing/stima` accetta `{ daSedeId, aSedeId }`. → `Logiche_Kantiere.md` §3.2.
-- **Impostazioni Kantiere riordinate** (Orario e ore · Turni · Pause · Viaggi e chilometri · Approvazione giornate · Anomalie · Kontabilità) con descrizioni oggettive ed esempio calcolato; tolta `anomalie_ore_max` (mai letta); soglia di verifica ora con i decimali. Fix: salvare dall'elenco Dipendenti azzerava `costo_orario`.
-
-### Le timbrature si arrotondano nei calcoli, non nel database
-
-Decisione di Luca con FPM e il consulente del lavoro (nessun vincolo
-normativo sui 5 minuti). Chi timbra scrive l'orario **esatto**; a video si
-legge ai 5 minuti (`ora-mostrata`, dal 22/10); e da oggi le **ore si
-calcolano sugli orari arrotondati al più vicino**, per **tutte le bocche**
-(badge, QR, app, PC): la scatola, il tetto del «+», le righe per cantiere e
-ciò che esce verso il gestionale sono multipli del passo.
-
-- **Un posto solo**: `@kommessa/api/arrotondamento-timbri` (`arrotondaMs`,
-  `arrotondaTimbrature`, `arrotondaEventi`; regola `{ passoMin, dal }`),
-  letto con `leggiRegolaTimbri` / `regolaTimbriDa` in `_lib/kantiere-config`.
-  Si applica **dove le timbrature entrano in un calcolo**: `ricomputa-rapportino`
-  (righe della giornata), `_lib/timbro/giornate.ts` (scatola e intervalli dal
-  registro e dalle timbrature), le tre `calcolaSegmentiSplit` di
-  `kantiere-timbra.ts` (chiusura con divisione, registra giornata, per un
-  altro), `leggiMiaGiornata`, la pagina Presenze e ore (una volta, poi
-  totali, timeline e dettaglio coincidono), il cruscotto e la scheda cantiere
-  del telefono. ⚠️ Un nuovo punto che legge `timbrature.ts` per contare ore
-  passa di qui, o conta al minuto da solo.
-- ⭐ **Il passato non si tocca**: `arrotondamento_timbri_dal` è il primo
-  giorno a cui la regola si applica, e lo scrive il **salvataggio** quando
-  l'ufficio cambia il valore (Impostazioni Kantiere → Orario e ore). Prima di
-  quella data si calcola al minuto, anche premendo «Ricalcola». FPM: 5 min dal
-  23/10/2026 (scritto via SQL); DEMOC uguale, così i banchi la esercitano
-  (`timbro.mjs` aspetta 8:35 da badge 08:00/12:30/13:00/17:03).
-- Nei dialog da scrivania la chiusura in anteprima usa gli stessi estremi
-  arrotondati del server; l'ora digitata ha `step` al passo. Le righe
-  sintetizzate dalla divisione di fine turno nascono già arrotondate (sono
-  derivate, non timbri). ⚠️ Due timbri nello stesso slot danno un intervallo
-  da zero, mai negativo (test).
-- ⚠️⚠️ **A parità di minuto arrotondato conta l'ordine vero.** Pausa,
-  ripresa e fine nello stesso slot cadono sullo stesso `ms`; il risolutore
-  ordinava per `ms` e poi per `id` (un uuid), quindi la ripresa finiva dopo
-  la fine e la presenza restava aperta: trovato dal banco
-  `presenza-sede-mobile`, non dalla rilettura. Ora `EventoTimbro`,
-  `TimbraturaAttribuita` e `TimbraturaMinuti` hanno `ordine?` (l'istante
-  esatto, o un indice crescente) come spareggio, e **la finestra dei
-  doppioni si misura sull'esatto**, altrimenti tre gesti a due minuti l'uno
-  dall'altro diventavano un doppione solo. Chi arrotonda prima di passare
-  gli eventi a un motore deve passare anche `ordine`.
-- ⚠️ **La pausa dichiarata si allinea al passo** (`coppiaPausaAllineata`,
-  usata da `coppiaPausaCentrata` nei due scrittori: fine turno con pausa
-  dichiarata e «aggiungi pausa» dell'ufficio). Centrata al secondo, una
-  pausa di 30 letta ai 5 minuti ne valeva 35 (12:02:30→12:32:30 diventa
-  12:00→12:35). Ora l'inizio sta sul passo e la fine e' inizio + minuti.
-- Vocabolario a schermo e tab **Regole** del super admin aggiornati; il
-  passo della display (`PASSO_ORA_MOSTRATA_MIN`) resta 5 per tutti.
-
-### Viaggio dentro «Registra giornata»
-
-- **Percorso**: partenza e rientro agli estremi, **chi guidava per ogni tratta con strada** (etichetta compatta, solo dove c'è strada), tratte fra cantieri costruite dal sistema (dirette con km/tempo, nel menu due scelte affiancate «Diretta» / «Passando da» la sede, tempo correggibile con motivo; «passando da casa» tolta). Premendo «Registra giornata» il foglio **«Il viaggio»** chiede solo i dati obbligatori mancanti; la **barra dei tempi** (lavoro + viaggio, partenza/rientro) resta visibile sotto. Conferma passeggero **sempre**.
-- **Ore**: andata e ritorno = tempo di viaggio fuori dall'orario dichiarato (vanno in `ore_viaggio`); le tratte fra cantieri stanno dentro l'orario e dal 15/09 sono **viaggio**: la fine si calcola (inizio + ore + pausa + tratte), con un buco fra i cantieri (`viaggioFraCantieri`, stesso calcolo in pagina e server); se la pausa cadrebbe sullo stesso cambio di una tratta va 30 minuti dopo l'arrivo (`SCARTO_PAUSA_MIN`), così pausa e viaggio restano due buchi distinti. Andata legata alla prima entrata, ritorno all'ultima uscita, scritte **insieme** (se falliscono si tolgono le timbrature appena scritte). Tutto validato prima di scrivere.
-- **Codice**: puro `@kommessa/api/kantiere-percorso` (+ test), UI `mobile/kantiere/ore/_components/registra-giornata-dialog.tsx` + `percorso-giornata.tsx`, `/api/routing/stima` anche cantiere → cantiere, cache condivisa `_lib/routing/stima-cache.ts`. Banco `scripts/banco-ui/registra-giornata.mjs` (`BANCO_SALVA=1` salva sul tenant demo: ripulire dopo). Regole in `Logiche_Kantiere.md` §7.6.
-- **15/09/2026, prove da telefono**: partenza e rientro di default la sede predefinita, senza abitazione privata (tutto il giorno in sede = niente partenza e rientro); tempo correggibile su ogni tratta fra cantieri, con motivo; si indica solo l'ora di inizio (fine = inizio + ore + pausa + tratte, con il conto a vista), chi guidava per tratta, pausa pranzo arancione, card «La giornata» più bassa e ad altezza fissa (le card sotto non si spostano con + e −).
-- **Tolta la vecchia «Ore su un cantiere, con viaggio»** (`manuale-dialog.tsx` e il suo banco): Registra giornata è l'unico inserimento a mano del tecnico. `registraOreManuali` è stata eliminata il 15/09/2026; le tratte storiche che aveva scritto contano ancora nel ricalcolo. Interfaccia di Registra giornata rimpicciolita del 10% circa su richiesta del cliente (a schermo era grandina).
-
-### Trasferimenti cantiere → cantiere
-
-Chi lavora su **più cantieri** in un giorno genera tragitti **A → B** (gated kantiere → Bertaiola-safe). Riga `timbratura_viaggio` con `timbratura_id` null, `da_cantiere_id`=A, `cantiere_id`=B (km sulla **destinazione**), `durata_stimata_min`=tempo. Copre switch live, split fine turno e Registra giornata (`registraTrasferimentiCantiere` + puro `trasferimentiDaSegmenti`); il super admin le vede in `/admin/kantiere/timbrature`.
-
-**Dal 15/09/2026 sono viaggio, sempre**: km nei totali per tutti i tenant (toggle `km_switch_attivo` e `leggiTrasferimentiAttivi` **tolti**, chiave rimossa dal config con la migration `20260915090000`); `durata_confermata_min` = stima arrotondata (in Registra giornata correggibile a mano, con motivo in `giustificazione`); il tempo si toglie dal lavoro (buco fra i segmenti o erosione del segmento di arrivo, `minutiDaTimbrature`). → `Logiche_Kantiere.md` §3.1.
-
-### Cronologia della giornata
-
-- **Cronologia** (migration `20260914090000`, ✅ APPLICATA): `timbrature.modalita` (vocabolario chiuso, scritta nello stesso insert in tutti i 15 punti — `origine` non diceva come) + azioni versione `pausa_ufficio`/`chiusura_ufficio`/`ricalcolo`. Storia **ricostruita dai dati** (`@kommessa/api/kantiere-cronologia`, puro+testato), non da un diario. Ogni modifica passa `prima` (`leggiStatoGiornata`) e le versioni vuote non si scrivono. UI: pannello laterale in Presenze e ore + bollino; tecnico = una riga «Corretta dall'ufficio». Giornate scritte a mano senza timbrature: pallino generico «5:00 di lavoro ordinario» **senza orario** (fra andata e ritorno) e riga «Senza timbrature · 5:00 di lavoro». ⚠️ Nuovi punti che inseriscono timbrature **devono** scrivere `modalita` (valore del CHECK). → `Logiche_Kantiere.md` §7.5.
-- **`scrollbar-gutter`**: i gusci office/admin non scorrono mai sulla pagina (scorre `<main>`). `html:has([data-app-shell])` → `auto`, riserva sul `<main>` dei gusci. Prima si perdevano 15px su ogni pagina e i `fixed right-0` si fermavano a 1425/1440.
-- **Tasti ufficio**: azioni di pagina e di barra = `<Button size="sm">` (40px, testo 12px, nero; outline per le secondarie). **Mai** tasti fatti a mano con `bg-primary`: il cobalto è per link, badge e stato «selezionato» di filtri e schede. Censimento ripetibile: `BANCO_CDP=9334 node scripts/banco-ui/tasti.mjs`.
-
-Working language for the app UI is **Italian**. Preserve it.
-
-### Metodi di pagamento e conferma passeggero
-
-- **Metodi di pagamento gestibili** (migration `20260901090000`, ✅ APPLICATA) — tabella `metodi_pagamento` per-tenant, UI in **Impostazioni → Pagamenti** (`/office/impostazioni/pagamenti`, admin/ufficio, con audit). **Non è gated da nessun modulo: vale per tutti i clienti.** ⚠️ **`codice` immutabile** (è il testo in `spese.metodo_pagamento`), si rinomina solo `nome` — sempre con conferma. Ritirare ≠ cancellare. L'**AI vede l'elenco del tenant** (`promptScontrino(metodi)` + glossario; un codice inventato viene scartato) e le action validano con `metodoAmmesso` (lo schema zod non è più un enum chiuso). Lettore difensivo `_lib/metodi-pagamento.ts` → se la tabella manca tornano i tre di sempre.
-- **Avviso dashboard giornate oltre soglia** — la soglia resta 10h (scelta cliente); la dashboard Kantiere segnala quante giornate/ore/chi restano ferme. `giornateOltreSoglia` **esclude oggi e le giornate rimaste aperte** (senza quei filtri su FPM direbbe 71 invece di 65).
-- **Conferma passeggero PWA** — chi conferma un viaggio senza spuntare «sono l'autista» deve confermarlo; se dice che guidava torna al modulo con la casella evidenziata. Pezzo unico `_components/conferma-passeggero.tsx`, usato da viaggio-ritorno, partenza e Registra giornata (la vecchia «ore a mano» è stata tolta il 14/09). ⚠️ È un **pannello dentro il foglio**, non un dialog annidato (Radix lo tratterebbe come clic "fuori" e chiuderebbe quello sotto).
-
-### «La mia giornata» da scrivania e «Compila giornata»
-
-Chi gestisce le presenze da PC spesso timbra anche per se', e fino a ieri
-doveva prendere il telefono. Ora l'header dell'ufficio ha una **pillola** con
-lo stato della giornata e le scorciatoie, e un dialog da scrivania che fa
-quello che il telefono fa in «Registra giornata» e nella scatola timbrata.
-
-- **Lettura unica** `office/_lib/mia-giornata.ts` (`leggiMiaGiornata`): il
-  turno aperto e **da dove e' partito** (app, QR, terminale, ufficio), la
-  giornata timbrata al terminale, i minuti gia' attribuiti, cantieri vivi,
-  sedi, mezzi, impostazioni. Chi non ha una scheda dipendente non vede niente
-  (Bertaiola invariata). Slot `headerExtra` in `OfficeShell` (packages/ui) →
-  `OfficeShellClient` → `office/layout.tsx`.
-- **La pillola** (`office/_components/mia-giornata.tsx`): «Nessun turno» ·
-  «In turno · cantiere · HH:MM» (pallino che pulsa) · «In pausa» · «Timbrato ·
-  X da ripartire» · «In sede · badge HH:MM». Il menu offre: Inizia giornata
-  (cantiere, in sede / in cantiere, partenza, chi guidava), Pausa pranzo,
-  Riprendi, Chiudi il turno, Registra giornata, Inserisci le commesse. ⚠️ In
-  pausa «Chiudi» e' spento: la regola del server (`RIPRENDI_PRIMA`) si vede
-  prima di sbatterci.
-- **Un dialog, quattro modi**
-  (`office/kantiere/_components/compila-giornata-dialog.tsx`): `registra`
-  (la mia giornata di oggi), `registra_altro` (l'ufficio per un'altra persona,
-  un giorno qualsiasi — azione nuova `registraGiornataPerDipendente`,
-  `modalita='ufficio'`, stesso scrittore `scriviGiornataRipartita`),
-  `scatola` (la giornata timbrata, mia o di un altro), `chiusura` (chiudo
-  adesso il turno, dividendo fra cantieri solo se la giornata e' pulita).
-  **Sinistra 2/3 si compila, destra 1/3 «Come verra' scritta»**: orari veri di
-  ogni cantiere, pause, tratte, totali — gli stessi motori puri del server
-  (`calcolaSegmentiSplit`, `riempiScatola`), quindi l'anteprima e' la
-  verita', non una stima. ⚠️ La chiusura secca (una riga sola) non passa dal
-  calcolo della divisione: un turno di un minuto si chiude lo stesso.
-- **«In sede» / «In cantiere» sempre a vista**, sul telefono e da scrivania,
-  con il default dalla scheda della persona (ufficio → in sede, esterno → in
-  cantiere). ⚠️ Il badge **non** inverte piu' il flag: dice che la persona
-  era in sede agli estremi, non dove ha lavorato in mezzo. ⚠️ Con un turno
-  aperto dall'app l'andata non si richiede: l'ha scritta l'avvio del turno.
-- In «Presenze e ore» il tasto principale e' **«Compila giornata»** (chi e
-  quando, poi il dialog grande); «Registra ore» resta come scorciatoia per
-  le sole ore nude. Il pannello delle giornate timbrate e le righe «da
-  ripartire» aprono lo stesso dialog. ⚠️ `ripartisci-timbro-dialog.tsx` e'
-  stato tolto: era la seconda verita'.
-- ⚠️ `sede_lavoro_id` sta sull'ingresso di **apertura**: la ripresa dopo la
-  pausa non la ripete. Chi deduce «in sede» da un ingresso qualunque sbaglia
-  dopo la prima pausa (trovato dal banco).
-- ⚠️ `next.config.mjs` ha `removeConsole` (tiene solo `error` e `warn`): un
-  `console.log` per capire cosa fa un layout **non stampa niente**, nemmeno in
-  sviluppo. Mezz'ora persa a cercare un bug che non c'era.
-- **La presenza in sede senza cantiere** (`segnaPresenzaInSede`): chi inizia
-  «in sede» senza un progetto **non sceglie il cantiere**: la presenza va nel
-  **registro** (`timbri_grezzi`, sorgente `app`, dispositivo `pc`), come un
-  badge, e la giornata diventa una scatola da riempire alla fine con lo stesso
-  flusso del terminale. ⭐ Niente in `timbrature` finche' non si attribuisce:
-  il gestionale vuole le ore per commessa, e cosi' non puo' uscire niente di
-  non attribuito. ⚠️ Il registro si legge **sempre**, con o senza Timbro: il
-  collegamento decide cosa entra, non chi legge. Le righe scritte dalla
-  ripartizione dicono da dove vengono: `timbro/timbratrice` se c'e' almeno un
-  badge, altrimenti `cronometro/app`. ⚠️ Dopo un'uscita il registro non sa se
-  e' pausa o fine: la pillola dice «da ripartire» e offre «Riprendi».
-  **Anche dal telefono** (22/10 pomeriggio): i due fogli di avvio («Inizia
-  giornata» di chi sta in sede e «Inizia turno» di chi sta in cantiere) hanno
-  in fondo «Inizia senza cantiere» (`mobile/kantiere/_components/presenza-sede.tsx`,
-  `dispositivo='telefono'`), e la card `PresenzaSedeCard` nella home mostra
-  pausa, ripresa, fine e «Inserisci le commesse». ⚠️ La card agisce solo su una
-  presenza segnata dall'app o dal PC: con il badge si chiude al terminale, o
-  il registro si ritrova un'uscita in piu'. Banco `presenza-sede-mobile.mjs`.
-- Banco: `scripts/banco-ui/giornata-scrivania.mjs` e `presenza-sede.mjs` (pillola, avvio, pausa,
-  ripresa, chiusura con anteprima, compila per un altro). Vuole una scheda
-  dipendente in modalita' ufficio sull'account ufficio di DEMOC.
-
-### «Inizia giornata» anche su Cruscotto e Ore
-
-Per un utente ufficio che timbra anche lui «Inizia giornata» stava solo
-nella tab Cantieri, che non e' la sua tab. Ora la stessa card («La mia
-giornata»: stato di oggi, Inizia giornata, pausa, chiudi, presenza in sede,
-Inserisci le commesse) sta **in cima al Cruscotto e alla tab Ore**, e resta
-anche in Cantieri. Per i **tecnici non cambia niente** (scelta di Luca).
-
-- Lettura unica `mobile/kantiere/_lib/giornata-ufficio.ts`
-  (`caricaGiornataUfficio`): torna `null` per i tecnici, per chi non ha una
-  scheda dipendente e per chi lavora in modalita' «esterno» (quelli hanno gia'
-  la card del turno e «Inizia turno» in Cantieri). `HomeUfficio` ha la prop
-  `compatto` (etichetta, senza nome e senza i due collegamenti).
-- ⚠️ Dove la card c'e', la card del turno di quelle pagine **non si mostra**:
-  due «Fine turno» sulla stessa pagina chiuderebbero in due modi diversi.
-  Nella tab Ore, con il turno gia' chiuso dal terminale, la card passa senza
-  turno (stessa regola della card del turno).
-
-### «Le mie ore» per chi sta in ufficio
-
-- **Chi ha ruolo ufficio e timbra anche per sé** trovava le proprie cose in
-  tre posti (pillola nell'header, pannelli «da sistemare» mischiati con gli
-  altri, riga nella tabella senza segno). Ora «Presenze e ore» ha **due zone
-  con un titolo**: la card **«Le mie ore»** in cima (solo per chi ha una scheda
-  dipendente: stato di oggi con i tasti, e le mie giornate da completare) e
-  sotto **«Dipendenti»**, i pannelli e la tabella degli altri. Le mie righe
-  restano nella tabella, marcate «tu», perché totali ed export non cambiano.
-  Chi non ha una scheda dipendente vede la pagina come prima.
-- ⭐ La pillola è diventata un hook, `useMiaGiornata` in
-  `office/_components/mia-giornata.tsx`: restituisce `stato`, `corpo` (i
-  tasti) e `dialoghi`. Card e pillola sono la **stessa logica e gli stessi
-  dialog**, non una copia. ⚠️ I dialoghi vanno montati **fuori** dal menu che
-  si smonta (lezione dell'08/10: nel menu stanno i tasti, non lo stato).
-  ⚠️ Nella card il blocco «Oggi» parla di oggi (`timbroOggi`), mentre la
-  pillola mostra la giornata più vecchia da ripartire: due promemoria diversi
-  per due posti diversi.
-- Barra dei filtri su una riga a 1440 px: date 8,25 rem, dipendente `w-32`,
-  cantiere `w-44`, «Solo anomalie» è un interruttore a icona, `LiveRefresh`
-  ha la prop `compatto` (solo l'ora). A 1280 px va a capo fra i due gruppi,
-  ed è accettato.
-- ⚠️ **Tono dei testi: formale, mai colloquiale.** Luca ha letto le notifiche
-  sui telefoni di FPM e le ha trovate «da azienda di campagna». Il promemoria
-  serale ora dice «Registrazione ore · Presenza registrata. Ricordati di
-  caricare le ore sulle commesse di oggi.»; le notifiche di assegnazione
-  hanno titoli come «Commessa assegnata». Il 23/10 è stato fatto un
-  censimento dei testi del telefono e dell'ufficio con le riscritture
-  (`scripts/banco-ui/esiti/proposte-tono-*.md`). Il «tu» dei tasti resta;
-  quello che non si scrive più: «dì su quali commesse hai lavorato», «i tuoi
-  ragazzi», «dillo all'ufficio», «la leggo io», «Ciao, nome», «Buon lavoro!»,
-  il sistema che parla in prima persona («Non sono riuscito a…»). Regola in
-  memoria: `feedback_tono_formale_testi.md`.
-
-### I tecnici da computer: `/office/mio`
-
-Un tecnico del mondo presenze che entra da PC vedeva la PWA del telefono
-allargata (il middleware lo mandava a `/mobile/kantiere/cantieri`). Luca ha
-chiesto «una versione desktop semplice con layout riadattato, non il mobile
-allargato». Ora entra nel guscio dell'ufficio (`OfficeShell`) con una barra
-ridotta: **Oggi** · Il mio lavoro (Cantieri, Le mie ore, Le mie spese se
-Kontabilita', La mia settimana se la pianificazione e' attiva) · Altro
-(Avvisi, Profilo). Pagine sotto `apps/web/app/office/mio/`.
-
-- ⭐ **Niente di nuovo nel motore**: la card «Le mie ore» e i dialog da
-  scrivania (`compila-giornata-dialog` nei soli modi `registra` e `scatola`,
-  senza `dipendenteId`) sono riusati; le azioni sono quelle *self*
-  (`segnaPresenzaInSede`, `avviaTurnoMio`, `ripartisciGiornataTimbro`,
-  `registraGiornataDaZero`), **mai** quelle «per un altro» dell'ufficio.
-- ⚠️ **Il presidio e' il layout, piu' il middleware per l'atterraggio**:
-  `office/layout.tsx` lascia entrare un tecnico del mondo presenze SOLO in
-  `/office/mio/**` e `/office/notifiche`, ogni altra `/office/...` rimbalza
-  a `/office/mio` (via `x-percorso`); nel mondo commesse il tecnico resta su
-  `/mobile`. `resolveOfficeLanding` (packages/api `server.ts`) legge anche
-  il ruolo. Cancello password e impersonazione intatti. Tutte le query
-  filtrano per la **scheda dipendente** della persona, mai per tenant.
-- ⚠️ Dal PC non si attivano le push: su `/office` non c'e' service worker
-  (vedi il difetto del logout del 23/10) e il profilo rimanda all'app
-  installata.
-- Aperto: «Inizia giornata» dalla scheda cantiere porta a Oggi senza
-  preselezionare il cantiere; il login da PC fa due salti
-  (`/office` → `/office/mio`); le spese dal PC non hanno anteprima prima
-  dell'invio. Banco `scripts/banco-ui/desktop-tecnico.mjs` (15 controlli).
-
-### Sottocantieri (fasi) dei cantieri (migration `20261023150000`)
-
-Un cantiere del mondo Kantiere puo' avere dei **sottocantieri** (FPM li chiama
-fasi; per FPM arriveranno da ERGO, l'ufficio li scrive anche a mano). Decisioni
-di Luca: le ore **restano attribuite alla fase**; CRUD dell'ufficio dalla scheda
-cantiere; il **cantiere intero resta sempre scegibile**; `codice` e' **testo**
-(puo' essere `25098.01`). Manuale: `Logiche_Kantiere.md` §12.
-
-- Tabella `sottocantieri` + colonna facoltativa `sottocantiere_id` su
-  `timbrature`, `rapportino_righe`, `spese`, `pianificazione_blocchi`. Vuota =
-  cantiere intero: **nessuna riga esistente cambia**.
-- ⭐ **La fase deve essere del cantiere della riga, e lo garantisce il
-  database**: chiave esterna COMPOSTA `(sottocantiere_id, cantiere_id)` con
-  `on delete set null (sottocantiere_id)` (Postgres 15+). Niente trigger, e
-  una fase di un altro cantiere viene rifiutata anche da chi scrive via SQL.
-- ⭐ **La fase entra nella chiave dei motori, il viaggio no.** La chiave e'
-  `cantiere:<id>/<fase>` (`@kommessa/api/sottocantieri`): righe per fase,
-  totale per cantiere sommando. Una tratta nomina il cantiere: in
-  `minutiDaTimbrature` i suoi minuti vanno alla **prima riga di quel cantiere**
-  (confronto sulla **radice** della chiave), mai a una riga vuota — e il
-  cambio fra due cantieri si riconosce anche con le righe per fase. Testato.
-- ⚠️⚠️ **La fase, una volta aperta, vale fino alla fine del turno.** Pausa,
-  ripresa e fine turno arrivano da QR, app, capo squadra, ufficio: nessuno di
-  loro conosce la fase dell'ingresso. Lo scrittore unico `scriviTimbrature`
-  la **eredita** dall'ultima timbratura di oggi della stessa persona sullo
-  stesso cantiere quando `sottocantiere_id` e' `undefined`. Senza, ingresso
-  con fase e uscita senza avrebbero chiavi diverse e il ricalcolo non li
-  appaierebbe. Chi passa il campo (anche `null`) decide da se'.
-- ⚠️ `conFase()` in `kantiere-split.ts` e `timbro-giornata.ts` **non emette
-  il campo se la fase e' nulla**: gli eventi senza fase restano identici a
-  prima, byte per byte (sette test `toEqual` lo pretendono).
-- Nella scatola due segmenti consecutivi si fondono solo con **stesso
-  cantiere e stessa fase**; fra due fasi dello stesso cantiere la strada vale
-  zero. Il cambio cantiere dal vivo accetta anche «stesso cantiere, fase
-  diversa». Con un turno aperto dall'app, la fase del primo segmento della
-  ripartizione e' quella dell'ingresso: la decide il server.
-- Guardia `sottocantieriScrivibili` (`lavoro-aperto.ts`): esiste, e' del suo
-  cantiere, non chiusa; `forzato` per le giornate gia' lavorate, come i cantieri.
-- **API**: `/cantieri` annida `sottocantieri[]` (chiuse comprese, ordinate per
-  codice naturale e nome; ⚠️ `modificatoAl` del padre non cambia con le fasi);
-  `/ore` e `/spese` espongono `sottocantiere { id, nome, codice, externalId } | null`;
-  `/viaggi` invariata; `/letture` accetta `entita: 'sottocantiere'`
-  (`externalCantiereId` obbligatorio) **solo in area di sosta**: la promozione
-  e la mappatura `sottocantiere ↔ externalId` restano da decidere con FPM/ERGO.
-- Nomi per le scritte «Cantiere › Fase»: `_lib/sottocantieri-nomi.ts`.
-
-### Le fasi dal gestionale e la scelta obbligatoria
-
-- **Promozione delle fasi** dall'area di sosta: pura in `@kommessa/api/fasi-gestionale`,
-  wiring `promuoviFasiDalGestionale` in `_lib/integrazione/promuovi.ts`, che gira DOPO i
-  cantieri nello stesso giro di chiusura della lettura e a comando dal tasto «Promuovi le
-  fasi ora» (tab Integrazione, super admin). ⭐ **Mai chiude ne' cancella** una fase che
-  non arriva piu' (per ERGO puo' essere commessa chiusa, fase rimasta sola o lettura
-  fallita). ⚠️ Padre non collegato → la fase resta in sosta, contata (`fasiSenzaPadre`):
-  qui non si crea mai un cantiere. ⭐ Una fase scritta a mano con lo stesso codice si
-  **collega** invece di nascere due volte. Idempotente, provata sul tenant demo.
-- **E' una personalizzazione del cliente FPM**: ERGO manda solo le commesse aperte con
-  due o piu' fasi, chiave `commessa.fase` (`25151.2`), nessuna descrizione; sulla
-  commessa con una fase sola la fase la mette l'agente. Errori permanenti su
-  `/scritture` («la fase X non esiste sulla commessa Y») si risolvono scegliendo di
-  nuovo la fase in Kommessa. Dettagli in `Logiche_Kantiere.md` §12.5.
-- **`fase_obbligatoria`** (Impostazioni Kantiere → Turni; FPM acceso dal 23/10):
-  guardia server `faseRichiesta` (`lavoro-aperto.ts`, codice `FASE_RICHIESTA`,
-  messaggio `MESSAGGIO_FASE_RICHIESTA`). ⚠️ Il primo segmento di una chiusura o di una
-  scatola che continua un turno aperto eredita la fase dell'ingresso e **non** passa
-  dalla guardia: un turno aperto prima delle fasi deve potersi chiudere.
-- ⚠️ Una rotta di prova sotto `app/api/` con la cartella che comincia per `_` **non
-  esiste** per Next (cartella privata): per provare una funzione server-only dal dev
-  server la rotta va sotto `api/cron/<nome>` con il segreto del cron, e poi si toglie.
-
-### «Auto personale» fra i mezzi (migration `20261024090000`)
-
-Chi va in cantiere con la propria auto lo puo' dichiarare, e i chilometri
-restano tracciati per il rimborso.
-
-- ⭐ **Non e' un valore speciale: e' una riga vera in `mezzi`**, una per
-  cliente, con la colonna `personale` e la targa segnaposto `AUTO PERSONALE`.
-  Cosi' compare da se' in tutte e sei le tendine dei mezzi e
-  `timbratura_viaggio.mezzo_id` la cita come qualunque altro mezzo: i km per
-  persona si contano con le query di sempre, senza codice nuovo. L'alternativa
-  (un valore sentinella da riconoscere ovunque) voleva sei modifiche e sei
-  occasioni di sbagliare.
-- ⚠️ **Non si rinomina e non si cancella**: `aggiornaMezzo` lascia passare solo
-  l'interruttore, `eliminaMezzo` rifiuta. Indice unico parziale: una sola per
-  cliente. Nei conteggi del parco **non entra** (non e' un mezzo dell'azienda).
-- A schermo si legge «Auto personale» e sta in fondo all'elenco:
-  `@kommessa/api/mezzi` (`etichettaMezzo`, `etichettaMezzoEstesa`,
-  `ordinaMezzi`, `eAutoPersonale`). La targa segnaposto e' il riconoscimento di
-  riserva, quindi le query che non leggono la colonna funzionano lo stesso.
-- ⚠️ **Resta aperto**: la tariffa del rimborso al chilometro. Oggi i km ci sono
-  (per persona e per tratta), ma nessuno li moltiplica per un importo.
-
-### Kontabilità e auto-approvazione
-
-- **Auto-approvazione rapportini** (tutti i tenant kantiere): le **timbrature sono la sostanza**, il rapportino è **forma**. Una giornata si auto-compila dalle timbrature e si **auto-approva** quando è **chiusa** (ingressi = uscite) ed **entro soglia** (config `anomalia_turno_ore_max`, default **10h**, pause escluse); **aperta o oltre soglia** → resta **"da verificare"** (bozza), gestita solo da office/admin. Si ri-valuta a ogni timbratura (riaprire un turno la riporta in bozza). Disattivabile per tenant (`auto_approva_rapportini`). Logica pura `esitoAutoApprovazione` (testata), wiring in `ricomputaRapportinoAuto` (congelata solo se `approvato_da` valorizzato dall'ufficio). Correzione anomalia "pausa pranzo dimenticata" (office: `aggiungiPausaGiornata` → coppia-pausa → se rientra in soglia auto-approva). Anteprima soglia del dialog letta dal config (non hardcoded). **Dal 20/08/2026 vale anche per le giornate scritte A MANO** (`esitoAutoApprovazioneManuale`, pura+testata, agganciata a `marcaRapportinoManuale`): guarda le **ore dichiarate** invece degli ingressi, perché una giornata senza timbrature ha `ingressi=0` e veniva scartata per sempre come «nessun turno» — restava in bozza e non usciva mai verso il gestionale. Non approva se 0 ore o se un turno timbrato è ancora aperto. ⚠️ **`auto_compilato` resta `false`**: rimetterlo a `true` farebbe cancellare le ore a mano dal ricalcolo successivo.
-- **Viaggio di ritorno anche da APP** (non solo QR): chiusura turno self (scheda cantiere) e capo (wizard per-membro) aprono lo stesso dialog del QR (sede/km/autista/mezzo + pausa) e **tracciano** la tratta `timbratura_viaggio` `direzione='ritorno'`. Uscite in-app `origine='cronometro'` (QR resta `'qr'`). Helper viaggio/pausa condivisi in `_actions/_lib/viaggio-timbra` (`ViaggioSchema`, `validaViaggio`, `inserisciViaggioRow`, `inserisciPausaDichiarata`, `inizioSeEleggibilePausa`, `coppiaPausaCentrata`) — il viaggio si **valida sempre PRIMA** di scrivere pausa/uscita (niente righe orfane). `<LiveRefresh>` auto-aggiorna i dati live ogni 60s (office presenze/cantiere/dashboard, mobile cruscotto/cantiere).
-- **Kontabilità (spese di cantiere)** — sotto-modulo dentro Kantiere, flag `kontabilita_attiva` (default on). Il tecnico fotografa lo scontrino dalla PWA → **AI vision** (`OPENAI_MODEL_VISION` = `gpt-5.4-mini`, `reasoning_effort: 'low'`) estrae i campi → revisione → salva, agganciata al cantiere del turno (helper condiviso `mioTurnoAttivo`). Tabella `spese` (migration `20260625120000`, **foto su R2** via `r2_key`/`r2_thumb_key`, NON `file_refs`; RLS: tecnico le proprie, office/admin tutto il tenant). Office `/office/kantiere/kontabilita`: tabella spese + Analisi costi + Costo cantiere + **Ricevute** (browser R2 con zip via `archiver@7`). Upload office (immagine/PDF) via `creaSpesaOffice` (service-role, gated ruolo). Cleanup R2 best-effort se l'insert DB fallisce. Super admin `/admin/kantiere/kontabilita` (cross-tenant). PDF: solo archiviazione, niente AI.
-
-> Dettaglio operativo, milestone e TODO vivono nella memoria (`MEMORY.md` → `kantiere-overview`, `project-branch-kontabilita-wip`, checkpoint 24–25/06).
-
-### Timbratrice Timbro ↔ Kommessa (migration `20261021120000`, `20261022090000`)
-
-Integrazione **per FPM** (spenta finché il super admin non la accende): Timbro
-(prodotto Solva a sé) e l'app di Kommessa sono **due bocche interscambiabili
-dello stesso orologio**. I timbri formano il **contenitore** della giornata;
-poi il tecnico dal telefono (o l'ufficio dalla scrivania) **riempie la
-scatola** per commessa.
-
-📘 **Tutto il dettaglio**: `documentazione_generale/08_LOGICHE/Logiche_Integrazione_Timbro.md` (v2.0, §7 «Com'è fatto»).
-
-- ⭐ **Timbro espone eventi, non direzioni**: la direzione la deduce chi tiene
-  il registro (`@kommessa/api/timbri-sequenza`). Niente chiamate in uscita
-  verso Timbro se non per leggere: nessun token di Kommessa va a loro.
-- ⭐⭐ **Il contenitore è VIRTUALE**: `timbri_grezzi` tiene i passaggi,
-  `timbrature` nasce **solo all'attribuzione** (`origine='timbro'`,
-  `modalita='timbratrice'`). Perché `/api/v1/ore` non filtra per stato e ERGO
-  è append-only: **l'unico presidio è che le ore non esistano ancora.**
-- ⚠️⚠️ **Il token sta in `integrazione_timbro`** (RLS senza policy, `revoke
-  all` da anon/authenticated), **mai** in `tenant_modules.config`: lì lo
-  leggerebbe ogni dipendente del cliente. Il tab Timbro lo prova prima di
-  salvarlo e non lo rilegge mai.
-- **L'import** (`_lib/timbro/import.ts`): riconciliazione a cursore ogni 2
-  minuti (`pg_cron` → `/api/cron/timbro-import`), `updated_since = cursore −
-  60 s`, upsert sulla chiave unica, cursore che avanza solo a giro riuscito.
-  Il webhook `/api/webhooks/timbro?t=<tenantId>` (HMAC a tempo costante) **non
-  scrive**: fa partire lo stesso giro. ⚠️ I giri vanno in
-  `integrazione_esecuzioni` con `sistema='timbro'`: le query di salute di
-  ERGO (`admin/_lib/integrazione/foto.ts`) filtrano `sistema <> 'timbro'`.
-- **Lo stato della giornata** è puro (`@kommessa/api/timbro-giornata`,
-  `statoGiornataTimbro`): `da_ripartire` · `da_chiudere` (turno aperto
-  dall'app e un timbro dopo: **il timbro lo chiude**, primo cantiere
-  obbligato) · `coperta` · `presenza_aperta` · `da_verificare`. ⭐ «Si apre
-  dall'app e si chiude al terminale» funziona innestando l'avvio del turno
-  nella sequenza come direzione dichiarata, solo se a quell'ora i timbri
-  dicono «fuori». ⭐ Ore attribuite **oltre** la presenza non sono una scatola
-  vuota: le giudica la soglia di verifica, non il tecnico.
-- **Riempire la scatola** (`riempiScatola`): il contenitore è una **lista di
-  intervalli**, non un `[ingresso, uscita]`: la pausa timbrata alle 12:31 resta
-  alle 12:31 (per questo non si riusa `calcolaSegmentiSplit`, che la mette
-  dove le pare). Andata e ritorno dalla sede stanno **dentro** il contenitore
-  quando l'estremo è un passaggio fisico. ⚠️ **Uno scrittore solo**:
-  `scriviGiornataRipartita` in `_actions/kantiere-timbra.ts`, estratto da
-  «Registra giornata» e riusato da `ripartisciGiornataTimbro`; `registraGiornataDaZero`
-  è rimasta **identica nel comportamento** (stesso motore, stessa pausa al centro).
-- **Il default «in sede»** con l'ingresso fisico: il flag del cantiere gira
-  come per chi lavora in ufficio (`invertito` nel dialog), «Uscito in cantiere»
-  fa calcolare strada e tempo dalla sede predefinita. Il dialog di «Registra
-  giornata» è **lo stesso** (`scatola` prop): titolo «Inserisci le commesse
-  sulle quali hai lavorato oggi», estremi fissi dai timbri, `Salva le ore`.
-- **Ufficio**: «Presenze e ore» mostra il pannello «giornate timbrate da
-  sistemare», righe sintetiche (`id` che comincia per `timbro:`) per chi ha
-  timbrato e non ripartito, i passaggi al terminale nel dettaglio
-  (`TimbriTerminale`), e il dialog `RipartisciTimbroDialog` da scrivania.
-  `OrigineLine` dice «Timbrata · terminale»; la cronologia «Dai timbri del
-  terminale».
-- **Super admin**: tab **Timbro** (stato spento/osservazione/attivo, data di
-  partenza, token, webhook, «Leggi ora», abbinamento persone Timbro ↔ nostre
-  via `external_id` con suggerimento per matricola o nome, giornate recenti),
-  semaforo in `/admin/integrazioni` (`@kommessa/api/timbro-salute`, pura), e
-  tab **Regole**: il censimento di tutte le regolette del mondo presenze con
-  scritto **chi ha la chiave** (ufficio / super admin / scheda persona / nel
-  codice). ⭐ Una regola «nel codice» diventa un'impostazione solo quando una
-  riga di codice la legge.
-- **Promemoria «inserisci le ore»**: avviso `ore_da_inserire` (in
-  `@kommessa/api/avvisi`, quindi governabile dalla persona) mandato da
-  `/api/cron/promemoria-ore` ogni quarto d'ora nella finestra della sera
-  (oggi) e della mattina (ieri e prima). Orari per cliente in
-  `config.promemoria_ore` (Impostazioni Kantiere → Approvazione giornate).
-- ⚠️⚠️ **Le push non arrivavano perché nessuno le aveva attivate**: al 21/10
-  **una** sottoscrizione su quattro clienti, e la pagina che chiede il permesso
-  sta due livelli sotto il profilo. Ora il banner «Attiva le notifiche su
-  questo telefono» (`mobile/_components/attiva-notifiche-banner.tsx`) compare
-  finché non c'è una sottoscrizione. Su iPhone serve l'app **aggiunta alla
-  Home** (iOS ≥ 16.4); su Samsung le notifiche dei siti possono essere spente
-  nelle impostazioni di sistema del browser.
-- ⚠️ **`/api/v1/ore` è ordinata davvero** (22/10): chiave `(rapportino_id, id)`,
-  entrambe di primo livello, con `daCursore`. Prima ordinava per `id` e il
-  cursore filtrava su una colonna dell'embed che PostgREST **non** usa per
-  ordinare i padri (misurato: 21 righe su 358 paginando a 5). Il cursore è
-  opaco per l'agente, che lo rimanda e basta.
-- Banchi: `scripts/banco-ui/timbro.mjs` (giornata solo-badge) e
-  `timbro-chiudere.mjs` (turno dall'app chiuso al terminale): scrivono sul
-  tenant demo, si ripulisce a mano.
-
-### Anagrafica: la data di nascita (migration `20261021090000`)
-
-La timbratrice **Timbro** (prodotto a sé, multi-tenant) fa gli auguri quando la
-persona passa il badge all'ingresso: le serve leggere l'anagrafica del
-personale. Da qui due lavori legati.
-
-`dipendenti.data_nascita date`, nullable, esposta da `GET /api/v1/dipendenti`
-come `dataNascita` (`AAAA-MM-GG`). Si compila in **Personale → Dipendenti** e si
-vede nella colonna **Nascita** dell'elenco, che serve anche a vedere **chi
-manca**.
-
-- ⚠️ **È la prima colonna anagrafica di legge** su `dipendenti`: finora la
-  tabella teneva solo ciò che serve ad attribuire ore e costi (niente codice
-  fiscale, niente indirizzo, niente documenti). L'aggiunta è voluta e ha uno
-  scopo dichiarato; chi ne aggiungerà altre sappia che la linea è stata
-  attraversata qui di proposito, non per abitudine.
-- ⚠️ **In aggiornamento si scrive solo se arriva** (`...(x !== undefined ? …)`),
-  come già fa `costo_orario`: **la scheda della singola persona chiama la stessa
-  azione senza quel campo**, e uno `?? null` cancellerebbe la data a ogni
-  salvataggio da lì. Verificato cercando i chiamanti **prima** di scrivere.
-- ⚠️ **La data si formatta spezzando la stringa, non con `new Date()`**:
-  `new Date('1985-03-14')` è mezzanotte UTC e in un fuso a ovest diventa il 13.
-  Qui non c'è nessun istante da convertire, solo tre numeri da riordinare.
-- La colonna si chiama `data_nascita` e non `compleanno`: il compleanno è
-  l'uso, la data è il fatto, e un nome che descrive l'uso invecchia male.
-- ⚠️ Su `dipendenti` i privilegi sono di **tabella**: la colonna nasce
-  leggibile da ogni utente autenticato del tenant. Per una data di nascita fra
-  colleghi è una scelta accettata — **ma resta aperto** lo stesso rilievo sul
-  `costo_orario`, che con quella RLS ogni tecnico può leggere.
-
-### Personalizzazioni ed export paghe
-
-Area office **Personalizzazioni** = il **contenitore** delle funzioni su misura, gated dal modulo per-tenant **`personalizzazioni`** (Bertaiola non ha la riga → non vede niente). Qualunque cliente può averla accesa; quali funzioni sono attive sta in `tenant_modules.config.funzioni`, e sotto la chiave di ognuna stanno le sue impostazioni. L'elenco vive in `apps/web/app/_lib/personalizzazioni-registry.ts`: **per aggiungerne una servono una voce nel registro e la sua pagina**, poi la voce in sidebar e la casella nel pannello super admin compaiono da sole. Due porte: il layout controlla l'area, la pagina controlla la sua funzione. Prima funzione: **Export paghe** (`/office/personalizzazioni/paghe`), che produce `DatiMese.txt`, il file a lunghezza fissa che il consulente del lavoro importa nel suo programma paghe. Manuale: `documentazione_generale/08_LOGICHE/Logiche_Export_Paghe.md`.
-
-- **Si esportano solo le variazioni** rispetto all'orario teorico: straordinari, assenze, maggiorazioni. Le ore ordinarie **no** (confermato dal consulente: l'azienda ha un orario settimanale fisso e il programma paghe conosce il teorico). Una giornata normale non produce nessuna riga.
-- **Niente si congela**: il mese si ricostruisce a ogni apertura da rapportini **approvati** + `permesso_richieste` **approvate** + le variazioni scritte a mano in `paghe_eventi` (per chi non usa ancora l'app). Le giornate in bozza restano fuori e la pagina le elenca.
-- ⭐ **`dipendenti.codice_interno` è già il codice paghe dello Studio** (verificato sui dati FPM). Non confonderlo con l'id del gestionale, che non si guarda mai.
-- **Record 12 (periodo) obbligatorio** per malattia, maternità, infortunio e congedi; tutto il resto va nel record 14 (giornaliero, ore obbligatorie). **Ore in centesimi**: `001,50` è un'ora e mezza.
-- **Il PUC non si inventa**: se manca, il file esce lo stesso con avviso evidente e lo Studio lo inserisce a mano. Numero e documento del medico stanno in `paghe_certificati` (allegato su R2, non viene mandato allo Studio).
-- Logica **pura e testata** in `@kommessa/api/paghe-essepaghe` (record composti dichiarando le posizioni del manuale), `paghe-causali` (le 233 causali dello Studio, **generate dal CSV**: rigenerare, non modificare a mano), `paghe-mappatura` (corrispondenze, festività, taglio dei periodi). ⚠️ Un test riproduce **carattere per carattere** il fac-simile approvato dal consulente: se cambia, è cambiato il tracciato.
-- Il **dizionario è dato, non codice**: codice ditta, corrispondenze e causali aggiunte dal cliente vivono in `tenant_modules.config`. Le corrispondenze ambigue (visita medica, congedo matrimoniale, congedo parentale) restano **da decidere** di proposito: sceglierle al posto del consulente sarebbe decidere sulla busta paga.
-- Ordine di affidabilità delle fonti: **conferma del consulente > manuale > Excel storico > esempi > nostre deduzioni.**
+Modulo presenze: tenant con `app_mode=kantiere` (**FPM Impianti**, `FPMIMP`).
+Tutto è gated da `tenantHasModule('kantiere')` → **Bertaiola non ne è toccata**,
+e ogni modifica va pensata **Bertaiola-safe e FPM-safe**.
+
+> 📘📘 **Le logiche del mondo presenze stanno in
+> `documentazione_generale/08_LOGICHE/Logiche_Kantiere.md`** (~1.400 righe), che
+> è **la** fonte: timbrature e arrotondamenti, viaggi e chilometri, sedi e
+> cantieri, pause, ore e quote, auto-approvazione, cronologia, sottocantieri
+> (fasi), le superfici dell'ufficio e del tecnico, i file chiave del codice.
+> **Prima di toccare qualsiasi cosa del mondo presenze, aprire quel file.**
+> Fino al 26/10/2026 queste 577 righe stavano qui: CLAUDE.md si carica **intero**
+> a ogni conversazione, e una sessione sul mondo commesse non ha motivo di
+> portarsi dietro le regole delle timbrature.
+>
+> I manuali vicini, ognuno col suo file in `08_LOGICHE/`:
+> **`Logiche_Integrazione_Timbro.md`** (la timbratrice Timbro ↔ Kommessa:
+> contenitore virtuale, import a cursore, fasi del turno. **Attiva in produzione
+> su FPM dal 26/10/2026**), **`Logiche_Export_Paghe.md`** (il `DatiMese.txt` per
+> il consulente del lavoro), **`Logiche_Pianificazione.md`** (settimana, ferie e
+> permessi), **`Logiche_Control_Room.md`**.
+
+Le poche cose che servono **anche** a chi non sta lavorando sul mondo presenze:
+
+- **Due mondi, invisibili fra loro.** `app_mode` + moduli per-tenant decidono
+  cosa esiste: pagine, voci di barra, ⌘K, API. Una pagina del mondo commesse su
+  un tenant Kantiere fa `notFound()`, e viceversa. Aggiungendo una superficie,
+  decidere **a quale mondo appartiene** prima di scriverla.
+- ⭐⭐ **`timbrature` ha un solo scrittore**: `_actions/_lib/timbrature-scrivi.ts`
+  (`scriviTimbrature`). Prima erano quattordici `insert` sparsi. Un punto nuovo
+  che scrive timbrature passa di lì, o si perdono gli invarianti (eredità della
+  fase, specchio della chiusura nel registro, `modalita` obbligatoria).
+- ⭐ **Le ore si registrano pure e le quote si derivano**: `minuti_lavoro` /
+  `minuti_viaggio` per cantiere, e ordinario/straordinario/viaggio eccedente si
+  calcolano dall'orario del cliente (`@kommessa/api/kantiere-quote`). Scrittore
+  unico `scriviRigheGiornata`; chi legge usa `quoteDaRiga`, **mai**
+  `ore_ordinarie` da solo.
+- ⚠️ **Le timbrature si arrotondano nei calcoli, non nel database** (dal
+  23/10/2026): l'orario scritto è esatto, le ore sono multipli del passo del
+  cliente (FPM: 5 min). Un posto solo, `@kommessa/api/arrotondamento-timbri`.
+- **Personalizzazioni** (`/office/personalizzazioni`): il contenitore delle
+  funzioni su misura, gated dal modulo `personalizzazioni` — **non** è una cosa
+  del mondo presenze, qualunque cliente può averla accesa (Bertaiola non ha la
+  riga). Registro in `_lib/personalizzazioni-registry.ts`: per aggiungerne una
+  servono una voce nel registro e la sua pagina. ⭐ **Due porte**: il layout
+  controlla l'area, la pagina controlla la sua funzione. Prima funzione:
+  **Export paghe** → `Logiche_Export_Paghe.md`.
 
 ## Interfaccia
+
+### Dialog, tendine e fogli: trappole pagate sul campo
+
+- **Overflow orizzontale «form gigante»**: un `DialogContent` `display:grid` ha
+  grid item con `min-width:auto` (= min-content); un titolo `truncate` (nowrap)
+  allarga il *track* della griglia → tutto sborda. Fix: `min-w-0` sul grid item
+  (e `grid-cols-[minmax(0,1fr)]`), `overflow-x-hidden`, `min-w-0` su tutta la
+  catena, testi troncati.
+- **Scroll che non ingaggia / dialog che cresce**: a `flex-1 overflow-y-auto`
+  serve un antenato ad **altezza definita** e **`min-h-0`** sul figlio flex.
+  Struttura: header `shrink-0` · body `min-h-0 flex-1 overflow-y-auto` · footer
+  `shrink-0`.
+- **Dialog che sborda sopra o sotto**: con `viewport-fit=cover`, `100dvh`
+  include la status bar e l'home indicator → il `max-h` deve **sottrarre**
+  `env(safe-area-inset-top/bottom)`.
+- **Zoom iOS all'apertura**: input con font < 16px → WebKit zooma la pagina.
+  Per gli input custom usare `text-base`.
+- **Elemento nascosto sotto la bottom-nav**: un `fixed` dentro il guscio resta
+  intrappolato nel contesto di impilamento → **`createPortal` su body** con z
+  alto (`mobile/_components/portal.tsx`).
+- **Tastiera che copre i tasti**: agganciarsi alla **`visualViewport`**.
+- ⚠️⚠️ **Dropdown dentro un dialog Radix — servono QUATTRO cose insieme**, e per
+  settimane ce n'erano due: **(1)** Portal su `document.body` (un overlay
+  in-flow viene **tagliato**: `DialogContent` ha `overflow-y-auto` *e* una
+  `transform`, e una trasformazione impedisce persino a un `position: fixed` di
+  uscire); **(2)** il pannello **marcato** `data-popover-portale`
+  (`SEGNO_PANNELLO_PORTATO` in `packages/ui/.../dialog.tsx`), altrimenti
+  Radix legge il clic su una voce come «fuori» e chiude il dialog sotto; **(3)**
+  **`pointerEvents: 'auto'` esplicito** — un dialog modale Radix mette
+  `pointer-events: none` su tutto il `<body>` e li riaccende **solo** nel
+  proprio recinto: il pannello si vedeva e **il dito ci passava
+  attraverso** (`elementFromPoint` sul centro di una voce restituiva la
+  `<textarea>` che stava sotto);
+  **(4)** un **`FocusScope`** attorno al pannello — non per intrappolare
+  (`trapped` resta falso) ma perché montandosi mette in **pausa** la gabbia del
+  fuoco del dialog, che altrimenti strappa il cursore alla casella di ricerca.
+  E la tastiera va agganciata **anche al pannello**: gli eventi di un Portal
+  risalgono l'albero di React, dove il pannello è un *fratello* del tasto.
+  Banco: `tendine.mjs` (23 controlli).
+- ⚠️ **E la rotellina del mouse**, quinta cosa: Radix blocca lo scorrimento con
+  `react-remove-scroll`, che mette un ascoltatore di `wheel` su `document` e
+  **annulla** ogni evento che non venga da dentro il dialog. Il pannello sta su
+  `body`, quindi era «fuori»: l'elenco si scorreva **solo** trascinando la barra
+  di lato. La via d'uscita prevista dalla libreria
+  (`shards`) la passa Radix e non è raggiungibile: si ferma l'evento **prima** che arrivi a `document`, con uno
+  `stopPropagation` sul pannello (ascoltatore **nativo**, `passive: false`,
+  anche `touchmove`).
+- ⚠️⚠️ **Un banco che sceglie con `elemento.click()` non misura niente di tutto
+  questo**: è una chiamata al DOM e **ignora `pointer-events`**. Quel banco dava
+  **11 verdi** su una tendina che nessuno riusciva a usare. In
+  `scripts/banco-ui/comune.mjs` ci sono `clicVero`, `scriviVero`, `premiTasto`,
+  `chiHaIlFuoco`, `chiRiceveIlTocco`: eventi veri del browser.
+- ⚠️⚠️ **Sfocatura di iOS 26/27 in cima all'app installata**. Apple disegna un
+  effetto vetro sopra la barra di stato e per ~40 punti sotto; nessun meta o CSS
+  lo spegne. **Lo stile della barra (`black-translucent`) è memorizzato
+  all'installazione**: cambiarlo in `layout.tsx` non tocca le app già sulla
+  Home. Difesa in `mobile/_components/anti-sfocatura-ios.tsx`.
+- **Tasti fissi in alto** (campanella, «＋ Spesa»): 34px a `safe-area + 10px`,
+  tocco da 44px con un'area invisibile `before:`. ⚠️ La fascia in alto a destra
+  fino a 40px resta libera: «Aggiornato alle» va sulla riga sotto. Banco
+  `campanella.mjs`.
+- **`scrollbar-gutter`**: i gusci ufficio e admin non scorrono mai sulla pagina
+  (scorre `<main>`). Prima si perdevano 15px su ogni pagina e i `fixed right-0`
+  si fermavano a 1425 invece di 1440.
+- **Tasti dell'ufficio**: azioni di pagina e di barra = `<Button size="sm">`
+  (40px, testo 12px, nero; outline per le secondarie). ⚠️ **Mai** tasti fatti a
+  mano con `bg-primary`: il cobalto è per link, badge e stato «selezionato».
+  Censimento ripetibile: `node scripts/banco-ui/tasti.mjs`.
+- `TastoComando` (packages/ui) dice «⌘K» su Mac e «Ctrl K» altrove; frecce e
+  invio nella palette sono icone Lucide, non glifi (su Windows «⏎» usciva un
+  quadratino).
+- ⚠️ **Il bundle di sviluppo invecchia sull'indice di `@kommessa/ui`**: un export
+  nuovo nel barrel risultava `undefined` nel componente che lo importava («type
+  is invalid») finché non si è pulito `.next`.
 
 ### PWA: atterraggio per ruolo e fluidità
 

@@ -1,9 +1,9 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.4
-**Stato**: costruita e collaudata sul tenant demo (22/10/2026) · in produzione **spenta** finché il super admin non la accende
+**Versione**: 2.5
+**Stato**: **attiva in produzione su FPM dal 26/10/2026** (stato `attivo`, le fasi del turno arrivano)
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
-**Data**: 21–22/10/2026
+**Data**: 21–26/10/2026
 **Cliente**: FPM Impianti (`FPMIMP`, mondo presenze). Bertaiola non è toccata.
 
 ---
@@ -22,7 +22,9 @@
 | ✅ **Ufficio** | «Presenze e ore»: pannello «giornate timbrate da sistemare», righe per chi ha timbrato e non ripartito, passaggi al terminale nel dettaglio, dialog da scrivania |
 | ✅ **Super admin** | tab **Timbro** per cliente (stato, token, data di partenza, webhook, abbinamento persone, giornate recenti), semaforo in `/admin/integrazioni`, tab **Regole** |
 | ✅ **Promemoria** | avviso `ore_da_inserire` la sera e la mattina dopo (pg_cron `promemoria-ore`), orari per cliente |
-| ⏸ **In produzione** | nessun cliente acceso: FPM si accende dal tab Timbro, in **osservazione** prima, poi **attivo** |
+| ✅ **Lo specchio verso Timbro** | `_lib/timbro/invia.ts`: scrive solo con stato **`attivo`**, chiave con scope `punches:write` |
+| ✅ **In produzione** | **FPM `attivo` dal 26/10/2026**, `dal = 2026-10-26`. Verificato sul database: giro ogni 2 minuti con esito `ok`, cursore che avanza, **40 passaggi** letti dal 21/10 |
+| ✅ **Fasi del turno** | «Evento con fasi del turno» acceso su FPM: **15 passaggi su 40 portano `passo`** — `pause_start`/`pause_end` con `passo_origine` `person` (l'ha toccato la persona) e `inferred`, `turno_era_aperto` su 16 |
 
 > ⚠️ **Oggi per chi timbra non cambia niente finché il collegamento è spento.** Acceso in «osservazione» legge e mostra all'ufficio; solo «attivo» chiede qualcosa ai tecnici.
 
@@ -203,7 +205,7 @@ Chiunque apre la giornata con un metodo e la chiude con un altro: badge la matti
 
 `/api/cron/promemoria-ore` ogni quarto d'ora: per i clienti con Timbro **attivo** e il modulo Kantiere, nella finestra della **sera** (giornata di oggi) o della **mattina** (ieri e prima, fino a 7 giorni), avvisa chi è `da_ripartire`/`da_chiudere`. Orari in `tenant_modules.config.promemoria_ore` (Impostazioni Kantiere → Approvazione giornate; predefiniti 18:00 e 08:00). Mittente unico `avvisa()`, avviso `ore_da_inserire`; un avviso per giornata per finestra.
 
-⚠️ **Le push arrivano solo a chi ha attivato le notifiche su quel telefono.** Al 21/10 c'era **una** sottoscrizione su quattro clienti. Per questo nella PWA c'è ora il banner «Attiva le notifiche su questo telefono». Su iPhone serve l'app **aggiunta alla schermata Home** (iOS ≥ 16.4); su Samsung le notifiche dei siti possono essere spente dalle impostazioni di sistema dell'app browser.
+⚠️ **Le push arrivano solo a chi ha attivato le notifiche su quel telefono.** Al 21/10 c'era **una** sottoscrizione su quattro clienti. Per questo nella PWA c'è ora il foglio «Attiva le notifiche su questo telefono» (`mobile/_components/attiva-notifiche-sheet.tsx`, che dal 22/10 sera ha sostituito la riga sottile `attiva-notifiche-banner.tsx`). Su iPhone serve l'app **aggiunta alla schermata Home** (iOS ≥ 16.4); su Samsung le notifiche dei siti possono essere spente dalle impostazioni di sistema dell'app browser.
 
 ---
 
@@ -351,12 +353,32 @@ cursore non le superasse, ogni giro ripartirebbe da prima.
 integrazione scrive. Se un domani ne arriva una, qui va un confronto con i
 nostri id.
 
-### 10.5 Resta da fare
+### 10.5 Dove siamo, e cosa resta (26/10/2026)
 
-- La **chiave con `punches:write`** (la crea Luca in Integrazioni di Timbro):
-  lo specchio legge il token dalla configurazione, quindi si attiva da sé.
-- Accendere «Evento con fasi del turno» su FPM e provare con una persona vera.
-- Usare la fase **dichiarata** dentro `statoGiornataTimbro` (oggi la sequenza
-  decide da sé, e con `step: null` è la cosa giusta).
-- Dopo le prime timbrature vere dall'app, Timbro verifica che compaiano da loro
-  con `source: "api"`. Solo allora si accende «Evento con fasi del turno».
+✅ **Fatto e misurato sul database di produzione**: la chiave con
+`punches:write` c'è, lo stato di FPM è **`attivo`** (quindi lo specchio scrive),
+«Evento con fasi del turno» è acceso e i campi arrivano — su 40 passaggi letti
+dal 21/10, **15 portano `passo`** e 16 `turno_era_aperto`. I valori veri visti
+sono `pause_start` / `pause_end`, con `passo_origine` `person` sul gesto della
+persona e `inferred` sulla deduzione del terminale: esattamente i due casi che
+`leggiPasso` distingue, e nessuna origine fuori dal contratto.
+
+⚠️ **`tipo` (la direzione) arriva `null` su tutti**, com'era inteso: Timbro
+espone eventi (§2) e la direzione la decide la nostra sequenza. Chi un domani
+vedesse un `tipo` valorizzato non lo prenda per un miglioramento: resta più
+informata la sequenza, che conosce anche le timbrature della nostra app.
+
+Resta da fare:
+
+- **La prima timbratura vera dall'app di FPM**: è il gesto che prova lo
+  specchio da capo a fondo (noi scriviamo su Timbro → la riga torna con
+  `source: "api"` → l'import la salta e non raddoppia la giornata). Fino a quel
+  momento lo specchio è provato solo sul tenant demo.
+- **Usare la fase dichiarata dentro `statoGiornataTimbro`**: oggi la sequenza
+  decide da sé e `faseDaSeguire` esiste senza chiamanti nel percorso di lettura.
+  Con `passo_origine: 'person'` che ora arriva davvero, una pausa **dichiarata
+  al terminale** potrebbe smettere di essere dedotta.
+- ⚠️ **L'ipotesi del terminale può contraddirci e nessuno lo sta ancora
+  guardando**: `leggiPasso` lo dichiara (`contraddice`), ma nessuna superficie
+  lo mostra all'ufficio. Un `inferred` sbagliato — tipico di chi apre il turno
+  dall'app prima che lo specchio arrivi a Timbro — oggi passa muto.
