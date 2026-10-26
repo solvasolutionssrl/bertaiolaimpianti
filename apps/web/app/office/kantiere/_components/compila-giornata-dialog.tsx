@@ -159,8 +159,10 @@ export function CompilaGiornataDialog({
   /** Dopo quale riga (indice in `righe`) sta la pausa; null = decide il motore. */
   const [pausaDopo, setPausaDopo] = React.useState<number | null>(null);
   const [righe, setRighe] = React.useState<Riga[]>([]);
-  const [partenza, setPartenza] = React.useState<string>('casa');
-  const [rientro, setRientro] = React.useState<string>('casa');
+  // ⚠️ Mai `'casa'`: «Abitazione privata» non e' piu' una scelta (26/10/2026,
+  // CCNL). Senza sedi non c'e' percorso da chiedere, e il valore resta vuoto.
+  const [partenza, setPartenza] = React.useState<string>('');
+  const [rientro, setRientro] = React.useState<string>('');
   const [guidaGiornata, setGuidaGiornata] = React.useState<Guida>({ autista: false, mezzoId: null });
   const [tratte, setTratte] = React.useState<Record<string, TrattaDetta>>({});
   const [stime, setStime] = React.useState<Record<string, Stima | 'attesa'>>({});
@@ -226,8 +228,8 @@ export function CompilaGiornataDialog({
   const andataDentro = modo?.tipo === 'scatola' ? modo.vista.inizioFisico : false;
   const ritornoDentro = modo?.tipo === 'scatola' ? modo.vista.fineFisica : false;
   const chiediAndata = modo?.tipo !== 'chiusura' && !(modo?.tipo === 'scatola' && modo.vista.primoCantiere);
-  const trattaAndata = chiediAndata && partenza !== 'casa' && primo && luogoDi(primo) !== `s:${partenza}` ? chiaveTratta(`s:${partenza}`, luogoDi(primo)) : null;
-  const trattaRitorno = rientro !== 'casa' && ultimo && luogoDi(ultimo) !== `s:${rientro}` ? chiaveTratta(luogoDi(ultimo), `s:${rientro}`) : null;
+  const trattaAndata = chiediAndata && !!partenza && primo && luogoDi(primo) !== `s:${partenza}` ? chiaveTratta(`s:${partenza}`, luogoDi(primo)) : null;
+  const trattaRitorno = !!rientro && ultimo && luogoDi(ultimo) !== `s:${rientro}` ? chiaveTratta(luogoDi(ultimo), `s:${rientro}`) : null;
   const tratteFra: (string | null)[] = vive.map((r, i) => (i === 0 ? null : luogoDi(vive[i - 1]!) === luogoDi(r) ? null : chiaveTratta(luogoDi(vive[i - 1]!), luogoDi(r))));
   const richieste = [trattaAndata, trattaRitorno, ...tratteFra].filter((x): x is string => !!x);
   const firma = richieste.join('|');
@@ -515,8 +517,8 @@ export function CompilaGiornataDialog({
       }];
     });
     const percorso = {
-      andata: chiediAndata && partenza !== 'casa' ? tratta(trattaAndata, partenza) : null,
-      ritorno: rientro !== 'casa' ? tratta(trattaRitorno, rientro) : null,
+      andata: chiediAndata && partenza ? tratta(trattaAndata, partenza) : null,
+      ritorno: rientro ? tratta(trattaRitorno, rientro) : null,
       autista: guidaGiornata.autista,
       mezzoId: guidaGiornata.autista ? guidaGiornata.mezzoId : null,
       passaggi,
@@ -672,7 +674,7 @@ export function CompilaGiornataDialog({
                   stima={stimaTratta(trattaAndata)}
                   attesa={!!trattaAndata && (stime[trattaAndata] === 'attesa' || stime[trattaAndata] === undefined)}
                   km={kmTratta(trattaAndata)}
-                  senzaStrada={partenza !== 'casa' && !trattaAndata}
+                  senzaStrada={!!partenza && !trattaAndata}
                   guida={trattaAndata ? guidaTratta(trattaAndata) : null}
                   mezzi={dati.mezzi}
                   disabled={pending}
@@ -788,7 +790,7 @@ export function CompilaGiornataDialog({
                   stima={stimaTratta(trattaRitorno)}
                   attesa={!!trattaRitorno && (stime[trattaRitorno] === 'attesa' || stime[trattaRitorno] === undefined)}
                   km={kmTratta(trattaRitorno)}
-                  senzaStrada={rientro !== 'casa' && !trattaRitorno}
+                  senzaStrada={!!rientro && !trattaRitorno}
                   guida={trattaRitorno ? guidaTratta(trattaRitorno) : null}
                   mezzi={dati.mezzi}
                   disabled={pending}
@@ -1135,9 +1137,7 @@ function EstremoCard({
   const parte = verso === 'partenza';
   const Freccia = parte ? ArrowUpRight : ArrowDownLeft;
   const detto =
-    valore === 'casa'
-      ? 'nessun viaggio di lavoro'
-      : senzaStrada
+    senzaStrada
         ? 'stessa sede: nessuna strada'
         : attesa
           ? 'stima in corso…'
@@ -1179,12 +1179,11 @@ function EstremoCard({
             partenza e rientro sono una sede, e la casa non ha km da contare.
             Resta come ripiego solo se il valore in corso e' gia' quello (una
             giornata vecchia), per non mostrare una tendina senza selezione. */}
-        {valore === 'casa' ? <option value="casa">Abitazione privata</option> : null}
       </select>
       <span className={cn('shrink-0 whitespace-nowrap tabular-nums text-[11px]', parte ? 'text-sky-800/80' : 'text-slate-600')}>
         {detto}
       </span>
-      {guida && valore !== 'casa' && !senzaStrada ? (
+      {guida && !senzaStrada ? (
         <ChipGuida guida={guida} mezzi={mezzi} disabled={disabled} onGuida={onGuida} />
       ) : null}
     </div>

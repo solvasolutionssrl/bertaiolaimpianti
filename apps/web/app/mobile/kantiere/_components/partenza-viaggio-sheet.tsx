@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { etichettaMezzo, ordinaMezzi } from '@kommessa/api/mezzi';
 import { createPortal } from 'react-dom';
-import { MapPin, Car, Loader2, Home, ArrowLeft, X, Play, Building2 } from 'lucide-react';
+import { MapPin, Car, Loader2, ArrowLeft, X, Play, Building2 } from 'lucide-react';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 
 import type {
@@ -12,8 +12,6 @@ import type {
   ViaggioRitornoPayload,
 } from '@/app/_components/viaggio-ritorno-dialog';
 
-/** Sentinel: "parto da casa" → nessun viaggio di lavoro (0 km, 0 tempo). */
-const CASA_ID = '__casa__';
 
 // ─── format (piccoli helper, gemelli del dialog di ritorno) ─────────────────────
 
@@ -78,7 +76,9 @@ export interface PartenzaViaggioSheetProps {
  * l'avvio del turno è la priorità, quindi una stima km non disponibile NON deve
  * impedire di iniziare (a differenza del ritorno, dove il tempo è obbligatorio).
  *
- * Le opzioni ammesse sono: "Abitazione privata" (0 km / 0 tempo), la sede
+ * ⚠️ Dal 26/10/2026 «Abitazione privata» NON è più una scelta: scelta
+ * aziendale che sta nel CCNL, si conta come se si partisse sempre dalla sede.
+ * Le opzioni ammesse sono: la sede
  * predefinita del tenant e le sedi associate al cantiere (regola sedi↔cantiere,
  * già filtrata lato server). Portal su body → sopra la bottom-nav.
  */
@@ -112,9 +112,8 @@ export function PartenzaViaggioSheet({
   // «Lavoro dalla sede sul progetto»: l'andata arriva alla sede predefinita.
   const [daSede, setDaSede] = useState(false);
 
-  const casa = sedeId === CASA_ID;
   const stessaSede = daSede && sedeDefaultId != null && sedeId === sedeDefaultId;
-  const senzaViaggio = casa || stessaSede;
+  const senzaViaggio = stessaSede;
   const modificato = !senzaViaggio && stimaMin != null && confermMin !== stimaMin;
   const nomeSedeDefault = sedi.find((s) => s.id === sedeDefaultId)?.nome ?? 'la sede predefinita';
   const giustObbligatoria = modificato;
@@ -180,15 +179,6 @@ export function PartenzaViaggioSheet({
     setSedeId(id);
     setGiustificazione('');
     setErrLocale(null);
-    if (id === CASA_ID) {
-      // Parto da casa: nessun viaggio di lavoro → 0 km, 0 tempo, niente stima.
-      reqSeq.current += 1; // invalida eventuali stime ancora in volo
-      setStimaMin(null);
-      setStimaKm(null);
-      setConfermMin(0);
-      setStimaLoading(false);
-      return;
-    }
     void calcolaStima(id, daSede);
   }
 
@@ -196,12 +186,12 @@ export function PartenzaViaggioSheet({
     setDaSede(attivo);
     setGiustificazione('');
     setErrLocale(null);
-    if (sedeId && sedeId !== CASA_ID) void calcolaStima(sedeId, attivo);
+    if (sedeId) void calcolaStima(sedeId, attivo);
   }
 
   // All'apertura (o quando arrivano le opzioni): preseleziona la sede predefinita
   // — coerente con lo scan QR — e calcola subito km + tempo. Se non c'è nessuna
-  // sede si parte da "Abitazione privata".
+  // sede, non si chiede nessuna strada.
   useEffect(() => {
     if (!open) {
       setSedeId('');
@@ -216,9 +206,9 @@ export function PartenzaViaggioSheet({
       return;
     }
     if (loading) return;
-    const def = sedeDefaultId ?? sedi[0]?.id ?? CASA_ID;
+    const def = sedeDefaultId ?? sedi[0]?.id ?? '';
     setSedeId(def);
-    if (def !== CASA_ID) void calcolaStima(def, false);
+    if (def) void calcolaStima(def, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, loading]);
 
@@ -338,25 +328,7 @@ export function PartenzaViaggioSheet({
                 Sede di partenza
               </p>
               <div className="grid gap-2">
-                {/* Abitazione privata: sempre disponibile → 0 km, 0 tempo. */}
-                <button
-                  type="button"
-                  onClick={() => selezionaSede(CASA_ID)}
-                  className={[
-                    'flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
-                    casa
-                      ? 'border-primary bg-primary/5 font-medium text-foreground'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted/40',
-                  ].join(' ')}
-                >
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <Home className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                    <span className="truncate">Abitazione privata</span>
-                  </span>
-                  <span className="ml-2 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
-                    no viaggio
-                  </span>
-                </button>
+
                 {sediOrdinate.map((s) => (
                   <button
                     key={s.id}
@@ -378,11 +350,7 @@ export function PartenzaViaggioSheet({
               </div>
             </div>
 
-            {casa ? (
-              <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                Partenza dall’abitazione: nessun chilometro né tempo di viaggio da registrare.
-              </p>
-            ) : stessaSede ? (
+            {stessaSede ? (
               <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
                 Partenza dalla sede di lavoro: nessun chilometro né tempo di viaggio da registrare.
               </p>

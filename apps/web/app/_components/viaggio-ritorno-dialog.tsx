@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { etichettaMezzo, ordinaMezzi } from '@kommessa/api/mezzi';
 import { etichettaLuogo, valoreLuogo, MESSAGGIO_FASE_RICHIESTA } from '@kommessa/api/sottocantieri';
 import { createPortal } from 'react-dom';
-import { MapPin, Car, Loader2, Utensils, X, Home, Plus, Minus } from 'lucide-react';
+import { MapPin, Car, Loader2, Utensils, X, Plus, Minus } from 'lucide-react';
 import { useConfermaPasseggero } from '@/app/_components/conferma-passeggero';
 import { Button } from '@kommessa/ui';
 import {
@@ -15,8 +15,6 @@ import { titoloCase } from '@/app/mobile/_lib/display-case';
 import { etichettaPausa, PAUSA_PREDEFINITA_MIN } from '@kommessa/api/kantiere-pausa';
 import { SceltaPausaPranzo } from '@/app/_components/scelta-pausa-pranzo';
 
-/** Sentinel: "rientro a casa" → nessun viaggio di lavoro (0 km, 0 tempo). */
-const CASA_ID = '__casa__';
 
 // ─── tipi ─────────────────────────────────────────────────────────────────────
 
@@ -287,9 +285,8 @@ export function ViaggioRitornoDialog({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const casa = sedeId === CASA_ID;
   const stessaSede = sedeLavoroId != null && sedeId === sedeLavoroId;
-  const senzaViaggio = casa || stessaSede;
+  const senzaViaggio = stessaSede;
   const modificato = !senzaViaggio && stimaMin != null && confermMin !== stimaMin;
   const giustObbligatoria = modificato;
 
@@ -347,15 +344,6 @@ export function ViaggioRitornoDialog({
     setSedeId(id);
     setGiustificazione('');
     setErrLocale(null);
-    if (id === CASA_ID) {
-      // Rientro a casa: nessun viaggio di lavoro → 0 km, 0 tempo, niente stima.
-      reqSeq.current += 1; // invalida eventuali stime ancora in volo
-      setStimaMin(null);
-      setStimaKm(null);
-      setConfermMin(0);
-      setStimaLoading(false);
-      return;
-    }
     void calcolaStima(id);
   }
 
@@ -556,33 +544,11 @@ export function ViaggioRitornoDialog({
                       </span>
                     </button>
                   ))}
-                  {/* Rientro a casa: sempre disponibile → 0 km, 0 tempo. */}
-                  <button
-                    type="button"
-                    onClick={() => selezionaSede(CASA_ID)}
-                    className={[
-                      'flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
-                      casa
-                        ? 'border-primary bg-primary/5 font-medium text-foreground'
-                        : 'border-border bg-background text-muted-foreground hover:bg-muted/40',
-                    ].join(' ')}
-                  >
-                    <span className="inline-flex min-w-0 items-center gap-2">
-                      <Home className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                      <span className="truncate">Abitazione privata</span>
-                    </span>
-                    <span className="ml-2 shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      no viaggio
-                    </span>
-                  </button>
+
                 </div>
               </div>
 
-              {casa ? (
-                <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                  Rientro a casa: nessun km né tempo di viaggio da registrare.
-                </p>
-              ) : stessaSede ? (
+              {stessaSede ? (
                 <p className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
                   Rientro nella sede in cui hai lavorato: nessun km né tempo di viaggio da registrare.
                 </p>

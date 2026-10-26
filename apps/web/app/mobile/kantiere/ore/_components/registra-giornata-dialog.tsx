@@ -533,7 +533,7 @@ export function RegistraGiornataDialog({
 
   /**
    * Partenza e rientro: di default la sede predefinita (in Registra giornata non
-   * c'è l'abitazione privata). Una sede che il cantiere non ammette più torna
+   * ⚠️ L'abitazione privata non è più fra le scelte, dal 26/10/2026). Una sede che il cantiere non ammette più torna
    * alla predefinita. Quando l'estremo non si mostra non c'è viaggio da indicare.
    */
   const luogoEstremo = (
@@ -541,7 +541,12 @@ export function RegistraGiornataDialog({
     ammesse: SedeOpzione[],
     mostra: boolean,
   ): Estremo => {
-    const predefinito: Estremo = sedeDefaultLuogo ?? { tipo: 'casa' };
+    // ⚠️ Mai l'abitazione privata: dal 26/10/2026 non e' piu' una scelta (CCNL,
+    // si conta come se si partisse sempre dalla sede). Senza una sede
+    // predefinita si ripiega sulla prima ammessa; se non ce n'e' nessuna
+    // l'estremo non si mostra, quindi non c'e' niente da indicare.
+    const primaAmmessa = ammesse[0];
+    const predefinito: Estremo = sedeDefaultLuogo ?? (primaAmmessa ? { tipo: 'sede', sedeId: primaAmmessa.id } : { tipo: 'casa' });
     if (!mostra) return predefinito;
     if (scelto?.tipo === 'sede' && ammesse.some((s) => s.id === scelto.sedeId)) return scelto;
     return predefinito;

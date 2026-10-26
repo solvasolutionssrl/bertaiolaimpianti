@@ -68,7 +68,7 @@ interface OpzioniPartenza {
 /**
  * Pulsante "Inizia turno" (senza QR) → flusso in DUE step:
  *  1. scegli il cantiere (foglio di ricerca);
- *  2. "da dove parti?" (Abitazione privata / sede FPM / sedi del cantiere) →
+ *  2. "da dove parti?" (la sede predefinita o le sedi del cantiere) →
  *     registra la tratta di andata (km + tempo) come lo scan QR.
  *
  * Riusabile su home tecnico, lista Cantieri e cruscotto office. Se i `cantieri`
@@ -146,7 +146,7 @@ export function IniziaTurnoButton({
     })();
   }
 
-  // Step 2 → avvio effettivo (viaggio null = "Abitazione privata": 0 km/0 tempo).
+  // Step 2 → avvio effettivo (viaggio null = nessuna strada da contare).
   function avvia(viaggio: ViaggioRitornoPayload | null, opzioni: { daSede: boolean } = { daSede: false }) {
     if (!selectedId) return;
     setErrore(null);

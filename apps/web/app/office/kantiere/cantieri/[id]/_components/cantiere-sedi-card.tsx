@@ -63,7 +63,6 @@ const SELECT_CLS =
  * sedi). Mostra in modo semplice cosa i tecnici vedranno alla domanda "Da dove
  * sei partito?" per QUESTO cantiere:
  *  - la **sede predefinita** del tenant (sempre, sola lettura);
- *  - **Abitazione privata** (sempre disponibile a fine turno, sola lettura);
  *  - le **sedi collegate** a questo cantiere (rimovibili);
  *  - due modi per aggiungerne: "usa una sede esistente" (ricerca) o "crea nuova".
  *
@@ -147,14 +146,6 @@ export function CantiereSediCard({
             .
           </li>
         )}
-
-        {/* Abitazione privata — sempre, a fine turno */}
-        <RigaFissa
-          icona={<Home className="h-4 w-4 text-slate-500" aria-hidden="true" />}
-          nome="Abitazione privata"
-          badge="A fine turno · sempre"
-          badgeCls="bg-slate-100 text-slate-600"
-        />
 
         {/* Sedi collegate — rimovibili */}
         {collegate.map((s) => (

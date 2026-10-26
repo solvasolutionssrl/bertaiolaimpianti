@@ -344,6 +344,12 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
  * che era al lavoro dalle 07:40. Zero era vero per le ore *attribuite* e
  * falso per chiunque guardasse la riga.
  *
+ * ⚠️ Vale anche **in pausa e a giornata finita ma non ripartita**: quando la
+ * persona timbra l'inizio della pausa l'intervallo si chiude, lo stato passa a
+ * «da ripartire» e il tempo tornava a **0:00** — cioe' la stessa bugia di
+ * prima, un passo piu' in la'. Finche' le ore non sono sui cantieri si mostra
+ * la presenza: viva se l'intervallo e' aperto, ferma se e' chiuso.
+ *
  * ⚠️ Niente `Date.now()` nell'inizializzatore di `useState`: server e browser
  * darebbero due alberi diversi e l'idratazione salterebbe.
  */
@@ -356,10 +362,16 @@ function usePresenzaViva(timbro: TimbroGiornataVista | null | undefined): number
     const id = setInterval(() => setOra(Date.now()), 30_000);
     return () => clearInterval(id);
   }, [aperta]);
-  if (!timbro || !aperta || ora === null) return null;
-  const da = timbro.inizioIso ?? timbro.timbri.find((t) => !t.scartato)?.ts ?? null;
-  if (!da) return null;
-  return Math.max(0, Math.round((ora - Date.parse(da)) / 60000) - (timbro.pausaTimbrataMin ?? 0));
+  if (!timbro) return null;
+  if (aperta) {
+    if (ora === null) return null;
+    const da = timbro.inizioIso ?? timbro.timbri.find((t) => !t.scartato)?.ts ?? null;
+    if (!da) return null;
+    return Math.max(0, Math.round((ora - Date.parse(da)) / 60000) - (timbro.pausaTimbrataMin ?? 0));
+  }
+  // Intervallo chiuso (pausa iniziata, o giornata finita): il netto e' gia'
+  // calcolato, pause timbrate escluse. Non scorre piu', ma non e' zero.
+  return timbro.nettoMin > 0 ? timbro.nettoMin : null;
 }
 
 function OggiRow({
@@ -418,12 +430,14 @@ function OggiRow({
             // Presenza in corso e niente ancora sui cantieri: si mostra il
             // tempo che scorre, ma in tono minore e con un perche'. Non sono
             // ore attribuite, e darle per tali sarebbe l'errore opposto.
+            // ⚠️ La parola «presenza» su una riga sua faceva andare a capo la
+            // colonna: sta nel suggerimento, e il tono spento basta a dire che
+            // non sono ore attribuite. La `h` resta **accanto** al numero.
             <span
-              className="tabular-nums text-sm font-medium text-muted-foreground"
-              title="Presenza in corso: le ore non sono ancora attribuite ai cantieri."
+              className="whitespace-nowrap tabular-nums text-sm font-medium text-muted-foreground"
+              title="Tempo di presenza: le ore non sono ancora attribuite ai cantieri."
             >
-              {minToColon(presenzaViva)}<span className="ml-0.5 text-[11px] font-normal"> h</span>
-              <span className="ml-1 text-[10px] font-normal uppercase tracking-wide">presenza</span>
+              {minToColon(presenzaViva)}<span className="font-normal"> h</span>
             </span>
           )}
         </td>

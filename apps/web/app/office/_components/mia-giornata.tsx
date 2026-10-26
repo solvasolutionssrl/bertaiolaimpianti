@@ -258,7 +258,7 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
   const [pending, startTransition] = React.useTransition();
   const [cantiereId, setCantiereId] = React.useState<string | null>(null);
   const [inSede, setInSede] = React.useState(dati.modalitaLavoro === 'ufficio');
-  const [partenza, setPartenza] = React.useState<string>(dati.sedi.find((s) => s.isDefault)?.id ?? 'casa');
+  const [partenza, setPartenza] = React.useState<string>(dati.sedi.find((s) => s.isDefault)?.id ?? dati.sedi[0]?.id ?? '');
   const [autista, setAutista] = React.useState(false);
   const [mezzoId, setMezzoId] = React.useState(dati.ultimoMezzoId ?? '');
   const [errore, setErrore] = React.useState<string | null>(null);
@@ -287,7 +287,7 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
         return;
       }
       let viaggio: { sedeId: string; durataStimataMin: number | null; durataConfermataMin: number; distanzaKm: number | null; autista: boolean; mezzoId: string | null } | undefined;
-      const sedePartenza = inSede ? null : partenza !== 'casa' ? partenza : null;
+      const sedePartenza = inSede ? null : partenza || null;
       if (sedePartenza) {
         const st = await fetch('/api/routing/stima', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sedeId: sedePartenza, cantiereId, direzione: 'andata' }) })
           .then((r) => r.json() as Promise<{ ok?: boolean; minuti?: number | null; km?: number | null }>)
@@ -329,11 +329,15 @@ function AvviaGiornataDialog({ open, onClose, dati }: { open: boolean; onClose: 
             <label className="block space-y-1">
               <span className="font-medium text-muted-foreground">Partenza</span>
               <select value={partenza} disabled={pending} onChange={(e) => setPartenza(e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                {/* ⚠️ **«Abitazione privata» non esiste piu' come scelta** (26/10/2026, scelta
+                    aziendale di FPM, con una ragione che vale anche per i clienti futuri: lo dice
+                    il **CCNL**). Si conta come se si partisse **sempre dalla sede**. Non si
+                    rimette «perche' sarebbe comodo»: e' una regola del contratto, non una
+                    preferenza di interfaccia. */}
                 {sediAmmesse.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-                <option value="casa">Abitazione privata</option>
               </select>
             </label>
-            {partenza !== 'casa' ? (
+            {partenza ? (
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-1.5"><input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={autista} disabled={pending} onChange={(e) => setAutista(e.target.checked)} /> Conducente</label>
                 {autista && dati.mezzi.length > 0 ? (
