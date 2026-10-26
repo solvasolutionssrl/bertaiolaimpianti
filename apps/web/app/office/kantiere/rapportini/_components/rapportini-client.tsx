@@ -336,6 +336,32 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
  * il totale ore LIVE va nell'ultima colonna, sempre popolato.
  */
 
+/**
+ * I minuti di PRESENZA di una giornata ancora aperta, che scorrono.
+ *
+ * ⚠️ Serve perche' chi ha solo passato il badge non ha nessuna timbratura sui
+ * cantieri: `useTotaleGiornata` conta quelle, e quindi diceva **0:00** a uno
+ * che era al lavoro dalle 07:40. Zero era vero per le ore *attribuite* e
+ * falso per chiunque guardasse la riga.
+ *
+ * ⚠️ Niente `Date.now()` nell'inizializzatore di `useState`: server e browser
+ * darebbero due alberi diversi e l'idratazione salterebbe.
+ */
+function usePresenzaViva(timbro: TimbroGiornataVista | null | undefined): number | null {
+  const aperta = !!timbro && (timbro.stato === 'presenza_aperta' || timbro.fineIso === null);
+  const [ora, setOra] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!aperta) return;
+    setOra(Date.now());
+    const id = setInterval(() => setOra(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, [aperta]);
+  if (!timbro || !aperta || ora === null) return null;
+  const da = timbro.inizioIso ?? timbro.timbri.find((t) => !t.scartato)?.ts ?? null;
+  if (!da) return null;
+  return Math.max(0, Math.round((ora - Date.parse(da)) / 60000) - (timbro.pausaTimbrataMin ?? 0));
+}
+
 function OggiRow({
   riga,
   isOpen,
@@ -348,6 +374,7 @@ function OggiRow({
   mioId?: string | null;
 }) {
   const { minuti } = useTotaleGiornata(riga.timbrature);
+  const presenzaViva = usePresenzaViva(riga.timbro);
   const labels = targetLabels(riga);
   return (
     <>
@@ -385,7 +412,20 @@ function OggiRow({
           )}
         </td>
         <td className="px-2 py-1.5 text-right align-top">
-          <span className="tabular-nums text-sm font-semibold text-foreground">{minToColon(minuti)}</span>
+          {minuti > 0 || presenzaViva === null ? (
+            <span className="tabular-nums text-sm font-semibold text-foreground">{minToColon(minuti)}</span>
+          ) : (
+            // Presenza in corso e niente ancora sui cantieri: si mostra il
+            // tempo che scorre, ma in tono minore e con un perche'. Non sono
+            // ore attribuite, e darle per tali sarebbe l'errore opposto.
+            <span
+              className="tabular-nums text-sm font-medium text-muted-foreground"
+              title="Presenza in corso: le ore non sono ancora attribuite ai cantieri."
+            >
+              {minToColon(presenzaViva)}
+              <span className="ml-1 text-[10px] font-normal uppercase tracking-wide">presenza</span>
+            </span>
+          )}
         </td>
       </tr>
       {isOpen ? (

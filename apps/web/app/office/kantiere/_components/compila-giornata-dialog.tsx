@@ -98,13 +98,24 @@ const nuovaRiga = (r: Omit<Riga, 'id'>): Riga => ({ id: nuovoId(), ...r });
  * Sono le stesse famiglie della «La giornata» del telefono, nella densita'
  * dell'ufficio: bordo a sinistra pieno, fondo appena tinto.
  */
+/**
+ * Una tinta per cantiere, e devono distinguersi **a colpo d'occhio**.
+ *
+ * ⚠️ Prima tre toni su sei erano blu (`primary`, `indigo`, `sky`): la prima,
+ * la terza e la quinta card si somigliavano, che e' il contrario del motivo
+ * per cui le tinte esistono. E i fondi stavano al 4-6%, cioe' bianco.
+ * Ora i toni adiacenti sono **lontani di tinta** e il fondo si vede.
+ *
+ * ⚠️ Non vale la regola «poca varieta' di colori» dell'ufficio: li' il colore
+ * decora, qui **e' l'identita' della riga** mentre la si trascina.
+ */
 const TINTE = [
-  { bordo: 'border-l-primary', fondo: 'bg-primary/[0.045]', punto: 'bg-primary' },
-  { bordo: 'border-l-teal-500', fondo: 'bg-teal-500/[0.06]', punto: 'bg-teal-500' },
-  { bordo: 'border-l-indigo-500', fondo: 'bg-indigo-500/[0.06]', punto: 'bg-indigo-500' },
-  { bordo: 'border-l-amber-500', fondo: 'bg-amber-500/[0.07]', punto: 'bg-amber-500' },
-  { bordo: 'border-l-sky-500', fondo: 'bg-sky-500/[0.06]', punto: 'bg-sky-500' },
-  { bordo: 'border-l-rose-500', fondo: 'bg-rose-500/[0.06]', punto: 'bg-rose-500' },
+  { bordo: 'border-l-primary', fondo: 'bg-primary/[0.09]' },
+  { bordo: 'border-l-amber-500', fondo: 'bg-amber-500/[0.13]' },
+  { bordo: 'border-l-teal-600', fondo: 'bg-teal-600/[0.11]' },
+  { bordo: 'border-l-rose-500', fondo: 'bg-rose-500/[0.10]' },
+  { bordo: 'border-l-violet-500', fondo: 'bg-violet-500/[0.10]' },
+  { bordo: 'border-l-lime-600', fondo: 'bg-lime-600/[0.13]' },
 ] as const;
 const tinta = (i: number) => TINTE[i % TINTE.length]!;
 
@@ -1084,29 +1095,54 @@ function EstremoCard({
 }) {
   const parte = verso === 'partenza';
   const Freccia = parte ? ArrowUpRight : ArrowDownLeft;
+  const detto =
+    valore === 'casa'
+      ? 'nessun viaggio di lavoro'
+      : senzaStrada
+        ? 'stessa sede: nessuna strada'
+        : attesa
+          ? 'stima in corso…'
+          : stima === null
+            ? 'nessuna stima'
+            : `${hm(stima)}${fmtKm(km) ? ` · ${fmtKm(km)}` : ''}`;
   return (
     <div
       className={cn(
-        'rounded-md border border-l-4 px-2.5 py-1.5 text-xs',
-        parte ? 'border-sky-200 border-l-sky-600 bg-sky-50/70' : 'border-slate-200 border-l-slate-500 bg-slate-50/80',
+        // ⭐ Un estremo NON e' un blocco di lavoro: niente barra piena a
+        // sinistra, che qui vuol dire «cantiere». E' viaggio, quindi parla la
+        // lingua delle tratte fra i blocchi: tratteggio sky, fondo tenue.
+        'flex min-h-[2.25rem] flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-dashed px-2 py-1 text-xs',
+        parte ? 'border-sky-300 bg-sky-50/60' : 'border-slate-300 bg-slate-50/70',
       )}
     >
-      <div className="flex items-center gap-2">
-        <span className={cn('flex w-[6.5rem] shrink-0 items-center gap-1 font-semibold', parte ? 'text-sky-900' : 'text-slate-700')}>
-          <Freccia className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-          {titolo}
-        </span>
-        <select value={valore} disabled={disabled} aria-label={titolo} onChange={(e) => onValore(e.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
-          {opzioni.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
-          <option value="casa">Abitazione privata</option>
-        </select>
-      </div>
-      <div className={cn('mt-1 flex flex-wrap items-center justify-between gap-2 pl-[7.25rem] text-[11px]', parte ? 'text-sky-800/80' : 'text-slate-600')}>
-        <span>
-          {valore === 'casa' ? 'nessun viaggio di lavoro' : senzaStrada ? 'si lavora nella stessa sede: nessuna strada' : attesa ? 'stima in corso…' : stima === null ? 'nessuna stima' : <>{hm(stima)}{fmtKm(km) ? ` · ${fmtKm(km)}` : ''}</>}
-        </span>
-        {guida && valore !== 'casa' && !senzaStrada ? <ChipGuida guida={guida} mezzi={mezzi} disabled={disabled} onGuida={onGuida} /> : null}
-      </div>
+      {/* Il punto: e' un capolinea, non un blocco. Pieno si parte, vuoto si rientra. */}
+      <span
+        className={cn(
+          'ml-0.5 h-2 w-2 shrink-0 rounded-full border-2',
+          parte ? 'border-sky-600 bg-sky-600' : 'border-slate-500 bg-transparent',
+        )}
+        aria-hidden="true"
+      />
+      <span className={cn('flex shrink-0 items-center gap-1 font-semibold', parte ? 'text-sky-900' : 'text-slate-700')}>
+        <Freccia className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        {titolo}
+      </span>
+      <select
+        value={valore}
+        disabled={disabled}
+        aria-label={titolo}
+        onChange={(e) => onValore(e.target.value)}
+        className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-1.5 text-[13px]"
+      >
+        {opzioni.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+        <option value="casa">Abitazione privata</option>
+      </select>
+      <span className={cn('shrink-0 whitespace-nowrap tabular-nums text-[11px]', parte ? 'text-sky-800/80' : 'text-slate-600')}>
+        {detto}
+      </span>
+      {guida && valore !== 'casa' && !senzaStrada ? (
+        <ChipGuida guida={guida} mezzi={mezzi} disabled={disabled} onGuida={onGuida} />
+      ) : null}
     </div>
   );
 }
