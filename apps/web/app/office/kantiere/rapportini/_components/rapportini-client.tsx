@@ -422,7 +422,7 @@ function OggiRow({
               className="tabular-nums text-sm font-medium text-muted-foreground"
               title="Presenza in corso: le ore non sono ancora attribuite ai cantieri."
             >
-              {minToColon(presenzaViva)}
+              {minToColon(presenzaViva)}<span className="ml-0.5 text-[11px] font-normal"> h</span>
               <span className="ml-1 text-[10px] font-normal uppercase tracking-wide">presenza</span>
             </span>
           )}
