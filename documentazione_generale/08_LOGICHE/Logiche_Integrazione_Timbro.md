@@ -276,3 +276,87 @@ fine turno chiude una presenza aperta.
 ⚠️ **Un solo `sistema` per tenant.** `tenant_modules.config.sistema` è un valore solo e FPM ha già `ergo`: le mappature di Timbro finirebbero archiviate sotto quel nome, e le query di salute (`admin/_lib/integrazione/foto.ts`) filtrano **solo per `tenant_id`, non per `sistema`** — con due integrazioni i contatori si sommerebbero. ⭐ Il posto giusto per `sistema` è **il token**, che è emesso per integratore e quindi sa già chi chiama.
 
 ⚠️ **Timbro ≠ ore per commessa.** Un badge dice *quando* e *dove c'è il lettore*: risponde a «quante ore ha lavorato Mario», non a «quante ore su quella casa». L'attribuzione la mette una persona, ed è tutto il senso della scatola da riempire.
+
+## 10. Le fasi del turno (26/10/2026)
+
+Timbro dichiara in che punto del turno si trova una persona. Contratto
+**additivo**: autenticazione, cursore, HMAC e `external_id` invariati. Finché
+FPM resta in «Solo evento» i campi arrivano `null` e non cambia niente.
+Fonte: `03_NOTE/14_per-kommessa-fasi-del-turno.md` nel repo di Timbro (casi
+limite nel 13).
+
+### 10.1 Cosa arriva
+
+Su ogni passaggio: `step` (`start` · `pause_start` · `pause_end` · `end` ·
+`null`), `step_source` (`person` · `inferred` · `api` · `office` · `null`),
+`shift_was_open`, `previous_punch_id`, `previous_occurred_at`. Si salvano in
+`timbri_grezzi` come `passo`, `passo_origine`, `turno_era_aperto`,
+`precedente_esterno_id`, `precedente_at` (migration `20261026090000`).
+
+⚠️ **Nessun vincolo sui valori**: l'elenco delle fasi è di Timbro, non nostro.
+Un valore nuovo deve poter entrare e farsi leggere come «non la riconosco»
+(`@kommessa/api/timbro-passo`), non far fallire l'import di tutta la giornata.
+
+### 10.2 Come si legge
+
+⚠️ **`direction` non si guarda mai.** Con una fase è determinata dalla fase;
+senza, è una deduzione del terminale. Lo dice Timbro stesso.
+
+⚠️ **`inferred` è un'ipotesi, non un fatto.** Il terminale la ricava
+dall'ultimo stato che *lui* conosce: se la persona ha aperto il turno dalla
+nostra app e non gliel'abbiamo ancora detto, è sbagliata. `leggiPasso`
+confronta con la nostra sequenza e, quando si contraddicono, **lo dichiara**
+(`contraddice: true`) invece di scegliere. Si segue la fase solo se
+`dichiarata` (person/office) o `nostra` (api).
+
+⚠️ Un `step_source` sconosciuto **non** si promuove a «dichiarata».
+
+A schermo (`TimbriTerminale`) si scrive solo ciò che è dichiarato: un'ipotesi
+scritta come un fatto farebbe credere a una pausa che nessuno ha indicato.
+
+### 10.3 Come si scrive (`_lib/timbro/invia.ts`)
+
+⚠️⚠️ **Non tutte le righe.** Lo scrittore unico produce anche righe
+*derivate*: divisione di fine turno, «Registra giornata», scatola, cambio
+cantiere scrivono più righe in un colpo. Mandarle direbbe al terminale che il
+turno si è aperto e chiuso cinque volte, e il suo `inferred` peggiorerebbe
+**per colpa nostra**. Si manda il **lotto da una riga sola** (un gesto vero) e
+la **fine turno** di un lotto qualsiasi. Regola in `daSpecchiare`, pura.
+
+⚠️⚠️ **Il cambio cantiere non manda NIENTE** (deciso con Timbro il 26/10). Un
+gesto vero, ma la persona sta ancora lavorando: mandare la sola uscita sarebbe
+**peggio** del silenzio, perché per Timbro il turno risulterebbe chiuso e il
+badge di fine giornata diventerebbe uno `start` dedotto — sbagliato, e con una
+fiducia apparente. Scartate anche le alternative: una pausa finta sarebbe una
+bugia salvata come dichiarata, e un valore nuovo tipo `move` costerebbe schema,
+vincolo, firmware e documentazione.
+⭐ Il riconoscimento guarda **la sequenza, non gli orari** («c'è un ingresso
+dopo?»): regge anche se i due istanti non coincidono, mentre «stesso istante»
+dipenderebbe da come il chiamante arrotonda.
+
+⚠️ Non blocca mai: `waitUntil` dentro l'helper, nessuna sollevazione.
+⚠️ Idempotente sull'id della nostra riga. Un 401/403 (scope `punches:write`
+mancante) si dice una volta e si smette.
+⚠️ Mai le righe con `origine: 'timbro'`: si rimanderebbe ciò che si è letto.
+
+### 10.4 Il rischio chiuso per primo
+
+Le timbrature che scriviamo tornano in `GET /punches` con `source: "api"`, e
+`genereDa()` le avrebbe importate come passaggi veri: **la giornata di chi
+timbra dall'app sarebbe raddoppiata**. Ora si saltano (contate in
+`esito.nostri`). ⚠️ Il salto sta **dopo** l'avanzamento di `maxUpdated`: se il
+cursore non le superasse, ogni giro ripartirebbe da prima.
+
+⚠️ Si salta per `source`, non confrontando gli id: oggi su FPM nessun'altra
+integrazione scrive. Se un domani ne arriva una, qui va un confronto con i
+nostri id.
+
+### 10.5 Resta da fare
+
+- La **chiave con `punches:write`** (la crea Luca in Integrazioni di Timbro):
+  lo specchio legge il token dalla configurazione, quindi si attiva da sé.
+- Accendere «Evento con fasi del turno» su FPM e provare con una persona vera.
+- Usare la fase **dichiarata** dentro `statoGiornataTimbro` (oggi la sequenza
+  decide da sé, e con `step: null` è la cosa giusta).
+- Dopo le prime timbrature vere dall'app, Timbro verifica che compaiano da loro
+  con `source: "api"`. Solo allora si accende «Evento con fasi del turno».

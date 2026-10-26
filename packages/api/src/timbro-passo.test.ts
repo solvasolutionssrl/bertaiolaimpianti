@@ -151,16 +151,37 @@ describe('daSpecchiare — cosa si manda a Timbro e cosa no', () => {
     expect(daSpecchiare([r('uscita', false, 'manuale', '2026-10-26T17:00:00Z')])).toEqual([]);
   });
 
-  it('un cambio cantiere (uscita + ingresso) non dice a Timbro che il turno è finito', () => {
+  it('⭐ un cambio cantiere non manda NIENTE: la persona sta ancora lavorando', () => {
+    // Concordato con Timbro il 26/10: mandare la sola uscita è peggio di non
+    // mandare niente, perché il terminale risulterebbe chiuso e il badge di
+    // fine giornata diventerebbe uno `start` dedotto — sbagliato, e con una
+    // fiducia apparente.
+    expect(
+      daSpecchiare([
+        r('uscita', false, 'cronometro', '2026-10-26T14:00:00Z'),
+        r('ingresso', false, 'cronometro', '2026-10-26T14:25:00Z'),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('⚠️ si guarda la SEQUENZA, non l\u2019orario: regge anche a istanti identici', () => {
+    expect(
+      daSpecchiare([
+        r('uscita', false, 'cronometro', '2026-10-26T14:00:00Z'),
+        r('ingresso', false, 'cronometro', '2026-10-26T14:00:00Z'),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('una giornata che finisce davvero manda la fine, anche se contiene ingressi', () => {
     const out = daSpecchiare([
-      r('uscita', false, 'cronometro', '2026-10-26T14:00:00Z'),
-      r('ingresso', false, 'cronometro', '2026-10-26T14:25:00Z'),
+      r('ingresso', false, 'cronometro', '2026-10-26T08:00:00Z'),
+      r('uscita', false, 'cronometro', '2026-10-26T12:00:00Z'),
+      r('ingresso', false, 'cronometro', '2026-10-26T13:00:00Z'),
+      r('uscita', false, 'cronometro', '2026-10-26T17:00:00Z'),
     ]);
-    // L'uscita è l'ultima fine-turno del lotto: si manda quella e basta, mai
-    // il riaperto. ⚠️ È il compromesso dichiarato: il terminale saprà che il
-    // turno è chiuso finché non arriva un badge.
     expect(out).toHaveLength(1);
-    expect(out[0]!.tipo).toBe('uscita');
+    expect(out[0]!.ts).toBe('2026-10-26T17:00:00Z');
   });
 
   it('con due persone nello stesso lotto, una fine turno ciascuna', () => {

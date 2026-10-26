@@ -152,6 +152,17 @@ export function passoDaTimbratura(tipo: 'ingresso' | 'uscita', pausa: boolean): 
  * tasto nell'app, capo squadra) e **la fine turno** di un lotto qualsiasi, che
  * e' l'unico fatto che il terminale deve conoscere di una giornata ricostruita.
  *
+ * ⚠️⚠️ **Un'uscita seguita da un ingresso della stessa persona non e' una fine
+ * turno**: e' un cambio cantiere, e la persona sta ancora lavorando. Mandarla
+ * sarebbe **peggio di non mandare niente**: per Timbro il turno risulterebbe
+ * chiuso, e il badge di fine giornata verrebbe registrato come `start`
+ * dedotto — un'informazione sbagliata con una fiducia apparente, invece di un
+ * onesto «non lo so». Concordato con Timbro il 26/10/2026.
+ *
+ * ⭐ Il riconoscimento guarda **la sequenza, non gli orari**: «c'e' un ingresso
+ * dopo?» regge anche se i due istanti non coincidono, mentre «stesso istante»
+ * dipende da come il chiamante arrotonda.
+ *
  * ⚠️ Mai le righe che vengono DA Timbro (`origine: 'timbro'`): si rimanderebbe
  * indietro cio' che si e' appena letto.
  */
@@ -161,10 +172,20 @@ export function daSpecchiare<T extends { tipo: 'ingresso' | 'uscita'; pausa: boo
   const vive = righe.filter((r) => r.origine === 'qr' || r.origine === 'cronometro' || r.origine === 'capo');
   if (vive.length === 0) return [];
   if (righe.length === 1) return vive;
-  // Un lotto composto: solo la fine turno, l'ultima per persona.
+  // Un lotto composto: solo la fine turno vera, l'ultima per persona.
+  // L'ultimo ingresso di ciascuno dice fin dove il turno e' ancora aperto.
+  const ultimoIngresso = new Map<string, number>();
+  for (const r of righe) {
+    if (r.tipo !== 'ingresso') continue;
+    const t = Date.parse(r.ts);
+    const p = ultimoIngresso.get(r.dipendenteId);
+    if (p === undefined || t > p) ultimoIngresso.set(r.dipendenteId, t);
+  }
   const fini = new Map<string, T>();
   for (const r of vive) {
     if (r.tipo !== 'uscita' || r.pausa) continue;
+    const dopo = ultimoIngresso.get(r.dipendenteId);
+    if (dopo !== undefined && dopo >= Date.parse(r.ts)) continue; // riapre: non e' una fine
     const p = fini.get(r.dipendenteId);
     if (!p || Date.parse(r.ts) > Date.parse(p.ts)) fini.set(r.dipendenteId, r);
   }
