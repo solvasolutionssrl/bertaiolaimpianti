@@ -27,6 +27,23 @@ export interface PunchTimbro {
   note: string | null;
   received_at: string | null;
   updated_at: string;
+  /**
+   * Le fasi del turno (dal 26/10/2026). Facoltative: finche' il cliente resta
+   * in «Solo evento» arrivano `null`, e un firmware vecchio non le manda mai.
+   * ⚠️ Non si legge `direction` quando c'e' una fase: vedi
+   * `@kommessa/api/timbro-passo`.
+   */
+  step?: string | null;
+  step_source?: string | null;
+  shift_was_open?: boolean | null;
+  previous_punch_id?: string | null;
+  previous_occurred_at?: string | null;
+}
+
+/** Cosa risponde Timbro a una scrittura: `duplicate` se l'id c'era gia'. */
+export interface EsitoPunchScritto {
+  id?: string;
+  result?: 'created' | 'duplicate' | string;
 }
 
 export interface EmployeeTimbro {
@@ -144,12 +161,53 @@ export class ClientTimbro {
     return this.chiama('GET', '/me');
   }
 
-  punches(q: { updatedSince?: string; from?: string; to?: string; status?: string }): Promise<PunchTimbro[]> {
+  punches(q: {
+    updatedSince?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+    /** `device` | `manual` | `api`. Non si filtra lato Timbro: vedi `importaTimbri`. */
+    source?: string;
+    step?: string;
+  }): Promise<PunchTimbro[]> {
     return this.tutte<PunchTimbro>('/punches', {
       updated_since: q.updatedSince,
       from: q.from,
       to: q.to,
       status: q.status,
+      source: q.source,
+      step: q.step,
+    });
+  }
+
+  /**
+   * Scrive su Timbro una NOSTRA timbratura, cosi' il terminale sa in che punto
+   * del turno e' la persona anche quando ha timbrato dall'app.
+   *
+   * ⚠️ Idempotente sull'`id`: si passa **sempre** l'id della nostra riga, mai
+   * uno nuovo. Riprovare non crea doppioni; due id diversi per lo stesso gesto
+   * sì, e nessuno se ne accorgerebbe.
+   * ⚠️ Vuole lo scope `punches:write`, che la chiave di sola lettura non ha:
+   * chi chiama deve reggere un 401/403 senza rompersi.
+   */
+  creaPunch(p: {
+    id: string;
+    employeeExternalId: string;
+    occurredAt: string;
+    passo?: string | null;
+    direzione?: 'in' | 'out' | null;
+    nota?: string | null;
+  }): Promise<EsitoPunchScritto> {
+    return this.chiama('POST', '/punches', {
+      body: {
+        id: p.id,
+        employee_external_id: p.employeeExternalId,
+        occurred_at: p.occurredAt,
+        // Se abbiamo la fase si manda quella e basta: la direzione la ricava
+        // Timbro, e mandarle entrambe incoerenti e' un 422.
+        ...(p.passo ? { step: p.passo } : p.direzione ? { direction: p.direzione } : {}),
+        ...(p.nota ? { note: p.nota } : {}),
+      },
     });
   }
 

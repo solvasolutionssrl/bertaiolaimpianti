@@ -38,6 +38,8 @@ export interface EsitoImport {
   primaDellaPartenza: number;
   /** Eventi di badge non assegnati a nessuno dei nostri dipendenti. */
   orfani: number;
+  /** Eventi che abbiamo scritto NOI su Timbro e che tornano indietro: si saltano. */
+  nostri: number;
   messaggio: string | null;
 }
 
@@ -78,6 +80,7 @@ export async function importaTimbri(
     scritti: 0,
     primaDellaPartenza: 0,
     orfani: 0,
+    nostri: 0,
     messaggio: null,
   };
 
@@ -115,6 +118,24 @@ export async function importaTimbri(
   for (const p of punches) {
     if (p.updated_at && (!maxUpdated || p.updated_at > maxUpdated)) maxUpdated = p.updated_at;
     // Il minuto di margine rilegge sempre l'ultimo evento: non e' una novita'.
+    // ⚠️⚠️ Le timbrature che scriviamo NOI su Timbro tornano indietro con
+    // `source: 'api'`. Importarle vorrebbe dire contare due volte la stessa
+    // cosa: una dalla nostra tabella e una da qui, e la giornata di chi
+    // timbra dall'app risulterebbe il doppio. Si saltano.
+    //
+    // ⚠️ Il salto sta DOPO l'avanzamento di `maxUpdated`: se il cursore non
+    // superasse le nostre, ogni giro ripartirebbe da prima e il margine di un
+    // minuto non basterebbe piu'.
+    //
+    // ⚠️ Si salta per `source`, non controllando se l'id e' uno dei nostri:
+    // oggi su FPM nessun'altra integrazione scrive su Timbro, e contare due
+    // volte una giornata vera e' molto peggio che ignorare il timbro di un
+    // terzo che non esiste. Se un domani ne arriva uno, qui va un confronto
+    // con i nostri id.
+    if (p.source === 'api') {
+      esito.nostri += 1;
+      continue;
+    }
     if (!cfg.cursoreUpdatedAt || (p.updated_at && p.updated_at > cfg.cursoreUpdatedAt)) esito.nuovi += 1;
     if (p.occurred_at && p.occurred_at.slice(0, 10) < cfg.dal) {
       esito.primaDellaPartenza += 1;
@@ -139,6 +160,11 @@ export async function importaTimbri(
       annullato_motivo: p.void_reason,
       genere: genereDa(p),
       dispositivo: p.device_id,
+      passo: p.step ?? null,
+      passo_origine: p.step_source ?? null,
+      turno_era_aperto: p.shift_was_open ?? null,
+      precedente_esterno_id: p.previous_punch_id ?? null,
+      precedente_at: p.previous_occurred_at ?? null,
       grezzo: p,
     });
   }
@@ -231,6 +257,7 @@ export async function importaTimbriTenant(tenantId: string, avvio: Avvio): Promi
       scritti: 0,
       primaDellaPartenza: 0,
       orfani: 0,
+      nostri: 0,
       messaggio: 'Collegamento non configurato.',
     };
   }

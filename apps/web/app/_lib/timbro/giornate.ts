@@ -36,6 +36,10 @@ export interface TimbroVisto {
   genere: 'badge' | 'manuale' | 'api' | null;
   dispositivo: string | null;
   scartato: boolean;
+  /** La fase del turno dichiarata dal terminale (26/10/2026), se c'e'. */
+  passo: string | null;
+  /** Chi l'ha stabilita: `person`/`office` dichiarano, `inferred` ipotizza. */
+  passoOrigine: string | null;
 }
 
 export interface GiornataTimbroLetta extends GiornataTimbro {
@@ -55,6 +59,8 @@ interface RigaGrezza {
   tipo: 'ingresso' | 'uscita' | null;
   genere: string | null;
   dispositivo: string | null;
+  passo: string | null;
+  passo_origine: string | null;
 }
 
 interface RigaTimbratura {
@@ -86,7 +92,7 @@ export async function leggiGiornateTimbro(
     (da, a) => {
       let q = supabase
         .from('timbri_grezzi' as never)
-        .select('id, sorgente, dipendente_id, ts, orologio, tipo, genere, dispositivo')
+        .select('id, sorgente, dipendente_id, ts, orologio, tipo, genere, dispositivo, passo, passo_origine')
         .eq('tenant_id', tenantId)
         // Tutte le bocche: il terminale e la presenza segnata dall'app o dal
         // PC senza un cantiere. Il registro e' uno.
@@ -207,6 +213,8 @@ export async function leggiGiornateTimbro(
           genere: (r.genere === 'badge' || r.genere === 'manuale' || r.genere === 'api' ? r.genere : null) as TimbroVisto['genere'],
           dispositivo: r.dispositivo,
           scartato: !ris,
+          passo: r.passo ?? null,
+          passoOrigine: r.passo_origine ?? null,
         };
       })
       .sort((a, b) => a.ts.localeCompare(b.ts));

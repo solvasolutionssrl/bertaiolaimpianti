@@ -3,6 +3,7 @@
 import { Fingerprint, LogIn, LogOut, Monitor, PencilLine, Smartphone } from 'lucide-react';
 
 import type { TimbroVisto } from '@/app/_lib/timbro/giornate';
+import { etichettaPasso, leggiPasso } from '@kommessa/api/timbro-passo';
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 
@@ -47,13 +48,21 @@ export function TimbriTerminale({ timbri, compatto = false }: { timbri: TimbroVi
       {timbri.map((t) => {
         const Dir = t.tipo === 'ingresso' ? LogIn : LogOut;
         const bocca = boccaDelTimbro(t);
+        // La fase del turno, quando il terminale la dichiara (26/10/2026).
+        // ⚠️ Si mostra solo cio' che la persona o l'ufficio hanno DICHIARATO:
+        // un'ipotesi del terminale scritta a schermo come un fatto farebbe
+        // credere a una pausa che nessuno ha indicato.
+        const fase = leggiPasso({ step: t.passo, step_source: t.passoOrigine });
+        const faseDetta = fase.fiducia === 'dichiarata' ? etichettaPasso(fase.passo) : null;
         const titolo =
           (t.scartato
             ? 'Scartato (doppione o senza ora)'
             : t.tipo === 'ingresso'
               ? 'Ingresso'
               : 'Uscita') +
-          (t.dedotto && !t.scartato ? ' · direzione dedotta dalla sequenza' : '') +
+          (faseDetta ? ` · ${faseDetta}, indicata dalla persona` : '') +
+          (!faseDetta && fase.passo ? ` · ${etichettaPasso(fase.passo)} (dedotta dal terminale)` : '') +
+          (t.dedotto && !t.scartato && !fase.passo ? ' · direzione dedotta dalla sequenza' : '') +
           ` · ${bocca.titolo}`;
         return (
           <span
@@ -72,7 +81,9 @@ export function TimbriTerminale({ timbri, compatto = false }: { timbri: TimbroVi
             {!t.scartato && t.tipo ? <Dir className="h-3 w-3 shrink-0" aria-hidden="true" /> : null}
             <span className="font-medium">{oraMostrata(t.ts)}</span>
             {!compatto && !t.scartato && t.tipo ? (
-              <span className="text-[10px] opacity-80">{t.tipo === 'ingresso' ? 'in' : 'out'} · {bocca.parola}</span>
+              <span className="text-[10px] opacity-80">
+                {faseDetta ?? (t.tipo === 'ingresso' ? 'in' : 'out')} · {bocca.parola}
+              </span>
             ) : null}
           </span>
         );

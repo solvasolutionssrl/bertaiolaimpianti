@@ -14,6 +14,7 @@
     "./scope-api": "./src/scope-api.ts",
     "./timbri-sequenza": "./src/timbri-sequenza.ts",
     "./timbro-giornata": "./src/timbro-giornata.ts",
+    "./timbro-passo": "./src/timbro-passo.ts",
     "./timbro-salute": "./src/timbro-salute.ts",
     "./kantiere": "./src/kantiere.ts",
     "./stato-lavoro": "./src/stato-lavoro.ts",

@@ -4,6 +4,7 @@ import type { createServerSupabase } from '@kommessa/api/server';
 import type { ModalitaTimbratura } from '@kommessa/api/kantiere-cronologia';
 
 import { specchiaChiusuraNelRegistro } from './presenza-registro';
+import { specchiaSuTimbro } from '@/app/_lib/timbro/invia';
 
 /**
  * ⭐ Lo scrittore UNICO di `timbrature`.
@@ -19,7 +20,10 @@ import { specchiaChiusuraNelRegistro } from './presenza-registro';
  *  - inserisce le righe e restituisce gli id (in ordine di inserimento);
  *  - se fra le righe c'e' una FINE TURNO (uscita non di pausa) e la presenza
  *    della persona e' aperta nel registro (badge o presenza dall'app), scrive
- *    l'uscita anche li': «si apre con una bocca, si chiude con un'altra».
+ *    l'uscita anche li': «si apre con una bocca, si chiude con un'altra»;
+ *  - manda a **Timbro** i gesti veri (26/10/2026), cosi' il terminale conosce
+ *    la fase del turno di chi ha timbrato dall'app. Non tutte le righe e mai
+ *    in modo bloccante: la regola e' `daSpecchiare`, pura e provata.
  *
  * Cosa NON fa, di proposito: il ricalcolo della giornata. Chi scrive sa se
  * deve ricalcolare subito, dopo le tratte, o con una versione a nome suo.
@@ -92,6 +96,21 @@ export async function scriviTimbrature(
   if (error) return { ok: false, error: error.message };
   const scritte = ((data as { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; cantiere_id: string | null; sottocantiere_id: string | null }[] | null) ?? [])
     .map((r) => ({ id: r.id, tipo: r.tipo, ts: r.ts, pausa: !!r.pausa, cantiere_id: r.cantiere_id, sottocantiere_id: r.sottocantiere_id ?? null }));
+
+  // Lo specchio verso Timbro: non blocca, non solleva, e sceglie da se' quali
+  // righe meritano di essere mandate. Le righe scritte tornano in ordine di
+  // inserimento, quindi si appaiano per indice con quelle in ingresso.
+  specchiaSuTimbro(
+    righe[0]!.tenant_id,
+    scritte.map((s, i) => ({
+      id: s.id,
+      dipendenteId: righe[i]?.dipendente_id ?? '',
+      tipo: s.tipo,
+      pausa: s.pausa,
+      ts: s.ts,
+      origine: righe[i]?.origine ?? 'manuale',
+    })).filter((r) => r.dipendenteId),
+  );
 
   // Una fine turno per persona: l'ultima, se ce n'e' piu' d'una nel lotto.
   const fini = new Map<string, TimbraturaDaScrivere>();
