@@ -102,12 +102,6 @@ triggerata da n metodi».
   (`PresenzaSedeCard`): «Col badge. Puoi chiudere da qui o al terminale». Chi
   poi passa lo stesso il badge fa un secondo gesto che il registro mostra
   all'ufficio.
-- ⭐ **L'app installata parte da `/avvio`** (`manifest.start_url`): un puntatore
-  «coarse» è un telefono → `/mobile`, altrimenti → `/office`
-  (`app/avvio/page.tsx`, pubblica nel middleware). Chiude il caso dell'utente
-  ufficio FPM che si era installato la PWA sul PC e vedeva il telefono.
-  ⚠️ `id` resta `/mobile`: cambiarlo farebbe nascere una seconda app sui
-  telefoni.
 - Banchi: `bocche-incrociate.mjs` (badge → app; badge → turno → app, con lo
   specchio e la scatola residua), `avvio.mjs`, `cruscotto-registro.mjs`,
   `palette-tasti.mjs`. `timbro.mjs` e `timbro-chiudere.mjs` **si seminano da

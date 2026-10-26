@@ -56,7 +56,6 @@ memoria: chi è Luca e come lavora, il metodo, le trappole pagate, le cose
 aperte, i puntatori fuori dal repo, i fatti misurati sui dati veri. **La
 cronaca non sta in nessuno dei due**: quella è `git log`.
 
-
 ## Stato, stack e infrastruttura
 
 ### Stato della produzione
@@ -1267,6 +1266,15 @@ Le poche cose che servono **anche** a chi non sta lavorando sul mondo presenze:
   **Export paghe** → `Logiche_Export_Paghe.md`.
 
 ## Interfaccia
+
+### Dove atterra la PWA installata
+
+- ⭐ **L'app installata parte da `/avvio`** (`manifest.start_url`): un puntatore
+  «coarse» è un telefono → `/mobile`, altrimenti → `/office`
+  (`app/avvio/page.tsx`, pubblica nel middleware). Chiude il caso dell'utente
+  ufficio che si era installato la PWA sul PC e vedeva il telefono.
+  ⚠️ `id` resta `/mobile`: cambiarlo farebbe nascere una seconda app sui
+  telefoni.
 
 ### Dialog, tendine e fogli: trappole pagate sul campo
 
