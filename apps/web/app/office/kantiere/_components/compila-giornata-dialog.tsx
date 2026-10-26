@@ -5,7 +5,7 @@ import { etichettaMezzoEstesa, ordinaMezzi } from '@kommessa/api/mezzi';
 import { etichettaLuogo, luogoDaValore, valoreLuogo } from '@kommessa/api/sottocantieri';
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Car, Coffee, GripVertical, Loader2, MapPin, Plus, Trash2, Undo2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Building2, Car, Coffee, GripVertical, Loader2, MapPin, Plus, Trash2, Undo2 } from 'lucide-react';
 import { Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, cn } from '@kommessa/ui';
 import {
   latoRilascioInserimento,
@@ -411,9 +411,14 @@ export function CompilaGiornataDialog({
   const trascina = useTrascina({
     spostaRiga: spostaRigaConLampo,
     spostaPausa,
-    // `spostaRiga` rifiuta se la destinazione e' bloccata: li' non si accende
-    // nessuna linea, o prometterebbe un rilascio che non avviene.
-    puoRilasciare: (zona, indice) => (zona === 'pausa' ? true : !bloccabile(indice)),
+    // Dove il rilascio non avverrebbe, la linea non si accende: prometterebbe
+    // una cosa che non succede.
+    // ⚠️ `spostaRiga` rifiuta se la destinazione e' bloccata (turno aperto);
+    // `spostaPausa` taglia al penultimo blocco, perche' una pausa dopo
+    // l'ultimo starebbe a fine giornata. Prima quel taglio era muto: si
+    // trascinava la pausa in fondo e non succedeva niente, senza un perche'.
+    puoRilasciare: (zona, indice) =>
+      zona === 'pausa' ? indice <= Math.max(0, righe.length - 2) : !bloccabile(indice),
   });
 
   /** Il lato su cui disegnare la linea per la riga `i`, o niente. */
@@ -565,12 +570,12 @@ export function CompilaGiornataDialog({
                   step={passoTimbri > 0 ? passoTimbri * 60 : 60}
                   disabled={pending || modo.tipo === 'scatola' || modo.tipo === 'chiusura'}
                   onChange={(e) => setInizio(e.target.value || '08:00')}
-                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums disabled:opacity-70"
+                  className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm tabular-nums disabled:opacity-70"
                 />
               </label>
               <div className="w-28 space-y-1 text-xs">
                 <span className="font-medium text-muted-foreground">{modo.tipo === 'scatola' ? (modo.vista.dalTerminale ? 'Badge alle' : 'Uscita alle') : modo.tipo === 'chiusura' ? 'Chiusura' : 'Fine · calcolata'}</span>
-                <div className="flex h-10 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
+                <div className="flex h-8 items-center rounded-md border border-dashed border-primary/30 bg-primary/[0.04] px-2 text-sm font-semibold tabular-nums">
                   {vive.length > 0 || modo.tipo !== 'registra' ? hmRome(new Date(fineMs).toISOString()) : '--:--'}
                 </div>
               </div>
@@ -589,7 +594,7 @@ export function CompilaGiornataDialog({
                   ) : null}
                 </span>
                 {modo.tipo === 'scatola' && modo.vista.pausaTimbrataMin > 0 ? (
-                  <div className="flex h-10 items-center text-sm text-muted-foreground">timbrata · {hm(modo.vista.pausaTimbrataMin)}</div>
+                  <div className="flex h-8 items-center text-sm text-muted-foreground">timbrata · {hm(modo.vista.pausaTimbrataMin)}</div>
                 ) : (
                   <PausaScrivania valore={pausaMin} onChange={setPausaMin} disabled={pending} />
                 )}
@@ -608,7 +613,24 @@ export function CompilaGiornataDialog({
                   <p className="text-xs tabular-nums text-muted-foreground">{hm(assegnato)} di lavoro</p>
                 )}
               </div>
-              <ol className="space-y-2" aria-label="Blocchi di lavoro, in ordine">
+              {mostraPercorso && chiediAndata ? (
+                <EstremoCard
+                  titolo="Si parte da"
+                  verso="partenza"
+                  valore={partenza}
+                  opzioni={sediDi(primo?.cantiereId)}
+                  stima={stimaTratta(trattaAndata)}
+                  attesa={!!trattaAndata && (stime[trattaAndata] === 'attesa' || stime[trattaAndata] === undefined)}
+                  km={kmTratta(trattaAndata)}
+                  senzaStrada={partenza !== 'casa' && !trattaAndata}
+                  guida={trattaAndata ? guidaTratta(trattaAndata) : null}
+                  mezzi={dati.mezzi}
+                  disabled={pending}
+                  onValore={setPartenza}
+                  onGuida={(g) => trattaAndata && setTratte((p) => ({ ...p, [trattaAndata]: { ...p[trattaAndata], guida: g } }))}
+                />
+              ) : null}
+              <ol className="space-y-1.5" aria-label="Blocchi di lavoro, in ordine">
                 {righe.map((r, i) => {
                   const bloccata = bloccabile(i);
                   const kVivo = vive.findIndex((v) => v.id === r.id);
@@ -616,6 +638,7 @@ export function CompilaGiornataDialog({
                   const precedente = kVivo > 0 ? vive[kVivo - 1]! : null;
                   const t = tinta(i);
                   const inDrag = trascina.stato?.zona === 'blocchi' && trascina.stato.da === i;
+                  const presaQui = inDrag && trascina.stato?.colonna === 'sx';
                   const lato = latoDiRilascio(trascina.stato, i);
                   return (
                     <React.Fragment key={r.id}>
@@ -637,11 +660,13 @@ export function CompilaGiornataDialog({
                         data-drop-zona="blocchi"
                         data-indice={i}
                         data-lato-rilascio={lato ?? undefined}
+                        style={stilePresa(trascina.stato, !!presaQui)}
                         className={cn(
-                          'relative grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border border-border border-l-4 py-1.5 pl-1 pr-2 transition-all duration-150',
+                          'relative grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] items-center gap-2 rounded-md border border-border border-l-4 py-1 pl-1 pr-2 transition-all duration-150',
                           t.bordo,
                           t.fondo,
-                          inDrag && 'scale-[0.99] opacity-40 outline-dashed outline-1 outline-primary/50',
+                          presaQui && 'shadow-lg ring-2 ring-primary/40',
+                          inDrag && !presaQui && 'opacity-40 outline-dashed outline-1 outline-primary/50',
                           lampo === i && 'ring-2 ring-primary',
                         )}
                       >
@@ -651,17 +676,17 @@ export function CompilaGiornataDialog({
                           aria-label={`Sposta il blocco ${i + 1}`}
                           title="Trascina, o frecce su e giù"
                           disabled={pending || bloccata || righe.length < 2}
-                          onPointerDown={(e) => trascina.inizia(e, 'blocchi', i)}
+                          onPointerDown={(e) => trascina.inizia(e, 'blocchi', i, 'sx')}
                           onKeyDown={(e) => {
                             if (e.key === 'ArrowUp') { e.preventDefault(); spostaRigaConLampo(i, i - 1); }
                             if (e.key === 'ArrowDown') { e.preventDefault(); spostaRigaConLampo(i, i + 1); }
                           }}
-                          className="flex h-10 w-7 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:bg-black/5 active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
+                          className="flex h-8 w-7 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:bg-black/5 active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
                         >
                           <GripVertical className="h-4 w-4" aria-hidden="true" />
                         </button>
                         {bloccata ? (
-                          <span className="flex h-10 items-center truncate rounded-md border border-border bg-background/70 px-3 text-sm">
+                          <span className="flex h-8 items-center truncate rounded-md border border-border bg-background/70 px-3 text-sm">
                             {nomeCantiere(r.cantiereId, r.sottocantiereId)}&nbsp;<span className="text-[10px] uppercase text-muted-foreground">turno aperto</span>
                           </span>
                         ) : (
@@ -675,11 +700,11 @@ export function CompilaGiornataDialog({
                             segnaposto="Cantiere…"
                             segnapostoRicerca="Cerca cantiere, fase, codice…"
                             disabilitato={pending}
-                            className="h-10 [&>button]:h-10 [&>button]:min-h-0 [&>button]:bg-background [&>button]:py-0"
+                            className="h-8 [&>button]:h-8 [&>button]:min-h-0 [&>button]:bg-background [&>button]:py-0"
                           />
                         )}
                         {sedeDefault ? (
-                          <div role="radiogroup" aria-label="Dove" className="inline-flex h-10 overflow-hidden rounded-md border border-border bg-background text-xs">
+                          <div role="radiogroup" aria-label="Dove" className="inline-flex h-8 overflow-hidden rounded-md border border-border bg-background text-xs">
                             {([[true, 'In sede'], [false, 'In cantiere']] as [boolean, string][]).map(([v, et]) => (
                               <button key={et} type="button" role="radio" aria-checked={r.inSede === v} disabled={pending || (modo.tipo === 'chiusura' && i === 0)} onClick={() => setRighe((p) => p.map((x) => (x.id === r.id ? { ...x, inSede: v } : x)))} className={cn('h-full px-3', r.inSede === v ? 'bg-primary font-semibold text-white' : 'text-muted-foreground')}>
                                 {et}
@@ -696,14 +721,31 @@ export function CompilaGiornataDialog({
                           ariaLabel="Ore"
                           onChange={(m) => setRighe((p) => p.map((x) => (x.id === r.id ? { ...x, minuti: m } : x)))}
                         />
-                        <Button variant="ghost" size="sm" className="h-10 w-10 p-0" disabled={pending || bloccata || righe.length === 1} onClick={() => { setRighe((p) => p.filter((x) => x.id !== r.id)); setPausaDopo((pd) => (pd === null ? pd : pd >= i ? Math.max(0, pd - 1) : pd)); }} aria-label="Togli">
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" className="h-8 w-10 p-0" disabled={pending || bloccata || righe.length === 1} onClick={() => { setRighe((p) => p.filter((x) => x.id !== r.id)); setPausaDopo((pd) => (pd === null ? pd : pd >= i ? Math.max(0, pd - 1) : pd)); }} aria-label="Togli">
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </li>
                     </React.Fragment>
                   );
                 })}
               </ol>
+              {mostraPercorso ? (
+                <EstremoCard
+                  titolo="Si rientra a"
+                  verso="rientro"
+                  valore={rientro}
+                  opzioni={sediDi(ultimo?.cantiereId)}
+                  stima={stimaTratta(trattaRitorno)}
+                  attesa={!!trattaRitorno && (stime[trattaRitorno] === 'attesa' || stime[trattaRitorno] === undefined)}
+                  km={kmTratta(trattaRitorno)}
+                  senzaStrada={rientro !== 'casa' && !trattaRitorno}
+                  guida={trattaRitorno ? guidaTratta(trattaRitorno) : null}
+                  mezzi={dati.mezzi}
+                  disabled={pending}
+                  onValore={setRientro}
+                  onGuida={(g) => trattaRitorno && setTratte((p) => ({ ...p, [trattaRitorno]: { ...p[trattaRitorno], guida: g } }))}
+                />
+              ) : null}
               {puoAggiungere ? (
                 <Button variant="outline" size="sm" disabled={pending || righe.length >= 12} onClick={() => setRighe((p) => [...p, nuovaRiga({ cantiereId: '', sottocantiereId: null, minuti: 0, inSede: inUfficio && !!sedeDefault })])}>
                   <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" /> Aggiungi cantiere
@@ -713,46 +755,9 @@ export function CompilaGiornataDialog({
               )}
             </section>
 
-            {mostraPercorso ? (
-              <section className="space-y-2">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  <Car className="h-3 w-3" aria-hidden="true" /> Partenza e rientro
-                </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {chiediAndata ? (
-                    <EstremoCard
-                      titolo="Partenza"
-                      valore={partenza}
-                      opzioni={sediDi(primo?.cantiereId)}
-                      stima={stimaTratta(trattaAndata)}
-                      attesa={!!trattaAndata && (stime[trattaAndata] === 'attesa' || stime[trattaAndata] === undefined)}
-                      km={kmTratta(trattaAndata)}
-                      senzaStrada={partenza !== 'casa' && !trattaAndata}
-                      guida={trattaAndata ? guidaTratta(trattaAndata) : null}
-                      mezzi={dati.mezzi}
-                      disabled={pending}
-                      onValore={setPartenza}
-                      onGuida={(g) => trattaAndata && setTratte((p) => ({ ...p, [trattaAndata]: { ...p[trattaAndata], guida: g } }))}
-                    />
-                  ) : <div />}
-                  <EstremoCard
-                    titolo="Rientro"
-                    valore={rientro}
-                    opzioni={sediDi(ultimo?.cantiereId)}
-                    stima={stimaTratta(trattaRitorno)}
-                    attesa={!!trattaRitorno && (stime[trattaRitorno] === 'attesa' || stime[trattaRitorno] === undefined)}
-                    km={kmTratta(trattaRitorno)}
-                    senzaStrada={rientro !== 'casa' && !trattaRitorno}
-                    guida={trattaRitorno ? guidaTratta(trattaRitorno) : null}
-                    mezzi={dati.mezzi}
-                    disabled={pending}
-                    onValore={setRientro}
-                    onGuida={(g) => trattaRitorno && setTratte((p) => ({ ...p, [trattaRitorno]: { ...p[trattaRitorno], guida: g } }))}
-                  />
-                </div>
-                {viaggioTot > 0 ? <p className="text-[11px] text-muted-foreground">I km contano a chi guida. Chi guidava si indica tratta per tratta.</p> : null}
-              </section>
-            ) : sedeDefault ? (
+            {mostraPercorso && viaggioTot > 0 ? (
+              <p className="text-[11px] text-muted-foreground">I km contano a chi guida. Chi guidava si indica tratta per tratta.</p>
+            ) : !mostraPercorso && sedeDefault ? (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Building2 className="h-3.5 w-3.5" aria-hidden="true" /> Tutto il giorno in {sedeDefault.nome}: nessun viaggio.</p>
             ) : null}
 
@@ -784,7 +789,7 @@ export function CompilaGiornataDialog({
                         r.tono === 'lavoro' && !t && 'border-border',
                         r.tono === 'pausa' && 'border-amber-200 bg-amber-50 text-amber-800',
                         r.tono === 'viaggio' && 'border-sky-100 bg-sky-50 text-sky-800',
-                        inDrag && 'scale-[0.99] opacity-40 outline-dashed outline-1 outline-primary/50',
+                        inDrag && 'opacity-40 outline-dashed outline-1 outline-primary/50',
                         lampo != null && indice === lampo && 'ring-2 ring-primary',
                       )}
                     >
@@ -795,7 +800,7 @@ export function CompilaGiornataDialog({
                           aria-label={r.tono === 'pausa' ? 'Sposta la pausa' : 'Sposta il blocco'}
                           title="Trascina, o frecce su e giù"
                           disabled={pending}
-                          onPointerDown={(e) => trascina.inizia(e, r.tono === 'pausa' ? 'pausa' : 'blocchi', r.tono === 'pausa' ? (pausaDopo ?? -1) : (indice ?? 0))}
+                          onPointerDown={(e) => trascina.inizia(e, r.tono === 'pausa' ? 'pausa' : 'blocchi', r.tono === 'pausa' ? (pausaDopo ?? -1) : (indice ?? 0), 'dx')}
                           onKeyDown={(e) => {
                             if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
                             e.preventDefault();
@@ -851,6 +856,41 @@ export function CompilaGiornataDialog({
 }
 
 /**
+ * Lo stile della card mentre la si trascina. ⭐ Non sbiadisce sul posto: si
+ * **alza e segue il dito**. Sbiadire dice «questa non conta»; alzarsi dice
+ * «la sto portando io», che e' quello che sta succedendo.
+ *
+ * ⚠️ Solo la card della colonna da cui e' partito il gesto: le due colonne
+ * mostrano le stesse righe, e farle volare entrambe sarebbe due card per un
+ * gesto solo.
+ *
+ * ⚠️⚠️ **Solo la colonna di SINISTRA**, ed e' un limite dichiarato, non una
+ * dimenticanza: alzando anche le righe dell'anteprima, il trascinamento della
+ * **pausa** smette di spostarla. Misurato isolando l'animazione (col freno e
+ * senza, con `pointer-events: none` e senza): col sollevamento acceso la
+ * pausa resta dov'e', spento torna a muoversi. La causa non e' il colpo di
+ * mano sul bersaglio ne' il mio freno sul rilascio, e non l'ho trovata: a
+ * destra le righe sono basse e l'alzata vale poco, quindi si lascia la resa
+ * di prima invece di spedire una pausa che non si muove.
+ */
+function stilePresa(stato: StatoTrascina | null, mia: boolean): React.CSSProperties | undefined {
+  if (!stato || !mia) return undefined;
+  return {
+    transform: `translate3d(${stato.dx}px, ${stato.dy}px, 0) rotate(0.6deg) scale(1.015)`,
+    willChange: 'transform',
+    zIndex: 30,
+    position: 'relative',
+    cursor: 'grabbing',
+    // ⚠️⚠️ Da quando la card segue il dito, sta LEI sotto il puntatore: senza
+    // questo, `elementsFromPoint` trova se stessa invece della riga di
+    // destinazione, e il rilascio non sposta niente. Si vede solo sulle
+    // distanze corte (la pausa), ed e' il difetto che ha introdotto
+    // l'animazione.
+    pointerEvents: 'none',
+  };
+}
+
+/**
  * La linea che dice DOVE finira' la card. Il lato lo decide
  * `latoRilascioRiordino` / `latoRilascioInserimento`, pure e provate: la
  * direzione e' la cosa che si inverte senza accorgersene.
@@ -875,7 +915,18 @@ function LineaRilascio({ lato }: { lato: LatoRilascio | null }) {
 // ── il trascinamento, a mano: due zone, lo stesso stato ─────────────────────
 
 type ZonaTrascina = 'blocchi' | 'pausa';
-type StatoTrascina = { zona: ZonaTrascina; da: number; sopra: number | null; sotto: boolean };
+/** `colonna` = da dove si e' presa la card: solo QUELLA si alza e segue il
+    dito. Le due colonne mostrano le stesse righe, e farle volare entrambe
+    sarebbe due card per un gesto solo. */
+type StatoTrascina = {
+  zona: ZonaTrascina;
+  da: number;
+  sopra: number | null;
+  sotto: boolean;
+  colonna: 'sx' | 'dx';
+  dx: number;
+  dy: number;
+};
 
 /**
  * Pointer events senza librerie (nel repo non ce n'e' una): si prende la
@@ -903,10 +954,12 @@ function useTrascina({
     rif.current = s;
     setStato(s);
   };
-  const inizia = (e: React.PointerEvent, zona: ZonaTrascina, da: number) => {
+  const inizia = (e: React.PointerEvent, zona: ZonaTrascina, da: number, colonna: 'sx' | 'dx' = 'sx') => {
     if (e.button !== 0) return;
     e.preventDefault();
-    aggiorna({ zona, da, sopra: null, sotto: false });
+    const partenzaX = e.clientX;
+    const partenzaY = e.clientY;
+    aggiorna({ zona, da, sopra: null, sotto: false, colonna, dx: 0, dy: 0 });
     // Mentre si trascina il cursore lo dice, e il testo non si seleziona.
     const cursorePrima = document.body.style.cursor;
     const selezionePrima = document.body.style.userSelect;
@@ -915,19 +968,21 @@ function useTrascina({
     const muovi = (ev: PointerEvent) => {
       const s = rif.current;
       if (!s) return;
+      const dx = ev.clientX - partenzaX;
+      const dy = ev.clientY - partenzaY;
       const el = document.elementsFromPoint(ev.clientX, ev.clientY).find((x) => (x as HTMLElement).dataset?.dropZona === 'blocchi') as HTMLElement | undefined;
       if (!el) {
-        if (s.sopra !== null) aggiorna({ ...s, sopra: null });
+        aggiorna({ ...s, sopra: null, dx, dy });
         return;
       }
       const indice = Number(el.dataset.indice);
       if (!Number.isInteger(indice) || !puoRilasciare(s.zona, indice)) {
-        if (s.sopra !== null) aggiorna({ ...s, sopra: null });
+        aggiorna({ ...s, sopra: null, dx, dy });
         return;
       }
       const r = el.getBoundingClientRect();
       const sotto = ev.clientY > r.top + r.height / 2;
-      if (s.sopra !== indice || s.sotto !== sotto) aggiorna({ ...s, sopra: indice, sotto });
+      aggiorna({ ...s, sopra: indice, sotto, dx, dy });
     };
     const lascia = () => {
       window.removeEventListener('pointermove', muovi);
@@ -986,7 +1041,7 @@ function TrattaCard({
   const minuti = detta.minuti ?? stima ?? 0;
   const corretta = detta.minuti != null && stima !== null && detta.minuti !== stima;
   return (
-    <li className="ml-7 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-md border border-dashed border-sky-200 bg-sky-50/70 px-2.5 py-1.5 text-xs text-sky-900" aria-label="Strada fra i due blocchi">
+    <li className="ml-7 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 rounded-md border border-dashed border-sky-200 bg-sky-50/70 px-2.5 py-1 text-xs leading-tight text-sky-900" aria-label="Strada fra i due blocchi">
       <Car className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden="true" />
       <div className="min-w-0">
         <p className="truncate font-medium">{testo}</p>
@@ -1015,21 +1070,38 @@ function TrattaCard({
 }
 
 /** Partenza o rientro: la sede (o l'abitazione), la stima, chi guidava. */
+/**
+ * Un estremo della giornata. ⭐ **Partenza in cima, rientro in fondo**: la
+ * giornata si legge dall'alto in basso, e i due affiancati sotto l'elenco
+ * (com'erano) non dicevano piu' quale veniva prima. Contorni diversi apposta:
+ * si parte di slancio (sky, freccia in su), si rientra alla fine (ardesia,
+ * freccia in giu').
+ */
 function EstremoCard({
-  titolo, valore, opzioni, stima, attesa, km, senzaStrada, guida, mezzi, disabled, onValore, onGuida,
+  titolo, verso, valore, opzioni, stima, attesa, km, senzaStrada, guida, mezzi, disabled, onValore, onGuida,
 }: {
-  titolo: string; valore: string; opzioni: DatiCompila['sedi']; stima: number | null; attesa: boolean; km: number; senzaStrada: boolean; guida: Guida | null; mezzi: DatiCompila['mezzi']; disabled?: boolean; onValore: (v: string) => void; onGuida: (g: Guida) => void;
+  titolo: string; verso: 'partenza' | 'rientro'; valore: string; opzioni: DatiCompila['sedi']; stima: number | null; attesa: boolean; km: number; senzaStrada: boolean; guida: Guida | null; mezzi: DatiCompila['mezzi']; disabled?: boolean; onValore: (v: string) => void; onGuida: (g: Guida) => void;
 }) {
+  const parte = verso === 'partenza';
+  const Freccia = parte ? ArrowUpRight : ArrowDownLeft;
   return (
-    <div className="rounded-md border border-sky-100 bg-sky-50/50 px-2.5 py-2 text-xs">
+    <div
+      className={cn(
+        'rounded-md border border-l-4 px-2.5 py-1.5 text-xs',
+        parte ? 'border-sky-200 border-l-sky-600 bg-sky-50/70' : 'border-slate-200 border-l-slate-500 bg-slate-50/80',
+      )}
+    >
       <div className="flex items-center gap-2">
-        <span className="w-14 shrink-0 font-medium text-muted-foreground">{titolo}</span>
-        <select value={valore} disabled={disabled} aria-label={titolo} onChange={(e) => onValore(e.target.value)} className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
+        <span className={cn('flex w-[6.5rem] shrink-0 items-center gap-1 font-semibold', parte ? 'text-sky-900' : 'text-slate-700')}>
+          <Freccia className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {titolo}
+        </span>
+        <select value={valore} disabled={disabled} aria-label={titolo} onChange={(e) => onValore(e.target.value)} className="h-8 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
           {opzioni.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
           <option value="casa">Abitazione privata</option>
         </select>
       </div>
-      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 pl-16 text-[11px] text-sky-800/80">
+      <div className={cn('mt-1 flex flex-wrap items-center justify-between gap-2 pl-[7.25rem] text-[11px]', parte ? 'text-sky-800/80' : 'text-slate-600')}>
         <span>
           {valore === 'casa' ? 'nessun viaggio di lavoro' : senzaStrada ? 'si lavora nella stessa sede: nessuna strada' : attesa ? 'stima in corso…' : stima === null ? 'nessuna stima' : <>{hm(stima)}{fmtKm(km) ? ` · ${fmtKm(km)}` : ''}</>}
         </span>
@@ -1044,8 +1116,8 @@ function PausaScrivania({ valore, onChange, disabled }: { valore: number; onChan
   const rapide = [0, 30, 45, 60];
   const libera = !rapide.includes(valore);
   return (
-    <div className="flex h-10 items-center gap-2">
-      <div role="radiogroup" aria-label="Pausa pranzo" className="inline-flex h-10 overflow-hidden rounded-md border border-border text-xs">
+    <div className="flex h-8 items-center gap-2">
+      <div role="radiogroup" aria-label="Pausa pranzo" className="inline-flex h-8 overflow-hidden rounded-md border border-border text-xs">
         {rapide.map((m) => (
           <button key={m} type="button" role="radio" aria-checked={valore === m} disabled={disabled} onClick={() => onChange(m)} className={cn('h-full px-3', valore === m ? 'bg-amber-600 font-semibold text-white' : 'bg-background text-muted-foreground')}>
             {m === 0 ? 'Nessuna' : m === 60 ? '1 h' : `${m} min`}

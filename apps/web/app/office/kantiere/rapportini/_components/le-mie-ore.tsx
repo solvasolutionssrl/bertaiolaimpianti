@@ -55,7 +55,7 @@ export function LeMieOre({
 
   return (
     <section data-le-mie-ore className="rounded-xl border border-border bg-card shadow-soft">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-1.5">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold">
           <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           {ZONA_MIA.ore}
@@ -81,17 +81,28 @@ export function LeMieOre({
           Vedi le mie giornate
         </button>
       </div>
-      <div className="grid gap-3 px-3.5 py-3 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <div>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Oggi</p>
-          {corpo}
-        </div>
-        <div className="min-w-0 md:border-l md:border-border md:pl-3">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Da completare{daSistemare > 0 ? ` · ${daSistemare}` : ''}
-          </p>
+      <div
+        className={cn(
+          'grid gap-x-3 gap-y-2 px-3.5 py-2.5',
+          // Senza niente da completare la colonna di destra e' una riga sola:
+          // non vale un mezzo schermo, e la card resta bassa.
+          daSistemare === 0
+            ? 'md:grid-cols-[minmax(0,1fr)_auto] md:items-center'
+            : 'md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]',
+        )}
+      >
+        {/* ⚠️ Un tetto alla larghezza: senza, i due tasti si stirano su tutta
+            la card e un'azione larga mezzo schermo si prende una scena che
+            non le spetta. */}
+        <div className="min-w-0 md:max-w-[34rem]">{corpo}</div>
+        <div className={cn('min-w-0', daSistemare > 0 && 'md:border-l md:border-border md:pl-3')}>
+          {daSistemare > 0 ? (
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Da completare · {daSistemare}
+            </p>
+          ) : null}
           {daSistemare === 0 ? (
-            <p className="text-xs text-muted-foreground">Nessuna giornata in sospeso.</p>
+            <p className="whitespace-nowrap text-xs text-muted-foreground">Nessuna giornata da completare.</p>
           ) : (
             <ul className="space-y-1.5 text-xs">
               {altre.map((g) => (

@@ -22,6 +22,8 @@ import { cantiereScrivibile, faseRichiesta, sottocantieriScrivibili } from '@/ap
 import { romeDay, romeDayBoundsUtc, romeWallToUtcIso } from '@kommessa/api/rome-time';
 import { leggiTutto } from '@kommessa/api/pagine';
 import { scriviTimbrature } from '@/app/_actions/_lib/timbrature-scrivi';
+import { avvisa } from '@/app/_actions/_lib/avvisa';
+import { auditTenant } from '@/app/_actions/_lib/audit';
 
 type Result = { ok: true } | { ok: false; error: string; motivo?: string };
 
@@ -799,4 +801,81 @@ export async function aggiungiPausaGiornata(
   revalidatePath('/office/personale/dipendenti');
   revalidatePath('/office/kantiere/anomalie');
   return { ok: true, minutiPausa: minuti };
+}
+
+// ── sollecitaOre ─────────────────────────────────────────────────────────────
+/**
+ * L'ufficio sollecita una persona che ha timbrato ma non ha ancora detto su
+ * quali commesse ha lavorato.
+ *
+ * ⭐ **Non e' un avviso nuovo**: riusa `ore_da_inserire`, che e' esattamente la
+ * cosa di cui si parla e che la persona puo' gia' accendere o spegnere dal suo
+ * profilo. Aggiungerne uno nuovo avrebbe spezzato in due la stessa domanda
+ * («vuoi che ti ricordi le ore?») in due interruttori.
+ *
+ * ⚠️ **La finestra e' `ufficio`, non `sera`/`mattina`.** Il promemoria
+ * automatico salta chi ha gia' ricevuto `utente|giorno|finestra` nelle ultime
+ * 20 ore: con la stessa finestra, un sollecito a mano avrebbe **spento il
+ * promemoria della sera** di quella persona, o sarebbe stato ingoiato da uno
+ * mandato poco prima. Con una finestra sua le due cose non si disturbano.
+ *
+ * ⚠️ Chi non ha un accesso all'app non si puo' sollecitare: lo si dice invece
+ * di rispondere «fatto» a un messaggio che non e' partito.
+ */
+export async function sollecitaOre(input: unknown): Promise<Result & { nome?: string }> {
+  const parsed = z
+    .object({ dipendenteId: z.string().uuid(), giorno: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const ctx = await guard();
+  const supabase = createServerSupabase();
+
+  const { data: dipRaw } = await supabase
+    .from('dipendenti' as never)
+    .select('id, nome, cognome, user_id')
+    .eq('tenant_id', ctx.tenantId)
+    .eq('id', parsed.data.dipendenteId)
+    .maybeSingle();
+  const dip = dipRaw as { nome: string | null; cognome: string | null; user_id: string | null } | null;
+  if (!dip) return { ok: false, error: 'Questa persona non è in anagrafica.' };
+  const nome = [dip.nome, dip.cognome].filter(Boolean).join(' ').trim() || 'la persona';
+  if (!dip.user_id) {
+    return { ok: false, error: `${nome} non ha un accesso all'app: il sollecito non può arrivare.`, nome };
+  }
+
+  const giornoTesto = new Intl.DateTimeFormat('it-IT', {
+    timeZone: 'Europe/Rome',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(`${parsed.data.giorno}T12:00:00Z`));
+
+  const esito = await avvisa([
+    {
+      userId: dip.user_id,
+      codice: 'ore_da_inserire',
+      // Registro formale e oggettivo: il fatto, e l'azione richiesta.
+      titolo: `Sollecito · ore di ${giornoTesto}`,
+      corpo: `L'ufficio ha sollecitato la registrazione delle ore di ${giornoTesto}. Indicare su quali commesse è stato svolto il lavoro.`,
+      url: '/mobile/kantiere/ore',
+      extra: { giorno: parsed.data.giorno, finestra: 'ufficio' },
+    },
+  ]);
+  if (esito.registrati === 0) {
+    return {
+      ok: false,
+      error: `${nome} ha disattivato questo avviso: il sollecito non è stato mandato.`,
+      nome,
+    };
+  }
+  await auditTenant(supabase, {
+    tenantId: ctx.tenantId,
+    actorUserId: ctx.userId,
+    actorRole: ctx.role,
+    entityType: 'dipendente',
+    entityId: parsed.data.dipendenteId,
+    action: 'kantiere.ore.sollecito',
+    after: { giorno: parsed.data.giorno },
+  });
+  return { ok: true, nome };
 }

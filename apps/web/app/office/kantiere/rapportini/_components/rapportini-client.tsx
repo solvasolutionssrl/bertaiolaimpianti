@@ -17,14 +17,15 @@ import {
   History,
   Coffee,
   MapPin,
+  BellRing,
   Users,
 } from 'lucide-react';
 import { Button, Card, CardContent, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@kommessa/ui';
-import { registraOrePerDipendente, ricalcolaPresenzePeriodo } from '../../../_actions/kantiere-rapportini';
+import { registraOrePerDipendente, ricalcolaPresenzePeriodo, sollecitaOre } from '../../../_actions/kantiere-rapportini';
 import { BollinoAffidabilita, CronologiaGiornataPannello } from '../../_components/cronologia-giornata';
 import type { Affidabilita } from '@kommessa/api/kantiere-cronologia';
 import { cantiereImputabile } from '@kommessa/api/stato-lavoro';
-import { useConfirm } from '@/app/_components/confirm-provider';
+import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
 import {
   TimbratureSommario,
   GiornataFlow,
@@ -520,6 +521,31 @@ export function RapportiniClient({
   const [regError, setRegError] = React.useState('');
   const [isRegPending, startRegAction] = React.useTransition();
   const chiediConferma = useConfirm();
+  const mostraAvviso = useAlert();
+
+  // Il sollecito: una conferma, poi l'avviso alla persona. ⚠️ La conferma
+  // sta FUORI da `startTransition`, sempre: dentro, il dialog non si vede.
+  const [sollecitando, setSollecitando] = React.useState<string | null>(null);
+  const sollecita = async (g: TimbroGiornataVista) => {
+    const quando = fmtGiornoLungo(g.giorno);
+    const ok = await chiediConferma({
+      title: `Sollecitare ${g.dipendenteNome}?`,
+      description: `${g.dipendenteNome} riceve un avviso sul telefono: «L'ufficio ha sollecitato la registrazione delle ore di ${quando}». Arriva solo se ha un accesso all'app e non ha disattivato questo avviso.`,
+      confirmLabel: 'Manda il sollecito',
+    });
+    if (!ok) return;
+    setSollecitando(g.chiave);
+    const r = await sollecitaOre({ dipendenteId: g.dipendenteId, giorno: g.giorno });
+    setSollecitando(null);
+    if (r.ok) {
+      await mostraAvviso({ title: 'Sollecito mandato', body: `${g.dipendenteNome} è stato avvisato.` });
+    } else {
+      // ⚠️ Si dice perché NON è partito: «fatto» su un messaggio che non è
+      // arrivato è la bugia più comoda che questa pagina possa dire.
+      await mostraAvviso({ title: 'Sollecito non mandato', body: r.error });
+    }
+  };
+
 
   // Ricalcolo presenze dalle timbrature (riparazione giornate bloccate)
   const [isRicalcolo, startRicalcolo] = React.useTransition();
@@ -855,9 +881,24 @@ export function RapportiniClient({
                   >
                     {ETICHETTA_STATO_TIMBRO[g.stato]}
                   </span>
+                  {/* Due strade: la si chiede a lui, o la si compila al posto
+                      suo. ⚠️ «Compila tu» solo dove c'è davvero una giornata
+                      chiusa da ripartire: su una presenza ancora aperta non
+                      c'è niente da dividere, e un tasto che apre un dialog
+                      vuoto è un comando che promette e non fa niente. */}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-sky-800 hover:bg-sky-100"
+                    disabled={sollecitando === g.chiave}
+                    onClick={() => void sollecita(g)}
+                  >
+                    <BellRing className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    {sollecitando === g.chiave ? 'Mando…' : 'Sollecita'}
+                  </Button>
                   {g.stato === 'da_ripartire' || g.stato === 'da_chiudere' ? (
                     <Button size="sm" variant="outline" className="h-7" onClick={() => setRipartisciFor(g)}>
-                      Ripartisci
+                      Compila tu
                     </Button>
                   ) : null}
                 </span>

@@ -53,14 +53,20 @@ async function trascinaEOsserva(cdp, daEspr, aEspr, { meta = 'centro' } = {}) {
     const conLinea = righe.filter((li) => li.dataset.latoRilascio);
     const linea = conLinea[0] ? conLinea[0].querySelector('span[aria-hidden]') : null;
     const b = linea ? linea.getBoundingClientRect() : null;
-    const trascinata = righe.find((li) => Number(getComputedStyle(li).opacity) < 0.9);
+    // La card presa non sbiadisce piu': si ALZA e segue il dito. Si riconosce
+    // da una trasformazione che non e' l'identita'.
+    const trascinata = righe.find((li) => {
+      const t = getComputedStyle(li).transform;
+      return t && t !== 'none' && !/^matrix\(1, 0, 0, 1, 0, 0\)$/.test(t);
+    });
     const cursore = document.body.style.cursor;
     return {
       quante: conLinea.length,
       lato: conLinea[0]?.dataset.latoRilascio ?? null,
       indice: conLinea[0]?.dataset.indice ?? null,
       lineaVisibile: !!(b && b.width > 20 && b.height > 0),
-      opacitaTrascinata: trascinata ? Number(getComputedStyle(trascinata).opacity) : null,
+      trasformata: trascinata ? getComputedStyle(trascinata).transform : null,
+      ombra: trascinata ? getComputedStyle(trascinata).boxShadow.slice(0, 24) : null,
       cursore,
     };
   })()`);
@@ -152,7 +158,8 @@ try {
   esito(su.quante === 1, 'trascinando: la linea di rilascio compare, e su UNA riga sola', `righe con linea: ${su.quante}`);
   esito(su.lineaVisibile, 'trascinando: la linea si vede davvero (larga e alta piu\' di zero)', JSON.stringify(su));
   esito(su.lato === 'sopra', '⭐ salendo, la linea sta SOPRA la riga puntata (e\' li\' che finira\')', `lato: ${su.lato}`);
-  esito(su.opacitaTrascinata !== null && su.opacitaTrascinata < 0.9, 'trascinando: la card presa si alza (opacita\' ridotta)', `opacita: ${su.opacitaTrascinata}`);
+  esito(!!su.trasformata, '⭐ trascinando: la card presa SI MUOVE col dito, non sbiadisce sul posto', su.trasformata ?? 'nessuna trasformazione');
+  esito(!!su.ombra && su.ombra !== 'none', 'trascinando: la card presa si stacca dal foglio (ombra)', su.ombra ?? '-');
   esito(su.cursore === 'grabbing', 'trascinando: il cursore dice che stai trascinando', su.cursore || '(vuoto)');
   const nessunaLinea = await valuta(cdp, `[...document.querySelectorAll('[role=dialog] li[data-drop-zona=blocchi]')].filter((li) => li.dataset.latoRilascio).length`);
   esito(nessunaLinea === 0, 'lasciato il mouse, la linea sparisce', String(nessunaLinea));
