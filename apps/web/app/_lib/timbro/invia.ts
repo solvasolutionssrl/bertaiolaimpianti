@@ -50,8 +50,12 @@ const SCOPE_RICHIESTO = 'punches:write';
 
 async function invia(tenantId: string, righe: RigaDaSpecchiare[]): Promise<void> {
   const cfg = await leggiConfigTimbro(tenantId);
-  // Spento o senza token: non esiste nessuno specchio da tenere.
-  if (!cfg || cfg.stato === 'spento' || !cfg.token) return;
+  // ⚠️ Solo da `attivo`. In `osservazione` si legge e si mostra, ma non si
+  // tocca niente: scrivere su un sistema esterno mentre si dichiara di stare
+  // solo guardando è il contrario di quello che quello stato promette. E un
+  // collegamento messo in osservazione per capire un problema non deve
+  // continuare a mandare timbrature mentre lo si studia.
+  if (!cfg || cfg.stato !== 'attivo' || !cfg.token) return;
 
   const client = new ClientTimbro(cfg.urlBase, cfg.token);
   for (const r of righe) {
