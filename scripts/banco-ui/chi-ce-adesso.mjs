@@ -22,7 +22,15 @@ import { valuta, finoA } from '../banco-upload/cdp.mjs';
 const APERTO = 'c1d00000-0000-4000-8000-000000000001'; // Marco Rinaldi
 const PAUSA = 'c1d00000-0000-4000-8000-000000000002'; // Luca Fabbri
 const FINITO = 'c1d00000-0000-4000-8000-000000000003'; // Andrea Pozzi
-const TUTTI = [APERTO, PAUSA, FINITO];
+// ⚠️ La disposizione a card si misura solo con parecchie persone: con tre
+// righe anche un elenco verticale sembrerebbe a posto.
+const ALTRI = [
+  'c1d00000-0000-4000-8000-000000000004',
+  'c1d00000-0000-4000-8000-000000000005',
+  'c1d00000-0000-4000-8000-000000000006',
+  'c1d00000-0000-4000-8000-000000000007',
+];
+const TUTTI = [APERTO, PAUSA, FINITO, ...ALTRI];
 const TENANT = `(select tenant_id from dipendenti where id='${APERTO}')`;
 const sql = (q) => execSync(`supabase db query --linked "${q.replace(/"/g, '\\"')}"`, { stdio: 'ignore' });
 // ⚠️ Il giorno è quello di Roma, mai `current_date` (che è UTC sul server).
@@ -45,12 +53,13 @@ badge(PAUSA, '08:00');
 badge(PAUSA, '13:00', 'pause_start', 'person');
 badge(FINITO, '08:00');
 badge(FINITO, '12:00', 'end', 'person');
+ALTRI.forEach((d, i) => badge(d, `0${7 + (i % 2)}:${i % 2 ? '45' : '10'}`));
 
 const { cdp, chiudi } = await apriChrome({ larghezza: 1440, altezza: 950 });
 try {
   await accedi(cdp, 'kantiere');
   await vaiA(cdp, '/office/kantiere');
-  await finoA(cdp, `document.body.innerText.includes('Chi c')`, { cosa: 'card Chi c’è adesso', timeoutMs: 30000 });
+  await finoA(cdp, `document.body.innerText.includes('Personale presente')`, { cosa: 'card Chi c’è adesso', timeoutMs: 30000 });
   // Il conto si scrive solo dopo il primo tick dell'orologio del browser.
   await finoA(cdp, `/\\d+h \\d\\d m?|\\d+m/.test(document.body.innerText)`, { cosa: 'orologio partito', timeoutMs: 15000 }).catch(() => null);
 
@@ -58,7 +67,7 @@ try {
     cdp,
     `(() => {
       const t = (s) => (s || '').replace(/\\s+/g, ' ').trim();
-      const card = [...document.querySelectorAll('div')].find((d) => /Chi c.{0,3}è adesso/.test(t(d.textContent)) && d.querySelector('a[href*="rapportini?apri="]'));
+      const card = [...document.querySelectorAll('div')].find((d) => /Personale presente/.test(t(d.textContent)) && d.querySelector('a[href*="rapportini?apri="]'));
       if (!card) return { trovata: false, testo: t(document.body.innerText).slice(0, 400) };
       const righe = [...card.querySelectorAll('a[href*="rapportini?apri="]')].map((a) => ({
         href: a.getAttribute('href'),
@@ -75,11 +84,29 @@ try {
   esito(righe.some((r) => /Luca Fabbri/.test(r.testo)), 'chi è in pausa DICHIARATA resta in elenco');
   esito(!righe.some((r) => /Andrea Pozzi/.test(r.testo)), 'chi ha dichiarato FINE GIORNATA non compare');
   esito(/Presenti . cantiere da indicare/i.test(vista.testo ?? ''), 'il gruppo senza cantiere si chiama per quello che è');
+  esito(righe.length >= 6, 'ci sono abbastanza persone per misurare la disposizione', `${righe.length} card`);
+  // ⚠️ A card, non in colonna: con trenta persone un elenco verticale non finisce più.
+  const griglia = await valuta(
+    cdp,
+    `(() => {
+      const ul = [...document.querySelectorAll('ul')].find((u) => u.querySelector('a[href*="rapportini?apri="]'));
+      if (!ul) return { trovata: false };
+      const cime = new Set([...ul.querySelectorAll('li')].map((li) => Math.round(li.getBoundingClientRect().top)));
+      const righe = cime.size;
+      const card = ul.querySelectorAll('li').length;
+      const alta = Math.round(ul.querySelector('li')?.getBoundingClientRect().height ?? 0);
+      return { trovata: true, righe, card, perRiga: Math.round(card / Math.max(1, righe)), alta };
+    })()`,
+  );
+  esito(griglia.perRiga >= 2, 'le persone stanno su più colonne, non una sotto l\u2019altra', JSON.stringify(griglia));
+  esito(griglia.alta > 0 && griglia.alta <= 46, 'ogni card è compatta (≤ 46px)', `${griglia.alta}px`);
 
   const rigaMarco = righe.find((r) => /Marco Rinaldi/.test(r.testo));
   esito(/\d+h \d\d/.test(rigaMarco?.testo ?? ''), 'accanto al nome si legge da quante ore è al lavoro', rigaMarco?.testo ?? '');
   const rigaLuca = righe.find((r) => /Luca Fabbri/.test(r.testo));
-  esito(/in pausa pranzo/i.test(rigaLuca?.testo ?? ''), 'e di chi è a mangiare si legge che è in pausa', rigaLuca?.testo ?? '');
+  // ⚠️ Nella card compatta si legge «in pausa» con la forchetta accanto: una
+  // sola pausa esiste in questo sistema, e il pranzo lo dice l'icona.
+  esito(/in pausa/i.test(rigaLuca?.testo ?? ''), 'e di chi è a mangiare si legge che è in pausa', rigaLuca?.testo ?? '');
   // ⚠️ Il conto di chi è in pausa NON deve essere «adesso meno l'inizio»:
   // alle 13:00 si è fermato a 5 ore, e resta lì tutto il pomeriggio.
   esito(/5h 00/.test(rigaLuca?.testo ?? ''), 'in pausa il conto è fermo (5h 00 dalle 08:00 alle 13:00)', rigaLuca?.testo ?? '');
@@ -94,14 +121,22 @@ try {
     await clicVero(cdp, `document.querySelector('a[href="${rigaMarco.href}"]')`, { attesaMs: 1200 });
     await finoA(cdp, `location.pathname.includes('/rapportini')`, { cosa: 'arrivo su Presenze e ore', timeoutMs: 30000 });
     await finoA(cdp, `document.querySelector('[data-riga]')`, { cosa: 'righe di oggi', timeoutMs: 30000 }).catch(() => null);
+    // ⚠️ La riga GIUSTA, non la prima: le righe di oggi sono ordinate per
+    // cognome, quindi `querySelector('[data-riga]')` prendeva Fabbri e il
+    // controllo passava su una riga che nessuno aveva chiesto di aprire.
     const aperta = await valuta(
       cdp,
       `(() => {
-        const tr = document.querySelector('[data-riga]');
-        if (!tr) return { riga: false };
-        // La riga aperta ha una riga di dettaglio subito sotto.
+        const righe = [...document.querySelectorAll('tr[data-riga]')];
+        const tr = righe.find((r) => /Rinaldi/.test(r.textContent || ''));
+        if (!tr) return { riga: false, quante: righe.length };
         const dopo = tr.nextElementSibling;
-        return { riga: true, aperta: !!dopo && dopo.textContent.trim().length > 40, testo: (dopo?.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 120) };
+        const suaProprio = !!dopo && !dopo.hasAttribute('data-riga');
+        return {
+          riga: true,
+          aperta: suaProprio && dopo.textContent.trim().length > 40,
+          testo: (dopo?.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 120),
+        };
       })()`,
     );
     await foto(cdp, 'chi-ce-adesso-dropdown');

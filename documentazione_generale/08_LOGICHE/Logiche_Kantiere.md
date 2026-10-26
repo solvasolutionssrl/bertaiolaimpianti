@@ -1135,7 +1135,7 @@ giornata** → correzione retroattiva tracciata (`rapportino_versioni`, azione
   alla persona di registrare le ore (conferma, poi l'avviso). Riusa
   `ore_da_inserire` con finestra `ufficio` (§6). ⚠️ Se non parte **si dice
   perché** (nessun accesso all'app, avviso disattivato).
-- ⭐ **«Chi c'è adesso» sul cruscotto d'ufficio** (`/office/kantiere`, card
+- ⭐ **«Personale presente» sul cruscotto d'ufficio** (`/office/kantiere`, card
   `turni-attivi.tsx`, azione `kantiere-turni-attivi.ts`, polling 45s). **Due
   bocche, una card**: il turno aperto su un cantiere (`timbrature`, si sa anche
   *dove*) e la presenza al terminale (`timbri_grezzi`, si sa solo *che c'è*),
@@ -1157,6 +1157,12 @@ giornata** → correzione retroattiva tracciata (`rapportino_versioni`, azione
   mutazioni viste fallire).
   ⚠️ Se la lettura del terminale fallisce la card **non si spegne**: mostra
   comunque chi ha un turno su un cantiere.
+  ⚠️ **A card, non in colonna** (1 → 2 → 3 → 4 → 5 colonne con lo schermo, ogni
+  card 43px): con trenta persone al lavoro un elenco verticale non finisce più e
+  il cruscotto smette di essere un colpo d'occhio. In una card non ci stanno le
+  pastiglie del viaggio: sede, km e targa si leggono come testo sulla riga che
+  dice già da che ora, e per intero nel `title`. Il banco misura **quante card
+  per riga** e **quanto è alta una card**, non solo che i nomi ci siano.
   **Ogni riga è un collegamento** a `/office/kantiere/rapportini?apri=<dipendente>`:
   si atterra su «Presenze e ore» con la giornata di quella persona **già
   aperta**. ⚠️ Il parametro indica la **persona**, non la riga: da fuori non si
