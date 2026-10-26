@@ -99,7 +99,10 @@ export function TabTimbro({ dati }: { dati: DatiTabTimbro }) {
       });
       if (!res.ok) return void alert({ title: 'Non salvato', body: res.error });
       setToken('');
-      setEsito('Salvato.');
+      // Salvato, ma mezzo: lo si dice con un dialogo, non con una riga che
+      // scorre via insieme a «Salvato.».
+      if (res.avviso) await alert({ title: 'Salvato, ma la chiave non scrive', body: res.avviso });
+      setEsito(res.avviso ? 'Salvato · la chiave legge ma non scrive.' : 'Salvato.');
       router.refresh();
     });
   }

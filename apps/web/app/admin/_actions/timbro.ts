@@ -39,7 +39,7 @@ const SALVA_SCHEMA = z.object({
   urlBase: z.string().url().optional(),
 });
 
-export async function salvaCollegamentoTimbro(input: unknown): Promise<Esito> {
+export async function salvaCollegamentoTimbro(input: unknown): Promise<Esito<{ avviso?: string }>> {
   const admin = await requirePlatformAdmin();
   const parsed = SALVA_SCHEMA.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? 'Input non valido' };
@@ -49,10 +49,24 @@ export async function salvaCollegamentoTimbro(input: unknown): Promise<Esito> {
 
   // Un token nuovo si prova PRIMA di salvarlo: un token sbagliato salvato e'
   // un collegamento che sembra acceso e non legge niente.
+  //
+  // ⚠️ Si guardano anche gli SCOPE. Prima la prova chiamava `/punches`, che
+  // vuole solo `punches:read`: una chiave senza `punches:write` passava, il
+  // pannello diceva «funziona», e poi lo specchio delle nostre timbrature
+  // falliva in silenzio con un 403. Mezzo collegamento che si dichiara intero.
+  let avviso: string | null = null;
   if (d.token) {
     const client = new ClientTimbro(d.urlBase ?? prima?.urlBase ?? 'https://timbro-solva.vercel.app/api/v1', d.token);
     try {
-      await client.punches({ from: new Date(Date.now() - 60_000).toISOString() });
+      const io = await client.me();
+      const scopes = io.key?.scopes ?? [];
+      if (!scopes.includes('punches:read')) {
+        return { ok: false, error: 'La chiave non ha il permesso di leggere le timbrature (`punches:read`).' };
+      }
+      if (!scopes.includes('punches:write')) {
+        avviso =
+          'La chiave legge ma non scrive: senza `punches:write` le timbrature fatte dall\'app non arrivano a Timbro, e il terminale non sa in che punto del turno è la persona.';
+      }
     } catch (e) {
       return { ok: false, error: `Il token non funziona: ${messaggio(e)}` };
     }
@@ -85,7 +99,10 @@ export async function salvaCollegamentoTimbro(input: unknown): Promise<Esito> {
     after: { stato: d.stato, dal: d.dal, conToken: !!(d.token || prima?.token), tokenCambiato: !!d.token },
   });
   rinfresca(d.tenantId);
-  return { ok: true };
+  // ⚠️ Un avviso si restituisce, non si tiene per sé: il collegamento è
+  // salvato e funziona in lettura, ma chi l'ha salvato deve sapere che la
+  // metà in scrittura non c'è.
+  return avviso ? { ok: true, avviso } : { ok: true };
 }
 
 // ── Lettura a comando ────────────────────────────────────────────────────────

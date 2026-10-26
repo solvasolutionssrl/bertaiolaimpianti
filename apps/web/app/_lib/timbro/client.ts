@@ -156,8 +156,17 @@ export class ClientTimbro {
     return out;
   }
 
-  /** `GET /me`: chi siamo per Timbro. Serve a provare il token. */
-  me(): Promise<{ tenant_id?: string; name?: string; timezone?: string; scopes?: string[] }> {
+  /**
+   * `GET /me`: chi siamo per Timbro, e **cosa ci lascia fare la chiave**.
+   *
+   * ⚠️ La risposta e' annidata (`{ key, tenant }`), non piatta: il tipo di
+   * prima la dichiarava piatta e quindi leggeva `undefined` su tutto. Non si
+   * vedeva perche' non la chiamava nessuno.
+   */
+  me(): Promise<{
+    key?: { id?: string; name?: string; prefix?: string; scopes?: string[]; last_used_at?: string | null };
+    tenant?: { id?: string; name?: string; slug?: string; timezone?: string };
+  }> {
     return this.chiama('GET', '/me');
   }
 
