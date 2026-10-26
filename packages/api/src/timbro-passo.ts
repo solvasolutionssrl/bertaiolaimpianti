@@ -222,3 +222,20 @@ export function dichiaraFineGiornata(p: CampiPasso): boolean {
   const l = leggiPasso(p);
   return l.passo === 'end' && l.fiducia === 'dichiarata';
 }
+
+/**
+ * ⭐ **L'inizio di una pausa DICHIARATA**: serve a sapere che una persona è
+ * ancora al lavoro mentre il suo ultimo passaggio è un'uscita.
+ *
+ * ⚠️ Senza la fase, un'uscita è un'uscita: la giornata risulta **chiusa** e chi
+ * è a mangiare sparisce da «chi c'è adesso» per rispuntare al rientro. È il
+ * primo caso in cui la fase dichiarata dice qualcosa che la sola sequenza non
+ * può sapere — il terminale ha chiesto, la persona ha risposto.
+ *
+ * ⚠️ Anche qui solo `dichiarata`: un `pause_start` dedotto terrebbe «presente»
+ * chi è andato a casa, cioè un numero sbagliato su un cruscotto.
+ */
+export function dichiaraInizioPausa(p: CampiPasso): boolean {
+  const l = leggiPasso(p);
+  return l.passo === 'pause_start' && l.fiducia === 'dichiarata';
+}

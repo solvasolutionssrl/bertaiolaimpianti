@@ -135,6 +135,15 @@ interface PageProps {
     dipendente?: string;
     /** Id cantiere: il cantiere sta sulle RIGHE, non sulla giornata. */
     cantiere?: string;
+    /**
+     * Id dipendente di cui aprire subito la giornata di oggi. Lo passa la card
+     * «Chi c'è adesso» del cruscotto: un clic sulla persona deve far vedere la
+     * sua giornata, non una tabella in cui ricercarla.
+     * ⚠️ Si indica la **persona**, non la riga: la riga può essere un
+     * rapportino (uuid) oppure una presenza senza rapportino
+     * (`timbro:<dip>:<giorno>`), e da fuori non si sa quale delle due.
+     */
+    apri?: string;
   };
 }
 
@@ -152,6 +161,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
   const statoFilter = searchParams.stato ?? '';
   const dipendenteFilter = searchParams.dipendente ?? '';
   const cantiereFilter = searchParams.cantiere ?? '';
+  const apriDipendente = searchParams.apri ?? '';
 
   // Carica tutti i rapportini nel range, a pagine: il database restituisce al
   // massimo 1000 righe per richiesta (prima un .limit(500) tagliava in silenzio
@@ -831,6 +841,7 @@ export default async function RapportiniPage({ searchParams }: PageProps) {
         timbroGiornate={timbroGiornate}
         compila={compila}
         oggi={oggiRome}
+        apriDipendente={apriDipendente}
         mia={mia}
         sogliaOre={sogliaAnomaliaTurnoOre}
         sogliaPausaOre={sogliaPausaOre}

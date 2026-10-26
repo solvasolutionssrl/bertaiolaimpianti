@@ -1359,6 +1359,17 @@ Le poche cose che servono **anche** a chi non sta lavorando sul mondo presenze:
 - ⚠️ **Il bundle di sviluppo invecchia sull'indice di `@kommessa/ui`**: un export
   nuovo nel barrel risultava `undefined` nel componente che lo importava («type
   is invalid») finché non si è pulito `.next`.
+- ⚠️⚠️ **Mai un `next build` mentre gira `next dev`**: condividono `.next/`, e il
+  build **cancella i chunk di sviluppo** (`main-app.js`,
+  `app-pages-internals.js`). Il dev server non li riscrive — webpack li crede
+  già emessi — quindi da quel momento **nessuna pagina si idrata**: l'HTML
+  arriva 200, React non monta e un `<form>` resta con
+  `action="javascript:throw new Error('React form unexpectedly submitted.')"`.
+  Nessun errore, nessun avviso: i banchi falliscono tutti all'accesso e sembra
+  un difetto dell'app. Si ripara **solo** fermando il dev server, cancellando
+  `apps/web/.next` e riavviandolo. Misurato il 26/10/2026, costato due ore
+  di banchi. Per validare una modifica usare `tsc --noEmit` e `next lint`; il
+  build vero lo fa Vercel.
 
 ### PWA: atterraggio per ruolo e fluidità
 

@@ -1135,6 +1135,33 @@ giornata** → correzione retroattiva tracciata (`rapportino_versioni`, azione
   alla persona di registrare le ore (conferma, poi l'avviso). Riusa
   `ore_da_inserire` con finestra `ufficio` (§6). ⚠️ Se non parte **si dice
   perché** (nessun accesso all'app, avviso disattivato).
+- ⭐ **«Chi c'è adesso» sul cruscotto d'ufficio** (`/office/kantiere`, card
+  `turni-attivi.tsx`, azione `kantiere-turni-attivi.ts`, polling 45s). **Due
+  bocche, una card**: il turno aperto su un cantiere (`timbrature`, si sa anche
+  *dove*) e la presenza al terminale (`timbri_grezzi`, si sa solo *che c'è*),
+  che finisce in un gruppo a parte in fondo — «Presenti · cantiere da indicare»,
+  perché il cantiere non si inventa.
+  ⚠️⚠️ **Prima leggeva solo `timbrature`**, e con il contenitore virtuale quella
+  tabella nasce all'attribuzione delle ore: su FPM diceva **«nessuno»** con
+  trenta persone al lavoro (misurato il 26/10/2026). Stesso difetto, stessa
+  giornata, su «Timbrature oggi» (0 con venticinque badge passati) e su
+  «Presenze per cantiere» («Nessun dato»): ora contano **entrambe** le tabelle.
+  ⭐ **La pausa pranzo si vede solo grazie alla fase dichiarata**: mentre si
+  mangia l'ultimo passaggio è un'uscita, quindi la giornata «risulta chiusa» e
+  la persona sparirebbe per ricomparire al rientro. Con `passo: pause_start` +
+  `passo_origine: person` resta in elenco col pallino giallo. ⚠️ Un
+  `pause_start` **dedotto** non basta: terrebbe «presente» chi è andato a casa.
+  ⚠️ **Il conto delle ore non è «adesso meno l'inizio»**: in pausa si ferma sul
+  netto, o si regalerebbe un'ora a tutti. Regola pura e condivisa con la colonna
+  ORE di «Presenze e ore»: `@kommessa/api/presenza-viva` (13 asserzioni, 3
+  mutazioni viste fallire).
+  ⚠️ Se la lettura del terminale fallisce la card **non si spegne**: mostra
+  comunque chi ha un turno su un cantiere.
+  **Ogni riga è un collegamento** a `/office/kantiere/rapportini?apri=<dipendente>`:
+  si atterra su «Presenze e ore» con la giornata di quella persona **già
+  aperta**. ⚠️ Il parametro indica la **persona**, non la riga: da fuori non si
+  sa se la giornata di oggi ha già un rapportino (uuid) o è solo una presenza
+  timbrata (`timbro:<dip>:<giorno>`). Banco: `chi-ce-adesso.mjs`.
 - **Cruscotto mobile dell'ufficio** (`/mobile/kantiere/cruscotto`, gated
   admin/office): dashboard navigabile **per giorni** (`?giorno=YYYY-MM-DD`, mai
   il futuro), con le presenze del giorno espandibili (origine + viaggio).

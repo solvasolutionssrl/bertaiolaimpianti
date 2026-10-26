@@ -129,12 +129,27 @@ export default async function KantierePanoramica() {
   const oltreSoglia = await giornateOltreSoglia(supabase, ctx.tenantId, sogliaOre, oggiIso);
 
   // ===== KPI 4: timbrature oggi =====
+  // ⚠️⚠️ **Due tabelle, un numero.** `timbrature` sono le ore attribuite a un
+  // cantiere; i passaggi al terminale stanno in `timbri_grezzi` e con il
+  // contenitore virtuale non diventano `timbrature` finché qualcuno non
+  // ripartisce la giornata. Contando solo le prime, su FPM si leggeva
+  // **«Timbrature oggi: 0»** con venticinque badge passati — un numero falso
+  // su un cruscotto, che è il modo più veloce per far smettere di guardarlo.
   const inizioOggi = inizioOggiRome();
-  const { count: timbratureOggi } = await supabase
-    .from('timbrature' as never)
-    .select('id', { count: 'exact', head: true })
-    .eq('tenant_id', ctx.tenantId)
-    .gte('ts', inizioOggi);
+  const [{ count: timbratureAttribuite }, { count: passaggiTerminale }] = await Promise.all([
+    supabase
+      .from('timbrature' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', ctx.tenantId)
+      .gte('ts', inizioOggi),
+    supabase
+      .from('timbri_grezzi' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', ctx.tenantId)
+      .eq('stato', 'valido')
+      .gte('ts', inizioOggi),
+  ]);
+  const timbratureOggi = (timbratureAttribuite ?? 0) + (passaggiTerminale ?? 0);
 
   // ===== KPI 5: ore settimana =====
   const da7gg = settimanaDa();
@@ -244,6 +259,30 @@ export default async function KantierePanoramica() {
     }
   }
 
+  // ⚠️ Anche qui il terminale: chi ha passato il badge e basta non ha un
+  // cantiere, ma **c'è stato**. Senza, su FPM questa card diceva «Nessun dato
+  // nel periodo» in una giornata con trenta persone al lavoro.
+  {
+    const giaContati = new Set<string>();
+    for (const set of presenzaPerCantiere.values()) for (const id of set) giaContati.add(id);
+    const { data: badgeOggi } = (await supabase
+      .from('timbri_grezzi' as never)
+      .select('dipendente_id')
+      .eq('tenant_id', ctx.tenantId)
+      .eq('stato', 'valido')
+      .not('dipendente_id', 'is', null)
+      .gte('ts', inizioOggi)) as { data: { dipendente_id: string | null }[] | null };
+    const senzaCantiere = new Set<string>();
+    for (const r of badgeOggi ?? []) {
+      if (r.dipendente_id && !giaContati.has(r.dipendente_id)) senzaCantiere.add(r.dipendente_id);
+    }
+    if (senzaCantiere.size > 0) {
+      const esistente = presenzaPerCantiere.get('__nessuno__');
+      if (esistente) for (const id of senzaCantiere) esistente.add(id);
+      else presenzaPerCantiere.set('__nessuno__', senzaCantiere);
+    }
+  }
+
   // Carica nomi cantieri coinvolti oggi
   const cantiereIdsOggi = [...presenzaPerCantiere.keys()].filter((k) => k !== '__nessuno__');
   const cantiereNomiMap = new Map<string, string>();
@@ -261,7 +300,7 @@ export default async function KantierePanoramica() {
   const presenzaCantiereList: { nome: string; count: number }[] = [];
   for (const [cId, dipSet] of presenzaPerCantiere) {
     const nome =
-      cId === '__nessuno__' ? 'Non specificato' : (cantiereNomiMap.get(cId) ?? cId);
+      cId === '__nessuno__' ? 'Cantiere non indicato' : (cantiereNomiMap.get(cId) ?? cId);
     presenzaCantiereList.push({ nome, count: dipSet.size });
   }
   presenzaCantiereList.sort((a, b) => b.count - a.count);
@@ -415,7 +454,8 @@ export default async function KantierePanoramica() {
         />
         <KpiMini
           label="Timbrature oggi"
-          value={timbratureOggi ?? 0}
+          value={timbratureOggi}
+          hint="Terminale e app"
           icon={<Timer />}
           tone="default"
         />

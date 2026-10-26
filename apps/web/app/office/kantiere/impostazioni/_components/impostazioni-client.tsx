@@ -714,9 +714,10 @@ export function ImpostazioniClient({ impostazioni, codiceAzienda }: Props) {
                     cantiere; le tratte partono e arrivano alla sede predefinita.
                   </li>
                   <li>
-                    <span className="font-medium text-foreground">Partenza e rientro</span>: in Registra giornata sono
-                    sempre una sede, di default la predefinita; chi lavora tutto il giorno dalla sede non li indica. Avviando
-                    o chiudendo il turno dall’app è ammessa anche l’abitazione privata, senza tempo né chilometri.
+                    <span className="font-medium text-foreground">Partenza e rientro</span>: sono sempre una sede, di
+                    default la predefinita; chi lavora tutto il giorno dalla sede non li indica. Vale ovunque — Registra
+                    giornata, avvio e chiusura del turno dall’app: dal 26/10/2026 l’abitazione privata non è più una
+                    scelta, la giornata si conta come se si partisse sempre dalla sede.
                   </li>
                 </ul>
               </div>

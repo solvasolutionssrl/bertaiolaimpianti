@@ -1,21 +1,32 @@
 'use client';
 
 import * as React from 'react';
-import { Truck, MapPin, Radio, Utensils } from 'lucide-react';
-import { turniAttivi, type GruppoTurni } from '@/app/office/_actions/kantiere-turni-attivi';
+import Link from 'next/link';
+import { Truck, MapPin, Radio, Utensils, ChevronRight } from 'lucide-react';
+import { turniAttivi, type GruppoTurni, type TurnoAttivo } from '@/app/office/_actions/kantiere-turni-attivi';
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
+import { minutiPresenza, scriviDurata } from '@kommessa/api/presenza-viva';
 
 function oraInizio(ts: string): string {
   // A video ai 5 minuti; il dato resta esatto.
   return oraMostrata(ts);
 }
 
-function trascorso(ts: string, now: number): string {
-  const min = Math.max(0, Math.floor((now - Date.parse(ts)) / 60000));
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m}m`;
-  return `${h}h ${m.toString().padStart(2, '0')}m`;
+/**
+ * Da quanto è al lavoro. ⚠️ Non «adesso meno l'inizio»: in pausa il conto si
+ * ferma, o si regalerebbe un'ora a tutti. La regola è una sola per tutta
+ * l'applicazione (`@kommessa/api/presenza-viva`).
+ */
+function trascorso(t: TurnoAttivo, now: number): string {
+  return scriviDurata(
+    minutiPresenza({
+      aperta: t.aperta,
+      inizioMs: Date.parse(t.inizioTs),
+      pausaTimbrataMin: t.pausaMin,
+      nettoMin: t.nettoMin,
+      oraMs: now,
+    }),
+  );
 }
 
 function fmtKm(km: number | null): string | null {
@@ -86,12 +97,12 @@ export function TurniAttivi({
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Radio className="h-4 w-4 text-emerald-600" strokeWidth={1.75} aria-hidden="true" />
-          <h2 className="text-sm font-semibold text-foreground">Turni attivi</h2>
+          <h2 className="text-sm font-semibold text-foreground">Chi c&rsquo;è adesso</h2>
         </div>
         {totale > 0 ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
             <Pallino />
-            {totale} in corso
+            {totale} al lavoro
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">nessuno</span>
@@ -100,26 +111,28 @@ export function TurniAttivi({
 
       {gruppi.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-          Nessun turno attivo in questo momento.
+          Nessuno al lavoro in questo momento.
         </p>
       ) : (
         <div className="divide-y divide-border">
           {gruppi.map((g) => (
-            <div key={g.cantiereId} className="px-4 py-3">
-              <div className="mb-2 flex items-center justify-between">
+            <div key={g.cantiereId ?? '__senza_cantiere__'} className="px-4 py-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="truncate text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   {g.cantiereNome}
                 </p>
-                <span className="text-[11px] text-muted-foreground">{g.turni.length}</span>
+                <span className="shrink-0 text-[11px] text-muted-foreground">{g.turni.length}</span>
               </div>
               <ul className="space-y-1.5">
                 {g.turni.map((t) => {
                   const km = fmtKm(t.viaggio?.km ?? null);
                   return (
-                    <li
-                      key={t.dipendenteId}
-                      className="flex items-center gap-2.5 rounded-md bg-muted/40 px-2.5 py-2"
-                    >
+                    <li key={t.dipendenteId}>
+                      {/* Tutta la riga porta alla giornata di quella persona, gia' aperta. */}
+                      <Link
+                        href={`/office/kantiere/rapportini?apri=${t.dipendenteId}`}
+                        className="flex items-center gap-2.5 rounded-md bg-muted/40 px-2.5 py-2 transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
                       <Pallino inPausa={t.inPausa} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
@@ -128,13 +141,24 @@ export function TurniAttivi({
                         <p className="text-[11px] text-muted-foreground">
                           {t.inPausa ? (
                             <span className="inline-flex items-center gap-1 font-medium text-amber-700">
-                              <Utensils className="h-3 w-3" strokeWidth={2} /> in pausa pranzo
+                              <Utensils className="h-3 w-3" strokeWidth={2} /> in pausa pranzo · dalle{' '}
+                              {oraInizio(t.inizioTs)}
                             </span>
                           ) : (
-                            <>dalle {oraInizio(t.inizioTs)}{now != null ? ` · ${trascorso(t.inizioTs, now)}` : ''}</>
+                            <>dalle {oraInizio(t.inizioTs)}</>
                           )}
                         </p>
                       </div>
+                      {/* Quante ore ha fatto oggi: e' il numero per cui si guarda questa card. */}
+                      {now != null ? (
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                            t.inPausa ? 'bg-amber-50 text-amber-800' : 'bg-background text-foreground'
+                          }`}
+                        >
+                          {trascorso(t, now)}
+                        </span>
+                      ) : null}
                       <div className="flex shrink-0 items-center gap-1.5">
                         {t.viaggio?.sedeNome ? (
                           <span
@@ -160,6 +184,8 @@ export function TurniAttivi({
                           </span>
                         ) : null}
                       </div>
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      </Link>
                     </li>
                   );
                 })}

@@ -3,17 +3,37 @@
 import { createServerSupabase } from '@kommessa/api/server';
 import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
+import { romeDay } from '@kommessa/api/rome-time';
+import { dichiaraInizioPausa } from '@kommessa/api/timbro-passo';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiGiornateTimbro } from '@/app/_lib/timbro/giornate';
 import { titoloCase } from '@/app/mobile/_lib/display-case';
 
 /** Una pagina di righe da `leggiTutto`: il builder di supabase-js tipizzato a mano. */
 type Pagina<T> = PromiseLike<EsitoPagina<T>>;
 
 /**
- * Turni attivi = dipendenti con un INGRESSO aperto su un cantiere (hanno
- * timbrato ingresso ma non ancora uscita). Si popolano all'arrivo e si
- * spopolano alla timbratura di uscita. Usato dalla Panoramica Kantiere con
- * polling per una vista "live".
+ * **Chi c'è adesso.** Due bocche, una card.
+ *
+ * 1. **Turno su un cantiere** — un INGRESSO aperto in `timbrature`: la persona
+ *    ha timbrato col QR o dall'app e sappiamo anche *dove*.
+ * 2. **Presenza al terminale** — un badge in `timbri_grezzi` senza un'uscita di
+ *    fine: sappiamo che c'è, non su quale cantiere.
+ *
+ * ⚠️⚠️ **La seconda bocca mancava, e la card mentiva.** Con il contenitore
+ * virtuale (`Logiche_Integrazione_Timbro.md` §4) `timbrature` nasce solo
+ * all'attribuzione delle ore: su un cliente che timbra al terminale restava
+ * vuota tutto il giorno, quindi «Turni attivi» diceva **nessuno** mentre trenta
+ * persone erano al lavoro. Misurato su FPM il 26/10/2026.
+ *
+ * ⭐ **E la pausa pranzo si vede solo grazie alla fase dichiarata.** Mentre si
+ * mangia l'ultimo passaggio è un'uscita, quindi la giornata «risulta chiusa» e
+ * la persona sparirebbe da qui per ricomparire al rientro. Se il terminale ha
+ * chiesto e la persona ha risposto PAUSA (`passo: pause_start`,
+ * `passo_origine: person`) lo sappiamo, e resta in elenco col pallino giallo.
+ * Senza fase un'uscita resta un'uscita: è il prezzo dichiarato di non indovinare.
+ *
+ * Usato dal cruscotto Kantiere, con polling per una vista «live».
  */
 
 export type TurnoAttivo = {
@@ -22,6 +42,14 @@ export type TurnoAttivo = {
   inizioTs: string;
   /** true se il turno è aperto ma il dipendente è in pausa pranzo. */
   inPausa: boolean;
+  /** Da dove lo sappiamo: il turno su un cantiere, o il badge al terminale. */
+  fonte: 'cantiere' | 'terminale';
+  /** Pause già timbrate (minuti): si scalano dal tempo trascorso. */
+  pausaMin: number;
+  /** Il tempo scorre ancora (non è in pausa, non è finito). */
+  aperta: boolean;
+  /** Il netto già calcolato, per quando non scorre più. */
+  nettoMin: number;
   viaggio: {
     sedeNome: string | null;
     km: number | null;
@@ -32,7 +60,8 @@ export type TurnoAttivo = {
 };
 
 export type GruppoTurni = {
-  cantiereId: string;
+  /** `null` = il gruppo di chi c'è senza che si sappia su quale cantiere. */
+  cantiereId: string | null;
   cantiereNome: string;
   turni: TurnoAttivo[];
 };
@@ -84,7 +113,17 @@ export async function turniAttivi(): Promise<Result> {
   // `ingressoId` resta quello dell'inizio turno (a cui è legato il viaggio andata).
   const aperti = new Map<
     string,
-    { dipId: string; cantId: string; inizioTs: string; ingressoId: string; inPausa: boolean }
+    {
+      dipId: string;
+      cantId: string;
+      inizioTs: string;
+      ingressoId: string;
+      inPausa: boolean;
+      /** Quando è cominciata la pausa in corso: serve a congelare il conto. */
+      pausaDaTs: string | null;
+      /** Pause già chiuse dentro questo turno (minuti). */
+      pausaMin: number;
+    }
   >();
   for (const t of righe) {
     if (!t.cantiere_id) continue;
@@ -98,21 +137,73 @@ export async function turniAttivi(): Promise<Result> {
           inizioTs: t.ts,
           ingressoId: t.id,
           inPausa: false,
+          pausaDaTs: null,
+          pausaMin: 0,
         });
       } else {
-        cur.inPausa = false; // ripresa dopo pausa
+        // Ripresa dopo pausa: il buco si chiude e si somma, o il tempo
+        // trascorso conterebbe anche l'ora del pranzo.
+        if (cur.pausaDaTs) {
+          cur.pausaMin += Math.max(0, Math.round((Date.parse(t.ts) - Date.parse(cur.pausaDaTs)) / 60_000));
+          cur.pausaDaTs = null;
+        }
+        cur.inPausa = false;
       }
     } else if (t.pausa) {
-      if (cur) cur.inPausa = true;
+      if (cur) {
+        cur.inPausa = true;
+        cur.pausaDaTs = t.ts;
+      }
     } else {
       aperti.delete(key); // fine turno
     }
   }
 
   const attivi = Array.from(aperti.values());
-  if (attivi.length === 0) return { ok: true, gruppi: [], totale: 0 };
 
-  const dipIds = [...new Set(attivi.map((a) => a.dipId))];
+  // ── Seconda bocca: chi c'è al terminale, senza un cantiere ────────────────
+  // Si legge la giornata di OGGI (ora italiana) e si tiene chi è ancora
+  // dentro: presenza aperta, oppure fermo in una pausa **dichiarata**.
+  // ⚠️ Chi ha già un turno su un cantiere non si ripete: lì si sa anche dove.
+  const conTurno = new Set(attivi.map((a) => a.dipId));
+  const presenti: {
+    dipId: string;
+    inizioTs: string;
+    inPausa: boolean;
+    pausaMin: number;
+    aperta: boolean;
+    nettoMin: number;
+  }[] = [];
+  try {
+    const oggi = romeDay(new Date());
+    const giornate = await leggiGiornateTimbro(supabase, ctx.tenantId, { dalGiorno: oggi, alGiorno: oggi });
+    for (const g of giornate.values()) {
+      if (conTurno.has(g.dipendenteId)) continue;
+      const vivi = g.timbri.filter((t) => !t.scartato);
+      const ultimo = vivi[vivi.length - 1];
+      if (!ultimo) continue;
+      const aperta = g.presenza?.aperta === true;
+      const inPausa = !aperta && ultimo.tipo === 'uscita' && dichiaraInizioPausa({ step: ultimo.passo, step_source: ultimo.passoOrigine });
+      if (!aperta && !inPausa) continue;
+      const inizioMs = g.presenza?.intervalli[0]?.inizioMs ?? null;
+      presenti.push({
+        dipId: g.dipendenteId,
+        inizioTs: inizioMs != null ? new Date(inizioMs).toISOString() : (vivi[0]?.ts ?? ultimo.ts),
+        inPausa,
+        pausaMin: g.presenza?.minutiPausa ?? 0,
+        aperta,
+        nettoMin: g.presenza?.minutiNetti ?? 0,
+      });
+    }
+  } catch (e) {
+    // ⚠️ Il terminale non deve poter spegnere la card: se la lettura fallisce
+    // si mostra comunque chi ha un turno su un cantiere.
+    console.error('[turni-attivi] presenze dal terminale:', e);
+  }
+
+  if (attivi.length === 0 && presenti.length === 0) return { ok: true, gruppi: [], totale: 0 };
+
+  const dipIds = [...new Set([...attivi.map((a) => a.dipId), ...presenti.map((p) => p.dipId)])];
   const cantIds = [...new Set(attivi.map((a) => a.cantId))];
   const ingressoIds = attivi.map((a) => a.ingressoId);
 
@@ -204,6 +295,13 @@ export async function turniAttivi(): Promise<Result> {
       dipendenteNome: dipMap.get(a.dipId) ?? a.dipId,
       inizioTs: a.inizioTs,
       inPausa: a.inPausa,
+      fonte: 'cantiere',
+      pausaMin: a.pausaMin,
+      // In pausa il tempo non scorre: vale il netto fino all'inizio della pausa.
+      aperta: !a.inPausa,
+      nettoMin: a.inPausa && a.pausaDaTs
+        ? Math.max(0, Math.round((Date.parse(a.pausaDaTs) - Date.parse(a.inizioTs)) / 60_000) - a.pausaMin)
+        : 0,
       viaggio: via
         ? {
             sedeNome: via.sede_id ? sedeMap.get(via.sede_id) ?? null : null,
@@ -231,5 +329,28 @@ export async function turniAttivi(): Promise<Result> {
     }))
     .sort((a, b) => a.cantiereNome.localeCompare(b.cantiereNome));
 
-  return { ok: true, gruppi, totale: attivi.length };
+  // ⚠️ Chi c'è e basta va **in fondo**, in un gruppo suo: il cantiere non si
+  // inventa, e mischiarli coi turni localizzati farebbe credere che manchi
+  // un'informazione che invece non è mai stata chiesta a nessuno.
+  if (presenti.length > 0) {
+    gruppi.push({
+      cantiereId: null,
+      cantiereNome: 'Presenti · cantiere da indicare',
+      turni: presenti
+        .map((p) => ({
+          dipendenteId: p.dipId,
+          dipendenteNome: dipMap.get(p.dipId) ?? p.dipId,
+          inizioTs: p.inizioTs,
+          inPausa: p.inPausa,
+          fonte: 'terminale' as const,
+          pausaMin: p.pausaMin,
+          aperta: p.aperta,
+          nettoMin: p.nettoMin,
+          viaggio: null,
+        }))
+        .sort((x, y) => Date.parse(y.inizioTs) - Date.parse(x.inizioTs)),
+    });
+  }
+
+  return { ok: true, gruppi, totale: attivi.length + presenti.length };
 }

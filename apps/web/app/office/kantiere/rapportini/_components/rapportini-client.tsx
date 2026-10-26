@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { minutiPresenza } from '@kommessa/api/presenza-viva';
 import { ZONA_DIPENDENTI } from '@kommessa/api/zone-dati';
 import { TagTu } from '@/app/_components/tag-tu';
 import { useRouter } from 'next/navigation';
@@ -171,6 +172,8 @@ interface Props {
   giorniAperti: GiornataAperta[];
   /** Le giornate timbrate al terminale nel periodo, per il pannello «da ripartire». */
   timbroGiornate?: TimbroGiornataVista[];
+  /** Id dipendente la cui giornata di oggi va aperta all'arrivo (`?apri=`). */
+  apriDipendente?: string;
   /** Sedi, mezzi e impostazioni per «Compila giornata» da scrivania. */
   compila?: {
     sedi: { id: string; nome: string; tipo: string; isDefault: boolean }[];
@@ -363,15 +366,18 @@ function usePresenzaViva(timbro: TimbroGiornataVista | null | undefined): number
     return () => clearInterval(id);
   }, [aperta]);
   if (!timbro) return null;
-  if (aperta) {
-    if (ora === null) return null;
-    const da = timbro.inizioIso ?? timbro.timbri.find((t) => !t.scartato)?.ts ?? null;
-    if (!da) return null;
-    return Math.max(0, Math.round((ora - Date.parse(da)) / 60000) - (timbro.pausaTimbrataMin ?? 0));
-  }
-  // Intervallo chiuso (pausa iniziata, o giornata finita): il netto e' gia'
-  // calcolato, pause timbrate escluse. Non scorre piu', ma non e' zero.
-  return timbro.nettoMin > 0 ? timbro.nettoMin : null;
+  if (aperta && ora === null) return null;
+  const da = timbro.inizioIso ?? timbro.timbri.find((t) => !t.scartato)?.ts ?? null;
+  // ⭐ Il conto sta in un posto solo: lo fa anche la card «Chi c'è adesso» del
+  // cruscotto, e due formule divergenti darebbero due ore diverse per la
+  // stessa persona nella stessa applicazione.
+  return minutiPresenza({
+    aperta,
+    inizioMs: da ? Date.parse(da) : null,
+    pausaTimbrataMin: timbro.pausaTimbrataMin ?? 0,
+    nettoMin: timbro.nettoMin,
+    oraMs: ora ?? 0,
+  });
 }
 
 function OggiRow({
@@ -391,6 +397,7 @@ function OggiRow({
   return (
     <>
       <tr
+        data-riga={riga.id}
         className="border-b border-border cursor-pointer bg-emerald-50/50 transition-colors hover:bg-emerald-100/50"
         onClick={onToggle}
       >
@@ -461,6 +468,7 @@ export function RapportiniClient({
   cantieri,
   giorniAperti,
   timbroGiornate = [],
+  apriDipendente = '',
   compila,
   oggi,
   mia = null,
@@ -717,6 +725,26 @@ export function RapportiniClient({
   const storicoTutte = righe.filter((r) => r.data < oggi && !èVuota(r));
   const storicoRighe = soloAnomalie ? storicoTutte.filter((r) => r.daVerificare) : storicoTutte;
   const mostraOggi = oggiRighe.length > 0 && !soloAnomalie;
+
+  // ── `?apri=<dipendente>`: la giornata si apre da sola ─────────────────────
+  // Lo passa la card «Chi c'è adesso» del cruscotto. ⚠️ Si cerca per PERSONA,
+  // non per id di riga: da fuori non si sa se la giornata di oggi ha già un
+  // rapportino (uuid) o è solo una presenza timbrata (`timbro:…`).
+  const rigaDaAprire = apriDipendente
+    ? (oggiRighe.find((r) => r.dipendenteId === apriDipendente)?.id ?? null)
+    : null;
+  React.useEffect(() => {
+    if (!rigaDaAprire) return;
+    setExpanded((p) => (p.has(rigaDaAprire) ? p : new Set(p).add(rigaDaAprire)));
+    // ⚠️ Dopo il ridisegno: prima la riga aperta non esiste ancora, e lo
+    // scorrimento finirebbe sulla riga chiusa (o su niente).
+    const id = requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-riga="${rigaDaAprire}"]`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [rigaDaAprire]);
 
   // Anomalie (da verificare) nello storico: giornate passate non finalizzate.
   const nAnomalie = storicoTutte.filter((r) => r.daVerificare).length;

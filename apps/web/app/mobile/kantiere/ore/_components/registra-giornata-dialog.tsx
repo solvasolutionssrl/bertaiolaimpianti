@@ -774,6 +774,9 @@ export function RegistraGiornataDialog({
       titolo: isP ? 'Partenza' : 'Rientro',
       segnaposto: isP ? 'Indica la partenza' : 'Indica il rientro',
       scelta: luogo ? (luogo.tipo === 'casa' ? 'casa' : luogo.sedeId) : null,
+      // ⚠️ «Abitazione privata» non è una scelta dal 26/10/2026 (CCNL) e non sta
+      // fra le `opzioni`: resta solo come ETICHETTA di una giornata vecchia che
+      // ce l'ha già dentro, o la riga mostrerebbe una tendina senza selezione.
       nome: luogo ? (luogo.tipo === 'casa' ? 'Abitazione privata' : (sede?.nome ?? 'Sede')) : null,
       tipo: luogo ? (luogo.tipo === 'casa' ? 'casa' : tipoLuogoSede(sede?.tipo)) : null,
       opzioni,

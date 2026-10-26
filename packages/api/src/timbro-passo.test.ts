@@ -8,6 +8,7 @@ import {
   passoDaTimbratura,
   daSpecchiare,
   dichiaraFineGiornata,
+  dichiaraInizioPausa,
 } from './timbro-passo';
 
 describe('leggiPasso — la fase impone il verso', () => {
@@ -221,5 +222,23 @@ describe('dichiaraFineGiornata — solo una dichiarazione fa partire il promemor
     for (const step of ['start', 'pause_start', 'pause_end']) {
       expect(dichiaraFineGiornata({ step, step_source: 'person' })).toBe(false);
     }
+  });
+});
+
+describe('dichiaraInizioPausa — chi è a mangiare è ancora al lavoro', () => {
+  it('la persona ha toccato PAUSA', () => {
+    expect(dichiaraInizioPausa({ step: 'pause_start', step_source: 'person' })).toBe(true);
+  });
+
+  it('⚠️ una pausa DEDOTTA no: terrebbe «presente» chi è andato a casa', () => {
+    expect(dichiaraInizioPausa({ step: 'pause_start', step_source: 'inferred' })).toBe(false);
+  });
+
+  it('un\u2019uscita senza fase non dice niente', () => {
+    expect(dichiaraInizioPausa({ step: null, step_source: null })).toBe(false);
+  });
+
+  it('la fine giornata non è una pausa', () => {
+    expect(dichiaraInizioPausa({ step: 'end', step_source: 'person' })).toBe(false);
   });
 });
