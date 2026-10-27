@@ -48,6 +48,17 @@ export interface EventoTimbro {
    * avvenute non deve andare perso.
    */
   ordine?: number;
+  /**
+   * **L'evento è DERIVATO, non misurato.** Oggi è lo *specchio della chiusura*
+   * (`presenza-registro.ts`): quando si chiude il turno da un'altra bocca e nel
+   * registro la presenza risulta ancora aperta, si scrive l'uscita anche qui.
+   *
+   * ⚠️ Esiste **solo** perché in quel momento il registro sembrava aperto — e
+   * quel momento può mentire: il passaggio al terminale arriva con l'import,
+   * fino a due minuti dopo. Un derivato quindi non è un fatto: è una
+   * supposizione, e vale solo finché serve.
+   */
+  derivato?: boolean;
 }
 
 export interface TimbroRisolto {
@@ -60,7 +71,7 @@ export interface TimbroRisolto {
 
 export interface EventoScartato {
   id: string;
-  motivo: 'doppione' | 'senza_ora';
+  motivo: 'doppione' | 'senza_ora' | 'specchio_superfluo';
   /** Per un doppione: l'evento che e' rimasto al suo posto. */
   vinceId?: string;
 }
@@ -115,6 +126,25 @@ function vince(a: EventoTimbro, b: EventoTimbro): EventoTimbro {
   return a;
 }
 
+/**
+ * L'alternanza di una lista di eventi, senza costruire i timbri: serve a
+ * chiedersi «come finirebbe la giornata senza questo pezzo?» prima di decidere
+ * se tenerlo.
+ */
+function alternanza(eventi: readonly EventoTimbro[]): { dentro: boolean; incoerente: boolean } {
+  let dentro = false;
+  let incoerente = false;
+  for (const e of eventi) {
+    if (e.tipo !== null) {
+      if ((e.tipo === 'ingresso') === dentro) incoerente = true;
+      dentro = e.tipo === 'ingresso';
+    } else {
+      dentro = !dentro;
+    }
+  }
+  return { dentro, incoerente };
+}
+
 export function risolviSequenza(
   eventi: readonly EventoTimbro[],
   opzioni?: { finestraDoppioneMin?: number },
@@ -156,12 +186,48 @@ export function risolviSequenza(
     tenuti.push(e);
   }
 
+  // 3bis. ⭐⭐ **Un evento DERIVATO cede sempre davanti a quelli misurati.**
+  //
+  //    Lo specchio della chiusura nasce da un controllo fatto al momento della
+  //    scrittura — «nel registro la presenza e' ancora aperta?» — e quel
+  //    momento puo' mentire: il passaggio al terminale arriva con l'import,
+  //    fino a due minuti dopo. Misurato su una giornata vera di FPM: badge di
+  //    uscita alle 18:03:30, specchio alle 18:05, **due uscite** per un solo
+  //    gesto; il ripescaggio dei doppioni non le fonde (90 secondi, oltre la
+  //    finestra di un minuto) e la giornata diventava «da verificare» con una
+  //    presenza di **un'ora** al posto di nove e mezza.
+  //
+  //    ⚠️ Non si allarga la finestra dei doppioni: quella misura **gesti**, e
+  //    due tocchi a novanta secondi possono essere due gesti veri. Qui si
+  //    guarda **da dove viene** l'evento.
+  //
+  //    Il derivato entra solo se passa due prove:
+  //      1. senza di lui la giornata resterebbe **aperta** — e' il caso per cui
+  //         e' nato (apro col badge, chiudo dall'app);
+  //      2. mettendolo dentro, la sequenza **non diventa incoerente** — perche'
+  //         una supposizione non puo' smentire un fatto misurato.
+  //    ⚠️ La seconda prova non e' teorica: su ventimila giornate simulate
+  //    ventisei avevano uno specchio che cadeva accanto a un'uscita vera e
+  //    contraddiceva la sequenza. Con la sola prima prova restavano dentro.
+  let tenutiVivi = tenuti;
+  if (tenuti.some((e) => e.derivato)) {
+    const misurati = tenuti.filter((e) => !e.derivato);
+    const senza = alternanza(misurati);
+    const con = alternanza(tenuti);
+    if (!senza.dentro || con.incoerente) {
+      for (const d of tenuti) {
+        if (d.derivato) scartati.push({ id: d.id, motivo: 'specchio_superfluo' });
+      }
+      tenutiVivi = misurati;
+    }
+  }
+
   // 4. Si alterna partendo da fuori. Una direzione dichiarata e' un punto
   //    fermo; le altre seguono.
   const timbri: TimbroRisolto[] = [];
   let dentro = false;
   let incoerente = false;
-  for (const e of tenuti) {
+  for (const e of tenutiVivi) {
     if (e.tipo !== null) {
       if ((e.tipo === 'ingresso') === dentro) incoerente = true;
       timbri.push({ id: e.id, ms: e.ms, tipo: e.tipo, dedotto: false });

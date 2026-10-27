@@ -232,3 +232,62 @@ describe('timbri-sequenza — l’evento senza ora', () => {
     expect(tipi(r)).toEqual(['ingresso']);
   });
 });
+
+describe('⭐⭐ lo specchio della chiusura: un derivato cede davanti ai fatti', () => {
+  const T = (h: number, m = 0) => Date.UTC(2026, 9, 26, h, m);
+  const badge = (id: string, h: number, m = 0): EventoTimbro => ({ id, ms: T(h, m), tipo: null, orologio: 'fisso' });
+  const specchio = (id: string, h: number, m = 0): EventoTimbro => ({
+    id, ms: T(h, m), tipo: 'uscita', orologio: 'telefono', derivato: true,
+  });
+
+  it('la giornata si chiude da sé: lo specchio si scarta', () => {
+    // Il caso vero di FPM: badge di uscita delle **18:03:30** (che l'arrotondamento
+    // porta nello slot 18:05) e lo specchio delle 18:05:00. ⚠️ I due istanti
+    // esatti distano 90 secondi: il ripescaggio dei doppioni NON li fonde — la
+    // sua finestra è di un minuto, e misura gesti. Serve la regola del derivato.
+    const esatto = (h: number, m: number, sec: number) => Date.UTC(2026, 9, 26, h, m, sec);
+    const s = risolviSequenza([
+      badge('b1', 7, 40),
+      badge('b2', 12, 35),
+      badge('b3', 13, 35),
+      { ...badge('b4', 18, 5), ordine: esatto(18, 3, 30) },
+      { ...specchio('sp', 18, 5), ordine: esatto(18, 5, 0) },
+    ]);
+    expect(s.incoerente).toBe(false);
+    expect(s.timbri.map((t) => t.id)).toEqual(['b1', 'b2', 'b3', 'b4']);
+    expect(s.scartati).toContainEqual({ id: 'sp', motivo: 'specchio_superfluo' });
+  });
+
+  it('⭐ senza di lui la giornata resterebbe aperta: lo specchio resta', () => {
+    // È il caso per cui è nato: apro col badge, chiudo dall'app.
+    const s = risolviSequenza([badge('b1', 8), specchio('sp', 17)]);
+    expect(s.aperta).toBe(false);
+    expect(s.timbri.map((t) => t.id)).toEqual(['b1', 'sp']);
+    expect(s.scartati).toEqual([]);
+  });
+
+  it('⚠️ ma non entra se contraddirebbe un fatto misurato', () => {
+    // Giornata ancora aperta (tre tocchi), e lo specchio cade subito dopo
+    // un'uscita vera: due uscite di fila. Una supposizione non smentisce una
+    // misura — si scarta. Trovato su 20.000 giornate simulate.
+    const s = risolviSequenza([badge('b1', 8), badge('b2', 12), specchio('sp', 12, 30), badge('b3', 14)]);
+    expect(s.incoerente).toBe(false);
+    expect(s.scartati).toContainEqual({ id: 'sp', motivo: 'specchio_superfluo' });
+    expect(s.aperta).toBe(true);
+  });
+
+  it('⚠️ e non può nascondere una contraddizione che c’era già', () => {
+    const s = risolviSequenza([
+      { id: 'a', ms: T(8), tipo: 'ingresso', orologio: 'telefono' },
+      { id: 'b', ms: T(9), tipo: 'ingresso', orologio: 'telefono' },
+      specchio('sp', 17),
+    ]);
+    expect(s.incoerente).toBe(true);
+  });
+
+  it('senza derivati non cambia niente: nessuno scarto in più', () => {
+    const s = risolviSequenza([badge('b1', 8), badge('b2', 12), badge('b3', 13), badge('b4', 17)]);
+    expect(s.scartati).toEqual([]);
+    expect(s.timbri).toHaveLength(4);
+  });
+});

@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.7
+**Versione**: 2.8
 **Stato**: **attiva in produzione su FPM dal 26/10/2026** (stato `attivo`, le fasi del turno arrivano)
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–26/10/2026
@@ -424,6 +424,57 @@ Riproduzione e regressione in `timbro-giornata.test.ts` con i **dati veri** di
 quella giornata (3 asserzioni, **3 viste fallire** rimettendo `<`). Misurato:
 su FPM **3 giornate su 16** hanno passaggi da tutte e due le bocche, tutte fra
 il 23 e il 26/10 — cioè da quando l'integrazione è viva.
+
+### 10.5ter Lo specchio della chiusura, e perché un derivato deve cedere
+
+Correggendo il difetto sopra è emerso che **copriva un secondo difetto**, e la
+verifica è stata rifare le giornate vere dentro il motore, vecchia regola contro
+nuova. Su **16 giornate** del terminale: 3 passavano da «da verificare» a
+«coperta», nessuna peggiorava — e **una peggiorava**: Ciprian, 26/10.
+
+**Cos'era.** `specchiaChiusuraNelRegistro` scrive un'uscita nel registro quando
+si chiude il turno da un'altra bocca **e nel registro la presenza risulta
+ancora aperta**. ⚠️⚠️ Quel controllo guarda il registro **nell'istante della
+scrittura**, e quell'istante può mentire: un passaggio al terminale arriva con
+l'import, fino a due minuti dopo. Misurato: badge di uscita alle **18:03:30**,
+specchio alle **18:05** — due uscite per un gesto solo. Il ripescaggio dei
+doppioni non le fonde (90 secondi, oltre la finestra di un minuto) ed è giusto
+così: quella finestra misura **gesti**, e due tocchi a novanta secondi possono
+essere due gesti veri.
+
+⭐ **Il difetto era mascherato dall'altro**: l'innesto di troppo rimetteva a
+posto la parità per sbaglio, e la giornata risultava «coperta» — con una
+**presenza di un'ora** al posto di nove e mezza. Due errori che si annullavano
+a vicenda su uno dei due numeri e lasciavano l'altro sbagliato di otto ore.
+
+**La regola, ora**: un evento `derivato` (oggi solo lo specchio) entra nella
+sequenza **solo se passa due prove** —
+1. senza di lui la giornata resterebbe **aperta** (è il caso per cui è nato:
+   apro col badge, chiudo dall'app);
+2. mettendolo dentro la sequenza **non diventa incoerente**, perché una
+   supposizione non può smentire un fatto misurato.
+
+⚠️ La seconda prova non è teorica: su **20.000 giornate simulate** ventisei
+avevano uno specchio che cadeva accanto a un'uscita vera e la contraddiceva.
+Con la sola prima prova restavano dentro.
+
+Di contorno, due presidi:
+- **Lo scrittore non specchia più una chiusura che viene dal registro stesso**
+  (`origine: 'timbro'`): i passaggi ci sono già, e riscriverli può solo
+  duplicarli. È una tautologia, ma mancava.
+- **`timbri_grezzi.derivato`** (migration `20261027100000`): il riconoscimento
+  stava nel payload `grezzo`, che il lettore non carica. Una colonna costa
+  niente e si legge senza tirarsi dietro il JSON. Backfill incluso.
+
+**Come è stato verificato** (e come rifarlo): le giornate vere rigiocate nel
+motore con le due regole a confronto, più **20.000 giornate generate** con le
+forme del mondo vero. Le invarianti sono rimaste come test permanente
+(`timbro-giornata.simulate.test.ts`): la presenza non è mai negativa, non supera
+mai l'arco della giornata, e **l'ordine in cui gli eventi arrivano non cambia la
+risposta** — un import che riordina due righe non deve spostare le ore di
+nessuno. ⚠️ C'è anche il controllo che «da verificare» resti **raggiungibile**:
+una regola che non sbaglia mai perché non scatta mai sarebbe il difetto
+successivo.
 
 ### 10.6 Dove siamo, e cosa resta (26/10/2026)
 

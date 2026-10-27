@@ -61,6 +61,7 @@ interface RigaGrezza {
   dispositivo: string | null;
   passo: string | null;
   passo_origine: string | null;
+  derivato: boolean | null;
 }
 
 interface RigaTimbratura {
@@ -92,7 +93,7 @@ export async function leggiGiornateTimbro(
     (da, a) => {
       let q = supabase
         .from('timbri_grezzi' as never)
-        .select('id, sorgente, dipendente_id, ts, orologio, tipo, genere, dispositivo, passo, passo_origine')
+        .select('id, sorgente, dipendente_id, ts, orologio, tipo, genere, dispositivo, passo, passo_origine, derivato')
         .eq('tenant_id', tenantId)
         // Tutte le bocche: il terminale e la presenza segnata dall'app o dal
         // PC senza un cantiere. Il registro e' uno.
@@ -185,6 +186,7 @@ export async function leggiGiornateTimbro(
       ordine: r.ts ? Date.parse(r.ts) : undefined,
       tipo: r.tipo,
       orologio: r.orologio === 'fisso' ? 'fisso' : 'telefono',
+      derivato: r.derivato === true,
     }));
     const attribuite: TimbraturaAttribuita[] = (timbPerGiornata.get(k) ?? []).map((t) => ({
       id: t.id,

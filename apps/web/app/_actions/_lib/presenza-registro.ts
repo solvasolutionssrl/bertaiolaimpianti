@@ -21,6 +21,12 @@ import { leggiGiornataTimbro } from '@/app/_lib/timbro/giornate';
  * aperto dall'app entra nella sequenza da solo, vedi `statoGiornataTimbro`).
  * ⚠️ Idempotente: se la presenza non e' aperta non scrive niente. Best-effort:
  * un errore qui non annulla la timbratura, che e' il fatto principale.
+ *
+ * ⚠️⚠️ **Il controllo «la presenza e' aperta» guarda ADESSO, e adesso puo'
+ * mentire**: un passaggio al terminale arriva con l'import, fino a due minuti
+ * dopo. Per questo la riga nasce `derivato: true` e chi legge rifa' la domanda
+ * quando il registro e' completo (`timbri-sequenza.ts`): uno specchio vale
+ * solo se senza di lui la giornata resterebbe aperta.
  */
 export async function specchiaChiusuraNelRegistro(
   supabase: ReturnType<typeof createServerSupabase>,
@@ -35,6 +41,12 @@ export async function specchiaChiusuraNelRegistro(
     origine: 'qr' | 'cronometro' | 'capo' | 'manuale' | 'timbro';
   },
 ): Promise<void> {
+  // ⚠️⚠️ **Una chiusura che VIENE dal registro non si riscrive nel registro.**
+  // La ripartizione di una giornata a badge produce timbrature con
+  // `origine: 'timbro'`: i passaggi ci sono già, e specchiarli può solo
+  // duplicarli. Misurato su una giornata vera il 26/10/2026 — badge di uscita
+  // alle 18:03:30 non ancora importato, specchio alle 18:05, due uscite.
+  if (p.origine === 'timbro') return;
   try {
     const giorno = romeDay(new Date(p.ts));
     const g = await leggiGiornataTimbro(supabase, p.tenantId, p.dipendenteId, giorno);
@@ -56,6 +68,9 @@ export async function specchiaChiusuraNelRegistro(
       stato: 'valido',
       genere: null,
       dispositivo: p.dispositivo,
+      // ⭐ Dedotto, non misurato: chi legge rifà la domanda «serve davvero?»
+      // al momento della lettura, quando il registro è completo.
+      derivato: true,
       grezzo: { specchio: 'fine_turno', origine: p.origine, user_id: p.userId },
     } as never);
   } catch {
