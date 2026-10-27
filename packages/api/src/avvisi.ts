@@ -40,10 +40,22 @@ export interface MetaAvviso {
   ruoli: readonly RuoloAvviso[];
   /** Se la notifica sul telefono parte da sé, prima che qualcuno scelga. */
   pushPredefinita: boolean;
+  /**
+   * **Chi lo manda**, in una riga leggibile da una persona.
+   *
+   * ⭐ Non è decorazione: la regola di questo modulo è che ogni voce abbia un
+   * mittente vivo, e finché il mittente stava solo in un commento nessuno
+   * poteva accorgersi che se ne era andato. Scritto qui, finisce anche nella
+   * pagina che gli amministratori del cliente leggono per sapere cosa manda
+   * l'applicazione.
+   */
+  mittente: string;
+  /** Il mondo a cui appartiene: serve a non mostrare a Bertaiola gli avvisi delle presenze. */
+  mondo: 'commesse' | 'presenze' | 'entrambi';
 }
 
 /**
- * I sei avvisi che qualcuno manda davvero.
+ * I sette avvisi che qualcuno manda davvero.
  *
  * Per aggiungerne uno: prima la riga di codice che lo manda, poi la voce qui.
  * Mai il contrario.
@@ -55,6 +67,8 @@ export const AVVISI: readonly MetaAvviso[] = [
     quando: 'Quando l’ufficio ti mette su un lavoro.',
     ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
+    mittente: 'Quando l’ufficio mette una persona in squadra su una commessa, dalla scheda o in blocco.',
+    mondo: 'commesse',
   },
   {
     codice: 'todo_assegnato',
@@ -62,6 +76,8 @@ export const AVVISI: readonly MetaAvviso[] = [
     quando: 'Quando qualcuno assegna una cosa da fare o una richiesta a te.',
     ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
+    mittente: 'Quando una cosa da fare o una richiesta viene affidata a qualcuno, dalla board, dalla scheda o dal telefono.',
+    mondo: 'commesse',
   },
   {
     codice: 'pianificazione_pubblicata',
@@ -69,6 +85,8 @@ export const AVVISI: readonly MetaAvviso[] = [
     quando: 'Quando l’ufficio pubblica o cambia la pianificazione che ti riguarda.',
     ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
+    mittente: 'Quando l’ufficio pubblica o cambia la settimana in Pianificazione.',
+    mondo: 'presenze',
   },
   {
     codice: 'permesso_esito',
@@ -76,6 +94,8 @@ export const AVVISI: readonly MetaAvviso[] = [
     quando: 'Quando una tua richiesta di ferie o permesso viene accolta o respinta.',
     ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
+    mittente: 'Quando una richiesta di ferie o permesso viene accolta o respinta.',
+    mondo: 'presenze',
   },
   {
     codice: 'permesso_richiesto',
@@ -85,6 +105,8 @@ export const AVVISI: readonly MetaAvviso[] = [
     quando: 'Quando qualcuno chiede ferie o un permesso e tocca a te decidere.',
     ruoli: ['admin', 'office'],
     pushPredefinita: true,
+    mittente: 'Quando una persona invia una richiesta di ferie o permesso.',
+    mondo: 'presenze',
   },
   {
     codice: 'ore_da_inserire',
@@ -95,6 +117,17 @@ export const AVVISI: readonly MetaAvviso[] = [
     quando: 'Quando timbri la fine giornata, e poi la sera o la mattina dopo, se non hai ancora detto su quali commesse hai lavorato.',
     ruoli: ['admin', 'office', 'tecnico'],
     pushPredefinita: true,
+    mittente: 'Tre momenti: la fine giornata dichiarata al terminale (entro due minuti dal gesto), il promemoria della sera e della mattina, il sollecito a mano dell’ufficio.',
+    mondo: 'presenze',
+  },
+  {
+    codice: 'spesa_da_completare',
+    etichetta: 'Scontrini da completare',
+    quando: 'Quando la lettura automatica di uno scontrino che hai mandato non riesce.',
+    ruoli: ['admin', 'office', 'tecnico'],
+    pushPredefinita: true,
+    mittente: 'Quando la lettura automatica di uno scontrino non riesce: servizio non disponibile, foto mancante o dati incompleti.',
+    mondo: 'presenze',
   },
 ] as const;
 

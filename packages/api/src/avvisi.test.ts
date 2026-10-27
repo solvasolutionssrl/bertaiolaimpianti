@@ -168,3 +168,26 @@ describe('componiAssegnazione', () => {
     }
   });
 });
+
+describe('il catalogo si descrive da sé', () => {
+  it('⭐ ogni avviso dichiara chi lo manda e a quale mondo appartiene', () => {
+    // La pagina che gli amministratori del cliente leggono si costruisce da
+    // qui: una voce senza mittente diventerebbe una riga vuota a schermo, e
+    // una senza mondo comparirebbe al cliente sbagliato.
+    for (const a of AVVISI) {
+      expect(a.mittente.length, `${a.codice} senza mittente`).toBeGreaterThan(20);
+      expect(['commesse', 'presenze', 'entrambi'], `${a.codice} con un mondo ignoto`).toContain(a.mondo);
+    }
+  });
+
+  it('⚠️ il mittente è una frase per una persona, non un percorso di codice', () => {
+    for (const a of AVVISI) {
+      expect(a.mittente, `${a.codice}`).not.toMatch(/[`/]|\.ts\b/);
+    }
+  });
+
+  it('nessun codice doppio', () => {
+    const codici = AVVISI.map((a) => a.codice);
+    expect(new Set(codici).size).toBe(codici.length);
+  });
+});

@@ -7,6 +7,7 @@ import { formattaOreGiornata, formattaOreTotale } from '@kommessa/api/kantiere-o
 import { oraMostrata } from '@kommessa/api/ora-mostrata';
 
 import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
+import { usePresenzaViva } from './presenza-viva';
 import { boccaDelTimbro } from './timbri-terminale';
 import { OrigineLine, type TimbraturaInput } from './timbrature-riepilogo';
 
@@ -34,11 +35,24 @@ function Totali({
   kmViaggio: number;
   timbro?: TimbroGiornataVista | null;
 }) {
+  // ⚠️⚠️ **«Lavorate 0:00» su una persona al lavoro da un'ora.** `minutiLavoro`
+  // conta le ore ATTRIBUITE ai cantieri: finché nessuno ripartisce la giornata
+  // sono zero, e lo era anche la pastiglia «Presenza», che usa il netto dei
+  // soli intervalli CHIUSI. Nella riga della tabella il tempo giusto si
+  // vedeva, qui dentro no: due numeri diversi per la stessa giornata, a dieci
+  // pixel di distanza. Ora il conto è lo stesso — `usePresenzaViva` — e,
+  // quando non c'è ancora niente sui cantieri, il numero grande **si chiama
+  // Presenza**, perché è quello che è.
+  const presenzaViva = usePresenzaViva(timbro);
+  const soloPresenza = minutiLavoro === 0 && presenzaViva !== null;
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border bg-muted/30 px-2.5 py-1.5">
-      <span className="text-[11px] text-muted-foreground">Lavorate</span>
-      <span className="tabular-nums text-sm font-semibold text-foreground">
-        {formattaOreGiornata(minutiLavoro)}
+      <span className="text-[11px] text-muted-foreground">{soloPresenza ? 'Presenza' : 'Lavorate'}</span>
+      <span
+        className={`tabular-nums text-sm font-semibold ${soloPresenza ? 'text-muted-foreground' : 'text-foreground'}`}
+        title={soloPresenza ? 'Tempo di presenza: le ore non sono ancora attribuite ai cantieri.' : undefined}
+      >
+        {formattaOreGiornata(soloPresenza ? presenzaViva : minutiLavoro)}
       </span>
       {oreViaggio > 0 ? (
         <>
@@ -61,7 +75,8 @@ function Totali({
           className="ml-auto rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700"
           title={timbro.motivo ?? undefined}
         >
-          Presenza {formattaOreGiornata(timbro.nettoMin)} · {ETICHETTA_STATO_TIMBRO[timbro.stato]}
+          {soloPresenza ? '' : `Presenza ${formattaOreGiornata(presenzaViva ?? timbro.nettoMin)} · `}
+          {ETICHETTA_STATO_TIMBRO[timbro.stato]}
         </span>
       ) : null}
     </div>

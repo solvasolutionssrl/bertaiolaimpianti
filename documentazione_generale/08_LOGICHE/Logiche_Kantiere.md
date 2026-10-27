@@ -417,6 +417,19 @@ finestra. ⚠️ Il dedupe è su `utente | giorno | finestra` nelle ultime 20 or
 **sollecito a mano** dell'ufficio usa la finestra `ufficio` apposta, o
 spegnerebbe il promemoria automatico di quella persona.
 
+⭐ **Quando la lettura di uno scontrino non riesce, lo si dice alla persona**
+(27/10/2026, avviso `spesa_da_completare`, migration `20261027090000`). Prima
+succedeva in silenzio: la spesa restava in `bozza` con un codice in
+`analisi_errore` che nessuno leggeva, e nei casi di servizio non disponibile si
+avvisava **il super admin** — cioè chi può riparare, non chi deve rimettere i
+dati. ⚠️ **Un avviso solo per tutte le cause** (AI non disponibile, foto
+assente, dati incompleti), con il corpo che dice quale: la domanda per chi lo
+riceve è sempre «questa spesa aspetta te», e tre interruttori per tre modi di
+fallire sarebbero tre modi di spegnere la stessa cosa. ⚠️ **Una volta sola per
+spesa**: «Rianalizza» rifà il giro e chi l'ha premuto sta guardando lo schermo.
+⚠️ Non può far cadere l'analisi (try/catch), e una spesa inserita dall'ufficio
+non avvisa nessuno: non c'è una persona che aspetta.
+
 ⭐ **Dal 26/10/2026 `ore_da_inserire` ha tre mittenti e resta un avviso solo**
 (un interruttore solo nel profilo): la **fine giornata dichiarata** al terminale
 Timbro — finestra `fine_turno`, entro due minuti dal gesto, dove c'è
@@ -1125,6 +1138,23 @@ giornata** → correzione retroattiva tracciata (`rapportino_versioni`, azione
   Componente condiviso fra ufficio e cruscotto:
   `office/kantiere/_components/timbrature-riepilogo.tsx` (`TimbratureRiepilogo`,
   `OrigineLine`, `GiornataFlow`).
+- ⚠️⚠️ **Le colonne devono dire la verità in tutte e due le sezioni**
+  (27/10/2026). Le ore di «In corso oggi» finivano nell'**ultima** colonna,
+  quella delle azioni, mentre nello storico stanno sotto **Ore**: lo stesso
+  dato in due colonne diverse a seconda della sezione, e le intestazioni che
+  non dicevano più niente. Ora la riga di oggi usa le stesse colonne — ore
+  sotto **Ore**, passaggi e stato sotto **Esito** (dove lo storico scrive
+  «Regolare»), azioni vuote perché su una giornata in corso non c'è ancora
+  niente da correggere.
+- ⚠️⚠️ **E lo stesso tempo, dentro e fuori la riga.** Aprendo la riga si
+  leggeva «Lavorate 0:00» e «Presenza 0:00» su una persona al lavoro da un'ora:
+  `minutiLavoro` conta le ore **attribuite** ai cantieri e la pastiglia usava il
+  netto dei soli intervalli **chiusi**. Due numeri diversi per la stessa
+  giornata a dieci pixel di distanza. Ora il conto è uno solo
+  (`usePresenzaViva`, su `@kommessa/api/presenza-viva`) e, quando non c'è
+  ancora niente sui cantieri, il numero grande **si chiama Presenza** — perché
+  è quello che è. Banco: `colonne-presenze.mjs` (11 controlli; misura che
+  l'indice di colonna delle ore sia lo **stesso** nelle due sezioni).
 - ⚠️ **Il tempo di chi ha solo passato il badge**: le ore della colonna vengono
   dalle timbrature **sui cantieri**; chi ha solo timbrato al terminale non ne ha
   nessuna, e la riga diceva `0:00` a una persona presente da tre ore. Ora, a

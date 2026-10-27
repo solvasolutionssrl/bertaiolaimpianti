@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { minutiPresenza } from '@kommessa/api/presenza-viva';
 import { ZONA_DIPENDENTI } from '@kommessa/api/zone-dati';
 import { TagTu } from '@/app/_components/tag-tu';
 import { useRouter } from 'next/navigation';
@@ -38,6 +37,7 @@ import type { MiaGiornata } from '@/app/office/_lib/mia-giornata';
 import { CatenaGiornata } from '../../_components/catena-giornata';
 import { TimbriTerminale } from '../../_components/timbri-terminale';
 import { CompilaGiornataDialog, type ModoCompila } from '../../_components/compila-giornata-dialog';
+import { usePresenzaViva } from '@/app/office/kantiere/_components/presenza-viva';
 import { ETICHETTA_STATO_TIMBRO, type TimbroGiornataVista } from '@/app/_lib/timbro/vista';
 import type { GiornataAperta } from '@/app/office/_actions/kantiere-rapportini';
 import {
@@ -334,52 +334,11 @@ function DettaglioGiornata({ riga, onModifica }: { riga: RapportiniRiga; onModif
 }
 
 /**
- * Riga "In corso oggi" come riga di tabella (colonne allineate allo storico).
- * Niente esito: le pill della giornata occupano lo spazio Ore+Esito (colSpan 2);
- * il totale ore LIVE va nell'ultima colonna, sempre popolato.
+ * Riga «In corso oggi», con le stesse colonne dello storico: le ore sotto
+ * **Ore** e lo stato della giornata sotto **Esito** (dove, nello storico, c'è
+ * «Regolare»). L'ultima colonna — le azioni — resta vuota: su una giornata in
+ * corso non c'è ancora niente da correggere.
  */
-
-/**
- * I minuti di PRESENZA di una giornata ancora aperta, che scorrono.
- *
- * ⚠️ Serve perche' chi ha solo passato il badge non ha nessuna timbratura sui
- * cantieri: `useTotaleGiornata` conta quelle, e quindi diceva **0:00** a uno
- * che era al lavoro dalle 07:40. Zero era vero per le ore *attribuite* e
- * falso per chiunque guardasse la riga.
- *
- * ⚠️ Vale anche **in pausa e a giornata finita ma non ripartita**: quando la
- * persona timbra l'inizio della pausa l'intervallo si chiude, lo stato passa a
- * «da ripartire» e il tempo tornava a **0:00** — cioe' la stessa bugia di
- * prima, un passo piu' in la'. Finche' le ore non sono sui cantieri si mostra
- * la presenza: viva se l'intervallo e' aperto, ferma se e' chiuso.
- *
- * ⚠️ Niente `Date.now()` nell'inizializzatore di `useState`: server e browser
- * darebbero due alberi diversi e l'idratazione salterebbe.
- */
-function usePresenzaViva(timbro: TimbroGiornataVista | null | undefined): number | null {
-  const aperta = !!timbro && (timbro.stato === 'presenza_aperta' || timbro.fineIso === null);
-  const [ora, setOra] = React.useState<number | null>(null);
-  React.useEffect(() => {
-    if (!aperta) return;
-    setOra(Date.now());
-    const id = setInterval(() => setOra(Date.now()), 30_000);
-    return () => clearInterval(id);
-  }, [aperta]);
-  if (!timbro) return null;
-  if (aperta && ora === null) return null;
-  const da = timbro.inizioIso ?? timbro.timbri.find((t) => !t.scartato)?.ts ?? null;
-  // ⭐ Il conto sta in un posto solo: lo fa anche la card «Chi c'è adesso» del
-  // cruscotto, e due formule divergenti darebbero due ore diverse per la
-  // stessa persona nella stessa applicazione.
-  return minutiPresenza({
-    aperta,
-    inizioMs: da ? Date.parse(da) : null,
-    pausaTimbrataMin: timbro.pausaTimbrataMin ?? 0,
-    nettoMin: timbro.nettoMin,
-    oraMs: ora ?? 0,
-  });
-}
-
 function OggiRow({
   riga,
   isOpen,
@@ -413,24 +372,12 @@ function OggiRow({
         <td className="px-2.5 py-1.5 align-top">
           <CantierePills labels={labels} />
         </td>
-        <td className="px-2.5 py-1.5 align-top" colSpan={2}>
-          {riga.timbro && riga.timbrature.length === 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <TimbriTerminale timbri={riga.timbro.timbri} />
-              <span className="rounded-full border border-sky-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-sky-800">
-                {ETICHETTA_STATO_TIMBRO[riga.timbro.stato]}
-              </span>
-            </div>
-          ) : (
-            <GiornataFlow
-              timbrature={riga.timbrature}
-              oreViaggio={riga.totale.viaggio}
-              kmViaggio={riga.viaggioKm ?? 0}
-              minutiLavoro={Math.round((riga.totale.ord + riga.totale.straord) * 60)}
-            />
-          )}
-        </td>
-        <td className="px-2 py-1.5 text-right align-top">
+        {/* ⚠️⚠️ Le ore stanno nella colonna ORE, come nello storico. Prima le
+            pill occupavano Ore+Esito (colSpan 2) e il totale finiva
+            nell'ultima colonna, quella delle azioni: lo stesso dato cadeva in
+            due colonne diverse a seconda della sezione, e le intestazioni non
+            dicevano più niente. */}
+        <td className="px-2.5 py-1.5 align-top">
           {minuti > 0 || presenzaViva === null ? (
             <span className="tabular-nums text-sm font-semibold text-foreground">{minToColon(minuti)}</span>
           ) : (
@@ -446,6 +393,23 @@ function OggiRow({
             >
               {minToColon(presenzaViva)}<span className="font-normal"> h</span>
             </span>
+          )}
+        </td>
+        <td className="px-2.5 py-1.5 align-top" colSpan={2}>
+          {riga.timbro && riga.timbrature.length === 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <TimbriTerminale timbri={riga.timbro.timbri} />
+              <span className="rounded-full border border-sky-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+                {ETICHETTA_STATO_TIMBRO[riga.timbro.stato]}
+              </span>
+            </div>
+          ) : (
+            <GiornataFlow
+              timbrature={riga.timbrature}
+              oreViaggio={riga.totale.viaggio}
+              kmViaggio={riga.viaggioKm ?? 0}
+              minutiLavoro={Math.round((riga.totale.ord + riga.totale.straord) * 60)}
+            />
           )}
         </td>
       </tr>

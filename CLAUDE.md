@@ -944,6 +944,20 @@ ognuno a modo suo, e **nessuno guardava le preferenze della persona**.
   settimana con un `await` secco, quindi a volte le mandava e a volte no, senza
   che si vedesse niente. Una cosa che va ricordata a ogni chiamata prima o poi
   si dimentica: la si mette dove si decide.
+- ⭐ **Il catalogo si descrive da sé, e gli amministratori del cliente lo
+  leggono**: `/office/impostazioni/notifiche` (dal 27/10/2026) mostra cosa
+  manda l'applicazione, **cosa lo fa partire**, a chi, se la push è accesa di
+  default e **quante ne sono partite negli ultimi 30 giorni** su quel cliente.
+  Si costruisce da `AVVISI`, quindi una voce nuova compare da sé. Ogni voce ora
+  dichiara anche `mittente` (una frase per una persona, ⚠️ **non un percorso di
+  codice** — c'è un test) e `mondo` (`commesse`/`presenze`/`entrambi`, per non
+  mostrare a Bertaiola gli avvisi delle presenze).
+  ⚠️ **Non è un pannello di comandi, ed è voluto**: qui non si accende e non si
+  spegne niente. La scelta è della persona che riceve l'interruzione; un
+  amministratore che potesse spegnere l'avviso di un altro creerebbe una terza
+  verità — oltre al mestiere e alla preferenza — su «questa persona riceve?».
+  ⚠️ **Nessun gate ad amministratore**: non si scrive niente, e la domanda
+  «perché Mario non ha ricevuto l'avviso?» la fa l'ufficio.
 - **Il predefinito dipende dal mestiere**, non e' un valore solo per tutti:
   `@kommessa/api/avvisi`. Con un valore solo, a un tecnico arriverebbero le
   richieste di permesso da approvare, che non puo' approvare. ⚠️ E una

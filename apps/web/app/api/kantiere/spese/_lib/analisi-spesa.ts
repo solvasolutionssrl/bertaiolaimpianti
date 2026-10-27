@@ -29,6 +29,7 @@ import {
   OpenAiError,
 } from '@/app/_lib/openai';
 import { segnalaAiNonDisponibile } from '@/app/_lib/ai-alert';
+import { avvisaSpesaDaCompletare } from './avvisa-spesa';
 
 /**
  * Analisi AI della ricevuta, ESEGUITA IN CLOUD dopo l'upload (waitUntil) o su
@@ -262,6 +263,7 @@ export async function processSpesaAI(opts: {
         .update({ stato: 'bozza', analisi_at: new Date().toISOString(), analisi_errore: 'foto_assente' } as never)
         .eq('id', opts.spesaId)
         .eq('tenant_id', opts.tenantId);
+      await avvisaSpesaDaCompletare(service, { tenantId: opts.tenantId, spesaId: opts.spesaId, causa: 'foto_assente' });
       return;
     }
     const scaricata = await scaricaDaR2(opts.tenantId, spesa.r2_key);
@@ -294,6 +296,9 @@ export async function processSpesaAI(opts: {
       .update({ stato: 'bozza', analisi_at: new Date().toISOString(), analisi_errore: 'ai_non_disponibile' } as never)
       .eq('id', opts.spesaId)
       .eq('tenant_id', opts.tenantId);
+    // ⚠️ Il super admin sa che il servizio è giù; la persona deve sapere che
+    // la SUA spesa aspetta lei. Sono due destinatari per due cose diverse.
+    await avvisaSpesaDaCompletare(service, { tenantId: opts.tenantId, spesaId: opts.spesaId, causa: 'ai_non_disponibile' });
     return;
   }
 
@@ -336,4 +341,12 @@ export async function processSpesaAI(opts: {
     .update(patch as never)
     .eq('id', opts.spesaId)
     .eq('tenant_id', opts.tenantId);
+
+  if (!sufficiente) {
+    await avvisaSpesaDaCompletare(service, {
+      tenantId: opts.tenantId,
+      spesaId: opts.spesaId,
+      causa: esito.aiOk ? 'illeggibile' : 'non_estratto',
+    });
+  }
 }
