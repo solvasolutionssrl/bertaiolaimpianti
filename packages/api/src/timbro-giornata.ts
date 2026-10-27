@@ -237,9 +237,25 @@ export function statoGiornataTimbro(input: {
     const aperto = turnoAperto !== null && t.id === turnoAperto.id;
     const toccoDopo = input.eventi.some((e) => e.tipo === null && e.ms > t.ms);
     if (!aperto && !toccoDopo) continue;
-    const prima = presenzaDaEventi(eventiPresenza.filter((e) => e.ms < t.ms));
+    // ⚠️⚠️ **`<=`, non `<`.** La domanda è «la presenza è già aperta in questo
+    // momento?», e un passaggio nello STESSO istante la apre. Con `<` un badge
+    // che cade nello stesso slot dell'ingresso attribuito restava fuori dal
+    // conto, l'ingresso del turno veniva innestato lo stesso e la giornata
+    // finiva con due ingressi di fila: la direzione dichiarata successiva
+    // contraddiceva la sequenza e la giornata diventava «da verificare».
+    //
+    // ⚠️ Dal 23/10/2026 lo «stesso istante» è frequente: le timbrature si
+    // arrotondano al passo del cliente, quindi un badge delle 07:51:41 e
+    // l'ingresso attribuito delle 07:50 cadono tutti e due su 07:50. Il
+    // ripescaggio dei doppioni non li fonde, perché misura la distanza
+    // sull'istante ESATTO (101 secondi, oltre la finestra di un minuto): è
+    // giusto così — sono due gesti — ma vuol dire che qui l'innesto non deve
+    // proprio avvenire. Misurato su una giornata vera di FPM il 27/10/2026.
+    const prima = presenzaDaEventi(eventiPresenza.filter((e) => e.ms <= t.ms));
     if (prima.aperta) continue;
-    eventiPresenza.push({ id: `app:${t.id}`, ms: t.ms, tipo: 'ingresso', orologio: 'telefono' });
+    // L'istante esatto viaggia con l'evento innestato: senza, il confronto dei
+    // doppioni userebbe l'orario arrotondato e misurerebbe distanze finte.
+    eventiPresenza.push({ id: `app:${t.id}`, ms: t.ms, ordine: t.ordine ?? t.ms, tipo: 'ingresso', orologio: 'telefono' });
     // La fine si innesta SOLO se si e' innestato l'ingresso: un turno dentro
     // una presenza a badge (badge 8, QR 9→17, badge 17:30) non aggiunge niente.
     if (aperto) continue;
@@ -250,9 +266,24 @@ export function statoGiornataTimbro(input: {
       (u) => u.tipo === 'uscita' && !u.pausa && u.ms > t.ms && !ordinate.some((i) => i.tipo === 'ingresso' && !i.pausa && i.ms === u.ms),
     );
     if (!fine) continue;
+    // ⚠️ Qui resta `<`, **non** `<=` come sopra, ed è deliberato: la domanda è
+    // «un istante PRIMA della fine la presenza è ancora aperta?», e includere
+    // ciò che cade sull'istante stesso cambia la risposta in tutti e due i
+    // versi (un badge di uscita la chiude, uno di ingresso la riapre). Il caso
+    // simmetrico a quello dell'ingresso — badge della sera nello stesso slot
+    // dell'uscita attribuita — è plausibile ma non è ancora stato osservato su
+    // una giornata vera: quando capiterà, si guarda quella e si scrive il test
+    // su quella. Cambiarlo adesso vorrebbe dire muovere un ramo che nessuna
+    // misura descrive.
     const finoAllaFine = presenzaDaEventi(eventiPresenza.filter((e) => e.ms < fine.ms));
     if (finoAllaFine.aperta) {
-      eventiPresenza.push({ id: `app:${fine.id}`, ms: fine.ms, tipo: 'uscita', orologio: 'telefono' });
+      eventiPresenza.push({
+        id: `app:${fine.id}`,
+        ms: fine.ms,
+        ordine: fine.ordine ?? fine.ms,
+        tipo: 'uscita',
+        orologio: 'telefono',
+      });
     }
   }
   const presenza = presenzaDaEventi(eventiPresenza);

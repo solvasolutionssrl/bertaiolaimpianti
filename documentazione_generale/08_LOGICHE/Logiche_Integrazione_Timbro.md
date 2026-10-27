@@ -1,6 +1,6 @@
 # Logiche — Integrazione con la timbratrice Timbro
 
-**Versione**: 2.6
+**Versione**: 2.7
 **Stato**: **attiva in produzione su FPM dal 26/10/2026** (stato `attivo`, le fasi del turno arrivano)
 **Decisione di forma**: contenitore **virtuale** (§4) — `timbrature` nasce solo all'attribuzione
 **Data**: 21–26/10/2026
@@ -381,6 +381,49 @@ accesso** all'app (gli altri due non possono ricevere niente, ed è giusto che
 non si finga il contrario) e **5 tecnici hanno il telefono registrato** su 8
 dispositivi — gli altri lo leggono nella campanella, perché la riga in app si
 scrive sempre e la preferenza governa solo ciò che interrompe.
+
+### 10.5bis Una giornata «Regolare» che si leggeva «Da verificare» (27/10/2026)
+
+Segnalato guardando la pagina: la card in cima a «Presenze e ore» diceva **Da
+verificare** su una giornata che, due righe sotto, la tabella dava **Regolare**.
+Due verdetti sulla stessa giornata — e quello sbagliato era il primo.
+
+**La giornata vera**: badge al terminale la mattina (07:51:41), due passaggi
+**dall'app** a mezzogiorno (12:22 uscita, 12:25 ingresso), pausa e fine a badge,
+e le ore già tutte attribuite. Esito: `da_verificare`, motivo «Una direzione
+dichiarata contraddice la sequenza dei timbri».
+
+⭐ **La causa è l'arrotondamento che incontra un confronto stretto.**
+`statoGiornataTimbro` innesta nella presenza l'ingresso di un turno aperto
+altrove, ma **solo se la presenza non è già aperta**; il controllo guardava gli
+eventi `< t.ms`, cioè **prima** dell'istante. Dal 23/10 le timbrature si
+arrotondano al passo del cliente: il badge delle 07:51:41 e l'ingresso
+attribuito delle 07:50 cadono **sullo stesso slot**, quindi il badge non
+rientrava in «prima» e l'innesto avveniva lo stesso. Due ingressi di fila, e la
+prima direzione **dichiarata** che arrivava dopo — l'uscita dell'app a
+mezzogiorno — contraddiceva la sequenza.
+
+⚠️ **Il ripescaggio dei doppioni non poteva salvarlo, ed è giusto così**: misura
+la distanza sull'istante **esatto** (101 secondi, oltre la finestra di un
+minuto) proprio per non fondere gesti diversi caduti nello stesso slot. Il
+punto è che l'innesto non doveva avvenire.
+
+**La correzione**: `<=` invece di `<` — la domanda è «la presenza è già aperta
+**in questo momento**?», e un passaggio nello stesso istante la apre. Più
+l'istante esatto che viaggia con l'evento innestato, così il confronto dei
+doppioni non misuri distanze finte.
+
+⚠️ **Il ramo simmetrico — la FINE del turno — è rimasto `<`, deliberatamente.**
+Lì includere l'istante stesso cambia la risposta in tutti e due i versi (un
+badge di uscita chiude, uno di ingresso riapre), e il caso non è ancora stato
+osservato su una giornata vera. Quando capiterà si guarda quella e si scrive il
+test su quella: muovere un ramo che nessuna misura descrive è il modo di
+scambiare un difetto con un altro.
+
+Riproduzione e regressione in `timbro-giornata.test.ts` con i **dati veri** di
+quella giornata (3 asserzioni, **3 viste fallire** rimettendo `<`). Misurato:
+su FPM **3 giornate su 16** hanno passaggi da tutte e due le bocche, tutte fra
+il 23 e il 26/10 — cioè da quando l'integrazione è viva.
 
 ### 10.6 Dove siamo, e cosa resta (26/10/2026)
 

@@ -380,3 +380,50 @@ describe('riempiScatola', () => {
     }
   });
 });
+
+describe('⚠️⚠️ badge e app nello stesso slot: la giornata NON è «da verificare»', () => {
+  // La giornata vera di una persona di FPM, 26/10/2026. Badge al terminale la
+  // mattina, due passaggi dall'app a mezzogiorno, pausa e fine a badge, e le
+  // ore già tutte attribuite. A schermo si leggeva «Regolare» nella tabella e
+  // «Da verificare» nella card in cima: due verdetti sulla stessa giornata.
+  //
+  // La causa: l'ingresso del turno veniva innestato nella presenza perché il
+  // badge del mattino, arrotondato allo stesso slot, non veniva contato come
+  // «presenza già aperta» (il confronto era `<`, non `<=`). Due ingressi di
+  // fila, e l'uscita dichiarata dall'app a mezzogiorno contraddiceva la
+  // sequenza.
+  const e = (hhmmss: string) => Date.parse(`2026-10-26T${hhmmss}+01:00`);
+  const r = (hhmm: string) => Date.parse(`2026-10-26T${hhmm}:00+01:00`);
+
+  const giornata = () =>
+    statoGiornataTimbro({
+      eventi: [
+        { id: 'b1', ms: r('07:50'), ordine: e('07:51:41'), tipo: null, orologio: 'fisso' },
+        { id: 'a1', ms: r('12:20'), ordine: e('12:22:15'), tipo: 'uscita', orologio: 'telefono' },
+        { id: 'a2', ms: r('12:25'), ordine: e('12:25:25'), tipo: 'ingresso', orologio: 'telefono' },
+        { id: 'b2', ms: r('12:35'), ordine: e('12:33:16'), tipo: null, orologio: 'fisso' },
+        { id: 'b3', ms: r('14:00'), ordine: e('14:01:14'), tipo: null, orologio: 'fisso' },
+        { id: 'b4', ms: r('17:50'), ordine: e('17:47:45'), tipo: null, orologio: 'fisso' },
+      ],
+      timbrature: [
+        { id: 't1', tipo: 'ingresso', ms: r('07:50'), ordine: r('07:50'), pausa: false, cantiereId: 'c1' },
+        { id: 't2', tipo: 'uscita', ms: r('12:20'), ordine: r('12:20'), pausa: true, cantiereId: 'c1' },
+        { id: 't3', tipo: 'ingresso', ms: r('12:25'), ordine: r('12:25'), pausa: true, cantiereId: 'c1' },
+        { id: 't4', tipo: 'uscita', ms: r('12:35'), ordine: r('12:35'), pausa: true, cantiereId: 'c1' },
+        { id: 't5', tipo: 'ingresso', ms: r('14:00'), ordine: r('14:00'), pausa: true, cantiereId: 'c1' },
+        { id: 't6', tipo: 'uscita', ms: r('17:50'), ordine: r('17:50'), pausa: false, cantiereId: 'c1' },
+      ],
+    });
+
+  it('è coperta, non «da verificare»', () => {
+    expect(giornata().stato).toBe('coperta');
+  });
+
+  it('e nessuna direzione dichiarata contraddice la sequenza', () => {
+    expect(giornata().motivo).toBeNull();
+  });
+
+  it('la presenza resta quella misurata: 8h30 netti', () => {
+    expect(giornata().presenza?.minutiNetti).toBe(8 * 60 + 30);
+  });
+});
