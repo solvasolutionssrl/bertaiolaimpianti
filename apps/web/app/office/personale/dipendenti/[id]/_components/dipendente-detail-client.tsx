@@ -77,6 +77,7 @@ interface DipendenteProp {
   note: string | null;
   costoOrario: number | null;
   aTurni: boolean;
+  orarioForfettario: boolean;
 }
 
 interface GiornoView {
@@ -117,6 +118,8 @@ interface Props {
   kmPasseggero: number;
   minutiGuida: number;
   calendario: { mese: string; giorni: GiornoCalendario[] };
+  /** Il flag dell'orario forfettario serve solo dove c'e' l'export paghe. */
+  mostraForfettario?: boolean;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -268,6 +271,7 @@ export function DipendenteDetailClient({
   kmPasseggero,
   minutiGuida,
   calendario,
+  mostraForfettario = false,
 }: Props) {
   const router = useRouter();
 
@@ -278,6 +282,7 @@ export function DipendenteDetailClient({
     codiceInterno: dipendente.codiceInterno ?? '',
     costoOrario: dipendente.costoOrario != null ? String(dipendente.costoOrario) : '',
     aTurni: dipendente.aTurni,
+    orarioForfettario: dipendente.orarioForfettario,
     statoAttivo: dipendente.statoAttivo,
     note: dipendente.note ?? '',
   });
@@ -319,6 +324,7 @@ export function DipendenteDetailClient({
         stato_attivo: form.statoAttivo,
         a_turni: form.aTurni,
         costo_orario: costoNum,
+        ...(mostraForfettario ? { orario_forfettario: form.orarioForfettario } : {}),
         note: form.note.trim() || null,
       });
       if (!res.ok) {
@@ -341,6 +347,7 @@ export function DipendenteDetailClient({
       codiceInterno: dipendente.codiceInterno ?? '',
       costoOrario: dipendente.costoOrario != null ? String(dipendente.costoOrario) : '',
       aTurni: dipendente.aTurni,
+      orarioForfettario: dipendente.orarioForfettario,
       statoAttivo: dipendente.statoAttivo,
       note: dipendente.note ?? '',
     });
@@ -739,6 +746,23 @@ export function DipendenteDetailClient({
                     />
                     Lavora a turni
                   </label>
+                  {mostraForfettario ? (
+                    <label className="flex cursor-pointer items-start gap-2 text-sm select-none">
+                      <input
+                        name="orarioForfettario"
+                        type="checkbox"
+                        checked={form.orarioForfettario}
+                        onChange={handleChange}
+                        className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span>
+                        Orario forfettario
+                        <span className="block text-xs text-muted-foreground">
+                          Nell&apos;export paghe ogni giornata lavorata vale l&apos;orario pieno. Le ore registrate non cambiano.
+                        </span>
+                      </span>
+                    </label>
+                  ) : null}
                 </div>
 
                 <div className="space-y-1">
@@ -795,6 +819,9 @@ export function DipendenteDetailClient({
                     {dipendente.statoAttivo ? 'Attivo' : 'Non attivo'}
                   </span>
                 </RigaInfo>
+                {mostraForfettario && dipendente.orarioForfettario ? (
+                  <RigaInfo label="Contratto">Orario forfettario</RigaInfo>
+                ) : null}
                 <RigaInfo label="Costo orario">
                   {dipendente.costoOrario != null ? (
                     <span className="inline-flex items-center gap-1">

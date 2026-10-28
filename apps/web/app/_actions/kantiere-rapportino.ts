@@ -400,6 +400,11 @@ const CaricaGiornataSchema = z.object({
 export type RigaGiornataModifica = {
   commessa_id: string | null;
   cantiere_id: string | null;
+  /**
+   * La fase: fa parte della chiave della riga. Senza, il salvataggio non
+   * ritrovava la riga esistente e ne aggiungeva una seconda (8 ore → 16).
+   */
+  sottocantiere_id: string | null;
   target_label: string;
   ore_lavoro: number;
   ore_viaggio: number;
@@ -464,6 +469,7 @@ export async function caricaMiaGiornata(
     righe = payload.righe.map((rr) => ({
       commessa_id: rr.commessa_id,
       cantiere_id: rr.cantiere_id,
+      sottocantiere_id: rr.sottocantiere_id ?? null,
       target_label: rr.target_label,
       ore_lavoro: rr.ore_ordinarie + rr.ore_straordinarie,
       ore_viaggio: rr.ore_viaggio,
@@ -695,6 +701,7 @@ const RigaModificaSchema = z
   .object({
     commessa_id: z.string().uuid().nullable().optional(),
     cantiere_id: z.string().uuid().nullable().optional(),
+    sottocantiere_id: z.string().uuid().nullable().optional(),
     ore_lavoro: z.number().min(0).max(24),
     ore_viaggio: z.number().min(0).max(24),
   })
@@ -865,6 +872,7 @@ export async function modificaMiaGiornata(
       modifiche: righe.map((rr) => ({
         commessa_id: rr.commessa_id ?? null,
         cantiere_id: rr.cantiere_id ?? null,
+        sottocantiere_id: rr.cantiere_id ? (rr.sottocantiere_id ?? null) : null,
         minutiLavoro: Math.round(rr.ore_lavoro * 60),
         minutiViaggio: Math.round(rr.ore_viaggio * 60),
       })),

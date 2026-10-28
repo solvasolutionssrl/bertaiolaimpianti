@@ -747,3 +747,35 @@ describe('attestati e periodi tagliati', () => {
     expect(esito.avvisi[0]!.messaggio).toContain('arrotondamento');
   });
 });
+
+describe('orario forfettario', () => {
+  const base = { dipendenteId: 'for', minutiStraordinari: 120, minutiViaggioEccedente: 90 };
+
+  it('un feriale lavorato vale l\'orario pieno: niente straordinario, niente viaggio', () => {
+    expect(eventiDaGiornata({ ...base, data: '2026-06-15', minutiForfait: 480 })).toEqual([]);
+  });
+
+  it('un sabato lavorato e\' una giornata forfettaria di straordinario del sabato', () => {
+    const eventi = eventiDaGiornata({ ...base, data: '2026-06-13', minutiForfait: 480 });
+    expect(eventi).toHaveLength(1);
+    expect(eventi[0]).toMatchObject({ causale: 'S9', ore: 8, record: '14' });
+  });
+
+  it('senza il flag le ore vere passano come sempre', () => {
+    const eventi = eventiDaGiornata({ ...base, data: '2026-06-15', minutiForfait: null });
+    expect(eventi.map((e) => e.causale)).toEqual(['S0', 'V1']);
+  });
+
+  it('le assenze non cambiano e non compare l\'avviso dell\'arrotondamento', () => {
+    const esito = traduciMese(
+      {
+        giornate: [{ ...base, data: '2026-06-15', minutiForfait: 480 }],
+        assenze: [{ dipendenteId: 'for', tipo: 'ferie', dal: '2026-06-16', al: '2026-06-16', tuttoIlGiorno: true }],
+      },
+      regoleConfigurate({ assenze: { ferie: 'FE' } } as never),
+      { periodo: '2026-06', oreGiornataIntera: 8 },
+    );
+    expect(esito.eventi.map((e) => [e.causale, e.dal])).toEqual([['FE', '2026-06-16']]);
+    expect(esito.avvisi).toEqual([]);
+  });
+});

@@ -202,6 +202,14 @@ export interface GiornataKommessa {
   minutiStraordinari: number;
   /** Minuti di viaggio oltre l'orario ordinario. */
   minutiViaggioEccedente: number;
+  /**
+   * Orario forfettario (personalizzazione FPM, 28/10/2026): i minuti che il
+   * contratto riconosce per una giornata lavorata, a prescindere da quelle
+   * fatte. Valorizzato solo se la persona ha il flag **e** quel giorno ha
+   * lavorato davvero; in Kommessa le ore vere restano come sono, cambia solo
+   * cosa si dice al consulente.
+   */
+  minutiForfait?: number | null;
 }
 
 export interface AssenzaKommessa {
@@ -273,6 +281,25 @@ export function eventiDaGiornata(
 ): EventoPaghe[] {
   const eventi: EventoPaghe[] = [];
   const passo = regole.arrotondamentoMinuti;
+
+  // Forfettario: in un giorno feriale la giornata vale l'orario pieno, cioe'
+  // nessuna variazione (niente straordinario, niente viaggio oltre l'orario).
+  // Di sabato e nei festivi l'orario teorico non c'e', quindi la giornata
+  // forfettaria intera e' lo straordinario di quel giorno, come per chiunque.
+  if (giornata.minutiForfait != null) {
+    if (tipoGiorno(giornata.data) === 'feriale' || giornata.minutiForfait <= 0) return eventi;
+    return [
+      {
+        dipendenteId: giornata.dipendenteId,
+        causale: causaleStraordinario(giornata.data, regole),
+        dal: giornata.data,
+        al: giornata.data,
+        ore: oreDaMinuti(giornata.minutiForfait),
+        record: '14',
+        origine: 'kommessa',
+      },
+    ];
+  }
 
   const straordinari = arrotondaMinuti(Math.max(0, giornata.minutiStraordinari), passo);
   if (straordinari > 0) {
@@ -415,7 +442,7 @@ export function traduciMese(
     // L'arrotondamento puo' mangiarsi pochi minuti fino a farli sparire: e'
     // una scelta legittima, ma va detta.
     const minuti = giornata.minutiStraordinari + giornata.minutiViaggioEccedente;
-    if (minuti > 0 && suoi.length === 0) {
+    if (giornata.minutiForfait == null && minuti > 0 && suoi.length === 0) {
       avvisi.push({
         dipendenteId: giornata.dipendenteId,
         messaggio: `Il ${giornata.data.slice(8, 10)}/${giornata.data.slice(5, 7)} ci sono ${minuti} minuti fra straordinario e viaggio, azzerati dall'arrotondamento di ${regole.arrotondamentoMinuti} minuti.`,

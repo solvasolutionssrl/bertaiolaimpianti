@@ -5,6 +5,7 @@ import { leggiTutto, leggiPerId, type EsitoPagina } from '@kommessa/api/pagine';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { romeDay } from '@kommessa/api/rome-time';
 import { tenantHasModule } from '@/app/_lib/modules';
+import { leggiFunzioniPersonalizzate } from '@/app/_lib/personalizzazioni';
 import { DipendenteDetailClient } from './_components/dipendente-detail-client';
 import { giornateAperte } from '@/app/office/_actions/kantiere-rapportini';
 import { GiornateApertePanel } from '@/app/office/kantiere/rapportini/_components/giornate-aperte-panel';
@@ -70,7 +71,7 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   const { data: dipRaw } = await supabase
     .from('dipendenti' as never)
     .select(
-      'id, user_id, nome, cognome, mansione, codice_interno, stato_attivo, note, costo_orario, a_turni',
+      'id, user_id, nome, cognome, mansione, codice_interno, stato_attivo, note, costo_orario, a_turni, orario_forfettario',
     )
     .eq('id', params.id)
     .eq('tenant_id', ctx.tenantId)
@@ -89,7 +90,10 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
     note: string | null;
     costo_orario: number | null;
     a_turni: boolean;
+    orario_forfettario: boolean | null;
   };
+  // Il flag del forfettario lo legge solo l'export paghe: dove non c'e', non si mostra.
+  const conExportPaghe = (await leggiFunzioniPersonalizzate(supabase, ctx.tenantId)).includes('export_paghe');
 
   // ── 2. Account collegato ──────────────────────────────────────────────────
   let accountNome: string | null = null;
@@ -446,7 +450,9 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
           note: dip.note,
           costoOrario: dip.costo_orario,
           aTurni: dip.a_turni,
+          orarioForfettario: Boolean(dip.orario_forfettario),
         }}
+        mostraForfettario={conExportPaghe}
         accountNome={accountNome}
         giorni={giorni}
         mezziGuidati={mezziGuidati}

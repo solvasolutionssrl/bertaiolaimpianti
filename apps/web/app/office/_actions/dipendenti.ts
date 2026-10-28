@@ -29,6 +29,8 @@ const BaseSchema = z.object({
   user_id: z.string().uuid().optional().nullable(),
   stato_attivo: z.boolean().optional(),
   a_turni: z.boolean().optional(),
+  /** Orario forfettario: lo legge solo l'export paghe. Si scrive solo se arriva. */
+  orario_forfettario: z.boolean().optional(),
   /** Come lavora: cambia cosa chiede l'app, non cosa le e' permesso fare. */
   modalita_lavoro: z.enum(['ufficio', 'esterno']).optional(),
   costo_orario: z.number().min(0).max(10000).optional().nullable(),
@@ -150,6 +152,9 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
       ...(parsed.data.data_nascita !== undefined
         ? { data_nascita: parsed.data.data_nascita }
         : {}),
+      ...(parsed.data.orario_forfettario !== undefined
+        ? { orario_forfettario: parsed.data.orario_forfettario }
+        : {}),
       note: parsed.data.note ?? null,
     } as never)
     .eq('id', parsed.data.id);
@@ -177,6 +182,9 @@ export async function aggiornaDipendente(input: unknown): Promise<Result> {
         : {}),
       ...(parsed.data.data_nascita !== undefined
         ? { data_nascita: parsed.data.data_nascita }
+        : {}),
+      ...(parsed.data.orario_forfettario !== undefined
+        ? { orario_forfettario: parsed.data.orario_forfettario }
         : {}),
     },
   });

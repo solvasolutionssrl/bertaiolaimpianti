@@ -35,6 +35,7 @@ export interface ModificaGiornataDialogProps {
 interface RigaEdit {
   commessa_id: string | null;
   cantiere_id: string | null;
+  sottocantiere_id: string | null;
   target_label: string;
   lavoroH: number;
   lavoroM: number;
@@ -71,6 +72,7 @@ function rigaFromPayload(r: RigaGiornataModifica): RigaEdit {
   return {
     commessa_id: r.commessa_id,
     cantiere_id: r.cantiere_id,
+    sottocantiere_id: r.sottocantiere_id,
     target_label: r.target_label,
     lavoroH: lav.h,
     lavoroM: lav.m,
@@ -270,6 +272,7 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
         righe: righe.map((r) => ({
           commessa_id: r.commessa_id,
           cantiere_id: r.cantiere_id,
+          sottocantiere_id: r.sottocantiere_id,
           ore_lavoro: hmToDec(r.lavoroH, r.lavoroM),
           ore_viaggio: hmToDec(r.viaggioH, r.viaggioM),
         })),
@@ -322,7 +325,7 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
                   {/* Un cantiere = una riga: Lavoro · Viaggio inline con −/+ */}
                   {righe.map((r, idx) => (
                     <div
-                      key={r.cantiere_id ?? r.commessa_id ?? idx}
+                      key={`${r.cantiere_id ?? r.commessa_id ?? idx}/${r.sottocantiere_id ?? ''}`}
                       className="min-w-0 rounded-xl border border-border bg-card p-2.5 shadow-soft"
                     >
                       <p className="truncate text-[13px] font-semibold text-foreground">

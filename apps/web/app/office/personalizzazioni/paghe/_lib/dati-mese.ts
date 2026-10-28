@@ -130,11 +130,12 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
         cognome: string;
         codice_interno: string | null;
         stato_attivo: boolean;
+        orario_forfettario: boolean | null;
       }>(
         (da, a) =>
           supabase
             .from('dipendenti' as never)
-            .select('id, nome, cognome, codice_interno, stato_attivo')
+            .select('id, nome, cognome, codice_interno, stato_attivo, orario_forfettario')
             .eq('tenant_id', tenantId)
             .order('cognome')
             .order('id')
@@ -261,6 +262,11 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
     else righePerGiornata.set(riga.rapportino_id, [riga]);
   }
 
+  // Orario forfettario (personalizzazione FPM): una giornata lavorata vale
+  // sempre la giornata intera, qualunque siano le ore registrate.
+  const forfettari = new Set(dipendentiRaw.filter((d) => d.orario_forfettario).map((d) => d.id));
+  const minutiGiornataIntera = Math.round(oreGiornataIntera * 60);
+
   const giornate: GiornataKommessa[] = [];
   const giornateSospese: GiornataSospesa[] = [];
   const conGiornate = new Set<string>();
@@ -280,6 +286,10 @@ export async function caricaMese(tenantId: string, periodo: string): Promise<Mod
       data: giornata.data,
       minutiStraordinari: totali.minutiStraordinari,
       minutiViaggioEccedente: totali.minutiViaggioEccedenti,
+      minutiForfait:
+        forfettari.has(giornata.dipendente_id) && totali.minutiLavoro + totali.minutiViaggio > 0
+          ? minutiGiornataIntera
+          : null,
     });
   }
 
