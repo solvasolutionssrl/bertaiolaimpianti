@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { COLONNE_QUOTE, quoteOre, sommaQuote, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
 import { createServerSupabase } from '@kommessa/api/server';
@@ -438,6 +439,14 @@ export default async function DipendenteDetailPage({ params, searchParams }: Pag
   return (
     <div className="w-full space-y-4">
       <GiornateApertePanel giorni={giorniApertiDip} />
+      <div className="flex justify-end">
+        <Link
+          href={`/office/personale/monte-ore?dip=${dip.id}`}
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          Monte ore del mese →
+        </Link>
+      </div>
       <DipendenteDetailClient
         dipendente={{
           id: dip.id,

@@ -18,6 +18,7 @@ import {
 } from '@kommessa/api/permessi-richiesta';
 import { Portal } from '@/app/mobile/_components/portal';
 import { useAlert, useConfirm } from '@/app/_components/confirm-provider';
+import { Scelta } from '@/app/_components/scelta';
 import { MobileBackButton } from '@/app/mobile/_components/mobile-back-button';
 import { richiediPermesso, decidiPermesso, annullaRichiesta } from '@/app/office/_actions/ferie-permessi';
 
@@ -59,8 +60,20 @@ export function PermessiMobileClient({
   puoApprovare: boolean;
 }) {
   const [formOpen, setFormOpen] = React.useState(false);
-  const inAttesa = mieRichieste.filter((r) => r.stato === 'in_attesa' || r.stato === 'modifica_richiesta');
-  const decise = mieRichieste.filter((r) => r.stato === 'approvato' || r.stato === 'rifiutato');
+  const [tipoSel, setTipoSel] = React.useState<string | null>(null);
+  // I tipi presenti nelle richieste in elenco (anche quelli non piu' attivi).
+  const opzioniTipo = React.useMemo(() => {
+    const visti = new Set<string>();
+    for (const r of mieRichieste) visti.add(r.tipoLabel);
+    for (const r of daApprovare) visti.add(r.tipoLabel);
+    return [...visti].sort((a, b) => a.localeCompare(b, 'it')).map((t) => ({ valore: t, etichetta: t }));
+  }, [mieRichieste, daApprovare]);
+  const delTipo = <T extends { tipoLabel: string }>(lista: T[]) =>
+    tipoSel ? lista.filter((r) => r.tipoLabel === tipoSel) : lista;
+  const mie = delTipo(mieRichieste);
+  const daApprovareVisibili = delTipo(daApprovare);
+  const inAttesa = mie.filter((r) => r.stato === 'in_attesa' || r.stato === 'modifica_richiesta');
+  const decise = mie.filter((r) => r.stato === 'approvato' || r.stato === 'rifiutato');
 
   return (
     <div className="animate-content-in flex min-h-[100dvh] flex-col gap-4 p-4">
@@ -86,12 +99,26 @@ export function PermessiMobileClient({
         </p>
       )}
 
-      {puoApprovare && daApprovare.length > 0 ? (
+      {opzioniTipo.length > 1 ? (
+        <div className="min-w-0" data-filtro="tipo">
+          <Scelta
+            aria-label="Tipo di richiesta"
+            opzioni={opzioniTipo}
+            valore={tipoSel}
+            onCambia={setTipoSel}
+            segnaposto="Tutti i tipi"
+            etichettaNessuno="Tutti i tipi"
+            segnapostoRicerca="Cerca un tipo…"
+          />
+        </div>
+      ) : null}
+
+      {puoApprovare && daApprovareVisibili.length > 0 ? (
         <section className="space-y-2" data-sezione="da-approvare">
           <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <Inbox className="h-3.5 w-3.5" aria-hidden="true" /> Da approvare ({daApprovare.length})
+            <Inbox className="h-3.5 w-3.5" aria-hidden="true" /> Da approvare ({daApprovareVisibili.length})
           </h2>
-          {daApprovare.map((r) => (
+          {daApprovareVisibili.map((r) => (
             <DaApprovareCard key={r.id} r={r} />
           ))}
         </section>
@@ -101,7 +128,7 @@ export function PermessiMobileClient({
         <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">In attesa di risposta</h2>
         {inAttesa.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border bg-card/60 p-4 text-sm text-muted-foreground">
-            Nessuna richiesta in attesa.
+            Nessuna richiesta {tipoSel ? 'di questo tipo ' : ''}in attesa.
           </p>
         ) : (
           inAttesa.map((r) => <MiaRichiestaCard key={r.id} r={r} />)

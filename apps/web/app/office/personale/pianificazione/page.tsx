@@ -128,9 +128,17 @@ export default async function PianificazionePage({
     .maybeSingle();
   const mioDipendenteId = (miaScheda as { id: string } | null)?.id ?? null;
 
+  // Chi ha scelto di non vedere: scelta personale, la RLS fa leggere solo le proprie.
+  const { data: nascostiRaw } = await supabase
+    .from('pianificazione_nascosti' as never)
+    .select('dipendente_id')
+    .eq('user_id', ctx.userId);
+  const nascostiIds = ((nascostiRaw as { dipendente_id: string }[] | null) ?? []).map((r) => r.dipendente_id);
+
   return (
     <PianificazioneClient
       mioDipendenteId={mioDipendenteId}
+      nascostiIniziali={nascostiIds}
       lunediISO={lunedi}
       oggiLunediISO={oggiLunedi}
       oggiISO={oggi}

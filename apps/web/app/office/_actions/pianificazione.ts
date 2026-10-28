@@ -1306,3 +1306,50 @@ export async function copiaSettimanaPrecedente(input: unknown): Promise<CopiaRes
   revalidatePath(PATH);
   return { ok: true, copiati, avvisi };
 }
+
+// ── dipendenti nascosti dalla vista (scelta personale, 28/10/2026) ─────────
+// Chi pianifica decide chi non vuole vedere: la griglia e gli export PDF li
+// saltano. La scelta e' di chi guarda e lo segue su ogni dispositivo; gli altri
+// continuano a vedere tutti. Non cambia nessun dato della pianificazione.
+
+const NascostiSchema = z.object({ dipendentiIds: z.array(z.string().uuid()).max(500) });
+
+export async function salvaNascostiPianificazione(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = NascostiSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  let g: Awaited<ReturnType<typeof guard>>;
+  try {
+    g = await guard();
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  const { ctx, supabase } = g;
+  const ids = [...new Set(parsed.data.dipendentiIds)];
+
+  // Solo persone di questo cliente: un id estraneo si scarta, non si scrive.
+  let validi: string[] = [];
+  if (ids.length > 0) {
+    const { data, error } = await supabase
+      .from('dipendenti' as never)
+      .select('id')
+      .eq('tenant_id', ctx.tenantId)
+      .in('id', ids);
+    if (error) return { ok: false, error: 'Non riesco a salvare la scelta: riprova.' };
+    validi = ((data as { id: string }[] | null) ?? []).map((d) => d.id);
+  }
+
+  const { error: eDel } = await supabase
+    .from('pianificazione_nascosti' as never)
+    .delete()
+    .eq('user_id', ctx.userId);
+  if (eDel) return { ok: false, error: 'Non riesco a salvare la scelta: riprova.' };
+  if (validi.length > 0) {
+    const { error: eIns } = await supabase
+      .from('pianificazione_nascosti' as never)
+      .insert(validi.map((id) => ({ user_id: ctx.userId, tenant_id: ctx.tenantId, dipendente_id: id })) as never);
+    if (eIns) return { ok: false, error: 'Non riesco a salvare la scelta: riprova.' };
+  }
+  return { ok: true };
+}

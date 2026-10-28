@@ -302,8 +302,8 @@ function DialogRichiesta({
           ) : null}
 
           {aOre ? (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>*]:min-w-0">
+              <div className="col-span-2 space-y-1.5 sm:col-span-1">
                 <Label htmlFor="rich-giorno">Giorno</Label>
                 <Input id="rich-giorno" type="date" value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
               </div>
@@ -315,7 +315,7 @@ function DialogRichiesta({
                 <Label htmlFor="rich-alle">Alle</Label>
                 <Input id="rich-alle" type="time" step={300} value={oraFine} onChange={(e) => setOraFine(e.target.value)} />
               </div>
-              <div className="col-span-3 flex flex-wrap items-center gap-2">
+              <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-3">
                 <span className="text-xs text-muted-foreground">Durata:</span>
                 {SCORCIATOIE_ORE.map((h) => (
                   <button
@@ -333,7 +333,7 @@ function DialogRichiesta({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <div className="space-y-1.5">
                 <Label htmlFor="rich-dal">Dal</Label>
                 <Input

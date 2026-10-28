@@ -30,6 +30,7 @@ import {
 } from '@kommessa/ui';
 import { LABEL_STATO_PERMESSO, numeroAttestatoObbligatorio } from '@kommessa/api/permessi-tipi';
 import { useAlert } from '@/app/_components/confirm-provider';
+import { Scelta } from '@/app/_components/scelta';
 import {
   caricaGiustificativo,
   decidiPermesso,
@@ -150,6 +151,16 @@ export function PermessiClient({
   oggiISO: string;
 }) {
   const [filtro, setFiltro] = React.useState<'in_attesa' | 'tutte' | 'approvato' | 'rifiutato'>('in_attesa');
+  const [tipoSel, setTipoSel] = React.useState<string | null>(null);
+  // I tipi si prendono dalle richieste che ci sono, non dal catalogo attivo: un
+  // tipo spento oggi ha comunque richieste di ieri da ritrovare.
+  const opzioniTipo = React.useMemo(() => {
+    const visti = new Map<string, string>();
+    for (const r of richieste) if (!visti.has(r.tipo)) visti.set(r.tipo, r.tipoLabel);
+    return [...visti]
+      .map(([valore, etichetta]) => ({ valore, etichetta }))
+      .sort((a, b) => a.etichetta.localeCompare(b.etichetta, 'it'));
+  }, [richieste]);
   const [decisione, setDecisione] = React.useState<{ r: RichiestaRow; esito: Stato } | null>(null);
   const [nuovaOpen, setNuovaOpen] = React.useState(false);
   const [giustificativoDi, setGiustificativoDi] = React.useState<RichiestaRow | null>(null);
@@ -165,11 +176,12 @@ export function PermessiClient({
   }, [richieste]);
 
   const filtrate = React.useMemo(() => {
-    if (filtro === 'tutte') return richieste;
+    const perTipo = tipoSel ? richieste.filter((r) => r.tipo === tipoSel) : richieste;
+    if (filtro === 'tutte') return perTipo;
     if (filtro === 'in_attesa')
-      return richieste.filter((r) => r.stato === 'in_attesa' || r.stato === 'modifica_richiesta');
-    return richieste.filter((r) => r.stato === filtro);
-  }, [richieste, filtro]);
+      return perTipo.filter((r) => r.stato === 'in_attesa' || r.stato === 'modifica_richiesta');
+    return perTipo.filter((r) => r.stato === filtro);
+  }, [richieste, filtro, tipoSel]);
 
   return (
     <div className="space-y-4">
@@ -195,7 +207,7 @@ export function PermessiClient({
         </div>
       </header>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {FILTRI.map((f) => {
           const n =
             f.value === 'in_attesa'
@@ -220,11 +232,24 @@ export function PermessiClient({
             </button>
           );
         })}
+        {opzioniTipo.length > 1 ? (
+          <div className="w-full sm:ml-auto sm:w-56">
+            <Scelta
+              aria-label="Tipo di richiesta"
+              opzioni={opzioniTipo}
+              valore={tipoSel}
+              onCambia={setTipoSel}
+              segnaposto="Tutti i tipi"
+              etichettaNessuno="Tutti i tipi"
+              segnapostoRicerca="Cerca un tipo…"
+            />
+          </div>
+        ) : null}
       </div>
 
       {filtrate.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-          Nessuna richiesta {filtro === 'in_attesa' ? 'da approvare' : 'in questa vista'}.
+          Nessuna richiesta {tipoSel ? 'di questo tipo ' : ''}{filtro === 'in_attesa' ? 'da approvare' : 'in questa vista'}.
         </p>
       ) : (
         <Card>
@@ -629,7 +654,7 @@ function NuovaRichiestaDialog({
           </label>
 
           {tuttoIlGiorno ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
               <label className="block text-sm">
                 <span className="mb-1 block text-xs font-medium text-muted-foreground">Dal</span>
                 <input
@@ -664,7 +689,7 @@ function NuovaRichiestaDialog({
                   className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:border-primary focus:outline-none"
                 />
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <label className="block text-sm">
                   <span className="mb-1 block text-xs font-medium text-muted-foreground">Dalle</span>
                   <input

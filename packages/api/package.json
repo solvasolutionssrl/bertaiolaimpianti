@@ -71,7 +71,8 @@
     "./nome-cartella": "./src/nome-cartella.ts",
     "./testo": "./src/testo.ts",
     "./impersonazione": "./src/impersonazione.ts",
-    "./righe-abbina": "./src/righe-abbina.ts"
+    "./righe-abbina": "./src/righe-abbina.ts",
+    "./margine-ore": "./src/margine-ore.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -62,8 +62,10 @@ import {
   copiaSettimanaPrecedente,
   spostaBlocco,
   ripetiBlocco,
+  salvaNascostiPianificazione,
 } from '@/app/office/_actions/pianificazione';
 import { ExportMenu } from './export-menu';
+import { SceltaMultipla } from '@/app/_components/scelta';
 import { GruppoFilter } from './gruppo-filter';
 import { useGridDrag, type GridDrag } from './use-grid-drag';
 import { TIP } from '../_lib/tooltips';
@@ -1184,6 +1186,7 @@ function MoreMenu({ children }: { children: React.ReactNode }) {
 
 export function PianificazioneClient({
   mioDipendenteId = null,
+  nascostiIniziali = [],
   lunediISO,
   oggiLunediISO,
   oggiISO,
@@ -1200,6 +1203,8 @@ export function PianificazioneClient({
 }: {
   /** La scheda di chi guarda, se timbra anche lui: la sua riga porta «tu». */
   mioDipendenteId?: string | null;
+  /** Chi l'utente ha scelto di non vedere (griglia ed export). Scelta sua. */
+  nascostiIniziali?: string[];
   lunediISO: string;
   oggiLunediISO: string;
   oggiISO: string;
@@ -1223,6 +1228,23 @@ export function PianificazioneClient({
   const [soloTurni, setSoloTurni] = React.useState(false);
   const [gruppoSel, setGruppoSel] = React.useState<string[]>([]); // filtro gruppi (vuoto = tutti)
   const [vista, setVista] = React.useState<'piano' | 'ferie'>('piano');
+  const [nascosti, setNascosti] = React.useState<string[]>(nascostiIniziali);
+  const nascostiSet = React.useMemo(() => new Set(nascosti), [nascosti]);
+  // Le persone che restano in vista: da qui partono griglia ed export PDF.
+  const dipVisibili = React.useMemo(
+    () => dipendenti.filter((d) => !nascostiSet.has(d.id)),
+    [dipendenti, nascostiSet],
+  );
+  const cambiaNascosti = (ids: string[]) => {
+    const prima = nascosti;
+    setNascosti(ids);
+    void salvaNascostiPianificazione({ dipendentiIds: ids }).then((res) => {
+      if (!res.ok) {
+        setNascosti(prima);
+        void alert({ title: 'Scelta non salvata', body: res.error });
+      }
+    });
+  };
 
   const giorni = React.useMemo(() => giorniSettimana(lunediISO), [lunediISO]);
 
@@ -1264,13 +1286,13 @@ export function PianificazioneClient({
   }, [blocchi, assenze]);
 
   const dipFiltrati = React.useMemo(() => {
-    let out = dipendenti;
+    let out = dipVisibili;
     if (soloTurni) out = out.filter((d) => d.aTurni);
     if (gruppoSel.length > 0) out = out.filter((d) => gruppoSel.includes(dipGruppo[d.id] ?? ''));
     const q = cerca.trim().toLowerCase();
     if (q) out = out.filter((d) => `${nomeDip(d)} ${d.mansione ?? ''}`.toLowerCase().includes(q));
     return out;
-  }, [dipendenti, soloTurni, cerca, gruppoSel, dipGruppo]);
+  }, [dipVisibili, soloTurni, cerca, gruppoSel, dipGruppo]);
 
   const bozze = blocchi.filter((b) => b.stato === 'bozza').length;
 
@@ -1595,6 +1617,17 @@ export function PianificazioneClient({
           />
           Solo a turni
         </label>
+        <div className="w-48" title="Le persone nascoste non compaiono nella griglia ne' negli export PDF. La scelta e' solo tua.">
+          <SceltaMultipla
+            aria-label="Persone nascoste"
+            opzioni={dipendenti.map((d) => ({ valore: d.id, etichetta: nomeDip(d), dettaglio: d.mansione ?? undefined }))}
+            valori={nascosti}
+            onCambia={cambiaNascosti}
+            segnaposto="Nascondi persone…"
+            riassunto
+            larghezzaElenco="auto"
+          />
+        </div>
 
         {/* Azioni (a destra): primaria d'inserimento + export + overflow */}
         <div className="ml-auto flex items-center gap-2">
@@ -1612,7 +1645,7 @@ export function PianificazioneClient({
           <ExportMenu
             lunediISO={lunediISO}
             giorni={giorni}
-            dipendenti={dipendenti}
+            dipendenti={dipVisibili}
             cantieri={cantieri}
             mezzi={mezzi}
             blocchi={blocchi}

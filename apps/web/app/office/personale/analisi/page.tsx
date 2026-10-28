@@ -9,6 +9,9 @@ import {
   labelTipoConMappa,
 } from '../../../_lib/dipendenti-config';
 import { AnalisiClient, type LatestRow, type SerieMese } from './_components/analisi-client';
+import { tenantHasModule } from '@/app/_lib/modules';
+import { caricaMonteOre } from '../monte-ore/_lib/monte-ore';
+import { MonteOreCard } from '../monte-ore/_components/monte-ore-card';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,7 +141,15 @@ export default async function AnalisiPage() {
     stato: r.stato as LatestRow['stato'],
   }));
 
+  // Il monte ore esiste dove si registrano le ore: il mondo presenze.
+  const monteOre =
+    canDecide && (await tenantHasModule('kantiere'))
+      ? await caricaMonteOre(supabase, ctx.tenantId, ym)
+      : null;
+
   return (
+    <div className="space-y-4">
+    {monteOre ? <MonteOreCard persone={monteOre.persone} periodo={ym} /> : null}
     <AnalisiClient
       kpi={{
         totale: rich.length,
@@ -156,6 +167,7 @@ export default async function AnalisiPage() {
       latest={latest}
       canDecide={canDecide}
     />
+    </div>
   );
 }
 
