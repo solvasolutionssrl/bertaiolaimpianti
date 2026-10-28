@@ -1235,15 +1235,20 @@ export function PianificazioneClient({
     () => dipendenti.filter((d) => !nascostiSet.has(d.id)),
     [dipendenti, nascostiSet],
   );
+  // I salvataggi vanno in fila: due scelte rapide in parallelo si pestavano i
+  // piedi sul database (cancella e reinserisci) e l'ultima poteva fallire.
+  const codaNascosti = React.useRef<Promise<unknown>>(Promise.resolve());
   const cambiaNascosti = (ids: string[]) => {
     const prima = nascosti;
     setNascosti(ids);
-    void salvaNascostiPianificazione({ dipendentiIds: ids }).then((res) => {
-      if (!res.ok) {
-        setNascosti(prima);
-        void alert({ title: 'Scelta non salvata', body: res.error });
-      }
-    });
+    codaNascosti.current = codaNascosti.current.then(() =>
+      salvaNascostiPianificazione({ dipendentiIds: ids }).then((res) => {
+        if (!res.ok) {
+          setNascosti(prima);
+          void alert({ title: 'Scelta non salvata', body: res.error });
+        }
+      }),
+    );
   };
 
   const giorni = React.useMemo(() => giorniSettimana(lunediISO), [lunediISO]);

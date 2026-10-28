@@ -281,7 +281,19 @@ export default async function MobileOrePage() {
         timbroDaFare={timbroDaFare}
       />
 
-      <StoricoOre giorni={storico} passo={impTurno.passoMinuti} />
+      <StoricoOre
+        giorni={storico}
+        passo={impTurno.passoMinuti}
+        registra={{
+          passoMinuti: impTurno.passoMinuti,
+          stepViaggio: arrotondamenti.viaggioMin,
+          sedi: sediDisponibili,
+          sediPerCantiere,
+          mezzi: mezziDisponibili,
+          ultimoMezzoId,
+          inUfficio,
+        }}
+      />
     </div>
   );
 }

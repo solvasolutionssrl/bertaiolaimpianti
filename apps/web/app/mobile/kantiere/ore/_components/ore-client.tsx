@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { PenLine, Clock, CalendarClock } from 'lucide-react';
 
 import { titoloCase } from '@/app/mobile/_lib/display-case';
-import { ModificaGiornataDialog } from './modifica-giornata-dialog';
+import { CorreggiGiornata } from './correggi-giornata';
 import { RegistraGiornataDialog, type ScatolaDialog } from './registra-giornata-dialog';
 import type { PickerCantiere } from '../../_components/cantiere-picker';
 import { TimbriTerminale } from '@/app/office/kantiere/_components/timbri-terminale';
@@ -383,12 +383,21 @@ export function OreClient({
       />
 
       {/* Panoramica/correzione della giornata di oggi (pencil sul riepilogo) */}
-      <ModificaGiornataDialog
-        open={panoramicaOpen}
-        data={rapportino.data}
-        passo={passoMinuti}
-        onClose={() => setPanoramicaOpen(false)}
-      />
+      {panoramicaOpen ? (
+        <CorreggiGiornata
+          data={rapportino.data}
+          base={{
+            passoMinuti,
+            stepViaggio,
+            sedi: sediDisponibili,
+            sediPerCantiere,
+            mezzi: mezziDisponibili,
+            ultimoMezzoId,
+            inUfficio,
+          }}
+          onClose={() => setPanoramicaOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

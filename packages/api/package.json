@@ -72,7 +72,8 @@
     "./testo": "./src/testo.ts",
     "./impersonazione": "./src/impersonazione.ts",
     "./righe-abbina": "./src/righe-abbina.ts",
-    "./margine-ore": "./src/margine-ore.ts"
+    "./margine-ore": "./src/margine-ore.ts",
+    "./riallocazione-giornata": "./src/riallocazione-giornata.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

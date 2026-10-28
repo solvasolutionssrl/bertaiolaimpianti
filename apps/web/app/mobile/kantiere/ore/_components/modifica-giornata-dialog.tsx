@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useTransition } from 'react';
+import { useState, useEffect, useCallback, useRef, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Coffee, Info, Loader2 } from 'lucide-react';
 import { Button } from '@kommessa/ui';
@@ -261,7 +261,12 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
     setErrore(null);
   }
 
+  const inVolo = useRef(false);
   function handleSalva() {
+    // Doppio tocco: il secondo arriva prima che `pending` disabiliti il tasto,
+    // e la pausa (cancellata e reinserita) finirebbe scritta due volte.
+    if (inVolo.current) return;
+    inVolo.current = true;
     setErrore(null);
     // Invio la pausa solo se cambiata: aggiunta (era assente) o durata diversa.
     const pausaDaInviare =
@@ -277,6 +282,8 @@ export function ModificaGiornataDialog({ open, onClose, data, passo = 15 }: Modi
           ore_viaggio: hmToDec(r.viaggioH, r.viaggioM),
         })),
         pausaMinuti: pausaDaInviare,
+      }).finally(() => {
+        inVolo.current = false;
       });
       if (res.ok) {
         router.refresh();

@@ -49,7 +49,9 @@ import { CantiereSearchSheet, type PickerCantiere } from '../../_components/cant
 import {
   registraGiornataDaZero,
   ripartisciGiornataTimbro,
+  riallocaMiaGiornata,
   elencoCantieriTurno,
+  type GiornataDaRiallocare,
 } from '@/app/_actions/kantiere-timbra';
 import {
   BarraGiornata,
@@ -120,6 +122,12 @@ function messaggioErrore(code: string, motivo?: string | null): string {
       return 'Il mezzo scelto non è valido. Ricarica la pagina e riprova.';
     case 'GIUSTIFICAZIONE_RICHIESTA':
       return 'Hai modificato un tempo di viaggio: indica il motivo.';
+    case 'FUORI_FINESTRA':
+      return 'Termine superato: per questa giornata rivolgersi all’ufficio.';
+    case 'NON_MODIFICABILE':
+      return 'La giornata è già stata approvata dall’ufficio: per correggerla rivolgersi all’ufficio.';
+    case 'GIORNATA_NON_CHIUSA':
+      return 'La giornata non è ancora chiusa: si potrà correggere a fine turno.';
     case 'VIAGGIO_NON_SALVATO':
       return 'Il viaggio non è stato salvato, quindi la giornata non è stata registrata. Riprova.';
     default:
@@ -394,7 +402,8 @@ export function RegistraGiornataDialog({
   mezzi,
   ultimoMezzoId,
   inUfficio = false,
-  scatola = null,
+  scatola: scatolaProp = null,
+  riallocazione = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -410,7 +419,33 @@ export function RegistraGiornataDialog({
   inUfficio?: boolean;
   /** La giornata timbrata al terminale da ripartire: estremi fissi, salvataggio su `ripartisciGiornataTimbro`. */
   scatola?: ScatolaDialog | null;
+  /**
+   * Una giornata gia' registrata da correggere (28/10/2026): inizio e fine
+   * fissi (li corregge l'ufficio), si riallocano commesse e ore, e la pausa se
+   * non e' timbrata. Funziona come una scatola; salva su `riallocaMiaGiornata`.
+   */
+  riallocazione?: GiornataDaRiallocare | null;
 }) {
+  // La riallocazione e' una scatola con estremi fatti: stessa schermata.
+  const scatola: ScatolaDialog | null =
+    scatolaProp ??
+    (riallocazione
+      ? {
+          giorno: riallocazione.giorno,
+          inizioIso: riallocazione.inizioIso,
+          fineIso: riallocazione.fineIso,
+          nettoMin: riallocazione.nettoMin,
+          pausaTimbrataMin: riallocazione.pausaTimbrataMin,
+          inizioFisico: false,
+          fineFisica: false,
+          primoCantiere: null,
+          dalTerminale: false,
+        }
+      : null);
+  const pausaBloccata = !!riallocazione && riallocazione.pausaTimbrataMin > 0;
+  // La pausa fusa nel cambio di cantiere si ricava una volta, a stime pronte.
+  const pausaRicavata = useRef(false);
+  const salvataggioInVolo = useRef(false);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const passeggero = useConfermaPasseggero();
@@ -478,6 +513,24 @@ export function RegistraGiornataDialog({
     );
     setErrore(null);
     // Solo all'apertura: la scatola non cambia finche' il dialog e' aperto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Riallocazione: si riparte da com'e' la giornata adesso.
+  useEffect(() => {
+    if (!open || !riallocazione) return;
+    setPausaMin(riallocazione.pausaTimbrataMin > 0 ? 0 : riallocazione.pausaDichiarataMin);
+    setRighe(
+      riallocazione.righe.map((r) => ({
+        cantiereId: r.cantiereId,
+        sottocantiereId: r.sottocantiereId,
+        nome: etichettaLuogo(r.nome, r.sottocantiereNome),
+        codice: r.codice,
+        minuti: r.minuti,
+        daSede: r.daSede,
+      })),
+    );
+    pausaRicavata.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -730,6 +783,12 @@ export function RegistraGiornataDialog({
       (scatola.fineFisica ? ritornoMin : 0)
     : assegnato;
   const restoScatola = scatola ? daAssegnare - assegnato : 0;
+  // La strada che sta DENTRO la presenza e quindi si toglie: le tratte fra
+  // cantieri, e andata e ritorno solo se gli estremi sono in sede. Il testo
+  // mostrava tutta la strada e il conto non tornava a chi lo rifaceva.
+  const stradaDentroMin = scatola
+    ? trasferimentiMin + (scatola.inizioFisico ? andataMin : 0) + (scatola.fineFisica ? ritornoMin : 0)
+    : viaggioTotaleMin;
   const segmenti = segmentiBarraGiornata({
     andataMin,
     ritornoMin,
@@ -744,6 +803,17 @@ export function RegistraGiornataDialog({
     !teAndata.inArrivo &&
     !teRitorno.inArrivo &&
     !fraCantieri.inArrivo;
+
+  // Riallocazione senza pausa segnata: il buco fra i cantieri meno la strada
+  // stimata e' la pausa che c'era. Si ricava una volta, a stime pronte, cosi'
+  // aprire e salvare senza toccare niente lascia le ore come sono.
+  useEffect(() => {
+    if (!open || !riallocazione || pausaBloccata || pausaRicavata.current) return;
+    if (riallocazione.pausaDichiarataMin > 0 || riallocazione.buchiFraCantieriMin <= 0) return;
+    if (fraCantieri.inArrivo || righe.length === 0) return;
+    pausaRicavata.current = true;
+    setPausaMin(Math.max(0, riallocazione.buchiFraCantieriMin - trasferimentiMin));
+  }, [open, riallocazione, pausaBloccata, fraCantieri.inArrivo, trasferimentiMin, righe.length]);
 
   // ── viste ────────────────────────────────────────────────────────────────────
   const nomeSede = (id: string) => sedi.find((s) => s.id === id);
@@ -1070,7 +1140,12 @@ export function RegistraGiornataDialog({
       ? righe.map((r, i) => (i === righe.length - 1 ? { ...r, minuti: Math.max(0, r.minuti + restoScatola) } : r))
       : righe;
 
+    // Un doppio tocco arriva prima che `pending` ridisegni il tasto: senza
+    // questo blocco partirebbero due salvataggi, cioe' due giornate.
+    if (salvataggioInVolo.current) return;
+    salvataggioInVolo.current = true;
     startTransition(async () => {
+      try {
       const split = righeInvio.map((r) => ({
         cantiereId: r.cantiereId,
         sottocantiereId: r.sottocantiereId,
@@ -1097,7 +1172,14 @@ export function RegistraGiornataDialog({
             })(),
           })),
       };
-      const res = scatola
+      const res = riallocazione
+        ? await riallocaMiaGiornata({
+            giorno: riallocazione.giorno,
+            pausaMin: pausaBloccata ? 0 : pausaMin,
+            split,
+            percorso: percorsoPayload,
+          })
+        : scatola
         ? await ripartisciGiornataTimbro({
             giorno: scatola.giorno,
             pausaMin,
@@ -1121,6 +1203,9 @@ export function RegistraGiornataDialog({
         }, 1100);
       } else {
         setErrore(messaggioErrore(res.error, res.motivo));
+      }
+      } finally {
+        salvataggioInVolo.current = false;
       }
     });
   }
@@ -1444,14 +1529,18 @@ export function RegistraGiornataDialog({
             </button>
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold leading-tight tracking-tight">
-                {scatola
+                {riallocazione
+                  ? 'Correggi commesse e ore'
+                  : scatola
                   ? scatola.giorno === giornoOggi
                     ? 'Inserisci le commesse sulle quali hai lavorato oggi'
                     : 'Inserisci le commesse sulle quali hai lavorato'
                   : 'Registra giornata'}
               </h2>
               <p className="text-muted-foreground truncate text-[11px] leading-tight first-letter:uppercase">
-                {scatola
+                {riallocazione
+                  ? `${giornoEsteso} · ${inizio} → ${fine} · inizio e fine li corregge l’ufficio`
+                  : scatola
                   ? `${giornoEsteso} · ` +
                     (scatola.primoCantiere
                       ? `turno dall’app ${inizio}, ${scatola.dalTerminale === false ? 'uscita' : 'badge'} in sede ${fine}`
@@ -1522,12 +1611,12 @@ export function RegistraGiornataDialog({
                     time nativo iOS non allarga la traccia). */}
                 <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2">
                   <TimeField
-                    label={scatola ? 'Timbrato alle' : 'Inizio lavoro'}
+                    label={riallocazione ? 'Inizio' : scatola ? 'Timbrato alle' : 'Inizio lavoro'}
                     value={inizio}
                     onChange={setInizio}
                     disabled={pending || !!scatola}
                   />
-                  <FineCalcolata ora={fineMostrata} etichetta={scatola ? 'Timbrato alle' : undefined} />
+                  <FineCalcolata ora={fineMostrata} etichetta={riallocazione ? 'Fine' : scatola ? 'Timbrato alle' : undefined} />
                 </div>
                 <p
                   className="text-muted-foreground -mt-0.5 line-clamp-2 h-[2.75em] text-[11px] leading-snug"
@@ -1535,17 +1624,17 @@ export function RegistraGiornataDialog({
                 >
                   {scatola ? (
                     <>
-                      Presenza timbrata {fmtHM(scatola.nettoMin)}
+                      {riallocazione ? 'Presenza' : 'Presenza timbrata'} {fmtHM(scatola.nettoMin)}
                       {pausaMin > 0 ? (
                         <>
                           {' '}
                           − <span className="text-amber-700">{fmtHM(pausaMin)} di pausa</span>
                         </>
                       ) : null}
-                      {viaggioTotaleMin > 0 ? (
+                      {stradaDentroMin > 0 ? (
                         <>
                           {' '}
-                          − <span className="text-sky-700">{fmtHM(viaggioTotaleMin)} di strada</span>
+                          − <span className="text-sky-700">{fmtHM(stradaDentroMin)} di strada</span>
                         </>
                       ) : null}
                       {' = '}
@@ -1585,13 +1674,19 @@ export function RegistraGiornataDialog({
                   <label className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-amber-700">
                     <Coffee className="h-3 w-3" aria-hidden="true" /> Pausa pranzo
                   </label>
-                  <SceltaPausaPranzo
-                    valore={pausaMin}
-                    onChange={setPausaMin}
-                    conNessuna
-                    disabled={pending}
-                    tono="tenue"
-                  />
+                  {pausaBloccata ? (
+                    <p className="text-muted-foreground text-[12px]">
+                      Pausa timbrata di {fmtHM(riallocazione!.pausaTimbrataMin)}: non si modifica da qui.
+                    </p>
+                  ) : (
+                    <SceltaPausaPranzo
+                      valore={pausaMin}
+                      onChange={setPausaMin}
+                      conNessuna
+                      disabled={pending}
+                      tono="tenue"
+                    />
+                  )}
                 </div>
               </section>
 
@@ -1671,14 +1766,14 @@ export function RegistraGiornataDialog({
               viaggioNoto={viaggioNoto}
               sinistra={
                 scatola
-                  ? { etichetta: 'Timbrato', ora: inizio }
+                  ? { etichetta: riallocazione ? 'Inizio' : 'Timbrato', ora: inizio }
                   : conPartenza
                     ? { etichetta: 'Partenza', ora: spostaOrario(inizio, -andataMin) }
                     : { etichetta: 'Inizio', ora: inizio }
               }
               destra={
                 scatola
-                  ? { etichetta: 'Timbrato', ora: fine }
+                  ? { etichetta: riallocazione ? 'Fine' : 'Timbrato', ora: fine }
                   : !fineMostrata
                     ? { etichetta: 'Fine', ora: '--:--' }
                     : conRientro

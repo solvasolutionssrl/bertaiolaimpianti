@@ -40,6 +40,10 @@ import { ricomputaRapportinoAuto } from './_lib/ricomputa-rapportino';
 import { leggiGiornataTimbro } from '@/app/_lib/timbro/giornate';
 import { scriviTimbrature } from './_lib/timbrature-scrivi';
 import { riempiScatola } from '@kommessa/api/timbro-giornata';
+import { estremiGiornata, pausaImplicita } from '@kommessa/api/riallocazione-giornata';
+import { nomiSottocantieri } from '@/app/_lib/sottocantieri-nomi';
+import { giorniModificabiliTecnico, nomeDipendente, notificaModificaTecnicoOffice } from './_lib/modifica-giornata';
+import { leggiStatoGiornata, scriviVersioneRapportino } from './_lib/scrivi-versione-rapportino';
 import {
   ViaggioSchema,
   validaViaggio,
@@ -2225,4 +2229,291 @@ async function scriviGiornataRipartita(p: GiornataRipartitaInput): Promise<Resul
   }
   const fine = eventi[eventi.length - 1]!;
   return { ok: true, tipo: 'uscita', pausa: false, ts: fine.ts };
+}
+
+// ── 8) riallocare una giornata gia' registrata (28/10/2026) ───────────────
+// Dal telefono il tecnico corregge SU QUALI commesse e QUANTE ore per
+// ciascuna, e la pausa se non l'ha timbrata. Inizio e fine non si toccano:
+// quelli li corregge l'ufficio. La giornata si riempie di nuovo come una
+// scatola del terminale (estremi fissi, `riempiScatola`), con lo stesso
+// scrittore di «Registra giornata».
+//
+// ⚠️ Solo giornate SENZA righe nel registro presenze (badge o presenza
+// dall'app): quelle hanno la loro ripartizione e il loro stato, e restano sul
+// dialog «Modifica giornata».
+// ⚠️ Ordine: prima si scrive la giornata nuova, poi si tolgono le timbrature
+// vecchie (le tratte se ne vanno con loro). Se la scrittura non va, la
+// giornata resta com'era; se non va la cancellazione, si tolgono le nuove.
+
+export interface GiornataDaRiallocare {
+  giorno: string;
+  inizioIso: string;
+  fineIso: string;
+  /** Presenza meno le pause timbrate: il tempo da ripartire. */
+  nettoMin: number;
+  pausaTimbrataMin: number;
+  /** La pausa dichiarata attuale (si puo' cambiare solo se non c'e' una pausa timbrata). */
+  pausaDichiarataMin: number;
+  /**
+   * Senza nessuna pausa segnata: i minuti di buco fra un cantiere e l'altro.
+   * Meno la strada stimata, e' la pausa fusa nel cambio di cantiere.
+   */
+  buchiFraCantieriMin: number;
+  righe: {
+    cantiereId: string;
+    sottocantiereId: string | null;
+    nome: string;
+    codice: string | null;
+    sottocantiereNome: string | null;
+    minuti: number;
+    daSede: boolean;
+  }[];
+}
+
+type MotivoNonRiallocabile =
+  | 'FUORI_FINESTRA'
+  | 'NON_MODIFICABILE'
+  | 'DAL_REGISTRO'
+  | 'GIORNATA_NON_CHIUSA'
+  | 'RIGHE_SENZA_CANTIERE';
+
+async function giornataDaRiallocare(
+  supabase: ReturnType<typeof createServerSupabase>,
+  tenantId: string,
+  dipendenteId: string,
+  giorno: string,
+): Promise<
+  | {
+      ok: true;
+      vista: GiornataDaRiallocare;
+      intervalli: { inizioMs: number; fineMs: number }[];
+      vecchieIds: string[];
+      rapportinoId: string | null;
+    }
+  | { ok: false; error: MotivoNonRiallocabile | string }
+> {
+  if (!giorniModificabiliTecnico().includes(giorno)) return { ok: false, error: 'FUORI_FINESTRA' };
+
+  const { data: rappRaw } = await supabase
+    .from('rapportini' as never)
+    .select('id, approvato_da')
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .eq('data', giorno)
+    .maybeSingle();
+  const rapp = rappRaw as { id: string; approvato_da: string | null } | null;
+  if (rapp?.approvato_da) return { ok: false, error: 'NON_MODIFICABILE' };
+
+  const { fromIso, toIso } = romeDayBoundsUtc(giorno);
+  // Il registro lo legge solo la service role; si guarda solo se c'e' qualcosa.
+  const { count: nelRegistro } = await createServiceSupabase()
+    .from('timbri_grezzi' as never)
+    .select('id', { count: 'exact', head: true })
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso);
+  if ((nelRegistro ?? 0) > 0) return { ok: false, error: 'DAL_REGISTRO' };
+
+  const { data: timbRaw, error: eT } = await supabase
+    .from('timbrature' as never)
+    .select('id, tipo, ts, pausa, modalita, origine, cantiere_id, sede_lavoro_id')
+    .eq('tenant_id', tenantId)
+    .eq('dipendente_id', dipendenteId)
+    .gte('ts', fromIso)
+    .lt('ts', toIso)
+    .order('ts');
+  if (eT) return { ok: false, error: eT.message };
+  const timb =
+    (timbRaw as { id: string; tipo: 'ingresso' | 'uscita'; ts: string; pausa: boolean | null; modalita: string | null; origine: string | null; cantiere_id: string | null; sede_lavoro_id: string | null }[] | null) ?? [];
+  const est = estremiGiornata(timb.map((t) => ({ ...t, pausa: !!t.pausa })));
+  if (!est.ok) return { ok: false, error: est.error };
+
+  // Una pausa fusa nel cambio di cantiere non e' segnata: resta solo il buco
+  // fra un cantiere e l'altro. La strada di quel buco la stima il dialog (la
+  // stessa stima usata scrivendo), e la differenza e' la pausa.
+  const buchiFraCantieriMin =
+    est.pausaTimbrataMin === 0 && est.pausaDichiarataMin === 0
+      ? pausaImplicita(timb.map((t) => ({ ...t, pausa: !!t.pausa })), 0)
+      : 0;
+  // «Lavoro dalla sede sul progetto»: lo dice la sede scritta sulla timbratura.
+  const daSedeDi = new Map<string, boolean>();
+  for (const t of timb) if (!t.pausa && t.tipo === 'ingresso' && t.cantiere_id) daSedeDi.set(t.cantiere_id, !!t.sede_lavoro_id);
+
+  let righe: GiornataDaRiallocare['righe'] = [];
+  if (rapp) {
+    const { data: rr } = await supabase
+      .from('rapportino_righe' as never)
+      .select('cantiere_id, sottocantiere_id, minuti_lavoro, ore_ordinarie, ore_straordinarie')
+      .eq('rapportino_id', rapp.id)
+      .order('id');
+    const lette =
+      (rr as { cantiere_id: string | null; sottocantiere_id: string | null; minuti_lavoro: number | null; ore_ordinarie: number | null; ore_straordinarie: number | null }[] | null) ?? [];
+    if (lette.some((r) => !r.cantiere_id)) return { ok: false, error: 'RIGHE_SENZA_CANTIERE' };
+    const ids = [...new Set(lette.map((r) => r.cantiere_id!))];
+    const { data: cc } = ids.length
+      ? await supabase.from('cantieri' as never).select('id, nome, codice_commessa').in('id', ids)
+      : { data: [] };
+    const cantiere = new Map(((cc as { id: string; nome: string; codice_commessa: string | null }[] | null) ?? []).map((c) => [c.id, c]));
+    const fasi = await nomiSottocantieri(supabase, tenantId, lette.map((r) => r.sottocantiere_id));
+    righe = lette.map((r) => ({
+      cantiereId: r.cantiere_id!,
+      sottocantiereId: r.sottocantiere_id,
+      nome: cantiere.get(r.cantiere_id!)?.nome ?? 'Cantiere',
+      codice: cantiere.get(r.cantiere_id!)?.codice_commessa ?? null,
+      sottocantiereNome: r.sottocantiere_id ? (fasi.get(r.sottocantiere_id)?.nome ?? null) : null,
+      daSede: daSedeDi.get(r.cantiere_id!) ?? false,
+      minuti:
+        r.minuti_lavoro ?? Math.round(((Number(r.ore_ordinarie) || 0) + (Number(r.ore_straordinarie) || 0)) * 60),
+    }));
+  }
+
+  const nettoMin = est.intervalli.reduce((s, i) => s + Math.round((i.fineMs - i.inizioMs) / 60_000), 0);
+  return {
+    ok: true,
+    vista: {
+      giorno,
+      inizioIso: new Date(est.inizioMs).toISOString(),
+      fineIso: new Date(est.fineMs).toISOString(),
+      nettoMin,
+      pausaTimbrataMin: est.pausaTimbrataMin,
+      pausaDichiarataMin: est.pausaDichiarataMin,
+      buchiFraCantieriMin,
+      righe,
+    },
+    intervalli: est.intervalli,
+    vecchieIds: timb.map((t) => t.id),
+    rapportinoId: rapp?.id ?? null,
+  };
+}
+
+export async function caricaGiornataDaRiallocare(
+  input: unknown,
+): Promise<{ ok: true; giornata: GiornataDaRiallocare } | { ok: false; error: string }> {
+  const parsed = z.object({ giorno: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, r.ctx.tenantId, r.ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+  const g = await giornataDaRiallocare(supabase, r.ctx.tenantId, me.id, parsed.data.giorno);
+  if (!g.ok) return { ok: false, error: g.error };
+  return { ok: true, giornata: g.vista };
+}
+
+const RiallocaSchema = z.object({
+  giorno: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  pausaMin: z.number().int().min(0).max(600).optional(),
+  pausaDopoIndice: z.number().int().min(0).max(11).optional(),
+  split: z
+    .array(
+      z.object({
+        cantiereId: z.string().uuid(),
+        sottocantiereId: z.string().uuid().nullable().optional(),
+        minuti: z.number().int().nonnegative(),
+        daSede: z.boolean().optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+  percorso: PercorsoGiornataSchema.optional(),
+});
+
+export async function riallocaMiaGiornata(input: unknown): Promise<Result> {
+  const parsed = RiallocaSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Input non valido' };
+  const r = await ctxConModulo();
+  if ('error' in r) return { ok: false, error: r.error };
+  const { ctx } = r;
+  const supabase = createServerSupabase();
+  const me = await dipendenteDi(supabase, ctx.tenantId, ctx.userId);
+  if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
+
+  // Tutto si rilegge qui: il client propone, il server decide.
+  const { giorno } = parsed.data;
+  const g = await giornataDaRiallocare(supabase, ctx.tenantId, me.id, giorno);
+  if (!g.ok) return { ok: false, error: g.error };
+  // Una pausa timbrata non si tocca: niente pausa dichiarata in piu'.
+  const pausaTimbrata = g.vista.pausaTimbrataMin > 0;
+  const pausaDichiarataMin = pausaTimbrata ? 0 : (parsed.data.pausaMin ?? 0);
+
+  const prima = await leggiStatoGiornata(supabase, g.rapportinoId ?? undefined);
+
+  const scritta = await scriviGiornataRipartita({
+    supabase,
+    tenantId: ctx.tenantId,
+    userId: ctx.userId,
+    dipendenteId: me.id,
+    giorno,
+    split: parsed.data.split,
+    percorso: parsed.data.percorso ?? null,
+    origine: 'manuale',
+    // Con una pausa timbrata la giornata resta «dall'app»: cosi' la pausa
+    // riscritta resta riconoscibile come timbrata alla prossima correzione.
+    modalita: pausaTimbrata ? 'app' : 'giornata_dichiarata',
+    // E' una giornata gia' lavorata: un cantiere chiuso nel frattempo non blocca.
+    cantieriForzati: true,
+    ingressoEsistente: null,
+    estremiDentro: false,
+    autoEstremi: false,
+    generaEventi: (viaggioPrima) =>
+      riempiScatola({
+        intervalli: g.intervalli,
+        segmenti: parsed.data.split,
+        viaggioPrima,
+        pausaDichiarataMin,
+        pausaDopoIndice: parsed.data.pausaDopoIndice ?? null,
+      }),
+  });
+  if (!scritta.ok) return scritta;
+
+  // Via le timbrature di prima. Se non si riesce, via le nuove: mai due giornate sovrapposte.
+  const { error: eDel } = await supabase
+    .from('timbrature' as never)
+    .delete()
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .in('id', g.vecchieIds);
+  if (eDel) {
+    const { fromIso, toIso } = romeDayBoundsUtc(giorno);
+    await supabase
+      .from('timbrature' as never)
+      .delete()
+      .eq('tenant_id', ctx.tenantId)
+      .eq('dipendente_id', me.id)
+      .gte('ts', fromIso)
+      .lt('ts', toIso)
+      .not('id', 'in', `(${g.vecchieIds.join(',')})`);
+    await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, giorno);
+    return { ok: false, error: 'La giornata non è stata modificata: riprova.' };
+  }
+
+  // Le ore ora vengono dalle timbrature: la giornata torna «automatica».
+  await supabase
+    .from('rapportini' as never)
+    .update({ auto_compilato: true } as never)
+    .eq('tenant_id', ctx.tenantId)
+    .eq('dipendente_id', me.id)
+    .eq('data', giorno);
+  const rapp = await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, giorno, { versione: false });
+  if (rapp) {
+    const nome = await nomeDipendente(supabase, me.id);
+    await scriviVersioneRapportino({
+      supabase,
+      rapportinoId: rapp.id,
+      tenantId: ctx.tenantId,
+      azione: 'modifica_tecnico',
+      modificatoDa: ctx.userId,
+      modificatoDaNome: nome,
+      prima,
+    });
+    await notificaModificaTecnicoOffice(ctx.tenantId, ctx.userId, {
+      rapportinoId: rapp.id,
+      dipendenteId: me.id,
+      dipendenteNome: nome ?? 'Un tecnico',
+      data: giorno,
+    });
+  }
+  return scritta;
 }

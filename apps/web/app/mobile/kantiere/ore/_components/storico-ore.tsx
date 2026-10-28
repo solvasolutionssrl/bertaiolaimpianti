@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { History, PencilLine, Lock } from 'lucide-react';
 import type { GiornoStorico } from '@/app/_actions/kantiere-rapportino';
 import { ModificaGiornataDialog } from './modifica-giornata-dialog';
+import { CorreggiGiornata, type BaseRegistraGiornata } from './correggi-giornata';
 
 function fmtGiorno(data: string): string {
   // data = 'YYYY-MM-DD'; ancoriamo a mezzogiorno UTC per evitare slittamenti di fuso.
@@ -59,7 +60,16 @@ function giorniModificabili(): Set<string> {
  * Le giornate di oggi + i 3 giorni precedenti sono TAPPABILI e aprono il dialog
  * di modifica; le più vecchie restano in sola lettura.
  */
-export function StoricoOre({ giorni, passo = 15 }: { giorni: GiornoStorico[]; passo?: number }) {
+export function StoricoOre({
+  giorni,
+  passo = 15,
+  registra = null,
+}: {
+  giorni: GiornoStorico[];
+  passo?: number;
+  /** Con questi dati la correzione apre le card di «Registra giornata» dove si puo'. */
+  registra?: BaseRegistraGiornata | null;
+}) {
   const editabili = useMemo(() => giorniModificabili(), []);
   const [selezionata, setSelezionata] = useState<string | null>(null);
 
@@ -156,7 +166,9 @@ export function StoricoOre({ giorni, passo = 15 }: { giorni: GiornoStorico[]; pa
         </>
       )}
 
-      {selezionata ? (
+      {selezionata && registra ? (
+        <CorreggiGiornata data={selezionata} base={registra} onClose={() => setSelezionata(null)} />
+      ) : selezionata ? (
         <ModificaGiornataDialog
           open
           data={selezionata}

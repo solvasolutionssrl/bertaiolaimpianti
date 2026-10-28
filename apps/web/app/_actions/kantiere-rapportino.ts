@@ -13,6 +13,7 @@ import { scriviVersioneRapportino, leggiStatoGiornata } from './_lib/scrivi-vers
 import { ricomputaRapportinoAuto, marcaRapportinoManuale } from './_lib/ricomputa-rapportino';
 import { aggiornaRigheGiornata } from './_lib/righe-giornata';
 import { inserisciPausaDichiarata } from './_lib/viaggio-timbra';
+import { giorniModificabiliTecnico, nomeDipendente, notificaModificaTecnicoOffice } from './_lib/modifica-giornata';
 
 // ── tipi di ritorno ──────────────────────────────────────────────────────────
 
@@ -67,19 +68,6 @@ async function dipendenteDi(
     .eq('user_id', userId)
     .maybeSingle();
   return (data as { id: string } | null) ?? null;
-}
-
-async function nomeDipendente(
-  supabase: ReturnType<typeof createServerSupabase>,
-  id: string,
-): Promise<string | null> {
-  const { data } = await supabase
-    .from('dipendenti' as never)
-    .select('nome, cognome')
-    .eq('id', id)
-    .maybeSingle();
-  const d = data as { nome: string; cognome: string } | null;
-  return d ? `${d.nome} ${d.cognome}`.trim() : null;
 }
 
 // ── helper carica titoli commesse ────────────────────────────────────────────
@@ -147,23 +135,6 @@ function oggiRome(): string {
 }
 
 // Finestra di auto-modifica del tecnico: oggi + i N giorni precedenti.
-const FINESTRA_MODIFICA_GIORNI = 3;
-
-/**
- * Giorni (YYYY-MM-DD) in cui il tecnico può ancora modificare la propria
- * giornata: oggi + i `FINESTRA_MODIFICA_GIORNI` precedenti. Confini Europe/Rome,
- * TZ-safe (ancoraggio a mezzogiorno UTC del giorno italiano corrente, così lo
- * scivolamento di data non capita mai vicino alla mezzanotte).
- */
-function calcolaGiorniModificabili(): string[] {
-  const noon = Date.parse(`${oggiRome()}T12:00:00Z`);
-  const out: string[] = [];
-  for (let i = 0; i <= FINESTRA_MODIFICA_GIORNI; i += 1) {
-    out.push(new Date(noon - i * 86400000).toISOString().slice(0, 10));
-  }
-  return out;
-}
-
 /**
  * Esiste già un rapportino per (dipendente, giorno) OPPURE almeno una timbratura
  * in quel giorno? Serve a `precompilaMioRapportino` per NON creare un rapportino
@@ -454,7 +425,7 @@ export async function caricaMiaGiornata(
   if (!me) return { ok: false, error: 'NESSUN_DIPENDENTE' };
 
   const { data } = parsed.data;
-  const modificabile = calcolaGiorniModificabili().includes(data);
+  const modificabile = giorniModificabiliTecnico().includes(data);
 
   // Righe correnti (riflettono le timbrature, come la vista "oggi").
   const rapp = (await esisteRapportinoOTimbrature(supabase, ctx.tenantId, me.id, data))
@@ -615,7 +586,7 @@ export async function correggiMioViaggio(
   }
   if (!giorno) return { ok: false, error: 'GIORNO_NON_RISOLTO' };
 
-  if (!calcolaGiorniModificabili().includes(giorno)) {
+  if (!giorniModificabiliTecnico().includes(giorno)) {
     return { ok: false, error: 'FUORI_FINESTRA' };
   }
 
@@ -715,48 +686,6 @@ const ModificaGiornataSchema = z.object({
   pausaMinuti: z.number().int().min(5).max(240).nullable().optional(),
 });
 
-/**
- * Notifica di sistema all'ufficio (utenti office/admin del tenant, escluso chi
- * modifica) che un tecnico ha corretto le ore di una giornata. Best-effort via
- * service role (l'attore tecnico non vede le righe `notifiche` altrui).
- */
-async function notificaModificaTecnicoOffice(
-  tenantId: string,
-  attoreUserId: string,
-  info: { rapportinoId: string; dipendenteId: string; dipendenteNome: string; data: string },
-): Promise<void> {
-  try {
-    const service = createServiceSupabase();
-    const { data: destRaw } = await service
-      .from('users')
-      .select('id')
-      .eq('tenant_id', tenantId)
-      .in('role', ['admin', 'office'])
-      .eq('attivo', true);
-    const dest = ((destRaw as { id: string }[] | null) ?? []).filter(
-      (u) => u.id !== attoreUserId,
-    );
-    if (dest.length === 0) return;
-
-    const url = `/office/kantiere/rapportini?giorno=${info.data}`;
-    const rows = dest.map((u) => ({
-      tenant_id: tenantId,
-      user_id: u.id,
-      type: 'kantiere_modifica_tecnico',
-      payload: {
-        rapportinoId: info.rapportinoId,
-        dipendenteId: info.dipendenteId,
-        dipendenteNome: info.dipendenteNome,
-        data: info.data,
-        url,
-      },
-    }));
-    await service.from('notifiche').insert(rows);
-  } catch (e) {
-    console.warn('[modificaMiaGiornata] notifica office fallita', e);
-  }
-}
-
 export async function modificaMiaGiornata(
   input: unknown,
 ): Promise<ResultSimple | ResultErr> {
@@ -774,7 +703,7 @@ export async function modificaMiaGiornata(
   const { data, righe, pausaMinuti } = parsed.data;
 
   // Finestra: oggi + i 3 giorni precedenti (Europe/Rome).
-  if (!calcolaGiorniModificabili().includes(data)) {
+  if (!giorniModificabiliTecnico().includes(data)) {
     return { ok: false, error: 'FUORI_FINESTRA' };
   }
 
