@@ -1,5 +1,6 @@
 import type { createServerSupabase } from '@kommessa/api/server';
 import { oreDaMinuti, quoteDaRiga, quoteGiornata, type RigaRapportinoLetta } from '@kommessa/api/kantiere-quote';
+import { abbinaRighe } from '@kommessa/api/righe-abbina';
 import { chiaveCantiere } from '@kommessa/api/sottocantieri';
 import { leggiRegolaQuote } from '@/app/_lib/kantiere-config';
 
@@ -36,7 +37,8 @@ const chiaveTarget = (r: { commessa_id: string | null; cantiere_id: string | nul
   r.cantiere_id ? chiaveCantiere(r.cantiere_id, r.sottocantiere_id) : r.commessa_id ? `commessa:${r.commessa_id}` : '';
 
 /**
- * Sostituisce tutte le righe della giornata con quelle date. L'ordine conta:
+ * Porta le righe della giornata a quelle date, tenendo l'id di ogni riga la cui
+ * chiave (cantiere + fase) resta. L'ordine conta:
  * l'orario ordinario si riempie riga per riga nell'ordine ricevuto.
  */
 export async function scriviRigheGiornata(
@@ -77,27 +79,38 @@ export async function scriviRigheGiornata(
     };
   });
 
-  // Prima le righe nuove, poi via le vecchie: se l'inserimento fallisce la
-  // giornata resta com'era, invece di restare senza ore.
+  // L'id di una riga resta lo stesso finché resta la sua chiave (cantiere +
+  // fase): una giornata corretta non deve sembrare nuova a chi legge dall'API e
+  // tiene il conto di cosa ha già mandato (`@kommessa/api/righe-abbina`).
+  // Ordine: prima le righe nuove, poi via quelle sparite, poi gli aggiornamenti.
+  // Se l'inserimento fallisce la giornata resta com'era invece di restare senza ore.
   const { data: vecchieRaw, error: eLett } = await supabase
     .from('rapportino_righe' as never)
-    .select('id')
-    .eq('rapportino_id', opts.rapportinoId);
+    .select('id, commessa_id, cantiere_id, sottocantiere_id')
+    .eq('rapportino_id', opts.rapportinoId)
+    .order('id');
   if (eLett) return { ok: false, error: eLett.message };
-  const vecchie = ((vecchieRaw as { id: string }[] | null) ?? []).map((r) => r.id);
+  const vecchie = (
+    (vecchieRaw as { id: string; commessa_id: string | null; cantiere_id: string | null; sottocantiere_id: string | null }[] | null) ?? []
+  ).map((r) => ({ id: r.id, chiave: chiaveTarget(r) }));
+
+  const piano = abbinaRighe(
+    vecchie,
+    insert.map((r) => ({ chiave: chiaveTarget(r), riga: r })),
+  );
 
   let nuove: string[] = [];
-  if (insert.length > 0) {
+  if (piano.inserisci.length > 0) {
     const { data: nuoveRaw, error: eIns } = await supabase
       .from('rapportino_righe' as never)
-      .insert(insert as never)
+      .insert(piano.inserisci as never)
       .select('id');
     if (eIns) return { ok: false, error: eIns.message };
     nuove = ((nuoveRaw as { id: string }[] | null) ?? []).map((r) => r.id);
   }
 
-  if (vecchie.length > 0) {
-    const { error: eDel } = await supabase.from('rapportino_righe' as never).delete().in('id', vecchie);
+  if (piano.cancella.length > 0) {
+    const { error: eDel } = await supabase.from('rapportino_righe' as never).delete().in('id', piano.cancella);
     if (eDel) {
       // Le vecchie sono rimaste: si tolgono le nuove per non contare le ore due volte.
       if (nuove.length > 0) {
@@ -107,6 +120,14 @@ export async function scriviRigheGiornata(
       return { ok: false, error: eDel.message };
     }
   }
+
+  const esitiAgg = await Promise.all(
+    piano.aggiorna.map(({ id, riga }) =>
+      supabase.from('rapportino_righe' as never).update(riga as never).eq('id', id),
+    ),
+  );
+  const eAgg = esitiAgg.find((e) => e.error)?.error;
+  if (eAgg) return { ok: false, error: eAgg.message };
 
   const { error: eOrario } = await supabase
     .from('rapportini' as never)

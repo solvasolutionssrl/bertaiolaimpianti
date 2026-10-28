@@ -48,6 +48,12 @@ export const maxDuration = 30;
  * Le giornate precedenti alla regola hanno `viaggioOrdinario` 0 e tutto il viaggio
  * in `viaggioEccedente`.
  *
+ * **L'`id` di una riga e' stabile** (dal 28/10/2026): correggere una giornata
+ * aggiorna la riga dello stesso cantiere+fase invece di crearne una nuova. Un
+ * id nuovo vuol dire un cantiere o una fase nuovi in quella giornata; un id che
+ * sparisce, un cantiere tolto. Le righe scritte prima di quella data hanno gia'
+ * cambiato id a ogni correzione.
+ *
  * Parametri: `modificatoDopo`, `dal`, `al`, `cursore`, `limite`.
  */
 

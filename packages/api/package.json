@@ -70,7 +70,8 @@
     "./zoom-foto": "./src/zoom-foto.ts",
     "./nome-cartella": "./src/nome-cartella.ts",
     "./testo": "./src/testo.ts",
-    "./impersonazione": "./src/impersonazione.ts"
+    "./impersonazione": "./src/impersonazione.ts",
+    "./righe-abbina": "./src/righe-abbina.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
