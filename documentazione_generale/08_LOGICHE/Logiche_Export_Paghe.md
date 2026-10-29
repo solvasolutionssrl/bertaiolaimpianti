@@ -1,6 +1,6 @@
 # Logiche Export paghe (area Personalizzazioni)
 
-**Versione**: 1.1
+**Versione**: 1.2
 **Stato**: in produzione dal 16/09/2026 · giustificativi generici dal 20/09/2026
 **Ambito**: funzione `export_paghe` dentro il modulo per-tenant `personalizzazioni`, l'area delle funzioni su misura. L'area puo' essere accesa per qualunque cliente; le funzioni attive stanno in `tenant_modules.config.funzioni` e l'elenco vive in `apps/web/app/_lib/personalizzazioni-registry.ts`. Chi non ha la riga non vede nemmeno la voce in menu.
 
@@ -177,3 +177,17 @@ Sul file finito si ricontrollano lunghezza di ogni record, caratteri ASCII e del
 Quando due fonti sono in contrasto:
 
 **conferma del consulente > manuale ufficiale > foglio Excel storico > file di esempio > nostre deduzioni.**
+
+---
+
+## 9. Orario forfettario (dal 28/10/2026)
+
+Flag sul dipendente (`dipendenti.orario_forfettario`), visibile nella scheda solo dove l'export paghe è attivo. In Kommessa le ore vere si registrano e si leggono come sempre: il flag cambia **solo** cosa finisce nel `DatiMese.txt`.
+
+| Giorno | Cosa va nel file |
+|---|---|
+| Feriale lavorato | Niente: la giornata vale l'orario pieno (nessuno straordinario, nessun viaggio oltre l'orario) |
+| Sabato, domenica, festivo lavorato | Le ore fatte (lavoro + viaggio), **fino a una giornata intera**, come straordinario del giorno (S9/S7). Due ore fatte = due ore |
+| Ferie, malattia, permessi | Come per chiunque: sono assenze |
+
+Regola pura in `@kommessa/api/paghe-mappatura` (`minutiForfait`), il taglio alla giornata in `dati-mese.ts`. Le ore nel file restano in centesimi (0,50 = mezz'ora); nei campi delle paghe si possono scrivere anche come ore e minuti (`1:30`), con l'anteprima del valore che finirà nel file.

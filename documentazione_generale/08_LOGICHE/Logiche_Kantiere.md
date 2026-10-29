@@ -1,6 +1,6 @@
 # Logiche operative — Kantiere (presenze, viaggi, sedi, ore)
 
-**Versione**: 2.1
+**Versione**: 2.2
 **Stato**: Attivo (in produzione)
 **Ultimo aggiornamento**: 26/10/2026
 **Ambito**: modulo **Kantiere** (tenant con `app_mode=kantiere`, es. FPM Impianti). NON tocca il mondo commesse (Bertaiola).
@@ -1488,3 +1488,23 @@ qui; in `CLAUDE.md` resta solo il blocco corto con il gating e il rimando.*
 `Logiche_Export_Paghe.md` (il file per il consulente del lavoro),
 `Logiche_Pianificazione.md` (settimana, ferie e permessi),
 `Logiche_Upload_Media.md` (foto e allegati).*
+
+---
+
+## 20. Correzione dal telefono e monte ore (dal 28-29/10/2026)
+
+### Correggere una giornata = riallocarla
+Dallo storico (e dal riepilogo di oggi) si apre la schermata a card di «Registra giornata». **Inizio e fine non si toccano**: li corregge l'ufficio. Si spostano commesse e ore, e la pausa **solo se non è timbrata**.
+
+- Azioni: `caricaGiornataDaRiallocare` / `riallocaMiaGiornata` (`kantiere-timbra.ts`). Regole pure in `@kommessa/api/riallocazione-giornata`.
+- **Senza registro**: estremi dalle timbrature; si riscrive come «Registra giornata» (origine `manuale`).
+- **Con il registro** (badge o presenza dall'app): estremi e pause timbrate dal registro, andata e ritorno dentro la presenza; si riscrive come la ripartizione del terminale (origine `timbro`, quindi niente torna a Timbro). Solo giornate «coperte», coerenti e con tutte le timbrature dalla ripartizione; il resto resta al dialog «Modifica giornata».
+- Ordine: prima si scrive la giornata nuova, poi si tolgono le timbrature vecchie (le tratte se ne vanno con loro), poi ricalcolo, versione e avviso all'ufficio. Finestra: oggi + 3 giorni; mai su una giornata approvata a mano.
+- ⚠️ `riempiScatola` fonde una pausa dichiarata che cade sul cambio di cantiere con il buco della strada: le ore tornano ma la pausa non resta segnata. La riallocazione la ritrova (buco fra cantieri meno strada stimata), così aprire e salvare senza toccare niente non sposta le ore.
+- ⚠️ «Modifica giornata» perdeva la fase (`sottocantiere_id`) e su un cantiere con fasi 8 ore diventavano 16. Corretto il 28/10; un caso in produzione (26/10) lasciato com'è.
+
+### Monte ore
+Card in Personale → Analisi (colonna destra) e nella scheda del dipendente; pagina `/office/personale/monte-ore`. Regola in `@kommessa/api/margine-ore`: lavoro + viaggio entro l'orario + permessi a ore − orario ordinario; weekend e festivi interamente in più; assenze di giornata intera escluse; feriali senza registrazioni **non** contati in meno ma indicati a parte. Si scrive in `h` e `min` («131 h 43 min»). Come il saldo verrà trattato con il consulente del lavoro è da decidere.
+
+### Ore scritte a mano
+Le ore si scrivono come ore e minuti (`7:30`); i decimali restano accettati (`7,5`). `0,30` è un decimale (18 minuti): `OreInput` lo mostra mentre si scrive invece di rifiutarlo. «Correggi giornata» e «Registra rapportino» usano `OreInput`.

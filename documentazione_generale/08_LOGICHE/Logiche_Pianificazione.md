@@ -1,6 +1,6 @@
 # Logiche — Pianificazione settimanale (modulo Dipendenti)
 
-**Versione**: 1.2
+**Versione**: 1.3
 **Stato**: registro operativo vivo (aggiornare man mano)
 **Data**: 20/09/2026
 **Ambito**: `/office/personale/pianificazione` · gated modulo `dipendenti` + sotto-flag `pianificazione_attiva` (FPM attivo, Bertaiola nascosta)
@@ -100,3 +100,9 @@ Due situazioni diverse, gestite diversamente (`bloccoEquivalente` distingue i du
 - **Sposta** (`spostaBlocco`): lo spostamento è atomico (tutta la squadra) → se qualcuno finirebbe **doppio** sullo stesso cantiere, **rifiuta** con messaggio; le sovrapposizioni cross-cantiere passano con **avviso**.
 - **Dialog crea/modifica**: già mostrava l'avviso soft "X è già assegnato a …" + "Salva comunque" (sia per doppione sia per sovrapposizione). Invariato.
 - **Cleanup una-tantum**: `scripts/cleanup-pianificazione-duplicati.mjs` (dry-run di default, `--apply` per eseguire) unisce eventuali blocchi equivalenti duplicati nel keeper e cancella gli extra, senza perdere membri.
+
+---
+
+## 10. Persone nascoste (dal 28/10/2026)
+
+«Nascondi persone…» nella barra della griglia: ognuno sceglie chi non vedere. La scelta è **di chi guarda**, salvata sul suo account (tabella `pianificazione_nascosti`, RLS sulle sole proprie righe) e valida su ogni dispositivo; gli altri continuano a vedere tutti. Le persone nascoste spariscono dalla griglia e da **tutti gli export PDF** (il menu riceve già la lista delle visibili). Il dialog dei blocchi continua a proporre tutti: nascondere non vuol dire non poter pianificare. I salvataggi della scelta vanno in fila, così due cambi rapidi non si sovrascrivono.
