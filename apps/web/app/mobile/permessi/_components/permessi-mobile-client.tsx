@@ -356,16 +356,22 @@ function RichiestaSheet({
         </header>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-4">
-          <label className="block">
+          <div className="block">
             <span className={ETICHETTA}>Tipo</span>
-            <select value={tipo} onChange={(e) => onTipo(e.target.value)} className={CAMPO}>
-              {tipiOpzioni.map((t) => (
-                <option key={t.codice} value={t.codice}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            {/* Con la ricerca, come nell'ufficio: la tendina di sistema non la ha */}
+            <Scelta
+              aria-label="Tipo"
+              opzioni={tipiOpzioni.map((t) => ({ valore: t.codice, etichetta: t.label }))}
+              valore={tipo || null}
+              onCambia={(v) => {
+                if (v) onTipo(v);
+              }}
+              segnaposto="Scegli il tipo…"
+              segnapostoRicerca="Cerca un tipo…"
+              ricercaSempre
+              className="h-11 text-base"
+            />
+          </div>
           {tipoScelto?.richiedeGiustificativo ? (
             <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />

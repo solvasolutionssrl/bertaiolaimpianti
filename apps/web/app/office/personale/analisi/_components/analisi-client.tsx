@@ -126,7 +126,7 @@ export function AnalisiClient({
         </p>
       </header>
 
-      <div className={laterale ? 'grid gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,1fr)] xl:items-start' : ''}>
+      <div className={laterale ? 'grid gap-4 xl:grid-cols-[minmax(0,4fr)_minmax(0,1fr)]' : ''}>
       <div className="min-w-0 space-y-4">
       {/* KPI compatti */}
       <div className={'grid grid-cols-2 gap-2.5 sm:grid-cols-3 ' + (laterale ? '2xl:grid-cols-6' : 'lg:grid-cols-6')}>
@@ -136,6 +136,62 @@ export function AnalisiClient({
         <Kpi label="Rifiutate" value={kpi.rifiutate} tone="rose" />
         <Kpi label="Giorni ferie (anno)" value={kpi.giorniFerie} />
         <Kpi label="Presenze (mese)" value={kpi.presenzeMese} />
+      </div>
+
+      {/* Ultime richieste + assenze in arrivo */}
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardContent className="p-0">
+              <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                <h2 className="text-sm font-semibold">Ultime richieste</h2>
+                <a href="/office/personale/permessi" className="text-xs font-medium text-primary hover:underline">
+                  Tutte →
+                </a>
+              </div>
+              {latest.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nessuna richiesta.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {latest.map((r) => (
+                    <LatestRiga key={r.id} r={r} canDecide={canDecide} />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardContent className="p-0">
+            <div className="border-b border-border px-4 py-2.5">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+                <CalendarOff className="h-4 w-4 text-rose-500" /> Assenze in arrivo
+              </h2>
+            </div>
+            {upcoming.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                Nessuna assenza nei prossimi 30 giorni.
+              </p>
+            ) : (
+              <div className="divide-y divide-border">
+                {upcoming.map((u, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 px-4 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{u.dipendenteNome}</p>
+                      <p className="text-[11px] text-muted-foreground">{u.tipoLabel}</p>
+                    </div>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {u.dataInizio === u.dataFine
+                        ? fmtData(u.dataInizio)
+                        : `${fmtData(u.dataInizio)} → ${fmtData(u.dataFine)}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Grafici */}
@@ -206,61 +262,9 @@ export function AnalisiClient({
           )}
         </ChartCard>
       </div>
-
-      {/* Ultime richieste + assenze in arrivo */}
-      <div className="grid gap-3 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Card>
-            <CardContent className="p-0">
-              <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-                <h2 className="text-sm font-semibold">Ultime richieste</h2>
-                <a href="/office/personale/permessi" className="text-xs font-medium text-primary hover:underline">
-                  Tutte →
-                </a>
-              </div>
-              {latest.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">Nessuna richiesta.</p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {latest.map((r) => (
-                    <LatestRiga key={r.id} r={r} canDecide={canDecide} />
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card>
-          <CardContent className="p-0">
-            <div className="border-b border-border px-4 py-2.5">
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold">
-                <CalendarOff className="h-4 w-4 text-rose-500" /> Assenze in arrivo
-              </h2>
-            </div>
-            {upcoming.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Nessuna assenza nei prossimi 30 giorni.
-              </p>
-            ) : (
-              <div className="divide-y divide-border">
-                {upcoming.map((u, i) => (
-                  <div key={i} className="flex items-center justify-between gap-2 px-4 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{u.dipendenteNome}</p>
-                      <p className="text-[11px] text-muted-foreground">{u.tipoLabel}</p>
-                    </div>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {u.dataInizio === u.dataFine
-                        ? fmtData(u.dataInizio)
-                        : `${fmtData(u.dataInizio)} → ${fmtData(u.dataFine)}`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      </div>
+      {/* Alta quanto tutte le card di sinistra: la card si allunga fino in fondo. */}
+      {laterale ? <aside className="flex min-w-0 [&>*]:flex-1">{laterale}</aside> : null}
       </div>
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -268,9 +272,6 @@ export function AnalisiClient({
         mese sono le giornate registrate nei rapportini. Il residuo ferie richiede il monte-ore per
         contratto (in arrivo).
       </p>
-      </div>
-      {laterale ? <aside className="min-w-0">{laterale}</aside> : null}
-      </div>
     </div>
   );
 }
