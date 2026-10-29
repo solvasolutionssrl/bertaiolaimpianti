@@ -1622,7 +1622,7 @@ export function PianificazioneClient({
           />
           Solo a turni
         </label>
-        <div className="w-48" title="Le persone nascoste non compaiono nella griglia ne' negli export PDF. La scelta e' solo tua.">
+        <div className="w-48" title="Le persone nascoste non compaiono nella griglia né negli export PDF. La scelta vale solo per il proprio account.">
           <SceltaMultipla
             aria-label="Persone nascoste"
             opzioni={dipendenti.map((d) => ({ valore: d.id, etichetta: nomeDip(d), dettaglio: d.mansione ?? undefined }))}

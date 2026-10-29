@@ -1539,7 +1539,7 @@ export function RegistraGiornataDialog({
               </h2>
               <p className="text-muted-foreground truncate text-[11px] leading-tight first-letter:uppercase">
                 {riallocazione
-                  ? `${giornoEsteso} · ${inizio} → ${fine} · inizio e fine li corregge l’ufficio`
+                  ? `${giornoEsteso} · ${inizio} → ${fine} · inizio e fine modificabili solo dall’ufficio`
                   : scatola
                   ? `${giornoEsteso} · ` +
                     (scatola.primoCantiere
@@ -1676,7 +1676,7 @@ export function RegistraGiornataDialog({
                   </label>
                   {pausaBloccata ? (
                     <p className="text-muted-foreground text-[12px]">
-                      Pausa timbrata di {fmtHM(riallocazione!.pausaTimbrataMin)}: non si modifica da qui.
+                      Pausa timbrata di {fmtHM(riallocazione!.pausaTimbrataMin)}: non modificabile.
                     </p>
                   ) : (
                     <SceltaPausaPranzo

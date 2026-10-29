@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Card, CardContent } from '@kommessa/ui';
-import { formattaMargine } from '@kommessa/api/margine-ore';
+import { formattaDurata, formattaMargine } from '@kommessa/api/margine-ore';
 import type { MonteOrePersona } from '../_lib/monte-ore';
 
 /**
@@ -16,8 +16,8 @@ export function MonteOreCard(
 ) {
   const { periodo } = props;
   return (
-    <Card>
-      <CardContent className="space-y-3 py-3">
+    <Card className="flex min-h-0 flex-col">
+      <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto py-3">
         <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Monte ore del mese</h2>
         {props.persone ? <Squadra persone={props.persone} periodo={periodo} /> : <Persona persona={props.persona} periodo={periodo} />}
       </CardContent>
@@ -30,10 +30,6 @@ const PER_PARTE = 8;
 const tono = (m: number) =>
   m > 0 ? 'text-emerald-700 dark:text-emerald-400' : m < 0 ? 'text-rose-700 dark:text-rose-400' : 'text-muted-foreground';
 
-const oreHM = (minuti: number) => {
-  const m = Math.max(0, Math.round(minuti));
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
-};
 
 function Squadra({ persone, periodo }: { persone: MonteOrePersona[]; periodo: string }) {
   const conOre = persone.filter((p) => p.saldo.giorniLavorati > 0);
@@ -44,7 +40,7 @@ function Squadra({ persone, periodo }: { persone: MonteOrePersona[]; periodo: st
   return (
     <>
       {conOre.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Ancora nessuna giornata registrata questo mese.</p>
+        <p className="text-sm text-muted-foreground">Nessuna giornata registrata nel mese.</p>
       ) : (
         <>
           <Elenco titolo="Più ore dell'orario" persone={sopra} periodo={periodo} />
@@ -68,8 +64,8 @@ function Persona({ persona, periodo }: { persona: MonteOrePersona | null; period
         <p className={`text-2xl font-semibold tabular-nums ${tono(s.margine)}`}>{formattaMargine(s.margine)}</p>
       </div>
       <dl className="space-y-1 text-sm">
-        <Riga etichetta="Ore contate" valore={oreHM(s.minutiContati)} />
-        <Riga etichetta="Ore teoriche" valore={oreHM(s.minutiTeorici)} />
+        <Riga etichetta="Ore contate" valore={formattaDurata(s.minutiContati)} />
+        <Riga etichetta="Ore teoriche" valore={formattaDurata(s.minutiTeorici)} />
         <Riga etichetta="Giorni lavorati" valore={String(s.giorniLavorati)} />
         {s.giorniVuoti > 0 ? <Riga etichetta="Senza registrazioni" valore={`${s.giorniVuoti} gg`} /> : null}
       </dl>
@@ -97,7 +93,7 @@ function Elenco({ titolo, persone, periodo }: { titolo: string; persone: MonteOr
     <div className="min-w-0">
       <p className="mb-1 text-xs font-medium text-muted-foreground">{titolo}</p>
       {persone.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nessuno.</p>
+        <p className="text-sm text-muted-foreground">Nessun dipendente.</p>
       ) : (
         <ul className="space-y-1">
           {persone.map((p) => (

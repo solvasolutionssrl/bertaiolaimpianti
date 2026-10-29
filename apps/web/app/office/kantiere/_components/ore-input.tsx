@@ -91,7 +91,7 @@ export function OreInput({
             setErrore(false);
           }
         }}
-        title={errore ? 'Scrivere le ore come 7:30' : 'Ore e minuti, per esempio 7:30 (vale anche 7,5 = sette ore e mezza)'}
+        title={errore ? 'Scrivere le ore come 7:30' : 'Ore e minuti, ad esempio 7:30 (vale anche 7,5 = sette ore e mezza)'}
         className="w-[4.5rem] min-w-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums outline-none placeholder:font-normal placeholder:text-muted-foreground/60"
       />
       <button type="button" tabIndex={-1} aria-label="Più" disabled={disabled || minuti >= tetto} onClick={() => fissa(minuti + passo)} className="w-8 shrink-0 border-l border-input text-muted-foreground hover:bg-muted/60 disabled:opacity-40">

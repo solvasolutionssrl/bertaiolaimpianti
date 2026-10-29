@@ -101,9 +101,22 @@ export function margineMese(giorni: readonly GiornoMargine[]): MargineMese {
   };
 }
 
-/** `+1:30`, `−0:45`, `0:00`: il segno sempre, perche' e' la cosa che si legge. */
+/**
+ * Una durata con le unita' scritte: `131 h 43 min`, `8 h`, `45 min`, `0 h`.
+ * «131:43» non diceva quali fossero le ore e quali i minuti (29/10/2026).
+ */
+export function formattaDurata(minuti: number): string {
+  const m = Math.abs(Math.round(minuti));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  if (h > 0 && r > 0) return `${h} h ${r} min`;
+  if (h > 0) return `${h} h`;
+  if (r > 0) return `${r} min`;
+  return '0 h';
+}
+
+/** `+1 h 30 min`, `−45 min`, `0 h`: il segno sempre, perche' e' la cosa che si legge. */
 export function formattaMargine(minuti: number): string {
   const segno = minuti > 0 ? '+' : minuti < 0 ? '−' : '';
-  const m = Math.abs(Math.round(minuti));
-  return `${segno}${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  return `${segno}${formattaDurata(minuti)}`;
 }

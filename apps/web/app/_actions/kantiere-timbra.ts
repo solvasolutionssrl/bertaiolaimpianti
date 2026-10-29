@@ -2539,7 +2539,7 @@ export async function riallocaMiaGiornata(input: unknown): Promise<Result> {
       .lt('ts', toIso)
       .not('id', 'in', `(${g.vecchieIds.join(',')})`);
     await ricomputaRapportinoAuto(supabase, ctx.tenantId, me.id, giorno);
-    return { ok: false, error: 'La giornata non è stata modificata: riprova.' };
+    return { ok: false, error: 'La giornata non è stata modificata. Riprovare.' };
   }
 
   // Le ore ora vengono dalle timbrature: la giornata torna «automatica».

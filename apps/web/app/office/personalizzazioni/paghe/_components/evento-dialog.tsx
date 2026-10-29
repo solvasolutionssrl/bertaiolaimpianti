@@ -97,7 +97,7 @@ export function EventoDialog({
     }
     const valore = ore.trim() === '' ? 0 : (oreDecimaliDaTesto(ore) ?? NaN);
     if (!Number.isFinite(valore) || valore < 0) {
-      await showAlert({ title: 'Ore non valide', body: 'Scrivi le ore come ore e minuti, per esempio 1:30.' });
+      await showAlert({ title: 'Ore non valide', body: 'Indicare le ore come ore e minuti, ad esempio 1:30.' });
       return;
     }
 
@@ -279,7 +279,7 @@ export function EventoDialog({
                 className="mt-1 h-9 bg-background font-mono shadow-none"
               />
               <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                Scrivi ore e minuti, per esempio 1:30 per un&apos;ora e mezza.{' '}
+                Ore e minuti, ad esempio 1:30 per un&apos;ora e mezza.{' '}
                 <AnteprimaOre testo={ore} paghe />
               </p>
             </div>

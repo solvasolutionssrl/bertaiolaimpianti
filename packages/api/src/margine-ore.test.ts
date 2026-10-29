@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formattaMargine, margineGiorno, margineMese, type GiornoMargine } from './margine-ore';
+import { formattaDurata, formattaMargine, margineGiorno, margineMese, type GiornoMargine } from './margine-ore';
 
 const g = (data: string, extra: Partial<GiornoMargine> = {}): GiornoMargine => ({
   data,
@@ -56,9 +56,11 @@ describe('margine ore', () => {
     expect(margineGiorno(g('2026-10-26', { minutiLavoro: 0 }))).toMatchObject({ esito: 'lavorato', margine: -480 });
   });
 
-  it('il segno si scrive sempre', () => {
-    expect(formattaMargine(90)).toBe('+1:30');
-    expect(formattaMargine(-45)).toBe('−0:45');
-    expect(formattaMargine(0)).toBe('0:00');
+  it('il segno si scrive sempre, e le unita\' pure', () => {
+    expect(formattaMargine(90)).toBe('+1 h 30 min');
+    expect(formattaMargine(-45)).toBe('−45 min');
+    expect(formattaMargine(0)).toBe('0 h');
+    expect(formattaDurata(7903)).toBe('131 h 43 min');
+    expect(formattaDurata(480)).toBe('8 h');
   });
 });

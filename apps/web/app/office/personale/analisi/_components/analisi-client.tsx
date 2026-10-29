@@ -194,6 +194,16 @@ export function AnalisiClient({
         </Card>
       </div>
 
+      </div>
+      {/* Alta quanto i numeri e le card «Ultime richieste» e «Assenze in arrivo»: finisce dove finiscono loro. */}
+      {laterale ? (
+        <aside className="min-w-0 xl:relative">
+          {/* Da xl in su l'altezza la decide la colonna di sinistra; l'elenco scorre dentro la card. */}
+          <div className="flex xl:absolute xl:inset-0 [&>*]:flex-1">{laterale}</div>
+        </aside>
+      ) : null}
+      </div>
+
       {/* Grafici */}
       <div className="grid gap-3 lg:grid-cols-3">
         <ChartCard title="Richieste per stato">
@@ -261,10 +271,6 @@ export function AnalisiClient({
             </ResponsiveContainer>
           )}
         </ChartCard>
-      </div>
-      </div>
-      {/* Alta quanto tutte le card di sinistra: la card si allunga fino in fondo. */}
-      {laterale ? <aside className="flex min-w-0 [&>*]:flex-1">{laterale}</aside> : null}
       </div>
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

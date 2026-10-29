@@ -1336,7 +1336,7 @@ export async function salvaNascostiPianificazione(
       .select('id')
       .eq('tenant_id', ctx.tenantId)
       .in('id', ids);
-    if (error) return { ok: false, error: 'Non riesco a salvare la scelta: riprova.' };
+    if (error) return { ok: false, error: 'Non è stato possibile salvare la scelta. Riprovare.' };
     validi = ((data as { id: string }[] | null) ?? []).map((d) => d.id);
   }
 
@@ -1344,12 +1344,12 @@ export async function salvaNascostiPianificazione(
     .from('pianificazione_nascosti' as never)
     .delete()
     .eq('user_id', ctx.userId);
-  if (eDel) return { ok: false, error: 'Non riesco a salvare la scelta: riprova.' };
+  if (eDel) return { ok: false, error: 'Non è stato possibile salvare la scelta. Riprovare.' };
   if (validi.length > 0) {
     const { error: eIns } = await supabase
       .from('pianificazione_nascosti' as never)
       .insert(validi.map((id) => ({ user_id: ctx.userId, tenant_id: ctx.tenantId, dipendente_id: id })) as never);
-    if (eIns) return { ok: false, error: 'Non riesco a salvare la scelta: riprova.' };
+    if (eIns) return { ok: false, error: 'Non è stato possibile salvare la scelta. Riprovare.' };
   }
   return { ok: true };
 }

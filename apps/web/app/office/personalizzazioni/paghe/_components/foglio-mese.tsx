@@ -170,7 +170,7 @@ export function FoglioMese({ mese, eventiPerDip, catalogo, onAggiornato }: Fogli
     if (!Number.isFinite(valore) || valore <= 0) {
       await showAlert({
         title: 'Ore non valide',
-        body: 'Scrivi le ore come ore e minuti, per esempio 8:00 oppure 1:30.',
+        body: 'Indicare le ore come ore e minuti, ad esempio 8:00 o 1:30.',
       });
       return;
     }

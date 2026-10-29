@@ -5,7 +5,7 @@ import { Card, CardContent } from '@kommessa/ui';
 import { requireTenantContext } from '@kommessa/api/tenant';
 import { createServerSupabase } from '@kommessa/api/server';
 import { romeDay } from '@kommessa/api/rome-time';
-import { formattaMargine, type EsitoGiorno } from '@kommessa/api/margine-ore';
+import { formattaDurata, formattaMargine, type EsitoGiorno } from '@kommessa/api/margine-ore';
 import { tenantHasModule } from '@/app/_lib/modules';
 import { caricaMonteOre } from './_lib/monte-ore';
 
@@ -23,11 +23,6 @@ function spostaMese(periodo: string, delta: number): string {
 
 const nomeMese = (p: string) => `${MESI[Number(p.slice(5, 7)) - 1]} ${p.slice(0, 4)}`;
 
-/** Ore in h:mm, anche oltre le cento: e' un totale, non un orario. */
-function oreHM(minuti: number): string {
-  const m = Math.max(0, Math.round(minuti));
-  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
-}
 
 function toneMargine(minuti: number): string {
   if (minuti > 0) return 'text-emerald-700 dark:text-emerald-400';
@@ -74,7 +69,7 @@ export default async function MonteOrePage({
             Monte ore{persona ? ` · ${persona.nome}` : ''}
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Quanto ciascuno è sopra o sotto l&apos;orario ordinario: nove ore oggi e sette domani fanno zero.
+            Differenza fra le ore registrate e l&apos;orario ordinario, dipendente per dipendente.
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -103,10 +98,11 @@ export default async function MonteOrePage({
       </header>
 
       <p className="text-xs text-muted-foreground">
-        Dal {dal.slice(8, 10)}/{dal.slice(5, 7)} al {al.slice(8, 10)}/{al.slice(5, 7)}. Conta lavoro e viaggio dentro
-        l&apos;orario più i permessi a ore; il viaggio oltre l&apos;orario si paga a parte e resta fuori. Sabati,
-        domeniche e festivi sono tutti in più; le assenze di giornata intera non contano. I feriali senza nessuna
-        registrazione non vengono contati come ore in meno: si segnalano a parte.
+        Dal {dal.slice(8, 10)}/{dal.slice(5, 7)} al {al.slice(8, 10)}/{al.slice(5, 7)}. Il saldo comprende lavoro,
+        viaggio entro l&apos;orario e permessi a ore, meno l&apos;orario ordinario. Il viaggio oltre l&apos;orario è
+        escluso perché retribuito a parte. Sabati, domeniche e festivi sono interamente in più; le assenze di
+        giornata intera non sono conteggiate. I giorni feriali senza registrazioni non sono conteggiati come ore in
+        meno e sono indicati a parte.
       </p>
 
       {persona ? (
@@ -122,8 +118,8 @@ export default async function MonteOrePage({
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Riquadro titolo="Saldo del mese" valore={formattaMargine(persona.saldo.margine)} tono={toneMargine(persona.saldo.margine)} />
-            <Riquadro titolo="Ore contate" valore={oreHM(persona.saldo.minutiContati)} />
-            <Riquadro titolo="Ore teoriche" valore={oreHM(persona.saldo.minutiTeorici)} />
+            <Riquadro titolo="Ore contate" valore={formattaDurata(persona.saldo.minutiContati)} />
+            <Riquadro titolo="Ore teoriche" valore={formattaDurata(persona.saldo.minutiTeorici)} />
             <Riquadro titolo="Senza registrazioni" valore={`${persona.saldo.giorniVuoti} gg`} />
           </div>
           <Card>
@@ -147,8 +143,8 @@ export default async function MonteOrePage({
                         <td className="px-3 py-1.5 tabular-nums">
                           {dow} {g.data.slice(8, 10)}/{g.data.slice(5, 7)}
                         </td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">{g.minutiContati ? oreHM(g.minutiContati) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right tabular-nums">{g.minutiTeorici ? oreHM(g.minutiTeorici) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{g.minutiContati ? formattaDurata(g.minutiContati) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums">{g.minutiTeorici ? formattaDurata(g.minutiTeorici) : '—'}</td>
                         <td className={`px-3 py-1.5 text-right font-medium tabular-nums ${toneMargine(g.margine)}`}>
                           {g.esito === 'lavorato' || g.esito === 'extra' ? formattaMargine(g.margine) : ''}
                         </td>
@@ -189,8 +185,8 @@ export default async function MonteOrePage({
                       {p.mansione ? <span className="block text-xs text-muted-foreground">{p.mansione}</span> : null}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{p.saldo.giorniLavorati}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{oreHM(p.saldo.minutiContati)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{oreHM(p.saldo.minutiTeorici)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formattaDurata(p.saldo.minutiContati)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formattaDurata(p.saldo.minutiTeorici)}</td>
                     <td className={`px-3 py-2 text-right font-semibold tabular-nums ${toneMargine(p.saldo.margine)}`}>
                       {formattaMargine(p.saldo.margine)}
                     </td>
